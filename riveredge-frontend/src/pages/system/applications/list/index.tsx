@@ -9,10 +9,12 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag } from 'antd';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree } from 'antd';
+const { Title, Paragraph, Text } = Typography;
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { UniTable } from '../../../../components/uni-table';
+import { UniWiki, WikiItem, WikiTreeData } from '../../../../components';
 import { theme } from 'antd';
 import {
   EyeOutlined,
@@ -30,6 +32,12 @@ import {
   ApiOutlined,
   LockOutlined,
   SyncOutlined,
+  ShareAltOutlined,
+  PrinterOutlined,
+  LikeOutlined,
+  DislikeOutlined,
+  LeftOutlined,
+  RightOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import { useGlobalStore } from '../../../../stores';
@@ -103,6 +111,159 @@ const getCardGradient = (code: string, isActive: boolean): string => {
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
   };
   return gradients[code] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+};
+
+/**
+ * 帮助视图内容组件 (Wiki 左右分栏样式)
+ */
+const ApplicationHelpView: React.FC = () => {
+  const wikiItems: WikiItem[] = [
+    {
+      key: '1',
+      label: '1. 概述',
+      breadcrumbs: ['帮助目录', '概述'],
+      content: (
+        <>
+          <Title level={2}>1. 概述</Title>
+          <Paragraph>
+            <Text strong>应用中心</Text>是系统管理员集中管理组织内所有系统模块和业务插件的核心控制台。通过应用中心，管理员可以轻松完成应用的发现、安装、卸载、授权、启停控制以及菜单清单的同步，实现企业数字化底座的灵活扩展与生命周期管理。
+          </Paragraph>
+          <Alert message="仅具有系统管理员权限的用户可访问和操作应用中心。" type="info" showIcon />
+        </>
+      )
+    },
+    {
+      key: '2',
+      label: '2. 核心概念',
+      breadcrumbs: ['帮助目录', '核心概念'],
+      content: (
+        <>
+          <Title level={2}>2. 核心概念</Title>
+          <Paragraph>在开始操作之前，了解以下核心概念有助于您更好地使用应用中心：</Paragraph>
+          <ul>
+            <li style={{ marginBottom: 12 }}><Text strong>系统应用 (System App)</Text>：系统内置的基础支撑应用（如主数据 Master-Data 等），这类应用为系统正常运行提供核心服务，<Text type="danger">不可被卸载</Text>。</li>
+            <li style={{ marginBottom: 12 }}><Text strong>专业版应用 (Pro App)</Text>：包含高级功能的应用（如快报表、快数采、BI 等）。此类应用在首次启用前，需要输入有效的 <Text mark>License Key</Text> 进行授权激活。</li>
+            <li><Text strong>应用清单 (Manifest)</Text>：描述应用基础信息、路由和菜单结构的配置文件。系统通过解析应用清单来生成您看到的左侧导航菜单。</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      key: '3.1',
+      label: '3.1 安装与卸载',
+      breadcrumbs: ['帮助目录', '操作指南', '安装与卸载'],
+      content: (
+        <>
+          <Title level={2}>3.1 应用的安装与卸载</Title>
+          <ul>
+            <li style={{ marginBottom: 12 }}><Text strong>安装应用</Text>：在应用列表中找到处于“未安装”状态的应用，点击卡片上的 <b>[安装]</b> 按钮（或下载图标）。安装成功后，应用将注册到您的系统中。</li>
+            <li><Text strong>卸载应用</Text>：对于不再需要的已安装应用，点击卡片上的 <b>[更多操作]</b> -{'>'} <b>[卸载]</b>。</li>
+          </ul>
+          <Alert message="注意：卸载应用可能会导致关联的业务数据不可见。此外，“系统应用”的卸载按钮为禁用状态，无法卸载。" type="warning" showIcon style={{ marginTop: 24 }} />
+        </>
+      )
+    },
+    {
+      key: '3.2',
+      label: '3.2 启用与授权',
+      breadcrumbs: ['帮助目录', '操作指南', '启用与授权'],
+      content: (
+        <>
+          <Title level={2}>3.2 应用的启用与授权</Title>
+          <ul>
+            <li style={{ marginBottom: 12 }}><Text strong>启用 / 禁用</Text>：在应用卡片底部或表格行内切换 <b>[启用状态]</b> 开关。禁用的应用将不会在左侧菜单栏向普通用户展示。</li>
+            <li><Text strong>激活专业版应用</Text>：在尝试启用专业版应用（如 快报表 kuaireport、快数采 kuaiiot）时，系统会自动弹出授权验证窗口。您需要输入正确的授权码（License Key），校验通过后应用才会成功启用。</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      key: '3.3',
+      label: '3.3 扫描本地应用',
+      breadcrumbs: ['帮助目录', '操作指南', '扫描本地应用'],
+      content: (
+        <>
+          <Title level={2}>3.3 扫描本地应用</Title>
+          <Paragraph>当开发人员在本地新增了应用代码（放置于 <code>src/apps</code> 目录下）时，需要将其注册到系统中：</Paragraph>
+          <ol>
+            <li style={{ marginBottom: 8 }}>点击页面顶部的 <b>[扫描应用]</b> 按钮。</li>
+            <li>系统会自动扫描发现新应用并将其基础信息注册到应用中心。</li>
+          </ol>
+          <Alert message="“扫描应用”仅更新了应用的基础清单数据库。扫描完成后，请务必执行 [一键同步菜单] 操作，否则左侧导航菜单不会更新。" type="info" showIcon style={{ marginTop: 24 }} />
+        </>
+      )
+    },
+    {
+      key: '3.4',
+      label: '3.4 菜单同步管理',
+      breadcrumbs: ['帮助目录', '操作指南', '菜单同步管理'],
+      content: (
+        <>
+          <Title level={2}>3.4 菜单同步管理</Title>
+          <ul>
+            <li style={{ marginBottom: 12 }}><Text strong>一键同步菜单</Text>：当进行了本地应用扫描或后端代码有菜单更新时，点击顶部的 <b>[一键同步菜单]</b>。系统会执行两步操作：① 批量拉取所有已安装应用的最新清单；② 将这些清单中的菜单全量写入核心数据库，并自动刷新您的侧边栏。</li>
+            <li><Text strong>单应用同步</Text>：如果您确认只有某个特定应用发生了菜单变更，可以点击该应用卡片上的 <b>[更多操作]</b> -{'>'} <b>[同步菜单]</b> 进行定向同步。</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      key: '3.5',
+      label: '3.5 高级配置与管理',
+      breadcrumbs: ['帮助目录', '操作指南', '高级配置与管理'],
+      content: (
+        <>
+          <Title level={2}>3.5 应用高级配置与管理</Title>
+          <ul>
+            <li style={{ marginBottom: 12 }}><Text strong>查看详情</Text>：点击应用卡片上的 <b>[查看]</b> 按钮，系统会从右侧弹出抽屉，展示应用的描述、版本号等详细信息。</li>
+            <li style={{ marginBottom: 12 }}><Text strong>应用配置</Text>：点击 <b>[更多操作]</b> -{'>'} <b>[应用配置]</b>，可修改该应用在系统中的显示名称、显示排序等基本参数。</li>
+            <li><Text strong>重置数据</Text>：针对特定应用（如快制造 kuaizhizao），在 <b>[更多操作]</b> 中提供了 <b>[重置数据]</b> 功能。</li>
+          </ul>
+          <Alert message="高危操作警告：“重置数据”将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。" type="error" showIcon style={{ marginTop: 24 }} />
+        </>
+      )
+    },
+    {
+      key: '4',
+      label: '4. 常见问题 (FAQ)',
+      breadcrumbs: ['帮助目录', '常见问题 (FAQ)'],
+      content: (
+        <>
+          <Title level={2}>4. 常见问题 (FAQ)</Title>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Card size="small" title="Q: 为什么“卸载”按钮是禁用的？">
+              <Text>A: 该应用带有 <code>System</code> 标签，代表它是系统级应用，为保障系统核心运行稳定，系统底层安全机制禁止对其执行卸载操作。</Text>
+            </Card>
+            <Card size="small" title="Q: 我刚点击了“扫描应用”并提示成功，为什么左侧菜单栏还是没有出现新应用的入口？">
+              <Text>A: “扫描应用”仅将应用的配置注册到系统。请您接着点击顶部的 <b>[一键同步菜单]</b>，系统才会将菜单结构完整写入数据库并触发界面的刷新。</Text>
+            </Card>
+            <Card size="small" title="Q: 启用快报表（kuaireport）时为什么提示需要授权？">
+              <Text>A: 快报表等属于 Pro 级别的专业应用，需要向供应商获取有效的 License Key，校验并激活通过后方可开放使用。</Text>
+            </Card>
+          </Space>
+        </>
+      )
+    },
+  ];
+
+  const treeData: WikiTreeData[] = [
+    { key: '1', title: '1. 概述' },
+    { key: '2', title: '2. 核心概念' },
+    {
+      key: '3',
+      title: '3. 操作指南',
+      children: [
+        { key: '3.1', title: '3.1 安装与卸载' },
+        { key: '3.2', title: '3.2 启用与授权' },
+        { key: '3.3', title: '3.3 扫描本地应用' },
+        { key: '3.4', title: '3.4 菜单同步管理' },
+        { key: '3.5', title: '3.5 高级配置与管理' },
+      ],
+    },
+    { key: '4', title: '4. 常见问题 (FAQ)' },
+  ];
+
+  return <UniWiki items={wikiItems} treeData={treeData} defaultExpandedKeys={['3']} />;
 };
 
 /**
@@ -1097,6 +1258,7 @@ const ApplicationListPage: React.FC = () => {
           ]}
           viewTypes={['card', 'table', 'help']}
           defaultViewType="card"
+          helpViewConfig={{ content: <ApplicationHelpView /> }}
           cardViewConfig={{
             renderCard: renderApplicationCard,
             columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },

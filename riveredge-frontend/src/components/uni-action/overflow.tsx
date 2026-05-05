@@ -238,6 +238,14 @@ export function renderRowActionsOverflow(
 
   const inline = enabled.slice(0, primarySlotsBeforeMore)
   const overflow = enabled.slice(primarySlotsBeforeMore)
+  // 若溢出区仅 1 个动作，直接平铺展示，避免把单个按钮折叠进“更多”。
+  if (overflow.length <= 1) {
+    return (
+      <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+        {enabled}
+      </Space>
+    )
+  }
 
   return (
     <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>

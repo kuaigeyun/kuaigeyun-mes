@@ -1519,24 +1519,28 @@ const WorkOrdersPage: React.FC = () => {
       const created = await reportingApi.create(
         coerceReportingCreateStrings(reportingData, quickReportingWorkOrder)
       )
+      const createdId = Number((created as any)?.id)
+      if (!Number.isFinite(createdId) || createdId <= 0) {
+        throw new Error('报工创建返回异常：未返回有效记录ID')
+      }
       if (
         quickReportingOperation.reporting_type === 'quantity' &&
         Number(values.unqualified_quantity) > 0 &&
         operationHasSimpleInspection(quickReportingOperation) &&
-        created?.id
+        createdId
       ) {
         const uq = Number(values.unqualified_quantity) || 0
         const defectOpts = getOperationDefectTypeOptions(quickReportingOperation)
         try {
           if (defectOpts.length > 0 && values.defect_type) {
-            await reportingApi.recordDefect(created.id.toString(), {
+            await reportingApi.recordDefect(String(createdId), {
               defect_quantity: uq,
               defect_type: values.defect_type,
               defect_reason: '工单列表快速报工录入',
               disposition: 'quarantine',
             })
           } else if (defectOpts.length === 0 && (values.defect_reason_text || '').toString().trim()) {
-            await reportingApi.recordDefect(created.id.toString(), {
+            await reportingApi.recordDefect(String(createdId), {
               defect_quantity: uq,
               defect_type: 'other',
               defect_reason: String(values.defect_reason_text).trim(),
@@ -1877,13 +1881,6 @@ const WorkOrdersPage: React.FC = () => {
                 operation.status === 'pending'
                   ? async () => {
                       try {
-                        if (executionConfig?.require_confirmed_picking_before_operation_start) {
-                          const pickingStatus = await workOrderApi.getPickingConfirmationStatus(workOrder.id!.toString())
-                          if (!pickingStatus?.has_confirmed_picking) {
-                            messageApi.warning('当前配置要求先确认领料，未确认时不可开工')
-                            return
-                          }
-                        }
                         await workOrderApi.startOperation(workOrder.id!.toString(), operation.id)
                         messageApi.success('工序已开始')
                         const operations = await workOrderApi.getOperations(workOrder.id!.toString())
@@ -2856,6 +2853,28 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
+   * 通知入库（从工单下推创建待入库单）
+   */
+  const handleNotifyInbound = async (record: WorkOrder) => {
+    if (!record.id) return
+    Modal.confirm({
+      title: '通知入库',
+      content: `确认通知工单「${record.code || record.id}」入库吗？`,
+      onOk: async () => {
+        try {
+          await warehouseApi.finishedGoodsReceipt.batchReceipt({
+            work_order_ids: [record.id],
+          })
+          messageApi.success('已通知入库')
+          actionRef.current?.reload()
+        } catch (error: any) {
+          messageApi.error(error?.message || '通知入库失败')
+        }
+      },
+    })
+  }
+
+  /**
    * 处理提交工序委外表单
    */
   const handleSubmitOutsource = async (values: any): Promise<void> => {
@@ -3700,13 +3719,18 @@ const WorkOrdersPage: React.FC = () => {
       {
         title: '生产模式',
         dataIndex: 'production_mode',
-        width: 100,
+        width: 132,
         valueEnum: {
           MTS: { text: '按库存生产', status: 'processing' },
           MTO: { text: '按订单生产', status: 'success' },
         },
         hideInSearch: false,
         className: WO_ROW_EXPAND_TRIGGER_CLASS,
+        render: (_, record) => (
+          <span style={{ whiteSpace: 'nowrap' }}>
+            {record.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
+          </span>
+        ),
     },
     {
       title: '制造模式',
@@ -3968,17 +3992,36 @@ const WorkOrdersPage: React.FC = () => {
               创建返工单
             </Button>
           )
-          parts.push(
-            <Button
-              key="outsource"
-              type="link"
-              size="small"
-              icon={<TeamOutlined />}
-              onClick={() => handleCreateOutsource(record)}
-            >
-              创建工序委外
-            </Button>
-          )
+          if (isCompleted) {
+            parts.push(
+              <Button
+                key="notifyInbound"
+                type="link"
+                size="small"
+                icon={<InboxOutlined />}
+                disabled={false}
+                style={{ pointerEvents: 'auto' }}
+                onClick={(e) => {
+                  e?.stopPropagation?.()
+                  void handleNotifyInbound(record)
+                }}
+              >
+                通知入库
+              </Button>
+            )
+          } else {
+            parts.push(
+              <Button
+                key="outsource"
+                type="link"
+                size="small"
+                icon={<TeamOutlined />}
+                onClick={() => handleCreateOutsource(record)}
+              >
+                创建工序委外
+              </Button>
+            )
+          }
         }
         if (canSplit) {
           parts.push(
@@ -4342,15 +4385,6 @@ const WorkOrdersPage: React.FC = () => {
             ], [selectedRowKeys]);
 
             return [
-              <Button
-                key="urgent-simulate"
-                icon={<PlusOutlined />}
-                danger
-                type="primary"
-                onClick={() => setUrgentSimulationVisible(true)}
-              >
-                紧急插单模拟
-              </Button>,
               <Button
                 key="smartRelease"
                 style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}

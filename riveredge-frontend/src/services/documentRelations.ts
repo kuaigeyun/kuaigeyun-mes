@@ -10,6 +10,7 @@ export interface DocumentTraceNode {
   document_id: number;
   document_code?: string | null;
   document_name?: string | null;
+  created_at?: string | null;
   level: number;
   children: DocumentTraceNode[];
 }
@@ -20,6 +21,7 @@ export interface DocumentTraceResponse {
   document_id: number;
   document_code?: string | null;
   document_name?: string | null;
+  created_at?: string | null;
   upstream_chain: DocumentTraceNode[];
   downstream_chain: DocumentTraceNode[];
 }

@@ -35,8 +35,6 @@ export interface PurchaseRequisition {
   source_type?: string;
   source_id?: number;
   source_code?: string;
-  is_urgent?: boolean;
-  urgent_reason?: string;
   review_status?: string;
   notes?: string;
   items_count?: number;
@@ -122,16 +120,6 @@ export async function convertToPurchaseOrder(
   persisted_material_ids?: number[];
 }> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/convert-to-purchase-order`, {
-    method: 'POST',
-    data,
-  });
-}
-
-export async function urgentPurchase(
-  requisitionId: number,
-  data: { urgent_reason: string }
-): Promise<{ success: boolean; message: string; purchase_orders: Array<{ id: number; code: string }> }> {
-  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/urgent-purchase`, {
     method: 'POST',
     data,
   });

@@ -1735,12 +1735,22 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
         from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
 
+        source_type = str(getattr(demand, "source_type", "") or getattr(demand, "demand_type", "") or "").strip()
+        source_code = str(getattr(demand, "source_code", "") or getattr(demand, "demand_code", "") or "").strip()
+        if source_type == "sales_order":
+            push_note = f"从销售订单 {source_code} 下推创建"
+        elif source_type == "sales_forecast":
+            push_note = f"从销售预测 {source_code} 下推创建"
+        else:
+            # 手工建立需求计划：保留“需求计划”语义，避免误导为订单来源
+            push_note = f"从需求计划 {source_code} 下推创建"
+
         comp_service = DemandComputationService()
         comp_data = DemandComputationCreate(
             demand_id=demand_id,
             computation_type=computation_type,
             computation_params=default_params,
-            notes=f"从需求 {demand.demand_code} 下推创建",
+            notes=push_note,
         )
 
         try:

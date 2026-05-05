@@ -301,22 +301,10 @@ class SalesOrderService:
         )
 
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
-        """如果存在关联需求，则同步并重算快照，返回是否同步成功。"""
-        demand = await self._get_linked_demand(tenant_id, order_id)
-        if demand:
-            from apps.kuaizhizao.services.demand_service import DemandService
-            try:
-                sync_result = await DemandService().sync_from_upstream(
-                    tenant_id=tenant_id,
-                    source_type="sales_order",
-                    source_id=order_id,
-                    operator_id=operator_id,
-                )
-                if sync_result.get("synced"):
-                    logger.info("销售订单 %s 已同步关联需求并更新快照", order_id)
-                    return True
-            except Exception as e:
-                logger.warning("销售订单更新后同步需求失败: %s", e)
+        """
+        历史兼容占位：销售订单不再自动同步到需求池（Demand）。
+        仅保留显式「下推需求计算」路径创建/更新计算数据。
+        """
         return False
 
     def _is_audited(self, status: str) -> bool:
@@ -1248,13 +1236,7 @@ class SalesOrderService:
                     DemandStatus.DRAFT, DemandStatus.CONFIRMED,
                     submitted_by, submitter_name, "提交并自动确认",
                 )
-                demand = await self._get_linked_demand(tenant_id, sales_order_id)
-                if not demand:
-                    await self._create_demand_from_sales_order(
-                        tenant_id, sales_order_id, submitted_by
-                    )
-                else:
-                    await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
+                # 不再在提交时自动创建/同步 Demand，避免形成「订单→需求计划」隐式链路。
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -1282,7 +1264,6 @@ class SalesOrderService:
                     DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
                     submitted_by, submitter_name, "提交",
                 )
-            await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         # 审批流程不存在，设为待审核，需手动调用审核接口
@@ -1299,7 +1280,6 @@ class SalesOrderService:
                 DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
                 submitted_by, submitter_name, "提交",
             )
-        await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def approve_sales_order(
@@ -1347,15 +1327,8 @@ class SalesOrderService:
                 DemandStatus.PENDING_REVIEW, DemandStatus.AUDITED,
                 approved_by, approver_name, "自动审核" if is_auto_approve else "审核通过",
             )
-            # 审核通过后自动产生 Demand，进入需求池；若已有需求（如反审核再编辑后重新审核）则同步需求
+            # 审核通过后不再自动创建/同步 Demand。
             demand_synced = False
-            demand = await self._get_linked_demand(tenant_id, sales_order_id)
-            if not demand:
-                await self._create_demand_from_sales_order(
-                    tenant_id, sales_order_id, approved_by
-                )
-            else:
-                demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
         result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
         auto_push_result = await self._try_auto_push_order_to_computation(
             tenant_id=tenant_id,
@@ -1402,7 +1375,6 @@ class SalesOrderService:
                 DemandStatus.PENDING_REVIEW, DemandStatus.REJECTED,
                 approved_by, approver_name, f"驳回: {rejection_reason}",
             )
-        await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def unapprove_sales_order(
@@ -1434,8 +1406,7 @@ class SalesOrderService:
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(review_status=ReviewStatus.APPROVED)
             order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
-        # 需求已下推需求计算：无下游时撤回/作废计算后允许反审核；有下游则阻止
-        # 需求未下推：直接允许反审核，需求状态由 _sync_demand_if_exists 与订单同步
+        # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if demand and demand.pushed_to_computation:
             await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)
@@ -1457,7 +1428,6 @@ class SalesOrderService:
                 order.status, DemandStatus.PENDING_REVIEW,
                 unapproved_by, unapprover_name, "反审核",
             )
-        await self._sync_demand_if_exists(tenant_id, sales_order_id, unapproved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def push_sales_order_to_computation(

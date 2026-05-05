@@ -14,6 +14,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.document_relation import DocumentRelation
+from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.schemas.document_relation import (
     DocumentRelationCreate,
     DocumentRelationResponse,
@@ -221,12 +222,69 @@ class DocumentRelationNewService:
         except Exception as e:
             logger.warning(f"业务推导关联获取失败，仅返回表驱动结果: {e}")
 
-        # 兼容历史库：旧版曾写入 DocumentRelation(sales_order→demand)；新建订单已不再创建该边，
-        # 合并结果时仍丢弃订单→「需求」下游，避免追溯图分叉。
-        if document_type == "sales_order":
+        # 兼容历史库：旧版曾写入 DocumentRelation(sales_order/sales_forecast→demand)；
+        # 现链路以「销售订单/销售预测 -> 需求计算」为准，需隐藏中间 demand 节点。
+        if document_type in {"sales_order", "sales_forecast"}:
             downstream_responses = [
                 r for r in downstream_responses if r.target_type != "demand"
             ]
+
+            # 若工单是由「需求计算」下推生成，则不应再展示为
+            # sales_order/sales_forecast -> work_order 的直连边，避免链路“跨层短路”。
+            computation_ids = {
+                int(r.target_id)
+                for r in downstream_responses
+                if r.target_type == "demand_computation" and r.target_id
+            }
+            work_order_ids = {
+                int(r.target_id)
+                for r in downstream_responses
+                if r.target_type == "work_order" and r.target_id
+            }
+            if computation_ids and work_order_ids:
+                comp_to_wo_rows = await DocumentRelation.filter(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id__in=list(computation_ids),
+                    target_type="work_order",
+                    target_id__in=list(work_order_ids),
+                ).values("target_id")
+                wo_from_computation_ids = {int(row.get("target_id")) for row in comp_to_wo_rows if row.get("target_id")}
+                if wo_from_computation_ids:
+                    downstream_responses = [
+                        r for r in downstream_responses
+                        if not (
+                            r.target_type == "work_order"
+                            and int(r.target_id or 0) in wo_from_computation_ids
+                        )
+                    ]
+
+        # 兼容历史库：旧版曾写入 DocumentRelation(demand→demand_computation)。
+        # 若该 demand 实际来自销售订单/销售预测，则在全链路中隐藏 demand 节点，展示真实直连链路：
+        # sales_order/sales_forecast -> demand_computation
+        if document_type == "demand_computation":
+            demand_upstream_ids = {
+                int(r.source_id)
+                for r in upstream_responses
+                if r.source_type == "demand" and r.source_id
+            }
+            if demand_upstream_ids:
+                demand_rows = await Demand.filter(
+                    tenant_id=tenant_id,
+                    id__in=list(demand_upstream_ids),
+                ).values("id", "demand_type", "source_type")
+                hide_demand_ids = set()
+                for row in demand_rows:
+                    dt = str(row.get("demand_type") or "").strip()
+                    st = str(row.get("source_type") or "").strip()
+                    if dt in {"sales_order", "sales_forecast"} or st in {"sales_order", "sales_forecast"}:
+                        hide_demand_ids.add(int(row.get("id")))
+                if hide_demand_ids:
+                    upstream_responses = [
+                        r
+                        for r in upstream_responses
+                        if not (r.source_type == "demand" and int(r.source_id or 0) in hide_demand_ids)
+                    ]
 
         return DocumentRelationListResponse(
             upstream=upstream_responses,
@@ -366,7 +424,7 @@ class DocumentRelationNewService:
             DocumentTraceResponse: 完整的追溯链
         """
         # 获取根单据信息
-        root_code, root_name = await self._get_document_info(tenant_id, document_type, document_id)
+        root_code, root_name, root_created_at = await self._get_document_info(tenant_id, document_type, document_id)
         
         # 初始化追溯结果
         upstream_chain: List[DocumentTraceNode] = []
@@ -403,6 +461,7 @@ class DocumentRelationNewService:
             document_id=document_id,
             document_code=root_code,
             document_name=root_name,
+            created_at=root_created_at,
             upstream_chain=upstream_chain,
             downstream_chain=downstream_chain
         )
@@ -442,6 +501,7 @@ class DocumentRelationNewService:
                 document_id=rel.source_id,
                 document_code=rel.source_code,
                 document_name=rel.source_name,
+                created_at=rel.created_at,
                 level=level + 1,
                 children=children
             ))
@@ -483,6 +543,7 @@ class DocumentRelationNewService:
                 document_id=rel.target_id,
                 document_code=rel.target_code,
                 document_name=rel.target_name,
+                created_at=rel.created_at,
                 level=level + 1,
                 children=children
             ))
@@ -494,25 +555,30 @@ class DocumentRelationNewService:
         tenant_id: int,
         document_type: str,
         document_id: int
-    ) -> tuple[Optional[str], Optional[str]]:
-        """获取单据基本信息（编码和名称）"""
+    ) -> tuple[Optional[str], Optional[str], Optional[datetime]]:
+        """获取单据基本信息（编码、名称、创建时间）"""
         try:
             from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
             if document_type not in DocumentRelationService.DOCUMENT_TYPES:
-                return None, None
+                return None, None, None
             cfg = DocumentRelationService.DOCUMENT_TYPES[document_type]
             model = cfg["model"]
             code_field = cfg["code_field"]
             name_field = cfg.get("name_field")
             doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
             if not doc:
-                return None, None
+                return None, None, None
             code = getattr(doc, code_field, None)
             name = getattr(doc, name_field, None) if name_field else None
-            return str(code) if code else None, str(name) if name else str(code) if code else None
+            created_at = getattr(doc, "created_at", None)
+            return (
+                str(code) if code else None,
+                str(name) if name else str(code) if code else None,
+                created_at,
+            )
         except Exception as e:
             logger.debug(f"获取单据信息失败 {document_type}#{document_id}: {e}")
-            return None, None
+            return None, None, None
 
     def _flatten_downstream_nodes(
         self,

@@ -7,16 +7,49 @@
  * Date: 2025-12-26
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Input, Form, App } from 'antd';
+import { Input, Form, App, Button, Space } from 'antd';
 import { ProForm } from '@ant-design/pro-components';
-import { UniDropdown } from '../uni-dropdown';
+import { UniDropdown, QuickCreateAnchorPopover } from '../uni-dropdown';
 import {
   getDataDictionaryByCode,
   getDictionaryItemList,
   createDictionaryItem,
 } from '../../services/dataDictionary';
+
+type DictionaryOption = { label: string; value: string };
+
+/** 由 Form.Item 注入 value/onChange；合并异步选项与当前值，避免未加载字典项时误显示占位符 */
+const DictionarySelectField = forwardRef<
+  any,
+  Omit<React.ComponentProps<typeof UniDropdown>, 'options'> & {
+    loadedOptions: DictionaryOption[];
+    hookOnChange?: (v: any, opt: any) => void;
+  }
+>(({ loadedOptions, hookOnChange, onChange, value, ...rest }, ref) => {
+  const displayOptions = useMemo(() => {
+    if (value === undefined || value === null || value === '') {
+      return loadedOptions;
+    }
+    const strVal = String(value);
+    if (loadedOptions.some((o) => String(o.value) === strVal)) {
+      return loadedOptions;
+    }
+    return [...loadedOptions, { value: strVal, label: strVal }];
+  }, [loadedOptions, value]);
+
+  const handleChange = useCallback(
+    (v: any, opt: any) => {
+      (onChange as ((val: any, option: any) => void) | undefined)?.(v, opt);
+      hookOnChange?.(v, opt);
+    },
+    [onChange, hookOnChange]
+  );
+
+  return <UniDropdown ref={ref} {...rest} options={displayOptions} value={value} onChange={handleChange} />;
+});
+DictionarySelectField.displayName = 'DictionarySelectField';
 
 /**
  * 数据字典选择组件属性
@@ -26,7 +59,7 @@ export interface DictionarySelectProps {
   dictionaryCode: string;
   /** 字段名称 (noStyle 为 false 时必填) */
   name?: string | (string | number)[];
-  /** 标签 (用于错误提示和 Modal 标题) */
+  /** 标签 (用于错误提示与快速创建 Popover 标题) */
   label?: string;
   /** 占位符 */
   placeholder?: string;
@@ -57,10 +90,17 @@ export interface DictionarySelectProps {
   /** 当前选中的值 */
   value?: any;
   /**
-   * 快速创建时仅填写「标签」，存储用的 value 与 label 相同（适合基础单位等场景）。
-   * 其它字典仍可单独填写稳定唯一标识。
+   * 快速创建时是否只填「名称」：为 true 时存储 value 与显示 label 相同（默认）。
+   * 需单独维护稳定编码（如币种 CNY / 中文展示）时传 false，将显示「值」输入框。
    */
   valueEqualsLabel?: boolean;
+  /**
+   * 与客户/供应商表单一致：Popover 内仅一个输入框（占位「请输入新选项」）、标题「快速新增{label}」、主按钮「确定」；
+   * 新建项时 value 与 label 均为该输入内容（与 valueEqualsLabel 是否 false 无关，仅影响创建弹层）。
+   */
+  simpleQuickCreate?: boolean;
+  /** 快速创建 Popover 的 zIndex（嵌在抬升的 Modal 内时需高于父级，如报价单弹窗） */
+  quickCreatePopoverZIndex?: number;
 }
 
 /**
@@ -84,13 +124,16 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   className,
   onChange,
   value,
-  valueEqualsLabel = false,
+  valueEqualsLabel = true,
+  simpleQuickCreate = false,
+  quickCreatePopoverZIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
-  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createPopoverOpen, setCreatePopoverOpen] = useState(false);
+  const [createAnchorEl, setCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [createForm] = Form.useForm<{ displayLabel: string; storedValue?: string; description?: string }>();
   const [creating, setCreating] = useState(false);
   const [dictionaryUuid, setDictionaryUuid] = useState<string>('');
@@ -130,18 +173,26 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     let trimmedLabel: string;
     let trimmedValue: string;
     try {
-      const values = await createForm.validateFields();
-      trimmedLabel = String(values.displayLabel ?? '').trim();
-      trimmedValue = valueEqualsLabel ? trimmedLabel : String(values.storedValue ?? '').trim();
+      if (simpleQuickCreate) {
+        const values = await createForm.validateFields(['displayLabel']);
+        trimmedLabel = String(values.displayLabel ?? '').trim();
+        trimmedValue = trimmedLabel;
+      } else {
+        const values = await createForm.validateFields();
+        trimmedLabel = String(values.displayLabel ?? '').trim();
+        trimmedValue = valueEqualsLabel ? trimmedLabel : String(values.storedValue ?? '').trim();
+      }
     } catch {
       return;
     }
 
-    if (!trimmedLabel || (!valueEqualsLabel && !trimmedValue)) {
+    if (!trimmedLabel || (!simpleQuickCreate && !valueEqualsLabel && !trimmedValue)) {
       messageApi.warning(
-        valueEqualsLabel
-          ? t('components.dictionarySelect.enterUnitItem')
-          : t('components.dictionarySelect.enterLabelAndValue')
+        simpleQuickCreate
+          ? '请填写新选项'
+          : valueEqualsLabel
+            ? t('components.dictionarySelect.enterUnitItem')
+            : t('components.dictionarySelect.enterLabelAndValue')
       );
       return;
     }
@@ -154,7 +205,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
     try {
       setCreating(true);
-      const descTrimmed = String(createForm.getFieldValue('description') ?? '').trim();
+      const descTrimmed = simpleQuickCreate
+        ? ''
+        : String(createForm.getFieldValue('description') ?? '').trim();
 
       const newItem = await createDictionaryItem(dictionaryUuid, {
         label: trimmedLabel,
@@ -165,7 +218,8 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       });
 
       messageApi.success(t('common.createSuccess'));
-      setCreateModalVisible(false);
+      setCreatePopoverOpen(false);
+      setCreateAnchorEl(null);
       createForm.resetFields();
 
       await loadDictionaryItems();
@@ -201,107 +255,142 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
   const effectiveColProps = colProps ?? { span: 12 };
 
+  const baseFieldProps = {
+    style: { width: '100%', ...style } as React.CSSProperties,
+    className,
+    placeholder: placeholder || `请选择${label}`,
+    showSearch: true as const,
+    allowClear: true,
+    loading: loading || externalLoading,
+    disabled,
+    loadedOptions: options,
+    size,
+    quickCreate: {
+      label: simpleQuickCreate ? '快速新建' : '创建新项',
+      onClick: (anchor: HTMLElement | null | undefined) => {
+        createForm.resetFields();
+        setCreateAnchorEl(anchor ?? null);
+        setCreatePopoverOpen(true);
+      },
+    },
+  };
+
+  /** noStyle 时无 Form.Item 注入，需显式传 value；有 ProForm.Item 时勿传 value，避免 undefined 覆盖表单里的站点默认币种等 */
   const dropdown = (
-    <UniDropdown
-      style={{ width: '100%', ...style }}
-      className={className}
-      placeholder={placeholder || `请选择${label}`}
-      showSearch
-      allowClear
-      loading={loading || externalLoading}
-      disabled={disabled}
-      options={options}
-      size={size}
-      onChange={onChange}
-      value={value}
-      quickCreate={{
-        label: '创建新项',
-        onClick: () => {
-          createForm.resetFields();
-          setCreateModalVisible(true);
-        },
-      }}
+    <DictionarySelectField
+      {...baseFieldProps}
+      hookOnChange={onChange}
+      {...(noStyle ? { value } : {})}
     />
   );
 
-  const modal = (
-    <Modal
-      title={`创建新的${label}项`}
-      open={createModalVisible}
-      onOk={handleCreateItem}
-      onCancel={() => {
-        setCreateModalVisible(false);
+  const createPopoverZ = quickCreatePopoverZIndex ?? 2000;
+
+  const createPopover = (
+    <QuickCreateAnchorPopover
+      open={createPopoverOpen}
+      anchorEl={createAnchorEl}
+      title={simpleQuickCreate ? `快速新增${label}` : `创建新的${label}项`}
+      zIndex={createPopoverZ}
+      onClose={() => {
+        setCreatePopoverOpen(false);
+        setCreateAnchorEl(null);
         createForm.resetFields();
       }}
-      confirmLoading={creating}
-      okText="创建"
-      cancelText="取消"
-      zIndex={2000} // 确保在 Table 单元格等复杂场景下也能正确覆盖
     >
       <Form form={createForm} layout="vertical" preserve={false}>
-        <Form.Item
-          name="displayLabel"
-          label={
-            valueEqualsLabel
-              ? t('components.dictionarySelect.unitItem')
-              : t('components.dictionarySelect.fieldLabel')
-          }
-          rules={[
-            {
-              required: true,
-              whitespace: true,
-              message: valueEqualsLabel
-                ? t('components.dictionarySelect.enterUnitItem')
-                : t('components.dictionarySelect.enterLabel'),
-            },
-            { max: 100, message: t('components.dictionarySelect.maxLength100') },
-          ]}
-          extra={
-            valueEqualsLabel ? t('components.dictionarySelect.valueMirrorsLabelHint') : undefined
-          }
-        >
-          <Input
-            placeholder={
-              valueEqualsLabel
-                ? t('components.dictionarySelect.placeholderUnitItem')
-                : t('components.dictionarySelect.placeholderLabel')
-            }
-            maxLength={100}
-          />
-        </Form.Item>
-        {!valueEqualsLabel ? (
+        {simpleQuickCreate ? (
           <Form.Item
-            name="storedValue"
-            label={t('components.dictionarySelect.fieldValue')}
+            name="displayLabel"
             rules={[
-              {
-                required: true,
-                whitespace: true,
-                message: t('components.dictionarySelect.enterValue'),
-              },
+              { required: true, whitespace: true, message: '请填写新选项' },
               { max: 100, message: t('components.dictionarySelect.maxLength100') },
             ]}
+            style={{ marginBottom: 0 }}
           >
-            <Input placeholder={t('components.dictionarySelect.placeholderValue')} maxLength={100} />
+            <Input placeholder="请输入新选项" maxLength={100} autoFocus />
           </Form.Item>
-        ) : null}
-        <Form.Item name="description" label={t('components.dictionarySelect.fieldDescription')}>
-          <Input.TextArea
-            placeholder={t('components.dictionarySelect.placeholderDescription')}
-            rows={3}
-            maxLength={500}
-            showCount
-          />
-        </Form.Item>
+        ) : (
+          <>
+            <Form.Item
+              name="displayLabel"
+              label={
+                valueEqualsLabel
+                  ? t('components.dictionarySelect.unitItem')
+                  : t('components.dictionarySelect.fieldLabel')
+              }
+              rules={[
+                {
+                  required: true,
+                  whitespace: true,
+                  message: valueEqualsLabel
+                    ? t('components.dictionarySelect.enterUnitItem')
+                    : t('components.dictionarySelect.enterLabel'),
+                },
+                { max: 100, message: t('components.dictionarySelect.maxLength100') },
+              ]}
+              extra={
+                valueEqualsLabel ? t('components.dictionarySelect.valueMirrorsLabelHint') : undefined
+              }
+            >
+              <Input
+                placeholder={
+                  valueEqualsLabel
+                    ? t('components.dictionarySelect.placeholderUnitItem')
+                    : t('components.dictionarySelect.placeholderLabel')
+                }
+                maxLength={100}
+              />
+            </Form.Item>
+            {!valueEqualsLabel ? (
+              <Form.Item
+                name="storedValue"
+                label={t('components.dictionarySelect.fieldValue')}
+                rules={[
+                  {
+                    required: true,
+                    whitespace: true,
+                    message: t('components.dictionarySelect.enterValue'),
+                  },
+                  { max: 100, message: t('components.dictionarySelect.maxLength100') },
+                ]}
+              >
+                <Input placeholder={t('components.dictionarySelect.placeholderValue')} maxLength={100} />
+              </Form.Item>
+            ) : null}
+            <Form.Item name="description" label={t('components.dictionarySelect.fieldDescription')}>
+              <Input.TextArea
+                placeholder={t('components.dictionarySelect.placeholderDescription')}
+                rows={3}
+                maxLength={500}
+                showCount
+              />
+            </Form.Item>
+          </>
+        )}
+        <Space style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+          <Button
+            onClick={() => {
+              setCreatePopoverOpen(false);
+              setCreateAnchorEl(null);
+              createForm.resetFields();
+            }}
+          >
+            取消
+          </Button>
+          <Button type="primary" loading={creating} onClick={() => void handleCreateItem()}>
+            {simpleQuickCreate ? '确定' : '创建'}
+          </Button>
+        </Space>
       </Form>
-    </Modal>
+    </QuickCreateAnchorPopover>
   );
 
   if (noStyle) {
     return (
       <>
         {dropdown}
-        {modal}
+        {createPopover}
       </>
     );
   }
@@ -318,7 +407,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       >
         {dropdown}
       </ProForm.Item>
-      {modal}
+      {createPopover}
     </>
   );
 };

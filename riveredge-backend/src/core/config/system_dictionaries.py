@@ -159,6 +159,15 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "ORDER_TYPE",
+        "name": "订单类型",
+        "description": "采购订单等业务单据的订单类型",
+        "items": [
+            {"label": "标准采购", "value": "标准采购", "description": "常规采购订单", "sort_order": 1},
+            {"label": "框架协议", "value": "框架协议", "description": "按框架协议执行的采购订单", "sort_order": 2},
+        ],
+    },
+    {
         "code": "RETURN_REASON",
         "name": "退货原因",
         "description": "销售退货、采购退货等业务的退货原因",
@@ -292,6 +301,33 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "A级", "value": "A", "description": "A级", "sort_order": 2},
             {"label": "B级", "value": "B", "description": "B级", "sort_order": 3},
             {"label": "C级", "value": "C", "description": "C级", "sort_order": 4},
+        ],
+    },
+    {
+        "code": "CUSTOMER_CATEGORY",
+        "name": "客户分类",
+        "description": "客户与供应商档案中的客户/伙伴分类（可按组织在数据字典中增删）",
+        "items": [
+            {"label": "企业客户", "value": "ENTERPRISE", "description": "企业法人或组织客户", "sort_order": 1},
+            {"label": "终端/OEM", "value": "OEM", "description": "终端品牌或 OEM 客户", "sort_order": 2},
+            {"label": "贸易商/渠道", "value": "CHANNEL", "description": "分销、代理、贸易商", "sort_order": 3},
+            {"label": "政府/事业单位", "value": "GOV", "description": "政府、事业单位等", "sort_order": 4},
+            {"label": "个人客户", "value": "INDIVIDUAL", "description": "自然人客户", "sort_order": 5},
+            {"label": "其他", "value": "OTHER", "description": "其他类型", "sort_order": 99},
+        ],
+    },
+    {
+        "code": "CONTACT_TITLE",
+        "name": "联系人职位",
+        "description": "客户与供应商联系人职务（可按组织在数据字典中增删）",
+        "items": [
+            {"label": "总经理/负责人", "value": "GM", "description": "总经理或主要负责人", "sort_order": 1},
+            {"label": "采购", "value": "PROCUREMENT", "description": "采购相关岗位", "sort_order": 2},
+            {"label": "销售/商务", "value": "SALES", "description": "销售或商务", "sort_order": 3},
+            {"label": "技术/工程", "value": "TECH", "description": "技术、工程、研发", "sort_order": 4},
+            {"label": "财务", "value": "FINANCE", "description": "财务、会计", "sort_order": 5},
+            {"label": "仓储/物流", "value": "LOGISTICS", "description": "仓储、物流、计划", "sort_order": 6},
+            {"label": "其他", "value": "OTHER", "description": "其他职务", "sort_order": 99},
         ],
     },
     {

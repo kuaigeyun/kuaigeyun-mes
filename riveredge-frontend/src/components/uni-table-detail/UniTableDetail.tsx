@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table, Form as AntForm, Button, Space } from 'antd';
+import { Table, Form as AntForm, Button, Space, theme } from 'antd';
 import type { TableProps, ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ImportOutlined, DeleteOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,7 @@ export interface UniTableDetailProps<RecordType = any> {
   initialValue?: RecordType;
   /** 自定义工具栏操作（右侧，如导入按钮） */
   headerExtra?: React.ReactNode;
-  /** 底部额外按钮（如“物料批量选择”） */
+  /** 底部额外按钮（如"物料批量选择"） */
   footerExtra?: React.ReactNode;
   /** 多选物料点击事件 */
   onBatchSelect?: () => void;
@@ -46,9 +46,14 @@ export interface UniTableDetailProps<RecordType = any> {
 
 /**
  * 通用明细表格组件 (UniTableDetail)
- * 
- * 基准设计：报价单新建Modal中的物料明细表。
+ *
+ * 基准设计：报价单新建 Modal 中的物料明细表。
  * 支持 Form.List 自动关联、响应式滚动、自定义页脚按钮等。
+ *
+ * ⚠️ 背景色注入策略：
+ *   操作列（fixed:'right'）的表头/单元格背景通过 onHeaderCell/onCell 的 inline style
+ *   直接注入，不依赖 Less 选择器去覆盖 antd v6 CSS-in-JS 生成的样式。
+ *   Inline style 优先级最高，与 antd 版本解耦，不受 CSS-in-JS 哈希类干扰。
  */
 export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   name,
@@ -71,10 +76,12 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   containerStyle,
 }) => {
   const { t } = useTranslation();
+  // 从 antd design token 中读取正确的背景色，与主题保持一致
+  const { token } = theme.useToken();
 
   return (
     <div className="uni-table-detail" style={containerStyle}>
-      {(title || (headerExtra || onImport)) && (
+      {(title || headerExtra || onImport) && (
         <div className="uni-table-detail-header">
           <span className="detail-title">
             {required && <span className="required-mark">*</span>}
@@ -108,7 +115,9 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
           const totalWidth = columns.reduce((s, c) => s + (Number(c.width) || 0), 0) + (hideOperation ? 0 : 70);
 
           // 合并操作列
-          const finalColumns = [...columns];
+          // 关键：通过 onHeaderCell / onCell 用 inline style 注入背景色。
+          // 不依赖 CSS 选择器，彻底规避 antd v6 CSS-in-JS 与 Less 的优先级冲突。
+          const finalColumns: ColumnsType<any> = [...columns];
           if (!hideOperation && !disabledRemove) {
             finalColumns.push({
               title: t('common.operate') ?? '操作',
@@ -116,6 +125,14 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
               width: 70,
               align: 'center',
               fixed: 'right',
+              // ✅ 表头单元格：inline style 直接给背景色，优先级高于一切 CSS
+              onHeaderCell: () => ({
+                style: { background: token.colorFillAlter },
+              }),
+              // ✅ 数据单元格：同理
+              onCell: () => ({
+                style: { background: token.colorBgContainer },
+              }),
               render: (_, __, index) => {
                 const deleteDisabled = minRows != null && fields.length <= minRows;
                 return (

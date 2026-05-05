@@ -853,10 +853,19 @@ PURCHASE_REQUISITION_MAIN_STAGES = [
     {"key": "full", "label": "全部转单"},
 ]
 
+PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "approved", "label": "已通过"},
+    {"key": "partial", "label": "部分转单"},
+    {"key": "full", "label": "全部转单"},
+]
+
 
 def get_purchase_requisition_lifecycle(
     requisition: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    audit_required: bool = True,
 ) -> Dict[str, Any]:
     """采购申请生命周期计算"""
     status = _norm(getattr(requisition, "status", None))
@@ -866,20 +875,26 @@ def get_purchase_requisition_lifecycle(
         "待审核": "pending_review", "pending_review": "pending_review",
         "已驳回": "pending_review", "rejected": "pending_review",
         "已通过": "approved", "approved": "approved",
+        "已确认": "approved", "confirmed": "approved", "CONFIRMED": "approved",
         "部分转单": "partial", "partial": "partial",
         "全部转单": "full", "full": "full",
         "PARTIAL_CONVERTED": "partial", "FULL_CONVERTED": "full",
     }
     key = status_map.get(status, "draft")
+    if not audit_required and key == "pending_review":
+        key = "approved"
     stage_name = {"draft": "草稿", "pending_review": "待审核", "approved": "已通过",
                   "partial": "部分转单", "full": "全部转单"}.get(key, status or "草稿")
     if status in ("已驳回", "rejected"):
         stage_name = "已驳回"
+    if not audit_required and stage_name == "待审核":
+        stage_name = "已通过"
+    main_stages_def = PURCHASE_REQUISITION_MAIN_STAGES if audit_required else PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
         "status": "exception" if stage_name == "已驳回" else "success" if key == "full" else "normal",
-        "main_stages": _build_main_stages(PURCHASE_REQUISITION_MAIN_STAGES, key, is_exception=(stage_name == "已驳回")),
+        "main_stages": _build_main_stages(main_stages_def, key, is_exception=(stage_name == "已驳回")),
         "sub_stages": None,
         "next_step_suggestions": ["下推采购订单"] if key in ("approved", "partial") else [],
         "milestones": milestones,
@@ -1134,14 +1149,14 @@ def get_finished_goods_inspection_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（与 status / review_status 一致的可读拆分）
-# 草稿 → 已发送（提交后即此状态，内含待审核/已通过）→ 已审核 → 客户确认或转订单 → 已转订单
+# 报价单生命周期（统一主轴）
+# 草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单
 # ---------------------------------------------------------------------------
 QUOTATION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "submitted", "label": "已发送"},
-    {"key": "reviewed", "label": "已审核"},
-    {"key": "send_or_push", "label": "客户确认·转订单"},
+    {"key": "generated", "label": "已生成"},
+    {"key": "sent_pending_confirm", "label": "已发送待确认"},
+    {"key": "customer_confirmed", "label": "客户确认"},
     {"key": "converted", "label": "已转订单"},
 ]
 
@@ -1209,7 +1224,7 @@ def get_demand_computation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（草稿 → 已发送 → 已审核 → 客户确认·转订单 → 已转订单）
+# 报价单生命周期（草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单）
 # ---------------------------------------------------------------------------
 def _merge_quotation_version_meta(quotation: Any, result: Dict[str, Any]) -> Dict[str, Any]:
     """为生命周期结果附加版本系列信息，供列表/详情 UniLifecycle 与引导文案使用。"""
@@ -1283,7 +1298,7 @@ def get_quotation_lifecycle(
         return _merge_quotation_version_meta(
             quotation,
             _ret(
-                "submitted",
+                "generated",
                 "已驳回",
                 "exception",
                 ["修改报价单后点击「重新编辑」回到草稿，再提交审核"],
@@ -1305,8 +1320,8 @@ def get_quotation_lifecycle(
         return _merge_quotation_version_meta(
             quotation,
             _ret(
-                "send_or_push",
-                "客户已确认（待下推）",
+                "customer_confirmed",
+                "客户确认",
                 "normal",
                 ["转销售订单（下推）"],
             ),
@@ -1317,8 +1332,8 @@ def get_quotation_lifecycle(
             return _merge_quotation_version_meta(
                 quotation,
                 _ret(
-                    "submitted",
-                    "待审核",
+                    "generated",
+                    "已生成（待审核）",
                     "normal",
                     ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
                 ),
@@ -1327,11 +1342,11 @@ def get_quotation_lifecycle(
             return _merge_quotation_version_meta(
                 quotation,
                 _ret(
-                    "reviewed",
-                    "已审核",
+                    "sent_pending_confirm",
+                    "已发送待确认",
                     "normal",
                     [
-                        "客户确认（标记已接受，表示已发送/客户认可）",
+                        "客户确认（标记已接受）",
                         "转销售订单（下推，可直接下推不经客户确认）",
                         "撤回审核（回到待审核）",
                     ],
@@ -1340,8 +1355,8 @@ def get_quotation_lifecycle(
         return _merge_quotation_version_meta(
             quotation,
             _ret(
-                "submitted",
-                "待审核",
+                "generated",
+                "已生成（待审核）",
                 "normal",
                 ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
             ),

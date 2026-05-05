@@ -6,7 +6,7 @@
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
-import React, { useState, useCallback, useEffect, useRef, forwardRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, forwardRef, useMemo, useImperativeHandle } from 'react';
 import { Select, theme } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
@@ -51,6 +51,9 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   const mergedStyles = useMemo(() => mergeSelectPopupStyles(stylesProp), [stylesProp]);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const pinyinMatchRef = useRef<((text: string, pattern: string) => any) | null>(null);
+  const innerSelectRef = useRef<any>(null);
+  const anchorWrapRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(ref, () => innerSelectRef.current);
 
   // 动态加载 pinyin-pro，避免首屏同步引入
   useEffect(() => {
@@ -118,8 +121,20 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
                 role="button"
                 tabIndex={0}
                 style={itemStyle}
-                onClick={() => quickCreate.onClick()}
-                onKeyDown={(e) => e.key === 'Enter' && quickCreate.onClick()}
+                onClick={() => {
+                  innerSelectRef.current?.blur?.();
+                  requestAnimationFrame(() => {
+                    quickCreate.onClick(anchorWrapRef.current ?? undefined);
+                  });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    innerSelectRef.current?.blur?.();
+                    requestAnimationFrame(() => {
+                      quickCreate.onClick(anchorWrapRef.current ?? undefined);
+                    });
+                  }
+                }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = token.colorFillTertiary;
                   e.currentTarget.style.color = token.colorText;
@@ -162,16 +177,18 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
 
   return (
     <>
-      <Select
-        {...selectProps}
-        styles={mergedStyles}
-        style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', ...style }}
-        filterOption={effectiveFilterOption}
-        optionFilterProp={effectiveOptionFilterProp}
-        onChange={onChange}
-        popupRender={popupRender}
-        ref={ref}
-      />
+      <div ref={anchorWrapRef} style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+        <Select
+          {...selectProps}
+          styles={mergedStyles}
+          style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', ...style }}
+          filterOption={effectiveFilterOption}
+          optionFilterProp={effectiveOptionFilterProp}
+          onChange={onChange}
+          popupRender={popupRender}
+          ref={innerSelectRef}
+        />
+      </div>
       {advancedSearch && (
         <AdvancedSearchModal
           open={advancedSearchOpen}
@@ -188,3 +205,4 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
 
 export type { QuickCreateConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
 export { AdvancedSearchModal } from './AdvancedSearchModal';
+export { QuickCreateAnchorPopover } from './QuickCreateAnchorPopover';

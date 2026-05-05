@@ -26,7 +26,8 @@ const STATUS_TO_STAGE: Record<string, string> = {
   FULL_CONVERTED: '全部转单',
 };
 
-const MAIN_STAGE_KEYS = ['draft', 'pending_review', 'approved', 'partial', 'full'] as const;
+const MAIN_STAGE_KEYS_AUDIT = ['draft', 'pending_review', 'approved', 'partial', 'full'] as const;
+const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'approved', 'partial', 'full'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
   draft: '草稿',
   pending_review: '待审核',
@@ -35,9 +36,9 @@ const MAIN_STAGE_LABELS: Record<string, string> = {
   full: '全部转单',
 };
 
-function buildMainStages(currentKey: string): SubStage[] {
-  const order = ['draft', 'pending_review', 'approved', 'partial', 'full'];
-  const stageToIndex: Record<string, number> = {
+function buildMainStages(currentKey: string, auditRequired: boolean): SubStage[] {
+  const order = auditRequired ? [...MAIN_STAGE_KEYS_AUDIT] : [...MAIN_STAGE_KEYS_NO_AUDIT];
+  const stageToIndexAudit: Record<string, number> = {
     草稿: 0,
     待审核: 1,
     已驳回: 1,
@@ -45,6 +46,15 @@ function buildMainStages(currentKey: string): SubStage[] {
     部分转单: 3,
     全部转单: 4,
   };
+  const stageToIndexNoAudit: Record<string, number> = {
+    草稿: 0,
+    待审核: 1,
+    已驳回: 1,
+    已通过: 1,
+    部分转单: 2,
+    全部转单: 3,
+  };
+  const stageToIndex = auditRequired ? stageToIndexAudit : stageToIndexNoAudit;
   const currentIdx = stageToIndex[currentKey] ?? 0;
   return order.map((key, idx) => {
     let status: SubStage['status'] = 'pending';
@@ -54,9 +64,12 @@ function buildMainStages(currentKey: string): SubStage[] {
   });
 }
 
-function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
+function buildFallbackLifecycle(record: Record<string, unknown>, auditRequired: boolean): BackendLifecycle {
   const status = norm(record?.status as string);
-  const stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
+  let stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
+  if (!auditRequired && (stageName === '待审核' || stageName === '已驳回')) {
+    stageName = '已通过';
+  }
   const keyMap: Record<string, string> = {
     草稿: 'draft',
     待审核: 'pending_review',
@@ -81,7 +94,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     current_stage_key: key,
     current_stage_name: stageName,
     status: stageName === '已驳回' ? 'exception' : stageName === '全部转单' ? 'success' : 'normal',
-    main_stages: buildMainStages(stageName),
+    main_stages: buildMainStages(stageName, auditRequired),
     next_step_suggestions: nextStepSuggestions[key] ?? [],
   };
 }
@@ -92,12 +105,19 @@ export interface PurchaseRequisitionLike {
 }
 
 export function getPurchaseRequisitionLifecycle(
-  record: PurchaseRequisitionLike | Record<string, unknown> | null | undefined
+  record: PurchaseRequisitionLike | Record<string, unknown> | null | undefined,
+  auditRequired = true
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
-    return parseBackendLifecycle(backend);
+    const result = parseBackendLifecycle(backend);
+    if (!auditRequired && result.stageName === '待审核') {
+      return { ...result, stageName: '已通过', mainStages: buildMainStages('已通过', false) };
+    }
+    return result;
   }
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  const built = buildFallbackLifecycle(record as Record<string, unknown>, auditRequired);
+  built.main_stages = buildMainStages(built.current_stage_name || '草稿', auditRequired);
+  return parseBackendLifecycle(built);
 }

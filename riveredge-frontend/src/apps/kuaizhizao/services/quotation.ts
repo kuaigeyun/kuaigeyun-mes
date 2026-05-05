@@ -22,6 +22,8 @@ export interface QuotationItem {
   material_unit?: string;
   quote_quantity?: number;
   unit_price?: number;
+  /** 税率（%），含税模式下录入 */
+  tax_rate?: number;
   total_amount?: number;
   delivery_date?: string;
   notes?: string;
@@ -43,6 +45,8 @@ export interface Quotation {
   customer_phone?: string;
   total_quantity?: number;
   total_amount?: number;
+  /** 与销售订单一致：tax_inclusive 含税单价 / tax_exclusive 不含税单价 */
+  price_type?: 'tax_inclusive' | 'tax_exclusive' | string;
   status?: string;
   reviewer_id?: number;
   reviewer_name?: string;

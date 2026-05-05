@@ -20,7 +20,7 @@ export interface DemandComputation {
   demand_id?: number;
   demand_ids?: number[];  // 多需求合并支持
   demand_code?: string;
-  demand_type?: 'sales_forecast' | 'sales_order';
+  demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   business_mode?: 'MTS' | 'MTO' | 'ATO';
   /** 恒为 MRP；业务模式见 business_mode */
   computation_type?: 'MRP';

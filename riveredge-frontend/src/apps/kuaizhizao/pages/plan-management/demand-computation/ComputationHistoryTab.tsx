@@ -77,7 +77,7 @@ const ComputationHistoryTab: React.FC = () => {
 
   const columns: ProColumns<DemandComputation>[] = [
     { title: '计算编号', dataIndex: 'computation_code', width: 150, fixed: 'left' },
-    { title: '需求编号', dataIndex: 'demand_code', width: 150 },
+    { title: '来源单号', dataIndex: 'demand_code', width: 150 },
     {
       title: '业务模式',
       dataIndex: 'business_mode',

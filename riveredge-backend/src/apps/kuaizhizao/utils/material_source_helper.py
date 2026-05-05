@@ -204,9 +204,8 @@ async def validate_material_source_config(
             if not has_process_route:
                 errors.append(f"组合型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})")
         else:
-            # 未设置制造模式：沿用原逻辑，BOM 和工艺路线都建议配置
-            if bom_count == 0:
-                errors.append(f"自制件建议配置BOM，物料: {material.main_code} ({material.name})")
+            # 未设置制造模式：允许“仅工艺路线”的自制件参与计算并生成建议工单。
+            # 过去这里会因缺 BOM 直接报错并阻断建议工单，导致机加工类半成品误拦截。
             if not has_process_route:
                 errors.append(f"自制件建议配置工艺路线，物料: {material.main_code} ({material.name})")
             

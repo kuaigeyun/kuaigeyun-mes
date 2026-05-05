@@ -11,7 +11,6 @@ import {
   EyeOutlined,
   EditOutlined,
   SwapOutlined,
-  ThunderboltOutlined,
   DeleteOutlined,
   CopyOutlined,
   PlusOutlined,
@@ -39,7 +38,6 @@ import {
   withdrawPurchaseRequisition,
   fixPurchaseRequisitionStatus,
   convertToPurchaseOrder,
-  urgentPurchase,
   PurchaseRequisition,
   PurchaseRequisitionItem,
 } from '../../../services/purchase-requisition';
@@ -57,9 +55,10 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
-import { PriceHistoryInsight, MultiSupplierPriceComparison } from '../purchase-orders/ProcurementEmpowermentComponents';
+import { PriceHistoryInsight } from '../purchase-orders/ProcurementEmpowermentComponents';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -94,6 +93,7 @@ function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
@@ -247,14 +247,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [messageApi]
   );
 
-  const lifecycleValueEnum = {
-    草稿: { text: '草稿', status: 'Default' as const },
-    待审核: { text: '待审核', status: 'Processing' as const },
-    已驳回: { text: '已驳回', status: 'Error' as const },
-    已通过: { text: '已通过', status: 'Success' as const },
-    部分转单: { text: '部分转单', status: 'Warning' as const },
-    全部转单: { text: '全部转单', status: 'Success' as const },
-  };
+  const lifecycleValueEnum = purchaseRequestAuditEnabled
+    ? {
+        草稿: { text: '草稿', status: 'Default' as const },
+        待审核: { text: '待审核', status: 'Processing' as const },
+        已驳回: { text: '已驳回', status: 'Error' as const },
+        已通过: { text: '已通过', status: 'Success' as const },
+        部分转单: { text: '部分转单', status: 'Warning' as const },
+        全部转单: { text: '全部转单', status: 'Success' as const },
+      }
+    : {
+        草稿: { text: '草稿', status: 'Default' as const },
+        已通过: { text: '已通过', status: 'Success' as const },
+        部分转单: { text: '部分转单', status: 'Warning' as const },
+        全部转单: { text: '全部转单', status: 'Success' as const },
+      };
 
   const columns: ProColumns<PurchaseRequisition>[] = [
     // 仅高级搜索、不在表身展示；必须放在最前，避免夹在可滚动列与右侧 fixed 列之间导致固定列顺序异常
@@ -322,13 +329,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       hideInSearch: true,
     },
     { title: '明细数', dataIndex: 'items_count', width: 80, align: 'center', hideInSearch: true },
-    {
-      title: '紧急',
-      dataIndex: 'is_urgent',
-      width: 70,
-      hideInSearch: true,
-      render: (v) => (v ? <Tag color="red">紧急</Tag> : '-'),
-    },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160, hideInSearch: true },
     {
       title: '更新时间',
@@ -348,7 +348,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       hideInSearch: false,
       valueEnum: lifecycleValueEnum,
       render: (_, record) => {
-        const lifecycle = getPurchaseRequisitionLifecycle(record);
+        const lifecycle = getPurchaseRequisitionLifecycle(record, purchaseRequestAuditEnabled);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -372,14 +372,29 @@ const PurchaseRequisitionsPage: React.FC = () => {
       render: (_, record) => {
         const s = (record.status ?? '').toString().trim();
         const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
-        const isPending = ['待审核', 'pending_review', 'PENDING_REVIEW'].includes(s);
-        const isApprovedOrPartial = ['已通过', '部分转单', 'audited', 'approved', 'AUDITED', 'PARTIAL_CONVERTED'].includes(s);
+        const isApprovedOrPartial = [
+          '已通过',
+          '已确认',
+          '部分转单',
+          'approved',
+          'confirmed',
+          'audited',
+          'APPROVED',
+          'CONFIRMED',
+          'AUDITED',
+          'PARTIAL_CONVERTED',
+        ].includes(s);
         const parts: React.ReactNode[] = [
           <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>,
         ];
         if (isDraft) {
+          parts.push(
+            <Button key="submit" type="link" size="small" onClick={() => handleSubmitRequisition(record)}>
+              提交
+            </Button>
+          );
           parts.push(
             <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               编辑
@@ -400,8 +415,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
               theme="link"
               size="small"
               confirmMessages={{ revoke: '撤回后状态将变为待审核，可重新提交审核。' }}
+              workflowAuditEnabled={purchaseRequestAuditEnabled}
+              hideAuditActionsWhenDisabled={true}
               actions={{
-                submit: (id) => submitPurchaseRequisition(id),
                 approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
                 reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
                 revoke: (id) => withdrawPurchaseRequisition(id),
@@ -414,13 +430,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
           parts.push(
             <Button key="cv" type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
               下推采购单
-            </Button>
-          );
-        }
-        if (isDraft || isPending) {
-          parts.push(
-            <Button key="urgent" type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleUrgent(record)}>
-              紧急采购
             </Button>
           );
         }
@@ -650,6 +659,28 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   };
 
+  const handleSubmitRequisition = (record: PurchaseRequisition) => {
+    if (!record.id) return;
+    modalApi.confirm({
+      title: '提交采购申请',
+      content: purchaseRequestAuditEnabled ? '提交后将进入审核流程，是否继续？' : '提交后将直接生效（无需审核），是否继续？',
+      onOk: async () => {
+        try {
+          await submitPurchaseRequisition(record.id!);
+          messageApi.success('提交成功');
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          if (currentReq?.id === record.id) {
+            const refreshed = await getPurchaseRequisition(record.id!);
+            setCurrentReq(refreshed);
+          }
+        } catch (e: any) {
+          messageApi.error(e?.response?.data?.detail || '提交失败');
+        }
+      },
+    });
+  };
+
   // handleSubmit removed as it is redundant with UniWorkflowActions
 
   const convertFormRef = React.useRef<{
@@ -784,40 +815,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.response?.data?.detail || '删除失败');
-        }
-      },
-    });
-  };
-
-  const handleUrgent = (record: PurchaseRequisition) => {
-    let reason = '';
-    modalApi.confirm({
-      title: '紧急采购',
-      content: (
-        <AntForm layout="vertical">
-          <AntForm.Item label="紧急原因" required>
-            <Input.TextArea
-              rows={3}
-              placeholder="请输入紧急原因（如：客户加急、设备故障补件）"
-              onChange={(e) => (reason = e.target.value)}
-            />
-          </AntForm.Item>
-        </AntForm>
-      ),
-      onOk: async () => {
-        if (!reason?.trim()) {
-          messageApi.error('请填写紧急原因');
-          return Promise.reject();
-        }
-        try {
-          await urgentPurchase(record.id!, { urgent_reason: reason.trim() });
-          messageApi.success('紧急采购完成');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.response?.data?.detail || '操作失败');
-          return Promise.reject();
         }
       },
     });
@@ -1440,6 +1437,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     </Button>
                   ),
                 },
+                {
+                  key: 'submit',
+                  visible: ['草稿', 'draft', 'DRAFT'].includes((currentReq.status ?? '').toString().trim()),
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => currentReq && handleSubmitRequisition(currentReq)}
+                    >
+                      提交
+                    </Button>
+                  ),
+                },
                 { key: 'workflow', visible: true, render: () => (
                   <UniWorkflowActions
                     record={currentReq}
@@ -1454,11 +1464,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     size="small"
                     confirmMessages={{ revoke: '撤回后状态将变为待审核，可重新提交审核。' }}
                     actions={{
-                      submit: (id) => submitPurchaseRequisition(id),
                       approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
                       reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
                       revoke: (id) => withdrawPurchaseRequisition(id),
                     }}
+                    workflowAuditEnabled={purchaseRequestAuditEnabled}
+                    hideAuditActionsWhenDisabled={true}
                     onSuccess={async () => {
                       invalidateMenuBadgeCounts();
 
@@ -1474,7 +1485,24 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     }}
                   />
                 ) },
-                { key: 'convert', visible: currentReq.status === '已通过' || currentReq.status === '部分转单', render: () => <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>下推采购单</Button> },
+                {
+                  key: 'convert',
+                  visible: [
+                    '已通过',
+                    '已确认',
+                    '部分转单',
+                    'approved',
+                    'confirmed',
+                    'APPROVED',
+                    'CONFIRMED',
+                    'PARTIAL_CONVERTED',
+                  ].includes((currentReq.status ?? '').toString().trim()),
+                  render: () => (
+                    <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>
+                      下推采购单
+                    </Button>
+                  ),
+                },
                 {
                   key: 'fixStatus',
                   visible: ['全部转单', 'FULL_CONVERTED'].includes(currentReq.status ?? ''),
@@ -1514,7 +1542,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   column={3}
                   size="small"
                   items={(() => {
-                    const lc = getPurchaseRequisitionLifecycle(currentReq);
+                    const lc = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
                     const stageName = lc.stageName ?? currentReq.status ?? '草稿';
                     const fmtDate = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD') : '-');
                     const fmtDt = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-');
@@ -1551,17 +1579,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       },
                       { key: 'reqd', label: '要求到货日期', children: fmtDate(currentReq.required_date) },
                       {
-                        key: 'urgent',
-                        label: '是否紧急',
-                        children: currentReq.is_urgent ? <Tag color="red">是</Tag> : '否',
-                      },
-                      {
-                        key: 'urgent_reason',
-                        label: '紧急原因',
-                        span: 3,
-                        children: currentReq.urgent_reason?.trim() ? currentReq.urgent_reason : '-',
-                      },
-                      {
                         key: 'notes',
                         label: '备注',
                         span: 3,
@@ -1579,7 +1596,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getPurchaseRequisitionLifecycle(currentReq);
+                    const lifecycle = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
                     const mainStages = lifecycle.mainStages ?? [];
                     return (
                       <>
@@ -1831,18 +1848,6 @@ const ConvertForm: React.FC<{
               ) : record.purchase_order_id ? (
                 '-'
               ) : null,
-          },
-          { 
-            title: '比价助手', 
-            width: 100, 
-            align: 'center',
-            render: (_: unknown, record: PurchaseRequisitionItem) => 
-              record.id != null && record.material_id ? (
-                <MultiSupplierPriceComparison 
-                  materialId={record.material_id} 
-                  onSelectSupplier={(sid) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: sid }))}
-                />
-              ) : '-'
           },
           { title: '需求数量', dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => Number(v ?? 0) },
           {

@@ -926,20 +926,6 @@ code {
   border-radius: var(--ant-borderRadius) !important;
 }
 
-/* 报价单列表：编号列含树形展开 + 复制，禁用单元格层省略（与列 ellipsis: false 一致） */
-.kuaizhizao-quotations-table .quotation-list-code-cell.ant-table-cell {
-  overflow: visible !important;
-  text-overflow: clip !important;
-  vertical-align: middle !important;
-  white-space: nowrap !important;
-}
-.kuaizhizao-quotations-table .quotation-list-code-cell .ant-table-cell-content,
-.kuaizhizao-quotations-table .quotation-list-code-cell .rc-table-cell-content {
-  overflow: visible !important;
-  text-overflow: clip !important;
-  white-space: nowrap !important;
-}
-
 /* 同一系列树：父行 / 子行单元格高度一致，避免 V2/V1 看起来比 V3 行高不同 */
 .kuaizhizao-quotations-table .ant-table-tbody > tr > td {
   vertical-align: middle !important;

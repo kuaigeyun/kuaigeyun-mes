@@ -12,7 +12,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select, Switch } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -20,6 +20,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
+import '../../../../../components/uni-table-detail/index.less';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
@@ -70,17 +71,14 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
+import { useConfigStore } from '../../../../../stores/configStore';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
-import '../../../../../components/uni-table-detail/index.less';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
 );
 const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
-
-/** 币种字典值：人民币（与 CURRENCY 字典项 value 一致，一般为 CNY） */
-const DEFAULT_QUOTATION_CURRENCY = 'CNY';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   草稿: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
@@ -311,8 +309,71 @@ function renderQuotationRowActions(nodes: React.ReactNode[], keyPrefix: string):
   return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
+const toSafeNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toCents = (value: unknown): number => Math.round(toSafeNumber(value) * 100);
+const fromCents = (cents: number): number => cents / 100;
+
+/** 与销售订单明细价税列一致；数量字段为 quote_quantity */
+const calcQuotationLineAmounts = (
+  qtyInput: unknown,
+  priceInput: unknown,
+  taxRateInput: unknown,
+  priceTypeInput?: string,
+) => {
+  const qty = toSafeNumber(qtyInput);
+  const unitPriceCents = toCents(priceInput);
+  const taxRate = toSafeNumber(taxRateInput);
+  const priceType = priceTypeInput ?? 'tax_exclusive';
+
+  if (priceType === 'tax_inclusive') {
+    const inclCents = Math.round(qty * unitPriceCents);
+    const exclCents = Math.round(inclCents / (1 + taxRate / 100));
+    const taxCents = inclCents - exclCents;
+    return {
+      excl: fromCents(exclCents),
+      tax: fromCents(taxCents),
+      incl: fromCents(inclCents),
+    };
+  }
+
+  const exclCents = Math.round(qty * unitPriceCents);
+  const taxCents = Math.round((exclCents * taxRate) / 100);
+  return {
+    excl: fromCents(exclCents),
+    tax: fromCents(taxCents),
+    incl: fromCents(exclCents + taxCents),
+  };
+};
+
+const convertUnitPriceByPriceType = (
+  unitPriceInput: unknown,
+  taxRateInput: unknown,
+  fromPriceType: string,
+  toPriceType: string,
+): number => {
+  const unitPriceCents = toCents(unitPriceInput);
+  if (fromPriceType === toPriceType) return fromCents(unitPriceCents);
+
+  const taxRate = toSafeNumber(taxRateInput);
+  const factor = 1 + taxRate / 100;
+  if (factor <= 0) return fromCents(unitPriceCents);
+
+  if (fromPriceType === 'tax_exclusive' && toPriceType === 'tax_inclusive') {
+    return fromCents(Math.round(unitPriceCents * factor));
+  }
+  if (fromPriceType === 'tax_inclusive' && toPriceType === 'tax_exclusive') {
+    return fromCents(Math.round(unitPriceCents / factor));
+  }
+  return fromCents(unitPriceCents);
+};
+
 /** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
 const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+  const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
   const mid =
     row?.material_id != null && row?.material_id !== ''
@@ -327,6 +388,21 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
           label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
         }
       : undefined;
+  /** 主数据默认售价为不含税；表单为含税单价时需换算，与切换价类时的 convert 一致 */
+  const onMaterialPicked = useCallback(
+    (_val: number | undefined, material: Material | undefined) => {
+      if (!material) return;
+      const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
+      if (pt !== 'tax_inclusive') return;
+      const raw = Number(form.getFieldValue(['items', index, 'unit_price'])) || 0;
+      const taxR = Number(form.getFieldValue(['items', index, 'tax_rate'])) || 0;
+      form.setFieldValue(
+        ['items', index, 'unit_price'],
+        convertUnitPriceByPriceType(raw, taxR, 'tax_exclusive', 'tax_inclusive'),
+      );
+    },
+    [form, index],
+  );
   return (
     <div
       className="quotation-material-cell"
@@ -347,48 +423,80 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
             material_spec: 'specification',
             material_unit: 'baseUnit',
             unit_price: 'defaults.defaultSalePrice' as any,
+            tax_rate: 'defaults.defaultTaxRate' as any,
           }}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate
           showAdvancedSearch
+          onChange={onMaterialPicked}
         />
       </div>
     </div>
   );
 };
 
+/** 不含税模式下仅展示未税金额列；含税模式下列为可编辑价税合计，本组件仅用于不含税简化列 */
 const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
-  const amt = (Number(row?.quote_quantity) || 0) * (Number(row?.unit_price) || 0);
-  return <AmountDisplay resource="sales_order" value={amt} />;
+  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
+  const line = calcQuotationLineAmounts(row?.quote_quantity, row?.unit_price, row?.tax_rate, priceType);
+  return <AmountDisplay resource="sales_order" value={line.excl} />;
 };
 
 const QuotationFormSummary: React.FC = () => {
   const items = Form.useWatch('items');
+  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
+  const { token } = AntdTheme.useToken();
   const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0), 0) || 0;
-  const totalAmount =
-    items?.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0) * (Number(it?.unit_price) || 0), 0) || 0;
+  let totalExcl = 0;
+  let totalIncl = 0;
+  for (const it of items || []) {
+    const line = calcQuotationLineAmounts(it?.quote_quantity, it?.unit_price, it?.tax_rate, priceType);
+    totalExcl += line.excl;
+    totalIncl += line.incl;
+  }
 
   return (
     <div
       style={{
         marginTop: 12,
-        padding: '12px',
-        background: '#fafafa',
+        marginBottom: 24,
+        padding: '12px 12px 16px',
+        background: token.colorFillAlter,
         borderRadius: '4px',
         display: 'flex',
         justifyContent: 'flex-end',
+        flexWrap: 'wrap',
         gap: 24,
       }}
     >
       <span>总数量: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-      <span>
-        总金额:{' '}
-        <Typography.Text strong type="danger">
-          <AmountDisplay resource="sales_order" value={totalAmount} />
-        </Typography.Text>
-      </span>
+      {priceType === 'tax_exclusive' ? (
+        <>
+          <span>
+            未税总额:{' '}
+            <Typography.Text strong>
+              <AmountDisplay resource="sales_order" value={totalExcl} />
+            </Typography.Text>
+          </span>
+          {Math.abs(totalIncl - totalExcl) > 0.005 && (
+            <span>
+              价税合计(含税):{' '}
+              <Typography.Text strong type="danger">
+                <AmountDisplay resource="sales_order" value={totalIncl} />
+              </Typography.Text>
+            </span>
+          )}
+        </>
+      ) : (
+        <span>
+          价税合计:{' '}
+          <Typography.Text strong type="danger">
+            <AmountDisplay resource="sales_order" value={totalIncl} />
+          </Typography.Text>
+        </span>
+      )}
     </div>
   );
 };
@@ -404,6 +512,10 @@ const QuotationsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { message: messageApi } = App.useApp();
+  const defaultQuotationCurrency = useConfigStore((s) => {
+    const c = s.configs.default_currency;
+    return typeof c === 'string' && c.trim() !== '' ? c.trim() : 'CNY';
+  });
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
@@ -453,6 +565,37 @@ const QuotationsPage: React.FC = () => {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const formRef = useRef<any>(null);
+  const lastPriceTypeRef = useRef<'tax_exclusive' | 'tax_inclusive'>('tax_exclusive');
+  const [quotationEditingIncl, setQuotationEditingIncl] = useState<{ index: number; value: number | null } | null>(
+    null,
+  );
+  const quotationEditingInclValueRef = useRef<number | null>(null);
+
+  const handleQuotationPriceTypeToggle = useCallback((checked: boolean) => {
+    const nextType: 'tax_exclusive' | 'tax_inclusive' = checked ? 'tax_inclusive' : 'tax_exclusive';
+    const currentTypeRaw = formRef.current?.getFieldValue?.('price_type') ?? lastPriceTypeRef.current;
+    const currentType: 'tax_exclusive' | 'tax_inclusive' =
+      currentTypeRaw === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
+    if (currentType === nextType) {
+      lastPriceTypeRef.current = nextType;
+      return;
+    }
+
+    const items = formRef.current?.getFieldValue?.('items') ?? [];
+    if (Array.isArray(items) && items.length > 0) {
+      const convertedItems = items.map((row: any) => ({
+        ...row,
+        unit_price: convertUnitPriceByPriceType(row?.unit_price, row?.tax_rate, currentType, nextType),
+      }));
+      formRef.current?.setFieldsValue({ items: convertedItems, price_type: nextType });
+    } else {
+      formRef.current?.setFieldsValue({ price_type: nextType });
+    }
+    setQuotationEditingIncl(null);
+    quotationEditingInclValueRef.current = null;
+    lastPriceTypeRef.current = nextType;
+  }, []);
+
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [userList, setUserList] = useState<any[]>([]);
@@ -536,14 +679,13 @@ const QuotationsPage: React.FC = () => {
       key: 'quotation_code',
       dataIndex: 'quotation_code',
       /** 树形展开 + 复制占宽；关闭列级 ellipsis，避免 rc-table 与 Typography 双重省略号 */
-      width: 520,
+      width: 240,
+      /** 统一由列定义控制宽度：禁用该列拖拽改宽，避免持久化覆盖 */
+      resizable: false,
       ellipsis: false,
       fixed: 'left',
       order: 10,
       fieldProps: { placeholder: '支持模糊匹配' },
-      onCell: () => ({
-        className: 'quotation-list-code-cell',
-      }),
       render: (_, r) => {
         const code = String(r.quotation_code ?? '-');
         return (
@@ -877,8 +1019,9 @@ const QuotationsPage: React.FC = () => {
         shipping_address: detail.shipping_address,
         shipping_method: detail.shipping_method,
         payment_terms: detail.payment_terms,
-        currency_code: detail.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
+        currency_code: detail.currency_code ?? defaultQuotationCurrency,
         notes: detail.notes,
+        price_type: detail.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
         items: (detail.items || []).map((it) => ({
           material_id: it.material_id!,
           material_code: it.material_code || '',
@@ -887,12 +1030,15 @@ const QuotationsPage: React.FC = () => {
           material_unit: it.material_unit || '',
           quote_quantity: Number(it.quote_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
+          tax_rate: Number(it.tax_rate) || 0,
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
         })),
       };
       setTimeout(() => {
         formRef.current?.setFieldsValue(editValues);
+        lastPriceTypeRef.current =
+          editValues.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
       }, 50);
     } catch {
       messageApi.error('获取报价单详情失败');
@@ -918,6 +1064,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleItemImport = (data: any[][]) => {
+    const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
     const rows = data.slice(2);
     const newItems = rows
       .map((row) => {
@@ -931,7 +1078,13 @@ const QuotationsPage: React.FC = () => {
         if (!materialCode) return null;
 
         const material = materialList.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
-        
+        const taxR =
+          Number(material?.defaults?.defaultTaxRate ?? material?.defaults?.default_tax_rate) || 0;
+        let unitPrice = price || Number(material?.defaults?.defaultSalePrice ?? material?.default_sale_price) || 0;
+        if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
+          unitPrice = convertUnitPriceByPriceType(unitPrice, taxR, 'tax_exclusive', 'tax_inclusive');
+        }
+
         return {
           material_id: material?.id ?? material?.material_id,
           material_code: material?.main_code ?? material?.mainCode ?? material?.code ?? materialCode,
@@ -939,7 +1092,8 @@ const QuotationsPage: React.FC = () => {
           material_spec: material?.specification ?? material?.material_spec ?? spec,
           material_unit: material?.base_unit ?? material?.baseUnit ?? material?.material_unit ?? unit,
           quote_quantity: quantity,
-          unit_price: price || material?.defaults?.defaultSalePrice || material?.default_sale_price || 0,
+          unit_price: unitPrice,
+          tax_rate: taxR,
           delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
         };
       })
@@ -1130,6 +1284,7 @@ const QuotationsPage: React.FC = () => {
         material_unit: mat.baseUnit || '件',
         quote_quantity: qty,
         unit_price: price,
+        tax_rate: 0,
         delivery_date: delivery || undefined,
         notes: notes || undefined,
       });
@@ -1406,8 +1561,9 @@ const QuotationsPage: React.FC = () => {
           );
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
-          setQuotationDetail(created);
-          setDetailDrawerVisible(true);
+          // 创建新版后直接进入编辑 Modal（与“新建”一致），不再跳详情抽屉。
+          setDetailDrawerVisible(false);
+          await handleEdit(created);
         } catch (e: any) {
           messageApi.error(e?.message || e?.detail || '操作失败');
         }
@@ -1492,7 +1648,18 @@ const QuotationsPage: React.FC = () => {
    * 处理新建报价单
    * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编号（不占用序号）
    */
-  const defaultQuoteItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', quote_quantity: 1, unit_price: 0, delivery_date: undefined, notes: '' };
+  const defaultQuoteItem = {
+    material_id: undefined,
+    material_code: '',
+    material_name: '',
+    material_spec: '',
+    material_unit: '件',
+    quote_quantity: 1,
+    unit_price: 0,
+    tax_rate: 0,
+    delivery_date: undefined,
+    notes: '',
+  };
 
   const handleCreate = async () => {
     formRef.current?.resetFields();
@@ -1502,7 +1669,12 @@ const QuotationsPage: React.FC = () => {
     setEffectiveAutoGen(null);
     setModalVisible(true);
     setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultQuoteItem], currency_code: DEFAULT_QUOTATION_CURRENCY });
+      lastPriceTypeRef.current = 'tax_exclusive';
+      formRef.current?.setFieldsValue({
+        items: [defaultQuoteItem],
+        currency_code: defaultQuotationCurrency,
+        price_type: 'tax_exclusive',
+      });
     }, 100);
     try {
       const config = await getCodeRulePageConfig('kuaizhizao-quotation');
@@ -1576,8 +1748,9 @@ const QuotationsPage: React.FC = () => {
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
-      currency_code: values.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
+      currency_code: values.currency_code ?? defaultQuotationCurrency,
       notes: values.notes,
+      price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
       items: validItems.map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code,
@@ -1586,6 +1759,7 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
+        tax_rate: it.tax_rate ?? 0,
         delivery_date: toApiDateString(it.delivery_date),
         notes: it.notes,
       })),
@@ -1621,8 +1795,9 @@ const QuotationsPage: React.FC = () => {
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
-      currency_code: values.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
+      currency_code: values.currency_code ?? defaultQuotationCurrency,
       notes: values.notes,
+      price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
       items: validItems.map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code,
@@ -1631,6 +1806,7 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
+        tax_rate: it.tax_rate ?? 0,
         delivery_date: toApiDateString(it.delivery_date),
         notes: it.notes,
       })),
@@ -1679,6 +1855,12 @@ const QuotationsPage: React.FC = () => {
     { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
     { title: '有效期至', dataIndex: 'valid_until', valueType: 'date' },
     {
+      title: '是否含税',
+      dataIndex: 'price_type',
+      render: (_: unknown, r: Quotation) =>
+        r.price_type === 'tax_inclusive' ? '含税单价' : '不含税单价',
+    },
+    {
       title: '总金额',
       dataIndex: 'total_amount',
       render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
@@ -1687,7 +1869,7 @@ const QuotationsPage: React.FC = () => {
       title: '币种',
       dataIndex: 'currency_code',
       render: (_: unknown, record: Quotation) => (
-        <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || DEFAULT_QUOTATION_CURRENCY} />
+        <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || defaultQuotationCurrency} />
       ),
     },
     {
@@ -1795,20 +1977,29 @@ const QuotationsPage: React.FC = () => {
 
   const appendQuotationItemsFromMaterials = useCallback(
     (selected: Material[]) => {
+      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-      const rowFromMaterial = (m: Material) => ({
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_spec: m.specification ?? '',
-        material_unit: m.baseUnit ?? '',
-        quote_quantity: 1,
-        unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).default_sale_price ?? 0,
-        delivery_date: defaultDelivery,
-        notes: '',
-      });
+      const rowFromMaterial = (m: Material) => {
+        const taxR = Number((m as any).defaults?.defaultTaxRate ?? (m as any).defaults?.default_tax_rate) || 0;
+        let up = Number((m as any).defaults?.defaultSalePrice ?? (m as any).default_sale_price) || 0;
+        if (pt === 'tax_inclusive' && up > 0) {
+          up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
+        }
+        return {
+          material_id: m.id,
+          material_code: m.mainCode ?? m.code ?? '',
+          material_name: m.name ?? '',
+          material_spec: m.specification ?? '',
+          material_unit: m.baseUnit ?? '',
+          quote_quantity: 1,
+          unit_price: up,
+          tax_rate: taxR,
+          delivery_date: defaultDelivery,
+          notes: '',
+        };
+      };
       const isEmptyItemRow = (row: any) => {
         if (row == null) return true;
         if (row.material_id != null && row.material_id !== '') return false;
@@ -1844,25 +2035,7 @@ const QuotationsPage: React.FC = () => {
           />
         </Col>
         <Col span={12}>
-          <ProForm.Item
-            name="customer_id"
-            label={
-              <span>
-                客户名称
-                <a
-                  href="/apps/master-data/supply-chain/customers"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate('/apps/master-data/supply-chain/customers');
-                  }}
-                  style={{ marginLeft: 8, fontSize: 12 }}
-                >
-                  客户信息管理
-                </a>
-              </span>
-            }
-            rules={[{ required: true, message: '请选择客户' }]}
-          >
+          <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
             <UniDropdown
               placeholder="请选择客户"
               showSearch
@@ -1982,6 +2155,8 @@ const QuotationsPage: React.FC = () => {
             label="发货方式"
             placeholder="请选择发货方式"
             formRef={formRef}
+            simpleQuickCreate
+            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
           />
         </Col>
       </Row>
@@ -2003,6 +2178,8 @@ const QuotationsPage: React.FC = () => {
             label="付款条件"
             placeholder="请选择付款条件"
             formRef={formRef}
+            simpleQuickCreate
+            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
           />
         </Col>
         <Col span={4}>
@@ -2012,159 +2189,345 @@ const QuotationsPage: React.FC = () => {
             label="币种"
             placeholder="请选择币种"
             formRef={formRef}
-            initialValue={DEFAULT_QUOTATION_CURRENCY}
+            initialValue={defaultQuotationCurrency}
+            valueEqualsLabel={false}
+            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
           />
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
 
       <div className="uni-table-detail">
-        <div className="uni-table-detail-header">
-          <span className="detail-title">
-            <span className="required-mark">*</span>
-            物料明细
-          </span>
+        <div
+          className="uni-table-detail-header"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 8,
+          }}
+        >
+          <Space align="center" size={12}>
+            <span className="detail-title">
+              <span className="required-mark">*</span>
+              物料明细
+            </span>
+            <ProForm.Item
+              name="price_type"
+              initialValue="tax_exclusive"
+              noStyle
+              valuePropName="checked"
+              getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
+              getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
+            >
+              <Switch
+                checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
+                unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
+                onChange={handleQuotationPriceTypeToggle}
+              />
+            </ProForm.Item>
+          </Space>
           <div className="uni-table-detail-header-actions">
             <Button type="default" size="small" icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
               导入明细
             </Button>
           </div>
         </div>
-        {/* 与销售订单一致：Form.Item(noStyle) + Form.List + Table；勿再套一层 ProForm.Item 同名 items */}
-        <Form.Item
-          name="items"
-          noStyle
-          rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}
-        >
-          <Form.List name="items">
-            {(fields, { add, remove }) => {
-              const quotationDetailColumns = [
-                {
-                  title: '物料',
-                  dataIndex: 'material_id',
-                  width: 260,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <QuotationMaterialSelectCell index={index} />
-                  ),
-                },
-                {
-                  title: '规格',
-                  dataIndex: 'material_spec',
-                  width: 120,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                      <Input placeholder="规格" size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '单位',
-                  dataIndex: 'material_unit',
-                  width: 100,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item
-                      noStyle
-                      shouldUpdate={(prev: any, curr: any) =>
-                        prev?.items?.[index]?.material_id !==
-                        curr?.items?.[index]?.material_id
-                      }
-                    >
-                      {({ getFieldValue }) => {
-                        const materialId = getFieldValue(['items', index, 'material_id']);
-                        return (
-                          <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                            <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+        <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+          {({ getFieldValue }: any) => {
+            const priceType = getFieldValue('price_type') ?? 'tax_exclusive';
+            const showTaxColumns = priceType === 'tax_inclusive';
+            return (
+              <Form.Item
+                name="items"
+                noStyle
+                rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}
+              >
+                <Form.List name="items">
+                  {(fields, { add, remove }) => {
+                    const quotationDetailColumns = [
+                      {
+                        title: '物料',
+                        dataIndex: 'material_id',
+                        width: 260,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <QuotationMaterialSelectCell index={index} />
+                        ),
+                      },
+                      {
+                        title: '规格',
+                        dataIndex: 'material_spec',
+                        width: 120,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                            <Input placeholder="规格" size="small" />
                           </Form.Item>
-                        );
-                      }}
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '数量',
-                  dataIndex: 'quote_quantity',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item
-                      name={[index, 'quote_quantity']}
-                      rules={[{ required: true, message: '必填' }]}
-                      style={{ margin: 0 }}
-                    >
-                      <InputNumber placeholder="数量" min={0.01} precision={2} style={{ width: '100%' }} size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '单价',
-                  dataIndex: 'unit_price',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                      <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '金额',
-                  width: 120,
-                  align: 'right' as const,
-                  render: (_: unknown, __: unknown, index: number) => <QuotationAmountCell index={index} />,
-                },
-                {
-                  title: '交货日期',
-                  dataIndex: 'delivery_date',
-                  width: 130,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
-                      <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '备注',
-                  dataIndex: 'notes',
-                  width: 120,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                      <Input placeholder="备注" size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '操作',
-                  width: 70,
-                  fixed: 'right' as const,
-                  onHeaderCell: () => ({ className: 'quotation-fixed-op-header' }),
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                      删除
-                    </Button>
-                  ),
-                },
-              ];
-              const totalWidth = quotationDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
-              return (
-                <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                  <style>{`
-                    .quotation-detail-table .ant-table-thead > tr > th {
-                      background-color: var(--ant-color-fill-alter) !important;
-                      font-weight: 600;
-                    }
-                    .quotation-detail-table .ant-table-thead > tr > th.quotation-fixed-op-header {
-                      background: var(--ant-color-fill-alter) !important;
-                    }
-                    .quotation-detail-table .ant-table-cell-fix-right {
-                      background: var(--ant-color-bg-container) !important;
-                    }
-                    .quotation-detail-table .ant-table {
-                      border-top: 1px solid var(--ant-color-border);
-                    }
-                    .quotation-detail-table .ant-table-tbody > tr > td {
-                      border-bottom: 1px solid var(--ant-color-border);
-                      overflow: visible !important;
-                    }
+                        ),
+                      },
+                      {
+                        title: '单位',
+                        dataIndex: 'material_unit',
+                        width: 100,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item
+                            noStyle
+                            shouldUpdate={(prev: any, curr: any) =>
+                              prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+                            }
+                          >
+                            {({ getFieldValue: gf }) => {
+                              const materialId = gf(['items', index, 'material_id']);
+                              return (
+                                <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                                  <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                                </Form.Item>
+                              );
+                            }}
+                          </Form.Item>
+                        ),
+                      },
+                      {
+                        title: '数量',
+                        dataIndex: 'quote_quantity',
+                        width: 100,
+                        align: 'right' as const,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item
+                            name={[index, 'quote_quantity']}
+                            rules={[{ required: true, message: '必填' }]}
+                            style={{ margin: 0 }}
+                          >
+                            <InputNumber
+                              placeholder="数量"
+                              min={0.01}
+                              precision={2}
+                              style={{ width: '100%' }}
+                              size="small"
+                            />
+                          </Form.Item>
+                        ),
+                      },
+                      {
+                        title:
+                          priceType === 'tax_inclusive'
+                            ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
+                            : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right' as const,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                            <InputNumber
+                              placeholder={
+                                priceType === 'tax_inclusive'
+                                  ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                  : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                              }
+                              min={0}
+                              precision={2}
+                              prefix="¥"
+                              style={{ width: '100%' }}
+                              size="small"
+                            />
+                          </Form.Item>
+                        ),
+                      },
+                      ...(showTaxColumns
+                        ? [
+                            {
+                              title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                              width: 110,
+                              align: 'right' as const,
+                              render: (_: unknown, __: unknown, index: number) => (
+                                <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                                  {({ getFieldValue: gf2 }: any) => {
+                                    const itemsVal = gf2('items') ?? [];
+                                    const row = itemsVal[index];
+                                    const line = calcQuotationLineAmounts(
+                                      row?.quote_quantity,
+                                      row?.unit_price,
+                                      row?.tax_rate,
+                                      priceType,
+                                    );
+                                    return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                  }}
+                                </Form.Item>
+                              ),
+                            },
+                          ]
+                        : []),
+                      ...(showTaxColumns
+                        ? [
+                            {
+                              title: (
+                                <span>
+                                  {t('app.kuaizhizao.salesOrder.taxRate')}
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    style={{ padding: '0 4px', height: 'auto' }}
+                                    onClick={() => {
+                                      const itemsVal = formRef.current?.getFieldValue('items') ?? [];
+                                      if (itemsVal.length === 0) return;
+                                      const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                                      if (rate != null && rate !== '') {
+                                        const num = parseFloat(rate);
+                                        if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                          const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
+                                          formRef.current?.setFieldsValue({ items: next });
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    {t('app.kuaizhizao.salesOrder.batch')}
+                                  </Button>
+                                </span>
+                              ),
+                              dataIndex: 'tax_rate',
+                              width: 120,
+                              align: 'right' as const,
+                              render: (_: unknown, __: unknown, index: number) => (
+                                <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
+                                  <InputNumber
+                                    placeholder="0"
+                                    min={0}
+                                    max={100}
+                                    precision={2}
+                                    addonAfter="%"
+                                    style={{ width: '100%' }}
+                                    size="small"
+                                  />
+                                </Form.Item>
+                              ),
+                            },
+                            {
+                              title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                              width: 100,
+                              align: 'right' as const,
+                              render: (_: unknown, __: unknown, index: number) => (
+                                <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                                  {({ getFieldValue: gf2 }: any) => {
+                                    const itemsVal = gf2('items') ?? [];
+                                    const row = itemsVal[index];
+                                    const line = calcQuotationLineAmounts(
+                                      row?.quote_quantity,
+                                      row?.unit_price,
+                                      row?.tax_rate,
+                                      priceType,
+                                    );
+                                    return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                  }}
+                                </Form.Item>
+                              ),
+                            },
+                          ]
+                        : []),
+                      {
+                        title: showTaxColumns
+                          ? t('app.kuaizhizao.salesOrder.inclAmount')
+                          : t('app.kuaizhizao.salesOrder.exclAmount'),
+                        width: 120,
+                        align: 'right' as const,
+                        render: (_: unknown, __: unknown, index: number) =>
+                          showTaxColumns ? (
+                            <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                              {({ getFieldValue: gf2 }: any) => {
+                                const itemsVal = gf2('items') ?? [];
+                                const row = itemsVal[index];
+                                const qty = Number(row?.quote_quantity) || 0;
+                                const taxRate = Number(row?.tax_rate) || 0;
+                                const line = calcQuotationLineAmounts(
+                                  row?.quote_quantity,
+                                  row?.unit_price,
+                                  row?.tax_rate,
+                                  priceType,
+                                );
+                                const totalIncl = line.incl;
+                                const isEditing = quotationEditingIncl?.index === index;
+                                const displayValue = isEditing ? quotationEditingIncl.value : totalIncl;
+                                return (
+                                  <InputNumber
+                                    placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
+                                    min={0}
+                                    precision={2}
+                                    prefix="¥"
+                                    style={{ width: '100%' }}
+                                    size="small"
+                                    value={displayValue}
+                                    onChange={(val) => {
+                                      const v = val ?? null;
+                                      quotationEditingInclValueRef.current = v;
+                                      setQuotationEditingIncl({ index, value: v });
+                                    }}
+                                    onFocus={() => {
+                                      setQuotationEditingIncl((prev) =>
+                                        prev?.index === index ? prev : { index, value: totalIncl },
+                                      );
+                                      quotationEditingInclValueRef.current = totalIncl;
+                                    }}
+                                    onBlur={() => {
+                                      const incl = quotationEditingInclValueRef.current;
+                                      if (quotationEditingIncl?.index === index && incl != null && qty > 0) {
+                                        const factor = 1 + taxRate / 100;
+                                        const newPrice =
+                                          priceType === 'tax_inclusive'
+                                            ? incl / qty
+                                            : (factor > 0 ? incl / factor : incl) / qty;
+                                        const next = [...itemsVal];
+                                        next[index] = { ...row, unit_price: newPrice };
+                                        formRef.current?.setFieldsValue({ items: next });
+                                      }
+                                      setQuotationEditingIncl(null);
+                                    }}
+                                  />
+                                );
+                              }}
+                            </Form.Item>
+                          ) : (
+                            <QuotationAmountCell index={index} />
+                          ),
+                      },
+                      {
+                        title: '交货日期',
+                        dataIndex: 'delivery_date',
+                        width: 130,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
+                            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                          </Form.Item>
+                        ),
+                      },
+                      {
+                        title: '备注',
+                        dataIndex: 'notes',
+                        width: 120,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                            <Input placeholder="备注" size="small" />
+                          </Form.Item>
+                        ),
+                      },
+                      {
+                        title: '操作',
+                        width: 70,
+                        fixed: 'right' as const,
+                        onHeaderCell: () => ({ className: 'quotation-fixed-op-header' }),
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                            删除
+                          </Button>
+                        ),
+                      },
+                    ];
+                    const totalWidth = quotationDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
+                    return (
+                      <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                        {/* 通用表格样式（thead/fix-right/border 等）已迁移到 uni-table-detail/index.less，
+                            外层 <div className="uni-table-detail"> 即可生效；这里只保留业务专属的两条：
+                            1) 物料列让 Select 占满；2) 数字/文本输入选中态颜色。 */}
+                        <style>{`
                     .quotation-detail-table .quotation-material-cell .ant-form-item,
                     .quotation-detail-table .quotation-material-cell .ant-form-item-control,
                     .quotation-detail-table .quotation-material-cell .ant-form-item-control-input,
@@ -2172,73 +2535,73 @@ const QuotationsPage: React.FC = () => {
                       width: 100% !important;
                       min-width: 0;
                     }
-                    .quotation-detail-table .ant-form-item-explain,
-                    .quotation-detail-table .ant-form-item-explain-error {
-                      display: none !important;
-                    }
                     .quotation-detail-table .ant-input-number-input::selection,
                     .quotation-detail-table .ant-input::selection {
-                      background-color: var(--ant-color-primary);
+                      background-color: var(--ant-color-primary, #1677ff);
                       color: #fff;
                       border-radius: 0;
                     }
                   `}</style>
-                  <div style={{ width: '100%', overflowX: 'auto' }}>
-                    <Table
-                      className="quotation-detail-table"
-                      size="small"
-                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                      rowKey="key"
-                      pagination={false}
-                      columns={quotationDetailColumns}
-                      scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                      style={{ width: '100%', margin: 0 }}
-                      footer={() => (
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 8,
-                            width: '100%',
-                            flexWrap: 'wrap',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => {
-                              add({
-                                material_id: undefined,
-                                material_code: '',
-                                material_name: '',
-                                material_spec: '',
-                                material_unit: '',
-                                quote_quantity: 1,
-                                unit_price: 0,
-                                delivery_date: undefined,
-                                notes: '',
-                              });
-                            }}
-                          >
-                            添加明细
-                          </Button>
-                          <Button
-                            type="default"
-                            icon={<AppstoreAddOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => setMaterialPickerOpen(true)}
-                          >
-                            {t('app.kuaizhizao.common.materialBatchSelect')}
-                          </Button>
+                        <div style={{ width: '100%', overflowX: 'auto' }}>
+                          <Table
+                            className="quotation-detail-table"
+                            size="small"
+                            dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                            rowKey="key"
+                            pagination={false}
+                            columns={quotationDetailColumns}
+                            scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                            style={{ width: '100%', margin: 0 }}
+                            footer={() => (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 8,
+                                  width: '100%',
+                                  flexWrap: 'wrap',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                <Button
+                                  type="dashed"
+                                  icon={<PlusOutlined />}
+                                  style={{ flex: 1, minWidth: 120 }}
+                                  onClick={() => {
+                                    add({
+                                      material_id: undefined,
+                                      material_code: '',
+                                      material_name: '',
+                                      material_spec: '',
+                                      material_unit: '',
+                                      quote_quantity: 1,
+                                      unit_price: 0,
+                                      tax_rate: 0,
+                                      delivery_date: undefined,
+                                      notes: '',
+                                    });
+                                  }}
+                                >
+                                  添加明细
+                                </Button>
+                                <Button
+                                  type="default"
+                                  icon={<AppstoreAddOutlined />}
+                                  style={{ flex: 1, minWidth: 120 }}
+                                  onClick={() => setMaterialPickerOpen(true)}
+                                >
+                                  {t('app.kuaizhizao.common.materialBatchSelect')}
+                                </Button>
+                              </div>
+                            )}
+                          />
                         </div>
-                      )}
-                    />
-                  </div>
-                </div>
-              );
-            }}
-          </Form.List>
+                      </div>
+                    );
+                  }}
+                </Form.List>
+              </Form.Item>
+            );
+          }}
         </Form.Item>
       </div>
       <QuotationFormSummary />
@@ -2257,7 +2620,7 @@ const QuotationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           className="kuaizhizao-quotations-table"
-          columnPersistenceId="kuaizhizao-sales-quotations-v2"
+          columnPersistenceId="kuaizhizao-sales-quotations-v3"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"
@@ -2674,35 +3037,93 @@ const QuotationsPage: React.FC = () => {
                     rowKey="id"
                     tableLayout="fixed"
                     style={{ minWidth: QUOTATION_DETAIL_ITEMS_SCROLL_X }}
-                    columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                      { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
-                      { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true },
-                      {
-                        title: '单位',
-                        dataIndex: 'material_unit',
-                        width: 72,
-                        ellipsis: true,
-                        render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
-                      },
-                      { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' },
-                      {
-                        title: '单价',
-                        dataIndex: 'unit_price',
-                        width: 100,
-                        align: 'right',
-                        render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
-                      },
-                      {
-                        title: '金额',
-                        dataIndex: 'total_amount',
-                        width: 100,
-                        align: 'right',
-                        render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
-                      },
-                      { title: '交货日期', dataIndex: 'delivery_date', width: 120, ellipsis: true },
-                      { title: '备注', dataIndex: 'notes', width: 160, ellipsis: true },
-                    ]}
+                    columns={(() => {
+                      const pt = quotationDetail.price_type ?? 'tax_exclusive';
+                      const showTax = pt === 'tax_inclusive';
+                      type LineIt = NonNullable<Quotation['items']>[number];
+                      return [
+                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
+                        { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true },
+                        {
+                          title: '单位',
+                          dataIndex: 'material_unit',
+                          width: 72,
+                          ellipsis: true,
+                          render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
+                        },
+                        { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' as const },
+                        {
+                          title: '单价',
+                          dataIndex: 'unit_price',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
+                        },
+                        ...(showTax
+                          ? [
+                              {
+                                title: '不含税金额',
+                                key: 'line_excl',
+                                width: 100,
+                                align: 'right' as const,
+                                render: (_: unknown, it: LineIt) => {
+                                  const line = calcQuotationLineAmounts(
+                                    it.quote_quantity,
+                                    it.unit_price,
+                                    it.tax_rate,
+                                    pt,
+                                  );
+                                  return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                },
+                              },
+                              {
+                                title: '税率(%)',
+                                dataIndex: 'tax_rate',
+                                width: 72,
+                                align: 'right' as const,
+                              },
+                              {
+                                title: '税额',
+                                key: 'line_tax',
+                                width: 90,
+                                align: 'right' as const,
+                                render: (_: unknown, it: LineIt) => {
+                                  const line = calcQuotationLineAmounts(
+                                    it.quote_quantity,
+                                    it.unit_price,
+                                    it.tax_rate,
+                                    pt,
+                                  );
+                                  return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                },
+                              },
+                            ]
+                          : []),
+                        {
+                          title: showTax ? '价税合计' : '未税金额',
+                          key: 'line_amount_display',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (_: unknown, it: LineIt) => {
+                            const line = calcQuotationLineAmounts(
+                              it.quote_quantity,
+                              it.unit_price,
+                              it.tax_rate,
+                              pt,
+                            );
+                            return (
+                              <AmountDisplay
+                                resource="sales_order"
+                                value={showTax ? line.incl : line.excl}
+                              />
+                            );
+                          },
+                        },
+                        { title: '交货日期', dataIndex: 'delivery_date', width: 120, ellipsis: true },
+                        { title: '备注', dataIndex: 'notes', width: 160, ellipsis: true },
+                      ];
+                    })()}
                     dataSource={quotationDetail.items}
                     pagination={false}
                   />
@@ -2777,7 +3198,7 @@ const QuotationsPage: React.FC = () => {
         formRef={formRef}
         width={1200}
         layout="vertical"
-        initialValues={editingId == null ? { quotation_date: dayjs(), currency_code: DEFAULT_QUOTATION_CURRENCY } : undefined}
+        initialValues={editingId == null ? { quotation_date: dayjs(), currency_code: defaultQuotationCurrency } : undefined}
         onValuesChange={(changed, _all) => {
           if ('customer_id' in changed && changed.customer_id != null) {
             const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);

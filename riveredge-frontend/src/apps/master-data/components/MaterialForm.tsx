@@ -963,16 +963,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
 
-      // 提取核心数据和自定义字段数据
-      const { coreData, customFieldValues: cfValues } = extractFormValues(submitData);
+      // extractFormValues 返回 { customData, standardValues }（与 PlantFormModal 等一致）；勿用不存在的 coreData
+      const { customData: cfValues, standardValues: coreData } = extractFormValues(submitData);
 
       const result = await onFinish(coreData as any);
       
-      // 保存自定义字段值
-      // 如果 result 中包含 uuid，则使用它；否则尝试从 material 中获取（编辑模式）
-      const entityUuid = (result as any)?.uuid || (material as any)?.uuid;
-      if (entityUuid) {
-        await saveCustomFieldValues(entityUuid, cfValues);
+      // 保存自定义字段值（API 要求 record_id 为数字主键，勿传 uuid）
+      const recordIdForCustom =
+        (result as any)?.id != null ? Number((result as any).id) : (material as any)?.id != null ? Number((material as any).id) : NaN;
+      if (Number.isFinite(recordIdForCustom) && recordIdForCustom > 0) {
+        await saveCustomFieldValues(recordIdForCustom, cfValues);
       }
       
       emitAgentDebugLog('run-1', 'H4', 'MaterialForm.tsx:894', 'onFinish resolved', {

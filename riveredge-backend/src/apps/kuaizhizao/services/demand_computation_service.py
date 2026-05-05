@@ -436,7 +436,13 @@ class DemandComputationService:
                 demands.append(d)
 
             demand = demands[0]
-            demand_codes = ",".join(x.demand_code for x in demands[:3])
+            # 展示“来源单号”：订单/预测优先使用 source_code，手工需求计划回退 demand_code
+            source_codes = [
+                (str(getattr(x, "source_code", "") or "").strip() or str(getattr(x, "demand_code", "") or "").strip())
+                for x in demands
+            ]
+            source_codes = [c for c in source_codes if c]
+            demand_codes = ",".join(source_codes[:3]) if source_codes else (demand.demand_code or "")
             if len(demands) > 3:
                 demand_codes += f"等{len(demands)}个"
 
@@ -1558,7 +1564,9 @@ class DemandComputationService:
                 schedule_buffer_days = 0
 
             if source_type == SOURCE_TYPE_MAKE:
-                if planning_qty > 0 and validation_passed:
+                # 自制件建议工单量不再被来源校验结果阻断：
+                # 校验失败仅用于提示（source_validation_*），避免半成品因配置不完整被直接算成“-”。
+                if planning_qty > 0:
                     suggested_work_order_quantity = Decimal(str(planning_qty))
                     planned_production = Decimal(str(planning_qty))
                     production_lead_time = source_config.get("source_config", {}).get("production_lead_time", 3)

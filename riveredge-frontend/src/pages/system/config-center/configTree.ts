@@ -69,7 +69,6 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'bom.bom_multi_version_allowed', nameKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed', descriptionKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed_desc', source: 'business_config', sourcePath: 'parameters.bom.bom_multi_version_allowed', type: 'boolean' },
   ],
   production: [
-    { key: 'work_order.allow_production_without_material', nameKey: 'pages.system.configCenter.param.work_order_allow_production_without_material', descriptionKey: 'pages.system.configCenter.param.work_order_allow_production_without_material_desc', source: 'business_config', sourcePath: 'parameters.work_order.allow_production_without_material', type: 'boolean' },
     { key: 'work_order.priority', nameKey: 'pages.system.configCenter.param.work_order_priority', descriptionKey: 'pages.system.configCenter.param.work_order_priority_desc', source: 'business_config', sourcePath: 'parameters.work_order.priority', type: 'boolean' },
     { key: 'work_order.split', nameKey: 'pages.system.configCenter.param.work_order_split', descriptionKey: 'pages.system.configCenter.param.work_order_split_desc', source: 'business_config', sourcePath: 'parameters.work_order.split', type: 'boolean' },
     { key: 'work_order.merge', nameKey: 'pages.system.configCenter.param.work_order_merge', descriptionKey: 'pages.system.configCenter.param.work_order_merge_desc', source: 'business_config', sourcePath: 'parameters.work_order.merge', type: 'boolean' },

@@ -27,6 +27,7 @@ class QuotationItemBase(BaseSchema):
     material_unit: str = Field(..., max_length=20, description="物料单位")
     quote_quantity: Decimal = Field(..., gt=0, description="报价数量")
     unit_price: Decimal = Field(..., ge=0, description="单价")
+    tax_rate: Decimal = Field(Decimal("0"), ge=0, le=100, description="税率（%）")
     total_amount: Optional[Decimal] = Field(None, ge=0, description="金额")
     delivery_date: Optional[date] = Field(None, description="预计交货日期")
     notes: Optional[str] = Field(None, description="备注")
@@ -46,6 +47,7 @@ class QuotationItemUpdate(BaseSchema):
     material_unit: Optional[str] = Field(None, max_length=20)
     quote_quantity: Optional[Decimal] = Field(None, gt=0)
     unit_price: Optional[Decimal] = Field(None, ge=0)
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     total_amount: Optional[Decimal] = Field(None, ge=0)
     delivery_date: Optional[date] = None
     notes: Optional[str] = None
@@ -82,6 +84,11 @@ class QuotationBase(BaseSchema):
     # 金额信息
     total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
+    price_type: Optional[str] = Field(
+        "tax_exclusive",
+        max_length=20,
+        description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)",
+    )
 
     # 状态：草稿/已发送/已接受/已拒绝/已转订单
     status: str = Field("草稿", max_length=20, description="报价状态")
@@ -129,6 +136,7 @@ class QuotationUpdate(BaseSchema):
     customer_phone: Optional[str] = Field(None, max_length=20)
     total_quantity: Optional[Decimal] = Field(None, ge=0)
     total_amount: Optional[Decimal] = Field(None, ge=0)
+    price_type: Optional[str] = Field(None, max_length=20)
     status: Optional[str] = Field(None, max_length=20)
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = Field(None, max_length=100)
@@ -196,6 +204,7 @@ class QuotationRevisionBody(BaseSchema):
     customer_phone: Optional[str] = Field(None, max_length=20)
     total_quantity: Optional[Decimal] = Field(None, ge=0)
     total_amount: Optional[Decimal] = Field(None, ge=0)
+    price_type: Optional[str] = Field(None, max_length=20)
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = Field(None, max_length=100)
     shipping_address: Optional[str] = None

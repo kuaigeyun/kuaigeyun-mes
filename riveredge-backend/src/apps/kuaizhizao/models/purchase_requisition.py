@@ -34,12 +34,6 @@ class PurchaseRequisition(BaseModel):
     source_id = fields.IntField(null=True, description="来源ID（computation_id）")
     source_code = fields.CharField(max_length=50, null=True, description="来源编码")
 
-    # 紧急采购
-    is_urgent = fields.BooleanField(default=False, description="是否紧急采购")
-    urgent_reason = fields.TextField(null=True, description="紧急原因")
-    urgent_operator_id = fields.IntField(null=True, description="紧急操作人ID")
-    urgent_operated_at = fields.DatetimeField(null=True, description="紧急操作时间")
-
     # 审核
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")

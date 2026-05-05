@@ -13,6 +13,7 @@ export interface TraceGraphNodeMeta {
   document_id: number;
   document_code?: string;
   document_name?: string;
+  created_at?: string;
   /** 是否为当前查看的单据 */
   is_root?: boolean;
 }
@@ -45,6 +46,7 @@ function upsertNode(map: Map<string, TraceGraphNodeMeta>, meta: TraceGraphNodeMe
   }
   if (meta.document_code && !prev.document_code) prev.document_code = meta.document_code;
   if (meta.document_name && !prev.document_name) prev.document_name = meta.document_name;
+  if (meta.created_at && !prev.created_at) prev.created_at = meta.created_at;
   if (meta.is_root) prev.is_root = true;
 }
 
@@ -66,6 +68,7 @@ function walkUpstream(
     document_id: node.document_id,
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
+    created_at: node.created_at ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
   const children = node.children ?? [];
@@ -87,6 +90,7 @@ function walkDownstream(
     document_id: node.document_id,
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
+    created_at: node.created_at ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
   const children = node.children ?? [];
@@ -121,6 +125,7 @@ export function traceResponseToFlowGraphData(
     document_id: trace.document_id,
     document_code: trace.document_code ?? undefined,
     document_name: trace.document_name ?? undefined,
+    created_at: trace.created_at ?? undefined,
     is_root: true,
   });
 

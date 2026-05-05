@@ -2688,11 +2688,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if getattr(work_order, "is_frozen", False):
                 raise BusinessLogicError(f"工单已冻结，不能开工。冻结原因：{getattr(work_order, 'freeze_reason', None) or '无'}")
 
-            policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
-            if policy.get("require_confirmed_picking_before_operation_start", False):
-                has_confirmed = await self.has_confirmed_picking_for_work_order(tenant_id, work_order_id)
-                if not has_confirmed:
-                    raise BusinessLogicError("未确认领料，禁止开工：请先确认该工单的领料单")
+            biz_cfg = BusinessConfigService()
+            manufacturing_mode = await self._resolve_manufacturing_mode(tenant_id, work_order.product_id)
+            is_assembly_mode = str(manufacturing_mode or "").strip().lower() == "assembly"
+
+            # 开工领料规则：
+            # - 工艺型（fabrication）：允许不领料开工（不受“开工前需确认领料”策略限制）
+            # - 装配型（assembly）：由流程设置「开工前必须确认领料」控制是否必须先确认领料
+            if is_assembly_mode:
+                policy = await biz_cfg.get_work_order_picking_policy(tenant_id)
+                if policy.get("require_confirmed_picking_before_operation_start", False):
+                    has_confirmed = await self.has_confirmed_picking_for_work_order(tenant_id, work_order_id)
+                    if not has_confirmed:
+                        raise BusinessLogicError("装配型工单未确认领料，禁止开工：请先确认该工单的领料单")
 
             block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
             if _material_shortage_block_applies(block_level, "operation_start"):

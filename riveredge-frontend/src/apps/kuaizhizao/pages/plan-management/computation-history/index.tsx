@@ -106,7 +106,7 @@ const ComputationHistoryPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '需求编号',
+      title: '来源单号',
       dataIndex: 'demand_code',
       width: 150,
     },

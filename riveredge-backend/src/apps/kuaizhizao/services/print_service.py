@@ -313,8 +313,8 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
 
 def _run_playwright_with_dedicated_loop(html_string: str) -> bytes:
     """
-    在线程中创建独立事件循环执行 Playwright，避免 Windows 下默认线程 loop
-    触发 subprocess NotImplementedError。
+    在线程中创建独立事件循环执行 async_playwright。
+    Windows 强制使用 ProactorEventLoop，确保支持 subprocess（Playwright driver）。
     """
     if platform.system() == "Windows":
         loop = asyncio.ProactorEventLoop()
@@ -333,7 +333,7 @@ def _run_playwright_with_dedicated_loop(html_string: str) -> bytes:
 
 
 async def _html_to_pdf_bytes_playwright(html_string: str) -> bytes:
-    # 在线程中运行并显式设置事件循环策略，规避 Windows 下 subprocess NotImplementedError。
+    # 单一路径：仅使用 async_playwright + dedicated loop，不做兜底分支。
     return await asyncio.to_thread(_run_playwright_with_dedicated_loop, html_string)
 
 
@@ -1348,6 +1348,7 @@ class DocumentPrintService:
                     "material_unit": i.material_unit,
                     "quote_quantity": str(i.quote_quantity),
                     "unit_price": str(i.unit_price),
+                    "tax_rate": str(getattr(i, "tax_rate", None) or 0),
                     "total_amount": str(i.total_amount),
                     "delivery_date": i.delivery_date.isoformat() if i.delivery_date else None,
                     "notes": i.notes,
@@ -1378,6 +1379,7 @@ class DocumentPrintService:
             "delivery_date": quotation.delivery_date.isoformat() if quotation.delivery_date else None,
             "total_quantity": str(quotation.total_quantity),
             "total_amount": str(quotation.total_amount),
+            "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
             "status": quotation.status,
             "salesman_name": quotation.salesman_name,
             "shipping_address": quotation.shipping_address,

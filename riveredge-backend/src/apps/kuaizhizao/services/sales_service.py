@@ -92,7 +92,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                         **item_data
                     )
 
-            # 与提交流程一致：蓝图配置无需审核时，创建后自动审核通过并联动需求
+            # 与提交流程一致：蓝图配置无需审核时，创建后自动审核通过。
+            # 不再自动联动需求池（Demand），避免形成「预测→需求计划」隐式链路。
             from infra.services.business_config_service import BusinessConfigService
             from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
             config_service = BusinessConfigService()
@@ -103,9 +104,6 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.APPROVED.value,
                     updated_by=created_by
                 )
-                demand = await self._get_linked_demand_for_forecast(tenant_id, forecast.id)
-                if not demand:
-                    await self._create_demand_from_sales_forecast(tenant_id, forecast.id, created_by)
                 await self._try_auto_push_forecast_to_computation(
                     tenant_id=tenant_id,
                     forecast_id=forecast.id,
@@ -275,22 +273,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
 
     async def _sync_demand_if_exists(self, tenant_id: int, forecast_id: int, operator_id: int) -> bool:
-        """如果存在关联需求，则同步并重算快照，返回是否同步成功"""
-        demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
-        if demand:
-            from apps.kuaizhizao.services.demand_service import DemandService
-            try:
-                sync_result = await DemandService().sync_from_upstream(
-                    tenant_id=tenant_id,
-                    source_type="sales_forecast",
-                    source_id=forecast_id,
-                    operator_id=operator_id,
-                )
-                if sync_result.get("synced"):
-                    logger.info("销售预测 %s 已同步关联需求并更新快照", forecast_id)
-                    return True
-            except Exception as e:
-                logger.warning("销售预测更新后同步需求失败: %s", e)
+        """
+        历史兼容占位：销售预测不再自动同步到需求池（Demand）。
+        仅保留显式「下推需求计算」路径创建/更新计算数据。
+        """
         return False
 
     async def _create_demand_from_sales_forecast(
@@ -408,19 +394,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 updated_by=approved_by
             )
 
-            # 审核通过后自动产生 Demand，进入需求池；若已有需求则同步需求
+            # 审核通过/驳回后均不再自动创建或同步 Demand。
             demand_synced = False
-            existing_demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
-            if not rejection_reason:
-                if not existing_demand:
-                    await self._create_demand_from_sales_forecast(
-                        tenant_id, forecast_id, approved_by
-                    )
-                else:
-                    demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, approved_by)
-            else:
-                if existing_demand:
-                    demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, approved_by)
 
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             out = updated_forecast.model_dump()
@@ -555,12 +530,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.APPROVED.value,
                     updated_by=submitted_by
                 )
-                # 无需审核时，提交即审核通过，自动产生 Demand
-                demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
-                if not demand:
-                    await self._create_demand_from_sales_forecast(
-                        tenant_id, forecast_id, submitted_by
-                    )
+                # 无需审核时不再自动创建 Demand，保持链路为「销售预测→需求计算（显式下推）」。
                 await self._try_auto_push_forecast_to_computation(
                     tenant_id=tenant_id,
                     forecast_id=forecast_id,
@@ -572,7 +542,6 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.PENDING.value,
                     updated_by=submitted_by
                 )
-                await self._sync_demand_if_exists(tenant_id, forecast_id, submitted_by)
             
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast

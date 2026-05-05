@@ -30,7 +30,7 @@ from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase_requisition import (
     PurchaseRequisitionCreate, PurchaseRequisitionUpdate, PurchaseRequisitionResponse,
     PurchaseRequisitionListResponse, PurchaseRequisitionItemResponse,
-    ConvertToPurchaseOrderRequest, UrgentPurchaseRequest,
+    ConvertToPurchaseOrderRequest,
 )
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
@@ -217,7 +217,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         resp = PurchaseRequisitionResponse.model_construct(**req_dict)
         resp.items = item_resps
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle
-        resp.lifecycle = get_purchase_requisition_lifecycle(req)
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
+        resp.lifecycle = get_purchase_requisition_lifecycle(req, audit_required=audit_required)
         return resp
 
     async def list_requisitions(
@@ -266,6 +267,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         total = await query.count()
         reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
 
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
         result = []
         for req in reqs:
             items_count = await PurchaseRequisitionItem.filter(
@@ -277,7 +279,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             resp.items_count = items_count
             from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle, get_document_milestones
             milestones = await get_document_milestones(req.tenant_id, "purchase_requisition", req.id)
-            resp.lifecycle = get_purchase_requisition_lifecycle(req, milestones=milestones)
+            resp.lifecycle = get_purchase_requisition_lifecycle(req, milestones=milestones, audit_required=audit_required)
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
 
@@ -770,116 +772,3 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "persisted_material_ids": persisted_material_ids if data.persist_default_supplier_to_material else [],
         }
 
-    async def urgent_purchase(
-        self,
-        tenant_id: int,
-        requisition_id: int,
-        data: UrgentPurchaseRequest,
-        operator_id: int,
-    ) -> Dict[str, Any]:
-        """紧急采购：跳过审批，直接生成采购单"""
-        req = await PurchaseRequisition.get_or_none(
-            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
-        )
-        if not req:
-            raise NotFoundError(f"采购申请不存在: {requisition_id}")
-
-
-        if not is_draft_status(req.status) and not is_pending_review_status(req.status):
-            raise BusinessLogicError("只有草稿或待审核状态可执行紧急采购")
-
-        items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id, requisition_id=requisition_id
-        ).all()
-
-        if not items:
-            raise BusinessLogicError("采购申请无明细")
-
-        # 按 supplier_id 分组（无 supplier 的用默认 1）
-        by_supplier: Dict[int, List] = {}
-        for item in items:
-            sid = item.supplier_id or 1
-            if sid not in by_supplier:
-                by_supplier[sid] = []
-            by_supplier[sid].append(item)
-
-        supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=1)
-        supplier_name = supplier.name if supplier else "默认供应商"
-
-        req.is_urgent = True
-        req.urgent_reason = data.urgent_reason
-        req.urgent_operator_id = operator_id
-        req.urgent_operated_at = datetime.now()
-        req.status = "已通过"
-        await req.save()
-
-        generated = []
-        for sid, grp in by_supplier.items():
-            sup = await Supplier.get_or_none(tenant_id=tenant_id, id=sid)
-            sname = sup.name if sup else f"供应商{sid}"
-            today = date.today()
-            max_required = max((i.required_date or today for i in grp), default=today)
-
-            po_items = []
-            for item in grp:
-                up = item.suggested_unit_price or Decimal(0)
-                qty = item.quantity
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        ordered_quantity=qty,
-                        unit=item.unit or "件",
-                        unit_price=up,
-                        total_price=qty * up,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=item.required_date or max_required,
-                        source_type="PurchaseRequisition",
-                        source_id=item.id,
-                        notes=item.notes,
-                    )
-                )
-
-            po_data = PurchaseOrderCreate(
-                supplier_id=sid,
-                supplier_name=sname,
-                order_date=today,
-                delivery_date=max_required,
-                order_type="标准采购",
-                status="草稿",
-                source_type="PurchaseRequisition",
-                source_id=requisition_id,
-                notes=f"紧急采购-{data.urgent_reason}",
-                items=po_items,
-            )
-
-            po = await self.purchase_service.create_purchase_order(
-                tenant_id=tenant_id, order_data=po_data, created_by=operator_id
-            )
-
-            for i, item in enumerate(grp):
-                po_item = po.items[i] if i < len(po.items) else None
-                po_item_id = getattr(po_item, "id", None) if po_item else None
-                await item.update_from_dict({
-                    "purchase_order_id": po.id,
-                    "purchase_order_item_id": po_item_id,
-                    "supplier_id": sid,
-                }).save()
-
-            generated.append({"id": po.id, "code": po.order_code})
-
-        req.status = "全部转单"
-        await req.save()
-
-        logger.info(
-            f"紧急采购: requisition_id={requisition_id}, reason={data.urgent_reason}, operator={operator_id}"
-        )
-
-        return {
-            "success": True,
-            "message": "紧急采购完成，已生成采购订单",
-            "purchase_orders": generated,
-        }

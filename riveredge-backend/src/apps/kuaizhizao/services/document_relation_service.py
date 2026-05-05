@@ -200,9 +200,17 @@ class DocumentRelationService:
         if not demand:
             return upstream
 
-        # 销售订单来源：追溯链不再插入「需求」节点，上游即为销售订单
-        if demand.source_type == "sales_order" and demand.source_id:
-            order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+        demand_source_type = (getattr(demand, "source_type", None) or "").strip()
+        demand_type = (getattr(demand, "demand_type", None) or "").strip()
+        demand_source_id = getattr(demand, "source_id", None)
+
+        # 销售订单来源：追溯链不再插入「需求」节点，上游即为销售订单。
+        # 兼容历史数据：source_type 缺失但 demand_type=sales_order 时也按直连处理。
+        if (
+            (demand_source_type == "sales_order" or demand_type == "sales_order")
+            and demand_source_id
+        ):
+            order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand_source_id)
             if order:
                 upstream.append({
                     "document_type": "sales_order",
@@ -214,9 +222,13 @@ class DocumentRelationService:
                 })
                 return upstream
 
-        # 销售预测直推需求计算：不再插入「需求」节点，上游即为销售预测
-        if demand.source_type == "sales_forecast" and demand.source_id:
-            forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+        # 销售预测直推需求计算：不再插入「需求」节点，上游即为销售预测。
+        # 兼容历史数据：source_type 缺失但 demand_type=sales_forecast 时也按直连处理。
+        if (
+            (demand_source_type == "sales_forecast" or demand_type == "sales_forecast")
+            and demand_source_id
+        ):
+            forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand_source_id)
             if forecast:
                 upstream.append({
                     "document_type": "sales_forecast",

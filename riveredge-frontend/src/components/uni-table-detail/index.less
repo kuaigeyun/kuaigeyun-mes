@@ -1,7 +1,19 @@
+/**
+ * uni-table-detail 通用明细表样式
+ *
+ * 设计原则：
+ *   1. 只写组件自身元素（.uni-table-detail-header / .detail-table-footer 等）的样式。
+ *   2. 不再尝试用 Less 选择器覆盖 antd v6 CSS-in-JS 生成的 .ant-table-* 内部样式，
+ *      那样做在 antd v6 中不可靠（哈希类优先级 / inline style 优先级问题）。
+ *   3. 固定列（fixed:'right'）的表头 / 单元格背景色通过 onHeaderCell / onCell 的
+ *      inline style 在 UniTableDetail.tsx 中直接注入，与 CSS 层完全解耦。
+ */
+
 .uni-table-detail {
   margin-bottom: 24px;
   width: 100%;
 
+  /* ===== 组件自有 Header ===== */
   .uni-table-detail-header {
     display: flex;
     justify-content: space-between;
@@ -10,71 +22,78 @@
     flex-wrap: wrap;
     gap: 12px;
 
-    /* 与同级 Form.Item / ProForm 字段 label 同一档：用全局字号与行高，不单独加大一档 */
     .detail-title {
       font-size: var(--ant-font-size, 14px);
       line-height: var(--ant-line-height, 22px);
       font-weight: var(--ant-font-weight-strong, 500);
-      color: var(--ant-color-text);
-      display: flex;
+      color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+      display: inline-flex;
       align-items: center;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .required-mark {
-      color: var(--ant-color-error);
+      color: var(--ant-color-error, #ff4d4f);
       margin-right: 4px;
       font-family: SimSun, sans-serif;
     }
 
-    /* 与表尾「多选物料」等一致：默认实线按钮，不用 link，便于各业务页复用 */
     .uni-table-detail-header-actions {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-
-      /* 与 small 表格、表单项高度协调，避免默认中号按钮显得头重脚轻 */
-      .ant-btn {
-        font-size: var(--ant-font-size, 14px);
-      }
     }
   }
 
+  /* ===== 表格容器 ===== */
   .detail-table-wrapper {
     width: 100%;
     min-width: 0;
     overflow: hidden;
     box-sizing: border-box;
+  }
 
-    .uni-detail-table {
-      width: 100%;
-      margin: 0;
+  /* ===== 顶部边框 ===== */
+  .ant-table {
+    border-top: 1px solid var(--ant-color-border, #d9d9d9);
+  }
 
-      /* 与 git 中报价单 .quotation-detail-table 内联样式一致（develop@f5b7cc6 及同结构） */
-      .ant-table-thead > tr > th {
-        background-color: var(--ant-color-fill-alter) !important;
-        font-weight: 600;
-      }
+  /* ===== 表头文字不换行 ===== */
+  .ant-table-thead > tr > th,
+  .ant-table-thead > tr > td {
+    white-space: nowrap;
+  }
 
-      .ant-table {
-        border-top: 1px solid var(--ant-color-border);
-      }
+  /* ===== 单元格允许内容（下拉/弹层）溢出 ===== */
+  .ant-table-tbody > tr > td {
+    overflow: visible !important;
+  }
 
-      .ant-table-tbody > tr > td {
-        border-bottom: 1px solid var(--ant-color-border);
-      }
+  /* ===== 带单位的输入框（addonAfter / addonBefore）单位格收窄 ===== */
+  .ant-input-number-group-addon,
+  .ant-input-group-addon {
+    padding-inline: 6px;
+    min-width: 0;
+  }
 
-      .ant-table-footer {
-        background: transparent;
-        padding: 8px 0;
-        border: none;
-      }
+  /* ===== 隐藏行级校验错误提示（以表单整体提示为准） ===== */
+  .ant-form-item-explain,
+  .ant-form-item-explain-error {
+    display: none !important;
+  }
 
-      // 优化紧凑模式下的表单项间距
-      .ant-form-item {
-        margin-bottom: 0 !important;
-      }
-    }
+  /* ===== 紧凑模式下表单项零外边距 ===== */
+  .ant-form-item {
+    margin-bottom: 0 !important;
+  }
+
+  /* ===== 表格 footer（添加行 / 批量选择 按钮区） ===== */
+  .ant-table-footer {
+    background: transparent;
+    padding: 8px 0;
+    border: none;
   }
 
   .detail-table-footer {
@@ -83,26 +102,11 @@
     flex-wrap: wrap;
     width: 100%;
 
-    .ant-btn {
-      font-size: var(--ant-font-size, 14px);
-    }
-
     .ant-btn-dashed {
-      border-color: var(--ant-color-border);
+      border-color: var(--ant-color-border, #d9d9d9);
       &:hover {
-        border-color: var(--ant-color-primary);
-        color: var(--ant-color-primary);
-      }
-    }
-  }
-}
-
-// 适配深色模式
-[data-theme='dark'] {
-  .uni-table-detail {
-    .uni-detail-table {
-      .ant-table-thead > tr > th {
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        border-color: var(--ant-color-primary, #1677ff);
+        color: var(--ant-color-primary, #1677ff);
       }
     }
   }

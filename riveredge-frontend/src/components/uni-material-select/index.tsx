@@ -22,14 +22,20 @@ export function uniMaterialSelectGetValueProps(v: unknown): { value: number | un
   return { value: Number.isFinite(n) ? n : undefined };
 }
 
+/** 单层字段名：兼容 camelCase 与 snake_case（如 defaults 内 default_sale_price） */
+function pickObjectKey(obj: Record<string, any>, key: string): any {
+  if (obj == null || typeof obj !== 'object') return undefined;
+  if (key in obj) return obj[key];
+  const snake = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+  if (snake !== key && snake in obj) return obj[snake];
+  return undefined;
+}
+
 function getMaterialField(m: Record<string, any>, field: string): any {
   if (field.includes('.')) {
-    return field.split('.').reduce((obj, key) => (obj && typeof obj === 'object' ? obj[key] : undefined), m);
+    return field.split('.').reduce((obj: any, key: string) => pickObjectKey(obj, key), m);
   }
-  let v = m[field];
-  if (v !== undefined && v !== null) return v;
-  const snake = field.replace(/([A-Z])/g, '_$1').toLowerCase();
-  return m[snake];
+  return pickObjectKey(m, field);
 }
 
 interface UniMaterialSelectProps {
@@ -154,10 +160,6 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         ? data.find((m) => Number((m as any).id) === Number(val))
         : undefined;
 
-    if (onChangeRef.current) {
-      onChangeRef.current(val, selectedMaterial);
-    }
-
     if (selectedMaterial && fillMapping && form) {
       const isListContext = listFieldKey !== undefined && listFieldKey !== null;
 
@@ -175,6 +177,10 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
           form.setFieldValue(targetField, sourceValue);
         }
       });
+    }
+
+    if (onChangeRef.current) {
+      onChangeRef.current(val, selectedMaterial);
     }
   };
 
@@ -241,7 +247,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                   isActive: activeOnly ? true : undefined,
                   ...(kw && { keyword: kw }),
                 });
-                const items = list || [];
+                const raw = list as { items?: Material[]; data?: Material[] } | Material[];
+                const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
+                const items = Array.isArray(rows) ? rows : [];
                 return items.map((m) => {
                   const code = getMaterialField(m as any, 'mainCode') || getMaterialField(m as any, 'code') || '';
                   const nameVal = getMaterialField(m as any, 'name') || '';

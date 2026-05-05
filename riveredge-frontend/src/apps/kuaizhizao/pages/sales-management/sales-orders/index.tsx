@@ -1511,6 +1511,7 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   const handleItemImport = (data: any[][]) => {
+    const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
     // 假设数据从第3行开始（0:表头, 1:示例）
     const rows = data.slice(2);
     const newItems = rows
@@ -1525,7 +1526,20 @@ const SalesOrdersPage: React.FC = () => {
         if (!materialCode) return null;
 
         const material = materials.find(m => m.mainCode === materialCode || m.code === materialCode);
-        
+        const taxR = Number((material as any)?.defaults?.defaultTaxRate ?? (material as any)?.defaults?.default_tax_rate) || 0;
+        let unitPrice =
+          price ||
+          Number(
+            (material as any)?.defaults?.defaultSalePrice ??
+              (material as any)?.defaults?.default_sale_price ??
+              (material as any)?.defaultSalePrice ??
+              (material as any)?.default_sale_price,
+          ) ||
+          0;
+        if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
+          unitPrice = convertUnitPriceByPriceType(unitPrice, taxR, 'tax_exclusive', 'tax_inclusive');
+        }
+
         return {
           material_id: material?.id,
           material_code: material?.mainCode || material?.code || materialCode,
@@ -1533,9 +1547,9 @@ const SalesOrdersPage: React.FC = () => {
           material_spec: material?.specification || spec,
           material_unit: material?.baseUnit || unit,
           required_quantity: quantity,
-          unit_price: price,
+          unit_price: unitPrice,
           delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
-          tax_rate: 0,
+          tax_rate: taxR,
         };
       })
       .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id !== undefined || it.material_code !== ''));
@@ -1555,12 +1569,24 @@ const SalesOrdersPage: React.FC = () => {
   /** 从物料多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
   const appendOrderItemsFromMaterials = React.useCallback(
     (selected: Material[]) => {
+      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
       const rowFromMaterial = (m: Material) => {
         const mainCode = m.mainCode ?? m.code ?? '';
         const st = m.sourceType ?? (m as any).source_type;
+        const taxR = Number((m as any).defaults?.defaultTaxRate ?? (m as any).defaults?.default_tax_rate) || 0;
+        let up =
+          Number(
+            (m as any).defaults?.defaultSalePrice ??
+              (m as any).defaults?.default_sale_price ??
+              (m as any).defaultSalePrice ??
+              (m as any).default_sale_price,
+          ) || 0;
+        if (pt === 'tax_inclusive' && up > 0) {
+          up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
+        }
         return {
           material_id: m.id,
           material_code: mainCode,
@@ -1569,8 +1595,8 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: m.baseUnit ?? '',
           required_quantity: 1,
           delivery_date: defaultDelivery,
-          unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? (m as any).defaultSalePrice ?? (m as any).default_sale_price ?? 0,
-          tax_rate: 0,
+          unit_price: up,
+          tax_rate: taxR,
           variant_attributes: '',
           _sourceType: st,
         };
@@ -1728,6 +1754,36 @@ const SalesOrdersPage: React.FC = () => {
             {t('app.kuaizhizao.salesOrder.viewDetail')}
           </Button>,
         ];
+        if (isDraft) {
+          parts.push(
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                Modal.confirm({
+                  title: t('app.kuaizhizao.salesOrder.submitOrder'),
+                  content: auditEnabled
+                    ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
+                    : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
+                  onOk: async () => {
+                    try {
+                      await submitSalesOrder(record.id!);
+                      messageApi.success(t('app.kuaizhizao.salesOrder.submitted'));
+                      invalidateOrdersCache();
+                      invalidateMenuBadge();
+                      invalidateStatistics();
+                      actionRef.current?.reload();
+                    } catch (e: any) {
+                      messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.submitFailed'));
+                    }
+                  },
+                });
+              }}
+            >
+              {t('app.kuaizhizao.salesOrder.submitOrder')}
+            </Button>
+          );
+        }
         parts.push(
           <Tooltip title={!canEdit ? t('app.kuaizhizao.salesOrder.editDisabledTip', { defaultValue: '已审核、已生效或执行中的订单不可编辑' }) : undefined}>
             <span>
@@ -2706,6 +2762,7 @@ const SalesOrdersPage: React.FC = () => {
                 label="发货方式"
                 placeholder="请选择发货方式"
                 formRef={formRef}
+                valueEqualsLabel={false}
               />
             </Col>
             <Col span={6}>
@@ -2715,6 +2772,7 @@ const SalesOrdersPage: React.FC = () => {
                 label="付款条件"
                 placeholder="请选择付款条件"
                 formRef={formRef}
+                valueEqualsLabel={false}
               />
             </Col>
           </Row>
@@ -2794,15 +2852,26 @@ const SalesOrdersPage: React.FC = () => {
                                       material_spec: 'specification',
                                       material_unit: 'baseUnit',
                                       unit_price: 'defaults.defaultSalePrice' as any,
+                                      tax_rate: 'defaults.defaultTaxRate' as any,
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
                                     onChange={(_val, material) => {
-                                      if (material) {
-                                        formRef.current?.setFieldValue(['items', index, '_sourceType'], (material as any)?.sourceType || (material as any)?.source_type);
-                                      }
+                                      if (!material) return;
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, '_sourceType'],
+                                        (material as any)?.sourceType || (material as any)?.source_type,
+                                      );
+                                      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+                                      if (pt !== 'tax_inclusive') return;
+                                      const raw = Number(formRef.current?.getFieldValue(['items', index, 'unit_price'])) || 0;
+                                      const taxR = Number(formRef.current?.getFieldValue(['items', index, 'tax_rate'])) || 0;
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, 'unit_price'],
+                                        convertUnitPriceByPriceType(raw, taxR, 'tax_exclusive', 'tax_inclusive'),
+                                      );
                                     }}
                                   />
                                 </div>
@@ -2880,7 +2949,10 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                      title:
+                        priceType === 'tax_inclusive'
+                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
+                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
                       dataIndex: 'unit_price',
                       width: 140,
                       align: 'right' as const,
@@ -2891,7 +2963,18 @@ const SalesOrdersPage: React.FC = () => {
                             return (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0, flex: 1 }}>
-                                  <InputNumber placeholder={t('app.kuaizhizao.salesOrder.unitPricePlaceholder')} min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                                  <InputNumber
+                                    placeholder={
+                                      priceType === 'tax_inclusive'
+                                        ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                        : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                    }
+                                    min={0}
+                                    precision={2}
+                                    prefix="¥"
+                                    style={{ width: '100%' }}
+                                    size="small"
+                                  />
                                 </AntForm.Item>
                                 <Tooltip title="敏捷核价">
                                   <Button 
@@ -2993,7 +3076,9 @@ const SalesOrdersPage: React.FC = () => {
                         ]
                       : []),
                     {
-                      title: t('app.kuaizhizao.salesOrder.inclAmount'),
+                      title: showTaxColumns
+                        ? t('app.kuaizhizao.salesOrder.inclAmount')
+                        : t('app.kuaizhizao.salesOrder.exclAmount'),
                       width: 120,
                       align: 'right' as const,
                       render: (_: any, __: any, index: number) => (
@@ -3009,6 +3094,9 @@ const SalesOrdersPage: React.FC = () => {
                               row?.tax_rate,
                               priceType,
                             );
+                            if (!showTaxColumns) {
+                              return <AmountDisplay resource="sales_order" value={line.excl} />;
+                            }
                             const totalIncl = line.incl;
                             const isEditing = editingIncl?.index === index;
                             const displayValue = isEditing ? editingIncl.value : totalIncl;

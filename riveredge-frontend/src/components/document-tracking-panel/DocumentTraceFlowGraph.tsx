@@ -89,6 +89,7 @@ interface TraceDocumentFlowNodeProps {
   document_type: string;
   document_id: number;
   document_code?: string;
+  created_at?: string;
   is_root: boolean;
   /** 画布点击选中（与 UniFlowNode selected 一致的主色描边 + 光晕） */
   selected: boolean;
@@ -100,6 +101,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   document_type,
   document_id,
   document_code,
+  created_at,
   is_root,
   selected,
   compact,
@@ -116,6 +118,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   const code =
     (document_code || '').trim() ||
     `#${document_id}`;
+  const createdAtText = created_at ? new Date(created_at).toLocaleString() : '-';
 
   return (
     <div
@@ -213,6 +216,19 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
             title={code}
           >
             {code}
+          </div>
+          <div
+            style={{
+              fontSize: compact ? 9 : 10,
+              color: token.colorTextTertiary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.3,
+            }}
+            title={`创建时间: ${createdAtText}`}
+          >
+            创建: {createdAtText}
           </div>
         </div>
       </div>
@@ -349,6 +365,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
             document_type: n.meta?.document_type ?? '',
             document_id: n.meta?.document_id ?? 0,
             document_code: n.meta?.document_code,
+              created_at: n.meta?.created_at,
           },
         })),
         edges: edges.map((e) => ({
@@ -374,6 +391,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               document_type?: string;
               document_id?: number;
               document_code?: string;
+              created_at?: string;
             };
             const document_type = datum?.document_type ?? '';
             const document_id = datum?.document_id ?? 0;
@@ -383,6 +401,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
                 document_type={document_type}
                 document_id={document_id}
                 document_code={datum?.document_code}
+                created_at={datum?.created_at}
                 is_root={!!datum?.is_root}
                 selected={nid !== '' && nid === selectedGraphNodeId}
                 compact={compact}

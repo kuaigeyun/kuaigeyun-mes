@@ -163,7 +163,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         """
         trigger_direct_inbound = False
         wo_id_for_auto: Optional[int] = None
-        async with in_transaction():
+
+        if True:
             # 验证工单是否存在且状态正确
             work_order = await WorkOrder.get_or_none(
                 id=reporting_data.work_order_id,
@@ -543,7 +544,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 getattr(reporting_record, "work_order_id", None),
                 sync_err,
             )
-
         return ReportingRecordResponse.model_validate(reporting_record)
 
     async def get_reporting_record_by_id(
@@ -571,7 +571,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         )
 
         if not record:
-            raise NotFoundError(f"报工记录不存在: {record_id}")
+            raise NotFoundError("报工记录", str(record_id))
 
         return ReportingRecordResponse.model_validate(record)
 
@@ -625,7 +625,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             query = query.filter(reported_at__lte=reported_at_end)
 
         records = await query.offset(skip).limit(limit).order_by("-reported_at").all()
-
         return [ReportingRecordListResponse.model_validate(record) for record in records]
 
     async def approve_reporting_record(

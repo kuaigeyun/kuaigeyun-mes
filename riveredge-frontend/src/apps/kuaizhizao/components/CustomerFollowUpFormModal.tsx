@@ -361,6 +361,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                   placeholder={t('app.kuaizhizao.customerFollowUp.activityTypePlaceholder')}
                   formRef={form as any}
                   required
+                  valueEqualsLabel={false}
                 />
               </Col>
               <Col xs={24} md={12}>

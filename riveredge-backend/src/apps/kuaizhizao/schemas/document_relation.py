@@ -95,6 +95,7 @@ class DocumentTraceNode(BaseModel):
     document_id: int = Field(..., description="单据ID")
     document_code: Optional[str] = Field(None, description="单据编码")
     document_name: Optional[str] = Field(None, description="单据名称")
+    created_at: Optional[datetime] = Field(None, description="单据创建时间")
     level: int = Field(..., description="层级（从根节点开始的层级）")
     children: List["DocumentTraceNode"] = Field(default_factory=list, description="子节点（下游或上游）")
 
@@ -105,6 +106,7 @@ class DocumentTraceResponse(BaseModel):
     document_id: int = Field(..., description="根单据ID")
     document_code: Optional[str] = Field(None, description="根单据编码")
     document_name: Optional[str] = Field(None, description="根单据名称")
+    created_at: Optional[datetime] = Field(None, description="根单据创建时间")
     upstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="上游追溯链")
     downstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="下游追溯链")
 

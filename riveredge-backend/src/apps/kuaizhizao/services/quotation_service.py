@@ -10,7 +10,7 @@ Date: 2026-02-19
 
 from typing import List, Optional, Set
 from datetime import datetime, date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from tortoise.transactions import in_transaction
 from loguru import logger
 
@@ -136,14 +136,47 @@ class QuotationService:
         *,
         quote_quantity: Decimal,
         unit_price: Decimal,
+        tax_rate: Optional[Decimal],
         total_amount: Optional[Decimal],
     ) -> None:
         if quote_quantity <= Decimal("0"):
             raise ValidationError("报价单明细数量必须大于0")
         if unit_price < Decimal("0"):
             raise ValidationError("报价单明细单价不能为负数")
+        tr = tax_rate if tax_rate is not None else Decimal("0")
+        if tr < Decimal("0") or tr > Decimal("100"):
+            raise ValidationError("报价单明细税率须在 0～100 之间")
         if total_amount is not None and total_amount < Decimal("0"):
             raise ValidationError("报价单明细金额不能为负数")
+
+    @staticmethod
+    def _quotation_line_inclusive_amount(
+        qty: Decimal,
+        unit_price: Decimal,
+        tax_rate: Decimal,
+        price_type: str,
+    ) -> Decimal:
+        """
+        价税合计（行金额），与前端销售/报价明细 calcSalesLineAmounts.incl 的分币舍入一致。
+        """
+        q = qty or Decimal("0")
+        up = unit_price or Decimal("0")
+        tr = tax_rate if tax_rate is not None else Decimal("0")
+        pt = (price_type or "tax_exclusive").strip()
+        unit_cents = int((up * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
+        if pt == "tax_inclusive":
+            incl_cents = int((q * Decimal(unit_cents)).to_integral_value(rounding=ROUND_HALF_UP))
+        else:
+            excl_cents = int((q * Decimal(unit_cents)).to_integral_value(rounding=ROUND_HALF_UP))
+            tax_cents = int(
+                (Decimal(excl_cents) * tr / Decimal("100")).to_integral_value(
+                    rounding=ROUND_HALF_UP
+                )
+            )
+            incl_cents = excl_cents + tax_cents
+        return (Decimal(incl_cents) / Decimal("100")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
     @staticmethod
     def _validate_quotation_non_negative(
@@ -186,6 +219,7 @@ class QuotationService:
             "customer_phone": quotation.customer_phone,
             "total_quantity": quotation.total_quantity,
             "total_amount": quotation.total_amount,
+            "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
             "status": quotation.status,
             "reviewer_id": quotation.reviewer_id,
             "reviewer_name": quotation.reviewer_name,
@@ -221,6 +255,7 @@ class QuotationService:
                     material_unit=it.material_unit,
                     quote_quantity=it.quote_quantity,
                     unit_price=it.unit_price,
+                    tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     total_amount=it.total_amount,
                     delivery_date=it.delivery_date,
                     notes=it.notes,
@@ -392,15 +427,22 @@ class QuotationService:
 
             total_qty = Decimal("0")
             total_amt = Decimal("0")
+            pt = str(q_dict.get("price_type") or "tax_exclusive")
             for item_data in quotation_data.items:
                 qty = item_data.quote_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
-                amt = item_data.total_amount or (qty * unit_pr)
+                tax_r = (
+                    item_data.tax_rate
+                    if item_data.tax_rate is not None
+                    else Decimal("0")
+                )
                 self._validate_quotation_item_non_negative(
                     quote_quantity=qty,
                     unit_price=unit_pr,
+                    tax_rate=tax_r,
                     total_amount=item_data.total_amount,
                 )
+                amt = self._quotation_line_inclusive_amount(qty, unit_pr, tax_r, pt)
                 total_qty += qty
                 total_amt += amt
                 await QuotationItem.create(
@@ -413,6 +455,7 @@ class QuotationService:
                     material_unit=(item_data.material_unit or "")[:20],
                     quote_quantity=qty,
                     unit_price=unit_pr,
+                    tax_rate=tax_r,
                     total_amount=amt,
                     delivery_date=item_data.delivery_date,
                     notes=item_data.notes,
@@ -900,15 +943,23 @@ class QuotationService:
                 ).delete()
                 total_qty = Decimal("0")
                 total_amt = Decimal("0")
+                q_row = await Quotation.get(id=quotation_id)
+                pt = str(getattr(q_row, "price_type", None) or "tax_exclusive")
                 for item_data in quotation_data.items:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
-                    amt = item_data.total_amount or (qty * unit_pr)
+                    tax_r = (
+                        item_data.tax_rate
+                        if item_data.tax_rate is not None
+                        else Decimal("0")
+                    )
                     self._validate_quotation_item_non_negative(
                         quote_quantity=qty,
                         unit_price=unit_pr,
+                        tax_rate=tax_r,
                         total_amount=item_data.total_amount,
                     )
+                    amt = self._quotation_line_inclusive_amount(qty, unit_pr, tax_r, pt)
                     total_qty += qty
                     total_amt += amt
                     await QuotationItem.create(
@@ -921,6 +972,7 @@ class QuotationService:
                         material_unit=(item_data.material_unit or "")[:20],
                         quote_quantity=qty,
                         unit_price=unit_pr,
+                        tax_rate=tax_r,
                         total_amount=amt,
                         delivery_date=item_data.delivery_date,
                         notes=item_data.notes,
@@ -982,6 +1034,10 @@ class QuotationService:
         )
         item_override = overrides.pop("items", None)
 
+        row_price_type = str(
+            overrides.get("price_type", getattr(latest, "price_type", None) or "tax_exclusive")
+        )
+
         async with in_transaction():
             new_row = await Quotation.create(
                 tenant_id=tenant_id,
@@ -1002,6 +1058,7 @@ class QuotationService:
                 customer_phone=overrides.get("customer_phone", latest.customer_phone),
                 total_quantity=overrides.get("total_quantity", latest.total_quantity),
                 total_amount=overrides.get("total_amount", latest.total_amount),
+                price_type=row_price_type,
                 status="草稿",
                 review_status="待审核",
                 reviewer_id=None,
@@ -1045,10 +1102,14 @@ class QuotationService:
                 if isinstance(item_data, QuotationItem):
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
-                    amt = item_data.total_amount or (qty * unit_pr)
+                    tax_r = getattr(item_data, "tax_rate", None) or Decimal("0")
+                    amt = self._quotation_line_inclusive_amount(
+                        qty, unit_pr, tax_r, row_price_type
+                    )
                     self._validate_quotation_item_non_negative(
                         quote_quantity=qty,
                         unit_price=unit_pr,
+                        tax_rate=tax_r,
                         total_amount=item_data.total_amount,
                     )
                     mid = item_data.material_id
@@ -1061,10 +1122,18 @@ class QuotationService:
                 else:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
-                    amt = item_data.total_amount or (qty * unit_pr)
+                    tax_r = (
+                        item_data.tax_rate
+                        if item_data.tax_rate is not None
+                        else Decimal("0")
+                    )
+                    amt = self._quotation_line_inclusive_amount(
+                        qty, unit_pr, tax_r, row_price_type
+                    )
                     self._validate_quotation_item_non_negative(
                         quote_quantity=qty,
                         unit_price=unit_pr,
+                        tax_rate=tax_r,
                         total_amount=item_data.total_amount,
                     )
                     mid = item_data.material_id
@@ -1087,6 +1156,7 @@ class QuotationService:
                     material_unit=(munit or "")[:20],
                     quote_quantity=qty,
                     unit_price=unit_pr,
+                    tax_rate=tax_r,
                     total_amount=amt,
                     delivery_date=ddate,
                     notes=nit,
@@ -1188,6 +1258,8 @@ class QuotationService:
             min(valid_dates) if valid_dates else order_date
         )
 
+        q_price_type = getattr(quotation, "price_type", None) or "tax_exclusive"
+
         so_items = [
             SalesOrderItemCreate(
                 material_id=it.material_id,
@@ -1198,6 +1270,7 @@ class QuotationService:
                 required_quantity=it.quote_quantity,
                 delivery_date=it.delivery_date or delivery_date,
                 unit_price=it.unit_price,
+                tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                 item_amount=it.total_amount,
                 notes=it.notes,
             )
@@ -1213,6 +1286,7 @@ class QuotationService:
             customer_phone=quotation.customer_phone,
             total_quantity=quotation.total_quantity,
             total_amount=quotation.total_amount,
+            price_type=q_price_type,
             status=DemandStatus.DRAFT,
             review_status=ReviewStatus.PENDING,
             salesman_id=quotation.salesman_id,

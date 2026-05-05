@@ -347,7 +347,6 @@ const PurchaseOrderFeeTotalsSummary: React.FC<{
 
 const ORDER_TYPE_FALLBACK: Array<{ label: string; value: string }> = [
   { label: '标准采购', value: '标准采购' },
-  { label: '紧急采购', value: '紧急采购' },
   { label: '框架协议', value: '框架协议' },
 ];
 
@@ -663,6 +662,11 @@ const PurchaseOrdersPage: React.FC = () => {
         ];
         if (isDraftStatus(record.status)) {
           parts.push(
+            <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(record)}>
+              提交
+            </Button>
+          );
+          parts.push(
             <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
               删除
             </Button>
@@ -683,7 +687,6 @@ const PurchaseOrdersPage: React.FC = () => {
             theme="link"
             size="small"
             actions={{
-              submit: (id) => submitPurchaseOrder(id),
               approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
               reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
             }}
@@ -713,20 +716,6 @@ const PurchaseOrdersPage: React.FC = () => {
                 下推 <DownOutlined />
               </Button>
             </Dropdown>
-          );
-          parts.push(
-            <Button
-              key="lc"
-              type="link"
-              size="small"
-              icon={<DollarOutlined />}
-              onClick={() => {
-                setLandingCostOrder(record);
-                setLandingCostModalVisible(true);
-              }}
-            >
-              费用分摊
-            </Button>
           );
         }
         return renderPurchaseOrderRowActions(parts, `po-${record.id ?? 'row'}`);
@@ -1008,6 +997,29 @@ const PurchaseOrdersPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '采购订单删除失败');
+        }
+      },
+    });
+  };
+
+  const handleSubmitOrder = (record: PurchaseOrder) => {
+    if (!record.id) return;
+    Modal.confirm({
+      title: '提交采购订单',
+      content: '确认提交该采购订单吗？',
+      onOk: async () => {
+        try {
+          await submitPurchaseOrder(record.id!);
+          messageApi.success('提交成功');
+          invalidateStatistics();
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          if (detailDrawerVisible && orderDetail?.id === record.id) {
+            const refreshed = await getPurchaseOrder(record.id!);
+            setOrderDetail(refreshed);
+          }
+        } catch (error: any) {
+          messageApi.error(error?.message || '提交失败');
         }
       },
     });
@@ -2465,6 +2477,15 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'submit',
+                  visible: isDraftStatus(orderDetail.status),
+                  render: () => (
+                    <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(orderDetail)}>
+                      提交
+                    </Button>
+                  ),
+                },
+                {
                   key: 'workflow',
                   render: () => (
                     <UniWorkflowActions
@@ -2480,7 +2501,6 @@ const PurchaseOrdersPage: React.FC = () => {
                       theme="link"
                       size="small"
                       actions={{
-                        submit: (id) => submitPurchaseOrder(id),
                         approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
                         reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
                       }}

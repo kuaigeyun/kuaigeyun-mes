@@ -184,13 +184,19 @@ async def get_dictionary_by_code(
         tenant_id=tenant_id,
         code=code
     )
-    
+
+    if not dictionary:
+        dictionary = await DataDictionaryService.ensure_system_dictionary_exists(
+            tenant_id=tenant_id,
+            code=code,
+        )
+
     if not dictionary:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="字典不存在"
         )
-    
+
     return DataDictionaryResponse.model_validate(dictionary)
 
 

@@ -18,7 +18,7 @@ from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.schemas.purchase_requisition import (
     PurchaseRequisitionCreate, PurchaseRequisitionUpdate, PurchaseRequisitionResponse,
-    PurchaseRequisitionListResponse, ConvertToPurchaseOrderRequest, UrgentPurchaseRequest,
+    PurchaseRequisitionListResponse, ConvertToPurchaseOrderRequest,
     ApproveRequisitionRequest,
 )
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
@@ -242,22 +242,3 @@ async def delete_requisition(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/urgent-purchase", summary="紧急采购")
-async def urgent_purchase(
-    data: UrgentPurchaseRequest,
-    requisition_id: int = Path(...),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """紧急采购：跳过审批直接生成采购单"""
-    try:
-        return await PurchaseRequisitionService().urgent_purchase(
-            tenant_id=tenant_id,
-            requisition_id=requisition_id,
-            data=data,
-            operator_id=current_user.id,
-        )
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))

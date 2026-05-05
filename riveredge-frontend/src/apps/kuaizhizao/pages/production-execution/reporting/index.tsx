@@ -1032,7 +1032,16 @@ const ReportingPage: React.FC = () => {
     const loadMaterials = async () => {
       try {
         const materials = await materialApi.list({ isActive: true });
-        setMaterialList(materials || []);
+        const normalizedMaterials = Array.isArray(materials)
+          ? materials
+          : Array.isArray((materials as any)?.data)
+            ? (materials as any).data
+            : Array.isArray((materials as any)?.results)
+              ? (materials as any).results
+              : Array.isArray((materials as any)?.items)
+                ? (materials as any).items
+                : [];
+        setMaterialList(normalizedMaterials);
       } catch (error) {
         console.error('获取物料列表失败:', error);
         setMaterialList([]);

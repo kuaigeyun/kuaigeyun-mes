@@ -998,40 +998,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
   }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled])
 
-  // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
-    // - 至少一列不设置 width（自适应），固定列必须保留 width
-    // - 操作列不参与拖拽，排除后单独合并，避免其宽度被持久化为过小值导致内容裁剪
-    // - 排除 hideInTable: true 的列（搜索专用列），避免 dataIndex 重复导致的 resizable-header 错误
-    const columnsForResize = React.useMemo(() => {
-      if (!processedColumns.length) return []
-      const tableCols = processedColumns.filter((c: any) => !isOperationColumn(c) && c.hideInTable !== true)
-      if (tableCols.length === 0) return []
-      
-      const allHaveWidth = tableCols.every((c: any) => c.width != null)
-      if (!allHaveWidth) return tableCols
-      
-      let idxToRemove = -1
-      // 优先从非固定列中选取一列去掉宽度，使其能自适应占满剩余空间
-      for (let i = tableCols.length - 1; i >= 0; i--) {
-        if (!tableCols[i].fixed) {
-          idxToRemove = i
-          break
-        }
-      }
-      
-      if (idxToRemove < 0) return tableCols
-      return tableCols.map((col: any, i: number) =>
-        i === idxToRemove ? (() => { const { width, ...rest } = col; return rest })() : col
-      )
-    }, [processedColumns])
+  // 全项目统一策略：列宽只由页面 columns 定义控制，不启用拖拽改宽与本地列宽持久化。
+  // 这样可避免「代码 width」与「localStorage columnsWidth」双控制源竞争。
+  const columnsForResize = React.useMemo(() => [], [])
 
   // 列宽拖拽 hook（仅表格视图时生效，与 ProTable 列设置共存）
   const tableId = columnPersistenceId ?? headerTitle
   const { components: resizableComponents, resizableColumns, tableWidth, resetColumns, refresh } = useAntdResizableHeader({
     columns: columnsForResize,
-    columnsState: tableId
-      ? { persistenceKey: `ui.tables.${tableId}.columnsWidth`, persistenceType: 'localStorage' }
-      : undefined,
+    columnsState: undefined,
   })
 
   const handleColumnReset = React.useCallback(() => {
@@ -2275,11 +2250,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           {currentViewType === 'help' && viewTypes.includes('help') && (
             <div
               style={{
-                padding: '24px',
-                minHeight: '400px',
-                background: '#fafafa',
-                borderRadius: '8px',
-                border: `1px solid var(--river-border-color)`,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden',
+                background: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+                border: `1px solid rgba(0, 0, 0, 0.12)`,
+                boxShadow: 'none',
               }}
             >
               {helpViewConfig?.content ?? (

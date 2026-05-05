@@ -107,14 +107,23 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
           skip,
           limit: PAGE_SIZE,
         });
-        const rows = Array.isArray(response)
-          ? response
-          : (response as { data?: Material[] })?.data ?? [];
-        const arr = Array.isArray(rows) ? (rows as Material[]) : [];
+        /** materialApi.list 固定返回 { items, total }；兼容历史 { data } 或裸数组 */
+        let arr: Material[] = [];
+        let totalFromApi: number | undefined;
+        if (Array.isArray(response)) {
+          arr = response as Material[];
+        } else if (response && typeof response === 'object') {
+          const r = response as { items?: Material[]; data?: Material[]; total?: number };
+          const rows = r.items ?? r.data;
+          arr = Array.isArray(rows) ? rows : [];
+          totalFromApi = typeof r.total === 'number' ? r.total : undefined;
+        }
         setList(arr);
-        setTotalHint(
-          arr.length < PAGE_SIZE ? skip + arr.length : skip + arr.length + 1
-        );
+        if (totalFromApi != null && totalFromApi >= 0) {
+          setTotalHint(totalFromApi);
+        } else {
+          setTotalHint(arr.length < PAGE_SIZE ? skip + arr.length : skip + arr.length + 1);
+        }
       } catch {
         setList([]);
         setTotalHint(0);

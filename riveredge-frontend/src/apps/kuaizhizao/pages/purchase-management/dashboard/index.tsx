@@ -138,11 +138,10 @@ const PurchaseDashboard: React.FC = () => {
                         {s?.pending_requisitions ?? 0}
                       </div>
                       <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        {s?.urgent_requisitions > 0 ? `含有 ${s.urgent_requisitions} 条紧急业务申请` : '当前无紧急申购任务'}
+                        本月新增申购 {s?.new_requisitions_this_month ?? 0} 条
                       </div>
                     </div>
                     {kpiSideBlock([
-                      { label: '紧急', value: <span style={{ color: s?.urgent_requisitions > 0 ? '#fff' : 'rgba(255,255,255,0.7)' }}>{s?.urgent_requisitions ?? 0}</span> },
                       { label: '本月新增', value: s?.new_requisitions_this_month ?? 0 },
                     ])}
                   </div>
@@ -277,12 +276,6 @@ const PurchaseDashboard: React.FC = () => {
                     render: (text, record) => <a onClick={() => navigate(`/apps/kuaizhizao/purchase-management/purchase-requisitions/${record.id}`)}>{text}</a>
                   },
                   { title: '申请人', dataIndex: 'applicant_name' },
-                  {
-                    title: '紧迫',
-                    dataIndex: 'is_urgent',
-                    width: 70,
-                    render: (is) => is ? <Tag color="red">紧急</Tag> : <Tag color="blue">正常</Tag>
-                  },
                   {
                     title: '状态',
                     dataIndex: 'status',

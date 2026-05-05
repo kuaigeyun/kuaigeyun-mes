@@ -7,8 +7,11 @@
 export interface QuickCreateConfig {
   /** 菜单项文案，默认「快速新建」 */
   label?: string;
-  /** 点击时触发，由父组件打开新建弹窗等 */
-  onClick: () => void;
+  /**
+   * 点击时触发；anchorEl 为下拉外侧包裹层（与 Select 同宽），用于 Popover 对齐字段。
+   * 忽略参数时仍兼容 `() => void` 写法。
+   */
+  onClick: (anchorEl?: HTMLElement | null) => void;
 }
 
 export interface AdvancedSearchField {

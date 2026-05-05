@@ -151,6 +151,23 @@ function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: 
   return renderRowActionsOverflow(nodes, keyPrefix)
 }
 
+function normalizeComputationSourceNote(computation?: DemandComputation): string {
+  const raw = String(computation?.notes || '').trim()
+  if (!raw) return ''
+
+  const demandNo = String(computation?.demand_code || '').trim()
+  const sourceNoFromRaw = raw.match(/^从需求\s+(.+?)\s+下推创建$/)?.[1]?.trim()
+  const sourceNo = demandNo || sourceNoFromRaw || ''
+
+  if (/^从需求\s+.+\s+下推创建$/.test(raw) || /^从需求计划\s+.+\s+下推创建$/.test(raw)) {
+    if (computation?.demand_type === 'sales_order') return `从销售订单 ${sourceNo} 下推创建`.trim()
+    if (computation?.demand_type === 'sales_forecast') return `从销售预测 ${sourceNo} 下推创建`.trim()
+    return `从需求计划 ${sourceNo} 下推创建`.trim()
+  }
+
+  return raw
+}
+
 /** 可用库存列：hover 展示分仓库构成与净需求计算说明（依赖 detail_results.inventory_breakdown） */
 function AvailableInventoryPopoverContent({ detail }: { detail?: Record<string, unknown> | null }) {
   const bd = detail?.inventory_breakdown as Record<string, unknown> | undefined
@@ -1154,8 +1171,8 @@ const DemandComputationPage: React.FC = () => {
       fixed: 'left',
       hideInSearch: false,
       render: (_: unknown, record: DemandComputation) => (
-        <Space size={4}>
-          <span>{record.computation_code ?? '-'}</span>
+        <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+          <span style={{ whiteSpace: 'nowrap' }}>{record.computation_code ?? '-'}</span>
           {record.computation_code ? (
             <Tooltip title="复制">
               <Button
@@ -1176,7 +1193,7 @@ const DemandComputationPage: React.FC = () => {
       ),
     },
     {
-      title: '需求编号',
+      title: '来源单号',
       dataIndex: 'demand_code',
       width: 168,
       hideInSearch: false,
@@ -1230,7 +1247,7 @@ const DemandComputationPage: React.FC = () => {
       },
     },
     {
-      title: '需求类型',
+      title: '来源类型',
       dataIndex: 'demand_type',
       width: 110,
       valueType: 'select',
@@ -1701,7 +1718,7 @@ const DemandComputationPage: React.FC = () => {
                 dataSource={executeRecord}
                 columns={[
                   { title: '计算编号', dataIndex: 'computation_code' },
-                  { title: '需求编号', dataIndex: 'demand_code' },
+                  { title: '来源单号', dataIndex: 'demand_code' },
                   {
                     title: '计算类型',
                     dataIndex: 'computation_type',
@@ -2173,7 +2190,7 @@ const DemandComputationPage: React.FC = () => {
                           },
                           {
                             key: 'demand',
-                            label: '需求编号',
+                            label: '来源单号',
                             children: (
                               <Space size={4}>
                                 <span>{currentComputation.demand_code ?? '—'}</span>
@@ -2206,7 +2223,7 @@ const DemandComputationPage: React.FC = () => {
                           },
                           {
                             key: 'dtype',
-                            label: '需求类型',
+                            label: '来源类型',
                             children: (
                               <Tag {...getDemandTypeTagProps(currentComputation.demand_type)}>
                                 {getDemandTypeLabel(currentComputation.demand_type)}
@@ -2260,7 +2277,7 @@ const DemandComputationPage: React.FC = () => {
                             key: 'notes',
                             label: '备注',
                             span: 3,
-                            children: currentComputation.notes?.trim() ? currentComputation.notes : '—',
+                            children: normalizeComputationSourceNote(currentComputation) || '—',
                           },
                         ]}
                       />

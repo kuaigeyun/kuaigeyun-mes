@@ -44,6 +44,11 @@ class Quotation(BaseModel):
     # 金额信息
     total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    price_type = fields.CharField(
+        max_length=20,
+        default="tax_exclusive",
+        description="价格类型：含税单价(tax_inclusive)/不含税单价(tax_exclusive)",
+    )
 
     # 状态：草稿/已发送/已接受/已拒绝/已转订单
     status = fields.CharField(max_length=20, default="草稿", description="报价状态")

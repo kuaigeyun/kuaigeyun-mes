@@ -392,7 +392,7 @@ class ProductionControlService:
             if impacted_orders:
                 recommendation += f" 注意：将导致 {len(impacted_orders)} 个现有工单物料短缺。"
         elif readiness_rate >= 80:
-            recommendation = "物料基本齐套，可考虑通过调拨或紧急采购补齐后插单。"
+            recommendation = "物料基本齐套，可考虑通过调拨补齐后插单。"
         else:
             recommendation = "严重缺料，不建议此时插单，以免造成生产停滞。"
 

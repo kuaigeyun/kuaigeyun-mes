@@ -407,7 +407,13 @@ async def print_quotation(
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    if (output_format or "html").lower() == "pdf" and result.get("mime_type") == "application/pdf":
+    # 仅在明确请求二进制响应时返回原始 PDF；
+    # response_format=json 时必须返回 base64 JSON，供前端解析预览。
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
         raw = base64.b64decode(result.get("content") or "")
         return Response(
             content=raw,

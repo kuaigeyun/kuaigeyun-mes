@@ -2265,14 +2265,6 @@ async def get_purchase_summary(
     # 1. 待处理申购
     q1 = PurchaseRequisition.filter(tenant_id=tenant_id, status__in=PURCHASE_REQUISITION_ACTIVE_STATUS, deleted_at__isnull=True).count()
     
-    # 增加：紧急申购
-    q1_urgent = PurchaseRequisition.filter(
-        tenant_id=tenant_id, 
-        is_urgent=True, 
-        status__in=PURCHASE_REQUISITION_ACTIVE_STATUS,
-        deleted_at__isnull=True
-    ).count()
-
     # 2. 待收货订单
     q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS).count()
     
@@ -2291,8 +2283,8 @@ async def get_purchase_summary(
         deleted_at__isnull=True
     ).count()
 
-    pending_requisitions, urgent_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
-        q1, q1_urgent, q2, q2_overdue, q3
+    pending_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
+        q1, q2, q2_overdue, q3
     )
 
     arrival_rate = await _read_dashboard_kpi(
@@ -2304,7 +2296,6 @@ async def get_purchase_summary(
 
     return {
         "pending_requisitions": pending_requisitions,
-        "urgent_requisitions": urgent_requisitions,
         "new_requisitions_this_month": new_requisitions,
         "pending_receipts": pending_receipts,
         "overdue_receipts": overdue_receipts,

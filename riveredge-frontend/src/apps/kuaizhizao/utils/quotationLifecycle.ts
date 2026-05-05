@@ -1,6 +1,6 @@
 /**
  * 报价单生命周期：前端兜底（无 lifecycle 字段时），与后端 get_quotation_lifecycle / QUOTATION_MAIN_STAGES 对齐。
- * 主轴：草稿 → 已发送 → 已审核 → 客户确认·转订单 → 已转订单（关闭审核时跳过「已审核」）
+ * 主轴：草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单
  */
 
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
@@ -11,12 +11,12 @@ function norm(s: string | undefined): string {
   return (s ?? '').trim();
 }
 
-const MAIN_STAGE_KEYS = ['draft', 'submitted', 'reviewed', 'send_or_push', 'converted'] as const;
+const MAIN_STAGE_KEYS = ['draft', 'generated', 'sent_pending_confirm', 'customer_confirmed', 'converted'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
   draft: '草稿',
-  submitted: '已发送',
-  reviewed: '已审核',
-  send_or_push: '客户确认·转订单',
+  generated: '已生成',
+  sent_pending_confirm: '已发送待确认',
+  customer_confirmed: '客户确认',
   converted: '已转订单',
 };
 
@@ -52,8 +52,8 @@ function buildMainStages(currentKey: (typeof MAIN_STAGE_KEYS)[number]): SubStage
   });
 }
 
-/** 未启用审核时主轴跳过「已审核」节点：草稿 → 已发送 → 客户确认·转订单 → 已转订单 */
-const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'submitted', 'send_or_push', 'converted'] as const;
+/** 未启用审核时主轴可直接跳过「已生成」：草稿 → 已发送待确认 → 客户确认 → 已转订单 */
+const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'sent_pending_confirm', 'customer_confirmed', 'converted'] as const;
 
 const NO_AUDIT_STAGE_PERCENT: Record<string, number> = {
   draft: 0,
@@ -84,7 +84,7 @@ function buildMainStagesNoAudit(currentKey: (typeof MAIN_STAGE_KEYS_NO_AUDIT)[nu
 
 function mapQuotationStageKeyWhenNoAudit(key: string): (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number] {
   const k = String(key ?? '').trim();
-  if (k === 'reviewed') return 'send_or_push';
+  if (k === 'generated') return 'sent_pending_confirm';
   const allowed = MAIN_STAGE_KEYS_NO_AUDIT as readonly string[];
   if (allowed.includes(k)) return k as (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number];
   return 'draft';
@@ -125,7 +125,7 @@ function adaptQuotationLifecycleForNoAudit(
   const percent = NO_AUDIT_STAGE_PERCENT[pipelineKey] ?? base.percent;
 
   let stageName = base.stageName;
-  if (stageName === '已审核' || stageName === '待审核') {
+  if (stageName === '已生成（待审核）' || stageName === '待审核') {
     const active = mainStages.find((s) => s.status === 'active');
     stageName = active?.label ?? stageName;
   }
@@ -161,10 +161,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
 
   if (status === '已拒绝' || isRejectedRs(rs)) {
     return {
-      current_stage_key: 'submitted',
+      current_stage_key: 'generated',
       current_stage_name: '已驳回',
       status: 'exception',
-      main_stages: buildMainStages('submitted'),
+      main_stages: buildMainStages('generated'),
       next_step_suggestions: ['修改报价单后点击「重新编辑」回到草稿，再提交审核'],
     };
   }
@@ -191,10 +191,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
 
   if (status === '已接受') {
     return {
-      current_stage_key: 'send_or_push',
-      current_stage_name: '客户已确认（待下推）',
+      current_stage_key: 'customer_confirmed',
+      current_stage_name: '客户确认',
       status: 'normal',
-      main_stages: buildMainStages('send_or_push'),
+      main_stages: buildMainStages('customer_confirmed'),
       next_step_suggestions: ['转销售订单（下推）'],
     };
   }
@@ -202,19 +202,19 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   if (status === '已发送') {
     if (isPendingRs(rs)) {
       return {
-        current_stage_key: 'submitted',
-        current_stage_name: '待审核',
+        current_stage_key: 'generated',
+        current_stage_name: '已生成（待审核）',
         status: 'normal',
-        main_stages: buildMainStages('submitted'),
+        main_stages: buildMainStages('generated'),
         next_step_suggestions: ['审核通过', '审核驳回', '撤回提交（整单回草稿）'],
       };
     }
     if (isApprovedRs(rs)) {
       return {
-        current_stage_key: 'reviewed',
-        current_stage_name: '已审核',
+        current_stage_key: 'sent_pending_confirm',
+        current_stage_name: '已发送待确认',
         status: 'normal',
-        main_stages: buildMainStages('reviewed'),
+        main_stages: buildMainStages('sent_pending_confirm'),
         next_step_suggestions: [
           '客户确认（标记已接受）',
           '转销售订单（下推）',
@@ -223,10 +223,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       };
     }
     return {
-      current_stage_key: 'submitted',
-      current_stage_name: '待审核',
+      current_stage_key: 'generated',
+      current_stage_name: '已生成（待审核）',
       status: 'normal',
-      main_stages: buildMainStages('submitted'),
+      main_stages: buildMainStages('generated'),
       next_step_suggestions: ['审核通过', '审核驳回', '撤回提交（整单回草稿）'],
     };
   }

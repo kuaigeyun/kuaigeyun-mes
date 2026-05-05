@@ -71,8 +71,6 @@ class PurchaseRequisitionBase(BaseModel):
     source_type: Optional[str] = None
     source_id: Optional[int] = None
     source_code: Optional[str] = None
-    is_urgent: bool = Field(False, description="是否紧急采购")
-    urgent_reason: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -102,8 +100,6 @@ class PurchaseRequisitionResponse(PurchaseRequisitionBase):
     """采购申请响应"""
     id: int
     tenant_id: int
-    urgent_operator_id: Optional[int] = None
-    urgent_operated_at: Optional[datetime] = None
     reviewer_id: Optional[int] = None
     reviewer_name: Optional[str] = None
     review_time: Optional[datetime] = None
@@ -149,8 +145,3 @@ class ApproveRequisitionRequest(BaseModel):
     """审核采购申请请求"""
     approved: bool = Field(True, description="是否通过")
     review_remarks: Optional[str] = Field(None, description="审核备注/驳回原因")
-
-
-class UrgentPurchaseRequest(BaseModel):
-    """紧急采购请求"""
-    urgent_reason: str = Field(..., min_length=1, description="紧急原因（必填）")

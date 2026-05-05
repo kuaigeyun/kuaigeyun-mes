@@ -30,6 +30,7 @@ class QuotationItem(BaseModel):
     # 报价数量和价格
     quote_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="报价数量")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价")
+    tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
 
     # 交货信息
