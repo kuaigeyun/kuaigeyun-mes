@@ -14,8 +14,10 @@ import type {
   MaterialCreate,
   MaterialUpdate,
   MaterialListParams,
+  MaterialListResponse,
   MaterialBulkTrackingPayload,
   MaterialBulkTrackingResult,
+  MaterialBatchDeleteResult,
   BOM,
   BOMCreate,
   BOMUpdate,
@@ -216,8 +218,15 @@ export const materialApi = {
   /**
    * 获取物料列表
    */
-  list: async (params?: MaterialListParams): Promise<Material[]> => {
-    return api.get('/apps/master-data/materials', { params });
+  list: async (params?: MaterialListParams): Promise<MaterialListResponse> => {
+    if (!params) {
+      return api.get('/apps/master-data/materials');
+    }
+    const { sortBy, sortOrder, ...rest } = params;
+    const backendParams: Record<string, unknown> = { ...rest };
+    if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
+    if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
+    return api.get('/apps/master-data/materials', { params: backendParams });
   },
 
   /**
@@ -239,6 +248,13 @@ export const materialApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/materials/${uuid}`);
+  },
+
+  /**
+   * 批量软删除物料（单请求，后端批量校验与 UPDATE）
+   */
+  batchDelete: async (material_uuids: string[]): Promise<MaterialBatchDeleteResult> => {
+    return api.post('/apps/master-data/materials/batch-delete', { material_uuids });
   },
 
   /**
@@ -273,12 +289,14 @@ export const materialApi = {
   },
 
   /**
-   * 按勾选导入标准件到指定物料分组
+   * 按勾选导入标准件（指定单一分组，或按预设库二级分类各建/复用分组）
    */
   loadStandardPartsPreset: async (body: {
-    materialGroupUuid: string;
     presetKeys: string[];
     codeMode: 'auto' | 'gb';
+    groupMode: 'single' | 'preset_by_category';
+    materialGroupUuid?: string;
+    parentMaterialGroupUuid?: string;
   }): Promise<LoadStandardPartsPresetResponse> => {
     return api.post('/apps/master-data/materials/standard-parts/load-preset', body);
   },

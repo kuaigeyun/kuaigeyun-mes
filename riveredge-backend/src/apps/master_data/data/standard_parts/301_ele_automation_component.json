@@ -1,21 +1,82 @@
 {
   "sortOrder": 301,
+  "industryId": "electronics_assembly",
   "primaryCategory": "electrical_components",
-  "id": "ele_automation_component",
-  "name": "电气与自动化-常用元件",
-  "description": "断路器、继电器、传感器等",
+  "id": "ele_low_voltage_and_control_cn_sme",
+  "name": "电气元件-低压配电与控制",
+  "description": "配电柜与设备控制柜中高频使用的断路器、接触器、继电器、电源等。",
   "items": [
-    { "preset_key": "mcb_1p_c10", "name": "微型断路器", "specification": "1P C10", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-1P-C10", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "mcb_1p_c16", "name": "微型断路器", "specification": "1P C16", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-1P-C16", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "mcb_1p_c20", "name": "微型断路器", "specification": "1P C20", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-1P-C20", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "mcb_1p_c32", "name": "微型断路器", "specification": "1P C32", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-1P-C32", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "mcb_3p_c32", "name": "微型断路器", "specification": "3P C32", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-3P-C32", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "mcb_3p_c63", "name": "微型断路器", "specification": "3P C63", "gb_standard": "GB/T 10963.1", "gb_code": "MCB-3P-C63", "base_unit": "个", "texture": "阻燃塑料" },
-    { "preset_key": "relay_my2nj_dc12", "name": "小型继电器", "specification": "DC12V", "gb_standard": "GB/T 21711.1", "gb_code": "RELAY-MY2NJ-DC12V", "base_unit": "个", "texture": "组合件" },
-    { "preset_key": "relay_my2nj_dc24", "name": "小型继电器", "specification": "DC24V", "gb_standard": "GB/T 21711.1", "gb_code": "RELAY-MY2NJ-DC24V", "base_unit": "个", "texture": "组合件" },
-    { "preset_key": "relay_my2nj_ac220", "name": "小型继电器", "specification": "AC220V", "gb_standard": "GB/T 21711.1", "gb_code": "RELAY-MY2NJ-AC220V", "base_unit": "个", "texture": "组合件" },
-    { "preset_key": "sensor_sn04n", "name": "接近开关", "specification": "SN04-N", "gb_standard": "GB/T 14048.10", "gb_code": "SENSOR-SN04-N", "base_unit": "个", "texture": "塑料" },
-    { "preset_key": "sensor_tl_q5mc1", "name": "电感式接近传感器", "specification": "TL-Q5MC1", "gb_standard": "GB/T 14048.10", "gb_code": "SENSOR-TL-Q5MC1", "base_unit": "个", "texture": "塑料" },
-    { "preset_key": "button_emergency_stop", "name": "急停按钮", "specification": "XB2-BS542", "gb_standard": "GB/T 14048.5", "gb_code": "BUTTON-ESTOP", "base_unit": "个", "texture": "组合件" }
+    {
+      "preset_key": "cn_ele_mcb_1p_c16",
+      "name": "微型断路器",
+      "specification": "1P C16",
+      "gb_standard": "GB/T 10963.1",
+      "gb_code": "GB10963.1-1P-C16",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_mcb_3p_c32",
+      "name": "微型断路器",
+      "specification": "3P C32",
+      "gb_standard": "GB/T 10963.1",
+      "gb_code": "GB10963.1-3P-C32",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_mccb_3p_100a",
+      "name": "塑壳断路器",
+      "specification": "3P 100A",
+      "gb_standard": "GB/T 14048.2",
+      "gb_code": "GB14048.2-3P-100A",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_contactor_ac3_18a",
+      "name": "交流接触器",
+      "specification": "AC-3 18A 24VDC线圈",
+      "gb_standard": "GB/T 14048.4",
+      "gb_code": "GB14048.4-AC3-18A-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_thermal_relay_12_18a",
+      "name": "热过载继电器",
+      "specification": "12-18A",
+      "gb_standard": "GB/T 14048.4",
+      "gb_code": "GB14048.4-OLR-12-18A",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_intermediate_relay_my2n",
+      "name": "中间继电器",
+      "specification": "MY2N 24VDC",
+      "gb_standard": "GB/T 21711.1",
+      "gb_code": "GB21711.1-MY2N-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_switching_psu_24v_10a",
+      "name": "导轨开关电源",
+      "specification": "24V 10A",
+      "gb_standard": "GB/T 14714",
+      "gb_code": "GB14714-24V-10A",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_din_rail_35x7_5",
+      "name": "顶帽式导轨",
+      "specification": "35×7.5",
+      "gb_standard": "GB/T 19159",
+      "gb_code": "GB19159-35X7.5",
+      "base_unit": "米",
+      "texture": "镀锌钢"
+    }
   ]
 }

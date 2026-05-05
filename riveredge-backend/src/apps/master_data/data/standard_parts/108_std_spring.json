@@ -1,17 +1,64 @@
 {
   "sortOrder": 108,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_spring_compression",
-  "name": "标准件-弹簧",
-  "description": "圆柱螺旋压缩弹簧",
+  "id": "std_spring_cn_sme",
+  "name": "弹簧件-压簧拉簧碟簧",
+  "description": "用于机构回位、缓冲与预紧的常用弹簧元件。",
   "items": [
-    { "preset_key": "spring_d05_d5_l20", "name": "圆柱螺旋压缩弹簧", "specification": "d0.5 D5 L20", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d0.5-D5-L20", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d08_d8_l25", "name": "圆柱螺旋压缩弹簧", "specification": "d0.8 D8 L25", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d0.8-D8-L25", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d10_d10_l30", "name": "圆柱螺旋压缩弹簧", "specification": "d1.0 D10 L30", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d1.0-D10-L30", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d12_d12_l35", "name": "圆柱螺旋压缩弹簧", "specification": "d1.2 D12 L35", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d1.2-D12-L35", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d15_d15_l40", "name": "圆柱螺旋压缩弹簧", "specification": "d1.5 D15 L40", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d1.5-D15-L40", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d20_d20_l50", "name": "圆柱螺旋压缩弹簧", "specification": "d2.0 D20 L50", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d2.0-D20-L50", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d25_d25_l60", "name": "圆柱螺旋压缩弹簧", "specification": "d2.5 D25 L60", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d2.5-D25-L60", "base_unit": "件", "texture": "弹簧钢" },
-    { "preset_key": "spring_d30_d30_l80", "name": "圆柱螺旋压缩弹簧", "specification": "d3.0 D30 L80", "gb_standard": "GB/T 2089", "gb_code": "GB2089-d3.0-D30-L80", "base_unit": "件", "texture": "弹簧钢" }
+    {
+      "preset_key": "cn_spring_compression_cyl_gbt2089_d20",
+      "name": "圆柱螺旋压缩弹簧",
+      "specification": "d=2.0 D=20 L0=60",
+      "gb_standard": "GB/T 2089",
+      "gb_code": "GB2089-D2-D20-L60",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_compression_cyl_gbt2089_d25",
+      "name": "圆柱螺旋压缩弹簧",
+      "specification": "d=2.5 D=25 L0=80",
+      "gb_standard": "GB/T 2089",
+      "gb_code": "GB2089-D2.5-D25-L80",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_extension_gbt1239_1_d16",
+      "name": "圆柱螺旋拉伸弹簧",
+      "specification": "d=1.6 D=12 L0=80",
+      "gb_standard": "GB/T 1239.1",
+      "gb_code": "GB1239.1-D1.6-D12-L80",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_torsion_gbt1239_3_d14",
+      "name": "圆柱螺旋扭转弹簧",
+      "specification": "d=1.4 D=10",
+      "gb_standard": "GB/T 1239.3",
+      "gb_code": "GB1239.3-D1.4-D10",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_disc_gbt1972_30x15x1_5",
+      "name": "碟形弹簧",
+      "specification": "30×15×1.5",
+      "gb_standard": "GB/T 1972",
+      "gb_code": "GB1972-30X15X1.5",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    },
+    {
+      "preset_key": "cn_wave_spring_jbt8135_25",
+      "name": "波形弹簧垫圈",
+      "specification": "25",
+      "gb_standard": "JB/T 8135",
+      "gb_code": "JBT8135-25",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "sortOrder": 617,
+  "industryId": "rubber_molding",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_rubber_molding_common",
+  "name": "辅材-橡胶模压常用",
+  "description": "橡胶配混、硫化与后处理高频辅材。",
+  "items": [
+    { "preset_key": "rm_aux_talc_powder_25kg", "name": "滑石粉", "specification": "25kg/袋", "gb_standard": "GB/T 15342", "gb_code": "GB15342-RM-25KG", "base_unit": "袋", "texture": "粉体" },
+    { "preset_key": "rm_aux_release_agent_550ml", "name": "橡胶脱模剂", "specification": "550ml", "gb_standard": "", "gb_code": "AUX-RM-REL-550", "base_unit": "罐", "texture": "气雾剂" },
+    { "preset_key": "rm_aux_cleaner_450ml", "name": "模具清洗剂", "specification": "450ml", "gb_standard": "", "gb_code": "AUX-RM-CLN-450", "base_unit": "罐", "texture": "清洗剂" },
+    { "preset_key": "rm_aux_pe_bag_500x700", "name": "PE包装袋", "specification": "500×700", "gb_standard": "GB/T 4456", "gb_code": "GB4456-RM-500X700", "base_unit": "个", "texture": "PE" }
+  ]
+}

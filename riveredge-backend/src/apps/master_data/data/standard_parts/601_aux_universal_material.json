@@ -1,0 +1,100 @@
+{
+  "sortOrder": 601,
+  "industryId": "general_assembly",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_universal_consumables_packaging_cn_sme",
+  "name": "辅材-通用耗材与包材",
+  "description": "将耗材/辅材/包材合并后的极常用清单，优先保留跨行业高频物料。",
+  "items": [
+    {
+      "preset_key": "cn_aux_carton_gbt6543_a3",
+      "name": "瓦楞纸箱",
+      "specification": "A3号",
+      "gb_standard": "GB/T 6543",
+      "gb_code": "GB6543-A3",
+      "base_unit": "个",
+      "texture": "瓦楞纸"
+    },
+    {
+      "preset_key": "cn_aux_carton_gbt6543_a5",
+      "name": "瓦楞纸箱",
+      "specification": "A5号",
+      "gb_standard": "GB/T 6543",
+      "gb_code": "GB6543-A5",
+      "base_unit": "个",
+      "texture": "瓦楞纸"
+    },
+    {
+      "preset_key": "cn_aux_pallet_gbt4995_1200x1000",
+      "name": "木托盘",
+      "specification": "1200×1000",
+      "gb_standard": "GB/T 4995",
+      "gb_code": "GB4995-1200X1000",
+      "base_unit": "个",
+      "texture": "木材"
+    },
+    {
+      "preset_key": "cn_aux_woven_bag_gbt8946_50kg",
+      "name": "塑料编织袋",
+      "specification": "50kg",
+      "gb_standard": "GB/T 8946",
+      "gb_code": "GB8946-50KG",
+      "base_unit": "条",
+      "texture": "PP"
+    },
+    {
+      "preset_key": "cn_aux_stretch_film_500x23",
+      "name": "PE缠绕膜",
+      "specification": "500mm×23um",
+      "gb_standard": "BB/T 0024",
+      "gb_code": "BBT0024-500X23",
+      "base_unit": "卷",
+      "texture": "LLDPE"
+    },
+    {
+      "preset_key": "cn_aux_sealing_tape_48x100",
+      "name": "BOPP封箱胶带",
+      "specification": "48mm×100m",
+      "gb_standard": "QB/T 2422",
+      "gb_code": "QBT2422-48X100",
+      "base_unit": "卷",
+      "texture": "BOPP"
+    },
+    {
+      "preset_key": "cn_aux_bubble_film_1000",
+      "name": "气泡膜",
+      "specification": "1000mm",
+      "gb_standard": "BB/T 0034",
+      "gb_code": "BBT0034-1000",
+      "base_unit": "米",
+      "texture": "PE"
+    },
+    {
+      "preset_key": "cn_aux_zip_tie_pa66_4x200",
+      "name": "尼龙扎带",
+      "specification": "4×200",
+      "gb_standard": "QB/T 4494",
+      "gb_code": "QBT4494-4X200",
+      "base_unit": "根",
+      "texture": "PA66"
+    },
+    {
+      "preset_key": "cn_aux_label_self_100x80",
+      "name": "不干胶标签",
+      "specification": "100×80",
+      "gb_standard": "GB/T 7707",
+      "gb_code": "GB7707-100X80",
+      "base_unit": "张",
+      "texture": "铜版纸+胶"
+    },
+    {
+      "preset_key": "cn_aux_wiper_industrial_200x200",
+      "name": "工业擦拭纸",
+      "specification": "200×200",
+      "gb_standard": "",
+      "gb_code": "WIPER-200X200",
+      "base_unit": "包",
+      "texture": "无尘纸"
+    }
+  ]
+}

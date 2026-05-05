@@ -1,14 +1,73 @@
 {
   "sortOrder": 304,
+  "industryId": "electronics_assembly",
   "primaryCategory": "electrical_components",
-  "id": "ele_cable_connector",
-  "name": "电气与自动化-线缆接头",
-  "description": "控制线缆、冷压端子、航空插头等",
+  "id": "ele_connector_and_terminal_cn_sme",
+  "name": "电气元件-连接器与端子",
+  "description": "满足设备布线、接线与维护常用的端子、插头、线鼻子等连接件。",
   "items": [
-    { "preset_key": "ele_cable_rvvp_4x0_75", "name": "屏蔽控制电缆", "specification": "RVVP 4×0.75mm²", "gb_standard": "GB/T 5023", "gb_code": "CABLE-RVVP-4X0.75", "base_unit": "米", "texture": "铜/PVC" },
-    { "preset_key": "ele_term_e1508", "name": "管形预绝缘端子", "specification": "E1508 黑色", "gb_standard": "通用标准", "gb_code": "TERM-E1508", "base_unit": "包", "texture": "紫铜/尼龙" },
-    { "preset_key": "ele_plug_gx16_4", "name": "航空插头", "specification": "GX16 4芯", "gb_standard": "通用标准", "gb_code": "PLUG-GX16-4", "base_unit": "套", "texture": "锌合金" },
-    { "preset_key": "ele_wire_bv_2_5", "name": "单芯硬铜线", "specification": "BV 2.5mm² 红色", "gb_standard": "GB/T 5023", "gb_code": "WIRE-BV-2.5-R", "base_unit": "米", "texture": "铜/PVC" },
-    { "preset_key": "ele_wire_bvr_1_5", "name": "多股软铜线", "specification": "BVR 1.5mm² 蓝色", "gb_standard": "GB/T 5023", "gb_code": "WIRE-BVR-1.5-B", "base_unit": "米", "texture": "铜/PVC" }
+    {
+      "preset_key": "cn_ele_terminal_uk2_5n",
+      "name": "导轨接线端子",
+      "specification": "UK2.5N",
+      "gb_standard": "GB/T 14048.7",
+      "gb_code": "GB14048.7-UK2.5N",
+      "base_unit": "个",
+      "texture": "PA+铜"
+    },
+    {
+      "preset_key": "cn_ele_terminal_uk6n",
+      "name": "导轨接线端子",
+      "specification": "UK6N",
+      "gb_standard": "GB/T 14048.7",
+      "gb_code": "GB14048.7-UK6N",
+      "base_unit": "个",
+      "texture": "PA+铜"
+    },
+    {
+      "preset_key": "cn_ele_cold_lug_dt_16",
+      "name": "铜接线端子",
+      "specification": "DT-16",
+      "gb_standard": "GB/T 14315",
+      "gb_code": "GB14315-DT16",
+      "base_unit": "个",
+      "texture": "紫铜镀锡"
+    },
+    {
+      "preset_key": "cn_ele_cold_lug_dt_25",
+      "name": "铜接线端子",
+      "specification": "DT-25",
+      "gb_standard": "GB/T 14315",
+      "gb_code": "GB14315-DT25",
+      "base_unit": "个",
+      "texture": "紫铜镀锡"
+    },
+    {
+      "preset_key": "cn_ele_ferrule_e0508",
+      "name": "管形预绝缘端头",
+      "specification": "E0508",
+      "gb_standard": "GB/T 24134",
+      "gb_code": "GB24134-E0508",
+      "base_unit": "个",
+      "texture": "铜+尼龙"
+    },
+    {
+      "preset_key": "cn_ele_ferrule_e2512",
+      "name": "管形预绝缘端头",
+      "specification": "E2512",
+      "gb_standard": "GB/T 24134",
+      "gb_code": "GB24134-E2512",
+      "base_unit": "个",
+      "texture": "铜+尼龙"
+    },
+    {
+      "preset_key": "cn_ele_industrial_plug_16a_3p",
+      "name": "工业插头插座",
+      "specification": "16A 3P+N+PE",
+      "gb_standard": "GB/T 11918.1",
+      "gb_code": "GB11918.1-16A-5P",
+      "base_unit": "套",
+      "texture": "组合件"
+    }
   ]
 }

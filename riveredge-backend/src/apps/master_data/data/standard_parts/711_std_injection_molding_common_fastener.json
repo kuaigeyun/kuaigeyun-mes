@@ -1,0 +1,16 @@
+{
+  "sortOrder": 711,
+  "industryId": "injection_molding",
+  "primaryCategory": "standard_parts",
+  "id": "std_injection_molding_common_fastener",
+  "name": "标准件-注塑装配紧固件",
+  "description": "注塑模具与后装配环节常用紧固件。",
+  "items": [
+    { "preset_key": "inj_std_bolt_gbt5783_m6x20", "name": "六角头螺栓", "specification": "M6×20", "gb_standard": "GB/T 5783", "gb_code": "GB5783-INJ-M6X20", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "inj_std_bolt_gbt5783_m8x25", "name": "六角头螺栓", "specification": "M8×25", "gb_standard": "GB/T 5783", "gb_code": "GB5783-INJ-M8X25", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "inj_std_socket_gbt701_m5x16", "name": "内六角圆柱头螺钉", "specification": "M5×16", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-INJ-M5X16", "base_unit": "件", "texture": "合金钢" },
+    { "preset_key": "inj_std_nut_gbt6170_m8", "name": "六角螺母", "specification": "M8", "gb_standard": "GB/T 6170", "gb_code": "GB6170-INJ-M8", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "inj_std_washer_flat_gbt97_8", "name": "平垫圈", "specification": "8", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-INJ-8", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "inj_std_washer_spring_gbt93_8", "name": "弹簧垫圈", "specification": "8", "gb_standard": "GB/T 93", "gb_code": "GB93-INJ-8", "base_unit": "件", "texture": "弹簧钢" }
+  ]
+}

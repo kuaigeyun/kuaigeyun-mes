@@ -1,0 +1,14 @@
+{
+  "sortOrder": 611,
+  "industryId": "injection_molding",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_injection_molding_common",
+  "name": "辅材-注塑常用",
+  "description": "注塑产线高频使用的通用辅材与包装物。",
+  "items": [
+    { "preset_key": "inj_aux_release_agent_550ml", "name": "脱模剂", "specification": "550ml", "gb_standard": "", "gb_code": "AUX-INJ-REL-550", "base_unit": "罐", "texture": "气雾剂" },
+    { "preset_key": "inj_aux_nozzle_cleaner_450ml", "name": "模具清洗剂", "specification": "450ml", "gb_standard": "", "gb_code": "AUX-INJ-CLN-450", "base_unit": "罐", "texture": "清洗剂" },
+    { "preset_key": "inj_aux_carton_gbt6543_a5", "name": "瓦楞纸箱", "specification": "A5号", "gb_standard": "GB/T 6543", "gb_code": "GB6543-INJ-A5", "base_unit": "个", "texture": "瓦楞纸" },
+    { "preset_key": "inj_aux_label_self_100x80", "name": "不干胶标签", "specification": "100×80", "gb_standard": "GB/T 7707", "gb_code": "GB7707-INJ-100X80", "base_unit": "张", "texture": "铜版纸+胶" }
+  ]
+}

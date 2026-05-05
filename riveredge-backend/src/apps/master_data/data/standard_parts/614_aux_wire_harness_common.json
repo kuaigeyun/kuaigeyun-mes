@@ -1,0 +1,14 @@
+{
+  "sortOrder": 614,
+  "industryId": "wire_harness",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_wire_harness_common",
+  "name": "辅材-线束常用",
+  "description": "线束加工、包扎和出货高频辅材。",
+  "items": [
+    { "preset_key": "wh_aux_pvc_tape_19x20", "name": "PVC电工胶带", "specification": "19mm×20m", "gb_standard": "GB/T 1408.1", "gb_code": "GB1408.1-WH-19X20", "base_unit": "卷", "texture": "PVC" },
+    { "preset_key": "wh_aux_corrugated_tube_pa10", "name": "阻燃波纹管", "specification": "PA10", "gb_standard": "GB/T 28799", "gb_code": "GB28799-WH-PA10", "base_unit": "米", "texture": "PA6" },
+    { "preset_key": "wh_aux_zip_tie_pa66_4x200", "name": "尼龙扎带", "specification": "4×200", "gb_standard": "QB/T 4494", "gb_code": "QBT4494-WH-4X200", "base_unit": "根", "texture": "PA66" },
+    { "preset_key": "wh_aux_label_heat_shrink_4_2", "name": "热缩标识管", "specification": "Φ4.2", "gb_standard": "GB/T 2951.11", "gb_code": "GB2951.11-WH-4.2", "base_unit": "米", "texture": "聚烯烃" }
+  ]
+}

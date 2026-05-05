@@ -1,0 +1,16 @@
+{
+  "sortOrder": 714,
+  "industryId": "electronics_assembly",
+  "primaryCategory": "standard_parts",
+  "id": "std_electronics_assembly_common_fastener",
+  "name": "标准件-电子装配紧固件",
+  "description": "电子装配机箱、导轨与PCB固定常用标准件。",
+  "items": [
+    { "preset_key": "ea_std_machine_screw_gbt818_m3x8", "name": "十字槽盘头螺钉", "specification": "M3×8", "gb_standard": "GB/T 818", "gb_code": "GB818-EA-M3X8", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "ea_std_machine_screw_gbt818_m4x10", "name": "十字槽盘头螺钉", "specification": "M4×10", "gb_standard": "GB/T 818", "gb_code": "GB818-EA-M4X10", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "ea_std_socket_gbt701_m3x6", "name": "内六角圆柱头螺钉", "specification": "M3×6", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-EA-M3X6", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "ea_std_nut_gbt6170_m3", "name": "六角螺母", "specification": "M3", "gb_standard": "GB/T 6170", "gb_code": "GB6170-EA-M3", "base_unit": "件", "texture": "镀镍钢" },
+    { "preset_key": "ea_std_washer_flat_gbt97_3", "name": "平垫圈", "specification": "3", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-EA-3", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "ea_std_standoff_hex_m3x6", "name": "六角隔离柱", "specification": "M3×6", "gb_standard": "", "gb_code": "STD-EA-STANDOFF-M3X6", "base_unit": "件", "texture": "黄铜镀镍" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "sortOrder": 715,
+  "industryId": "wire_harness",
+  "primaryCategory": "standard_parts",
+  "id": "std_wire_harness_common_fastener",
+  "name": "标准件-线束安装紧固件",
+  "description": "线束工装与总成固定常用标准紧固件。",
+  "items": [
+    { "preset_key": "wh_std_machine_screw_gbt819_m4x12", "name": "十字槽沉头螺钉", "specification": "M4×12", "gb_standard": "GB/T 819", "gb_code": "GB819-WH-M4X12", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "wh_std_bolt_gbt5783_m5x16", "name": "六角头螺栓", "specification": "M5×16", "gb_standard": "GB/T 5783", "gb_code": "GB5783-WH-M5X16", "base_unit": "件", "texture": "镀锌钢" },
+    { "preset_key": "wh_std_nut_gbt6170_m5", "name": "六角螺母", "specification": "M5", "gb_standard": "GB/T 6170", "gb_code": "GB6170-WH-M5", "base_unit": "件", "texture": "镀锌钢" },
+    { "preset_key": "wh_std_washer_flat_gbt97_5", "name": "平垫圈", "specification": "5", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-WH-5", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "wh_std_washer_spring_gbt93_5", "name": "弹簧垫圈", "specification": "5", "gb_standard": "GB/T 93", "gb_code": "GB93-WH-5", "base_unit": "件", "texture": "65Mn" },
+    { "preset_key": "wh_std_cable_clamp_p_type_6mm", "name": "P型线夹", "specification": "6mm", "gb_standard": "", "gb_code": "STD-WH-PCLAMP-6", "base_unit": "件", "texture": "尼龙+钢片" }
+  ]
+}

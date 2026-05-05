@@ -1,0 +1,64 @@
+{
+  "sortOrder": 307,
+  "industryId": "electronics_assembly",
+  "primaryCategory": "electrical_components",
+  "id": "ele_cable_protection_cn_sme",
+  "name": "电气元件-线缆管理与保护",
+  "description": "设备电控柜和机外布线常用桥接、固定、防护类辅件。",
+  "items": [
+    {
+      "preset_key": "cn_ele_cable_trunking_40x25",
+      "name": "PVC线槽",
+      "specification": "40×25",
+      "gb_standard": "GB/T 3048.1",
+      "gb_code": "GB3048.1-TRUNKING-40X25",
+      "base_unit": "米",
+      "texture": "阻燃PVC"
+    },
+    {
+      "preset_key": "cn_ele_cable_trunking_60x40",
+      "name": "PVC线槽",
+      "specification": "60×40",
+      "gb_standard": "GB/T 3048.1",
+      "gb_code": "GB3048.1-TRUNKING-60X40",
+      "base_unit": "米",
+      "texture": "阻燃PVC"
+    },
+    {
+      "preset_key": "cn_ele_cable_gland_pg13_5",
+      "name": "电缆密封接头",
+      "specification": "PG13.5",
+      "gb_standard": "GB/T 4208",
+      "gb_code": "GB4208-PG13.5-IP68",
+      "base_unit": "个",
+      "texture": "尼龙"
+    },
+    {
+      "preset_key": "cn_ele_cable_gland_m20",
+      "name": "电缆密封接头",
+      "specification": "M20",
+      "gb_standard": "GB/T 4208",
+      "gb_code": "GB4208-M20-IP68",
+      "base_unit": "个",
+      "texture": "尼龙"
+    },
+    {
+      "preset_key": "cn_ele_spiral_wrap_12",
+      "name": "螺旋缠绕管",
+      "specification": "φ12",
+      "gb_standard": "GB/T 2951.11",
+      "gb_code": "GB2951.11-SPW-12",
+      "base_unit": "米",
+      "texture": "PE"
+    },
+    {
+      "preset_key": "cn_ele_corrugated_tube_pa_10",
+      "name": "阻燃波纹管",
+      "specification": "PA10",
+      "gb_standard": "GB/T 28799",
+      "gb_code": "GB28799-PA10",
+      "base_unit": "米",
+      "texture": "PA6"
+    }
+  ]
+}

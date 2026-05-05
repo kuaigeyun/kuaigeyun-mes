@@ -1,0 +1,14 @@
+{
+  "sortOrder": 619,
+  "industryId": "wood_panel",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_wood_panel_common",
+  "name": "辅材-板式家具常用",
+  "description": "板式家具加工与包装环节常用辅材。",
+  "items": [
+    { "preset_key": "wp_aux_edge_band_abs_23mm", "name": "ABS封边带", "specification": "23mm", "gb_standard": "QB/T 4463", "gb_code": "QBT4463-WP-23", "base_unit": "米", "texture": "ABS" },
+    { "preset_key": "wp_aux_hotmelt_glue_25kg", "name": "封边热熔胶", "specification": "25kg/袋", "gb_standard": "HG/T 3698", "gb_code": "HGT3698-WP-25KG", "base_unit": "袋", "texture": "EVA热熔胶" },
+    { "preset_key": "wp_aux_carton_gbt6543_a3", "name": "瓦楞纸箱", "specification": "A3号", "gb_standard": "GB/T 6543", "gb_code": "GB6543-WP-A3", "base_unit": "个", "texture": "瓦楞纸" },
+    { "preset_key": "wp_aux_corner_protector_40x40", "name": "护角", "specification": "40×40", "gb_standard": "BB/T 0023", "gb_code": "BBT0023-WP-40X40", "base_unit": "个", "texture": "纸护角" }
+  ]
+}

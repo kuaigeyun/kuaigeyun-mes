@@ -1,25 +1,82 @@
 {
   "sortOrder": 110,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_pipe_fitting_flange",
-  "name": "标准件-管件法兰",
-  "description": "钢制管法兰、焊接弯头、丝扣接头等",
+  "id": "std_pipe_and_valve_cn_sme",
+  "name": "管路件-接头与阀门",
+  "description": "工业介质输送常用的螺纹管件、法兰、球阀、止回阀等通用器件。",
   "items": [
-    { "preset_key": "flange_dn25_pn16", "name": "板式平焊钢制管法兰", "specification": "DN25 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN25-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn32_pn16", "name": "板式平焊钢制管法兰", "specification": "DN32 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN32-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn40_pn16", "name": "板式平焊钢制管法兰", "specification": "DN40 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN40-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn50_pn16", "name": "板式平焊钢制管法兰", "specification": "DN50 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN50-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn65_pn16", "name": "板式平焊钢制管法兰", "specification": "DN65 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN65-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn80_pn16", "name": "板式平焊钢制管法兰", "specification": "DN80 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN80-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn100_pn16", "name": "板式平焊钢制管法兰", "specification": "DN100 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN100-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn125_pn16", "name": "板式平焊钢制管法兰", "specification": "DN125 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN125-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "flange_dn150_pn16", "name": "板式平焊钢制管法兰", "specification": "DN150 PN16", "gb_standard": "GB/T 9119", "gb_code": "GB9119-DN150-PN16", "base_unit": "个", "texture": "Q235" },
-    { "preset_key": "elbow_dn25_90e", "name": "钢制对焊弯头", "specification": "DN25 90E", "gb_standard": "GB/T 12459", "gb_code": "GB12459-DN25-90E", "base_unit": "个", "texture": "20#钢" },
-    { "preset_key": "elbow_dn50_90e", "name": "钢制对焊弯头", "specification": "DN50 90E", "gb_standard": "GB/T 12459", "gb_code": "GB12459-DN50-90E", "base_unit": "个", "texture": "20#钢" },
-    { "preset_key": "elbow_dn80_90e", "name": "钢制对焊弯头", "specification": "DN80 90E", "gb_standard": "GB/T 12459", "gb_code": "GB12459-DN80-90E", "base_unit": "个", "texture": "20#钢" },
-    { "preset_key": "union_g1_2", "name": "不锈钢丝扣活接头", "specification": "G1/2", "gb_standard": "GB/T 14383", "gb_code": "GB14383-G1/2", "base_unit": "个", "texture": "304" },
-    { "preset_key": "union_g3_4", "name": "不锈钢丝扣活接头", "specification": "G3/4", "gb_standard": "GB/T 14383", "gb_code": "GB14383-G3/4", "base_unit": "个", "texture": "304" },
-    { "preset_key": "tee_dn25_welding", "name": "钢制对焊等径三通", "specification": "DN25", "gb_standard": "GB/T 12459", "gb_code": "TEE-DN25-W", "base_unit": "个", "texture": "20#钢" },
-    { "preset_key": "tee_g1_2_thread", "name": "内螺纹三通", "specification": "G1/2", "gb_standard": "GB/T 14383", "gb_code": "TEE-G1/2-T", "base_unit": "个", "texture": "304" }
+    {
+      "preset_key": "cn_elbow_thread_gbt7306_dn20",
+      "name": "螺纹弯头",
+      "specification": "DN20",
+      "gb_standard": "GB/T 7306",
+      "gb_code": "GB7306-ELBOW-DN20",
+      "base_unit": "个",
+      "texture": "可锻铸铁"
+    },
+    {
+      "preset_key": "cn_tee_thread_gbt7306_dn15",
+      "name": "螺纹三通",
+      "specification": "DN15",
+      "gb_standard": "GB/T 7306",
+      "gb_code": "GB7306-TEE-DN15",
+      "base_unit": "个",
+      "texture": "可锻铸铁"
+    },
+    {
+      "preset_key": "cn_union_thread_gbt14383_dn20",
+      "name": "活接头",
+      "specification": "DN20",
+      "gb_standard": "GB/T 14383",
+      "gb_code": "GB14383-UNION-DN20",
+      "base_unit": "个",
+      "texture": "不锈钢304"
+    },
+    {
+      "preset_key": "cn_flange_plate_gbt9119_dn50",
+      "name": "平焊钢制管法兰",
+      "specification": "DN50 PN16",
+      "gb_standard": "GB/T 9119",
+      "gb_code": "GB9119-DN50-PN16",
+      "base_unit": "片",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_ball_valve_gbt12237_dn25",
+      "name": "钢制球阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12237",
+      "gb_code": "GB12237-DN25-PN16",
+      "base_unit": "个",
+      "texture": "不锈钢304"
+    },
+    {
+      "preset_key": "cn_globe_valve_gbt12235_dn25",
+      "name": "钢制截止阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12235",
+      "gb_code": "GB12235-DN25-PN16",
+      "base_unit": "个",
+      "texture": "WCB"
+    },
+    {
+      "preset_key": "cn_check_valve_gbt12236_dn25",
+      "name": "钢制止回阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12236",
+      "gb_code": "GB12236-DN25-PN16",
+      "base_unit": "个",
+      "texture": "WCB"
+    },
+    {
+      "preset_key": "cn_butterfly_valve_gbt12238_dn80",
+      "name": "法兰蝶阀",
+      "specification": "DN80 PN16",
+      "gb_standard": "GB/T 12238",
+      "gb_code": "GB12238-DN80-PN16",
+      "base_unit": "个",
+      "texture": "球墨铸铁"
+    }
   ]
 }

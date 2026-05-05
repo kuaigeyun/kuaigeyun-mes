@@ -1,0 +1,16 @@
+{
+  "sortOrder": 716,
+  "industryId": "powder_metallurgy",
+  "primaryCategory": "standard_parts",
+  "id": "std_powder_metallurgy_common_fastener",
+  "name": "标准件-粉末冶金装配紧固件",
+  "description": "粉末冶金结构件后处理与组装常用标准件。",
+  "items": [
+    { "preset_key": "pm_std_bolt_gbt5783_m5x12", "name": "六角头螺栓", "specification": "M5×12", "gb_standard": "GB/T 5783", "gb_code": "GB5783-PM-M5X12", "base_unit": "件", "texture": "8.8级镀锌钢" },
+    { "preset_key": "pm_std_socket_gbt701_m4x10", "name": "内六角圆柱头螺钉", "specification": "M4×10", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-PM-M4X10", "base_unit": "件", "texture": "合金钢" },
+    { "preset_key": "pm_std_nut_gbt6170_m4", "name": "六角螺母", "specification": "M4", "gb_standard": "GB/T 6170", "gb_code": "GB6170-PM-M4", "base_unit": "件", "texture": "镀锌钢" },
+    { "preset_key": "pm_std_washer_flat_gbt97_4", "name": "平垫圈", "specification": "4", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-PM-4", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "pm_std_dowel_pin_gbt1191_4x16", "name": "圆柱销", "specification": "4×16", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-PM-4X16", "base_unit": "件", "texture": "45钢淬硬" },
+    { "preset_key": "pm_std_key_gbt1096_5x5x20", "name": "平键", "specification": "5×5×20", "gb_standard": "GB/T 1096", "gb_code": "GB1096-PM-5X5X20", "base_unit": "件", "texture": "45钢" }
+  ]
+}

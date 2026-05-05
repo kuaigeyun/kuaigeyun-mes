@@ -1,17 +1,64 @@
 {
   "sortOrder": 202,
+  "industryId": "machining",
   "primaryCategory": "raw_materials",
-  "id": "raw_metal_plate",
-  "name": "原材料-金属板材",
-  "description": "冷轧板、热轧板、不锈钢板、铝板等",
+  "id": "raw_plate_cn_sme",
+  "name": "原材料-板材",
+  "description": "钣金、机加、焊接通用板材，优先采用国标牌号。",
   "items": [
-    { "preset_key": "plate_cr__708_1_0", "name": "冷轧钢板", "specification": "1.0mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-1.0", "base_unit": "平方米", "texture": "DC01" },
-    { "preset_key": "plate_cr__708_1_5", "name": "冷轧钢板", "specification": "1.5mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-1.5", "base_unit": "平方米", "texture": "DC01" },
-    { "preset_key": "plate_cr__708_2_0", "name": "冷轧钢板", "specification": "2.0mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-2.0", "base_unit": "平方米", "texture": "DC01" },
-    { "preset_key": "plate_hr__709_3_0", "name": "热轧钢板", "specification": "3.0mm", "gb_standard": "GB/T 709", "gb_code": "PLATE-HR-3.0", "base_unit": "平方米", "texture": "Q235B" },
-    { "preset_key": "plate_hr__709_5_0", "name": "热轧钢板", "specification": "5.0mm", "gb_standard": "GB/T 709", "gb_code": "PLATE-HR-5.0", "base_unit": "平方米", "texture": "Q235B" },
-    { "preset_key": "plate_ss__3280_1_2", "name": "不锈钢板", "specification": "1.2mm", "gb_standard": "GB/T 3280", "gb_code": "PLATE-SS-304-1.2", "base_unit": "平方米", "texture": "304" },
-    { "preset_key": "plate_ss__3280_2_0", "name": "不锈钢板", "specification": "2.0mm", "gb_standard": "GB/T 3280", "gb_code": "PLATE-SS-304-2.0", "base_unit": "平方米", "texture": "304" },
-    { "preset_key": "plate_al__3880_2_0", "name": "铝合金板", "specification": "2.0mm", "gb_standard": "GB/T 3880", "gb_code": "PLATE-AL-6061-2.0", "base_unit": "平方米", "texture": "6061-T6" }
+    {
+      "preset_key": "cn_raw_plate_q235b_3t",
+      "name": "热轧钢板",
+      "specification": "t=3mm",
+      "gb_standard": "GB/T 3274",
+      "gb_code": "GB3274-Q235B-T3",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_plate_q235b_6t",
+      "name": "热轧钢板",
+      "specification": "t=6mm",
+      "gb_standard": "GB/T 3274",
+      "gb_code": "GB3274-Q235B-T6",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_plate_45_20t",
+      "name": "优质碳素结构钢板",
+      "specification": "t=20mm",
+      "gb_standard": "GB/T 711",
+      "gb_code": "GB711-45-T20",
+      "base_unit": "千克",
+      "texture": "45钢"
+    },
+    {
+      "preset_key": "cn_raw_plate_304_2t",
+      "name": "不锈钢板",
+      "specification": "t=2mm",
+      "gb_standard": "GB/T 3280",
+      "gb_code": "GB3280-06Cr19Ni10-T2",
+      "base_unit": "千克",
+      "texture": "304"
+    },
+    {
+      "preset_key": "cn_raw_plate_al1060_2t",
+      "name": "工业纯铝板",
+      "specification": "t=2mm",
+      "gb_standard": "GB/T 3880.1",
+      "gb_code": "GB3880.1-1060-T2",
+      "base_unit": "千克",
+      "texture": "1060"
+    },
+    {
+      "preset_key": "cn_raw_plate_al5052_3t",
+      "name": "铝镁合金板",
+      "specification": "t=3mm",
+      "gb_standard": "GB/T 3880.1",
+      "gb_code": "GB3880.1-5052-T3",
+      "base_unit": "千克",
+      "texture": "5052"
+    }
   ]
 }

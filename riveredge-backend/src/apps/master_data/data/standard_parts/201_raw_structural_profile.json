@@ -1,21 +1,64 @@
 {
   "sortOrder": 201,
+  "industryId": "machining",
   "primaryCategory": "raw_materials",
-  "id": "raw_structural_profile",
-  "name": "原材料-常用型材",
-  "description": "角钢、槽钢、方管等结构型材",
+  "id": "raw_structural_profile_cn_sme",
+  "name": "原材料-型钢与结构材",
+  "description": "机架、底座、支撑件常用型钢，按国标材质与规格组织。",
   "items": [
-    { "preset_key": "prof_angle__706_40x40x4", "name": "等边角钢", "specification": "40×40×4", "gb_standard": "GB/T 706", "gb_code": "GB706-40X40X4", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_angle__706_50x50x5", "name": "等边角钢", "specification": "50×50×5", "gb_standard": "GB/T 706", "gb_code": "GB706-50X50X5", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_angle__706_63x63x6", "name": "等边角钢", "specification": "63×63×6", "gb_standard": "GB/T 706", "gb_code": "GB706-63X63X6", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_square_tube_40x40x3", "name": "方钢管", "specification": "40×40×3", "gb_standard": "GB/T 6728", "gb_code": "RECT-40X40X3", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_square_tube_50x50x4", "name": "方钢管", "specification": "50×50×4", "gb_standard": "GB/T 6728", "gb_code": "RECT-50X50X4", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_square_tube_80x80x5", "name": "方钢管", "specification": "80×80×5", "gb_standard": "GB/T 6728", "gb_code": "RECT-80X80X5", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_channel__706_10", "name": "热轧槽钢", "specification": "10# (100×48×5.3)", "gb_standard": "GB/T 706", "gb_code": "GB706-10#", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_channel__706_12_6", "name": "热轧槽钢", "specification": "12.6# (126×53×5.5)", "gb_standard": "GB/T 706", "gb_code": "GB706-12.6#", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_channel__706_16", "name": "热轧槽钢", "specification": "16# (160×63×6.5)", "gb_standard": "GB/T 706", "gb_code": "GB706-16#", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_ibeam__706_10", "name": "热轧工字钢", "specification": "10# (100×68×4.5)", "gb_standard": "GB/T 706", "gb_code": "GB706-I10#", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_ibeam__706_16", "name": "热轧工字钢", "specification": "16# (160×88×6.0)", "gb_standard": "GB/T 706", "gb_code": "GB706-I16#", "base_unit": "米", "texture": "Q235" },
-    { "preset_key": "prof_ibeam__706_20a", "name": "热轧工字钢", "specification": "20a# (200×100×7.0)", "gb_standard": "GB/T 706", "gb_code": "GB706-I20a#", "base_unit": "米", "texture": "Q235" }
+    {
+      "preset_key": "cn_raw_angle_q235_l40x4",
+      "name": "等边角钢",
+      "specification": "L40×4",
+      "gb_standard": "GB/T 706",
+      "gb_code": "GB706-L40X4-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_channel_q235_8",
+      "name": "槽钢",
+      "specification": "8#",
+      "gb_standard": "GB/T 706",
+      "gb_code": "GB706-8-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_hbeam_q235_150x100",
+      "name": "H型钢",
+      "specification": "150×100",
+      "gb_standard": "GB/T 11263",
+      "gb_code": "GB11263-H150X100-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_square_tube_q235_50x50x3",
+      "name": "方管",
+      "specification": "50×50×3",
+      "gb_standard": "GB/T 6728",
+      "gb_code": "GB6728-50X50X3-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_rect_tube_q235_80x40x3",
+      "name": "矩形管",
+      "specification": "80×40×3",
+      "gb_standard": "GB/T 6728",
+      "gb_code": "GB6728-80X40X3-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_round_tube_q235_dn25",
+      "name": "焊接钢管",
+      "specification": "DN25",
+      "gb_standard": "GB/T 3091",
+      "gb_code": "GB3091-DN25-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    }
   ]
 }

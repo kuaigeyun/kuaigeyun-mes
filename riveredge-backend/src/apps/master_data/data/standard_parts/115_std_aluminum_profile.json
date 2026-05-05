@@ -1,0 +1,64 @@
+{
+  "sortOrder": 115,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_aluminum_profile_cn_sme",
+  "name": "结构件-工业铝型材与连接件",
+  "description": "自动化设备机架与围栏高频使用的工业铝型材和标准连接件。",
+  "items": [
+    {
+      "preset_key": "cn_profile_alu_tslot_2020",
+      "name": "工业铝型材",
+      "specification": "20×20",
+      "gb_standard": "GB/T 6892",
+      "gb_code": "GB6892-20X20-TSLOT",
+      "base_unit": "米",
+      "texture": "6063-T5"
+    },
+    {
+      "preset_key": "cn_profile_alu_tslot_3030",
+      "name": "工业铝型材",
+      "specification": "30×30",
+      "gb_standard": "GB/T 6892",
+      "gb_code": "GB6892-30X30-TSLOT",
+      "base_unit": "米",
+      "texture": "6063-T5"
+    },
+    {
+      "preset_key": "cn_profile_alu_tslot_4040",
+      "name": "工业铝型材",
+      "specification": "40×40",
+      "gb_standard": "GB/T 6892",
+      "gb_code": "GB6892-40X40-TSLOT",
+      "base_unit": "米",
+      "texture": "6063-T5"
+    },
+    {
+      "preset_key": "cn_profile_corner_bracket_3030",
+      "name": "角码连接件",
+      "specification": "30系列",
+      "gb_standard": "GB/T 9787",
+      "gb_code": "GB9787-L30",
+      "base_unit": "件",
+      "texture": "ADC12/钢"
+    },
+    {
+      "preset_key": "cn_profile_tnut_m6_8",
+      "name": "T型螺母",
+      "specification": "M6-8槽",
+      "gb_standard": "GB/T 6170",
+      "gb_code": "GB6170-TNUT-M6-8",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_profile_endcap_4040",
+      "name": "型材端盖",
+      "specification": "40系列",
+      "gb_standard": "GB/T 1527",
+      "gb_code": "GB1527-ENDCAP-40",
+      "base_unit": "件",
+      "texture": "PA66"
+    }
+  ]
+}

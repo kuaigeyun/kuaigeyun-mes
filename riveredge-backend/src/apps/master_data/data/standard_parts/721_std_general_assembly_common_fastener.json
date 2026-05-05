@@ -1,0 +1,16 @@
+{
+  "sortOrder": 721,
+  "industryId": "general_assembly",
+  "primaryCategory": "standard_parts",
+  "id": "std_general_assembly_common_fastener",
+  "name": "标准件-通用装配紧固件",
+  "description": "总装工位与综合装配场景高频标准件。",
+  "items": [
+    { "preset_key": "ga_std_bolt_gbt5783_m6x20", "name": "六角头螺栓", "specification": "M6×20", "gb_standard": "GB/T 5783", "gb_code": "GB5783-GA-M6X20", "base_unit": "件", "texture": "8.8级镀锌钢" },
+    { "preset_key": "ga_std_bolt_gbt5783_m8x30", "name": "六角头螺栓", "specification": "M8×30", "gb_standard": "GB/T 5783", "gb_code": "GB5783-GA-M8X30", "base_unit": "件", "texture": "8.8级镀锌钢" },
+    { "preset_key": "ga_std_socket_gbt701_m6x16", "name": "内六角圆柱头螺钉", "specification": "M6×16", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-GA-M6X16", "base_unit": "件", "texture": "合金钢发黑" },
+    { "preset_key": "ga_std_nut_gbt6170_m8", "name": "六角螺母", "specification": "M8", "gb_standard": "GB/T 6170", "gb_code": "GB6170-GA-M8", "base_unit": "件", "texture": "镀锌钢" },
+    { "preset_key": "ga_std_washer_flat_gbt97_8", "name": "平垫圈", "specification": "8", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-GA-8", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "ga_std_washer_spring_gbt93_8", "name": "弹簧垫圈", "specification": "8", "gb_standard": "GB/T 93", "gb_code": "GB93-GA-8", "base_unit": "件", "texture": "65Mn" }
+  ]
+}

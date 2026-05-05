@@ -1,0 +1,16 @@
+{
+  "sortOrder": 720,
+  "industryId": "wood_panel",
+  "primaryCategory": "standard_parts",
+  "id": "std_wood_panel_common_fastener",
+  "name": "标准件-板式木作安装紧固件",
+  "description": "板式木作、家具柜体装配常用紧固与连接件。",
+  "items": [
+    { "preset_key": "wp_std_chipboard_screw_4x30", "name": "纤维板螺钉", "specification": "4×30", "gb_standard": "", "gb_code": "STD-WP-CHIPBOARD-4X30", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "wp_std_self_tapping_gbt845_st4_2x16", "name": "十字槽自攻螺钉", "specification": "ST4.2×16", "gb_standard": "GB/T 845", "gb_code": "GB845-WP-ST4.2X16", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "wp_std_confirmat_screw_7x50", "name": "三合一连接螺杆", "specification": "7×50", "gb_standard": "", "gb_code": "STD-WP-CONFIRMAT-7X50", "base_unit": "件", "texture": "碳钢镀镍" },
+    { "preset_key": "wp_std_cam_lock_15mm", "name": "偏心连接件", "specification": "15mm", "gb_standard": "", "gb_code": "STD-WP-CAMLOCK-15", "base_unit": "件", "texture": "锌合金" },
+    { "preset_key": "wp_std_dowel_pin_8x30", "name": "木榫", "specification": "8×30", "gb_standard": "", "gb_code": "STD-WP-DOWEL-8X30", "base_unit": "件", "texture": "榉木" },
+    { "preset_key": "wp_std_angle_bracket_30x30", "name": "L型角码", "specification": "30×30", "gb_standard": "", "gb_code": "STD-WP-ANGLE-30X30", "base_unit": "件", "texture": "镀锌钢" }
+  ]
+}

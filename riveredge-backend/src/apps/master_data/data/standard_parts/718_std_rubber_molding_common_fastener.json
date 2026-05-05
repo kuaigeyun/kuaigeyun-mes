@@ -1,0 +1,16 @@
+{
+  "sortOrder": 718,
+  "industryId": "rubber_molding",
+  "primaryCategory": "standard_parts",
+  "id": "std_rubber_molding_common_fastener",
+  "name": "标准件-橡胶成型装配紧固件",
+  "description": "橡胶件模压后装配和固定常用标准件。",
+  "items": [
+    { "preset_key": "rm_std_bolt_gbt5783_m5x20", "name": "六角头螺栓", "specification": "M5×20", "gb_standard": "GB/T 5783", "gb_code": "GB5783-RM-M5X20", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "rm_std_socket_gbt701_m5x16", "name": "内六角圆柱头螺钉", "specification": "M5×16", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-RM-M5X16", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "rm_std_nut_gbt6170_m5", "name": "六角螺母", "specification": "M5", "gb_standard": "GB/T 6170", "gb_code": "GB6170-RM-M5", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "rm_std_washer_flat_gbt97_5", "name": "平垫圈", "specification": "5", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-RM-5", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "rm_std_washer_spring_gbt93_5", "name": "弹簧垫圈", "specification": "5", "gb_standard": "GB/T 93", "gb_code": "GB93-RM-5", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "rm_std_retaining_ring_gbt893_20", "name": "轴用弹性挡圈", "specification": "20", "gb_standard": "GB/T 893.1", "gb_code": "GB893.1-RM-20", "base_unit": "件", "texture": "65Mn" }
+  ]
+}

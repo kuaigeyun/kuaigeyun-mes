@@ -11,6 +11,7 @@ from apps.master_data.services.material_standard_parts_catalog import (
     PRIMARY_CATEGORY_ALLOWED,
     clear_standard_parts_library_cache,
     get_standard_parts_library_dir,
+    get_preset_key_category_lookup,
     reload_standard_parts_library,
     standard_parts_preset_catalog_for_api,
     get_standard_part_by_preset_key,
@@ -38,6 +39,26 @@ def test_validate_preset_keys_unknown():
         validate_preset_keys(["not_a_real_key"])
 
 
+def test_preset_key_category_lookup_covers_key():
+    lk = get_preset_key_category_lookup()
+    sample = "bolt_hex_5783_m6x20"
+    assert sample in lk
+    assert lk[sample]["category_id"]
+    assert lk[sample]["category_name"]
+
+
+@pytest.mark.asyncio
+async def test_load_standard_parts_preset_single_requires_group_uuid():
+    with pytest.raises(ValidationError, match="须选择目标物料分组"):
+        await MaterialService.load_standard_parts_preset(
+            1,
+            ["bolt_hex_5783_m6x20"],
+            "auto",
+            group_mode="single",
+            material_group_uuid=None,
+        )
+
+
 @pytest.mark.asyncio
 async def test_load_standard_parts_preset_unknown_group():
     class FakeQS:
@@ -51,9 +72,10 @@ async def test_load_standard_parts_preset_unknown_group():
         with pytest.raises(ValidationError, match="物料分组"):
             await MaterialService.load_standard_parts_preset(
                 1,
-                "00000000-0000-0000-0000-000000000000",
-                ["fastener_hex_bolt_screw__5783_m6x16_88"],
+                ["bolt_hex_5783_m6x20"],
                 "auto",
+                group_mode="single",
+                material_group_uuid="00000000-0000-0000-0000-000000000000",
             )
 
 
@@ -72,16 +94,17 @@ async def test_load_standard_parts_preset_empty_keys():
     ):
         out = await MaterialService.load_standard_parts_preset(
             1,
-            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
             [],
             "auto",
+            group_mode="single",
+            material_group_uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
         )
     assert out["created"] == 0
     assert "未选择" in out["message"]
 
 
 def test_get_item_by_key():
-    it = get_standard_part_by_preset_key("bolt__5783_m6x16")
+    it = get_standard_part_by_preset_key("bolt_hex_5783_m6x20")
     assert it is not None
     assert it["name"]
 

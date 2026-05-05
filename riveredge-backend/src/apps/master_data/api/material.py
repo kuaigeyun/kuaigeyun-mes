@@ -8,7 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from typing import List, Optional, Annotated, Dict, Any
 from loguru import logger
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -23,8 +23,9 @@ from apps.master_data.services.material_source_service import (
 )
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
-    MaterialCreate, MaterialUpdate, MaterialResponse,
+    MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
     MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
+    MaterialBatchDeleteRequest, MaterialBatchDeleteResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary, BOMBatchItemsRequest,
@@ -1437,7 +1438,7 @@ async def create_material(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=List[MaterialResponse], summary="获取物料列表")
+@router.get("", response_model=MaterialListResponse, summary="获取物料列表")
 async def list_materials(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=2000, description="限制数量"),
@@ -1521,16 +1522,30 @@ async def bulk_update_material_tracking(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post(
+    "/batch-delete",
+    response_model=MaterialBatchDeleteResponse,
+    summary="批量删除物料",
+)
+async def bulk_delete_materials(
+    data: MaterialBatchDeleteRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量软删除物料（单次请求内完成校验与更新，避免逐条调用删除接口）。
+
+    - 不存在或已删除的 UUID 计入 **failed_items**（原因：物料不存在）。
+    - 仍被 BOM 引用（父件或子件）的物料无法删除，计入 **failed_items**。
+    """
+    return await MaterialService.bulk_delete_materials(tenant_id, data)
+
+
 class LoadStandardPartsPresetRequest(BaseModel):
-    """导入标准件预设：目标分组 + 勾选条目 + 主编码策略。"""
+    """导入标准件预设：分组策略 + 勾选条目 + 主编码策略。"""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    material_group_uuid: str = Field(
-        ...,
-        alias="materialGroupUuid",
-        description="目标物料分组 UUID（导入的物料均归入该组）",
-    )
     preset_keys: List[str] = Field(
         default_factory=list,
         alias="presetKeys",
@@ -1541,6 +1556,32 @@ class LoadStandardPartsPresetRequest(BaseModel):
         alias="codeMode",
         description="auto=按组织物料编码规则生成主编码；gb=使用目录中的国标推荐编号作为主编码",
     )
+    group_mode: str = Field(
+        "single",
+        alias="groupMode",
+        description="single=全部导入到 materialGroupUuid；preset_by_category=按预设库二级分类各建/复用分组后导入",
+    )
+    material_group_uuid: Optional[str] = Field(
+        None,
+        alias="materialGroupUuid",
+        description="指定分组模式必填：目标物料分组 UUID",
+    )
+    parent_material_group_uuid: Optional[str] = Field(
+        None,
+        alias="parentMaterialGroupUuid",
+        description="按预设分类建分组时可选：新建分类分组的父级 UUID；不填则建在顶级",
+    )
+
+    @model_validator(mode="after")
+    def _validate_group_mode(self) -> "LoadStandardPartsPresetRequest":
+        gm = (self.group_mode or "single").strip().lower()
+        if gm not in ("single", "preset_by_category"):
+            raise ValueError("groupMode 须为 single 或 preset_by_category")
+        object.__setattr__(self, "group_mode", gm)
+        if gm == "single":
+            if not (self.material_group_uuid or "").strip():
+                raise ValueError("指定分组模式下须填写 materialGroupUuid")
+        return self
 
 
 @router.get("/standard-parts/preset-preview", summary="获取标准件预设目录")
@@ -1548,7 +1589,7 @@ async def get_standard_parts_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    """按类型返回常用标准件（含 GB/T 推荐编号），不含租户业务数据。"""
+    """按行业 / 一级分类 / 二级分类返回常用标准件（含 GB/T 推荐编号），不含租户业务数据。"""
     return MaterialService.get_standard_parts_preset_catalog()
 
 
@@ -1559,22 +1600,28 @@ async def load_standard_parts_preset(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
     """
-    将所选标准件写入指定物料分组；采购件（Buy）。
+    将所选标准件写入物料分组；采购件（Buy）。
+    - **groupMode=single**：全部写入 **materialGroupUuid**。
+    - **groupMode=preset_by_category**：按预设库分类各建/复用物料分组（编码 `SP_*`），再写入对应组；可选 **parentMaterialGroupUuid** 作为父级。
     - **codeMode=auto**：主编码走 MATERIAL_CODE 编码规则（或回退生成）。
     - **codeMode=gb**：主编码使用目录中的国标推荐编号（gbCode）；已存在则跳过。
     """
     try:
         result = await MaterialService.load_standard_parts_preset(
             tenant_id,
-            body.material_group_uuid,
             body.preset_keys,
             body.code_mode,
+            group_mode=body.group_mode,
+            material_group_uuid=body.material_group_uuid,
+            parent_material_group_uuid=body.parent_material_group_uuid,
         )
         return {
             "created": result["created"],
             "skippedDuplicateCode": result["skipped_duplicate_code"],
             "skippedDuplicateItem": result["skipped_duplicate_item"],
             "failed": result["failed"],
+            "groupsCreated": result["groups_created"],
+            "groupsReused": result["groups_reused"],
             "message": result["message"],
         }
     except ValidationError as e:

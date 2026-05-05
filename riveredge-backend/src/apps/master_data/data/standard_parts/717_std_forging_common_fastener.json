@@ -1,0 +1,16 @@
+{
+  "sortOrder": 717,
+  "industryId": "forging",
+  "primaryCategory": "standard_parts",
+  "id": "std_forging_common_fastener",
+  "name": "标准件-锻造装配紧固件",
+  "description": "锻件机加工后配套装配常用紧固与定位标准件。",
+  "items": [
+    { "preset_key": "fg_std_bolt_gbt5783_m8x30", "name": "六角头螺栓", "specification": "M8×30", "gb_standard": "GB/T 5783", "gb_code": "GB5783-FG-M8X30", "base_unit": "件", "texture": "10.9级合金钢" },
+    { "preset_key": "fg_std_bolt_gbt5783_m10x35", "name": "六角头螺栓", "specification": "M10×35", "gb_standard": "GB/T 5783", "gb_code": "GB5783-FG-M10X35", "base_unit": "件", "texture": "10.9级合金钢" },
+    { "preset_key": "fg_std_nut_gbt6170_m10", "name": "六角螺母", "specification": "M10", "gb_standard": "GB/T 6170", "gb_code": "GB6170-FG-M10", "base_unit": "件", "texture": "8级碳钢" },
+    { "preset_key": "fg_std_washer_flat_gbt97_10", "name": "平垫圈", "specification": "10", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-FG-10", "base_unit": "件", "texture": "45钢" },
+    { "preset_key": "fg_std_washer_spring_gbt93_10", "name": "弹簧垫圈", "specification": "10", "gb_standard": "GB/T 93", "gb_code": "GB93-FG-10", "base_unit": "件", "texture": "65Mn" },
+    { "preset_key": "fg_std_key_gbt1096_10x8x45", "name": "平键", "specification": "10×8×45", "gb_standard": "GB/T 1096", "gb_code": "GB1096-FG-10X8X45", "base_unit": "件", "texture": "45钢" }
+  ]
+}

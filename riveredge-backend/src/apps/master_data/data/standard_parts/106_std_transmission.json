@@ -1,23 +1,82 @@
 {
   "sortOrder": 106,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_transmission_chain_belt",
-  "name": "标准件-链条皮带",
-  "description": "滚子链、普通 V 带等",
+  "id": "std_transmission_cn_sme",
+  "name": "传动件-链传动与带传动",
+  "description": "覆盖中小企业设备中最常见链轮链条、同步带与联轴器规格。",
   "items": [
-    { "preset_key": "chain__06a_1", "name": "短节距精密滚子链", "specification": "06A-1 (3分)", "gb_standard": "GB/T 1243", "gb_code": "GB1243-06A-1", "base_unit": "米", "texture": "钢" },
-    { "preset_key": "chain__08a_1", "name": "短节距精密滚子链", "specification": "08A-1 (4分)", "gb_standard": "GB/T 1243", "gb_code": "GB1243-08A-1", "base_unit": "米", "texture": "钢" },
-    { "preset_key": "chain__10a_1", "name": "短节距精密滚子链", "specification": "10A-1 (5分)", "gb_standard": "GB/T 1243", "gb_code": "GB1243-10A-1", "base_unit": "米", "texture": "钢" },
-    { "preset_key": "chain__12a_1", "name": "短节距精密滚子链", "specification": "12A-1 (6分)", "gb_standard": "GB/T 1243", "gb_code": "GB1243-12A-1", "base_unit": "米", "texture": "钢" },
-    { "preset_key": "chain__16a_1", "name": "短节距精密滚子链", "specification": "16A-1 (1寸)", "gb_standard": "GB/T 1243", "gb_code": "GB1243-16A-1", "base_unit": "米", "texture": "钢" },
-    { "preset_key": "belt_v_a_800", "name": "普通 V 带", "specification": "A型 Li=800", "gb_standard": "GB/T 11544", "gb_code": "GB11544-A-800", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_a_1000", "name": "普通 V 带", "specification": "A型 Li=1000", "gb_standard": "GB/T 11544", "gb_code": "GB11544-A-1000", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_a_1200", "name": "普通 V 带", "specification": "A型 Li=1200", "gb_standard": "GB/T 11544", "gb_code": "GB11544-A-1200", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_b_1200", "name": "普通 V 带", "specification": "B型 Li=1200", "gb_standard": "GB/T 11544", "gb_code": "GB11544-B-1200", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_b_1500", "name": "普通 V 带", "specification": "B型 Li=1500", "gb_standard": "GB/T 11544", "gb_code": "GB11544-B-1500", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_b_2000", "name": "普通 V 带", "specification": "B型 Li=2000", "gb_standard": "GB/T 11544", "gb_code": "GB11544-B-2000", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "belt_v_c_2000", "name": "普通 V 带", "specification": "C型 Li=2000", "gb_standard": "GB/T 11544", "gb_code": "GB11544-C-2000", "base_unit": "根", "texture": "橡胶" },
-    { "preset_key": "coup_plum_xl3", "name": "梅花形弹性联轴器", "specification": "XL3 (d20-D40)", "gb_standard": "GB/T 5272", "gb_code": "XL3-COUPLING", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "coup_diaph_45", "name": "双膜片联轴器", "specification": "D45 L50", "gb_standard": "通用标准", "gb_code": "DIAPH-COUPLING-45", "base_unit": "个", "texture": "铝合金/不锈钢" }
+    {
+      "preset_key": "cn_chain_roller_gbt1243_08b_1",
+      "name": "短节距精密滚子链",
+      "specification": "08B-1",
+      "gb_standard": "GB/T 1243",
+      "gb_code": "GB1243-08B-1",
+      "base_unit": "米",
+      "texture": "合金钢"
+    },
+    {
+      "preset_key": "cn_chain_roller_gbt1243_10a_1",
+      "name": "短节距精密滚子链",
+      "specification": "10A-1",
+      "gb_standard": "GB/T 1243",
+      "gb_code": "GB1243-10A-1",
+      "base_unit": "米",
+      "texture": "合金钢"
+    },
+    {
+      "preset_key": "cn_sprocket_08b_14t",
+      "name": "链轮",
+      "specification": "08B-14T",
+      "gb_standard": "GB/T 1244",
+      "gb_code": "GB1244-08B-14T",
+      "base_unit": "件",
+      "texture": "45#钢"
+    },
+    {
+      "preset_key": "cn_vbelt_classical_a1200",
+      "name": "普通V带",
+      "specification": "A-1200",
+      "gb_standard": "GB/T 1171",
+      "gb_code": "GB1171-A1200",
+      "base_unit": "条",
+      "texture": "橡胶纤维"
+    },
+    {
+      "preset_key": "cn_vbelt_classical_b1500",
+      "name": "普通V带",
+      "specification": "B-1500",
+      "gb_standard": "GB/T 1171",
+      "gb_code": "GB1171-B1500",
+      "base_unit": "条",
+      "texture": "橡胶纤维"
+    },
+    {
+      "preset_key": "cn_timing_belt_8m_20",
+      "name": "圆弧齿同步带",
+      "specification": "8M-20",
+      "gb_standard": "GB/T 13575.1",
+      "gb_code": "GB13575.1-8M-20",
+      "base_unit": "条",
+      "texture": "氯丁橡胶"
+    },
+    {
+      "preset_key": "cn_coupling_plum_lm45",
+      "name": "梅花弹性联轴器",
+      "specification": "LM45",
+      "gb_standard": "GB/T 5272",
+      "gb_code": "GB5272-LM45",
+      "base_unit": "套",
+      "texture": "钢+聚氨酯"
+    },
+    {
+      "preset_key": "cn_coupling_rigid_hl2",
+      "name": "刚性凸缘联轴器",
+      "specification": "HL2",
+      "gb_standard": "GB/T 5843",
+      "gb_code": "GB5843-HL2",
+      "base_unit": "套",
+      "texture": "45#钢"
+    }
   ]
 }

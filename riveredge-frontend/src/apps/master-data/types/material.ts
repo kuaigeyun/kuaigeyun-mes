@@ -268,6 +268,11 @@ export interface MaterialListParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface MaterialListResponse {
+  items: Material[];
+  total: number;
+}
+
 /** 批量更新批号/序列号管理（POST /materials/batch-tracking） */
 export interface MaterialBulkTrackingPayload {
   material_uuids: string[];
@@ -281,6 +286,18 @@ export interface MaterialBulkTrackingResult {
   updated_count: number;
   requested_count: number;
   not_found_uuids?: string[];
+}
+
+/** POST /materials/batch-delete */
+export interface MaterialBatchDeleteFailedItem {
+  uuid: string;
+  reason: string;
+}
+
+export interface MaterialBatchDeleteResult {
+  deleted_count: number;
+  failed_count: number;
+  failed_items: MaterialBatchDeleteFailedItem[];
 }
 
 /** GET /materials/standard-parts/preset-preview 中单条标准件 */
@@ -317,14 +334,45 @@ export interface StandardPartPresetCategory {
   id: string;
   name: string;
   description?: string;
+  industryId?: string;
+  industryName?: string;
   /** 一级大类，默认 standard_parts */
   primaryCategory?: StandardPresetPrimaryCategoryId | string;
   items: StandardPartPresetItem[];
 }
 
+export interface StandardPartPresetPrimaryCategory {
+  id: string;
+  name: string;
+  categories: StandardPartPresetCategory[];
+}
+
+export interface StandardPartPresetIndustry {
+  id: string;
+  name: string;
+  description?: string;
+  primaryCategories: StandardPartPresetPrimaryCategory[];
+}
+
+export interface StandardPartPresetTaxonomyPrimary {
+  id: string;
+  name: string;
+}
+
+export interface StandardPartPresetTaxonomySecondary {
+  id: string;
+  name: string;
+  description?: string;
+  primaryCategory: string;
+}
+
 /** 标准件预设目录 */
 export interface StandardPartsPresetCatalog {
-  categories: StandardPartPresetCategory[];
+  industries: StandardPartPresetIndustry[];
+  taxonomy: {
+    primaryCategories: StandardPartPresetTaxonomyPrimary[];
+    secondaryCategories: StandardPartPresetTaxonomySecondary[];
+  };
 }
 
 /** POST /materials/standard-parts/load-preset 响应 */
@@ -333,6 +381,8 @@ export interface LoadStandardPartsPresetResponse {
   skippedDuplicateCode: number;
   skippedDuplicateItem: number;
   failed: number;
+  groupsCreated?: number;
+  groupsReused?: number;
   message: string;
 }
 

@@ -1,20 +1,14 @@
 """
-标准件库：从 JSON 文件加载，每文件对应一个类型（分类）。
+标准件预设目录（行业 / 一级分类 / 二级分类）：
 
-默认目录：apps/master_data/data/standard_parts/*.json
-可通过环境变量 STANDARD_PARTS_LIBRARY_DIR 指向其它目录（便于 Docker 挂载扩展库）。
+- 存储：apps/master_data/data/standard_parts/*.json（每文件一个二级分类）
+- 行业维度：industryId / industryName / industryDescription（可省略，省略时按一级分类推断）
+- 一级分类：primaryCategory（standard_parts/raw_materials/electrical_components/auxiliary_materials）
+- 二级分类：文件中的 id/name/description + items[]
 
-每个 JSON 根对象字段：
-- sortOrder（可选 int）：分类排序，默认 999；相同时按文件名排序。
-- primaryCategory（可选 str）：一级大类，用于前端二级筛选。允许值见代码中
-  PRIMARY_CATEGORY_DEFAULT / PRIMARY_CATEGORY_ALLOWED（缺省视为 standard_parts；
-  非法值记入 general 并打日志）。
-- id（必填 str）：分类 id，全局唯一。
-- name、description：分类展示。
-- items（必填 array）：标准件条目，每项含 preset_key, name, specification, gb_standard, gb_code，
-  可选 base_unit（默认「件」）、texture、description。
-
-仅负责目录扫描与校验；业务创建仍由 MaterialService.load_standard_parts_preset 调用。
+对外：
+- load-preset 仍按 presetKey 导入，不依赖前端层级结构
+- preset-preview 返回 industries + categories（categories 保留兼容）
 """
 
 from __future__ import annotations
@@ -25,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 
 from loguru import logger
+from apps.master_data.services.process_preset_catalog import INDUSTRY_PRESETS
 
 
 class StandardPartItemDict(TypedDict, total=False):
@@ -38,47 +33,50 @@ class StandardPartItemDict(TypedDict, total=False):
     description: str
 
 
-PRIMARY_CATEGORY_DEFAULT = "standard_parts"
 PRIMARY_CATEGORY_ALLOWED = frozenset(
     {
-        # 机电类外购标准件（紧固件、轴承、密封、管件等）
         "standard_parts",
-        # 金属/非金属坯料与采购主料（板、棒、管、锭等，区别于已规格化的标准件）
         "raw_materials",
-        # 电气与自动化元件（低压电器、传感器、连接件等）
         "electrical_components",
-        # 刀具、夹具附件、量具检具（常单独管控）
-        "tools_and_gauges",
-        # 油品、切削液、清洗剂、胶粘与化学品
-        "chemicals_lubricants",
-        # 间接生产辅材（砂纸、磨料、工装辅料等，与易耗品可再细分）
         "auxiliary_materials",
-        # 劳保、清洁、办公类易耗等
-        "consumables",
-        # 运输与防护包材
-        "packaging",
-        # 设备维修/MRO 与备件（与生产用标准件并列时常单独统计）
-        "mro_spares",
-        # 未归类或跨类
         "general",
     }
 )
+
+PRIMARY_CATEGORY_LABELS: Dict[str, str] = {
+    "standard_parts": "标准件",
+    "raw_materials": "原材料",
+    "electrical_components": "电气与自动化",
+    "auxiliary_materials": "辅材",
+    "general": "其它",
+}
+
+INDUSTRY_PRESET_META: Dict[str, Dict[str, str]] = {
+    ind["id"]: {
+        "name": ind["name"],
+        "description": str(ind.get("description") or ""),
+    }
+    for ind in INDUSTRY_PRESETS
+}
+INDUSTRY_ORDER = [ind["id"] for ind in INDUSTRY_PRESETS]
 
 
 def _normalize_primary_category(raw: Any, filename: str) -> str:
     s = str(raw or "").strip()
     if not s:
-        return PRIMARY_CATEGORY_DEFAULT
+        raise ValueError(f"{filename}: 缺少 primaryCategory")
     if s in PRIMARY_CATEGORY_ALLOWED:
         return s
-    logger.warning("标准件库 {} 未知 primaryCategory「{}」，已归入 general", filename, s)
-    return "general"
+    raise ValueError(f"{filename}: 未知 primaryCategory「{s}」")
 
 
 class StandardPartCategoryDict(TypedDict):
     id: str
     name: str
     description: str
+    industry_id: str
+    industry_name: str
+    industry_description: str
     primary_category: str
     items: List[StandardPartItemDict]
 
@@ -167,11 +165,20 @@ def _parse_category_object(filename: str, data: Dict[str, Any]) -> StandardPartC
         data.get("primaryCategory") or data.get("primary_category"),
         filename,
     )
+    industry_id = str(data.get("industryId") or data.get("industry_id") or "").strip()
+    if not industry_id:
+        raise ValueError(f"{filename}: 缺少 industryId（须与工艺预设行业一致）")
+    if industry_id not in INDUSTRY_PRESET_META:
+        raise ValueError(f"{filename}: 未知 industryId「{industry_id}」（须与工艺预设行业 id 一致）")
+    industry_meta = INDUSTRY_PRESET_META[industry_id]
 
     return {
         "id": cid,
         "name": cname,
         "description": desc,
+        "industry_id": industry_id,
+        "industry_name": industry_meta["name"],
+        "industry_description": industry_meta["description"],
         "primary_category": pc,
         "items": items,
     }
@@ -263,29 +270,130 @@ def validate_preset_keys(preset_keys: List[str]) -> None:
             raise ValidationError(f"未知的标准件 presetKey: {k}")
 
 
+def get_preset_key_category_lookup() -> Dict[str, Dict[str, str]]:
+    """
+    preset_key -> 所属预设分类元数据（用于按分类建物料分组）。
+    键：industry_id, industry_name, primary_category, category_id, category_name, category_description
+    """
+    _ensure_loaded()
+    out: Dict[str, Dict[str, str]] = {}
+    for cat in _categories_cache or []:
+        cid = cat["id"]
+        cname = cat["name"]
+        cdesc = str(cat.get("description") or "")
+        for it in cat["items"]:
+            pk = it["preset_key"]
+            out[pk] = {
+                "industry_id": cat["industry_id"],
+                "industry_name": cat["industry_name"],
+                "primary_category": cat["primary_category"],
+                "category_id": cid,
+                "category_name": cname,
+                "category_description": cdesc,
+            }
+    return out
+
+
 def standard_parts_preset_catalog_for_api() -> Dict[str, Any]:
-    """供 GET preset-preview：不含租户数据，仅目录。"""
-    categories: List[Dict[str, Any]] = []
+    """供 GET preset-preview：返回 industries（三层）+ 全量 taxonomy。"""
+    industries_map: Dict[str, Dict[str, Any]] = {}
+    taxonomy_primary: Dict[str, Dict[str, Any]] = {}
+    taxonomy_secondary: Dict[str, Dict[str, Any]] = {}
     for cat in get_standard_parts_categories():
-        categories.append(
-            {
+        cat_obj = {
+            "id": cat["id"],
+            "name": cat["name"],
+            "description": cat["description"],
+            "industryId": cat["industry_id"],
+            "industryName": cat["industry_name"],
+            "primaryCategory": cat["primary_category"],
+            "items": [
+                {
+                    "presetKey": it["preset_key"],
+                    "name": it["name"],
+                    "specification": it.get("specification") or "",
+                    "gbStandard": it.get("gb_standard") or "",
+                    "gbCode": it.get("gb_code") or "",
+                    "baseUnit": it.get("base_unit") or "件",
+                    **({"texture": it["texture"]} if it.get("texture") else {}),
+                    **({"description": it["description"]} if it.get("description") else {}),
+                }
+                for it in cat["items"]
+            ],
+        }
+
+        ind = industries_map.get(cat["industry_id"])
+        if not ind:
+            ind = {
+                "id": cat["industry_id"],
+                "name": cat["industry_name"],
+                "description": cat["industry_description"],
+                "primaryCategories": {},
+            }
+            industries_map[cat["industry_id"]] = ind
+        pkey = cat["primary_category"]
+        pmap = ind["primaryCategories"]
+        if pkey not in pmap:
+            pmap[pkey] = {
+                "id": pkey,
+                "name": PRIMARY_CATEGORY_LABELS.get(pkey, pkey),
+                "categories": [],
+            }
+        pmap[pkey]["categories"].append(cat_obj)
+
+        if pkey not in taxonomy_primary:
+            taxonomy_primary[pkey] = {
+                "id": pkey,
+                "name": PRIMARY_CATEGORY_LABELS.get(pkey, pkey),
+            }
+        if cat["id"] not in taxonomy_secondary:
+            taxonomy_secondary[cat["id"]] = {
                 "id": cat["id"],
                 "name": cat["name"],
                 "description": cat["description"],
-                "primaryCategory": cat["primary_category"],
-                "items": [
-                    {
-                        "presetKey": it["preset_key"],
-                        "name": it["name"],
-                        "specification": it.get("specification") or "",
-                        "gbStandard": it.get("gb_standard") or "",
-                        "gbCode": it.get("gb_code") or "",
-                        "baseUnit": it.get("base_unit") or "件",
-                        **({"texture": it["texture"]} if it.get("texture") else {}),
-                        **({"description": it["description"]} if it.get("description") else {}),
-                    }
-                    for it in cat["items"]
-                ],
+                "primaryCategory": pkey,
+            }
+
+    industries: List[Dict[str, Any]] = []
+    for iid in INDUSTRY_ORDER:
+        ind = industries_map.get(iid) or {
+            "id": iid,
+            "name": INDUSTRY_PRESET_META[iid]["name"],
+            "description": INDUSTRY_PRESET_META[iid]["description"],
+            "primaryCategories": {},
+        }
+        pkeys = list(ind["primaryCategories"].keys())
+        pkeys.sort(key=lambda x: (0 if x in PRIMARY_CATEGORY_LABELS else 1, x))
+        industries.append(
+            {
+                "id": ind["id"],
+                "name": ind["name"],
+                "description": ind["description"],
+                "primaryCategories": [ind["primaryCategories"][k] for k in pkeys],
             }
         )
-    return {"categories": categories}
+    for iid, ind in industries_map.items():
+        if iid in INDUSTRY_ORDER:
+            continue
+        pkeys = sorted(ind["primaryCategories"].keys())
+        industries.append(
+            {
+                "id": ind["id"],
+                "name": ind["name"],
+                "description": ind["description"],
+                "primaryCategories": [ind["primaryCategories"][k] for k in pkeys],
+            }
+        )
+
+    primary_order = [p for p in ["standard_parts", "raw_materials", "electrical_components", "auxiliary_materials", "general"] if p in taxonomy_primary]
+    tail_primary = sorted([k for k in taxonomy_primary.keys() if k not in set(primary_order)])
+    primary_categories = [taxonomy_primary[k] for k in (primary_order + tail_primary)]
+    secondary_categories = sorted(taxonomy_secondary.values(), key=lambda x: (x.get("primaryCategory") or "", x.get("id") or ""))
+
+    return {
+        "industries": industries,
+        "taxonomy": {
+            "primaryCategories": primary_categories,
+            "secondaryCategories": secondary_categories,
+        },
+    }

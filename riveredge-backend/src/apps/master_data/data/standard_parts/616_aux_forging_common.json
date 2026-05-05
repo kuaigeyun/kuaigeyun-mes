@@ -1,0 +1,14 @@
+{
+  "sortOrder": 616,
+  "industryId": "forging",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_forging_common",
+  "name": "辅材-锻造常用",
+  "description": "锻造加热、模具润滑、清理与防锈常见辅材。",
+  "items": [
+    { "preset_key": "fg_aux_graphite_lube_20l", "name": "锻造石墨润滑剂", "specification": "20L", "gb_standard": "", "gb_code": "AUX-FG-GRA-20L", "base_unit": "桶", "texture": "石墨乳" },
+    { "preset_key": "fg_aux_quench_oil_170kg", "name": "淬火油", "specification": "170kg", "gb_standard": "SH/T 0564", "gb_code": "SHT0564-FG-170KG", "base_unit": "桶", "texture": "油品" },
+    { "preset_key": "fg_aux_shot_blast_media_s390", "name": "钢丸", "specification": "S390", "gb_standard": "GB/T 18838.3", "gb_code": "GB18838.3-FG-S390", "base_unit": "千克", "texture": "铸钢丸" },
+    { "preset_key": "fg_aux_rust_prevent_paper_vci", "name": "气相防锈纸", "specification": "1000mm", "gb_standard": "GB/T 16265", "gb_code": "GB16265-FG-VCI", "base_unit": "米", "texture": "牛皮纸+VCI" }
+  ]
+}

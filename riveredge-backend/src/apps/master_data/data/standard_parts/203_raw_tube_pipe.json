@@ -1,16 +1,64 @@
 {
   "sortOrder": 203,
+  "industryId": "machining",
   "primaryCategory": "raw_materials",
-  "id": "raw_metal_tube",
-  "name": "原材料-金属管材",
-  "description": "无缝钢管、焊接圆管、不锈钢管等",
+  "id": "raw_tube_pipe_cn_sme",
+  "name": "原材料-管材",
+  "description": "结构件、流体输送和防护用途的常用金属管材。",
   "items": [
-    { "preset_key": "tube_sm__8162_20x2", "name": "无缝钢管", "specification": "Φ20×2", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-20X2", "base_unit": "米", "texture": "20#钢" },
-    { "preset_key": "tube_sm__8162_25x3", "name": "无缝钢管", "specification": "Φ25×3", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-25X3", "base_unit": "米", "texture": "20#钢" },
-    { "preset_key": "tube_sm__8162_32x3", "name": "无缝钢管", "specification": "Φ32×3", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-32X3", "base_unit": "米", "texture": "20#钢" },
-    { "preset_key": "tube_sm__8162_48x4", "name": "无缝钢管", "specification": "Φ48×4", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-48X4", "base_unit": "米", "texture": "20#钢" },
-    { "preset_key": "tube_sm__8162_60x5", "name": "无缝钢管", "specification": "Φ60×5", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-60X5", "base_unit": "米", "texture": "20#钢" },
-    { "preset_key": "tube_ss__12771_25x2", "name": "不锈钢焊接钢管", "specification": "Φ25×2", "gb_standard": "GB/T 12771", "gb_code": "TUBE-SS-25X2", "base_unit": "米", "texture": "304" },
-    { "preset_key": "tube_ss__12771_38x2", "name": "不锈钢焊接钢管", "specification": "Φ38×2", "gb_standard": "GB/T 12771", "gb_code": "TUBE-SS-38X2", "base_unit": "米", "texture": "304" }
+    {
+      "preset_key": "cn_raw_pipe_welded_q235_dn15",
+      "name": "焊接钢管",
+      "specification": "DN15",
+      "gb_standard": "GB/T 3091",
+      "gb_code": "GB3091-DN15-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_pipe_welded_q235_dn25",
+      "name": "焊接钢管",
+      "specification": "DN25",
+      "gb_standard": "GB/T 3091",
+      "gb_code": "GB3091-DN25-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_pipe_seamless_20_27x3",
+      "name": "无缝钢管",
+      "specification": "φ27×3",
+      "gb_standard": "GB/T 8163",
+      "gb_code": "GB8163-20-27X3",
+      "base_unit": "米",
+      "texture": "20#钢"
+    },
+    {
+      "preset_key": "cn_raw_pipe_seamless_20_42x3_5",
+      "name": "无缝钢管",
+      "specification": "φ42×3.5",
+      "gb_standard": "GB/T 8163",
+      "gb_code": "GB8163-20-42X3.5",
+      "base_unit": "米",
+      "texture": "20#钢"
+    },
+    {
+      "preset_key": "cn_raw_pipe_stainless_304_25x2",
+      "name": "不锈钢工业管",
+      "specification": "φ25×2",
+      "gb_standard": "GB/T 14976",
+      "gb_code": "GB14976-06Cr19Ni10-25X2",
+      "base_unit": "米",
+      "texture": "304"
+    },
+    {
+      "preset_key": "cn_raw_pipe_al6063_30x2",
+      "name": "铝合金圆管",
+      "specification": "φ30×2",
+      "gb_standard": "GB/T 6893",
+      "gb_code": "GB6893-6063-30X2",
+      "base_unit": "米",
+      "texture": "6063-T5"
+    }
   ]
 }

@@ -1,24 +1,64 @@
 {
   "sortOrder": 109,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_pneumatic_component",
-  "name": "标准件-气动元件",
-  "description": "标准气缸、快插接头、电磁阀等气动标准件",
+  "id": "std_pneumatic_cn_sme",
+  "name": "气动元件-执行与控制",
+  "description": "覆盖自动化产线通用气缸、阀组、接头与气源处理组合件。",
   "items": [
-    { "preset_key": "cylinder_sc32x50", "name": "标准气缸 SC系列", "specification": "SC32×50", "gb_standard": "GB/T 2348", "gb_code": "SC32X50", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "cylinder_sc40x100", "name": "标准气缸 SC系列", "specification": "SC40×100", "gb_standard": "GB/T 2348", "gb_code": "SC40X100", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "cylinder_sc50x100", "name": "标准气缸 SC系列", "specification": "SC50×100", "gb_standard": "GB/T 2348", "gb_code": "SC50X100", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "cylinder_sc63x150", "name": "标准气缸 SC系列", "specification": "SC63×150", "gb_standard": "GB/T 2348", "gb_code": "SC63X150", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "cylinder_sc80x200", "name": "标准气缸 SC系列", "specification": "SC80×200", "gb_standard": "GB/T 2348", "gb_code": "SC80X200", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "cylinder_sc100x200", "name": "标准气缸 SC系列", "specification": "SC100×200", "gb_standard": "GB/T 2348", "gb_code": "SC100X200", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "pneu_fit_pc6_01", "name": "快插直通接头", "specification": "PC6-01", "gb_standard": "通用标准", "gb_code": "PC6-01", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_fit_pc8_02", "name": "快插直通接头", "specification": "PC8-02", "gb_standard": "通用标准", "gb_code": "PC8-02", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_fit_pc10_03", "name": "快插直通接头", "specification": "PC10-03", "gb_standard": "通用标准", "gb_code": "PC10-03", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_fit_pl6_01", "name": "快插弯头接头", "specification": "PL6-01", "gb_standard": "通用标准", "gb_code": "PL6-01", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_fit_pl8_02", "name": "快插弯头接头", "specification": "PL8-02", "gb_standard": "通用标准", "gb_code": "PL8-02", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_fit_pl10_03", "name": "快插弯头接头", "specification": "PL10-03", "gb_standard": "通用标准", "gb_code": "PL10-03", "base_unit": "个", "texture": "铜/塑料" },
-    { "preset_key": "pneu_valve_4v110", "name": "二位五通电磁阀", "specification": "4V110-06 DC24V", "gb_standard": "通用标准", "gb_code": "4V110-06", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "pneu_valve_4v210", "name": "二位五通电磁阀", "specification": "4V210-08 DC24V", "gb_standard": "通用标准", "gb_code": "4V210-08", "base_unit": "个", "texture": "铝合金" },
-    { "preset_key": "pneu_valve_4v310", "name": "二位五通电磁阀", "specification": "4V310-10 DC24V", "gb_standard": "通用标准", "gb_code": "4V310-10", "base_unit": "个", "texture": "铝合金" }
+    {
+      "preset_key": "cn_cylinder_iso6431_sc63x100",
+      "name": "标准气缸",
+      "specification": "SC63×100",
+      "gb_standard": "GB/T 2348",
+      "gb_code": "GB2348-SC63X100",
+      "base_unit": "支",
+      "texture": "铝合金"
+    },
+    {
+      "preset_key": "cn_cylinder_compact_sda32x25",
+      "name": "薄型气缸",
+      "specification": "SDA32×25",
+      "gb_standard": "GB/T 2348",
+      "gb_code": "GB2348-SDA32X25",
+      "base_unit": "支",
+      "texture": "铝合金"
+    },
+    {
+      "preset_key": "cn_solenoid_valve_5_2_24v",
+      "name": "二位五通电磁阀",
+      "specification": "24VDC",
+      "gb_standard": "GB/T 7932",
+      "gb_code": "GB7932-5/2-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_air_treatment_frl_g1_4",
+      "name": "气源处理三联件",
+      "specification": "G1/4",
+      "gb_standard": "GB/T 17446",
+      "gb_code": "GB17446-FRL-G1/4",
+      "base_unit": "套",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_pushin_fitting_pc8_02",
+      "name": "快插直通接头",
+      "specification": "PC8-02",
+      "gb_standard": "GB/T 14513",
+      "gb_code": "GB14513-PC8-02",
+      "base_unit": "个",
+      "texture": "黄铜镀镍"
+    },
+    {
+      "preset_key": "cn_pu_tube_8x5",
+      "name": "聚氨酯气管",
+      "specification": "8×5",
+      "gb_standard": "GB/T 18948",
+      "gb_code": "GB18948-8X5",
+      "base_unit": "米",
+      "texture": "PU"
+    }
   ]
 }

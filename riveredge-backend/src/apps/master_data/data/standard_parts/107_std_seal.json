@@ -1,23 +1,82 @@
 {
   "sortOrder": 107,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_seal_o_ring",
-  "name": "标准件-密封件",
-  "description": "O型密封圈、旋转轴唇形油封等",
+  "id": "std_seal_cn_sme",
+  "name": "密封件-旋转与往复密封",
+  "description": "面向泵阀、气缸、减速机和液压场景的高频密封元件。",
   "items": [
-    { "preset_key": "o_ring__5x1_8", "name": "O 型密封圈", "specification": "5×1.8", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-5X1.8", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__8x1_8", "name": "O 型密封圈", "specification": "8×1.8", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-8X1.8", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__10x2_5", "name": "O 型密封圈", "specification": "10×2.5", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-10X2.5", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__12x2_65", "name": "O 型密封圈", "specification": "12×2.65", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-12X2.65", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__16x2_65", "name": "O 型密封圈", "specification": "16×2.65", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-16X2.65", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__20x2_65", "name": "O 型密封圈", "specification": "20×2.65", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-20X2.65", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__25x3_55", "name": "O 型密封圈", "specification": "25×3.55", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-25X3.55", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__30x3_55", "name": "O 型密封圈", "specification": "30×3.55", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-30X3.55", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "o_ring__40x3_55", "name": "O 型密封圈", "specification": "40×3.55", "gb_standard": "GB/T 3452.1", "gb_code": "GB3452.1-40X3.55", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "oil_seal_tc_15x30x7", "name": "旋转轴唇形油封", "specification": "TC 15×30×7", "gb_standard": "GB/T 13871", "gb_code": "GB13871-TC15X30X7", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "oil_seal_tc_20x35x7", "name": "旋转轴唇形油封", "specification": "TC 20×35×7", "gb_standard": "GB/T 13871", "gb_code": "GB13871-TC20X35X7", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "oil_seal_tc_25x42x7", "name": "旋转轴唇形油封", "specification": "TC 25×42×7", "gb_standard": "GB/T 13871", "gb_code": "GB13871-TC25X42X7", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "oil_seal_tc_30x47x7", "name": "旋转轴唇形油封", "specification": "TC 30×47×7", "gb_standard": "GB/T 13871", "gb_code": "GB13871-TC30X47X7", "base_unit": "件", "texture": "丁腈橡胶" },
-    { "preset_key": "oil_seal_tc_40x62x8", "name": "旋转轴唇形油封", "specification": "TC 40×62×8", "gb_standard": "GB/T 13871", "gb_code": "GB13871-TC40X62X8", "base_unit": "件", "texture": "丁腈橡胶" }
+    {
+      "preset_key": "cn_oring_gbt3452_1_20x2_4",
+      "name": "O形圈",
+      "specification": "20×2.4",
+      "gb_standard": "GB/T 3452.1",
+      "gb_code": "GB3452.1-20X2.4",
+      "base_unit": "件",
+      "texture": "NBR"
+    },
+    {
+      "preset_key": "cn_oring_gbt3452_1_30x3_1",
+      "name": "O形圈",
+      "specification": "30×3.1",
+      "gb_standard": "GB/T 3452.1",
+      "gb_code": "GB3452.1-30X3.1",
+      "base_unit": "件",
+      "texture": "NBR"
+    },
+    {
+      "preset_key": "cn_oil_seal_gbt9877_1_tc25_40_7",
+      "name": "旋转轴唇形密封圈",
+      "specification": "TC 25×40×7",
+      "gb_standard": "GB/T 9877.1",
+      "gb_code": "GB9877.1-TC25X40X7",
+      "base_unit": "件",
+      "texture": "NBR+钢骨架"
+    },
+    {
+      "preset_key": "cn_oil_seal_gbt9877_1_tc35_52_7",
+      "name": "旋转轴唇形密封圈",
+      "specification": "TC 35×52×7",
+      "gb_standard": "GB/T 9877.1",
+      "gb_code": "GB9877.1-TC35X52X7",
+      "base_unit": "件",
+      "texture": "NBR+钢骨架"
+    },
+    {
+      "preset_key": "cn_vring_hg4_338_va30",
+      "name": "V形密封圈",
+      "specification": "VA30",
+      "gb_standard": "HG/T 2811",
+      "gb_code": "HGT2811-VA30",
+      "base_unit": "件",
+      "texture": "橡胶"
+    },
+    {
+      "preset_key": "cn_gasket_nonmetal_gbt9126_dn25",
+      "name": "非金属平垫片",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 9126",
+      "gb_code": "GB9126-DN25-PN16",
+      "base_unit": "件",
+      "texture": "无石棉板"
+    },
+    {
+      "preset_key": "cn_ptfe_packing_hgt20606_8x8",
+      "name": "聚四氟乙烯盘根",
+      "specification": "8×8",
+      "gb_standard": "HG/T 20606",
+      "gb_code": "HGT20606-8X8",
+      "base_unit": "米",
+      "texture": "PTFE纤维"
+    },
+    {
+      "preset_key": "cn_mech_seal_jbt4127_25mm",
+      "name": "泵用机械密封",
+      "specification": "25mm",
+      "gb_standard": "JB/T 4127",
+      "gb_code": "JBT4127-25",
+      "base_unit": "套",
+      "texture": "碳化硅/石墨"
+    }
   ]
 }

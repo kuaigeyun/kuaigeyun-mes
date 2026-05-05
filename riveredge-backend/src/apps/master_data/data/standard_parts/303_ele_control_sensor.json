@@ -1,12 +1,73 @@
 {
   "sortOrder": 303,
+  "industryId": "electronics_assembly",
   "primaryCategory": "electrical_components",
-  "id": "ele_control_sensor",
-  "name": "电气与自动化-控制与感测",
-  "description": "PLC模块、人机界面、各类精密传感器",
+  "id": "ele_sensor_and_signal_cn_sme",
+  "name": "电气元件-传感与信号",
+  "description": "适配自动化设备通用检测需求的接近、光电、行程与按钮指示件。",
   "items": [
-    { "preset_key": "ele_plc_cpu_1214c", "name": "S7-1200 CPU模块", "specification": "CPU 1214C DC/DC/DC", "gb_standard": "通用标准", "gb_code": "PLC-1214C", "base_unit": "个", "texture": "组合件" },
-    { "preset_key": "ele_hmi_7in", "name": "触摸屏 HMI", "specification": "7英寸 彩色", "gb_standard": "通用标准", "gb_code": "HMI-7IN", "base_unit": "个", "texture": "组合件" },
-    { "preset_key": "ele_sensor_laser", "name": "激光测距传感器", "specification": "测量范围0-2m", "gb_standard": "通用标准", "gb_code": "SENSOR-LASER-2M", "base_unit": "个", "texture": "组合件" }
+    {
+      "preset_key": "cn_ele_prox_sensor_m12_npn_no",
+      "name": "电感式接近开关",
+      "specification": "M12 NPN NO",
+      "gb_standard": "GB/T 14048.10",
+      "gb_code": "GB14048.10-M12-NPN-NO",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_prox_sensor_m18_pnp_no",
+      "name": "电感式接近开关",
+      "specification": "M18 PNP NO",
+      "gb_standard": "GB/T 14048.10",
+      "gb_code": "GB14048.10-M18-PNP-NO",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_photo_sensor_diff_2m",
+      "name": "光电开关",
+      "specification": "漫反射 2m",
+      "gb_standard": "GB/T 14048.10",
+      "gb_code": "GB14048.10-DIFF-2M",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_limit_switch_tz8108",
+      "name": "行程开关",
+      "specification": "TZ-8108",
+      "gb_standard": "GB/T 14048.5",
+      "gb_code": "GB14048.5-TZ8108",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_pushbutton_22mm_green",
+      "name": "按钮开关",
+      "specification": "22mm 绿色",
+      "gb_standard": "GB/T 14048.5",
+      "gb_code": "GB14048.5-PB22-G",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_indicator_22mm_red_24v",
+      "name": "指示灯",
+      "specification": "22mm 红色 24V",
+      "gb_standard": "GB/T 14048.5",
+      "gb_code": "GB14048.5-IND22-R-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_ele_buzzer_22mm_24v",
+      "name": "蜂鸣器",
+      "specification": "22mm 24V",
+      "gb_standard": "GB/T 14048.5",
+      "gb_code": "GB14048.5-BUZ22-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    }
   ]
 }

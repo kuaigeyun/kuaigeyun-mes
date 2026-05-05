@@ -1,0 +1,14 @@
+{
+  "sortOrder": 612,
+  "industryId": "sheet_metal",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_sheet_metal_common",
+  "name": "辅材-钣金常用",
+  "description": "钣金下料、折弯、焊接与包装高频辅材。",
+  "items": [
+    { "preset_key": "sm_aux_cutting_disc_100x1_2", "name": "切割片", "specification": "100×1.2", "gb_standard": "GB/T 2485", "gb_code": "GB2485-SM-100X1.2", "base_unit": "片", "texture": "树脂砂轮" },
+    { "preset_key": "sm_aux_flap_disc_100", "name": "百叶片", "specification": "100", "gb_standard": "GB/T 3884", "gb_code": "GB3884-SM-100", "base_unit": "片", "texture": "氧化铝" },
+    { "preset_key": "sm_aux_welding_wire_er50_6_1_0", "name": "气保焊丝", "specification": "ER50-6 φ1.0", "gb_standard": "GB/T 8110", "gb_code": "GB8110-SM-ER50-6-1.0", "base_unit": "千克", "texture": "镀铜钢丝" },
+    { "preset_key": "sm_aux_stretch_film_500x23", "name": "PE缠绕膜", "specification": "500mm×23um", "gb_standard": "BB/T 0024", "gb_code": "BBT0024-SM-500X23", "base_unit": "卷", "texture": "LLDPE" }
+  ]
+}

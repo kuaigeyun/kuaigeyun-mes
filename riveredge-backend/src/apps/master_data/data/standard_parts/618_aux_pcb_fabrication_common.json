@@ -1,0 +1,14 @@
+{
+  "sortOrder": 618,
+  "industryId": "pcb_fabrication",
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_pcb_fabrication_common",
+  "name": "辅材-PCB常用",
+  "description": "PCB制造过程中的清洁、防护与包装常用辅材。",
+  "items": [
+    { "preset_key": "pcb_aux_clean_wiper_200x200", "name": "无尘擦拭纸", "specification": "200×200", "gb_standard": "", "gb_code": "AUX-PCB-WIP-200", "base_unit": "包", "texture": "无尘纸" },
+    { "preset_key": "pcb_aux_isopropyl_alcohol_99", "name": "异丙醇", "specification": "99%", "gb_standard": "GB/T 7814", "gb_code": "GB7814-PCB-IPA99", "base_unit": "升", "texture": "液体" },
+    { "preset_key": "pcb_aux_esd_bag_300x400", "name": "防静电屏蔽袋", "specification": "300×400", "gb_standard": "SJ/T 10694", "gb_code": "SJT10694-PCB-300X400", "base_unit": "个", "texture": "PET/AL/PE" },
+    { "preset_key": "pcb_aux_label_self_60x40", "name": "不干胶标签", "specification": "60×40", "gb_standard": "GB/T 7707", "gb_code": "GB7707-PCB-60X40", "base_unit": "张", "texture": "铜版纸+胶" }
+  ]
+}

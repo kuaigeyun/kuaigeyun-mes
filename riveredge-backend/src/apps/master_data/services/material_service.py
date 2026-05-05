@@ -4,10 +4,12 @@
 提供物料数据的业务逻辑处理（物料分组、物料、BOM），支持多组织隔离。
 """
 
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING, Tuple
 from decimal import Decimal
 import asyncio
+import hashlib
 import json
+import re
 
 from tortoise.models import Q
 from apps.master_data.models.material import MaterialGroup, Material, BOM
@@ -15,8 +17,9 @@ from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
-    MaterialCreate, MaterialUpdate, MaterialResponse,
+    MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
     MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
+    MaterialBatchDeleteRequest, MaterialBatchDeleteResponse, MaterialBatchDeleteFailedItem,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary,
@@ -772,7 +775,7 @@ class MaterialService:
 
     @staticmethod
     def get_standard_parts_preset_catalog() -> Dict[str, Any]:
-        """标准件预设目录（按类型分类），供 GET standard-parts/preset-preview。"""
+        """标准件预设目录（行业/一级/二级），供 GET standard-parts/preset-preview。"""
         from apps.master_data.services.material_standard_parts_catalog import (
             standard_parts_preset_catalog_for_api,
         )
@@ -780,17 +783,63 @@ class MaterialService:
         return standard_parts_preset_catalog_for_api()
 
     @staticmethod
+    def _preset_category_group_code(category_id: str) -> str:
+        """预设分类对应物料分组编码（组织内唯一，≤50）。"""
+        raw = re.sub(r"[^0-9A-Za-z]+", "_", (category_id or "").strip().upper())
+        raw = re.sub(r"_+", "_", raw).strip("_")
+        code = f"SP_{raw}" if raw else "SP_UNKNOWN"
+        if len(code) <= 50:
+            return code
+        digest = hashlib.sha256(category_id.encode("utf-8")).hexdigest()[:16].upper()
+        return f"SP_{digest}"
+
+    @staticmethod
+    async def _get_or_create_preset_category_group(
+        tenant_id: int,
+        parent_id: Optional[int],
+        category_id: str,
+        category_name: str,
+        category_description: Optional[str],
+    ) -> Tuple[MaterialGroup, str]:
+        code = MaterialService._preset_category_group_code(category_id)
+        existing = await MaterialGroup.filter(
+            tenant_id=tenant_id, code=code, deleted_at__isnull=True
+        ).first()
+        if existing:
+            return existing, "reused"
+        desc = (category_description or "").strip() or None
+        data = MaterialGroupCreate(
+            code=code,
+            name=category_name[:200],
+            parent_id=parent_id,
+            description=desc,
+            is_active=True,
+        )
+        resp = await MaterialService.create_material_group(tenant_id, data)
+        mg = await MaterialGroup.filter(id=resp.id, tenant_id=tenant_id, deleted_at__isnull=True).first()
+        if not mg:
+            raise ValidationError("创建预设分类物料分组失败")
+        return mg, "created"
+
+    @staticmethod
     async def load_standard_parts_preset(
         tenant_id: int,
-        material_group_uuid: str,
         preset_keys: List[str],
         code_mode: str,
+        *,
+        group_mode: str = "single",
+        material_group_uuid: Optional[str] = None,
+        parent_material_group_uuid: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        按勾选导入标准件物料：写入指定物料分组；主编码为系统编码规则(auto) 或目录中的国标推荐码(gb)。
+        按勾选导入标准件物料；主编码为系统编码(auto) 或目录国标码(gb)。
+        group_mode=single：全部写入 material_group_uuid 对应分组。
+        group_mode=preset_by_category：按预设库二级分类各建/复用一个物料分组（编码 SP_*），再写入对应分组；
+        可选 parent_material_group_uuid 作为这些分组的父级。
         """
         from apps.master_data.services.material_standard_parts_catalog import (
             get_standard_part_by_preset_key,
+            get_preset_key_category_lookup,
             validate_preset_keys,
         )
 
@@ -798,22 +847,71 @@ class MaterialService:
         if mode not in ("auto", "gb"):
             raise ValidationError("codeMode 须为 auto（系统编码）或 gb（国标推荐编号作主数据主编码）")
 
-        mg = await MaterialGroup.filter(
-            tenant_id=tenant_id, uuid=material_group_uuid, deleted_at__isnull=True
-        ).first()
-        if not mg:
-            raise ValidationError("物料分组不存在或已删除")
+        gm = (group_mode or "single").strip().lower()
+        if gm not in ("single", "preset_by_category"):
+            raise ValidationError("groupMode 须为 single（指定分组）或 preset_by_category（按预设分类建分组）")
 
+        empty_out = {
+            "created": 0,
+            "skipped_duplicate_code": 0,
+            "skipped_duplicate_item": 0,
+            "failed": 0,
+            "groups_created": 0,
+            "groups_reused": 0,
+            "message": "未选择任何标准件",
+        }
         if not preset_keys:
-            return {
-                "created": 0,
-                "skipped_duplicate_code": 0,
-                "skipped_duplicate_item": 0,
-                "failed": 0,
-                "message": "未选择任何标准件",
-            }
+            return empty_out
+
+        if gm == "single":
+            uid = (material_group_uuid or "").strip()
+            if not uid:
+                raise ValidationError("指定分组模式下须选择目标物料分组")
 
         validate_preset_keys(preset_keys)
+
+        single_group: Optional[MaterialGroup] = None
+        category_to_group_id: Dict[str, int] = {}
+        groups_created = 0
+        groups_reused = 0
+        meta_lookup = get_preset_key_category_lookup()
+
+        if gm == "single":
+            uid = (material_group_uuid or "").strip()
+            single_group = await MaterialGroup.filter(
+                tenant_id=tenant_id, uuid=uid, deleted_at__isnull=True
+            ).first()
+            if not single_group:
+                raise ValidationError("物料分组不存在或已删除")
+        else:
+            parent_id: Optional[int] = None
+            puid = (parent_material_group_uuid or "").strip()
+            if puid:
+                parent_mg = await MaterialGroup.filter(
+                    tenant_id=tenant_id, uuid=puid, deleted_at__isnull=True
+                ).first()
+                if not parent_mg:
+                    raise ValidationError("父级物料分组不存在或已删除")
+                parent_id = parent_mg.id
+
+            needed: Dict[str, Tuple[str, str]] = {}
+            for key in preset_keys:
+                meta = meta_lookup.get(key)
+                if not meta:
+                    continue
+                cid = meta["category_id"]
+                if cid not in needed:
+                    needed[cid] = (meta["category_name"], meta.get("category_description") or "")
+
+            for cid, (cname, cdesc) in needed.items():
+                grp, st = await MaterialService._get_or_create_preset_category_group(
+                    tenant_id, parent_id, cid, cname, cdesc or None
+                )
+                category_to_group_id[cid] = grp.id
+                if st == "created":
+                    groups_created += 1
+                else:
+                    groups_reused += 1
 
         created = 0
         skipped_duplicate_code = 0
@@ -825,6 +923,20 @@ class MaterialService:
             if not item:
                 failed += 1
                 continue
+
+            if gm == "preset_by_category":
+                cmeta = meta_lookup.get(key)
+                if not cmeta:
+                    failed += 1
+                    continue
+                cid = cmeta["category_id"]
+                target_gid = category_to_group_id.get(cid)
+                if not target_gid:
+                    failed += 1
+                    continue
+            else:
+                assert single_group is not None
+                target_gid = single_group.id
 
             name = (item.get("name") or "").strip()
             if not name:
@@ -853,7 +965,7 @@ class MaterialService:
             else:
                 q = Material.filter(
                     tenant_id=tenant_id,
-                    group_id=mg.id,
+                    group_id=target_gid,
                     name=name,
                     deleted_at__isnull=True,
                 )
@@ -869,7 +981,7 @@ class MaterialService:
                 name=name,
                 specification=spec,
                 base_unit=base_unit,
-                group_id=mg.id,
+                group_id=target_gid,
                 source_type="Buy",
                 description=desc,
                 texture=texture,
@@ -894,6 +1006,8 @@ class MaterialService:
             parts.append(f"跳过同组同名同规格 {skipped_duplicate_item} 条")
         if failed:
             parts.append(f"失败 {failed} 条")
+        if gm == "preset_by_category" and (groups_created or groups_reused):
+            parts.append(f"预设分类分组 新建 {groups_created} 个、复用 {groups_reused} 个")
         msg = "，".join(parts) + "。"
 
         return {
@@ -901,6 +1015,8 @@ class MaterialService:
             "skipped_duplicate_code": skipped_duplicate_code,
             "skipped_duplicate_item": skipped_duplicate_item,
             "failed": failed,
+            "groups_created": groups_created,
+            "groups_reused": groups_reused,
             "message": msg,
         }
 
@@ -1038,7 +1154,7 @@ class MaterialService:
         base_unit: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
-    ) -> List[MaterialResponse]:
+    ) -> MaterialListResponse:
         """
         获取物料列表
 
@@ -1058,7 +1174,7 @@ class MaterialService:
             base_unit: 基础单位（可选，精确匹配）
 
         Returns:
-            List[MaterialResponse]: 物料列表
+            MaterialListResponse: 物料列表响应（含总数）
         """
         query = Material.filter(
             tenant_id=tenant_id,
@@ -1154,21 +1270,24 @@ class MaterialService:
         desc = (sort_order or "asc").lower() == "desc"
         order_expr = f"-{db_sort}" if desc else db_sort
 
+        # 获取总数
+        total = await query.count()
+
         # 预加载关联关系（优化，修复500错误）
         materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by(order_expr).all()
         
         # 构建响应数据（用 _material_to_response_data 避免 ReverseRelation 的 code_aliases；列表不加载别名）
-        result = []
+        items = []
         for m in materials:
             try:
                 resp_data = _material_to_response_data(m)
                 resp_data["code_aliases"] = []
-                result.append(MaterialResponse.model_validate(resp_data))
+                items.append(MaterialResponse.model_validate(resp_data))
             except Exception as e:
                 logger.warning(f"序列化物料 {m.id if hasattr(m, 'id') else 'unknown'} 失败: {str(e)}")
                 continue
         
-        return result
+        return MaterialListResponse(items=items, total=total)
 
     @staticmethod
     async def bulk_update_material_tracking(
@@ -1520,6 +1639,73 @@ class MaterialService:
         from tortoise import timezone
         material.deleted_at = timezone.now()
         await material.save()
+
+    @staticmethod
+    async def bulk_delete_materials(
+        tenant_id: int,
+        data: MaterialBatchDeleteRequest,
+    ) -> MaterialBatchDeleteResponse:
+        """
+        批量软删除物料：一次加载物料、一次 BOM 占用检查、一次 UPDATE，避免 N 次单条删除接口。
+        """
+        from tortoise import timezone
+
+        raw = [str(u).strip() for u in data.material_uuids if u is not None and str(u).strip()]
+        uuids = list(dict.fromkeys(raw))
+        if not uuids:
+            return MaterialBatchDeleteResponse(deleted_count=0, failed_count=0, failed_items=[])
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+        ).all()
+        id_to_uuid = {m.id: str(m.uuid) for m in materials}
+        uuid_to_material_id = {str(m.uuid): m.id for m in materials}
+        found_uuid_set = set(uuid_to_material_id.keys())
+
+        failed_items: List[MaterialBatchDeleteFailedItem] = []
+        for u in uuids:
+            if u not in found_uuid_set:
+                failed_items.append(MaterialBatchDeleteFailedItem(uuid=u, reason="物料不存在"))
+
+        material_ids = list(id_to_uuid.keys())
+        blocked_ids: set[int] = set()
+        if material_ids:
+            conflict_rows = await BOM.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(
+                Q(material_id__in=material_ids) | Q(component_id__in=material_ids)
+            ).only("material_id", "component_id")
+            id_set = set(material_ids)
+            for row in conflict_rows:
+                if row.material_id in id_set:
+                    blocked_ids.add(row.material_id)
+                if row.component_id in id_set:
+                    blocked_ids.add(row.component_id)
+
+        for mid in blocked_ids:
+            failed_items.append(
+                MaterialBatchDeleteFailedItem(
+                    uuid=id_to_uuid[mid],
+                    reason="物料被 BOM 使用，无法删除",
+                )
+            )
+
+        to_delete_ids = [mid for mid in material_ids if mid not in blocked_ids]
+        now = timezone.now()
+        if to_delete_ids:
+            await Material.filter(tenant_id=tenant_id, id__in=to_delete_ids).update(
+                deleted_at=now,
+                updated_at=now,
+            )
+
+        return MaterialBatchDeleteResponse(
+            deleted_count=len(to_delete_ids),
+            failed_count=len(failed_items),
+            failed_items=failed_items,
+        )
     
     # ==================== BOM相关方法 ====================
     

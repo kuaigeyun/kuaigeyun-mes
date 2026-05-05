@@ -1,24 +1,64 @@
 {
   "sortOrder": 105,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_linear_motion",
-  "name": "标准件-直线运动",
-  "description": "直线导轨、滚珠丝杠、直线轴承等",
+  "id": "std_linear_motion_cn_sme",
+  "name": "运动部件-线性导向与丝杠",
+  "description": "用于工装滑台、自动化模组与轻载设备的标准线性运动部件。",
   "items": [
-    { "preset_key": "linear_rail_hgr15", "name": "直线导轨 HGR系列", "specification": "HGR15", "gb_standard": "JB/T 7175", "gb_code": "HGR15", "base_unit": "米", "texture": "轴承钢" },
-    { "preset_key": "linear_rail_hgr20", "name": "直线导轨 HGR系列", "specification": "HGR20", "gb_standard": "JB/T 7175", "gb_code": "HGR20", "base_unit": "米", "texture": "轴承钢" },
-    { "preset_key": "linear_rail_hgr25", "name": "直线导轨 HGR系列", "specification": "HGR25", "gb_standard": "JB/T 7175", "gb_code": "HGR25", "base_unit": "米", "texture": "轴承钢" },
-    { "preset_key": "linear_block_hgh15ca", "name": "直线滑块 HGH系列", "specification": "HGH15CA", "gb_standard": "JB/T 7175", "gb_code": "HGH15CA", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_block_hgh20ca", "name": "直线滑块 HGH系列", "specification": "HGH20CA", "gb_standard": "JB/T 7175", "gb_code": "HGH20CA", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_block_hgh25ca", "name": "直线滑块 HGH系列", "specification": "HGH25CA", "gb_standard": "JB/T 7175", "gb_code": "HGH25CA", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_block_hgh30ca", "name": "直线滑块 HGH系列", "specification": "HGH30CA", "gb_standard": "JB/T 7175", "gb_code": "HGH30CA", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "ball_screw_sfu1204", "name": "滚珠丝杠 SFU系列", "specification": "SFU1204", "gb_standard": "GB/T 17587", "gb_code": "SFU1204", "base_unit": "根", "texture": "轴承钢" },
-    { "preset_key": "ball_screw_sfu1605", "name": "滚珠丝杠 SFU系列", "specification": "SFU1605", "gb_standard": "GB/T 17587", "gb_code": "SFU1605", "base_unit": "根", "texture": "轴承钢" },
-    { "preset_key": "ball_screw_sfu2005", "name": "滚珠丝杠 SFU系列", "specification": "SFU2005", "gb_standard": "GB/T 17587", "gb_code": "SFU2005", "base_unit": "根", "texture": "轴承钢" },
-    { "preset_key": "ball_screw_sfu2505", "name": "滚珠丝杠 SFU系列", "specification": "SFU2505", "gb_standard": "GB/T 17587", "gb_code": "SFU2505", "base_unit": "根", "texture": "轴承钢" },
-    { "preset_key": "linear_bearing_lm8uu", "name": "直线轴承 LM系列", "specification": "LM8UU", "gb_standard": "JB/T 7175", "gb_code": "LM8UU", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_bearing_lm12uu", "name": "直线轴承 LM系列", "specification": "LM12UU", "gb_standard": "JB/T 7175", "gb_code": "LM12UU", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_bearing_lm16uu", "name": "直线轴承 LM系列", "specification": "LM16UU", "gb_standard": "JB/T 7175", "gb_code": "LM16UU", "base_unit": "个", "texture": "轴承钢" },
-    { "preset_key": "linear_bearing_lm20uu", "name": "直线轴承 LM系列", "specification": "LM20UU", "gb_standard": "JB/T 7175", "gb_code": "LM20UU", "base_unit": "个", "texture": "轴承钢" }
+    {
+      "preset_key": "cn_linear_shaft_gbt905_12h6",
+      "name": "直线光轴",
+      "specification": "φ12 h6",
+      "gb_standard": "GB/T 905",
+      "gb_code": "GB905-12H6",
+      "base_unit": "米",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_linear_shaft_gbt905_16h6",
+      "name": "直线光轴",
+      "specification": "φ16 h6",
+      "gb_standard": "GB/T 905",
+      "gb_code": "GB905-16H6",
+      "base_unit": "米",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_linear_bushing_gbt3017_lm16uu",
+      "name": "直线轴承",
+      "specification": "LM16UU",
+      "gb_standard": "GB/T 3017",
+      "gb_code": "GB3017-LM16UU",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_ball_screw_gbt17587_1605_c7",
+      "name": "滚珠丝杠副",
+      "specification": "1605 C7",
+      "gb_standard": "GB/T 17587",
+      "gb_code": "GB17587-1605-C7",
+      "base_unit": "套",
+      "texture": "合金钢"
+    },
+    {
+      "preset_key": "cn_ball_screw_gbt17587_2005_c7",
+      "name": "滚珠丝杠副",
+      "specification": "2005 C7",
+      "gb_standard": "GB/T 17587",
+      "gb_code": "GB17587-2005-C7",
+      "base_unit": "套",
+      "texture": "合金钢"
+    },
+    {
+      "preset_key": "cn_guide_rail_hg15",
+      "name": "滚动直线导轨副",
+      "specification": "HG15",
+      "gb_standard": "GB/T 17431",
+      "gb_code": "GB17431-HG15",
+      "base_unit": "套",
+      "texture": "轴承钢"
+    }
   ]
 }

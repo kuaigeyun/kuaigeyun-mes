@@ -1,0 +1,16 @@
+{
+  "sortOrder": 719,
+  "industryId": "pcb_fabrication",
+  "primaryCategory": "standard_parts",
+  "id": "std_pcb_fabrication_common_fastener",
+  "name": "标准件-PCB制造安装紧固件",
+  "description": "PCB板框、治具与设备安装常用标准紧固件。",
+  "items": [
+    { "preset_key": "pcb_std_machine_screw_gbt818_m2_5x6", "name": "十字槽盘头螺钉", "specification": "M2.5×6", "gb_standard": "GB/T 818", "gb_code": "GB818-PCB-M2.5X6", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "pcb_std_machine_screw_gbt818_m3x6", "name": "十字槽盘头螺钉", "specification": "M3×6", "gb_standard": "GB/T 818", "gb_code": "GB818-PCB-M3X6", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "pcb_std_nut_gbt6170_m3", "name": "六角螺母", "specification": "M3", "gb_standard": "GB/T 6170", "gb_code": "GB6170-PCB-M3", "base_unit": "件", "texture": "镀镍钢" },
+    { "preset_key": "pcb_std_washer_flat_gbt97_3", "name": "平垫圈", "specification": "3", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-PCB-3", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "pcb_std_standoff_hex_m3x8", "name": "六角隔离柱", "specification": "M3×8", "gb_standard": "", "gb_code": "STD-PCB-STANDOFF-M3X8", "base_unit": "件", "texture": "黄铜镀镍" },
+    { "preset_key": "pcb_std_board_spacer_nylon_6mm", "name": "尼龙间隔柱", "specification": "6mm", "gb_standard": "", "gb_code": "STD-PCB-SPACER-NYLON-6", "base_unit": "件", "texture": "PA66" }
+  ]
+}

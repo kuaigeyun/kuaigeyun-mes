@@ -1,26 +1,82 @@
 {
   "sortOrder": 104,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_bearing_rolling",
-  "name": "标准件-滚动轴承",
-  "description": "深沟球轴承、推力球轴承等",
+  "id": "std_bearing_and_housing_cn_sme",
+  "name": "传动支承-轴承与轴承座",
+  "description": "中小制造企业最常用滚动轴承与带座轴承规格，适配电机、减速机和输送机构。",
   "items": [
-    { "preset_key": "bearing_6000_2z", "name": "深沟球轴承", "specification": "6000-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6000-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6001_2z", "name": "深沟球轴承", "specification": "6001-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6001-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6002_2z", "name": "深沟球轴承", "specification": "6002-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6002-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6200_2z", "name": "深沟球轴承", "specification": "6200-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6200-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6201_2z", "name": "深沟球轴承", "specification": "6201-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6201-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6202_2z", "name": "深沟球轴承", "specification": "6202-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6202-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6203_2z", "name": "深沟球轴承", "specification": "6203-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6203-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6204_2z", "name": "深沟球轴承", "specification": "6204-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6204-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6205_2z", "name": "深沟球轴承", "specification": "6205-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6205-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6301_2z", "name": "深沟球轴承", "specification": "6301-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6301-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6302_2z", "name": "深沟球轴承", "specification": "6302-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6302-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6303_2z", "name": "深沟球轴承", "specification": "6303-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6303-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6304_2z", "name": "深沟球轴承", "specification": "6304-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6304-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_6305_2z", "name": "深沟球轴承", "specification": "6305-2Z", "gb_standard": "GB/T 276", "gb_code": "GB276-6305-2Z", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_thrust_51100", "name": "推力球轴承", "specification": "51100", "gb_standard": "GB/T 301", "gb_code": "GB301-51100", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_thrust_51102", "name": "推力球轴承", "specification": "51102", "gb_standard": "GB/T 301", "gb_code": "GB301-51102", "base_unit": "件", "texture": "轴承钢" },
-    { "preset_key": "bearing_thrust_51104", "name": "推力球轴承", "specification": "51104", "gb_standard": "GB/T 301", "gb_code": "GB301-51104", "base_unit": "件", "texture": "轴承钢" }
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6201_2rz",
+      "name": "深沟球轴承",
+      "specification": "6201-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6201-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6202_2rz",
+      "name": "深沟球轴承",
+      "specification": "6202-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6202-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6203_2rz",
+      "name": "深沟球轴承",
+      "specification": "6203-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6203-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6204_2rz",
+      "name": "深沟球轴承",
+      "specification": "6204-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6204-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6305_2rz",
+      "name": "深沟球轴承",
+      "specification": "6305-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6305-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_insert_gbt7809_uc204",
+      "name": "带座外球面轴承内芯",
+      "specification": "UC204",
+      "gb_standard": "GB/T 7809",
+      "gb_code": "GB7809-UC204",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_housing_ucp204",
+      "name": "立式轴承座",
+      "specification": "UCP204",
+      "gb_standard": "JB/T 5308",
+      "gb_code": "JBT5308-UCP204",
+      "base_unit": "件",
+      "texture": "铸铁"
+    },
+    {
+      "preset_key": "cn_bearing_housing_ucf205",
+      "name": "方形法兰轴承座",
+      "specification": "UCF205",
+      "gb_standard": "JB/T 5308",
+      "gb_code": "JBT5308-UCF205",
+      "base_unit": "件",
+      "texture": "铸铁"
+    }
   ]
 }

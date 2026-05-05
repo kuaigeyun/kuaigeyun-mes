@@ -279,6 +279,39 @@ class MaterialBulkTrackingResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class MaterialBatchDeleteFailedItem(BaseModel):
+    """批量删除物料单条失败原因"""
+
+    uuid: str = Field(..., description="物料 UUID")
+    reason: str = Field(..., description="失败原因")
+
+
+class MaterialBatchDeleteRequest(BaseModel):
+    """批量删除物料（软删除）"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchDeleteResponse(BaseModel):
+    """批量删除物料结果"""
+
+    deleted_count: int = Field(..., description="成功软删除的物料数量")
+    failed_count: int = Field(..., description="失败数量（不存在或仍被 BOM 引用等）")
+    failed_items: List[MaterialBatchDeleteFailedItem] = Field(
+        default_factory=list,
+        description="失败明细（与请求去重后的 UUID 对齐）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MaterialCodeAliasResponse(BaseModel):
     """物料编码别名响应 Schema"""
     
@@ -1014,3 +1047,15 @@ class MaterialSerialListResponse(BaseModel):
     
     items: List[MaterialSerialResponse] = Field(..., description="序列号列表")
     total: int = Field(..., description="总数")
+
+
+class MaterialListResponse(BaseModel):
+    """物料列表响应 Schema"""
+    
+    items: List[MaterialResponse] = Field(..., description="物料列表")
+    total: int = Field(..., description="总数")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        by_alias=True
+    )

@@ -1,15 +1,64 @@
 {
   "sortOrder": 204,
+  "industryId": "machining",
   "primaryCategory": "raw_materials",
-  "id": "raw_metal_bar",
-  "name": "原材料-金属棒材",
-  "description": "圆钢、六角钢、不锈钢棒等",
+  "id": "raw_bar_rod_cn_sme",
+  "name": "原材料-棒材与圆钢",
+  "description": "轴类、销轴、工装治具常用圆钢与不锈钢棒材。",
   "items": [
-    { "preset_key": "bar_round__702_10", "name": "热轧圆钢", "specification": "Φ10", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-10", "base_unit": "米", "texture": "45#钢" },
-    { "preset_key": "bar_round__702_20", "name": "热轧圆钢", "specification": "Φ20", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-20", "base_unit": "米", "texture": "45#钢" },
-    { "preset_key": "bar_round__702_30", "name": "热轧圆钢", "specification": "Φ30", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-30", "base_unit": "米", "texture": "45#钢" },
-    { "preset_key": "bar_round__702_50", "name": "热轧圆钢", "specification": "Φ50", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-50", "base_unit": "米", "texture": "45#钢" },
-    { "preset_key": "bar_hex__705_17", "name": "热轧六角钢", "specification": "S17", "gb_standard": "GB/T 705", "gb_code": "BAR-HEX-17", "base_unit": "米", "texture": "45#钢" },
-    { "preset_key": "bar_hex__705_24", "name": "热轧六角钢", "specification": "S24", "gb_standard": "GB/T 705", "gb_code": "BAR-HEX-24", "base_unit": "米", "texture": "45#钢" }
+    {
+      "preset_key": "cn_raw_roundbar_q235_phi16",
+      "name": "热轧圆钢",
+      "specification": "φ16",
+      "gb_standard": "GB/T 1499.1",
+      "gb_code": "GB1499.1-Q235-16",
+      "base_unit": "千克",
+      "texture": "Q235"
+    },
+    {
+      "preset_key": "cn_raw_roundbar_45_phi20",
+      "name": "优质碳素结构钢圆钢",
+      "specification": "φ20",
+      "gb_standard": "GB/T 699",
+      "gb_code": "GB699-45-20",
+      "base_unit": "千克",
+      "texture": "45钢"
+    },
+    {
+      "preset_key": "cn_raw_roundbar_45_phi30",
+      "name": "优质碳素结构钢圆钢",
+      "specification": "φ30",
+      "gb_standard": "GB/T 699",
+      "gb_code": "GB699-45-30",
+      "base_unit": "千克",
+      "texture": "45钢"
+    },
+    {
+      "preset_key": "cn_raw_roundbar_40cr_phi25",
+      "name": "合金结构钢圆钢",
+      "specification": "φ25",
+      "gb_standard": "GB/T 3077",
+      "gb_code": "GB3077-40Cr-25",
+      "base_unit": "千克",
+      "texture": "40Cr"
+    },
+    {
+      "preset_key": "cn_raw_roundbar_ss304_phi20",
+      "name": "不锈钢圆棒",
+      "specification": "φ20",
+      "gb_standard": "GB/T 1220",
+      "gb_code": "GB1220-06Cr19Ni10-20",
+      "base_unit": "千克",
+      "texture": "304"
+    },
+    {
+      "preset_key": "cn_raw_hexbar_h62_s12",
+      "name": "黄铜六角棒",
+      "specification": "S12",
+      "gb_standard": "GB/T 5231",
+      "gb_code": "GB5231-H62-S12",
+      "base_unit": "千克",
+      "texture": "H62黄铜"
+    }
   ]
 }

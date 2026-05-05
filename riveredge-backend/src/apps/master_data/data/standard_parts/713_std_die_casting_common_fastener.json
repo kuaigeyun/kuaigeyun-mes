@@ -1,0 +1,16 @@
+{
+  "sortOrder": 713,
+  "industryId": "die_casting",
+  "primaryCategory": "standard_parts",
+  "id": "std_die_casting_common_fastener",
+  "name": "标准件-压铸装配紧固件",
+  "description": "压铸件去毛刺、机加工后总装常用标准件。",
+  "items": [
+    { "preset_key": "dc_std_bolt_gbt5783_m6x12", "name": "六角头螺栓", "specification": "M6×12", "gb_standard": "GB/T 5783", "gb_code": "GB5783-DC-M6X12", "base_unit": "件", "texture": "8.8级镀锌钢" },
+    { "preset_key": "dc_std_socket_gbt701_m5x12", "name": "内六角圆柱头螺钉", "specification": "M5×12", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-DC-M5X12", "base_unit": "件", "texture": "合金钢发黑" },
+    { "preset_key": "dc_std_socket_gbt701_m6x16", "name": "内六角圆柱头螺钉", "specification": "M6×16", "gb_standard": "GB/T 70.1", "gb_code": "GB70.1-DC-M6X16", "base_unit": "件", "texture": "合金钢发黑" },
+    { "preset_key": "dc_std_nut_gbt6170_m6", "name": "六角螺母", "specification": "M6", "gb_standard": "GB/T 6170", "gb_code": "GB6170-DC-M6", "base_unit": "件", "texture": "碳钢镀锌" },
+    { "preset_key": "dc_std_washer_flat_gbt97_6", "name": "平垫圈", "specification": "6", "gb_standard": "GB/T 97.1", "gb_code": "GB97.1-DC-6", "base_unit": "件", "texture": "不锈钢304" },
+    { "preset_key": "dc_std_dowel_pin_gbt1191_6x20", "name": "圆柱销", "specification": "6×20", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-DC-6X20", "base_unit": "件", "texture": "45钢淬硬" }
+  ]
+}

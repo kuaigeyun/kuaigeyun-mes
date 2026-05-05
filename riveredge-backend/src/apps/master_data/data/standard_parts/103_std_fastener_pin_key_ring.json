@@ -1,23 +1,73 @@
 {
   "sortOrder": 103,
+  "industryId": "machining",
   "primaryCategory": "standard_parts",
-  "id": "std_fastener_pin_key_ring",
-  "name": "标准件-销键挡圈",
-  "description": "圆柱销、开口销、平键、轴用/孔用弹性挡圈等",
+  "id": "std_fastener_position_lock_cn_sme",
+  "name": "紧固件-定位与防松件",
+  "description": "销、键、挡圈等用于传动定位、轴孔连接与防脱的标准件。",
   "items": [
-    { "preset_key": "pin_cyl__119_1_4x20", "name": "圆柱销 A级", "specification": "4×20", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-4X20", "base_unit": "件", "texture": "钢" },
-    { "preset_key": "pin_cyl__119_1_5x25", "name": "圆柱销 A级", "specification": "5×25", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-5X25", "base_unit": "件", "texture": "钢" },
-    { "preset_key": "pin_cyl__119_1_6x30", "name": "圆柱销 A级", "specification": "6×30", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-6X30", "base_unit": "件", "texture": "钢" },
-    { "preset_key": "pin_cyl__119_1_8x40", "name": "圆柱销 A级", "specification": "8×40", "gb_standard": "GB/T 119.1", "gb_code": "GB119.1-8X40", "base_unit": "件", "texture": "钢" },
-    { "preset_key": "key_flat__1096_8x7x30", "name": "普通平键 (A型)", "specification": "8×7×30", "gb_standard": "GB/T 1096", "gb_code": "GB1096-8X7X30", "base_unit": "件", "texture": "45#钢" },
-    { "preset_key": "key_flat__1096_10x8x40", "name": "普通平键 (A型)", "specification": "10×8×40", "gb_standard": "GB/T 1096", "gb_code": "GB1096-10X8X40", "base_unit": "件", "texture": "45#钢" },
-    { "preset_key": "key_flat__1096_12x8x50", "name": "普通平键 (A型)", "specification": "12×8×50", "gb_standard": "GB/T 1096", "gb_code": "GB1096-12X8X50", "base_unit": "件", "texture": "45#钢" },
-    { "preset_key": "ring_shaft__894_1_15", "name": "轴用弹性挡圈-A型", "specification": "15", "gb_standard": "GB/T 894.1", "gb_code": "GB894.1-15", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_shaft__894_1_20", "name": "轴用弹性挡圈-A型", "specification": "20", "gb_standard": "GB/T 894.1", "gb_code": "GB894.1-20", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_shaft__894_1_25", "name": "轴用弹性挡圈-A型", "specification": "25", "gb_standard": "GB/T 894.1", "gb_code": "GB894.1-25", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_shaft__894_1_30", "name": "轴用弹性挡圈-A型", "specification": "30", "gb_standard": "GB/T 894.1", "gb_code": "GB894.1-30", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_hole__893_1_30", "name": "孔用弹性挡圈-A型", "specification": "30", "gb_standard": "GB/T 893.1", "gb_code": "GB893.1-30", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_hole__893_1_40", "name": "孔用弹性挡圈-A型", "specification": "40", "gb_standard": "GB/T 893.1", "gb_code": "GB893.1-40", "base_unit": "件", "texture": "65Mn" },
-    { "preset_key": "ring_hole__893_1_50", "name": "孔用弹性挡圈-A型", "specification": "50", "gb_standard": "GB/T 893.1", "gb_code": "GB893.1-50", "base_unit": "件", "texture": "65Mn" }
+    {
+      "preset_key": "cn_pin_cylindrical_gbt119_6x30",
+      "name": "圆柱销",
+      "specification": "6×30",
+      "gb_standard": "GB/T 119.1",
+      "gb_code": "GB119.1-6X30",
+      "base_unit": "件",
+      "texture": "45#钢"
+    },
+    {
+      "preset_key": "cn_pin_taper_gbt117_6x40",
+      "name": "圆锥销",
+      "specification": "6×40",
+      "gb_standard": "GB/T 117",
+      "gb_code": "GB117-6X40",
+      "base_unit": "件",
+      "texture": "45#钢"
+    },
+    {
+      "preset_key": "cn_pin_split_gbt91_3_2x25",
+      "name": "开口销",
+      "specification": "3.2×25",
+      "gb_standard": "GB/T 91",
+      "gb_code": "GB91-3.2X25",
+      "base_unit": "件",
+      "texture": "低碳钢"
+    },
+    {
+      "preset_key": "cn_key_flat_gbt1096_8x7x40",
+      "name": "平键A型",
+      "specification": "8×7×40",
+      "gb_standard": "GB/T 1096",
+      "gb_code": "GB1096-8X7X40",
+      "base_unit": "件",
+      "texture": "45#钢"
+    },
+    {
+      "preset_key": "cn_key_flat_gbt1096_10x8x50",
+      "name": "平键A型",
+      "specification": "10×8×50",
+      "gb_standard": "GB/T 1096",
+      "gb_code": "GB1096-10X8X50",
+      "base_unit": "件",
+      "texture": "45#钢"
+    },
+    {
+      "preset_key": "cn_ring_ext_gbt894_30",
+      "name": "轴用弹性挡圈",
+      "specification": "30",
+      "gb_standard": "GB/T 894.1",
+      "gb_code": "GB894.1-30",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    },
+    {
+      "preset_key": "cn_ring_int_gbt893_40",
+      "name": "孔用弹性挡圈",
+      "specification": "40",
+      "gb_standard": "GB/T 893.1",
+      "gb_code": "GB893.1-40",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    }
   ]
 }
