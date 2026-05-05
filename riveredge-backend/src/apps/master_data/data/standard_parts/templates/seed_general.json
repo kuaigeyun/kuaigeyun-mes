@@ -1,0 +1,18 @@
+{
+  "sortOrder": 909,
+  "primaryCategory": "general",
+  "id": "seed_general",
+  "name": "其它（种子·待完善）",
+  "description": "【种子】未归入上列时使用 general。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_general__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "",
+      "gb_standard": "",
+      "gb_code": "SEED-GEN-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

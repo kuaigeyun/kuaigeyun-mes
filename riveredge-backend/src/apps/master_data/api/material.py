@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from typing import List, Optional, Annotated, Dict, Any
 from loguru import logger
+from pydantic import BaseModel, Field, ConfigDict
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -1516,6 +1517,66 @@ async def bulk_update_material_tracking(
     """
     try:
         return await MaterialService.bulk_update_material_tracking(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+class LoadStandardPartsPresetRequest(BaseModel):
+    """导入标准件预设：目标分组 + 勾选条目 + 主编码策略。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    material_group_uuid: str = Field(
+        ...,
+        alias="materialGroupUuid",
+        description="目标物料分组 UUID（导入的物料均归入该组）",
+    )
+    preset_keys: List[str] = Field(
+        default_factory=list,
+        alias="presetKeys",
+        description="标准件 presetKey 列表，与 preset-preview 中 items[].presetKey 一致",
+    )
+    code_mode: str = Field(
+        "auto",
+        alias="codeMode",
+        description="auto=按组织物料编码规则生成主编码；gb=使用目录中的国标推荐编号作为主编码",
+    )
+
+
+@router.get("/standard-parts/preset-preview", summary="获取标准件预设目录")
+async def get_standard_parts_preset_preview(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """按类型返回常用标准件（含 GB/T 推荐编号），不含租户业务数据。"""
+    return MaterialService.get_standard_parts_preset_catalog()
+
+
+@router.post("/standard-parts/load-preset", summary="按勾选导入标准件物料")
+async def load_standard_parts_preset(
+    body: LoadStandardPartsPresetRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    将所选标准件写入指定物料分组；采购件（Buy）。
+    - **codeMode=auto**：主编码走 MATERIAL_CODE 编码规则（或回退生成）。
+    - **codeMode=gb**：主编码使用目录中的国标推荐编号（gbCode）；已存在则跳过。
+    """
+    try:
+        result = await MaterialService.load_standard_parts_preset(
+            tenant_id,
+            body.material_group_uuid,
+            body.preset_keys,
+            body.code_mode,
+        )
+        return {
+            "created": result["created"],
+            "skippedDuplicateCode": result["skipped_duplicate_code"],
+            "skippedDuplicateItem": result["skipped_duplicate_item"],
+            "failed": result["failed"],
+            "message": result["message"],
+        }
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

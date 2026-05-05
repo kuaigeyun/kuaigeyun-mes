@@ -101,23 +101,6 @@ export const defectTypeApi = {
   },
 
   /**
-   * 获取不良品项预设列表（用于预览与勾选）
-   */
-  getPresetPreview: async (): Promise<PresetDefectTypeItem[]> => {
-    return api.get('/apps/master-data/process/defect-types/preset-preview');
-  },
-
-  /**
-   * 加载不良品项预设（可仅创建选中的 codes）
-   */
-  loadPreset: async (codes?: string[]): Promise<{ created: number; message: string }> => {
-    return api.post(
-      '/apps/master-data/process/defect-types/load-preset',
-      codes != null ? { codes } : undefined
-    );
-  },
-
-  /**
    * 批量解析或创建不良品项（用于工序导入）
    * 已存在则返回 uuid，不存在则创建（编号按规则自动）
    */
@@ -170,20 +153,23 @@ export const operationApi = {
   },
 
   /**
-   * 获取工序预设列表（用于预览与勾选）
+   * 获取工序行业预设目录（行业 → 工序 → 附带不良名称预览）
    */
-  getPresetPreview: async (): Promise<PresetOperationItem[]> => {
+  getPresetPreview: async (): Promise<OperationPresetCatalog> => {
     return api.get('/apps/master-data/process/operations/preset-preview');
   },
 
   /**
-   * 加载工序预设（可仅创建选中的 codes）
+   * 按行业加载所选工序预设（创建工序与不良并绑定）
    */
-  loadPreset: async (codes?: string[]): Promise<{ created: number; message: string }> => {
-    return api.post(
-      '/apps/master-data/process/operations/load-preset',
-      codes != null ? { codes } : undefined
-    );
+  loadPreset: async (
+    industryId: string,
+    presetKeys: string[]
+  ): Promise<LoadOperationPresetResponse> => {
+    return api.post('/apps/master-data/process/operations/load-preset', {
+      industryId,
+      presetKeys,
+    });
   },
 
   /**
@@ -516,17 +502,41 @@ export const sopExecutionApi = {
   },
 };
 
-/** 不良品项预设（与后端 PRESET_DEFECT_TYPES 结构一致） */
-export interface PresetDefectTypeItem {
-  code: string;
+/** 工序预设目录中单条不良预览 */
+export interface OperationPresetDefectPreview {
   name: string;
   category?: string;
+  description?: string;
 }
 
-/** 工序预设（与后端 PRESET_OPERATIONS 结构一致） */
-export interface PresetOperationItem {
-  code: string;
+/** 工序预设目录中的工序行 */
+export interface OperationPresetRow {
+  presetKey: string;
   name: string;
-  sort_order?: number;
+  sortOrder: number;
+  defectPresets: OperationPresetDefectPreview[];
+}
+
+/** 工序预设目录中的行业 */
+export interface OperationPresetIndustry {
+  id: string;
+  name: string;
+  description?: string;
+  operations: OperationPresetRow[];
+}
+
+/** GET /operations/preset-preview 响应 */
+export interface OperationPresetCatalog {
+  industries: OperationPresetIndustry[];
+}
+
+/** POST /operations/load-preset 响应 */
+export interface LoadOperationPresetResponse {
+  createdOperations: number;
+  skippedOperations: number;
+  createdDefectTypes: number;
+  reusedDefectTypes: number;
+  linkedPairs: number;
+  message: string;
 }
 

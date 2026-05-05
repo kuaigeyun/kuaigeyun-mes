@@ -1,0 +1,14 @@
+{
+  "sortOrder": 604,
+  "primaryCategory": "auxiliary_materials",
+  "id": "aux_assembly_material",
+  "name": "辅材-组装辅料",
+  "description": "生料带、扎带、缠绕管、热缩管等",
+  "items": [
+    { "preset_key": "aux_teflon_tape", "name": "聚四氟乙烯生料带", "specification": "12mm×10m", "gb_standard": "GB/T 20874", "gb_code": "AUX-TEFLON-TAPE", "base_unit": "卷", "texture": "PTFE" },
+    { "preset_key": "aux_cable_tie_200", "name": "尼龙扎带", "specification": "4×200mm", "gb_standard": "通用标准", "gb_code": "AUX-TIE-200", "base_unit": "包", "texture": "尼龙66" },
+    { "preset_key": "aux_heat_shrink_6", "name": "热缩套管", "specification": "Φ6 黑色", "gb_standard": "通用标准", "gb_code": "AUX-SHRINK-6", "base_unit": "米", "texture": "PE" },
+    { "preset_key": "aux_weld_rod_j422_3_2", "name": "碳钢焊条", "specification": "J422 Φ3.2", "gb_standard": "GB/T 5117", "gb_code": "WELD-J422-3.2", "base_unit": "盒", "texture": "组合件" },
+    { "preset_key": "aux_weld_rod_j422_4_0", "name": "碳钢焊条", "specification": "J422 Φ4.0", "gb_standard": "GB/T 5117", "gb_code": "WELD-J422-4.0", "base_unit": "盒", "texture": "组合件" }
+  ]
+}

@@ -7,7 +7,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status, Body
 from typing import Any, List, Optional, Annotated
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
@@ -138,32 +138,34 @@ async def batch_resolve_or_create_defect_types(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-class LoadDefectTypePresetRequest(BaseModel):
-    """加载不良品项预设请求：可指定只创建选中的 code 列表"""
-    codes: Optional[List[str]] = Field(None, description="要创建的预设不良品项 code 列表，不传则创建全部")
+_DEFECT_PRESET_DEPRECATED_DETAIL = (
+    "不良品独立预设已移除：请在「工序管理」中选择行业并加载工序预设，"
+    "系统会按编码规则创建工序并创建/复用不良品项且自动绑定。"
+)
 
 
-@router.get("/defect-types/preset-preview", summary="获取不良品项预设预览")
+@router.get("/defect-types/preset-preview", summary="[已废弃] 获取不良品项预设预览")
 async def get_defect_type_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
-    """返回预设不良品项列表，用于预览与勾选后再确认创建。"""
-    return list(ProcessService.PRESET_DEFECT_TYPES)
+    """本接口已废弃，不再返回预设列表。"""
+    raise FastAPIHTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=_DEFECT_PRESET_DEPRECATED_DETAIL,
+    )
 
 
-@router.post("/defect-types/load-preset", summary="加载不良品项预设")
+@router.post("/defect-types/load-preset", summary="[已废弃] 加载不良品项预设")
 async def load_preset_defect_types(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    body: Optional[LoadDefectTypePresetRequest] = Body(None),
 ):
-    """
-    加载中国中小制造业常见不良品项预设数据。请求体可传 codes 数组，只创建选中的预设项；不传则创建全部。
-    """
-    codes = body.codes if body else None
-    count = await ProcessService.load_preset_defect_types_sme(tenant_id, codes=codes)
-    return {"created": count, "message": f"已加载 {count} 个不良品项"}
+    """本接口已废弃，不再创建不良品预设数据。"""
+    raise FastAPIHTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=_DEFECT_PRESET_DEPRECATED_DETAIL,
+    )
 
 
 @router.get("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="获取不良品详情")
@@ -287,31 +289,53 @@ async def list_operations(
 
 
 class LoadOperationPresetRequest(BaseModel):
-    """加载工序预设请求：可指定只创建选中的 code 列表"""
-    codes: Optional[List[str]] = Field(None, description="要创建的预设工序 code 列表，不传则创建全部")
+    """按行业加载所选工序预设（工序与不良编码由编码规则生成）。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    industry_id: str = Field(..., alias="industryId", description="行业 id，与 preset-preview 中 industries[].id 一致")
+    preset_keys: List[str] = Field(
+        default_factory=list,
+        alias="presetKeys",
+        description="所选工序 presetKey 列表，与 preset-preview 中 operations[].presetKey 一致；空列表不创建",
+    )
 
 
-@router.get("/operations/preset-preview", summary="获取工序预设预览")
+@router.get("/operations/preset-preview", summary="获取工序行业预设目录")
 async def get_operation_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
-    """返回预设工序列表，用于预览与勾选后再确认创建。"""
-    return list(ProcessService.PRESET_OPERATIONS)
+    """返回行业树及每行业下的工序预设与附带不良名称预览（不含业务 code）。"""
+    return ProcessService.get_operation_preset_catalog()
 
 
-@router.post("/operations/load-preset", summary="加载工序预设")
+@router.post("/operations/load-preset", summary="按行业加载工序预设")
 async def load_preset_operations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    body: Optional[LoadOperationPresetRequest] = Body(None),
+    body: LoadOperationPresetRequest,
 ):
     """
-    加载中国中小制造业常见工序预设数据。请求体可传 codes 数组，只创建选中的预设项；不传则创建全部。
+    按所选行业与 presetKey 批量创建工序（OPERATION_CODE）、不良品项（DEFECT_TYPE_CODE 或按名称复用），
+    并写入工序-不良关联。同名未删除工序会跳过。
     """
-    codes = body.codes if body else None
-    count = await ProcessService.load_preset_operations_sme(tenant_id, codes=codes)
-    return {"created": count, "message": f"已加载 {count} 个工序"}
+    try:
+        result = await ProcessService.load_preset_operations_by_industry(
+            tenant_id,
+            body.industry_id,
+            body.preset_keys,
+        )
+        return {
+            "createdOperations": result["created_operations"],
+            "skippedOperations": result["skipped_operations"],
+            "createdDefectTypes": result["created_defect_types"],
+            "reusedDefectTypes": result["reused_defect_types"],
+            "linkedPairs": result["linked_pairs"],
+            "message": result["message"],
+        }
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/operations/{operation_uuid}", response_model=OperationResponse, summary="获取工序详情")

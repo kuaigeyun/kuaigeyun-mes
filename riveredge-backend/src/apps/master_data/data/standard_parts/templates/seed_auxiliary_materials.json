@@ -1,0 +1,18 @@
+{
+  "sortOrder": 905,
+  "primaryCategory": "auxiliary_materials",
+  "id": "seed_auxiliary_materials",
+  "name": "辅材（种子·待完善）",
+  "description": "【种子】间接生产辅材（砂纸、磨料、工装辅料等）。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_auxiliary_materials__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "粒度/尺寸等",
+      "gb_standard": "",
+      "gb_code": "SEED-AUX-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

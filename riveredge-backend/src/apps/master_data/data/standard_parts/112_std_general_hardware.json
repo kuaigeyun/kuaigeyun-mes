@@ -1,0 +1,21 @@
+{
+  "sortOrder": 112,
+  "primaryCategory": "standard_parts",
+  "id": "std_general_hardware",
+  "name": "标准件-通用五金",
+  "description": "脚轮、合页、拉手、搭扣等机械结构标准件",
+  "items": [
+    { "preset_key": "caster__2in_sb", "name": "万向带刹车脚轮", "specification": "2英寸 (50mm)", "gb_standard": "GB/T 14687", "gb_code": "CASTER-2IN-SB", "base_unit": "个", "texture": "聚氨酯" },
+    { "preset_key": "caster__3in_sb", "name": "万向带刹车脚轮", "specification": "3英寸 (75mm)", "gb_standard": "GB/T 14687", "gb_code": "CASTER-3IN-SB", "base_unit": "个", "texture": "聚氨酯" },
+    { "preset_key": "caster__4in_sb", "name": "万向带刹车脚轮", "specification": "4英寸 (100mm)", "gb_standard": "GB/T 14687", "gb_code": "CASTER-4IN-SB", "base_unit": "个", "texture": "聚氨酯" },
+    { "preset_key": "caster__5in_sb", "name": "万向带刹车脚轮", "specification": "5英寸 (125mm)", "gb_standard": "GB/T 14687", "gb_code": "CASTER-5IN-SB", "base_unit": "个", "texture": "聚氨酯" },
+    { "preset_key": "hinge__3in_ss", "name": "不锈钢平开合页", "specification": "3英寸", "gb_standard": "QB/T 2189", "gb_code": "HINGE-3IN-SS", "base_unit": "个", "texture": "304不锈钢" },
+    { "preset_key": "hinge__4in_ss", "name": "不锈钢平开合页", "specification": "4英寸", "gb_standard": "QB/T 2189", "gb_code": "HINGE-4IN-SS", "base_unit": "个", "texture": "304不锈钢" },
+    { "preset_key": "hinge_damp_110", "name": "液压阻尼合页", "specification": "110度 全盖", "gb_standard": "QB/T 2189", "gb_code": "HINGE-DAMP-110", "base_unit": "个", "texture": "冷轧钢" },
+    { "preset_key": "handle_al_90", "name": "铝合金拉手", "specification": "孔距90mm", "gb_standard": "QB/T 2189", "gb_code": "HANDLE-90-AL", "base_unit": "个", "texture": "铝合金" },
+    { "preset_key": "handle_al_120", "name": "铝合金拉手", "specification": "孔距120mm", "gb_standard": "QB/T 2189", "gb_code": "HANDLE-120-AL", "base_unit": "个", "texture": "铝合金" },
+    { "preset_key": "handle_al_150", "name": "铝合金拉手", "specification": "孔距150mm", "gb_standard": "QB/T 2189", "gb_code": "HANDLE-150-AL", "base_unit": "个", "texture": "铝合金" },
+    { "preset_key": "latch_toggle_small", "name": "不锈钢搭扣", "specification": "小型", "gb_standard": "通用标准", "gb_code": "LATCH-TOGGLE-S", "base_unit": "个", "texture": "304不锈钢" },
+    { "preset_key": "latch_toggle_medium", "name": "不锈钢搭扣", "specification": "中型", "gb_standard": "通用标准", "gb_code": "LATCH-TOGGLE-M", "base_unit": "个", "texture": "304不锈钢" }
+  ]
+}

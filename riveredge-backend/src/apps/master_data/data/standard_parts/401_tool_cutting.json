@@ -1,0 +1,14 @@
+{
+  "sortOrder": 401,
+  "primaryCategory": "tools_and_gauges",
+  "id": "tool_cutting",
+  "name": "刀具与量具-切削刀具",
+  "description": "铣刀、钻头、丝锥、刀片等",
+  "items": [
+    { "preset_key": "tool_mill_d10", "name": "立铣刀", "specification": "D10 HSS", "gb_standard": "GB/T 6117.1", "gb_code": "TOOL-MILL-D10", "base_unit": "把", "texture": "高速钢" },
+    { "preset_key": "tool_drill_d8_5", "name": "麻花钻", "specification": "D8.5 HSS", "gb_standard": "GB/T 6135.1", "gb_code": "TOOL-DRILL-D8.5", "base_unit": "把", "texture": "高速钢" },
+    { "preset_key": "tool_insert_wnmg", "name": "硬质合金刀片", "specification": "WNMG080408", "gb_standard": "通用标准", "gb_code": "TOOL-INSERT-WNMG", "base_unit": "盒", "texture": "硬质合金" },
+    { "preset_key": "tool_saw_hand_12", "name": "手用钢锯条", "specification": "12英寸 24T", "gb_standard": "GB/T 6080", "gb_code": "SAW-HAND-12", "base_unit": "把", "texture": "双金属" },
+    { "preset_key": "tool_saw_band_27", "name": "双金属带锯条", "specification": "27×0.9×3505", "gb_standard": "通用标准", "gb_code": "SAW-BAND-27", "base_unit": "根", "texture": "双金属" }
+  ]
+}

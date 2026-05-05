@@ -1,0 +1,12 @@
+{
+  "sortOrder": 205,
+  "primaryCategory": "raw_materials",
+  "id": "raw_nonmetal_material",
+  "name": "原材料-非金属材料",
+  "description": "尼龙、POM、电木、有机玻璃等",
+  "items": [
+    { "preset_key": "raw_nylon_rod_d50", "name": "尼龙棒", "specification": "Φ50", "gb_standard": "通用标准", "gb_code": "RAW-NYLON-D50", "base_unit": "米", "texture": "MC尼龙" },
+    { "preset_key": "raw_pom_plate_20", "name": "POM板", "specification": "20mm", "gb_standard": "通用标准", "gb_code": "RAW-POM-20", "base_unit": "平方米", "texture": "聚甲醛" },
+    { "preset_key": "raw_acrylic_5", "name": "有机玻璃板", "specification": "5mm", "gb_standard": "通用标准", "gb_code": "RAW-ACRYLIC-5", "base_unit": "平方米", "texture": "亚克力" }
+  ]
+}

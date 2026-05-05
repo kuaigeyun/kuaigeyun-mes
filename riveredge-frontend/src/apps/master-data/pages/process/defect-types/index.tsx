@@ -7,7 +7,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -16,7 +16,7 @@ import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/lay
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
 
-import { defectTypeApi, type PresetDefectTypeItem } from '../../../services/process';
+import { defectTypeApi } from '../../../services/process';
 import type { DefectType, DefectTypeCreate } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode } from '../../../../../services/codeRule';
@@ -42,11 +42,6 @@ const DefectTypesPage: React.FC = () => {
   // Modal 相关状态（创建/编辑不良品）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
-  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
-  const [presetModalVisible, setPresetModalVisible] = useState(false);
-  const [presetList, setPresetList] = useState<PresetDefectTypeItem[]>([]);
-  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
-  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const defectDetailReqRef = useRef(0);
 
   const defectTypeDetailColumns: ProDescriptionsItemProps<DefectType>[] = useMemo(
@@ -533,25 +528,6 @@ const DefectTypesPage: React.FC = () => {
             {t('field.defectType.createTitle') + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
-            key="loadPreset"
-            loading={loadPresetLoading}
-            onClick={async () => {
-              try {
-                setLoadPresetLoading(true);
-                const list = await defectTypeApi.getPresetPreview();
-                setPresetList(list);
-                setSelectedPresetCodes(list.map((x) => x.code));
-                setPresetModalVisible(true);
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              } finally {
-                setLoadPresetLoading(false);
-              }
-            }}
-          >
-            {t('field.defectType.loadPreset')}
-          </Button>,
-          <Button
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}
@@ -601,55 +577,6 @@ const DefectTypesPage: React.FC = () => {
         onSuccess={handleModalSuccess}
       />
 
-      <Modal
-        title={t('field.defectType.loadPreset')}
-        open={presetModalVisible}
-        onCancel={() => setPresetModalVisible(false)}
-        width={560}
-        footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
-          <Button
-            key="confirm"
-            type="primary"
-            loading={presetConfirmLoading}
-            disabled={selectedPresetCodes.length === 0}
-            onClick={async () => {
-              try {
-                setPresetConfirmLoading(true);
-                const res = await defectTypeApi.loadPreset(selectedPresetCodes);
-                messageApi.success(res.message);
-                setPresetModalVisible(false);
-                actionRef.current?.reload();
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              } finally {
-                setPresetConfirmLoading(false);
-              }
-            }}
-          >
-            {t('common.confirm')}
-          </Button>,
-        ]}
-      >
-        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
-          {t('app.master-data.presetModalDesc')}
-        </p>
-        <Table<PresetDefectTypeItem>
-          size="small"
-          rowKey="code"
-          dataSource={presetList}
-          pagination={false}
-          scroll={{ y: 280 }}
-          rowSelection={{
-            selectedRowKeys: selectedPresetCodes,
-            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
-          }}
-          columns={[
-            { title: '不良品编号', dataIndex: 'code', width: 120 },
-            { title: '不良品名称', dataIndex: 'name', width: 140 },
-          ]}
-        />
-      </Modal>
     </ListPageTemplate>
   );
 };

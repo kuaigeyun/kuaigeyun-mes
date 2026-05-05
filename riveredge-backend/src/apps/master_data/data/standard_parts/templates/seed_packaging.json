@@ -1,0 +1,18 @@
+{
+  "sortOrder": 907,
+  "primaryCategory": "packaging",
+  "id": "seed_packaging",
+  "name": "包材（种子·待完善）",
+  "description": "【种子】纸箱、托盘、缠绕膜等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_packaging__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "尺寸/承重等",
+      "gb_standard": "",
+      "gb_code": "SEED-PKG-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

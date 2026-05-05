@@ -1,0 +1,11 @@
+{
+  "sortOrder": 703,
+  "primaryCategory": "consumables",
+  "id": "cons_office_supply",
+  "name": "耗材-办公用品",
+  "description": "复印纸、墨粉、笔记本等",
+  "items": [
+    { "preset_key": "cons_paper_a4", "name": "A4复印纸", "specification": "80g 500张/包", "gb_standard": "GB/T 24984", "gb_code": "CONS-PAPER-A4", "base_unit": "包", "texture": "木浆" },
+    { "preset_key": "cons_toner_hp", "name": "硒鼓/碳粉", "specification": "通用型", "gb_standard": "通用标准", "gb_code": "CONS-TONER", "base_unit": "个", "texture": "组合件" }
+  ]
+}

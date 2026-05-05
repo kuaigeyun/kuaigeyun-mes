@@ -1,0 +1,18 @@
+{
+  "sortOrder": 906,
+  "primaryCategory": "consumables",
+  "id": "seed_consumables",
+  "name": "耗材（种子·待完善）",
+  "description": "【种子】劳保、清洁、办公易耗等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_consumables__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "规格/包装",
+      "gb_standard": "",
+      "gb_code": "SEED-CONS-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

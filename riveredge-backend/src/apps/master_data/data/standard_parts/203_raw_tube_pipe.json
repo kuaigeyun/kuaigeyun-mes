@@ -1,0 +1,16 @@
+{
+  "sortOrder": 203,
+  "primaryCategory": "raw_materials",
+  "id": "raw_metal_tube",
+  "name": "原材料-金属管材",
+  "description": "无缝钢管、焊接圆管、不锈钢管等",
+  "items": [
+    { "preset_key": "tube_sm__8162_20x2", "name": "无缝钢管", "specification": "Φ20×2", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-20X2", "base_unit": "米", "texture": "20#钢" },
+    { "preset_key": "tube_sm__8162_25x3", "name": "无缝钢管", "specification": "Φ25×3", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-25X3", "base_unit": "米", "texture": "20#钢" },
+    { "preset_key": "tube_sm__8162_32x3", "name": "无缝钢管", "specification": "Φ32×3", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-32X3", "base_unit": "米", "texture": "20#钢" },
+    { "preset_key": "tube_sm__8162_48x4", "name": "无缝钢管", "specification": "Φ48×4", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-48X4", "base_unit": "米", "texture": "20#钢" },
+    { "preset_key": "tube_sm__8162_60x5", "name": "无缝钢管", "specification": "Φ60×5", "gb_standard": "GB/T 8162", "gb_code": "TUBE-SM-60X5", "base_unit": "米", "texture": "20#钢" },
+    { "preset_key": "tube_ss__12771_25x2", "name": "不锈钢焊接钢管", "specification": "Φ25×2", "gb_standard": "GB/T 12771", "gb_code": "TUBE-SS-25X2", "base_unit": "米", "texture": "304" },
+    { "preset_key": "tube_ss__12771_38x2", "name": "不锈钢焊接钢管", "specification": "Φ38×2", "gb_standard": "GB/T 12771", "gb_code": "TUBE-SS-38X2", "base_unit": "米", "texture": "304" }
+  ]
+}

@@ -52,8 +52,11 @@ class TenantInitDataService:
         {"key": "position_preset", "name": "职位预设", "description": "总经理、生产经理等常用职位"},
         {"key": "role_preset", "name": "角色预设", "description": "部门经理、普通员工等常用角色"},
         {"key": "warehouse_preset", "name": "仓库预设", "description": "原料仓、成品仓、半成品仓、不良品仓等"},
-        {"key": "operation_preset", "name": "工序预设", "description": "下料、组装、检验、包装等常见工序"},
-        {"key": "defect_type_preset", "name": "不良品项预设", "description": "尺寸不良、外观不良、功能不良等"},
+        {
+            "key": "operation_preset",
+            "name": "工序预设",
+            "description": "已改为在「工序管理」中按行业加载；勾选此项不会自动写入数据，请到工序页选择行业与工序预设。",
+        },
         {"key": "variant_attribute_preset", "name": "属性定义预设", "description": "颜色、规格、材质、等级、表面处理等"},
     ]
 
@@ -63,25 +66,23 @@ class TenantInitDataService:
             "name": "离散制造通用版",
             "description": "适用于一般的五金、机械、注塑等离散制造企业。",
             "keys": [
-                "department_preset", 
-                "position_preset", 
-                "role_preset", 
+                "department_preset",
+                "position_preset",
+                "role_preset",
                 "warehouse_preset",
                 "operation_preset",
-                "defect_type_preset"
             ]
         },
         "electronics_assembly": {
             "name": "电子组装版",
             "description": "适用于 PCBA、3C 类电子产品组装与测试。",
             "keys": [
-                "department_preset", 
-                "position_preset", 
-                "role_preset", 
+                "department_preset",
+                "position_preset",
+                "role_preset",
                 "warehouse_preset",
                 "operation_preset",
-                "defect_type_preset",
-                "variant_attribute_preset"
+                "variant_attribute_preset",
             ]
         }
     }
@@ -289,10 +290,6 @@ class TenantInitDataService:
         if key == "operation_preset":
             from apps.master_data.services.process_service import ProcessService
             return await ProcessService.load_preset_operations_sme(tenant_id)
-
-        if key == "defect_type_preset":
-            from apps.master_data.services.process_service import ProcessService
-            return await ProcessService.load_preset_defect_types_sme(tenant_id)
 
         if key == "variant_attribute_preset":
             from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService

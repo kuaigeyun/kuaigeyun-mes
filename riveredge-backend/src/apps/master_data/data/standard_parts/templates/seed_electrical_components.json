@@ -1,0 +1,18 @@
+{
+  "sortOrder": 902,
+  "primaryCategory": "electrical_components",
+  "id": "seed_electrical_components",
+  "name": "电气与自动化（种子·待完善）",
+  "description": "【种子】低压电器、传感器、线束附件等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_electrical_components__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "型号/电压/电流等",
+      "gb_standard": "",
+      "gb_code": "SEED-ELEC-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

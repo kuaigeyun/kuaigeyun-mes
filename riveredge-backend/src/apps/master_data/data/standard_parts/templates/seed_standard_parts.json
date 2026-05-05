@@ -1,0 +1,18 @@
+{
+  "sortOrder": 900,
+  "primaryCategory": "standard_parts",
+  "id": "seed_standard_parts",
+  "name": "标准件（种子·待完善）",
+  "description": "【种子】位于 templates/ 不会被加载。复制到 standard_parts/ 根目录，改文件名与 id，补全 items；preset_key 全局唯一。",
+  "items": [
+    {
+      "preset_key": "seed_standard_parts__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "按规格填写",
+      "gb_standard": "GB/T 或企标",
+      "gb_code": "SEED-STD-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

@@ -48,6 +48,8 @@ import type {
   MaterialSerialUpdate,
   MaterialSerialListParams,
   MaterialSerialListResponse,
+  StandardPartsPresetCatalog,
+  LoadStandardPartsPresetResponse,
 } from '../types/material';
 
 function optionalNumberId(value: unknown): number | null {
@@ -261,6 +263,24 @@ export const materialApi = {
       material_code: materialCode,
       material_name: materialName,
     });
+  },
+
+  /**
+   * 标准件预设目录（按类型，含 GB/T 推荐主编码）
+   */
+  getStandardPartsPresetPreview: async (): Promise<StandardPartsPresetCatalog> => {
+    return api.get('/apps/master-data/materials/standard-parts/preset-preview');
+  },
+
+  /**
+   * 按勾选导入标准件到指定物料分组
+   */
+  loadStandardPartsPreset: async (body: {
+    materialGroupUuid: string;
+    presetKeys: string[];
+    codeMode: 'auto' | 'gb';
+  }): Promise<LoadStandardPartsPresetResponse> => {
+    return api.post('/apps/master-data/materials/standard-parts/load-preset', body);
   },
 };
 

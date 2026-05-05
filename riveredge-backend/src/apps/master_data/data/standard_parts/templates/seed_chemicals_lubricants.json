@@ -1,0 +1,18 @@
+{
+  "sortOrder": 904,
+  "primaryCategory": "chemicals_lubricants",
+  "id": "seed_chemicals_lubricants",
+  "name": "油品与化学品（种子·待完善）",
+  "description": "【种子】切削液、润滑油、清洗剂等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_chemicals_lubricants__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "粘度/容量/浓度等",
+      "gb_standard": "",
+      "gb_code": "SEED-CHEM-REPLACE",
+      "base_unit": "L",
+      "texture": ""
+    }
+  ]
+}

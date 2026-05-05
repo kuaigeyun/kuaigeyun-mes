@@ -1,0 +1,18 @@
+{
+  "sortOrder": 908,
+  "primaryCategory": "mro_spares",
+  "id": "seed_mro_spares",
+  "name": "MRO与备件（种子·待完善）",
+  "description": "【种子】设备维修件、易损备件等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_mro_spares__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "适配机型/件号",
+      "gb_standard": "",
+      "gb_code": "SEED-MRO-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

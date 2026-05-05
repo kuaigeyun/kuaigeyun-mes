@@ -1,0 +1,12 @@
+{
+  "sortOrder": 303,
+  "primaryCategory": "electrical_components",
+  "id": "ele_control_sensor",
+  "name": "电气与自动化-控制与感测",
+  "description": "PLC模块、人机界面、各类精密传感器",
+  "items": [
+    { "preset_key": "ele_plc_cpu_1214c", "name": "S7-1200 CPU模块", "specification": "CPU 1214C DC/DC/DC", "gb_standard": "通用标准", "gb_code": "PLC-1214C", "base_unit": "个", "texture": "组合件" },
+    { "preset_key": "ele_hmi_7in", "name": "触摸屏 HMI", "specification": "7英寸 彩色", "gb_standard": "通用标准", "gb_code": "HMI-7IN", "base_unit": "个", "texture": "组合件" },
+    { "preset_key": "ele_sensor_laser", "name": "激光测距传感器", "specification": "测量范围0-2m", "gb_standard": "通用标准", "gb_code": "SENSOR-LASER-2M", "base_unit": "个", "texture": "组合件" }
+  ]
+}

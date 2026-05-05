@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -16,7 +16,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { OperationFormModal } from '../../../components/OperationFormModal';
-import { operationApi, defectTypeApi, type PresetOperationItem } from '../../../services/process';
+import { operationApi, defectTypeApi, type OperationPresetCatalog, type OperationPresetRow } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -44,10 +44,16 @@ const OperationsPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
-  const [presetList, setPresetList] = useState<PresetOperationItem[]>([]);
-  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [presetCatalog, setPresetCatalog] = useState<OperationPresetCatalog | null>(null);
+  const [presetIndustryId, setPresetIndustryId] = useState<string>('');
+  const [selectedPresetKeys, setSelectedPresetKeys] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const operationDetailReqRef = useRef(0);
+
+  const presetOperations = useMemo(() => {
+    if (!presetCatalog?.industries?.length || !presetIndustryId) return [];
+    return presetCatalog.industries.find((i) => i.id === presetIndustryId)?.operations ?? [];
+  }, [presetCatalog, presetIndustryId]);
 
   const operationDetailColumns: ProDescriptionsItemProps<Operation>[] = useMemo(
     () => [
@@ -636,9 +642,12 @@ const OperationsPage: React.FC = () => {
             onClick={async () => {
               try {
                 setLoadPresetLoading(true);
-                const list = await operationApi.getPresetPreview();
-                setPresetList(list);
-                setSelectedPresetCodes(list.map((x) => x.code));
+                const catalog = await operationApi.getPresetPreview();
+                setPresetCatalog(catalog);
+                const first = catalog.industries?.[0];
+                const iid = first?.id ?? '';
+                setPresetIndustryId(iid);
+                setSelectedPresetKeys((first?.operations ?? []).map((o) => o.presetKey));
                 setPresetModalVisible(true);
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
@@ -745,18 +754,18 @@ const OperationsPage: React.FC = () => {
         title={t('field.operation.loadPreset')}
         open={presetModalVisible}
         onCancel={() => setPresetModalVisible(false)}
-        width={560}
+        width={760}
         footer={[
           <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
           <Button
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}
-            disabled={selectedPresetCodes.length === 0}
+            disabled={!presetIndustryId || selectedPresetKeys.length === 0}
             onClick={async () => {
               try {
                 setPresetConfirmLoading(true);
-                const res = await operationApi.loadPreset(selectedPresetCodes);
+                const res = await operationApi.loadPreset(presetIndustryId, selectedPresetKeys);
                 messageApi.success(res.message);
                 setPresetModalVisible(false);
                 actionRef.current?.reload();
@@ -772,22 +781,61 @@ const OperationsPage: React.FC = () => {
         ]}
       >
         <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
-          {t('app.master-data.presetModalDesc')}
+          {t('app.master-data.operations.presetModalHint')}
         </p>
-        <Table<PresetOperationItem>
+        <div style={{ marginBottom: 12 }}>
+          <Typography.Text type="secondary" style={{ marginRight: 8 }}>
+            {t('app.master-data.operations.presetIndustryLabel')}
+          </Typography.Text>
+          <Select
+            style={{ minWidth: 260 }}
+            placeholder={t('app.master-data.operations.presetIndustryPlaceholder')}
+            value={presetIndustryId || undefined}
+            options={(presetCatalog?.industries ?? []).map((ind) => ({
+              value: ind.id,
+              label: ind.name,
+            }))}
+            onChange={(v: string) => {
+              setPresetIndustryId(v);
+              const ind = presetCatalog?.industries?.find((i) => i.id === v);
+              setSelectedPresetKeys((ind?.operations ?? []).map((o) => o.presetKey));
+            }}
+          />
+        </div>
+        <Table<OperationPresetRow>
           size="small"
-          rowKey="code"
-          dataSource={presetList}
+          rowKey="presetKey"
+          dataSource={presetOperations}
+          locale={{
+            emptyText: t('app.master-data.operations.presetEmptyIndustry'),
+          }}
           pagination={false}
           scroll={{ y: 280 }}
           rowSelection={{
-            selectedRowKeys: selectedPresetCodes,
-            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
+            selectedRowKeys: selectedPresetKeys,
+            onChange: (keys) => setSelectedPresetKeys(keys as string[]),
           }}
           columns={[
-            { title: '工序编号', dataIndex: 'code', width: 120 },
-            { title: '工序名称', dataIndex: 'name', width: 140 },
-            { title: '排序', dataIndex: 'sort_order', width: 80 },
+            { title: t('field.operation.name'), dataIndex: 'name', width: 140, ellipsis: true },
+            {
+              title: t('field.department.sortOrder'),
+              dataIndex: 'sortOrder',
+              width: 72,
+            },
+            {
+              title: t('app.master-data.operations.presetDefectsColumn'),
+              key: 'defects',
+              ellipsis: true,
+              render: (_: unknown, row) => {
+                const parts = (row.defectPresets ?? []).map((d) => d.name).filter(Boolean);
+                const text = parts.length ? parts.join('、') : '—';
+                return (
+                  <Typography.Text type="secondary" ellipsis={{ tooltip: text }}>
+                    {text}
+                  </Typography.Text>
+                );
+              },
+            },
           ]}
         />
       </Modal>

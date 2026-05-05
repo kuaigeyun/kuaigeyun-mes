@@ -1,0 +1,15 @@
+{
+  "sortOrder": 204,
+  "primaryCategory": "raw_materials",
+  "id": "raw_metal_bar",
+  "name": "原材料-金属棒材",
+  "description": "圆钢、六角钢、不锈钢棒等",
+  "items": [
+    { "preset_key": "bar_round__702_10", "name": "热轧圆钢", "specification": "Φ10", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-10", "base_unit": "米", "texture": "45#钢" },
+    { "preset_key": "bar_round__702_20", "name": "热轧圆钢", "specification": "Φ20", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-20", "base_unit": "米", "texture": "45#钢" },
+    { "preset_key": "bar_round__702_30", "name": "热轧圆钢", "specification": "Φ30", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-30", "base_unit": "米", "texture": "45#钢" },
+    { "preset_key": "bar_round__702_50", "name": "热轧圆钢", "specification": "Φ50", "gb_standard": "GB/T 702", "gb_code": "BAR-RD-50", "base_unit": "米", "texture": "45#钢" },
+    { "preset_key": "bar_hex__705_17", "name": "热轧六角钢", "specification": "S17", "gb_standard": "GB/T 705", "gb_code": "BAR-HEX-17", "base_unit": "米", "texture": "45#钢" },
+    { "preset_key": "bar_hex__705_24", "name": "热轧六角钢", "specification": "S24", "gb_standard": "GB/T 705", "gb_code": "BAR-HEX-24", "base_unit": "米", "texture": "45#钢" }
+  ]
+}

@@ -29,6 +29,7 @@ import {
   Col,
   Divider,
   Tooltip,
+  Table,
 } from 'antd'
 import {
   EditOutlined,
@@ -44,6 +45,7 @@ import {
   NumberOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -88,6 +90,7 @@ import { qrcodeApi } from '../../../../services/qrcode'
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
+import { STANDARD_PRESET_PRIMARY_ORDER } from '../../types/material'
 import type {
   Material,
   MaterialCreate,
@@ -96,6 +99,7 @@ import type {
   MaterialGroupCreate,
   MaterialGroupUpdate,
   MaterialBulkTrackingPayload,
+  StandardPartsPresetCatalog,
 } from '../../types/material'
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
@@ -109,6 +113,19 @@ import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedMod
 
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
+
+type StandardPartFlatRow = {
+  presetKey: string
+  categoryId: string
+  categoryName: string
+  primaryCategory: string
+  name: string
+  specification: string
+  gbStandard: string
+  gbCode: string
+  baseUnit: string
+  texture?: string
+}
 
 /**
  * 物料管理合并页面组件
@@ -176,6 +193,91 @@ const MaterialsManagementPage: React.FC = () => {
     []
   )
   const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false)
+
+  const [standardPresetOpen, setStandardPresetOpen] = useState(false)
+  const [standardPresetLoading, setStandardPresetLoading] = useState(false)
+  const [standardPresetSubmitting, setStandardPresetSubmitting] = useState(false)
+  const [standardPresetCatalog, setStandardPresetCatalog] = useState<StandardPartsPresetCatalog | null>(null)
+  const [standardPresetPrimaryId, setStandardPresetPrimaryId] = useState<string>('')
+  const [standardPresetCategoryId, setStandardPresetCategoryId] = useState<string>('')
+  const [standardPresetSelectedKeys, setStandardPresetSelectedKeys] = useState<string[]>([])
+  const [standardPresetGroupUuid, setStandardPresetGroupUuid] = useState<string>('')
+  const [standardPresetCodeMode, setStandardPresetCodeMode] = useState<'auto' | 'gb'>('auto')
+
+  const standardPresetFlatRows = useMemo((): StandardPartFlatRow[] => {
+    const c = standardPresetCatalog?.categories ?? []
+    const rows: StandardPartFlatRow[] = []
+    for (const cat of c) {
+      const pc = (cat.primaryCategory ?? 'standard_parts') as string
+      for (const it of cat.items ?? []) {
+        rows.push({
+          presetKey: it.presetKey,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          primaryCategory: pc,
+          name: it.name,
+          specification: it.specification ?? '',
+          gbStandard: it.gbStandard ?? '',
+          gbCode: it.gbCode ?? '',
+          baseUnit: it.baseUnit ?? '件',
+          texture: it.texture,
+        })
+      }
+    }
+    return rows
+  }, [standardPresetCatalog])
+
+  const standardPresetFilteredRows = useMemo(() => {
+    if (standardPresetCategoryId) {
+      return standardPresetFlatRows.filter((r) => r.categoryId === standardPresetCategoryId)
+    }
+    if (standardPresetPrimaryId) {
+      return standardPresetFlatRows.filter((r) => r.primaryCategory === standardPresetPrimaryId)
+    }
+    return standardPresetFlatRows
+  }, [standardPresetFlatRows, standardPresetCategoryId, standardPresetPrimaryId])
+
+  /** 一级大类与后端白名单对齐，始终全部展示（目录里暂无该类 JSON 时选后表格为空即可） */
+  const standardPresetPrimaryOptions = useMemo(
+    () =>
+      STANDARD_PRESET_PRIMARY_ORDER.map((id) => ({
+        value: id,
+        label: t(`app.master-data.materials.standardPresetPrimary.${id}`),
+      })),
+    [t]
+  )
+
+  const standardPresetSecondaryOptions = useMemo(() => {
+    const c = standardPresetCatalog?.categories ?? []
+    const filtered = standardPresetPrimaryId
+      ? c.filter((cat) => (cat.primaryCategory ?? 'standard_parts') === standardPresetPrimaryId)
+      : c
+    return filtered.map((cat) => ({ value: cat.id, label: cat.name }))
+  }, [standardPresetCatalog, standardPresetPrimaryId])
+
+  const handleOpenStandardPreset = useCallback(async () => {
+    setStandardPresetLoading(true)
+    try {
+      const cat = await materialApi.getStandardPartsPresetPreview()
+      setStandardPresetCatalog(cat)
+      setStandardPresetPrimaryId('')
+      setStandardPresetCategoryId('')
+      const allKeys = (cat.categories ?? []).flatMap((c) => (c.items ?? []).map((i) => i.presetKey))
+      setStandardPresetSelectedKeys(allKeys)
+      if (selectedGroupId != null) {
+        const g = materialGroups.find((x) => x.id === selectedGroupId)
+        setStandardPresetGroupUuid(g?.uuid ?? '')
+      } else {
+        setStandardPresetGroupUuid('')
+      }
+      setStandardPresetCodeMode('auto')
+      setStandardPresetOpen(true)
+    } catch (e: any) {
+      messageApi.error(e?.message || t('common.operationFailed'))
+    } finally {
+      setStandardPresetLoading(false)
+    }
+  }, [materialGroups, messageApi, selectedGroupId, t])
 
   const emitAgentDebugLog = useCallback(
     (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
@@ -1398,6 +1500,13 @@ const MaterialsManagementPage: React.FC = () => {
                     {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
                   </Button>
                   <Button
+                    icon={<AppstoreOutlined />}
+                    loading={standardPresetLoading}
+                    onClick={handleOpenStandardPreset}
+                  >
+                    {t('app.master-data.materials.loadStandardPreset')}
+                  </Button>
+                  <Button
                     icon={<QrcodeOutlined />}
                     disabled={selectedRowKeys.length === 0}
                     onClick={handleBatchGenerateQRCode}
@@ -1735,6 +1844,177 @@ const MaterialsManagementPage: React.FC = () => {
               </Card>
             </Col>
           </Row>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.standardPresetModalTitle')}
+        open={standardPresetOpen}
+        onCancel={() => !standardPresetSubmitting && setStandardPresetOpen(false)}
+        width={960}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" disabled={standardPresetSubmitting} onClick={() => setStandardPresetOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="ok"
+            type="primary"
+            loading={standardPresetSubmitting}
+            disabled={!standardPresetGroupUuid || standardPresetSelectedKeys.length === 0}
+            onClick={async () => {
+              try {
+                setStandardPresetSubmitting(true)
+                const res = await materialApi.loadStandardPartsPreset({
+                  materialGroupUuid: standardPresetGroupUuid,
+                  presetKeys: standardPresetSelectedKeys,
+                  codeMode: standardPresetCodeMode,
+                })
+                messageApi.success(res.message)
+                setStandardPresetOpen(false)
+                actionRef.current?.reload()
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'))
+              } finally {
+                setStandardPresetSubmitting(false)
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {t('app.master-data.materials.standardPresetHint')}
+          </Typography.Paragraph>
+          <div>
+            <Typography.Text type="secondary" style={{ marginRight: 8 }}>
+              {t('app.master-data.materials.standardPresetTargetGroup')}
+            </Typography.Text>
+            <Select
+              style={{ minWidth: 320 }}
+              placeholder={t('app.master-data.materials.standardPresetTargetGroupPlaceholder')}
+              value={standardPresetGroupUuid || undefined}
+              onChange={(v) => setStandardPresetGroupUuid(v)}
+              options={materialGroups.map((g) => ({
+                value: g.uuid,
+                label: `${g.code} — ${g.name}`,
+              }))}
+              showSearch
+              optionFilterProp="label"
+              loading={materialGroupsLoading}
+            />
+          </div>
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+              {t('app.master-data.materials.standardPresetCodeMode')}
+            </Typography.Text>
+            <Segmented<'auto' | 'gb'>
+              block
+              value={standardPresetCodeMode}
+              onChange={(v) => setStandardPresetCodeMode(v)}
+              options={[
+                { label: t('app.master-data.materials.standardPresetCodeAuto'), value: 'auto' },
+                { label: t('app.master-data.materials.standardPresetCodeGb'), value: 'gb' },
+              ]}
+            />
+          </div>
+          <Space wrap size={[12, 8]} align="start">
+            <div>
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                {t('app.master-data.materials.standardPresetPrimaryFilter')}
+              </Typography.Text>
+              <Select
+                style={{ minWidth: 200 }}
+                allowClear
+                placeholder={t('app.master-data.materials.standardPresetPrimaryAll')}
+                value={standardPresetPrimaryId || undefined}
+                options={standardPresetPrimaryOptions}
+                onChange={(v) => {
+                  const nextPrimary = (v ?? '') as string
+                  setStandardPresetPrimaryId(nextPrimary)
+                  setStandardPresetCategoryId('')
+                  const rows = nextPrimary
+                    ? standardPresetFlatRows.filter((r) => r.primaryCategory === nextPrimary)
+                    : standardPresetFlatRows
+                  setStandardPresetSelectedKeys(rows.map((r) => r.presetKey))
+                }}
+                optionFilterProp="label"
+                showSearch
+              />
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                {t('app.master-data.materials.standardPresetSecondaryFilter')}
+              </Typography.Text>
+              <Select
+                style={{ minWidth: 220 }}
+                allowClear
+                placeholder={t('app.master-data.materials.standardPresetSecondaryAll')}
+                value={standardPresetCategoryId || undefined}
+                options={standardPresetSecondaryOptions}
+                onChange={(v) => {
+                  const nextId = (v ?? '') as string
+                  setStandardPresetCategoryId(nextId)
+                  let rows = standardPresetFlatRows
+                  if (nextId) {
+                    rows = rows.filter((r) => r.categoryId === nextId)
+                  } else if (standardPresetPrimaryId) {
+                    rows = rows.filter((r) => r.primaryCategory === standardPresetPrimaryId)
+                  }
+                  setStandardPresetSelectedKeys(rows.map((r) => r.presetKey))
+                }}
+                optionFilterProp="label"
+                showSearch
+              />
+            </div>
+          </Space>
+          <Table<StandardPartFlatRow>
+            size="small"
+            rowKey="presetKey"
+            dataSource={standardPresetFilteredRows}
+            pagination={false}
+            scroll={{ y: 360 }}
+            rowSelection={{
+              selectedRowKeys: standardPresetSelectedKeys,
+              onChange: (keys) => setStandardPresetSelectedKeys(keys as string[]),
+            }}
+            columns={[
+              {
+                title: t('app.master-data.materials.standardPresetColCategory'),
+                key: 'presetType',
+                width: 168,
+                ellipsis: true,
+                render: (_, r) => {
+                  const pLabel = t(`app.master-data.materials.standardPresetPrimary.${r.primaryCategory}`, {
+                    defaultValue: r.primaryCategory,
+                  })
+                  return `${pLabel} — ${r.categoryName}`
+                },
+              },
+              { title: t('app.master-data.materials.materialName'), dataIndex: 'name', width: 140, ellipsis: true },
+              {
+                title: t('app.master-data.materials.specification'),
+                dataIndex: 'specification',
+                width: 100,
+                ellipsis: true,
+              },
+              {
+                title: t('app.master-data.materials.standardPresetColGbStandard'),
+                dataIndex: 'gbStandard',
+                width: 100,
+                ellipsis: true,
+              },
+              {
+                title: t('app.master-data.materials.standardPresetColGbCode'),
+                dataIndex: 'gbCode',
+                width: 160,
+                ellipsis: true,
+              },
+              { title: t('app.master-data.materials.baseUnit'), dataIndex: 'baseUnit', width: 72 },
+            ]}
+          />
         </Space>
       </Modal>
 

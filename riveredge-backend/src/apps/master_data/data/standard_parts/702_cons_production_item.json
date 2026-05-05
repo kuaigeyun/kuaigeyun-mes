@@ -1,0 +1,12 @@
+{
+  "sortOrder": 702,
+  "primaryCategory": "consumables",
+  "id": "cons_production_item",
+  "name": "耗材-生产耗材",
+  "description": "工业擦拭纸、记号笔、自喷漆、电池等",
+  "items": [
+    { "preset_key": "cons_wipe_paper", "name": "工业大卷擦拭纸", "specification": "250mm×370mm", "gb_standard": "通用标准", "gb_code": "CONS-WIPE-PAPER", "base_unit": "卷", "texture": "再生纤维" },
+    { "preset_key": "cons_marker_black", "name": "油性记号笔", "specification": "黑色 双头", "gb_standard": "通用标准", "gb_code": "CONS-MARKER-B", "base_unit": "支", "texture": "塑料/油墨" },
+    { "preset_key": "cons_spray_paint_silver", "name": "自喷漆", "specification": "400ml 银色", "gb_standard": "通用标准", "gb_code": "CONS-SPRAY-SILVER", "base_unit": "瓶", "texture": "组合件" }
+  ]
+}

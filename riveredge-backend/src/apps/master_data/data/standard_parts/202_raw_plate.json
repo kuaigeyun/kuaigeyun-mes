@@ -1,0 +1,17 @@
+{
+  "sortOrder": 202,
+  "primaryCategory": "raw_materials",
+  "id": "raw_metal_plate",
+  "name": "原材料-金属板材",
+  "description": "冷轧板、热轧板、不锈钢板、铝板等",
+  "items": [
+    { "preset_key": "plate_cr__708_1_0", "name": "冷轧钢板", "specification": "1.0mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-1.0", "base_unit": "平方米", "texture": "DC01" },
+    { "preset_key": "plate_cr__708_1_5", "name": "冷轧钢板", "specification": "1.5mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-1.5", "base_unit": "平方米", "texture": "DC01" },
+    { "preset_key": "plate_cr__708_2_0", "name": "冷轧钢板", "specification": "2.0mm", "gb_standard": "GB/T 708", "gb_code": "PLATE-CR-2.0", "base_unit": "平方米", "texture": "DC01" },
+    { "preset_key": "plate_hr__709_3_0", "name": "热轧钢板", "specification": "3.0mm", "gb_standard": "GB/T 709", "gb_code": "PLATE-HR-3.0", "base_unit": "平方米", "texture": "Q235B" },
+    { "preset_key": "plate_hr__709_5_0", "name": "热轧钢板", "specification": "5.0mm", "gb_standard": "GB/T 709", "gb_code": "PLATE-HR-5.0", "base_unit": "平方米", "texture": "Q235B" },
+    { "preset_key": "plate_ss__3280_1_2", "name": "不锈钢板", "specification": "1.2mm", "gb_standard": "GB/T 3280", "gb_code": "PLATE-SS-304-1.2", "base_unit": "平方米", "texture": "304" },
+    { "preset_key": "plate_ss__3280_2_0", "name": "不锈钢板", "specification": "2.0mm", "gb_standard": "GB/T 3280", "gb_code": "PLATE-SS-304-2.0", "base_unit": "平方米", "texture": "304" },
+    { "preset_key": "plate_al__3880_2_0", "name": "铝合金板", "specification": "2.0mm", "gb_standard": "GB/T 3880", "gb_code": "PLATE-AL-6061-2.0", "base_unit": "平方米", "texture": "6061-T6" }
+  ]
+}

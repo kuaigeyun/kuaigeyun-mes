@@ -1,0 +1,14 @@
+{
+  "sortOrder": 304,
+  "primaryCategory": "electrical_components",
+  "id": "ele_cable_connector",
+  "name": "电气与自动化-线缆接头",
+  "description": "控制线缆、冷压端子、航空插头等",
+  "items": [
+    { "preset_key": "ele_cable_rvvp_4x0_75", "name": "屏蔽控制电缆", "specification": "RVVP 4×0.75mm²", "gb_standard": "GB/T 5023", "gb_code": "CABLE-RVVP-4X0.75", "base_unit": "米", "texture": "铜/PVC" },
+    { "preset_key": "ele_term_e1508", "name": "管形预绝缘端子", "specification": "E1508 黑色", "gb_standard": "通用标准", "gb_code": "TERM-E1508", "base_unit": "包", "texture": "紫铜/尼龙" },
+    { "preset_key": "ele_plug_gx16_4", "name": "航空插头", "specification": "GX16 4芯", "gb_standard": "通用标准", "gb_code": "PLUG-GX16-4", "base_unit": "套", "texture": "锌合金" },
+    { "preset_key": "ele_wire_bv_2_5", "name": "单芯硬铜线", "specification": "BV 2.5mm² 红色", "gb_standard": "GB/T 5023", "gb_code": "WIRE-BV-2.5-R", "base_unit": "米", "texture": "铜/PVC" },
+    { "preset_key": "ele_wire_bvr_1_5", "name": "多股软铜线", "specification": "BVR 1.5mm² 蓝色", "gb_standard": "GB/T 5023", "gb_code": "WIRE-BVR-1.5-B", "base_unit": "米", "texture": "铜/PVC" }
+  ]
+}

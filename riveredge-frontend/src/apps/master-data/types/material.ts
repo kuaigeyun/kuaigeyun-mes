@@ -283,6 +283,59 @@ export interface MaterialBulkTrackingResult {
   not_found_uuids?: string[];
 }
 
+/** GET /materials/standard-parts/preset-preview 中单条标准件 */
+export interface StandardPartPresetItem {
+  presetKey: string;
+  name: string;
+  specification: string;
+  gbStandard: string;
+  gbCode: string;
+  baseUnit: string;
+  texture?: string;
+  description?: string;
+}
+
+/** 预设库一级大类（与后端 PRIMARY_CATEGORY_ALLOWED 一致；扩展时需同步后端与 i18n） */
+/** 下拉展示顺序：与后端 PRIMARY_CATEGORY_ALLOWED 键集合一致 */
+export const STANDARD_PRESET_PRIMARY_ORDER = [
+  'standard_parts',
+  'raw_materials',
+  'electrical_components',
+  'tools_and_gauges',
+  'chemicals_lubricants',
+  'auxiliary_materials',
+  'consumables',
+  'packaging',
+  'mro_spares',
+  'general',
+] as const;
+
+export type StandardPresetPrimaryCategoryId = (typeof STANDARD_PRESET_PRIMARY_ORDER)[number];
+
+/** 标准件预设分类 */
+export interface StandardPartPresetCategory {
+  id: string;
+  name: string;
+  description?: string;
+  /** 一级大类，默认 standard_parts */
+  primaryCategory?: StandardPresetPrimaryCategoryId | string;
+  items: StandardPartPresetItem[];
+}
+
+/** 标准件预设目录 */
+export interface StandardPartsPresetCatalog {
+  categories: StandardPartPresetCategory[];
+}
+
+/** POST /materials/standard-parts/load-preset 响应 */
+export interface LoadStandardPartsPresetResponse {
+  created: number;
+  skippedDuplicateCode: number;
+  skippedDuplicateItem: number;
+  failed: number;
+  message: string;
+}
+
 /**
  * BOM（物料清单）类型定义
  * 

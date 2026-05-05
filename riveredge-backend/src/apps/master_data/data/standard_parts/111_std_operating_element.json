@@ -1,0 +1,21 @@
+{
+  "sortOrder": 111,
+  "primaryCategory": "standard_parts",
+  "id": "std_operating_element",
+  "name": "标准件-机械操作件",
+  "description": "手轮、手柄、星形把手等机械操作标准件",
+  "items": [
+    { "preset_key": "handwheel_10_80", "name": "圆轮手轮", "specification": "10×80", "gb_standard": "JB/T 7273.1", "gb_code": "JB/T7273.1-10X80", "base_unit": "件", "texture": "铸铁" },
+    { "preset_key": "handwheel_12_100", "name": "圆轮手轮", "specification": "12×100", "gb_standard": "JB/T 7273.1", "gb_code": "JB/T7273.1-12X100", "base_unit": "件", "texture": "铸铁" },
+    { "preset_key": "handwheel_12_125", "name": "圆轮手轮", "specification": "12×125", "gb_standard": "JB/T 7273.1", "gb_code": "JB/T7273.1-12X125", "base_unit": "件", "texture": "铸铁" },
+    { "preset_key": "handwheel_16_160", "name": "圆轮手轮", "specification": "16×160", "gb_standard": "JB/T 7273.1", "gb_code": "JB/T7273.1-16X160", "base_unit": "件", "texture": "铸铁" },
+    { "preset_key": "handwheel_18_200", "name": "圆轮手轮", "specification": "18×200", "gb_standard": "JB/T 7273.1", "gb_code": "JB/T7273.1-18X200", "base_unit": "件", "texture": "铸铁" },
+    { "preset_key": "handle_m6_50", "name": "可调位紧定手柄", "specification": "M6×50", "gb_standard": "JB/T 7270.1", "gb_code": "JB/T7270.1-M6X50", "base_unit": "件", "texture": "锌合金" },
+    { "preset_key": "handle_m8_63", "name": "可调位紧定手柄", "specification": "M8×63", "gb_standard": "JB/T 7270.1", "gb_code": "JB/T7270.1-M8X63", "base_unit": "件", "texture": "锌合金" },
+    { "preset_key": "handle_m10_80", "name": "可调位紧定手柄", "specification": "M10×80", "gb_standard": "JB/T 7270.1", "gb_code": "JB/T7270.1-M10X80", "base_unit": "件", "texture": "锌合金" },
+    { "preset_key": "handle_m12_100", "name": "可调位紧定手柄", "specification": "M12×100", "gb_standard": "JB/T 7270.1", "gb_code": "JB/T7270.1-M12X100", "base_unit": "件", "texture": "锌合金" },
+    { "preset_key": "knob_star_m6_25", "name": "星形把手", "specification": "M6×25", "gb_standard": "JB/T 7271.1", "gb_code": "JB/T7271.1-M6X25", "base_unit": "件", "texture": "胶木" },
+    { "preset_key": "knob_star_m8_32", "name": "星形把手", "specification": "M8×32", "gb_standard": "JB/T 7271.1", "gb_code": "JB/T7271.1-M8X32", "base_unit": "件", "texture": "胶木" },
+    { "preset_key": "knob_star_m10_40", "name": "星形把手", "specification": "M10×40", "gb_standard": "JB/T 7271.1", "gb_code": "JB/T7271.1-M10X40", "base_unit": "件", "texture": "胶木" }
+  ]
+}

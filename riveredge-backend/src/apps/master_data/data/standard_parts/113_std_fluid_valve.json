@@ -1,0 +1,12 @@
+{
+  "sortOrder": 113,
+  "primaryCategory": "standard_parts",
+  "id": "std_fluid_valve",
+  "name": "标准件-工业阀门",
+  "description": "球阀、闸阀、截止阀、止回阀等流体控制标准件",
+  "items": [
+    { "preset_key": "valve_ball_dn25_ss", "name": "不锈钢球阀 (丝扣)", "specification": "DN25 304", "gb_standard": "GB/T 12237", "gb_code": "VALVE-BALL-DN25", "base_unit": "个", "texture": "304不锈钢" },
+    { "preset_key": "valve_gate_dn50_ci", "name": "铸铁闸阀 (法兰)", "specification": "DN50 PN16", "gb_standard": "GB/T 12232", "gb_code": "VALVE-GATE-DN50", "base_unit": "个", "texture": "铸铁" },
+    { "preset_key": "valve_check_dn32_ss", "name": "不锈钢止回阀", "specification": "DN32 PN16", "gb_standard": "GB/T 12233", "gb_code": "VALVE-CHECK-DN32", "base_unit": "个", "texture": "304不锈钢" }
+  ]
+}

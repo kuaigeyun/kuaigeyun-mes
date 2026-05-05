@@ -769,7 +769,141 @@ class MaterialService:
         response = MaterialResponse.model_validate(resp_data)
 
         return response
-    
+
+    @staticmethod
+    def get_standard_parts_preset_catalog() -> Dict[str, Any]:
+        """标准件预设目录（按类型分类），供 GET standard-parts/preset-preview。"""
+        from apps.master_data.services.material_standard_parts_catalog import (
+            standard_parts_preset_catalog_for_api,
+        )
+
+        return standard_parts_preset_catalog_for_api()
+
+    @staticmethod
+    async def load_standard_parts_preset(
+        tenant_id: int,
+        material_group_uuid: str,
+        preset_keys: List[str],
+        code_mode: str,
+    ) -> Dict[str, Any]:
+        """
+        按勾选导入标准件物料：写入指定物料分组；主编码为系统编码规则(auto) 或目录中的国标推荐码(gb)。
+        """
+        from apps.master_data.services.material_standard_parts_catalog import (
+            get_standard_part_by_preset_key,
+            validate_preset_keys,
+        )
+
+        mode = (code_mode or "auto").strip().lower()
+        if mode not in ("auto", "gb"):
+            raise ValidationError("codeMode 须为 auto（系统编码）或 gb（国标推荐编号作主数据主编码）")
+
+        mg = await MaterialGroup.filter(
+            tenant_id=tenant_id, uuid=material_group_uuid, deleted_at__isnull=True
+        ).first()
+        if not mg:
+            raise ValidationError("物料分组不存在或已删除")
+
+        if not preset_keys:
+            return {
+                "created": 0,
+                "skipped_duplicate_code": 0,
+                "skipped_duplicate_item": 0,
+                "failed": 0,
+                "message": "未选择任何标准件",
+            }
+
+        validate_preset_keys(preset_keys)
+
+        created = 0
+        skipped_duplicate_code = 0
+        skipped_duplicate_item = 0
+        failed = 0
+
+        for key in preset_keys:
+            item = get_standard_part_by_preset_key(key)
+            if not item:
+                failed += 1
+                continue
+
+            name = (item.get("name") or "").strip()
+            if not name:
+                failed += 1
+                continue
+
+            spec_raw = item.get("specification")
+            spec = (spec_raw or "").strip() or None
+            gb_code = ((item.get("gb_code") or "").strip())[:50]
+            gb_std = (item.get("gb_standard") or "").strip()
+            base_unit = (item.get("base_unit") or "件").strip() or "件"
+            texture = (item.get("texture") or "").strip() or None
+            desc_extra = (item.get("description") or "").strip()
+            desc = desc_extra or (f"标准件｜{gb_std}" if gb_std else "标准件预设导入")
+
+            if mode == "gb":
+                if not gb_code:
+                    failed += 1
+                    continue
+                exists_code = await Material.filter(
+                    tenant_id=tenant_id, main_code=gb_code, deleted_at__isnull=True
+                ).exists()
+                if exists_code:
+                    skipped_duplicate_code += 1
+                    continue
+            else:
+                q = Material.filter(
+                    tenant_id=tenant_id,
+                    group_id=mg.id,
+                    name=name,
+                    deleted_at__isnull=True,
+                )
+                if spec:
+                    dup = await q.filter(specification=spec).exists()
+                else:
+                    dup = await q.filter(Q(specification__isnull=True) | Q(specification="")).exists()
+                if dup:
+                    skipped_duplicate_item += 1
+                    continue
+
+            create_data = MaterialCreate(
+                name=name,
+                specification=spec,
+                base_unit=base_unit,
+                group_id=mg.id,
+                source_type="Buy",
+                description=desc,
+                texture=texture,
+                is_active=True,
+                main_code=gb_code if mode == "gb" else None,
+            )
+
+            try:
+                await MaterialService.create_material(tenant_id, create_data)
+                created += 1
+            except ValidationError as e:
+                logger.warning(f"标准件预设导入失败 presetKey={key}: {e}")
+                failed += 1
+            except Exception as e:
+                logger.warning(f"标准件预设导入异常 presetKey={key}: {e}")
+                failed += 1
+
+        parts = [f"新建 {created} 条"]
+        if skipped_duplicate_code:
+            parts.append(f"跳过主编码已存在 {skipped_duplicate_code} 条")
+        if skipped_duplicate_item:
+            parts.append(f"跳过同组同名同规格 {skipped_duplicate_item} 条")
+        if failed:
+            parts.append(f"失败 {failed} 条")
+        msg = "，".join(parts) + "。"
+
+        return {
+            "created": created,
+            "skipped_duplicate_code": skipped_duplicate_code,
+            "skipped_duplicate_item": skipped_duplicate_item,
+            "failed": failed,
+            "message": msg,
+        }
+
     @staticmethod
     async def get_material_variants(
         tenant_id: int,

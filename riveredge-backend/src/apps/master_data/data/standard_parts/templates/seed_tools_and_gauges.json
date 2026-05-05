@@ -1,0 +1,18 @@
+{
+  "sortOrder": 903,
+  "primaryCategory": "tools_and_gauges",
+  "id": "seed_tools_and_gauges",
+  "name": "刀具与量具（种子·待完善）",
+  "description": "【种子】刀具、量具、检具等。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_tools_and_gauges__replace_me",
+      "name": "【示例】替换为真实物料名称",
+      "specification": "规格/精度等级",
+      "gb_standard": "",
+      "gb_code": "SEED-TOOL-REPLACE",
+      "base_unit": "件",
+      "texture": ""
+    }
+  ]
+}

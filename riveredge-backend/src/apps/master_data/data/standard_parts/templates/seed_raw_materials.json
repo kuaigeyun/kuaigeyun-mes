@@ -1,0 +1,18 @@
+{
+  "sortOrder": 901,
+  "primaryCategory": "raw_materials",
+  "id": "seed_raw_materials",
+  "name": "原材料（种子·待完善）",
+  "description": "【种子】板/棒/管/锭等采购主料。复制到 standard_parts/ 根目录后生效。",
+  "items": [
+    {
+      "preset_key": "seed_raw_materials__replace_me",
+      "name": "【示例】如 冷轧板 Q235 t2.0",
+      "specification": "材质·规格",
+      "gb_standard": "",
+      "gb_code": "SEED-RAW-REPLACE",
+      "base_unit": "kg",
+      "texture": ""
+    }
+  ]
+}

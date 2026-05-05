@@ -21,6 +21,13 @@ from apps.master_data.schemas.process_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
+from apps.master_data.services.process_preset_catalog import (
+    get_industry_by_id,
+    get_operation_preset_by_key,
+    preset_catalog_for_api,
+)
+from core.services.business.code_generation_service import CodeGenerationService
+
 
 async def _resolve_default_operator_uuids(tenant_id: int, default_operator_uuids: Optional[List[str]]) -> List[int]:
     """解析默认生产人员 UUID 列表 -> 用户 ID 列表，校验同组织。"""
@@ -538,46 +545,13 @@ class ProcessService:
         defect_type.deleted_at = timezone.now()
         await defect_type.save()
 
-    # 通用缺陷分类预设（制造业常见不良品项）
-    PRESET_DEFECT_TYPES = [
-        {"code": "SIZE", "name": "尺寸不良", "category": "外观/尺寸"},
-        {"code": "APPEARANCE", "name": "外观不良", "category": "外观/尺寸"},
-        {"code": "FUNCTION", "name": "功能不良", "category": "功能"},
-        {"code": "MATERIAL", "name": "材料不良", "category": "材料"},
-        {"code": "ASSEMBLY", "name": "装配不良", "category": "装配"},
-        {"code": "PACKAGE", "name": "包装不良", "category": "包装"},
-    ]
-
     @staticmethod
     async def load_preset_defect_types_sme(tenant_id: int, codes: Optional[List[str]] = None) -> int:
         """
-        加载中国中小制造业常见不良品项预设数据。
-        仅创建不存在的不良品项（按 code 去重）。codes 若指定则只创建这些 code 的预设。
+        已废弃：不良品预设改由「工序加载预设」按行业一并创建并绑定。
+        保留方法签名供历史调用方；不再创建任何记录。
         """
-        items = ProcessService.PRESET_DEFECT_TYPES
-        if codes is not None:
-            codes_set = set(codes)
-            items = [x for x in items if x["code"] in codes_set]
-        created = 0
-        for item in items:
-            exists = await DefectType.filter(
-                tenant_id=tenant_id,
-                code=item["code"],
-                deleted_at__isnull=True,
-            ).exists()
-            if not exists:
-                try:
-                    await DefectType.create(
-                        tenant_id=tenant_id,
-                        code=item["code"],
-                        name=item["name"],
-                        category=item.get("category"),
-                        is_active=True,
-                    )
-                    created += 1
-                except IntegrityError:
-                    pass
-        return created
+        return 0
     
     # ==================== 工序相关方法 ====================
     
@@ -919,46 +893,160 @@ class ProcessService:
         operation.deleted_at = timezone.now()
         await operation.save()
 
-    # 通用制造工序预设（下料、组装、检验、包装）
-    PRESET_OPERATIONS = [
-        {"code": "CUT", "name": "下料", "sort_order": 10},
-        {"code": "ASSEMBLE", "name": "组装", "sort_order": 20},
-        {"code": "INSPECT", "name": "检验", "sort_order": 30},
-        {"code": "PACK", "name": "包装", "sort_order": 40},
-    ]
+    # 历史扁平工序预设已废弃；结构见 process_preset_catalog.INDUSTRY_PRESETS
+    PRESET_OPERATIONS: List[Dict[str, Any]] = []
+
+    @staticmethod
+    def get_operation_preset_catalog() -> Dict[str, Any]:
+        """工序预设目录（行业树），供 API 序列化。"""
+        return preset_catalog_for_api()
+
+    @staticmethod
+    async def _resolve_or_create_defect_for_preset(
+        tenant_id: int,
+        name: str,
+        category: Optional[str],
+        description: Optional[str],
+    ) -> Tuple[str, bool]:
+        """
+        按名称复用未删除的不良品项；不存在则按 DEFECT_TYPE_CODE 生成编码并创建。
+        返回 (uuid_str, created_new)。
+        """
+        name_st = (name or "").strip()
+        if not name_st:
+            raise ValidationError("不良品名称不能为空")
+        if len(name_st) > 200:
+            name_st = name_st[:200]
+        existing = (
+            await DefectType.filter(tenant_id=tenant_id, name=name_st, deleted_at__isnull=True)
+            .order_by("id")
+            .first()
+        )
+        if existing:
+            return str(existing.uuid), False
+        code = await CodeGenerationService.generate_code(tenant_id, "DEFECT_TYPE_CODE")
+        cat = (category or "").strip()[:50] if category else None
+        desc = (description or "").strip() or None
+        try:
+            dt = await DefectType.create(
+                tenant_id=tenant_id,
+                code=code[:50],
+                name=name_st,
+                category=cat,
+                description=desc,
+                is_active=True,
+            )
+            return str(dt.uuid), True
+        except IntegrityError:
+            retry = await DefectType.filter(
+                tenant_id=tenant_id, name=name_st, deleted_at__isnull=True
+            ).first()
+            if retry:
+                return str(retry.uuid), False
+            raise
+
+    @staticmethod
+    async def load_preset_operations_by_industry(
+        tenant_id: int,
+        industry_id: str,
+        preset_keys: List[str],
+    ) -> Dict[str, Any]:
+        """
+        按行业加载所选工序预设：工序编码走 OPERATION_CODE，不良品走 DEFECT_TYPE_CODE 或按名称复用；
+        工序与不良通过 OperationDefectType 绑定。
+        """
+        industry = get_industry_by_id(industry_id)
+        if not industry:
+            raise ValidationError(f"未知行业: {industry_id}")
+        if not preset_keys:
+            return {
+                "created_operations": 0,
+                "skipped_operations": 0,
+                "created_defect_types": 0,
+                "reused_defect_types": 0,
+                "linked_pairs": 0,
+                "message": "未选择任何工序",
+            }
+        valid = {op["preset_key"] for op in industry["operations"]}
+        for k in preset_keys:
+            if k not in valid:
+                raise ValidationError(f"presetKey 不属于所选行业: {k}")
+
+        created_ops = 0
+        skipped_ops = 0
+        created_dt = 0
+        reused_dt = 0
+        linked_pairs = 0
+
+        for preset_key in preset_keys:
+            op_def = get_operation_preset_by_key(preset_key)
+            if not op_def:
+                continue
+            op_name = (op_def["name"] or "").strip()
+            if not op_name:
+                continue
+            exists_op = await Operation.filter(
+                tenant_id=tenant_id, name=op_name, deleted_at__isnull=True
+            ).first()
+            if exists_op:
+                skipped_ops += 1
+                continue
+            op_code = await CodeGenerationService.generate_code(tenant_id, "OPERATION_CODE")
+            op_code = (op_code or "").strip()[:50]
+            if not op_code:
+                raise ValidationError("工序编码生成失败，请检查编码规则 OPERATION_CODE 是否启用")
+
+            operation = await Operation.create(
+                tenant_id=tenant_id,
+                code=op_code,
+                name=op_name[:200],
+                reporting_type="quantity",
+                allow_jump=False,
+                is_node_operation=False,
+                is_active=True,
+            )
+            created_ops += 1
+
+            defect_uuids: List[str] = []
+            for d in op_def.get("defect_presets") or []:
+                dn = (d.get("name") or "").strip()
+                if not dn:
+                    continue
+                cat_raw = (d.get("category") or "").strip()
+                dc = cat_raw[:50] if cat_raw else None
+                ddesc = (d.get("description") or "").strip() or None
+                uid, was_new = await ProcessService._resolve_or_create_defect_for_preset(
+                    tenant_id, dn, dc, ddesc
+                )
+                defect_uuids.append(uid)
+                if was_new:
+                    created_dt += 1
+                else:
+                    reused_dt += 1
+
+            await _sync_operation_defect_types(operation.id, defect_uuids, tenant_id)
+            linked_pairs += len(defect_uuids)
+
+        msg = (
+            f"已创建 {created_ops} 个工序，新建不良品 {created_dt} 个，复用不良品 {reused_dt} 个"
+            f"{f'，跳过同名工序 {skipped_ops} 个' if skipped_ops else ''}"
+        )
+        return {
+            "created_operations": created_ops,
+            "skipped_operations": skipped_ops,
+            "created_defect_types": created_dt,
+            "reused_defect_types": reused_dt,
+            "linked_pairs": linked_pairs,
+            "message": msg.strip(),
+        }
 
     @staticmethod
     async def load_preset_operations_sme(tenant_id: int, codes: Optional[List[str]] = None) -> int:
         """
-        加载中国中小制造业常见工序预设数据。
-        仅创建不存在的工序（按 code 去重）。codes 若指定则只创建这些 code 的预设。
+        已废弃：硬编码工序预设不再写入。
+        租户初始化等历史入口不应再依赖本方法创建数据；请使用 load_preset_operations_by_industry。
         """
-        items = ProcessService.PRESET_OPERATIONS
-        if codes is not None:
-            codes_set = set(codes)
-            items = [x for x in items if x["code"] in codes_set]
-        created = 0
-        for item in items:
-            exists = await Operation.filter(
-                tenant_id=tenant_id,
-                code=item["code"],
-                deleted_at__isnull=True,
-            ).exists()
-            if not exists:
-                try:
-                    await Operation.create(
-                        tenant_id=tenant_id,
-                        code=item["code"],
-                        name=item["name"],
-                        reporting_type="quantity",
-                        allow_jump=False,
-                        is_node_operation=False,
-                        is_active=True,
-                    )
-                    created += 1
-                except IntegrityError:
-                    pass
-        return created
+        return 0
     
     # ==================== 工艺路线相关方法 ====================
     
