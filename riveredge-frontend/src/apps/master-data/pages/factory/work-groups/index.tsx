@@ -16,8 +16,12 @@ import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, List
 import { workGroupApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { WorkGroupFormModal } from '../../../components/WorkGroupFormModal';
 import type { WorkGroup, WorkGroupCreate } from '../../../types/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const WorkGroupsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -33,10 +37,30 @@ const WorkGroupsPage: React.FC = () => {
   const [workGroupDetail, setWorkGroupDetail] = useState<WorkGroup | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<WorkGroup>({ tableName: 'master_data_factory_work_groups' });
+
   const handleCreate = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  React.useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   useNewShortcut(handleCreate);
 
@@ -51,6 +75,7 @@ const WorkGroupsPage: React.FC = () => {
       setDetailLoading(true);
       const detail = await workGroupApi.get(record.uuid);
       setWorkGroupDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.workGroups.getDetailFailed'));
     } finally {
@@ -61,6 +86,7 @@ const WorkGroupsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkGroupDetail(null);
+    resetDetailFieldValues();
   };
 
   const handleDelete = async (record: WorkGroup) => {
@@ -404,7 +430,9 @@ const WorkGroupsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<WorkGroup>[] = [
+  const columns: ProColumns<WorkGroup>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
@@ -439,6 +467,8 @@ const WorkGroupsPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('field.workGroup.isActive'),
       dataIndex: 'isActive',
@@ -494,7 +524,8 @@ const WorkGroupsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   const detailColumns: ProDescriptionsItemProps<WorkGroup>[] = [
     { title: t('field.workGroup.code'), dataIndex: 'code' },
@@ -558,9 +589,10 @@ const WorkGroupsPage: React.FC = () => {
 
             try {
               const result = await workGroupApi.list(apiParams);
+              const enrichedData = await enrichRecordsWithCustomFields(result.items);
 
               return {
-                data: result.items,
+                data: enrichedData,
                 success: true,
                 total: result.total,
               };
@@ -648,6 +680,12 @@ const WorkGroupsPage: React.FC = () => {
         basic={workGroupDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workGroupDetail)} />
           ) : undefined}
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
 
       <WorkGroupFormModal

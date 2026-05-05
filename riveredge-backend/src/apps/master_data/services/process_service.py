@@ -5,10 +5,13 @@
 """
 
 from typing import List, Optional, Dict, Any, Tuple
+import hashlib
+import json
 import re
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
+from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import DefectType, Operation, OperationDefectType, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
     DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse, DefectTypeMinimal,
@@ -213,6 +216,36 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         except Exception:
             pass
     return result
+
+
+def _sop_code_token(raw: Optional[str], max_len: int = 40) -> str:
+    """SOP 编码片段：仅字母数字与下划线，大写截断。"""
+    if raw is None or str(raw).strip() == "":
+        return "X"
+    s = re.sub(r"[^0-9A-Za-z]+", "_", str(raw).strip()).strip("_").upper()
+    if not s:
+        return "X"
+    return s[:max_len]
+
+
+def _sop_code_join(parts: List[str], max_len: int = 100) -> str:
+    """将多段组合为 SOP 编码；超长时用哈希后缀保证可落库。"""
+    tokens = [p for p in parts if p]
+    base = "-".join(tokens)
+    if len(base) <= max_len:
+        return base
+    digest = hashlib.sha256(base.encode("utf-8")).hexdigest()[:10].upper()
+    keep = max_len - 1 - len(digest)
+    if keep < 12:
+        keep = 12
+    return f"{base[:keep]}-{digest}"[:max_len]
+
+
+def _sop_name_truncate(name: str, max_len: int = 200) -> str:
+    name = (name or "").strip()
+    if len(name) <= max_len:
+        return name
+    return name[: max_len - 1] + "…"
 
 
 class ProcessService:
@@ -1469,13 +1502,18 @@ class ProcessService:
     ) -> List[SOPResponse]:
         """
         按工艺路线批量创建 SOP 草稿
-        
-        为工艺路线中的每道工序创建一个 SOP，自动绑定物料/物料组。
-        
+
+        编号策略（与物料/组解耦，避免同路线多物料冲突）：
+        - 未选物料/组：编码 `{路线}-{工序}`，名称 `{路线名} - {工序名}`（通用）。
+        - 选多个物料：每个物料 × 每道工序一条 SOP；编码 `{路线}-{工序}-M-{主编码}`，
+          名称带「物料名｜主编码」；`material_uuids` 仅含该料一条；`bom_load_mode=by_material`。
+        - 选多个物料组：每组 × 每道工序一条；编码含 `G-{组编码}`；`bom_load_mode=by_material_group`。
+        物料与物料组不可同时传入。
+
         Args:
             tenant_id: 租户ID
             data: 批量创建请求（process_route_uuid, material_uuids, material_group_uuids）
-            
+
         Returns:
             List[SOPResponse]: 创建的 SOP 列表
         """
@@ -1548,39 +1586,112 @@ class ProcessService:
         operation_map = {op.id: op for op in operations}
         
         route_code = process_route.code or "ROUTE"
-        created_sops = []
-        used_codes = set()
-        
-        for op_data in operation_list:
-            op_id = op_data["operation_id"]
-            if op_id not in operation_map:
-                continue
-            operation = operation_map[op_id]
-            op_code = (operation.code or "").replace(" ", "_").upper() or f"OP{op_id}"
-            
-            # 生成唯一编码
-            base_code = f"{route_code}-{op_code}"
-            code = base_code
-            suffix = 0
-            while code in used_codes or await SOP.filter(tenant_id=tenant_id, code=code, deleted_at__isnull=True).exists():
-                suffix += 1
-                code = f"{base_code}-{suffix}"
-            used_codes.add(code)
-            
-            name = f"{process_route.name or route_code} - {operation.name or op_code}"
-            
-            sop = await SOP.create(
-                tenant_id=tenant_id,
-                code=code,
-                name=name,
-                operation_id=op_id,
-                material_uuids=data.material_uuids,
-                material_group_uuids=data.material_group_uuids,
-                route_uuids=[data.process_route_uuid],
-                is_active=True,
-            )
-            created_sops.append(SOPResponse.model_validate(sop))
-        
+        route_tok = _sop_code_token(route_code, 36)
+        route_name = (process_route.name or route_code).strip()
+
+        mat_req = list(dict.fromkeys(data.material_uuids or []))
+        grp_req = list(dict.fromkeys(data.material_group_uuids or []))
+        if mat_req and grp_req:
+            raise ValidationError("批量创建请只选择物料或只选择物料组，不能同时传入两类范围")
+
+        materials: List[Material] = []
+        groups: List[MaterialGroup] = []
+        if mat_req:
+            found_m = await Material.filter(
+                tenant_id=tenant_id, uuid__in=mat_req, deleted_at__isnull=True
+            ).all()
+            by_mu = {str(m.uuid): m for m in found_m}
+            missing_m = [u for u in mat_req if u not in by_mu]
+            if missing_m:
+                raise ValidationError(
+                    f"以下物料不存在或已删除：{', '.join(missing_m[:5])}"
+                    f"{'…' if len(missing_m) > 5 else ''}"
+                )
+            materials = [by_mu[u] for u in mat_req]
+        if grp_req:
+            found_g = await MaterialGroup.filter(
+                tenant_id=tenant_id, uuid__in=grp_req, deleted_at__isnull=True
+            ).all()
+            by_gu = {str(g.uuid): g for g in found_g}
+            missing_g = [u for u in grp_req if u not in by_gu]
+            if missing_g:
+                raise ValidationError(
+                    f"以下物料组不存在或已删除：{', '.join(missing_g[:5])}"
+                    f"{'…' if len(missing_g) > 5 else ''}"
+                )
+            groups = [by_gu[u] for u in grp_req]
+
+        # 每个物料或每个物料组 × 每道工序 各生成一条 SOP；无绑定则为「通用」一条/道工序
+        scopes: List[Tuple[str, Optional[Any]]] = []
+        if materials:
+            for m in materials:
+                scopes.append(("material", m))
+        elif groups:
+            for g in groups:
+                scopes.append(("group", g))
+        else:
+            scopes.append(("generic", None))
+
+        created_sops: List[SOPResponse] = []
+        used_codes: set = set()
+
+        for scope_kind, entity in scopes:
+            for op_data in operation_list:
+                op_id = op_data["operation_id"]
+                if op_id not in operation_map:
+                    continue
+                operation = operation_map[op_id]
+                op_tok = _sop_code_token(operation.code or f"OP{op_id}", 36)
+
+                mat_uuids_arg: Optional[List[str]] = None
+                grp_uuids_arg: Optional[List[str]] = None
+                bom_mode = "by_material"
+                title_extra = ""
+                scope_parts: List[str] = []
+
+                if scope_kind == "material" and entity is not None:
+                    mc = (getattr(entity, "main_code", None) or getattr(entity, "code", None) or str(entity.uuid))[:48]
+                    scope_parts.append(f"M-{_sop_code_token(mc, 32)}")
+                    mat_uuids_arg = [str(entity.uuid)]
+                    bom_mode = "by_material"
+                    title_extra = f"（{getattr(entity, 'name', '') or mc}｜{mc}）"
+                elif scope_kind == "group" and entity is not None:
+                    gc = (getattr(entity, "code", None) or str(entity.uuid))[:48]
+                    scope_parts.append(f"G-{_sop_code_token(gc, 32)}")
+                    grp_uuids_arg = [str(entity.uuid)]
+                    bom_mode = "by_material_group"
+                    title_extra = f"（{getattr(entity, 'name', '') or gc}｜{gc}）"
+
+                code_parts = [route_tok, op_tok] + scope_parts
+                base_code = _sop_code_join(code_parts, 100)
+
+                code = base_code
+                suffix = 0
+                while code in used_codes or await SOP.filter(
+                    tenant_id=tenant_id, code=code, deleted_at__isnull=True
+                ).exists():
+                    suffix += 1
+                    suf = f"-{suffix}"
+                    code = (base_code[: 100 - len(suf)] + suf)[:100]
+                used_codes.add(code)
+
+                op_display = operation.name or operation.code or str(op_id)
+                base_name = f"{route_name} - {op_display}"
+                name = _sop_name_truncate(base_name + title_extra)
+
+                sop = await SOP.create(
+                    tenant_id=tenant_id,
+                    code=code,
+                    name=name,
+                    operation_id=op_id,
+                    material_uuids=mat_uuids_arg,
+                    material_group_uuids=grp_uuids_arg,
+                    route_uuids=[data.process_route_uuid],
+                    bom_load_mode=bom_mode,
+                    is_active=True,
+                )
+                created_sops.append(SOPResponse.model_validate(sop))
+
         return created_sops
     
     @staticmethod
@@ -2355,6 +2466,43 @@ class ProcessService:
         await material.save()
     
     @staticmethod
+    async def _process_route_from_material_defaults(
+        tenant_id: int, material
+    ) -> Optional[ProcessRoute]:
+        """物料 defaults 中的默认工艺路线（与表单写入的 defaultProcessRoute* 一致）。"""
+        raw = getattr(material, "defaults", None)
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw.strip() or "null")
+            except (json.JSONDecodeError, TypeError):
+                raw = None
+        if not isinstance(raw, dict):
+            return None
+        d = raw
+        rid = d.get("defaultProcessRoute") or d.get("default_process_route")
+        if rid is not None:
+            try:
+                pr = await ProcessRoute.filter(
+                    id=int(rid),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).first()
+                if pr:
+                    return pr
+            except (TypeError, ValueError):
+                pass
+        u = d.get("defaultProcessRouteUuid") or d.get("default_process_route_uuid")
+        if u:
+            return await ProcessRoute.filter(
+                uuid=str(u),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+        return None
+
+    @staticmethod
     async def get_process_route_for_material(
         tenant_id: int,
         material_uuid: str
@@ -2364,10 +2512,10 @@ class ProcessService:
         
         根据《工艺路线和标准作业流程优化设计规范.md》设计。
         优先级从高到低：
-        1. 物料主数据中的工艺路线关联（最高优先级）
-        2. 物料绑定工艺路线（第二优先级）
-        3. 物料分组绑定工艺路线（第三优先级）
-        4. 默认工艺路线（最低优先级，如果配置了）
+        1. 物料 process_route_id（主表外键）
+        1b. 物料 defaults 中的默认工艺路线（与表单一致，未同步外键时仍生效）
+        2. 物料分组绑定工艺路线
+        3. 默认工艺路线（最低优先级，如果配置了）
         
         Args:
             tenant_id: 租户ID
@@ -2397,6 +2545,11 @@ class ProcessService:
             ).first()
             if process_route:
                 return await ProcessService._to_process_route_response(process_route)
+        
+        # 优先级1b：defaults 中的默认工艺路线（历史数据可能仅写入 JSON，未同步 process_route_id）
+        defaults_pr = await ProcessService._process_route_from_material_defaults(tenant_id, material)
+        if defaults_pr:
+            return await ProcessService._to_process_route_response(defaults_pr)
         
         # 优先级2：物料分组绑定工艺路线
         if material.group_id:

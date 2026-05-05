@@ -7,14 +7,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Card, Radio, Select, Space, Table, Steps, Empty, Modal, Input, Form, Typography } from 'antd';
+import { App, Button, Card, Select, Space, Table, Steps, Modal, Input, Form, Typography, Segmented, Alert } from 'antd';
 import { ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi, unwrapProcessPagedList } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import type { ProcessRoute, Operation } from '../../../types/process';
-import type { Material, MaterialGroup } from '../../../types/material';
+import type { Material, MaterialGroup, MaterialListResponse } from '../../../types/material';
 import type { SOP } from '../../../types/process';
 
 const { Text } = Typography;
@@ -65,6 +65,11 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
   const [addOpModalVisible, setAddOpModalVisible] = useState(false);
   const [selectedOpUuids, setSelectedOpUuids] = useState<string[]>([]);
 
+  /** 第二步：未绑定时从主数据中选择已有工艺路线 */
+  const [routePickerOptions, setRoutePickerOptions] = useState<ProcessRoute[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [pickedRouteUuid, setPickedRouteUuid] = useState<string | undefined>(undefined);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -75,7 +80,9 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
           materialGroupApi.list({ limit: 1000 }).catch(() => []),
           operationApi.list({ isActive: true, limit: 1000 }),
         ]);
-        setMaterials(Array.isArray(matRes) ? matRes : []);
+        setMaterials(
+          Array.isArray(matRes) ? matRes : ((matRes as MaterialListResponse | undefined)?.items ?? [])
+        );
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
         setAllOperations(unwrapProcessPagedList(opRes));
       } catch (e) {
@@ -124,6 +131,28 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
     }
   }, [route?.uuid, allOperations.length]);
 
+  /** 第二步且无已选路线时，拉取工艺路线列表供选择 */
+  useEffect(() => {
+    if (currentStep !== 1 || route != null) return;
+    let cancelled = false;
+    (async () => {
+      setRoutesLoading(true);
+      try {
+        const res = await processRouteApi.list({ limit: 500, isActive: true });
+        const list = unwrapProcessPagedList(res);
+        if (!cancelled) setRoutePickerOptions(list);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setRoutePickerOptions([]);
+      } finally {
+        if (!cancelled) setRoutesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, route]);
+
   const handleLoadRoute = async () => {
     if (type === 'material' && selectedMaterialUuids.length === 0) {
       messageApi.warning(t('app.master-data.sop.selectMaterial'));
@@ -148,15 +177,59 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
         setRoute(r);
         const ops = parseOperationSequence(r.operation_sequence);
         setOperations(ops);
-        setCurrentStep(1);
       } else {
-        setCreateRouteModalVisible(true);
+        setRoute(null);
+        setOperations([]);
+        setPickedRouteUuid(undefined);
       }
+      setCurrentStep(1);
     } catch (e: any) {
       messageApi.error(e?.message || t('app.master-data.sop.loadRouteFailed'));
     } finally {
       setRouteLoading(false);
     }
+  };
+
+  /** 使用下拉中选中的已有工艺路线（不写回绑定，仅本向导内使用） */
+  const handleConfirmPickRoute = async () => {
+    if (!pickedRouteUuid) {
+      messageApi.warning(t('app.master-data.sop.pickRouteFirst'));
+      return;
+    }
+    setRouteLoading(true);
+    try {
+      const full = await processRouteApi.get(pickedRouteUuid);
+      setRoute(full);
+      const ops = parseOperationSequence(full.operation_sequence);
+      setOperations(ops);
+      messageApi.success(t('app.master-data.sop.routeLoaded'));
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.master-data.sop.loadRouteFailed'));
+    } finally {
+      setRouteLoading(false);
+    }
+  };
+
+  const handleBackToStep0 = () => {
+    setCurrentStep(0);
+    setRoute(null);
+    setOperations([]);
+    setPickedRouteUuid(undefined);
+    setCreateRouteModalVisible(false);
+  };
+
+  const handleOpenCreateRouteModal = () => {
+    setOperations([]);
+    setNewRouteCode('');
+    setNewRouteName('');
+    setCreateRouteModalVisible(true);
+  };
+
+  const closeCreateRouteModal = () => {
+    setCreateRouteModalVisible(false);
+    setNewRouteCode('');
+    setNewRouteName('');
+    if (!route) setOperations([]);
   };
 
   const handleSaveNewRoute = async () => {
@@ -259,6 +332,12 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
     setOperations(arr);
   };
 
+  const batchSopCountPreview =
+    operations.length *
+    (type === 'material'
+      ? Math.max(1, selectedMaterialUuids.length)
+      : Math.max(1, selectedMaterialGroupUuids.length));
+
   const handleBatchCreateSops = async () => {
     if (!route) {
       messageApi.warning(t('app.master-data.sop.selectOrCreateRoute'));
@@ -301,6 +380,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
   return (
     <>
       <Steps
+        size="small"
         current={currentStep}
         items={[
           { title: '第一步：选择物料/物料组' },
@@ -308,7 +388,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
           { title: '第三步：确认工序' },
           { title: '第四步：SOP 已创建' },
         ]}
-        style={{ marginBottom: 24 }}
+        style={{ marginBottom: 20 }}
+        styles={{
+          itemTitle: { fontSize: 12, lineHeight: 1.35, fontWeight: 400 },
+        }}
       />
 
       {currentStep === 0 && (
@@ -316,10 +399,14 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 500 }}>选择类型</div>
-              <Radio.Group value={type} onChange={(e) => setType(e.target.value)}>
-                <Radio value="material_group">物料组</Radio>
-                <Radio value="material">物料</Radio>
-              </Radio.Group>
+              <Segmented<'material_group' | 'material'>
+                value={type}
+                onChange={(v) => setType(v)}
+                options={[
+                  { label: '物料组', value: 'material_group' },
+                  { label: '物料', value: 'material' },
+                ]}
+              />
             </div>
             {type === 'material_group' && (
               <div>
@@ -429,15 +516,61 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   },
                 ]}
               />
-              <Button type="primary" loading={loading} onClick={handleUpdateRoute}>
-                保存工艺路线
-              </Button>
-              <Button type="primary" onClick={() => setCurrentStep(2)} style={{ marginLeft: 8 }}>
-                下一步：确认工序
-              </Button>
+              <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 8 }}>
+                <Button onClick={() => setCurrentStep(0)}>
+                  上一步
+                </Button>
+                <Button type="primary" loading={loading} onClick={handleUpdateRoute}>
+                  保存工艺路线
+                </Button>
+                <Button type="primary" onClick={() => setCurrentStep(2)}>
+                  下一步：确认工序
+                </Button>
+              </div>
             </Space>
           ) : (
-            <Empty description="暂无工艺路线" />
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <Alert
+                type="info"
+                showIcon
+                message={t('app.master-data.sop.noBoundRouteTitle')}
+                description={t('app.master-data.sop.noBoundRouteDesc')}
+              />
+              <div>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.pickExistingRoute')}</div>
+                <Space wrap align="start">
+                  <Select
+                    showSearch
+                    allowClear
+                    placeholder={t('app.master-data.sop.pickRoutePlaceholder')}
+                    style={{ width: '100%', minWidth: 280, maxWidth: 440 }}
+                    loading={routesLoading}
+                    value={pickedRouteUuid}
+                    onChange={(v) => setPickedRouteUuid(v)}
+                    filterOption={(input, opt) =>
+                      String(opt?.label ?? '')
+                        .toLowerCase()
+                        .includes((input || '').toLowerCase())
+                    }
+                    options={routePickerOptions.map((r) => ({
+                      label: `${r.code} - ${r.name}`,
+                      value: r.uuid,
+                    }))}
+                  />
+                  <Button type="primary" loading={routeLoading} onClick={handleConfirmPickRoute} disabled={!pickedRouteUuid}>
+                    {t('app.master-data.sop.useSelectedRoute')}
+                  </Button>
+                </Space>
+              </div>
+              <div>
+                <Button type="default" onClick={handleOpenCreateRouteModal}>
+                  {t('app.master-data.sop.createNewRouteBind')}
+                </Button>
+              </div>
+              <Button type="link" onClick={handleBackToStep0} style={{ paddingLeft: 0 }}>
+                {t('app.master-data.sop.backToMaterialStep')}
+              </Button>
+            </Space>
           )}
         </Card>
       )}
@@ -445,8 +578,18 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       {currentStep === 2 && (
         <Card title="第三步：确认工序" size="small">
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="批量规则与编号"
+              description={
+                type === 'material'
+                  ? `已选 ${selectedMaterialUuids.length} 个物料：将生成约 ${batchSopCountPreview} 条 SOP（每个物料 × 每道工序各一条），编号格式为「路线编码-工序编码-M-主编码」，名称中带物料名与主编码。`
+                  : `已选 ${selectedMaterialGroupUuids.length} 个物料组：将生成约 ${batchSopCountPreview} 条 SOP（每组 × 每道工序各一条），编号含「G-物料组编码」，名称中带组名与编码。`
+              }
+            />
             <div>
-              将按以下 {operations.length} 个工序批量创建 SOP 草稿，再逐工序进入设计器完善流程。
+              将按以下 {operations.length} 个工序批量创建 SOP 草稿，再逐条进入设计器完善流程。
             </div>
             <Table
               size="small"
@@ -464,9 +607,14 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 { title: '工序名称', dataIndex: 'name' },
               ]}
             />
-            <Button type="primary" loading={createLoading} onClick={handleBatchCreateSops}>
-              为工序创建 SOP
-            </Button>
+            <Space>
+              <Button onClick={() => setCurrentStep(1)}>
+                上一步
+              </Button>
+              <Button type="primary" loading={createLoading} onClick={handleBatchCreateSops}>
+                为工序创建 SOP
+              </Button>
+            </Space>
           </Space>
         </Card>
       )}
@@ -486,7 +634,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 {
                   title: 'SOP编号',
                   dataIndex: 'code',
-                  width: 160,
+                  width: 280,
                   render: (value: string) => <Text copyable>{value || '-'}</Text>,
                 },
                 { title: 'SOP名称', dataIndex: 'name' },
@@ -520,9 +668,14 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 },
               ]}
             />
-            <Button type="primary" onClick={handleClose}>
-              关闭
-            </Button>
+            <Space>
+              <Button onClick={() => setCurrentStep(2)}>
+                上一步
+              </Button>
+              <Button type="primary" onClick={handleClose}>
+                关闭
+              </Button>
+            </Space>
           </Space>
         </Card>
       )}
@@ -530,12 +683,9 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       <Modal
         title="创建工艺路线"
         open={createRouteModalVisible}
-        onCancel={() => {
-          setCreateRouteModalVisible(false);
-          setOperations([]);
-        }}
+        onCancel={closeCreateRouteModal}
         footer={[
-          <Button key="cancel" onClick={() => setCreateRouteModalVisible(false)}>
+          <Button key="cancel" onClick={closeCreateRouteModal}>
             取消
           </Button>,
           <Button key="submit" type="primary" loading={newRouteSaving} onClick={handleSaveNewRoute}>

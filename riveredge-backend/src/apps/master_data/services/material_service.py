@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional, Dict, Any, TYPE_CHECKING, Tuple
+from collections import defaultdict
 from decimal import Decimal
 import asyncio
 import hashlib
@@ -13,6 +14,7 @@ import re
 
 from tortoise.models import Q
 from apps.master_data.models.material import MaterialGroup, Material, BOM
+from apps.master_data.models.process import ProcessRoute
 from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
@@ -46,6 +48,24 @@ def _source_type_to_type_code(source_type: Optional[str]) -> str:
     return _SOURCE_TYPE_TO_TYPE_CODE.get(source_type, "RAW")
 
 
+def _material_defaults_as_dict(raw: Any) -> Optional[Dict[str, Any]]:
+    """将物料 defaults 规范为 dict（兼容 ORM JSON 偶发返回字符串）。"""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s)
+            return parsed if isinstance(parsed, dict) else None
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
 async def _enrich_inspection_plan_name(resp_data: Dict[str, Any]) -> None:
     """当有 default_inspection_plan_id 时，填充 default_inspection_plan_name"""
     plan_id = resp_data.get("default_inspection_plan_id")
@@ -58,6 +78,122 @@ async def _enrich_inspection_plan_name(resp_data: Dict[str, Any]) -> None:
             resp_data["default_inspection_plan_name"] = plan.plan_name
     except Exception:
         pass
+
+
+async def _get_process_route_from_defaults_dict(
+    tenant_id: int, defaults: Optional[Any]
+) -> Optional[ProcessRoute]:
+    """从物料 defaults 中解析默认工艺路线（与前端 defaultProcessRoute / defaultProcessRouteUuid 一致）。"""
+    defaults = _material_defaults_as_dict(defaults)
+    if not defaults:
+        return None
+    rid = defaults.get("defaultProcessRoute") or defaults.get("default_process_route")
+    if rid is not None:
+        try:
+            return await ProcessRoute.filter(
+                id=int(rid), tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+        except (TypeError, ValueError):
+            pass
+    u = defaults.get("defaultProcessRouteUuid") or defaults.get("default_process_route_uuid")
+    if u:
+        return await ProcessRoute.filter(
+            uuid=str(u), tenant_id=tenant_id, deleted_at__isnull=True
+        ).first()
+    return None
+
+
+async def _resolve_process_route_id_from_defaults_dict(
+    tenant_id: int, defaults: Optional[Any]
+) -> Optional[int]:
+    pr = await _get_process_route_from_defaults_dict(tenant_id, defaults)
+    return pr.id if pr else None
+
+
+async def _enrich_material_process_route_display(
+    tenant_id: int, material: Any, resp_data: Dict[str, Any]
+) -> None:
+    """补齐 process_route_name；若仅有 defaults 中的路线引用则回填 id+name（列表/详情/保存后响应）。"""
+    pr_id = resp_data.get("process_route_id")
+    pr_name = resp_data.get("process_route_name")
+    if pr_id and not pr_name:
+        pr = await ProcessRoute.filter(
+            id=pr_id, tenant_id=tenant_id, deleted_at__isnull=True
+        ).first()
+        if pr:
+            resp_data["process_route_name"] = pr.name
+        return
+    if pr_id:
+        return
+    pr = await _get_process_route_from_defaults_dict(tenant_id, getattr(material, "defaults", None))
+    if pr:
+        resp_data["process_route_id"] = pr.id
+        resp_data["process_route_name"] = pr.name
+
+
+async def _batch_enrich_process_route_for_material_list(
+    tenant_id: int, materials: List[Any], resp_dicts: List[Dict[str, Any]]
+) -> None:
+    """列表页批量补齐工艺路线展示，避免 N+1；含「仅写在 defaults」的历史数据。"""
+    if not materials or len(materials) != len(resp_dicts):
+        return
+    need_by_id: Dict[int, List[int]] = defaultdict(list)
+    need_by_uuid: Dict[str, List[int]] = defaultdict(list)
+    for idx, (m, rd) in enumerate(zip(materials, resp_dicts)):
+        if rd.get("process_route_id") and not rd.get("process_route_name"):
+            need_by_id[int(rd["process_route_id"])].append(idx)
+            continue
+        if rd.get("process_route_id"):
+            continue
+        d = _material_defaults_as_dict(getattr(m, "defaults", None))
+        if not d:
+            continue
+        rid = d.get("defaultProcessRoute") or d.get("default_process_route")
+        routed_by_id = False
+        if rid is not None:
+            try:
+                need_by_id[int(rid)].append(idx)
+                routed_by_id = True
+            except (TypeError, ValueError):
+                pass
+        if not routed_by_id:
+            u = d.get("defaultProcessRouteUuid") or d.get("default_process_route_uuid")
+            if u:
+                need_by_uuid[str(u)].append(idx)
+    if need_by_id:
+        ids = list(need_by_id.keys())
+        routes = await ProcessRoute.filter(
+            tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+        ).all()
+        id_map = {r.id: r for r in routes}
+        for rid, indices in need_by_id.items():
+            r = id_map.get(rid)
+            if not r:
+                # defaults 里 id 已失效或跨环境不一致时，尝试同条 JSON 中的 UUID
+                for i in indices:
+                    d = _material_defaults_as_dict(getattr(materials[i], "defaults", None))
+                    u = (d.get("defaultProcessRouteUuid") or d.get("default_process_route_uuid")) if d else None
+                    if u:
+                        need_by_uuid[str(u)].append(i)
+                continue
+            for i in indices:
+                resp_dicts[i]["process_route_id"] = r.id
+                resp_dicts[i]["process_route_name"] = r.name
+    if need_by_uuid:
+        uuids = list(need_by_uuid.keys())
+        routes_u = await ProcessRoute.filter(
+            tenant_id=tenant_id, uuid__in=uuids, deleted_at__isnull=True
+        ).all()
+        uuid_map = {str(r.uuid): r for r in routes_u}
+        for u, indices in need_by_uuid.items():
+            r = uuid_map.get(u)
+            if not r:
+                continue
+            for i in indices:
+                if resp_dicts[i].get("process_route_name"):
+                    continue
+                resp_dicts[i]["process_route_id"] = r.id
+                resp_dicts[i]["process_route_name"] = r.name
 
 
 def _material_to_response_data(material) -> Dict[str, Any]:
@@ -667,6 +803,16 @@ class MaterialService:
         # 处理默认值
         if data.defaults:
             material_data["defaults"] = data.defaults
+
+        # 自制件：默认工艺路线可能仅写在 defaults（前端未带 process_route_id），创建时同步 FK
+        if (
+            not material_data.get("process_route_id")
+            and material_data.get("source_type") == "Make"
+            and _material_defaults_as_dict(data.defaults)
+        ):
+            resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(tenant_id, data.defaults)
+            if resolved_pr_id:
+                material_data["process_route_id"] = resolved_pr_id
         
         # 创建物料
         material = await Material.create(
@@ -769,6 +915,7 @@ class MaterialService:
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
+        await _enrich_material_process_route_display(tenant_id, material, resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
         return response
@@ -1135,6 +1282,7 @@ class MaterialService:
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
+        await _enrich_material_process_route_display(tenant_id, material, resp_data)
         return MaterialResponse.model_validate(resp_data)
     
     @staticmethod
@@ -1277,14 +1425,24 @@ class MaterialService:
         materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by(order_expr).all()
         
         # 构建响应数据（用 _material_to_response_data 避免 ReverseRelation 的 code_aliases；列表不加载别名）
-        items = []
+        raw_rows: List[Dict[str, Any]] = []
+        materials_for_rows: List[Any] = []
         for m in materials:
             try:
                 resp_data = _material_to_response_data(m)
                 resp_data["code_aliases"] = []
-                items.append(MaterialResponse.model_validate(resp_data))
+                raw_rows.append(resp_data)
+                materials_for_rows.append(m)
             except Exception as e:
                 logger.warning(f"序列化物料 {m.id if hasattr(m, 'id') else 'unknown'} 失败: {str(e)}")
+                continue
+        await _batch_enrich_process_route_for_material_list(tenant_id, materials_for_rows, raw_rows)
+        items = []
+        for resp_data in raw_rows:
+            try:
+                items.append(MaterialResponse.model_validate(resp_data))
+            except Exception as e:
+                logger.warning(f"校验物料响应失败: {str(e)}")
                 continue
         
         return MaterialListResponse(items=items, total=total)
@@ -1465,6 +1623,16 @@ class MaterialService:
         # 处理默认值
         if data.defaults is not None:
             material.defaults = data.defaults
+
+        # 自制件：未显式传 process_route_id 时，从 defaults 中的默认工艺路线同步 FK（修复列表/SOP 只认 process_route_id）
+        if (
+            getattr(material, "source_type", None) == "Make"
+            and "process_route_id" not in update_data
+            and _material_defaults_as_dict(getattr(material, "defaults", None))
+        ):
+            resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(tenant_id, material.defaults)
+            if resolved_pr_id:
+                material.process_route_id = resolved_pr_id
         
         await material.save()
         
@@ -1570,6 +1738,7 @@ class MaterialService:
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
+        await _enrich_material_process_route_display(tenant_id, material, resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
         try:

@@ -30,6 +30,7 @@ import {
   Divider,
   Tooltip,
   Table,
+  Skeleton,
 } from 'antd'
 import {
   EditOutlined,
@@ -45,6 +46,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   AppstoreOutlined,
+  FileOutlined,
+  FilePdfOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -101,15 +104,82 @@ import type {
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
 import { SecureImage } from '../../../../components/secure-image'
+import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services/file'
 import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 import { extractProTableSort } from '../../../../utils/tableQueryKey'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
+import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../components/custom-fields'
 
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
+
+/** 列表首列附件：图片走缩略图，PDF/DWG 等显示图标并可新开下载页 */
+const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({ fileUuid, alt }) => {
+  const { t } = useTranslation()
+  const [ext, setExt] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getFileByUuid(fileUuid)
+      .then((f) => {
+        if (cancelled) return
+        const fromField = (f.file_extension && String(f.file_extension).toLowerCase()) || ''
+        const name = f.original_name || ''
+        const fromName =
+          name.lastIndexOf('.') >= 0 ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
+        setExt(fromField || fromName || '')
+      })
+      .catch(() => {
+        if (!cancelled) setExt('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fileUuid])
+
+  if (ext === null) {
+    return <Skeleton.Avatar active shape="square" size={40} />
+  }
+
+  const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+  if (imageExt.includes(ext)) {
+    return <SecureImage fileUuid={fileUuid} alt={alt || ''} width={40} height={40} />
+  }
+
+  const open = async () => {
+    try {
+      const url = await getFileDownloadUrlWithToken(fileUuid)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <Tooltip title={t('app.master-data.materials.openAttachment')}>
+      <Button
+        type="link"
+        size="small"
+        style={{ padding: 0, height: 40, width: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        icon={
+          ext === 'pdf' ? (
+            <FilePdfOutlined style={{ fontSize: 22 }} />
+          ) : (
+            <FileOutlined style={{ fontSize: 22 }} />
+          )
+        }
+        onClick={open}
+      />
+    </Tooltip>
+  )
+}
 
 type StandardPartFlatRow = {
   presetKey: string
@@ -205,6 +275,37 @@ const MaterialsManagementPage: React.FC = () => {
   const [standardPresetGroupUuid, setStandardPresetGroupUuid] = useState<string>('')
   const [standardPresetParentGroupUuid, setStandardPresetParentGroupUuid] = useState<string>('')
   const [standardPresetCodeMode, setStandardPresetCodeMode] = useState<'auto' | 'gb'>('auto')
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Material>({ tableName: 'master_data_materials' });
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
+
+  /**
+   * 当详情抽屉打开时，加载自定义字段值
+   */
+  useEffect(() => {
+    if (materialDrawerVisible && currentMaterial?.id) {
+      loadFieldValuesForDetail(currentMaterial.id);
+    } else if (!materialDrawerVisible) {
+      resetDetailFieldValues();
+    }
+  }, [materialDrawerVisible, currentMaterial?.id, loadFieldValuesForDetail, resetDetailFieldValues]);
 
   const standardPresetIndustries = useMemo(
     () => standardPresetCatalog?.industries ?? [],
@@ -426,10 +527,12 @@ const MaterialsManagementPage: React.FC = () => {
         setMaterialDrawerVisible(true)
         setMaterialDetailLoading(true)
         setCurrentMaterial(null)
+        resetDetailFieldValues()
       })
       try {
         const detail = await materialApi.get(record.uuid)
         setCurrentMaterial(detail)
+        await loadFieldValuesForDetail(record.uuid)
       } catch (error: any) {
         messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
         setMaterialDrawerVisible(false)
@@ -991,13 +1094,15 @@ const MaterialsManagementPage: React.FC = () => {
     try {
       let toExport: Material[] = []
       if (type === 'all') {
-        toExport = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+        const res = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+        toExport = res.items ?? []
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid))
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData
       } else {
-        toExport = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+        const res = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+        toExport = res.items ?? []
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'))
@@ -1051,7 +1156,7 @@ const MaterialsManagementPage: React.FC = () => {
       })
 
       if (materialIsEdit && currentMaterial) {
-        await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
+        const result = await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
         emitAgentDebugLog('run-1', 'H4', 'management.tsx:handleMaterialSubmit:update-ok', 'update api resolved', {
           materialUuid: currentMaterial.uuid,
         })
@@ -1064,17 +1169,23 @@ const MaterialsManagementPage: React.FC = () => {
           defaultSalePrice: (refreshed as any)?.defaults?.defaultSalePrice,
         })
         messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
+        
+        setMaterialModalVisible(false)
+        actionRef.current?.reload()
+        return result
       } else {
         // 主编码只由 MaterialForm 决定：有 main_code 则按用户/预览保存，无则省略由后端规则生成。
         // 禁止在此处 delete main_code（曾导致预览/手填均被丢弃，只能累加序号）。
-        await materialApi.create(values as MaterialCreate)
+        const result = await materialApi.create(values as MaterialCreate)
         messageApi.success(t('common.createSuccess'))
+        
+        setMaterialModalVisible(false)
+        actionRef.current?.reload()
+        return result
       }
-
-      setMaterialModalVisible(false)
-      actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || (materialIsEdit ? t('common.updateFailed') : t('common.createFailed')))
+      throw error
     } finally {
       setMaterialFormLoading(false)
     }
@@ -1182,8 +1293,9 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'updatedAt',
         valueType: 'dateTime',
       },
+      ...generateCustomFieldColumns(),
     ],
-    [t, getMaterialGroupName]
+    [t, getMaterialGroupName, generateCustomFieldColumns]
   )
 
   /**
@@ -1220,11 +1332,9 @@ const MaterialsManagementPage: React.FC = () => {
             const fileUuid = firstImage.uid ?? firstImage.uuid ?? (typeof firstImage === 'string' ? firstImage : null);
             if (fileUuid) {
               return (
-                <SecureImage
+                <MaterialAttachmentThumb
                   fileUuid={fileUuid}
                   alt={firstImage.name || t('app.master-data.materials.image')}
-                  width={40}
-                  height={40}
                 />
               );
             }
@@ -1413,6 +1523,7 @@ const MaterialsManagementPage: React.FC = () => {
       handleViewMaterial,
       handleEditMaterial,
       handleDeleteMaterial,
+      generateCustomFieldColumns,
     ]
   )
 
@@ -1609,8 +1720,9 @@ const MaterialsManagementPage: React.FC = () => {
 
                 try {
                   const { items, total } = await materialApi.list(apiParams)
+                  const enriched = await enrichRecordsWithCustomFields(items || [])
                   return {
-                    data: items,
+                    data: enriched,
                     success: true,
                     total: total,
                   }
@@ -2309,6 +2421,11 @@ const MaterialsManagementPage: React.FC = () => {
                   noCard={true}
                 />
               </div>
+              
+              <CustomFieldsDetailSection
+                customFields={customFields}
+                customFieldValues={customFieldValues}
+              />
             </div>
           ) : null
         }

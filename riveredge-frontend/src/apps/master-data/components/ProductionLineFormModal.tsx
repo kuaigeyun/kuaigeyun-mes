@@ -14,8 +14,11 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import type { ProductionLine, ProductionLineCreate, ProductionLineUpdate, Workshop } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { productionLineFormSchema } from '../schemas/production-line';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-factory-production-line';
+const CUSTOM_FIELD_TABLE = 'master_data_factory_production_lines';
 
 export interface ProductionLineFormModalProps {
   open: boolean;
@@ -38,6 +41,15 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
 
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
+
   const isEdit = Boolean(editUuid);
 
   useEffect(() => {
@@ -56,6 +68,8 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
     if (!open) return;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true });
+    resetFieldValues();
+
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -90,7 +104,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
     setEffectiveRuleCode(null);
     productionLineApi
       .get(editUuid)
-      .then((detail) => {
+      .then(async (detail) => {
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -98,6 +112,8 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
           description: detail.description,
           isActive: detail.isActive ?? true,
         });
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.productionLines.getDetailFailed'));
@@ -107,35 +123,39 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
+      const { customData, standardValues } = extractFormValues(values);
+
       if (isEdit && editUuid) {
-        await productionLineApi.update(editUuid, values as ProductionLineUpdate);
+        await productionLineApi.update(editUuid, standardValues as ProductionLineUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await productionLineApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (values.code === previewCode || !values.code)
+          (standardValues.code === previewCode || !standardValues.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            values.code = codeResponse.code;
-          } catch {
-            // keep form code
-          }
+            standardValues.code = codeResponse.code;
+          } catch {}
         }
-        if (values.isActive === undefined) {
-          values.isActive = true;
+        if (standardValues.isActive === undefined) {
+          standardValues.isActive = true;
         }
-        const created = await productionLineApi.create(values as ProductionLineCreate);
+        const created = await productionLineApi.create(standardValues as ProductionLineCreate);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -147,6 +167,8 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    resetFieldValues();
   };
 
   const optionsMap = {
@@ -172,6 +194,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
     >
       <SchemaFormRenderer
         schema={productionLineFormSchema}
+        slots={{ customFields: <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} /> }}
         codeField="code"
         codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
         codeAutoGeneratedKey="field.productionLine.codeAutoGenerated"

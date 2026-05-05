@@ -14,8 +14,11 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import type { WorkCenter, WorkCenterCreate, WorkCenterUpdate, Workstation } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workCenterFormSchema } from '../schemas/workCenter';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-factory-work-center';
+const CUSTOM_FIELD_TABLE = 'master_data_factory_work_centers';
 
 export interface WorkCenterFormModalProps {
   open: boolean;
@@ -38,6 +41,15 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [workstations, setWorkstations] = useState<Workstation[]>([]);
 
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
+
   const isEdit = Boolean(editUuid);
 
   useEffect(() => {
@@ -56,6 +68,7 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
     if (!open) return;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true });
+    resetFieldValues();
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -90,7 +103,7 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
     setEffectiveRuleCode(null);
     workCenterApi
       .get(editUuid)
-      .then((detail) => {
+      .then(async (detail) => {
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -98,6 +111,8 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
           workstationIds: detail.workstationIds ?? [],
           isActive: detail.isActive ?? true,
         });
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.workCenters.getDetailFailed'));
@@ -107,35 +122,39 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
+      const { customData, standardValues } = extractFormValues(values);
+
       if (isEdit && editUuid) {
-        await workCenterApi.update(editUuid, values as WorkCenterUpdate);
+        await workCenterApi.update(editUuid, standardValues as WorkCenterUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await workCenterApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (values.code === previewCode || !values.code)
+          (standardValues.code === previewCode || !standardValues.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            values.code = codeResponse.code;
-          } catch {
-            // keep form code
-          }
+            standardValues.code = codeResponse.code;
+          } catch {}
         }
-        if (values.isActive === undefined) {
-          values.isActive = true;
+        if (standardValues.isActive === undefined) {
+          standardValues.isActive = true;
         }
-        const created = await workCenterApi.create(values as WorkCenterCreate);
+        const created = await workCenterApi.create(standardValues as WorkCenterCreate);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -147,6 +166,8 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    resetFieldValues();
   };
 
   return (
@@ -165,6 +186,7 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
     >
       <SchemaFormRenderer
         schema={workCenterFormSchema}
+        slots={{ customFields: <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} /> }}
         codeField="code"
         codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
         codeAutoGeneratedKey="field.workCenter.codeAutoGenerated"

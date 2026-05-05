@@ -495,7 +495,7 @@ class ProcessRouteVersionCompareResult(BaseModel):
 class SOPBase(BaseModel):
     """作业程序（SOP）基础 Schema — 工艺路线与 BOM 融合主数据，产出作业指导书与报工数据采集项"""
     
-    code: str = Field(..., max_length=50, description="SOP编码")
+    code: str = Field(..., max_length=100, description="SOP编码")
     name: str = Field(..., max_length=200, description="SOP名称")
     operation_id: Optional[int] = Field(None, description="关联工序ID")
     version: Optional[str] = Field(None, max_length=20, description="版本号")
@@ -549,7 +549,7 @@ class SOPUpdate(BaseModel):
     """更新作业程序（SOP） Schema；请求体支持 snake_case 与 camelCase。"""
     model_config = ConfigDict(populate_by_name=True)
 
-    code: Optional[str] = Field(None, max_length=50, description="SOP编码")
+    code: Optional[str] = Field(None, max_length=100, description="SOP编码")
     name: Optional[str] = Field(None, max_length=200, description="SOP名称")
     operation_id: Optional[int] = Field(None, description="关联工序ID")
     version: Optional[str] = Field(None, max_length=20, description="版本号")

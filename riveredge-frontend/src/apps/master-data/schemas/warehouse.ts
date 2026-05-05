@@ -51,6 +51,7 @@ export const warehouseFormSchemaBasic: FieldConfig[] = [
 
 /** 备注及之后字段（线边仓关联字段之后） */
 export const warehouseFormSchemaRest: FieldConfig[] = [
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
   {
     name: 'description',
     type: 'textarea',

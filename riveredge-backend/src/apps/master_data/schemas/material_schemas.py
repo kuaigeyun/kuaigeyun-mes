@@ -112,7 +112,7 @@ class MaterialBase(BaseModel):
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
     texture: Optional[str] = Field(None, max_length=100, description="材质（如：钢、塑料、铝合金等）")
-    images: Optional[List[str]] = Field(None, description="产品图片列表")
+    images: Optional[List[str]] = Field(None, description="物料附件文件 UUID 列表（图片、PDF、DWG 等）")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
     # 部门编码列表（用于创建时输入）
@@ -183,7 +183,7 @@ class MaterialUpdate(BaseModel):
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
     texture: Optional[str] = Field(None, max_length=100, description="材质")
-    images: Optional[List[str]] = Field(None, description="产品图片列表")
+    images: Optional[List[str]] = Field(None, description="物料附件文件 UUID 列表（图片、PDF、DWG 等）")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
     # 部门编码列表（用于更新时输入）

@@ -54,6 +54,16 @@ import type {
   LoadStandardPartsPresetResponse,
 } from '../types/material';
 
+/** 列表/详情接口可能返回 snake_case 或 camelCase，统一便于表格绑定 */
+function normalizeMaterialRow(item: Material): Material {
+  const row = item as any
+  const processRouteName = row.processRouteName ?? row.process_route_name
+  const processRouteId = row.processRouteId ?? row.process_route_id
+  if (processRouteName !== undefined) row.processRouteName = processRouteName
+  if (processRouteId !== undefined) row.processRouteId = processRouteId
+  return row as Material
+}
+
 function optionalNumberId(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -219,14 +229,18 @@ export const materialApi = {
    * 获取物料列表
    */
   list: async (params?: MaterialListParams): Promise<MaterialListResponse> => {
+    const unwrap = (raw: MaterialListResponse | null | undefined): MaterialListResponse => {
+      const items = Array.isArray(raw?.items) ? raw!.items.map((m) => normalizeMaterialRow(m)) : []
+      return { items, total: raw?.total ?? 0 }
+    };
     if (!params) {
-      return api.get('/apps/master-data/materials');
+      return unwrap(await api.get('/apps/master-data/materials'));
     }
     const { sortBy, sortOrder, ...rest } = params;
     const backendParams: Record<string, unknown> = { ...rest };
     if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
     if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
-    return api.get('/apps/master-data/materials', { params: backendParams });
+    return unwrap(await api.get('/apps/master-data/materials', { params: backendParams }));
   },
 
   /**

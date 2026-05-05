@@ -4,7 +4,7 @@
  * 提供仓库的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography, theme } from 'antd';
@@ -26,6 +26,11 @@ import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 仓库管理列表页面组件
@@ -51,6 +56,26 @@ const WarehousesPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetWarehouseItem[]>([]);
   const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Warehouse>({ tableName: 'master_data_warehouse_warehouses' });
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -494,6 +519,7 @@ const WarehousesPage: React.FC = () => {
       
       const detail = await warehouseApi.get(record.uuid);
       setWarehouseDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.warehouses.getDetailFailed'));
     } finally {
@@ -507,6 +533,7 @@ const WarehousesPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWarehouseDetail(null);
+    resetDetailFieldValues();
   };
 
   const handleModalSuccess = () => {
@@ -529,7 +556,9 @@ const WarehousesPage: React.FC = () => {
     quarantine: { text: t('warehouse.type.quarantine') },
   };
 
-  const columns: ProColumns<Warehouse>[] = [
+  const columns: ProColumns<Warehouse>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('app.master-data.warehouses.code'),
       dataIndex: 'code',
@@ -573,6 +602,8 @@ const WarehousesPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
@@ -636,7 +667,8 @@ const WarehousesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   /**
    * 详情 Drawer 的列定义
@@ -714,8 +746,9 @@ const WarehousesPage: React.FC = () => {
 
           try {
             const result = await warehouseApi.list(apiParams as any);
+            const enrichedData = await enrichRecordsWithCustomFields(result.items);
             return {
-              data: result.items,
+              data: enrichedData,
               success: true,
               total: result.total,
             };
@@ -875,6 +908,11 @@ const WarehousesPage: React.FC = () => {
                 />
               </div>
             </div>
+          ) : undefined}
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />

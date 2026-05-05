@@ -23,8 +23,12 @@ import {
 } from '../../../services/factory';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 工作中心列表页面组件
@@ -44,6 +48,15 @@ const WorkCentersPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [workstationMap, setWorkstationMap] = useState<Record<number, Workstation>>({});
 
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<WorkCenter>({ tableName: 'master_data_factory_work_centers' });
+
   useEffect(() => {
     const loadWorkstations = async () => {
       try {
@@ -58,6 +71,17 @@ const WorkCentersPage: React.FC = () => {
     };
     loadWorkstations();
   }, []);
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -77,6 +101,7 @@ const WorkCentersPage: React.FC = () => {
       setDetailLoading(true);
       const detail = await workCenterApi.get(record.uuid);
       setWorkCenterDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.workCenters.getDetailFailed'));
     } finally {
@@ -84,9 +109,13 @@ const WorkCentersPage: React.FC = () => {
     }
   };
 
+  /**
+   * 处理关闭详情
+   */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkCenterDetail(null);
+    resetDetailFieldValues();
   };
 
   const handleDelete = async (record: WorkCenter) => {
@@ -388,7 +417,9 @@ const WorkCentersPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<WorkCenter>[] = [
+  const columns: ProColumns<WorkCenter>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('field.workCenter.code'),
       dataIndex: 'code',
@@ -412,6 +443,8 @@ const WorkCentersPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('field.workCenter.isActive'),
       dataIndex: 'isActive',
@@ -476,7 +509,8 @@ const WorkCentersPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   const detailColumns: ProDescriptionsItemProps<WorkCenter>[] = [
     { title: t('field.workCenter.code'), dataIndex: 'code' },
@@ -531,9 +565,10 @@ const WorkCentersPage: React.FC = () => {
 
             try {
               const result = await workCenterApi.list(apiParams);
+              const enrichedData = await enrichRecordsWithCustomFields(result.items);
 
               return {
-                data: result.items,
+                data: enrichedData,
                 success: true,
                 total: result.total,
               };
@@ -623,6 +658,12 @@ const WorkCentersPage: React.FC = () => {
         basic={workCenterDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workCenterDetail)} />
           ) : undefined}
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
 
       <WorkCenterFormModal

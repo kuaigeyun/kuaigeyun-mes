@@ -15,7 +15,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload } from 'antd';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
@@ -36,12 +38,27 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import { testGenerateCode } from '../../../services/codeRule';
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
-import { getFileDownloadUrlWithToken, uploadMultipleFiles } from '../../../services/file';
+import { getFileByUuid, getFileDownloadUrlWithToken, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
 
 const { Panel } = Collapse;
+
+/** 物料附件：图片 + PDF + DWG（与上传校验、后端白名单一致） */
+const MATERIAL_ATTACHMENT_EXT = new Set([
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+  'pdf', 'dwg', 'dxf', 'step', 'stp', 'xls', 'xlsx',
+]);
+
+function materialAttachmentExtLower(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+function isImageAttachmentExt(ext: string): boolean {
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+}
 
 /** 系统默认规则占位值（提交时转为 null） */
 const SYSTEM_DEFAULT_RULE_VALUE = '__SYSTEM_DEFAULT__';
@@ -96,6 +113,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
+  
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: 'master_data_materials', loadWhenOpen: true, open });
+
   const sourceTypeOptions = useMemo(() => [
     { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
     { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
@@ -143,8 +170,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         iv?.variant_managed ??
         false;
       setVariantManaged(!!vm);
+      
+      if (isEdit && material?.uuid) {
+        loadFieldValues();
+      } else {
+        resetFieldValues();
+      }
     }
-  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog]);
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog, loadFieldValues, resetFieldValues]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -429,18 +462,36 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           loadExternalSystemCodes(material.uuid);
         }
         
-        // 处理图片预填（使用带 token 的 URL，确保生产环境可显示）
-        const materialImages = (material as any).images || [];
-        if (materialImages.length > 0) {
+        // 附件预填（图片用缩略 URL；PDF/DWG 仅展示文件名与图标，避免 picture-card 当作图片解码）
+        const materialImagesRaw = (material as any).images || [];
+        const attachmentUuids = materialImagesRaw
+          .map((item: unknown) =>
+            typeof item === 'string' ? item : (item as { uuid?: string; uid?: string })?.uuid ?? (item as { uid?: string })?.uid
+          )
+          .filter(Boolean) as string[];
+        if (attachmentUuids.length > 0) {
           Promise.all(
-            materialImages.map((uuid: string) =>
-              getFileDownloadUrlWithToken(uuid).then((url) => ({
+            attachmentUuids.map(async (uuid: string) => {
+              let name = t('app.master-data.materialForm.images');
+              let ext = '';
+              try {
+                const meta = await getFileByUuid(uuid);
+                name = meta.original_name || name;
+                ext = materialAttachmentExtLower(meta.original_name || '');
+                if (!ext && meta.file_extension) ext = String(meta.file_extension).toLowerCase();
+              } catch {
+                /* 元数据失败时仍尝试展示为附件 */
+              }
+              const url = await getFileDownloadUrlWithToken(uuid);
+              const showAsImage = isImageAttachmentExt(ext);
+              return {
                 uid: uuid,
-                name: t('app.master-data.materialForm.images'),
+                name,
                 status: 'done' as const,
-                url,
-              }))
-            )
+                url: showAsImage ? url : undefined,
+                thumbUrl: showAsImage ? url : undefined,
+              };
+            })
           ).then((fileList) => {
             setTimeout(() => {
               formRef.current?.setFieldsValue({ images: fileList });
@@ -544,6 +595,19 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     // 不将 processRoutes 放入 deps：processRoutes 更新会触发本 effect 重跑并再次调用 loadProcessRoutes，
     // 导致循环重新加载。工艺路线回填由下方独立 useEffect（依赖 processRoutes）在 150ms 后完成。
   }, [open, isEdit, material, generateCode, initialValues]);
+
+  // 自定义字段数据回填与重置
+  useEffect(() => {
+    if (!open) {
+      resetFieldValues();
+      return;
+    }
+    if (isEdit && material?.id) {
+      loadFieldValues(material.id).then((values) => {
+        formRef.current?.setFieldsValue(values);
+      });
+    }
+  }, [open, isEdit, material?.id, loadFieldValues, resetFieldValues]);
 
   /**
    * 编辑时：工艺路线列表加载完成后，用物料的 process_route_id 回填「默认工艺路线」
@@ -779,13 +843,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       // 处理默认工艺路线：写入 defaults 供展示，并准备 process_route_id 供后端物料表保存
       let processRouteIdForSubmit: number | undefined;
       const defaultProcessRouteUuid = formDefaults.defaultProcessRouteUuid;
-      if (defaultProcessRouteUuid && processRoutes.length > 0) {
+      if (defaultProcessRouteUuid) {
         const route = processRoutes.find(pr => pr.uuid === defaultProcessRouteUuid);
         if (route) {
           processedDefaults.defaultProcessRoute = route.id;
           processedDefaults.defaultProcessRouteUuid = route.uuid;
           processRouteIdForSubmit = route.id;
         }
+        // 路线列表未加载时仍保留 UUID 在 defaults，后端会从 defaults 同步 process_route_id
       }
       
       // 过滤空值
@@ -898,7 +963,18 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
 
-      const result = await onFinish(submitData);
+      // 提取核心数据和自定义字段数据
+      const { coreData, customFieldValues: cfValues } = extractFormValues(submitData);
+
+      const result = await onFinish(coreData as any);
+      
+      // 保存自定义字段值
+      // 如果 result 中包含 uuid，则使用它；否则尝试从 material 中获取（编辑模式）
+      const entityUuid = (result as any)?.uuid || (material as any)?.uuid;
+      if (entityUuid) {
+        await saveCustomFieldValues(entityUuid, cfValues);
+      }
+      
       emitAgentDebugLog('run-1', 'H4', 'MaterialForm.tsx:894', 'onFinish resolved', {
         resultType: typeof result,
       });
@@ -1031,7 +1107,18 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: t('app.master-data.materialForm.basicInfo'),
               children: (
                 <>
-                  <BasicInfoTab part={1} formRef={formRef} materialGroups={materialGroups} isEdit={isEdit} suspendedModalReturnPath={suspendedModalReturnPath} />
+                  <BasicInfoTab
+                    part={1}
+                    formRef={formRef}
+                    materialGroups={materialGroups}
+                    isEdit={isEdit}
+                    suspendedModalReturnPath={suspendedModalReturnPath}
+                    customFields={customFields}
+                    customFieldValues={customFieldValues}
+                    variantManaged={variantManaged}
+                    onVariantManagedChange={handleVariantManagedChange}
+                  />
+
                   <MaterialSourceTab
                     formRef={formRef}
                     material={material}
@@ -1044,7 +1131,17 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                     sourceTypeOptions={sourceTypeOptions}
                     suspendedModalReturnPath={suspendedModalReturnPath}
                   />
-                  <BasicInfoTab part={2} formRef={formRef} materialGroups={[]} variantManaged={variantManaged} onVariantManagedChange={handleVariantManagedChange} isEdit={isEdit} suspendedModalReturnPath={suspendedModalReturnPath} />
+                  <BasicInfoTab 
+                    part={2} 
+                    formRef={formRef} 
+                    materialGroups={[]} 
+                    variantManaged={variantManaged} 
+                    onVariantManagedChange={handleVariantManagedChange} 
+                    isEdit={isEdit} 
+                    suspendedModalReturnPath={suspendedModalReturnPath}
+                    customFields={[]}
+                    customFieldValues={{}}
+                  />
                 </>
               ),
             },
@@ -1125,6 +1222,18 @@ interface MaterialInspectionTabProps {
   material?: Material;
   isEdit: boolean;
   suspendedModalReturnPath?: string;
+}
+
+interface BasicInfoTabProps {
+  part: 1 | 2;
+  formRef: any;
+  materialGroups: MaterialGroup[];
+  isEdit: boolean;
+  suspendedModalReturnPath?: string;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, any>;
+  variantManaged?: boolean;
+  onVariantManagedChange?: (checked: boolean) => void;
 }
 
 const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
@@ -1569,25 +1678,19 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
 /**
  * 基本信息标签页（按字段作用分两段：part1 标识与分类，part2 管理开关与描述；中间为物料来源）
  */
-interface BasicInfoTabProps {
-  part: 1 | 2;
-  formRef: any;
-  materialGroups: Array<{ id: number; code: string; name: string }>;
-  variantManaged?: boolean;
-  onVariantManagedChange?: (checked: boolean) => void;
-  isEdit: boolean;
-  suspendedModalReturnPath?: string;
-}
-
 const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   part,
   formRef,
   materialGroups,
-  onVariantManagedChange,
   isEdit,
   suspendedModalReturnPath,
+  customFields = [],
+  customFieldValues = {},
+  variantManaged,
+  onVariantManagedChange,
 }) => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
@@ -1720,6 +1823,12 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
           />
         </Col>
+
+        {/* 自定义字段插槽：放在基础信息 Row 内部以确保完美对齐 */}
+        <CustomFieldsFormSection
+          customFields={customFields}
+          customFieldValues={customFieldValues}
+        />
       </Row>
     );
   }
@@ -1810,10 +1919,20 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         <ProFormUploadButton
           name="images"
           label={t('app.master-data.materialForm.materialImages')}
+          extra={t('app.master-data.materialForm.materialAttachmentsHint')}
           max={5}
           fieldProps={{
             multiple: true,
             listType: "picture-card",
+            accept: '.jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.dwg,.dxf,.step,.stp,.xls,.xlsx',
+            beforeUpload: (file) => {
+              const ext = materialAttachmentExtLower((file as File).name);
+              if (!MATERIAL_ATTACHMENT_EXT.has(ext)) {
+                messageApi.error(t('app.master-data.materialForm.attachmentInvalidType'));
+                return Upload.LIST_IGNORE;
+              }
+              return true;
+            },
             customRequest: async (options) => {
               try {
                 const res = await uploadMultipleFiles([options.file as File], { category: 'material_images' });

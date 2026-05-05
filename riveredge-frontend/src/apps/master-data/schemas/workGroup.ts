@@ -31,6 +31,7 @@ export const workGroupFormSchemaBasic: FieldConfig[] = [
 
 /** 备注及之后字段（成员列表之后） */
 export const workGroupFormSchemaRest: FieldConfig[] = [
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
   {
     name: 'description',
     type: 'textarea',

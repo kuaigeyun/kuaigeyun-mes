@@ -433,7 +433,7 @@ const BOMDesignerPage: React.FC = () => {
       try {
         setMaterialsLoading(true);
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result); 
+        setMaterials(result.items ?? []);
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       } finally {
@@ -493,8 +493,8 @@ const BOMDesignerPage: React.FC = () => {
 
       // 如果物料列表中找不到，尝试通过API获取
       if (!material) {
-        const allMaterials = await materialApi.list({ limit: 10000, isActive: true });
-        material = allMaterials.find((m: Material) => m.id === materialIdNum);
+        const allMaterialsRes = await materialApi.list({ limit: 10000, isActive: true });
+        material = (allMaterialsRes.items ?? []).find((m: Material) => m.id === materialIdNum);
       }
 
       if (!material) {
@@ -1218,6 +1218,51 @@ const BOMDesignerPage: React.FC = () => {
   };
 
   /**
+   * 保存并生效：先 batchImport，再对本批新建行批量审核通过（无需依赖独立「审核流程」开关）
+   */
+  const handleSaveAndPublish = async () => {
+    if (!materialId || !rootMaterial || !mindMapData) return;
+    if (bomStatus === 'approved') {
+      messageApi.warning(t('app.master-data.bom.approvedCannotEdit'));
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
+      if (items.length === 0) {
+        messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
+        return;
+      }
+      const targetVersion = resolvedVersion ?? '1.0';
+      const created = await bomApi.batchImport({ items, version: targetVersion });
+      const uuids = [...new Set((created ?? []).map((b) => b.uuid).filter(Boolean))];
+      if (uuids.length === 0) {
+        messageApi.warning(t('app.master-data.bom.saveFailed'));
+        await loadBOMData();
+        return;
+      }
+      try {
+        await bomApi.batchApprove(
+          uuids,
+          true,
+          t('app.master-data.bom.saveAndPublishComment'),
+          true,
+          false
+        );
+        messageApi.success(t('app.master-data.bom.saveAndPublishSuccess'));
+      } catch (approveErr: any) {
+        messageApi.warning(approveErr?.message || t('app.master-data.bom.saveAndPublishApproveFailed'));
+      }
+      await loadBOMData();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.bom.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
    * 版本号语义比较（用于取最大版本）：1.0 < 1.1 < 1.2
    */
   const compareVersionDesc = (a: { version: string }, b: { version: string }) => {
@@ -1527,9 +1572,10 @@ const BOMDesignerPage: React.FC = () => {
         setMaterialToEdit(null);
         // 刷新物料列表和主物料，以便节点显示最新来源等信息
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        const materialItems = result.items ?? [];
+        setMaterials(materialItems);
         if (rootMaterial && materialToEdit.uuid === (rootMaterial.uuid || (rootMaterial as any).uuid)) {
-          const updated = result.find((m) => m.uuid === materialToEdit.uuid || (m as any).uuid === materialToEdit.uuid);
+          const updated = materialItems.find((m) => m.uuid === materialToEdit.uuid || (m as any).uuid === materialToEdit.uuid);
           if (updated) setRootMaterial(updated);
         }
       } catch (error: any) {
@@ -2471,15 +2517,25 @@ const BOMDesignerPage: React.FC = () => {
               </Button>
             </>
           ) : (
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              onClick={handleSave}
-              title={t('app.master-data.bom.save')}
-            >
-              {t('app.master-data.bom.save')}
-            </Button>
+            <>
+              <Button
+                icon={<SaveOutlined />}
+                loading={saving}
+                onClick={handleSave}
+                title={t('app.master-data.bom.saveDraftTitle')}
+              >
+                {t('app.master-data.bom.saveDraft')}
+              </Button>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={saving}
+                onClick={handleSaveAndPublish}
+                title={t('app.master-data.bom.saveAndPublishTitle')}
+              >
+                {t('app.master-data.bom.saveAndPublish')}
+              </Button>
+            </>
           )}
           <Button
             icon={<ReloadOutlined />}

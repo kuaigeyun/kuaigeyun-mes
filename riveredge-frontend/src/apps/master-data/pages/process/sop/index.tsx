@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
+import dayjs from 'dayjs';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -24,6 +25,7 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../../componen
 import { sopApi, operationApi, processRouteApi, unwrapProcessPagedList } from '../../../services/process';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 import { materialApi, materialGroupApi } from '../../../services/material';
+import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
@@ -103,7 +105,9 @@ const SOPPage: React.FC = () => {
         ]);
         setOperations(unwrapProcessPagedList(opRes));
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
-        const rawMats = Array.isArray(matRes) ? matRes : [];
+        const rawMats = Array.isArray(matRes)
+          ? matRes
+          : ((matRes as MaterialListResponse | undefined)?.items ?? []);
         setMaterials(
           rawMats.map((m: any) => ({
             uuid: m.uuid,
@@ -463,7 +467,14 @@ const SOPPage: React.FC = () => {
     return operation ? `${operation.code} - ${operation.name}` : `工序ID: ${operationId}`;
   };
 
-  const sopDetailColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
+  const bomLoadModeLabel = (mode?: string | null) => {
+    const m = mode || 'by_material';
+    if (m === 'by_material_group') return '按关联物料组载入 BOM';
+    if (m === 'specific_bom') return '指定 BOM';
+    return '按关联物料载入 BOM';
+  };
+
+  const sopDetailBasicColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
     () => [
       { title: t('app.master-data.sop.codeLabel', { defaultValue: 'SOP编号' }), dataIndex: 'code' },
       { title: t('app.master-data.sop.nameLabel', { defaultValue: 'SOP名称' }), dataIndex: 'name' },
@@ -473,8 +484,28 @@ const SOPPage: React.FC = () => {
         render: (_: unknown, record: SOP) =>
           getOperationName(record?.operationId ?? (record as any)?.operation_id),
       },
-      { title: t('app.master-data.sop.versionLabel', { defaultValue: '版本号' }), dataIndex: 'version' },
-      { title: t('app.master-data.sop.contentLabel', { defaultValue: 'SOP内容' }), dataIndex: 'content', span: 2 },
+      {
+        title: t('app.master-data.sop.versionLabel', { defaultValue: '版本号' }),
+        dataIndex: 'version',
+        render: (_: unknown, record: SOP) => {
+          const v = (record as any)?.version;
+          return v != null && String(v).trim() !== '' ? String(v) : '-';
+        },
+      },
+      {
+        title: t('app.master-data.sop.contentLabel', { defaultValue: '备注 / SOP内容' }),
+        dataIndex: 'content',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const c = (record as any)?.content;
+          const text = c != null && String(c).trim() !== '' ? String(c) : '-';
+          return (
+            <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }} ellipsis={{ rows: 8, expandable: true }}>
+              {text}
+            </Typography.Paragraph>
+          );
+        },
+      },
       {
         title: t('field.route.isActive'),
         dataIndex: 'isActive',
@@ -487,10 +518,145 @@ const SOPPage: React.FC = () => {
           );
         },
       },
-      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
-      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'createdAt',
+        render: (_: unknown, record: SOP) => {
+          const v = (record as any)?.createdAt ?? (record as any)?.created_at;
+          return v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updatedAt',
+        render: (_: unknown, record: SOP) => {
+          const v = (record as any)?.updatedAt ?? (record as any)?.updated_at;
+          return v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
     ],
     [t, operations]
+  );
+
+  const sopDetailBindingColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
+    () => [
+      {
+        title: '绑定物料组',
+        dataIndex: 'materialGroupUuids',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const uuids: string[] =
+            (record as any)?.materialGroupUuids ?? (record as any)?.material_group_uuids ?? [];
+          if (!Array.isArray(uuids) || uuids.length === 0) return '-';
+          return (
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              {uuids.map((u) => {
+                const g = materialGroups.find((x) => x.uuid === u);
+                return <Tag key={u}>{g ? `${g.code} - ${g.name}` : u}</Tag>;
+              })}
+            </Space>
+          );
+        },
+      },
+      {
+        title: '绑定物料',
+        dataIndex: 'materialUuids',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const uuids: string[] = (record as any)?.materialUuids ?? (record as any)?.material_uuids ?? [];
+          if (!Array.isArray(uuids) || uuids.length === 0) return '-';
+          return (
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              {uuids.map((u) => {
+                const m = materials.find((x) => x.uuid === u);
+                return <Tag key={u}>{m ? `${m.code} - ${m.name}` : u}</Tag>;
+              })}
+            </Space>
+          );
+        },
+      },
+      {
+        title: '载入工艺路线',
+        dataIndex: 'routeUuids',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const uuids: string[] = (record as any)?.routeUuids ?? (record as any)?.route_uuids ?? [];
+          if (!Array.isArray(uuids) || uuids.length === 0) return '-';
+          return (
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              {uuids.map((u) => {
+                const r = routes.find((x) => x.uuid === u);
+                return <Tag key={u}>{r ? `${r.code} - ${r.name}` : u}</Tag>;
+              })}
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'BOM 载入方式',
+        dataIndex: 'bomLoadMode',
+        render: (_: unknown, record: SOP) =>
+          bomLoadModeLabel((record as any)?.bomLoadMode ?? (record as any)?.bom_load_mode),
+      },
+      {
+        title: '指定 BOM UUID',
+        dataIndex: 'specificBomUuid',
+        render: (_: unknown, record: SOP) => {
+          const u = (record as any)?.specificBomUuid ?? (record as any)?.specific_bom_uuid;
+          return u ? (
+            <Typography.Text copyable={{ text: String(u) }} style={{ wordBreak: 'break-all' }}>
+              {String(u)}
+            </Typography.Text>
+          ) : (
+            '-'
+          );
+        },
+      },
+    ],
+    [materialGroups, materials, routes]
+  );
+
+  const sopDetailDigitalColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
+    () => [
+      {
+        title: '作业指导流程（ProFlow）',
+        dataIndex: 'flowConfig',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const fc = (record as any)?.flowConfig ?? (record as any)?.flow_config;
+          if (fc == null || (typeof fc === 'object' && Object.keys(fc).length === 0)) return '-';
+          const nodes = (fc as any)?.nodes;
+          const n = Array.isArray(nodes) ? nodes.length : 0;
+          return n > 0 ? `已配置（${n} 个节点）` : '已配置';
+        },
+      },
+      {
+        title: '报工数据采集项（Formily）',
+        dataIndex: 'formConfig',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const fc = (record as any)?.formConfig ?? (record as any)?.form_config;
+          if (fc == null || (typeof fc === 'object' && Object.keys(fc).length === 0)) return '-';
+          return '已配置';
+        },
+      },
+      {
+        title: '附件',
+        dataIndex: 'attachments',
+        span: 2,
+        render: (_: unknown, record: SOP) => {
+          const att = (record as any)?.attachments;
+          if (att == null) return '-';
+          if (Array.isArray(att)) return att.length === 0 ? '-' : `${att.length} 个附件`;
+          if (typeof att === 'object') {
+            const k = Object.keys(att).length;
+            return k === 0 ? '-' : `${k} 项（JSON）`;
+          }
+          return String(att);
+        },
+      },
+    ],
+    []
   );
 
   /**
@@ -781,10 +947,31 @@ const SOPPage: React.FC = () => {
           sopDetail ? (
             <Descriptions
               column={1}
-              items={detailDrawerDescriptionItems(sopDetailColumns, sopDetail)}
+              size="small"
+              items={detailDrawerDescriptionItems(sopDetailBasicColumns, sopDetail)}
             />
           ) : null
         }
+        collaboration={
+          sopDetail ? (
+            <Descriptions
+              column={1}
+              size="small"
+              items={detailDrawerDescriptionItems(sopDetailBindingColumns, sopDetail)}
+            />
+          ) : null
+        }
+        collaborationTitle={t('app.master-data.sop.detailSectionBinding', { defaultValue: '绑定与 BOM 载入' })}
+        lines={
+          sopDetail ? (
+            <Descriptions
+              column={1}
+              size="small"
+              items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
+            />
+          ) : null
+        }
+        linesTitle={t('app.master-data.sop.detailSectionDigital', { defaultValue: '数字化作业指导' })}
       />
 
       {/* 新建 SOP Modal：按工艺路线批量创建 */}
@@ -825,7 +1012,7 @@ const SOPPage: React.FC = () => {
                 placeholder="请输入SOP编号"
                 rules={[
                   { required: true, message: '请输入SOP编号' },
-                  { max: 50, message: 'SOP编号不能超过50个字符' },
+                  { max: 100, message: 'SOP编号不能超过100个字符' },
                 ]}
                 fieldProps={{ style: { textTransform: 'uppercase' } }}
               />

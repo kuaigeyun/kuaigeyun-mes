@@ -394,11 +394,11 @@ const ProcessRoutesPage: React.FC = () => {
       setBoundMaterials(bound);
       
       // 加载所有物料和物料分组（用于选择）
-      const [materials, materialGroups] = await Promise.all([
+      const [materialsRes, materialGroups] = await Promise.all([
         materialApi.list({ limit: 1000 }),
         materialGroupApi.list({ limit: 1000 }),
       ]);
-      setAllMaterials(materials);
+      setAllMaterials(materialsRes.items ?? []);
       setAllMaterialGroups(materialGroups);
       
       setBindModalVisible(true);

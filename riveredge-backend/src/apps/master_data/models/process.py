@@ -490,7 +490,7 @@ class SOP(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
-    code = fields.CharField(max_length=50, description="SOP编码（组织内唯一）")
+    code = fields.CharField(max_length=100, description="SOP编码（组织内唯一，可含路线-工序-物料/组后缀）")
     name = fields.CharField(max_length=200, description="SOP名称")
     version = fields.CharField(max_length=20, null=True, description="版本号")
     

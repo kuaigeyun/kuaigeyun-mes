@@ -35,7 +35,8 @@ class FileService:
     # 安全白名单：只允许常见的非执行类文件
     ALLOWED_EXTENSIONS = {
         "jpg", "jpeg", "png", "gif", "svg", "webp",  # 图片
-        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "json", # 文档
+        "pdf", "dwg", "dxf", "step", "stp",  # 物料/SOP附件常用：PDF、2D/3D CAD
+        "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "json", # 文档
         "zip", "rar", "7z", "tar", "gz", # 压缩包
         "mp3", "wav", "mp4", "mov", "avi" # 多媒体
     }
@@ -102,6 +103,10 @@ class FileService:
             "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "ppt": "application/vnd.ms-powerpoint",
             "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "dwg": "application/acad",
+            "dxf": "image/vnd.dxf",
+            "step": "model/step",
+            "stp": "model/step",
         }
         
         return mime_types.get(file_extension.lower(), "application/octet-stream")

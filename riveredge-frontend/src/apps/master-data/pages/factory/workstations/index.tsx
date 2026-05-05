@@ -25,6 +25,11 @@ import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Workstation, WorkstationCreate, ProductionLine } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 工位管理列表页面组件
@@ -49,6 +54,15 @@ const WorkstationsPage: React.FC = () => {
   // 产线列表（用于导入等）
   const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
 
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Workstation>({ tableName: 'master_data_factory_workstations' });
+
   useEffect(() => {
     const loadProductionLines = async () => {
       try {
@@ -60,6 +74,17 @@ const WorkstationsPage: React.FC = () => {
     };
     loadProductionLines();
   }, []);
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -507,12 +532,12 @@ const WorkstationsPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: Workstation) => {
     try {
-      setCurrentWorkstationUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
       const detail = await workstationApi.get(record.uuid);
       setWorkstationDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.workstations.getDetailFailed'));
     } finally {
@@ -525,8 +550,8 @@ const WorkstationsPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentWorkstationUuid(null);
     setWorkstationDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
@@ -550,7 +575,9 @@ const WorkstationsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Workstation>[] = [
+  const columns: ProColumns<Workstation>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
@@ -580,6 +607,8 @@ const WorkstationsPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('app.master-data.workstations.statusLabel'),
       dataIndex: 'isActive',
@@ -643,7 +672,8 @@ const WorkstationsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t, productionLines]);
 
   /**
    * 详情 Drawer 的列定义
@@ -717,8 +747,9 @@ const WorkstationsPage: React.FC = () => {
           
           try {
             const result = await workstationApi.list(apiParams);
+            const enrichedData = await enrichRecordsWithCustomFields(result.items);
             return {
-              data: result.items,
+              data: enrichedData,
               success: true,
               total: result.total,
             };
@@ -855,6 +886,12 @@ const WorkstationsPage: React.FC = () => {
                 />
               </div>
             </div>
+          ) : null
+        }
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />

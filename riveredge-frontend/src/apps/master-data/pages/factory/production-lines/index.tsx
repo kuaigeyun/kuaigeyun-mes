@@ -24,6 +24,11 @@ import {
 import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
 import type { ProductionLine, ProductionLineCreate, Workshop } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 产线管理列表页面组件
@@ -47,6 +52,15 @@ const ProductionLinesPage: React.FC = () => {
   // 车间列表（用于导入等）
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
 
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<ProductionLine>({ tableName: 'master_data_factory_production_lines' });
+
   useEffect(() => {
     const loadWorkshops = async () => {
       try {
@@ -58,6 +72,17 @@ const ProductionLinesPage: React.FC = () => {
     };
     loadWorkshops();
   }, []);
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -505,12 +530,12 @@ const ProductionLinesPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: ProductionLine) => {
     try {
-      setCurrentProductionLineUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
       const detail = await productionLineApi.get(record.uuid);
       setProductionLineDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.productionLines.getDetailFailed'));
     } finally {
@@ -523,8 +548,8 @@ const ProductionLinesPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentProductionLineUuid(null);
     setProductionLineDetail(null);
+    resetDetailFieldValues();
   };
 
   /** 优先使用接口带出的 workshopCode/workshopName，避免车间字典尚未加载时闪烁 */
@@ -543,7 +568,9 @@ const ProductionLinesPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ProductionLine>[] = [
+  const columns: ProColumns<ProductionLine>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
@@ -573,6 +600,8 @@ const ProductionLinesPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('app.master-data.productionLines.statusLabel'),
       dataIndex: 'isActive',
@@ -638,7 +667,8 @@ const ProductionLinesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t, workshops]);
 
   /**
    * 详情 Drawer 的列定义
@@ -713,8 +743,9 @@ const ProductionLinesPage: React.FC = () => {
           
           try {
             const result = await productionLineApi.list(apiParams);
+            const enrichedData = await enrichRecordsWithCustomFields(result.items);
             return {
-              data: result.items,
+              data: enrichedData,
               success: true,
               total: result.total,
             };
@@ -821,6 +852,12 @@ const ProductionLinesPage: React.FC = () => {
         basic={productionLineDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, productionLineDetail)} />
           ) : undefined}
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
 
       {/* 创建/编辑产线 Modal */}

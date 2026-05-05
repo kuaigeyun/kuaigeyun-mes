@@ -20,6 +20,11 @@ import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 库区管理列表页面组件
@@ -43,6 +48,26 @@ const StorageAreasPage: React.FC = () => {
   
   // 仓库列表（用于导入等）
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<StorageArea>({ tableName: 'master_data_warehouse_storage_areas' });
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   useEffect(() => {
     const loadWarehouses = async () => {
@@ -502,6 +527,7 @@ const StorageAreasPage: React.FC = () => {
       
       const detail = await storageAreaApi.get(record.uuid);
       setStorageAreaDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.storageAreas.getDetailFailed'));
     } finally {
@@ -516,6 +542,7 @@ const StorageAreasPage: React.FC = () => {
     setDrawerVisible(false);
     setCurrentStorageAreaUuid(null);
     setStorageAreaDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
@@ -538,7 +565,9 @@ const StorageAreasPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<StorageArea>[] = [
+  const columns: ProColumns<StorageArea>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
@@ -575,6 +604,8 @@ const StorageAreasPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    // 插入自定义字段列
+    ...customFieldColumns,
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
@@ -640,7 +671,8 @@ const StorageAreasPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t, warehouses]);
 
   /**
    * 详情 Drawer 的列定义
@@ -711,8 +743,9 @@ const StorageAreasPage: React.FC = () => {
 
           try {
             const result = await storageAreaApi.list(apiParams as any);
+            const enrichedData = await enrichRecordsWithCustomFields(result.items);
             return {
-              data: result.items,
+              data: enrichedData,
               success: true,
               total: result.total,
             };
@@ -816,9 +849,7 @@ const StorageAreasPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        styles={{ body: { position: 'relative' } }}
-        basic={
-          storageAreaDetail ? (
+        basic={storageAreaDetail ? (
             <div style={{ position: 'relative', paddingRight: 8 }}>
               <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageAreaDetail)} />
               <div
@@ -849,6 +880,11 @@ const StorageAreasPage: React.FC = () => {
                 />
               </div>
             </div>
+          ) : undefined}
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />
