@@ -59,7 +59,7 @@ import {
 import { syncAllMenus } from '../../../../services/menu';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
-const OTHER_PLACEHOLDER_CODES = ['kuaitms', 'kuailtms', 'kuaiip', 'kuaiems'];
+const OTHER_PLACEHOLDER_CODES = ['kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', 'kuaitms', 'kuailtms', 'kuaiip', 'kuaiems'];
 const INDUSTRY_VALUE_PACK_CODES = [
   'kuaimachinery',
   'kuaimolding',
@@ -79,15 +79,36 @@ const INDUSTRY_VALUE_PACK_CODES = [
   'kuaisemiconductor',
 ];
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 按产品要求固定展示顺序：
-  // 快财务 -> 快客户 -> 快研发 -> 快协同 -> 快售后 -> 快数采 -> 快报表
+  // 通用应用保持现有编号（不变）
   kuaicaiwu: 40,
-  kuaicrm: 41,
-  kuaiplm: 42,
-  kuaisrm: 43,
-  kuaiasms: 44,
   kuaiiot: 45,
   kuaireport: 46,
+  // 其他类：从 100 开始
+  kuaicrm: 100,
+  kuaiplm: 101,
+  kuaisrm: 102,
+  kuaiasms: 103,
+  kuaitms: 104,
+  kuailtms: 105,
+  kuaiip: 106,
+  kuaiems: 107,
+  // 行业增值包：从 200 开始
+  kuaimachinery: 200,
+  kuaimolding: 201,
+  kuaielectronics: 202,
+  kuaiautoparts: 203,
+  kuaimedical: 204,
+  kuaifood: 205,
+  kuaipackaging: 206,
+  kuaihardware: 207,
+  kuaidiecasting: 208,
+  kuaiwiring: 209,
+  kuaimotor: 210,
+  kuaibattery: 211,
+  kuainewequipment: 212,
+  kuaisheetmetal: 213,
+  kuaimold: 214,
+  kuaisemiconductor: 215,
 };
 
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other';
@@ -1375,7 +1396,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 41,
+                  sort_order: 100,
                   version: 'Beta',
                 },
                 {
@@ -1388,7 +1409,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 42,
+                  sort_order: 101,
                   version: 'Beta',
                 },
                 {
@@ -1401,7 +1422,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 43,
+                  sort_order: 102,
                   version: 'Beta',
                 },
                 {
@@ -1414,7 +1435,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 100,
+                  sort_order: 200,
                   version: 'PRO',
                 },
                 {
@@ -1427,7 +1448,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 101,
+                  sort_order: 201,
                   version: 'PRO',
                 },
                 {
@@ -1440,7 +1461,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 102,
+                  sort_order: 202,
                   version: 'PRO',
                 },
                 {
@@ -1453,7 +1474,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 103,
+                  sort_order: 203,
                   version: 'PRO',
                 },
                 {
@@ -1466,7 +1487,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 104,
+                  sort_order: 204,
                   version: 'PRO',
                 },
                 {
@@ -1479,7 +1500,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 105,
+                  sort_order: 205,
                   version: 'PRO',
                 },
                 {
@@ -1492,7 +1513,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 106,
+                  sort_order: 206,
                   version: 'PRO',
                 },
                 {
@@ -1505,7 +1526,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 107,
+                  sort_order: 207,
                   version: 'PRO',
                 },
                 {
@@ -1518,7 +1539,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 108,
+                  sort_order: 208,
                   version: 'PRO',
                 },
                 {
@@ -1531,7 +1552,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 109,
+                  sort_order: 209,
                   version: 'PRO',
                 },
                 {
@@ -1544,7 +1565,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 110,
+                  sort_order: 210,
                   version: 'PRO',
                 },
                 {
@@ -1557,7 +1578,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 111,
+                  sort_order: 211,
                   version: 'PRO',
                 },
                 {
@@ -1570,7 +1591,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 112,
+                  sort_order: 212,
                   version: 'PRO',
                 },
                 {
@@ -1583,7 +1604,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 113,
+                  sort_order: 213,
                   version: 'PRO',
                 },
                 {
@@ -1596,7 +1617,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 114,
+                  sort_order: 214,
                   version: 'PRO',
                 },
                 {
@@ -1609,7 +1630,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 115,
+                  sort_order: 215,
                   version: 'PRO',
                 },
                 {
@@ -1622,7 +1643,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 200,
+                  sort_order: 104,
                   version: 'PRO',
                 },
                 {
@@ -1635,7 +1656,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 201,
+                  sort_order: 103,
                   version: 'PRO',
                 },
                 {
@@ -1648,7 +1669,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 202,
+                  sort_order: 105,
                   version: 'PRO',
                 },
                 {
@@ -1661,7 +1682,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 203,
+                  sort_order: 106,
                   version: 'PRO',
                 },
                 {
@@ -1674,7 +1695,7 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 204,
+                  sort_order: 107,
                   version: 'PRO',
                 },
               ];
@@ -1736,9 +1757,9 @@ const ApplicationListPage: React.FC = () => {
                 { label: '全部', value: 'all' },
                 { label: '通用', value: 'general' },
                 { label: '行业', value: 'industry' },
+                { label: '其他', value: 'other' },
                 { label: '基础版', value: 'basic' },
                 { label: '专业版', value: 'pro' },
-                { label: '其他', value: 'other' },
               ]}
               onChange={(value) => {
                 setAppCategoryFilter(value as AppCategoryFilter);
