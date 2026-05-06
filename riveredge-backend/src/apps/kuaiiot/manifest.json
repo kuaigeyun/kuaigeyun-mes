@@ -1,32 +1,33 @@
 {
-    "code": "kuaiiot",
-    "name": "快数采",
-    "version": "1.0.0",
-    "description": "工业物联网数据采集与集成平台",
+  "code": "kuaiiot",
+  "name": "快数采",
+  "version": "1.0.0",
+  "description": "工业物联网设备数采、互联与集成平台",
+  "icon": "cpu",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaiiot/index.tsx",
+  "route_path": "/apps/kuaiiot",
+  "sort_order": 55,
+  "is_pro": true,
+  "menu_config": {
+    "title": "app.kuaiiot.name",
     "icon": "cpu",
-    "author": "RiverEdge Team",
-    "entry_point": "../apps/kuaiiot/index.tsx",
-    "route_path": "/apps/kuaiiot",
-    "sort_order": 55,
-    "is_pro": true,
-    "menu_config": {
-        "title": "app.kuaiiot.name",
-        "icon": "cpu",
-        "path": "/apps/kuaiiot",
-        "children": [{
-                "title": "app.kuaiiot.menu.dashboard",
-                "path": "/apps/kuaiiot/dashboard",
-                "icon": "layout",
-                "sort_order": 1,
-                "permission": "kuaiiot:dashboard:read"
-            },
-            {
-                "title": "app.kuaiiot.menu.devices",
-                "path": "/apps/kuaiiot/devices",
-                "icon": "hardDrive",
-                "sort_order": 2,
-                "permission": "kuaiiot:device:read"
-            }
-        ]
-    }
+    "path": "/apps/kuaiiot",
+    "children": [
+      {
+        "title": "app.kuaiiot.menu.dashboard",
+        "path": "/apps/kuaiiot/dashboard",
+        "icon": "layout",
+        "sort_order": 1,
+        "permission": "kuaiiot:dashboard:read"
+      },
+      {
+        "title": "app.kuaiiot.menu.devices",
+        "path": "/apps/kuaiiot/devices",
+        "icon": "hardDrive",
+        "sort_order": 2,
+        "permission": "kuaiiot:device:read"
+      }
+    ]
+  }
 }

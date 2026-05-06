@@ -2,7 +2,7 @@
   "name": "快报表",
   "code": "kuaireport",
   "version": "2.0.0",
-  "description": "统一的数据决策中心",
+  "description": "多源数据聚合与经营分析决策中心",
   "icon": "fileBarChart",
   "author": "RiverEdge Team",
   "is_pro": true,

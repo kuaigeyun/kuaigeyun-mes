@@ -23,6 +23,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -2029,12 +2030,7 @@ const PurchaseOrdersPage: React.FC = () => {
           <Col span={12}>
             <ProForm.Item
               name="supplier_id"
-              label={
-                <span>
-                  供应商
-                  <a href="/apps/master-data/supply-chain/suppliers" onClick={(e) => { e.preventDefault(); navigate('/apps/master-data/supply-chain/suppliers'); }} style={{ marginLeft: 8, fontSize: 12 }}>供应商管理</a>
-                </span>
-              }
+              label="供应商"
               rules={[{ required: true, message: '请选择供应商' }]}
             >
               <UniDropdown
@@ -2159,13 +2155,11 @@ const PurchaseOrdersPage: React.FC = () => {
             );
           }}
         </AntForm.Item>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 12 }}>
-            <Space align="center" size={12}>
-              <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-                <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-                采购明细
-              </span>
+        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+          <UniTableDetailHeader
+            title="采购明细"
+            required
+            leftExtra={(
               <ProForm.Item
                 name="price_type"
                 initialValue="tax_exclusive"
@@ -2176,8 +2170,8 @@ const PurchaseOrdersPage: React.FC = () => {
               >
                 <Switch checkedChildren="含税" unCheckedChildren="不含税" />
               </ProForm.Item>
-            </Space>
-          </div>
+            )}
+          />
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = getFormValue('price_type') ?? 'tax_exclusive';

@@ -1840,6 +1840,7 @@ class SalesOrderService:
         sales_order_id: int,
         created_by: int,
         selected_item_ids: Optional[List[int]] = None,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         直推销售订单到工单（跳过需求计算）。
@@ -1864,6 +1865,11 @@ class SalesOrderService:
             items = [it for it in items if int(getattr(it, "id", 0)) in selected]
             if not items:
                 raise BusinessLogicError("所选明细为空，无法直推工单")
+
+        raw_push_mode = (push_mode or "").strip().lower()
+        if raw_push_mode not in ("draft", "confirm"):
+            raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
+        push_as_confirm = raw_push_mode == "confirm"
 
         from datetime import datetime
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -1972,6 +1978,13 @@ class SalesOrderService:
                 work_order_data=wo_data,
                 created_by=created_by,
             )
+            if push_as_confirm:
+                wo = await work_order_service.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=wo.id,
+                    released_by=created_by,
+                    check_shortage=False,
+                )
             wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
             wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
             wo_name = wo.name if hasattr(wo, "name") else wo.get("name")
@@ -2004,6 +2017,7 @@ class SalesOrderService:
         return {
             "success": True,
             "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
+            "push_mode": raw_push_mode,
             "target_documents": [
                 {"type": "work_order", "id": w.id if hasattr(w, "id") else w.get("id"), "code": w.code if hasattr(w, "code") else w.get("code")}
                 for w in work_orders

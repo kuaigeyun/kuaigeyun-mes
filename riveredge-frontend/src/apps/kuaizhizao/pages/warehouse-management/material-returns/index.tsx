@@ -15,6 +15,7 @@ import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, More
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
@@ -545,7 +546,8 @@ const MaterialReturnsPage: React.FC = () => {
         </Row>
         {selectedBorrowDetail && (
           <>
-            <ProFormItem label="归还明细" style={{ width: '100%' }}>
+            <div className="uni-table-detail" style={{ width: '100%' }}>
+              <UniTableDetailHeader title="归还明细" />
               <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <Table
@@ -579,7 +581,7 @@ const MaterialReturnsPage: React.FC = () => {
                 dataSource={selectedBorrowDetail.items}
                 />
               </div>
-            </ProFormItem>
+            </div>
           </>
         )}
         <Row gutter={16}>

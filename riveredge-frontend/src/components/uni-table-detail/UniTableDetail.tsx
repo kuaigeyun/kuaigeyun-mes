@@ -12,7 +12,7 @@ export interface UniTableDetailProps<RecordType = any> {
   columns: ColumnsType<RecordType>;
   /** 标题 */
   title?: React.ReactNode;
-  /** 是否必填（显示星号，默认 false） */
+  /** 是否必填（显示星号，默认 true） */
   required?: boolean;
   /** 是否禁用添加按钮 */
   disabledAdd?: boolean;
@@ -44,6 +44,78 @@ export interface UniTableDetailProps<RecordType = any> {
   containerStyle?: React.CSSProperties;
 }
 
+export interface UniTableDetailHeaderProps {
+  /** 标题 */
+  title?: React.ReactNode;
+  /** 是否必填（显示星号，默认 true） */
+  required?: boolean;
+  /** 标题左侧扩展（紧邻标题） */
+  leftExtra?: React.ReactNode;
+  /** 右侧标准动作按钮（统一 size/type） */
+  actions?: Array<{
+    key: string;
+    label: React.ReactNode;
+    onClick: () => void;
+    icon?: React.ReactNode;
+    type?: 'default' | 'primary' | 'dashed' | 'link' | 'text';
+    danger?: boolean;
+    disabled?: boolean;
+  }>;
+  /** 标题右侧自定义内容（兼容旧用法） */
+  headerExtra?: React.ReactNode;
+  /** 导入按钮点击事件 */
+  onImport?: () => void;
+  /** 导入按钮文案 */
+  importText?: React.ReactNode;
+}
+
+export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
+  title,
+  required = true,
+  leftExtra,
+  actions,
+  headerExtra,
+  onImport,
+  importText,
+}) => {
+  const { t } = useTranslation();
+
+  if (!title && !leftExtra && !actions?.length && !headerExtra && !onImport) return null;
+
+  return (
+    <div className="uni-table-detail-header">
+      <Space align="center" size={12}>
+        <span className="detail-title">
+          {required && <span className="required-mark">*</span>}
+          {title}
+        </span>
+        {leftExtra}
+      </Space>
+      <div className="uni-table-detail-header-actions">
+        {(actions || []).map((action) => (
+          <Button
+            key={action.key}
+            type={action.type ?? 'default'}
+            size="small"
+            icon={action.icon}
+            danger={action.danger}
+            disabled={action.disabled}
+            onClick={action.onClick}
+          >
+            {action.label}
+          </Button>
+        ))}
+        {headerExtra}
+        {onImport && (
+          <Button type="default" size="small" icon={<ImportOutlined />} onClick={onImport}>
+            {importText ?? t('common.import') ?? '导入明细'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /**
  * 通用明细表格组件 (UniTableDetail)
  *
@@ -59,7 +131,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   name,
   columns,
   title,
-  required = false,
+  required = true,
   disabledAdd,
   disabledRemove,
   addText,
@@ -81,22 +153,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
 
   return (
     <div className="uni-table-detail" style={containerStyle}>
-      {(title || headerExtra || onImport) && (
-        <div className="uni-table-detail-header">
-          <span className="detail-title">
-            {required && <span className="required-mark">*</span>}
-            {title}
-          </span>
-          <div className="uni-table-detail-header-actions">
-            {headerExtra}
-            {onImport && (
-              <Button type="default" size="small" icon={<ImportOutlined />} onClick={onImport}>
-                {t('common.import') ?? '导入明细'}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      <UniTableDetailHeader title={title} required={required} headerExtra={headerExtra} onImport={onImport} />
 
       <AntForm.List
         name={name}

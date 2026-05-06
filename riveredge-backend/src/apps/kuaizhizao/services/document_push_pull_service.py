@@ -25,6 +25,7 @@ from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
 from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+from infra.services.business_config_service import BusinessConfigService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -331,6 +332,12 @@ class DocumentPushPullService:
         relations = []
         
         # MTO 模式：从 Demand 追溯销售订单，写入工单以便列表可追溯到源订单
+        push_mode = (push_params or {}).get("push_mode")
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = resolved_push_mode == "confirm"
+
         sales_order_id: Optional[int] = None
         sales_order_code: Optional[str] = None
         sales_order_name: Optional[str] = None
@@ -375,6 +382,13 @@ class DocumentPushPullService:
                 work_order_data=work_order_data,
                 created_by=created_by
             )
+            if push_as_confirm and created_by is not None:
+                work_order = await self.work_order_service.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order.id,
+                    released_by=created_by,
+                    check_shortage=False,
+                )
             
             work_orders.append(work_order)
             
@@ -734,6 +748,11 @@ class DocumentPushPullService:
         relations = []
 
         production_mode = await self._resolve_plan_production_mode(tenant_id, plan)
+        push_mode = (push_params or {}).get("push_mode")
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = resolved_push_mode == "confirm"
 
         for item in prod_items:
             qty = float(item.work_order_quantity or 0)
@@ -761,6 +780,13 @@ class DocumentPushPullService:
                 work_order_data=wo_data,
                 created_by=created_by
             )
+            if push_as_confirm and created_by is not None:
+                wo = await work_order_service.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=wo.id,
+                    released_by=created_by,
+                    check_shortage=False,
+                )
             wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
             wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
             

@@ -535,6 +535,7 @@ async def push_all(
             production=b.get("production"),
             purchase=b.get("purchase"),
             include_outsource=b.get("include_outsource", True),
+            push_mode=b.get("push_mode"),
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

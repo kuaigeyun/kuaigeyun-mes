@@ -22,6 +22,7 @@ import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -597,7 +598,8 @@ const OtherInboundPage: React.FC = () => {
             </ProFormItem>
           </Col>
         </Row>
-        <ProFormItem label="明细" required style={{ width: '100%' }}>
+        <div className="uni-table-detail" style={{ width: '100%' }}>
+          <UniTableDetailHeader title="明细" required />
           <AntForm.List name="items">
               {(fields, { add, remove }) => {
                 const cols = [
@@ -795,7 +797,7 @@ const OtherInboundPage: React.FC = () => {
                 );
               }}
             </AntForm.List>
-        </ProFormItem>
+        </div>
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 

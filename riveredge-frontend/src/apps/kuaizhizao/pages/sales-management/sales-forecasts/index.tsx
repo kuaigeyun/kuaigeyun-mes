@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ImportOutlined, AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,6 +23,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail'
 import { UniImport } from '../../../../../components/uni-import'
 import type { Material } from '../../../../master-data/types/material'
 import {
@@ -1209,21 +1210,7 @@ export default function SalesForecastsPage() {
           <Col span={12}>
             <ProFormText
               name="forecast_code"
-              label={
-                <span>
-                  {t('app.kuaizhizao.salesForecast.forecastCode')}
-                  <a
-                    href="/system/code-rules"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate('/system/code-rules');
-                    }}
-                    style={{ marginLeft: 8, fontSize: 12 }}
-                  >
-                    {t('app.kuaizhizao.codeRule.setting')}
-                  </a>
-                </span>
-              }
+              label={t('app.kuaizhizao.salesForecast.forecastCode')}
               placeholder={
                 isAutoGenerateEnabled('kuaizhizao-sales-forecast')
                   ? t('common.autoCodePlaceholder')
@@ -1276,25 +1263,21 @@ export default function SalesForecastsPage() {
           </Col>
         </Row>
 
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-              {t('app.kuaizhizao.salesForecast.forecastItems')}
-            </span>
-            <Space size={8}>
-              <Button
-                size="small"
-                icon={<ImportOutlined />}
-                onClick={() => setImportModalVisible(true)}
-              >
-                导入明细
-              </Button>
-              <Button size="small" icon={<AppstoreAddOutlined />} onClick={openMatrixEntry}>
-                矩阵录入
-              </Button>
-            </Space>
-          </div>
+        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+          <UniTableDetailHeader
+            title={t('app.kuaizhizao.salesForecast.forecastItems')}
+            required
+            onImport={() => setImportModalVisible(true)}
+            importText="导入明细"
+            actions={[
+              {
+                key: 'matrix-entry',
+                label: '矩阵录入',
+                icon: <AppstoreAddOutlined />,
+                onClick: openMatrixEntry,
+              },
+            ]}
+          />
           <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesForecast.itemsRequired') }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => {

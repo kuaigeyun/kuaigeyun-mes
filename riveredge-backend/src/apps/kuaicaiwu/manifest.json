@@ -2,7 +2,7 @@
   "code": "kuaicaiwu",
   "name": "快财务",
   "version": "1.0.0",
-  "description": "业务驱动的管理会计",
+  "description": "企业财务核算与资金全周期管控平台",
   "icon": "wallet",
   "author": "RiverEdge Team",
   "entry_point": "../apps/kuaicaiwu/index.tsx",

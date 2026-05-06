@@ -1168,7 +1168,7 @@ const MaterialsManagementPage: React.FC = () => {
           defaultTaxRate: (refreshed as any)?.defaults?.defaultTaxRate,
           defaultSalePrice: (refreshed as any)?.defaults?.defaultSalePrice,
         })
-        messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
+        messageApi.success(t('common.updateSuccess'))
         
         setMaterialModalVisible(false)
         actionRef.current?.reload()

@@ -20,6 +20,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
@@ -566,7 +567,8 @@ const MaterialBorrowsPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
-        <ProFormItem label="明细" required style={{ width: '100%' }}>
+        <div className="uni-table-detail" style={{ width: '100%' }}>
+          <UniTableDetailHeader title="明细" required />
           <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => {
@@ -674,7 +676,7 @@ const MaterialBorrowsPage: React.FC = () => {
               }}
             </AntForm.List>
           </AntForm.Item>
-        </ProFormItem>
+        </div>
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 

@@ -2,7 +2,7 @@
   "name": "基础数据管理",
   "code": "master-data",
   "version": "1.0.0",
-  "description": "统一管理工厂、仓库、物料、工艺、供应链、绩效等基础数据",
+  "description": "企业基础数据的统一管理与维护平台",
   "icon": "database",
   "author": "RiverEdge Team",
   "entry_point": "../apps/master-data/index.tsx",

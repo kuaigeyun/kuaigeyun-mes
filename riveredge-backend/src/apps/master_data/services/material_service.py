@@ -1741,26 +1741,6 @@ class MaterialService:
         await _enrich_material_process_route_display(tenant_id, material, resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
-        try:
-            from core.tasks.dispatcher import TaskEvent, dispatch_event
-
-            await dispatch_event(
-                TaskEvent(
-                    name="material/updated",
-                    data={
-                        "tenant_id": tenant_id,
-                        "material_id": material.id,
-                        "material_uuid": str(material.uuid),
-                        "material_name": material.name,
-                        "main_code": material.main_code,
-                        "updated_by": updated_by,
-                    },
-                )
-            )
-            logger.info(f"已发送物料更新任务: material_id={material.id}")
-        except Exception as e:
-            logger.warning(f"发送物料更新任务失败: {e}")
-
         return response
 
     @staticmethod

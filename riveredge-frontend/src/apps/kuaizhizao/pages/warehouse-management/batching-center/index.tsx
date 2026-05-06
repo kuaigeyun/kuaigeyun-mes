@@ -24,6 +24,7 @@ import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
@@ -391,7 +392,8 @@ const BatchingCenterPage: React.FC = () => {
         <ProFormDependency name={['create_mode']}>
           {({ create_mode }) =>
             create_mode === 'manual' ? (
-              <ProFormItem label="配料明细" required style={{ width: '100%' }}>
+              <div className="uni-table-detail" style={{ width: '100%' }}>
+                <UniTableDetailHeader title="配料明细" required />
                 <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条配料明细' }]}>
                   <AntForm.List name="items">
                     {(fields, { add, remove }) => {
@@ -489,7 +491,7 @@ const BatchingCenterPage: React.FC = () => {
                     }}
                   </AntForm.List>
                 </AntForm.Item>
-              </ProFormItem>
+              </div>
             ) : null
           }
         </ProFormDependency>

@@ -22,6 +22,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
@@ -1189,22 +1190,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
           <Col span={12} />
         </Row>
         {/* 申请明细：与销售订单 Modal 同款 — AntForm.List + Table + 内联样式 + 操作列 fixed right */}
-        <div style={{ marginBottom: 24, width: '100%' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 8,
-              flexWrap: 'wrap',
-              gap: 12,
-            }}
-          >
-            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-              申请明细
-            </span>
-          </div>
+        <div className="uni-table-detail" style={{ marginBottom: 24, width: '100%' }}>
+          <UniTableDetailHeader title="申请明细" required />
           <AntForm.Item
             name="items"
             noStyle

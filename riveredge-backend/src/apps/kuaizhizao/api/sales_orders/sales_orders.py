@@ -789,6 +789,7 @@ async def preview_push_sales_order_to_work_order(
 @router.post("/{sales_order_id}/push-to-work-order", response_model=Dict[str, Any], summary="直推销售订单到工单")
 async def push_sales_order_to_work_order(
     sales_order_id: int = Path(..., description="销售订单ID"),
+    body: Optional[Dict[str, Any]] = Body(default=None, description="可选：push_mode=draft|confirm"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -798,10 +799,12 @@ async def push_sales_order_to_work_order(
     订单明细直接转为工单，不要求BOM，原材料由用户自行计算采购。
     """
     try:
+        payload = body or {}
         result = await sales_order_service.push_sales_order_to_work_order(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             created_by=current_user.id,
+            push_mode=payload.get("push_mode"),
         )
         return result
     except NotFoundError as e:

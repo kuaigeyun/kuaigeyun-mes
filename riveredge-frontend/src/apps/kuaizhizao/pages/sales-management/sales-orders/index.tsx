@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -34,8 +34,6 @@ import {
   SalesOrderDetailTimelinePane,
   SalesOrderDetailCollaborationTitleSuffix,
 } from './components/SalesOrderDetailBody';
-import { AgileQuotingDrawer } from './components/AgileQuotingDrawer';
-import { CalculatorOutlined } from '@ant-design/icons';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
@@ -54,6 +52,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems } from '../../../../../components/uni-push';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
 import {
@@ -532,10 +531,6 @@ const SalesOrdersPage: React.FC = () => {
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
 
-  // 敏捷核价相关状态
-  const [quoteDrawerVisible, setQuoteDrawerVisible] = useState(false);
-  const [quoteMaterialId, setQuoteMaterialId] = useState<number | undefined>(undefined);
-  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
 
@@ -2756,21 +2751,7 @@ const SalesOrdersPage: React.FC = () => {
             <Col span={12}>
               <ProFormText
                 name="order_code"
-                label={
-                  <span>
-                    订单编号
-                    <a
-                      href="/system/code-rules"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate('/system/code-rules');
-                      }}
-                      style={{ marginLeft: 8, fontSize: 12 }}
-                    >
-                      编号规则设置
-                    </a>
-                  </span>
-                }
+                label="订单编号"
                 placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? '编号将根据编号规则自动生成，可修改' : '请输入订单编号'}
                 rules={[{ required: true, message: '请输入订单编号' }]}
                 fieldProps={{ disabled: isEdit }}
@@ -2804,21 +2785,7 @@ const SalesOrdersPage: React.FC = () => {
             <Col span={6}>
               <ProForm.Item
                 name="customer_id"
-                label={
-                  <span>
-                    客户名称
-                    <a
-                      href="/apps/master-data/supply-chain/customers"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate('/apps/master-data/supply-chain/customers');
-                      }}
-                      style={{ marginLeft: 8, fontSize: 12 }}
-                    >
-                      客户信息管理
-                    </a>
-                  </span>
-                }
+                label="客户名称"
                 rules={[{ required: true, message: '请选择客户' }]}
               >
                 <UniDropdown
@@ -2961,13 +2928,11 @@ const SalesOrdersPage: React.FC = () => {
 
 
           {/* 订单明细：标题 + 价格类型开关 + 导入按钮 */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 12 }}>
-              <Space align="center" size={12}>
-                <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-                  <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-                  {t('app.kuaizhizao.salesOrder.orderItems')}
-                </span>
+          <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+            <UniTableDetailHeader
+              title={t('app.kuaizhizao.salesOrder.orderItems')}
+              required
+              leftExtra={(
                 <ProForm.Item
                   name="price_type"
                   initialValue="tax_exclusive"
@@ -2982,16 +2947,10 @@ const SalesOrdersPage: React.FC = () => {
                     onChange={handlePriceTypeToggle}
                   />
                 </ProForm.Item>
-              </Space>
-              <Button 
-                size="small" 
-                type="link"
-                icon={<ImportOutlined />} 
-                onClick={() => setImportModalVisible(true)}
-              >
-                {t('app.kuaizhizao.salesOrder.importItems')}
-              </Button>
-            </div>
+              )}
+              onImport={() => setImportModalVisible(true)}
+              importText={t('app.kuaizhizao.salesOrder.importItems')}
+            />
             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
               {({ getFieldValue: getFormValue }: any) => {
                 const priceType = getFormValue('price_type') ?? 'tax_exclusive';
@@ -3140,43 +3099,22 @@ const SalesOrdersPage: React.FC = () => {
                       align: 'right' as const,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                          {({ getFieldValue }: any) => {
-                            const materialId = getFieldValue(['items', index, 'material_id']);
-                            return (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0, flex: 1 }}>
-                                  <InputNumber
-                                    placeholder={
-                                      priceType === 'tax_inclusive'
-                                        ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
-                                        : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
-                                    }
-                                    min={0}
-                                    precision={2}
-                                    prefix="¥"
-                                    style={{ width: '100%' }}
-                                    size="small"
-                                  />
-                                </AntForm.Item>
-                                <Tooltip title="敏捷核价">
-                                  <Button 
-                                    size="small" 
-                                    type="text" 
-                                    icon={<CalculatorOutlined style={{ color: materialId ? '#1890ff' : '#ccc' }} />} 
-                                    onClick={() => {
-                                      if (materialId) {
-                                        setQuoteMaterialId(materialId);
-                                        setActiveItemIndex(index);
-                                        setQuoteDrawerVisible(true);
-                                      } else {
-                                        messageApi.warning('请先选择物料');
-                                      }
-                                    }}
-                                  />
-                                </Tooltip>
-                              </div>
-                            );
-                          }}
+                          {() => (
+                            <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                              <InputNumber
+                                placeholder={
+                                  priceType === 'tax_inclusive'
+                                    ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                    : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                }
+                                min={0}
+                                precision={2}
+                                prefix="¥"
+                                style={{ width: '100%' }}
+                                size="small"
+                              />
+                            </AntForm.Item>
+                          )}
                         </AntForm.Item>
                       ),
                     },
@@ -4037,24 +3975,6 @@ const SalesOrdersPage: React.FC = () => {
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
         title={t('app.kuaizhizao.salesOrder.syncFromDataset')}
-      />
-
-      <AgileQuotingDrawer
-        open={quoteDrawerVisible}
-        zIndex={nestedElevatedPopupZIndex}
-        materialId={quoteMaterialId}
-        onClose={() => setQuoteDrawerVisible(false)}
-        onAdopt={(price) => {
-          if (activeItemIndex !== null) {
-            const items = formRef.current?.getFieldValue('items') ?? [];
-            const next = [...items];
-            if (next[activeItemIndex]) {
-              next[activeItemIndex] = { ...next[activeItemIndex], unit_price: price };
-              formRef.current?.setFieldsValue({ items: next });
-              messageApi.success('已采纳建议报价');
-            }
-          }
-        }}
       />
 
       {/* 提醒弹窗 */}

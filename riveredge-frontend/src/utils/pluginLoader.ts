@@ -86,6 +86,8 @@ const APP_LOADERS: Record<string, () => Promise<unknown>> = {
   'master-data': () => import('../apps/master-data/index'),
   kuaiai: () => import('../apps/kuaiai/index'),
   kuaiiot: () => import('../apps/kuaiiot/index'),
+  kuaierp: () => import('../apps/kuaizhizao/index'),
+  kuaimes: () => import('../apps/kuaizhizao/index'),
 };
 
 /**

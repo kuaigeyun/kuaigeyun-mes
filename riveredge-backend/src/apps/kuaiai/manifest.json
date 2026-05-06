@@ -3,7 +3,7 @@
   "name": "KU-AI",
   "version": "1.0.0",
   "is_pro": true,
-  "description": "在相关业务单据提供智能建议，支持本地建议与大模型建议",
+  "description": "嵌入业务场景的 AI 智能辅助引擎",
   "icon": "sparkles",
   "author": "RiverEdge Team",
   "entry_point": "../apps/kuaiai/index.tsx",

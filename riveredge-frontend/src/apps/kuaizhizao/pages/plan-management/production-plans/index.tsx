@@ -26,6 +26,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -717,21 +718,23 @@ const ProductionPlansPage: React.FC = () => {
           <ProFormDateRangePicker name="dateRange" label="计划期间" rules={[{ required: true }]} />
         </ProFormGroup>
         
-        <ProFormList
-          name="items"
-          label="计划明细"
-          copyIconProps={false}
-          creatorButtonProps={{
-            creatorButtonText: '添加物料',
-          }}
-        >
-          <ProFormGroup>
-            <ProFormText name="material_code" label="物料编号" width="sm" rules={[{ required: true }]} />
-            <ProFormText name="material_name" label="物料名称" width="sm" rules={[{ required: true }]} />
-            <ProFormDigit name="planned_quantity" label="计划数量" width="xs" rules={[{ required: true }]} />
-            <ProFormDatePicker name="planned_date" label="计划日期" width="xs" rules={[{ required: true }]} />
-          </ProFormGroup>
-        </ProFormList>
+        <div className="uni-table-detail">
+          <UniTableDetailHeader title="计划明细" />
+          <ProFormList
+            name="items"
+            copyIconProps={false}
+            creatorButtonProps={{
+              creatorButtonText: '添加物料',
+            }}
+          >
+            <ProFormGroup>
+              <ProFormText name="material_code" label="物料编号" width="sm" rules={[{ required: true }]} />
+              <ProFormText name="material_name" label="物料名称" width="sm" rules={[{ required: true }]} />
+              <ProFormDigit name="planned_quantity" label="计划数量" width="xs" rules={[{ required: true }]} />
+              <ProFormDatePicker name="planned_date" label="计划日期" width="xs" rules={[{ required: true }]} />
+            </ProFormGroup>
+          </ProFormList>
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', marginTop: 8 }}>
           <Button type="default" icon={<ShoppingOutlined />} onClick={() => setMaterialPickerOpen(true)}>
             {t('app.kuaizhizao.common.materialBatchSelect')}

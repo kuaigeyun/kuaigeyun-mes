@@ -126,6 +126,10 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
         "labelKey": "pages.system.configCenter.category.supply",
         "descriptionKey": "pages.system.configCenter.category.supplyDesc",
     },
+    "automation": {
+        "labelKey": "pages.system.configCenter.category.production",
+        "descriptionKey": "pages.system.configCenter.category.productionDesc",
+    },
 }
 
 # 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
@@ -196,6 +200,19 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     },
     "parameters.sales.low_margin_threshold_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
+    "parameters.automation.push_default_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "draft",
+                "labelKey": "pages.system.configCenter.param.automation_push_default_mode_opt_draft",
+            },
+            {
+                "value": "confirm",
+                "labelKey": "pages.system.configCenter.param.automation_push_default_mode_opt_confirm",
+            },
+        ],
+    },
 }
 
 
@@ -250,6 +267,7 @@ PARAMETER_KEYS = {
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
+    "parameters.automation.push_default_mode",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -292,6 +310,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
+    "parameters.automation.push_default_mode",
 }
 
 # 默认仓管/生产领料确认角色
@@ -377,6 +396,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "planning": {
         "auto_push_sales_to_computation_on_approve": False,
+    },
+    "automation": {
+        "push_default_mode": "confirm",
     },
     "bom": {
         "bom_multi_version_allowed": True,
@@ -815,6 +837,21 @@ class BusinessConfigService:
             .get("planning", {})
             .get("auto_push_sales_to_computation_on_approve", False)
         )
+
+    async def get_push_default_mode(self, tenant_id: int) -> str:
+        """
+        下推默认模式：
+        - draft: 下推为草稿
+        - confirm: 下推为正式（执行单据确认/下达路径）
+        """
+        config = await self.get_business_config(tenant_id)
+        raw = (
+            config.get("parameters", {})
+            .get("automation", {})
+            .get("push_default_mode", "confirm")
+        )
+        mode = str(raw or "confirm").strip().lower()
+        return mode if mode in ("draft", "confirm") else "confirm"
 
     async def get_planning_config(self, tenant_id: int) -> Dict[str, Any]:
         """

@@ -40,6 +40,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -878,12 +879,7 @@ const ReceiptNoticesPage: React.FC = () => {
         <Col span={12}>
           <ProFormText
             name="notice_code"
-            label={
-              <span>
-                通知单号
-                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编号规则设置</a>
-              </span>
-            }
+            label="通知单号"
             placeholder={isAutoGenerateEnabled('kuaizhizao-receipt-notice') ? '编号将根据编号规则自动生成，可修改' : '请输入通知单号'}
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
@@ -933,7 +929,8 @@ const ReceiptNoticesPage: React.FC = () => {
         </Col>
         <Col span={12} />
       </Row>
-      <ProFormItem label="通知明细" required style={{ width: '100%' }}>
+      <div className="uni-table-detail" style={{ width: '100%' }}>
+        <UniTableDetailHeader title="通知明细" required />
         <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
           <AntForm.List name="items">
             {(fields, { add, remove }) => {
@@ -1043,7 +1040,7 @@ const ReceiptNoticesPage: React.FC = () => {
             }}
           </AntForm.List>
         </ProForm.Item>
-      </ProFormItem>
+      </div>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );
@@ -1084,7 +1081,8 @@ const ReceiptNoticesPage: React.FC = () => {
         </Col>
         <Col span={12} />
       </Row>
-      <ProFormItem label="通知明细">
+      <div className="uni-table-detail" style={{ width: '100%' }}>
+        <UniTableDetailHeader title="通知明细" />
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
           {({ getFieldValue }: any) => {
             const items = getFieldValue('items') ?? [];
@@ -1105,7 +1103,7 @@ const ReceiptNoticesPage: React.FC = () => {
             );
           }}
         </AntForm.Item>
-      </ProFormItem>
+      </div>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );

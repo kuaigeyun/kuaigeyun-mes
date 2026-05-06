@@ -2475,7 +2475,8 @@ class DemandComputationService:
         created_by: int,
         production: Optional[str] = None,
         purchase: Optional[str] = None,
-        include_outsource: bool = True
+        include_outsource: bool = True,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         一键下推：按配置执行生产计划/工单、采购申请/采购单、委外工单。
@@ -2488,6 +2489,11 @@ class DemandComputationService:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
         if computation.computation_status != "完成":
             raise BusinessLogicError("只能对已完成的计算进行下推")
+
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        allow_draft_by_mode = resolved_push_mode == "draft"
 
         results = {
             "work_orders": [],
@@ -2505,7 +2511,7 @@ class DemandComputationService:
                 computation_id=computation_id,
                 created_by=created_by,
                 generate_mode="work_order_only",
-                allow_draft=True,
+                allow_draft=allow_draft_by_mode,
             )
             results["work_orders"] = r.get("work_orders", [])
             results["outsource_work_orders"] = r.get("outsource_work_orders", [])
@@ -2536,13 +2542,14 @@ class DemandComputationService:
                 computation_id=computation_id,
                 created_by=created_by,
                 generate_mode="purchase_only",
-                allow_draft=False,
+                allow_draft=allow_draft_by_mode,
             )
             results["purchase_orders"] = r.get("purchase_orders", [])
 
         return {
             "success": True,
             "message": "一键下推完成",
+            "push_mode": resolved_push_mode,
             "results": results,
         }
 

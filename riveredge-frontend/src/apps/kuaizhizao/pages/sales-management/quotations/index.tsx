@@ -20,7 +20,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import '../../../../../components/uni-table-detail/index.less';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
@@ -2198,22 +2198,10 @@ const QuotationsPage: React.FC = () => {
       <ProFormText name="customer_name" hidden />
 
       <div className="uni-table-detail">
-        <div
-          className="uni-table-detail-header"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-            marginBottom: 8,
-          }}
-        >
-          <Space align="center" size={12}>
-            <span className="detail-title">
-              <span className="required-mark">*</span>
-              物料明细
-            </span>
+        <UniTableDetailHeader
+          title="物料明细"
+          required
+          leftExtra={(
             <ProForm.Item
               name="price_type"
               initialValue="tax_exclusive"
@@ -2228,13 +2216,10 @@ const QuotationsPage: React.FC = () => {
                 onChange={handleQuotationPriceTypeToggle}
               />
             </ProForm.Item>
-          </Space>
-          <div className="uni-table-detail-header-actions">
-            <Button type="default" size="small" icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
-              导入明细
-            </Button>
-          </div>
-        </div>
+          )}
+          onImport={() => setImportModalVisible(true)}
+          importText="导入明细"
+        />
         <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue }: any) => {
             const priceType = getFieldValue('price_type') ?? 'tax_exclusive';

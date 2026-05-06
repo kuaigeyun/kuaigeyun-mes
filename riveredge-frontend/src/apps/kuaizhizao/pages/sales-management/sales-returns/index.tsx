@@ -13,11 +13,12 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, MoreOutlined, CopyOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniImport } from '../../../../../components/uni-import';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -767,19 +768,12 @@ const SalesReturnsPage: React.FC = () => {
           </Col>
         </Row>
 
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-              退货明细
-            </span>
-            <Button
-              size="small"
-              icon={<ImportOutlined />}
-              onClick={() => setImportModalVisible(true)}
-            >
-              导入明细
-            </Button>
-          </div>
+        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+          <UniTableDetailHeader
+            title="退货明细"
+            onImport={() => setImportModalVisible(true)}
+            importText="导入明细"
+          />
           <ProForm.Item name="items" noStyle rules={[{ required: true, message: '请添加至少一项明细' }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => (

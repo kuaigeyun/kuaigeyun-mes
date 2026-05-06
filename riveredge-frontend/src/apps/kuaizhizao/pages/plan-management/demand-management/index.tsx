@@ -47,6 +47,7 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import {
@@ -932,13 +933,8 @@ const DemandManagementPage: React.FC = () => {
           </Col>
         </Row>
 
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ marginBottom: 8 }}>
-            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-              计划明细
-            </span>
-          </div>
+        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+          <UniTableDetailHeader title="计划明细" required />
           <ProForm.Item
             name="items"
             noStyle

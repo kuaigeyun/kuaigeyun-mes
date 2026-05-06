@@ -30,6 +30,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import {
   DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
@@ -1811,7 +1812,8 @@ const InboundPage: React.FC = () => {
                 />
               </Col>
             </Row>
-            <ProFormItem label="入库明细" required style={{ width: '100%' }}>
+            <div className="uni-table-detail" style={{ width: '100%' }}>
+              <UniTableDetailHeader title="入库明细" required />
               <AntForm.List name="items" initialValue={[defaultPurchaseItem]}>
                 {(fields, { add, remove }) => (
                     <div>
@@ -1924,7 +1926,7 @@ const InboundPage: React.FC = () => {
                     </div>
                   )}
                 </AntForm.List>
-              </ProFormItem>
+            </div>
             <ProFormItem name="notes" label="备注">
               <Input.TextArea rows={2} placeholder="可选" />
             </ProFormItem>

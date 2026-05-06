@@ -20,7 +20,6 @@ except ImportError:
     approval_action_workflow_function = None
     sop_execution_workflow_function = None
     sop_node_complete_workflow_function = None
-    material_change_notification_workflow = None
     data_backup_workflow = None
     data_restore_workflow = None
 
@@ -69,13 +68,6 @@ if INNGEST_AVAILABLE:
         sop_node_complete_workflow_function = None
     
     try:
-        from apps.master_data.inngest.functions.material_change_notification_workflow import (
-            material_change_notification_workflow
-        )
-    except ImportError:
-        material_change_notification_workflow = None
-    
-    try:
         from apps.kuaizhizao.inngest.functions.exception_detection_workflow import (
             run_exception_detection_scheduler,
             exception_detection_worker_function,
@@ -121,7 +113,6 @@ __all__ = [
     "approval_action_workflow_function",
     "sop_execution_workflow_function",
     "sop_node_complete_workflow_function",
-    "material_change_notification_workflow",
     "exception_detection_scheduler_function",
     "exception_detection_worker_function",
     "exception_detection_by_tenant_function",

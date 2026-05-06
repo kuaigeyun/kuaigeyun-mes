@@ -26,6 +26,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
@@ -770,7 +771,8 @@ const DeliveryNotesPage: React.FC = () => {
         </Col>
         <Col span={12} />
       </Row>
-      <ProFormItem label="明细" required style={{ width: '100%' }}>
+      <div className="uni-table-detail" style={{ width: '100%' }}>
+        <UniTableDetailHeader title="明细" required />
         <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
           <AntForm.List name="items">
             {(fields, { add, remove }) => {
@@ -889,7 +891,7 @@ const DeliveryNotesPage: React.FC = () => {
             }}
           </AntForm.List>
         </AntForm.Item>
-      </ProFormItem>
+      </div>
       <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
     </>
   );

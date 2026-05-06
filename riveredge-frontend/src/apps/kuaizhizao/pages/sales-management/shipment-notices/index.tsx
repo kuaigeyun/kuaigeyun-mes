@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined, MoreOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, MoreOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -24,6 +24,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -702,12 +703,7 @@ const ShipmentNoticesPage: React.FC = () => {
         <Col span={12}>
           <ProFormText
             name="notice_code"
-            label={
-              <span>
-                通知单号
-                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编号规则设置</a>
-              </span>
-            }
+            label="通知单号"
             placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? '编号将根据编号规则自动生成，可修改' : '请输入通知单号'}
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
@@ -774,16 +770,13 @@ const ShipmentNoticesPage: React.FC = () => {
         <Col span={12} />
       </Row>
       <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
-      <ProFormItem 
-        label={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <span>通知明细</span>
-            <Button size="small" icon={<ImportOutlined />} onClick={() => setImportVisible(true)}>导入明细</Button>
-          </div>
-        } 
-        required 
-        style={{ width: '100%' }}
-      >
+      <div className="uni-table-detail">
+        <UniTableDetailHeader
+          title="通知明细"
+          required
+          onImport={() => setImportVisible(true)}
+          importText="导入明细"
+        />
         <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
           <AntForm.List name="items">
             {(fields, { add, remove }) => {
@@ -906,7 +899,7 @@ const ShipmentNoticesPage: React.FC = () => {
           </AntForm.List>
         </ProForm.Item>
         <ShipmentNoticeFormSummary />
-      </ProFormItem>
+      </div>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );

@@ -44,6 +44,13 @@ export interface ConfigCategory {
   params: ParamMeta[];
 }
 
+/** 通用分类（每个 Tab 固定置顶） */
+const COMMON_CATEGORY = {
+  id: 'common',
+  nameKey: 'pages.system.configCenter.category.common',
+  descriptionKey: 'pages.system.configCenter.category.commonDesc',
+};
+
 /** 8 个标准系统模块的基础定义（按快制造菜单顺序） */
 const BASE_MODULES = [
   { id: 'sales', nameKey: 'app.kuaizhizao.menu.sales-management' },
@@ -58,7 +65,7 @@ const BASE_MODULES = [
 
 /** 辅助函数：根据模块 ID 快速创建分类列表 */
 function createCategories(moduleParams: Record<string, ParamMeta[]>): ConfigCategory[] {
-  return BASE_MODULES.map(m => ({
+  return [COMMON_CATEGORY, ...BASE_MODULES].map(m => ({
     ...m,
     params: moduleParams[m.id] || [],
   }));
@@ -130,6 +137,20 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
 
 /** 4. 业务自动化（配合taskiq进行业务按需的自动完成） */
 export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
+  common: [
+    {
+      key: 'automation.push_default_mode',
+      nameKey: 'pages.system.configCenter.param.automation_push_default_mode',
+      descriptionKey: 'pages.system.configCenter.param.automation_push_default_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.automation.push_default_mode',
+      type: 'select',
+      selectOptions: [
+        { value: 'confirm', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_confirm' },
+        { value: 'draft', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_draft' },
+      ],
+    },
+  ],
   production: [
     { key: 'work_order.auto_generate', nameKey: 'pages.system.configCenter.param.work_order_auto_generate', descriptionKey: 'pages.system.configCenter.param.work_order_auto_generate_desc', source: 'business_config', sourcePath: 'parameters.work_order.auto_generate', type: 'boolean' },
     {
