@@ -130,6 +130,27 @@ export const customerFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields
 
 const customerBusinessFields: FieldConfig[] = [
   {
+    name: 'revenueRecognitionOverride',
+    type: 'select',
+    labelKey: 'field.customer.revenueRecognitionOverride',
+    placeholderKey: 'field.partner.recognitionOverrideInherit',
+    colSpan: 12,
+    allowClear: true,
+    extraKey: 'field.customer.revenueRecognitionOverrideDesc',
+    extraAsTooltip: true,
+    options: [
+      { labelKey: 'field.partner.recognitionOverrideInherit', value: null },
+      {
+        labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment',
+        value: 'on_shipment',
+      },
+      {
+        labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice',
+        value: 'on_invoice',
+      },
+    ],
+  },
+  {
     name: 'industryCode',
     type: 'select',
     labelKey: 'field.customer.industry',

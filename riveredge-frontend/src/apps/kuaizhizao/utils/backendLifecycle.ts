@@ -43,6 +43,7 @@ const LEGACY_STAGE_PERCENT_FALLBACK: Record<string, number> = {
   effective: 50,
   executing: 50,
   delivered: 75,
+  invoicing: 88,
 };
 
 /**

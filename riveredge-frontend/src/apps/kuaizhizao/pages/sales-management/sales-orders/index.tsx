@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -67,8 +67,11 @@ import {
   pushSalesOrderToComputation,
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
+  pushSalesOrderToDelivery,
+  pushSalesOrderAutoRoute,
   pushSalesOrderToInvoice,
   pushSalesOrderToSalesReturn,
+  pullSalesOrderFromQuotation,
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
@@ -84,6 +87,7 @@ import {
   ReviewStatus,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
+import { listQuotations, type Quotation } from '../../../services/quotation';
 
 /** 已审核状态值集合（与后端 document_lifecycle _is_approved 一致，用于按钮显示） */
 const APPROVED_STATUS_VALUES = ['已审核', SalesOrderStatus.AUDITED, ReviewStatus.APPROVED, '审核通过', '通过', '已通过'] as const;
@@ -93,6 +97,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import dayjs from 'dayjs';
+import { formatApiErrorDetail } from '../../../../../services/api';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -121,6 +126,16 @@ const salesOrderChainHalfHeightCss = `calc((100vh - ${SALES_ORDER_CHAIN_VERTICAL
 const salesOrderChainPanelWidthCss = `calc(50vw - ${SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_ORDER_CHAIN_DRAWER_GAP}px)`;
 const salesOrderBriefPanelTopCss = `calc(${SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SALES_ORDER_CHAIN_VERTICAL_TRIM}px) / 2 + ${SALES_ORDER_LEFT_CHAIN_GAP}px)`;
 
+/** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
+function salesOrderCatchMessage(error: unknown, fallback: string): string {
+  const e = error as { response?: { data?: { detail?: unknown } }; message?: unknown };
+  return (
+    formatApiErrorDetail(e?.response?.data?.detail) ||
+    formatApiErrorDetail(e?.message) ||
+    fallback
+  );
+}
+
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
 type SalesOrderItemRow = SalesOrderItem & {
   _rowKey: string;
@@ -139,6 +154,20 @@ type SalesOrderItemRow = SalesOrderItem & {
   /** 生命周期阶段名，用于卡片分组 */
   _lifecycleStage?: string;
   items?: { work_order_id?: number | null }[];
+};
+
+type PullQuotationCandidate = {
+  id: number;
+  quotation_code: string;
+  customer_name?: string;
+  quotation_date?: string;
+  delivery_date?: string;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  salesman_name?: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
 };
 
 /** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
@@ -487,6 +516,12 @@ const SalesOrdersPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
+  const [pullFromQuotationVisible, setPullFromQuotationVisible] = useState(false);
+  const [pullQuotationLoading, setPullQuotationLoading] = useState(false);
+  const [pullQuotationSubmitting, setPullQuotationSubmitting] = useState(false);
+  const [pullQuotationKeyword, setPullQuotationKeyword] = useState('');
+  const [selectedPullQuotationId, setSelectedPullQuotationId] = useState<number | undefined>(undefined);
+  const [pullQuotationCandidates, setPullQuotationCandidates] = useState<PullQuotationCandidate[]>([]);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 与客户跟进列表一致：交货逾期行浅色警示背景 */
   const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(true);
@@ -882,7 +917,7 @@ const SalesOrdersPage: React.FC = () => {
             setCurrentSalesOrder(null);
           }
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
+          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.deleteFailed')));
         }
       },
     });
@@ -1126,7 +1161,7 @@ const SalesOrdersPage: React.FC = () => {
         setPushPreviewLoading(false);
       })
       .catch((err) => {
-        messageApi.error(err?.response?.data?.detail || err.message || t('app.kuaizhizao.salesOrder.loadPreviewFailed'));
+        messageApi.error(salesOrderCatchMessage(err, t('app.kuaizhizao.salesOrder.loadPreviewFailed')));
         setPushPreviewOpen(false);
         setPushPreviewLoading(false);
       });
@@ -1144,7 +1179,7 @@ const SalesOrdersPage: React.FC = () => {
       setPushPreviewData(null);
       setPushPreviewAction(null);
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error.message || '下推失败');
+      messageApi.error(salesOrderCatchMessage(error, '下推失败'));
     } finally {
       setPushPreviewConfirming(false);
     }
@@ -1187,7 +1222,7 @@ const SalesOrdersPage: React.FC = () => {
           messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
           refreshDrawerOrder(id);
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.salesOrder.pushFailed'));
+          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
         }
       },
     });
@@ -1209,7 +1244,43 @@ const SalesOrdersPage: React.FC = () => {
           messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.invoiceCreated'));
           refreshDrawerOrder(id);
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.salesOrder.pushFailed'));
+          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
+        }
+      },
+    });
+  };
+
+  /** 处理下推到销售出库 */
+  const handlePushToDelivery = async (id: number) => {
+    modalApi.confirm({
+      title: '下推到销售出库',
+      content: '确认按默认仓库生成销售出库单？',
+      zIndex: elevatedModalZIndex,
+      onOk: async () => {
+        try {
+          const res = await pushSalesOrderToDelivery(id);
+          messageApi.success(res?.message || '已生成销售出库单');
+          refreshDrawerOrder(id);
+        } catch (error: any) {
+          messageApi.error(salesOrderCatchMessage(error, '下推销售出库失败'));
+        }
+      },
+    });
+  };
+
+  /** 处理按 MTO/MTS 自动路由下推 */
+  const handlePushAutoRoute = async (id: number) => {
+    modalApi.confirm({
+      title: '自动路由下推',
+      content: '确认按订单类型和可用库存自动路由下推到工单/发货通知单？',
+      zIndex: elevatedModalZIndex,
+      onOk: async () => {
+        try {
+          const res = await pushSalesOrderAutoRoute(id);
+          messageApi.success(res?.message || '自动路由下推完成');
+          refreshDrawerOrder(id);
+        } catch (error: any) {
+          messageApi.error(salesOrderCatchMessage(error, '自动路由下推失败'));
         }
       },
     });
@@ -1232,7 +1303,7 @@ const SalesOrdersPage: React.FC = () => {
       setPushToReturnQuantities(quantities);
       setPushToReturnVisible(true);
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error?.message || '加载销售订单详情失败');
+      messageApi.error(salesOrderCatchMessage(error, '加载销售订单详情失败'));
     }
   };
 
@@ -1270,7 +1341,7 @@ const SalesOrdersPage: React.FC = () => {
       setPushToReturnWarehouseName('');
       refreshDrawerOrder(pushToReturnOrder.id);
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error?.message || '下推销售退货失败');
+      messageApi.error(salesOrderCatchMessage(error, '下推销售退货失败'));
     } finally {
       setPushToReturnLoading(false);
     }
@@ -1292,6 +1363,80 @@ const SalesOrdersPage: React.FC = () => {
       () => refreshDrawerOrder(id),
       id,
     );
+  };
+
+  const loadPullQuotationCandidates = async (keyword: string = '') => {
+    setPullQuotationLoading(true);
+    try {
+      const result = await listQuotations({
+        skip: 0,
+        limit: 30,
+        keyword: keyword.trim() || undefined,
+      });
+      const rows: Quotation[] = Array.isArray(result) ? result : (result as any).data || [];
+      const candidates: PullQuotationCandidate[] = rows
+        .filter((q) => q.id && q.quotation_code)
+        .map((q) => ({
+          id: Number(q.id),
+          quotation_code: String(q.quotation_code),
+          customer_name: q.customer_name || '',
+          quotation_date: q.quotation_date || '',
+          delivery_date: q.delivery_date || '',
+          total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
+          status: q.status || '',
+          review_status: q.review_status || '',
+          salesman_name: q.salesman_name || '',
+          sales_order_id: q.sales_order_id ? Number(q.sales_order_id) : undefined,
+          sales_order_code: q.sales_order_code || '',
+        }));
+      setPullQuotationCandidates(candidates);
+    } catch (error: any) {
+      messageApi.error(salesOrderCatchMessage(error, '加载报价单列表失败'));
+      setPullQuotationCandidates([]);
+    } finally {
+      setPullQuotationLoading(false);
+    }
+  };
+
+  /** 打开“从报价单创建销售订单”弹窗 */
+  const handlePullFromQuotation = () => {
+    setSelectedPullQuotationId(undefined);
+    setPullQuotationKeyword('');
+    setPullQuotationCandidates([]);
+    setPullFromQuotationVisible(true);
+    loadPullQuotationCandidates('');
+  };
+
+  const selectedPullQuotation = pullQuotationCandidates.find((item) => item.id === selectedPullQuotationId);
+  const selectedPullQuotationDuplicated = !!(
+    selectedPullQuotation && (selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id)
+  );
+
+  const handlePullFromQuotationConfirm = async () => {
+    if (!selectedPullQuotationId || selectedPullQuotationId <= 0) {
+      messageApi.warning('请先选择报价单');
+      return;
+    }
+    if (selectedPullQuotationDuplicated) {
+      messageApi.warning('该报价单已创建过销售订单，不能重复创建');
+      return;
+    }
+    try {
+      setPullQuotationSubmitting(true);
+      const result = await pullSalesOrderFromQuotation(selectedPullQuotationId);
+      messageApi.success(result?.message || `已生成销售订单：${result?.sales_order?.order_code || ''}`);
+      setPullFromQuotationVisible(false);
+      invalidateMenuBadge();
+      invalidateOrdersCache();
+      actionRef.current?.reload();
+      if (result?.sales_order?.id) {
+        refreshDrawerOrder(result.sales_order.id);
+      }
+    } catch (error: any) {
+      messageApi.error(salesOrderCatchMessage(error, '从报价单创建销售订单失败'));
+    } finally {
+      setPullQuotationSubmitting(false);
+    }
   };
 
   /** 打开提醒弹窗 */
@@ -1316,7 +1461,7 @@ const SalesOrdersPage: React.FC = () => {
       setReminderModalOpen(false);
     } catch (error: any) {
       if (error?.errorFields) return;
-      messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.salesOrder.sendFailed'));
+      messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.sendFailed')));
     } finally {
       setReminderSubmitting(false);
     }
@@ -1337,7 +1482,7 @@ const SalesOrdersPage: React.FC = () => {
           messageApi.success(t('app.kuaizhizao.salesOrder.withdrawSuccess'));
           refreshDrawerOrder(id);
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.salesOrder.withdrawFailed'));
+          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.withdrawFailed')));
         }
       },
     });
@@ -1719,6 +1864,8 @@ const SalesOrdersPage: React.FC = () => {
         执行中: { text: t('app.kuaizhizao.salesOrder.lifecycleInProgress') },
         已交货: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
         发货出库: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
+        账款发票: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
+        账款发票处理: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
         已完成: { text: t('app.kuaizhizao.salesOrder.lifecycleCompleted') },
         已驳回: { text: t('app.kuaizhizao.salesOrder.lifecycleRejected') },
         已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
@@ -1829,6 +1976,8 @@ const SalesOrdersPage: React.FC = () => {
           const canPushWorkOrder =
             pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
           const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+          const canPushDelivery = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+          const canPushAutoRoute = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
           const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
           const canPushSalesReturn = pushEnabledBase;
           const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
@@ -1851,6 +2000,18 @@ const SalesOrdersPage: React.FC = () => {
               label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
               disabled: !canPushShipment,
               onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
+            },
+            {
+              key: 'delivery',
+              label: '下推销售出库单',
+              disabled: !canPushDelivery,
+              onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
+            },
+            {
+              key: 'auto-route',
+              label: '自动路由下推',
+              disabled: !canPushAutoRoute,
+              onClick: () => canPushAutoRoute && handlePushAutoRoute(record.id!),
             },
             {
               key: 'invoice',
@@ -1995,6 +2156,8 @@ const SalesOrdersPage: React.FC = () => {
         执行中: { text: t('app.kuaizhizao.salesOrder.lifecycleInProgress') },
         已交货: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
         发货出库: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
+        账款发票: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
+        账款发票处理: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
         已完成: { text: t('app.kuaizhizao.salesOrder.lifecycleCompleted') },
         已驳回: { text: t('app.kuaizhizao.salesOrder.lifecycleRejected') },
         已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
@@ -2266,6 +2429,8 @@ const SalesOrdersPage: React.FC = () => {
                 执行中: 'IN_PROGRESS',
                 已交货: 'DELIVERED',
                 发货出库: 'DELIVERED',
+                账款发票: 'IN_PROGRESS',
+                账款发票处理: 'IN_PROGRESS',
                 已完成: 'COMPLETED',
                 已驳回: 'REJECTED',
                 已取消: 'CANCELLED',
@@ -2402,10 +2567,29 @@ const SalesOrdersPage: React.FC = () => {
           }}
           showAdvancedSearch={true}
           enableRowSelection={viewTypeState !== 'detailTable'}
-          showCreateButton={true}
+          showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
+            <Space.Compact key="create-sales-order-with-pull">
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                {t('app.kuaizhizao.salesOrder.create')}
+              </Button>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'pull-from-quotation',
+                      label: '从报价单创建销售订单',
+                      onClick: handlePullFromQuotation,
+                    },
+                  ],
+                }}
+              >
+                <Button type="primary" icon={<ArrowDownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
             <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
               <Button
                 disabled={selectedRowKeys.length === 0}
@@ -3492,6 +3676,50 @@ const SalesOrdersPage: React.FC = () => {
                       {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
                     </Button>
                   ) : null}
+                  {fullChainBriefDoc.document_type === 'sales_invoice' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false);
+                        navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${fullChainBriefDoc.document_id}`);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'receivable' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false);
+                        navigate(`/apps/kuaicaiwu/finance-management/receivables/${fullChainBriefDoc.document_id}`);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'receipt' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false);
+                        navigate('/apps/kuaicaiwu/finance-management/receipts');
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'payment' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false);
+                        navigate('/apps/kuaicaiwu/finance-management/payments');
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                    </Button>
+                  ) : null}
                 </Space>
               </div>
             ) : null}
@@ -3635,6 +3863,20 @@ const SalesOrdersPage: React.FC = () => {
                           onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!),
                         },
                         {
+                          key: 'delivery',
+                          label: '下推销售出库单',
+                          icon: <SendOutlined />,
+                          disabled: !salesNodeEnabled.shipment_notice,
+                          onClick: () => handlePushToDelivery(currentSalesOrder.id!),
+                        },
+                        {
+                          key: 'auto-route',
+                          label: '自动路由下推',
+                          icon: <AppstoreAddOutlined />,
+                          disabled: !salesNodeEnabled.shipment_notice,
+                          onClick: () => handlePushAutoRoute(currentSalesOrder.id!),
+                        },
+                        {
                           key: 'invoice',
                           label: t('app.kuaizhizao.salesOrder.salesInvoice'),
                           icon: <FileTextOutlined />,
@@ -3667,6 +3909,129 @@ const SalesOrdersPage: React.FC = () => {
           />
         </SalesOrderDetailProvider>
       ) : null}
+
+      <Modal
+        title="从报价单创建销售订单"
+        open={pullFromQuotationVisible}
+        width={1280}
+        zIndex={elevatedModalZIndex}
+        onCancel={() => setPullFromQuotationVisible(false)}
+        onOk={handlePullFromQuotationConfirm}
+        okText="创建销售订单"
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: !selectedPullQuotationId || selectedPullQuotationDuplicated || pullQuotationLoading }}
+        confirmLoading={pullQuotationSubmitting}
+        destroyOnHidden
+      >
+        <Space direction="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
+          <Input.Search
+            allowClear
+            value={pullQuotationKeyword}
+            placeholder="搜索报价单（编号/客户）"
+            enterButton="搜索"
+            onChange={(e) => setPullQuotationKeyword(e.target.value)}
+            onSearch={(value) => {
+              const keyword = value?.trim?.() || '';
+              setPullQuotationKeyword(keyword);
+              loadPullQuotationCandidates(keyword);
+            }}
+          />
+          <Table<PullQuotationCandidate>
+            rowKey="id"
+            loading={pullQuotationLoading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: pullQuotationKeyword ? '未找到匹配报价单' : '暂无可选报价单' }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullQuotationId ? [selectedPullQuotationId] : [],
+              onChange: (keys) => {
+                const key = keys?.[0];
+                setSelectedPullQuotationId(key != null ? Number(key) : undefined);
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.status === '已转订单' || !!record.sales_order_id,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.status === '已转订单' || record.sales_order_id) return;
+                setSelectedPullQuotationId(record.id);
+              },
+            })}
+            columns={[
+              { title: '报价单号', dataIndex: 'quotation_code', width: 180 },
+              { title: '客户', dataIndex: 'customer_name', width: 180, ellipsis: true, render: (v: string) => v || '-' },
+              {
+                title: '报价日期',
+                dataIndex: 'quotation_date',
+                width: 120,
+                render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+              },
+              {
+                title: '交期',
+                dataIndex: 'delivery_date',
+                width: 120,
+                render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+              },
+              {
+                title: '金额',
+                dataIndex: 'total_amount',
+                width: 130,
+                align: 'right',
+                render: (v: number | undefined) => (v != null ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'),
+              },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                width: 120,
+                render: (v: string) => {
+                  let color: string = 'blue';
+                  if (v === '已转订单') color = 'gold';
+                  else if (v === '已接受') color = 'green';
+                  else if (v === '已拒绝') color = 'red';
+                  return <Tag color={color}>{v || '未知状态'}</Tag>;
+                },
+              },
+              {
+                title: '审核',
+                dataIndex: 'review_status',
+                width: 100,
+                render: (v: string) => {
+                  const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+                  const rejected = v === 'REJECTED' || v === '已驳回';
+                  return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+                },
+              },
+              {
+                title: '销售员',
+                dataIndex: 'salesman_name',
+                width: 120,
+                ellipsis: true,
+                render: (v: string) => v || '-',
+              },
+              {
+                title: '防重提示',
+                width: 260,
+                render: (_: unknown, record: PullQuotationCandidate) =>
+                  record.status === '已转订单' || record.sales_order_id
+                    ? `已创建：${record.sales_order_code || record.sales_order_id || '-'}`
+                    : '可创建',
+              },
+            ]}
+            dataSource={pullQuotationCandidates}
+            scroll={{ x: 1180, y: 260 }}
+          />
+          {selectedPullQuotationDuplicated && (
+            <Alert
+              type="warning"
+              showIcon
+              message="该报价单已创建过销售订单，已禁止重复创建"
+              description={`关联销售订单：${selectedPullQuotation?.sales_order_code || selectedPullQuotation?.sales_order_id || '-'}`}
+            />
+          )}
+        </Space>
+      </Modal>
 
       <SyncFromDatasetModal
         open={syncModalVisible}

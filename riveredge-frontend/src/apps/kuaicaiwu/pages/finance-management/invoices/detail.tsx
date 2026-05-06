@@ -45,6 +45,7 @@ const InvoiceDetail: React.FC = () => {
 
   const handleFinish = async (values: any) => {
     const formData = { ...values, items: dataSource };
+    formData.invoice_number = String(formData.invoice_number ?? '').trim();
     let calculatedTotal = 0;
     let calculatedTax = 0;
     let calculatedExcl = 0;
@@ -160,7 +161,12 @@ const InvoiceDetail: React.FC = () => {
               width="md"
               rules={[{ required: true }]}
             />
-            <ProFormText name="invoice_number" label="发票号码" width="md" rules={[{ required: true }]} />
+            <ProFormText
+              name="invoice_number"
+              label="发票号码"
+              width="md"
+              placeholder="手工录入票面号码，草稿可留空"
+            />
             <ProFormText name="invoice_details_code" label="发票代码" width="md" />
             <ProFormSelect
               name="invoice_type"

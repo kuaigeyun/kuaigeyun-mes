@@ -15,6 +15,12 @@ import { workOrderApi } from '../../apps/kuaizhizao/services/production';
 import { getPurchaseOrder } from '../../apps/kuaizhizao/services/purchase';
 import { getPurchaseRequisition } from '../../apps/kuaizhizao/services/purchase-requisition';
 import { warehouseApi } from '../../apps/kuaizhizao/services/warehouse-execution';
+import { reportingApi } from '../../apps/kuaizhizao/services/reporting';
+import { apiRequest } from '../../services/api';
+import { receiptService } from '../../apps/kuaicaiwu/services/finance/receipt';
+import { receivableService } from '../../apps/kuaicaiwu/services/finance/receivable';
+import { payableService } from '../../apps/kuaicaiwu/services/finance/payable';
+import { purchaseInvoiceService } from '../../apps/kuaicaiwu/services/finance/purchase-invoice';
 import { AmountDisplay } from '../permission';
 import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { getStatusLabel } from '../../apps/kuaizhizao/constants/documentStatus';
@@ -647,6 +653,307 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
       ];
       return { basics, columns, rows };
     }
+    case 'reporting_timeline': {
+      const woId = -documentId;
+      if (!Number.isFinite(woId) || woId <= 0) {
+        throw new Error('unsupported:reporting_timeline');
+      }
+      const wo = (await workOrderApi.get(String(woId))) as Record<string, unknown>;
+      const woCode = String(wo.code ?? '').trim();
+      if (!woCode) {
+        throw new Error('unsupported:reporting_timeline');
+      }
+      const rawList = await reportingApi.list({
+        work_order_code: woCode,
+        skip: 0,
+        limit: 200,
+      });
+      const arr = Array.isArray(rawList) ? rawList : (rawList as { items?: unknown[] })?.items ?? [];
+      let list = (arr as Record<string, unknown>[]).filter(
+        (r) => String(r.work_order_code ?? '').trim() === woCode
+      );
+      if (list.length === 0) {
+        list = arr as Record<string, unknown>[];
+      }
+      list = [...list].sort((a, b) => {
+        const ta = new Date(String(a.reported_at ?? a.created_at ?? 0)).getTime();
+        const tb = new Date(String(b.reported_at ?? b.created_at ?? 0)).getTime();
+        return ta - tb;
+      });
+      const basics: BriefModel['basics'] = [
+        { key: 'wo', label: '工单', value: dash(wo.code) },
+        { key: 'won', label: '工单名称', value: dash(wo.name ?? wo.product_name) },
+        { key: 'cnt', label: '报工条数', value: String(list.length) },
+      ];
+      const qtyFmt = (v: unknown) =>
+        v != null && v !== '' && Number.isFinite(Number(v))
+          ? Number(v).toFixed(4).replace(/\.?0+$/, '')
+          : '—';
+      const columns: BriefModel['columns'] = [
+        {
+          title: '工序',
+          dataIndex: 'operation_name',
+          width: 120,
+          ellipsis: true,
+          render: (v: unknown) => dash(v),
+        },
+        {
+          title: '报工时间',
+          dataIndex: 'reported_at',
+          width: 172,
+          render: (_: unknown, row: Record<string, unknown>) =>
+            row.reported_at != null && row.reported_at !== ''
+              ? String(row.reported_at)
+              : dash(row.created_at),
+        },
+        { title: '状态', dataIndex: 'status', width: 88, render: (v: unknown) => briefDocStatus(v) },
+        { title: '生产人员', dataIndex: 'worker_name', width: 96, render: (v: unknown) => dash(v) },
+        {
+          title: '合格数量',
+          dataIndex: 'qualified_quantity',
+          width: 96,
+          render: (v: unknown) => qtyFmt(v),
+        },
+      ];
+      const rows = list.map((r, i) => ({
+        ...r,
+        key: String(r.id ?? `row-${i}`),
+      }));
+      return { basics, columns, rows };
+    }
+    case 'receivable': {
+      const ar = await receivableService.getReceivable(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '应收单号', value: dash(ar.receivable_code) },
+        { key: 'customer', label: '客户', value: dash(ar.customer_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(ar.status) },
+        { key: 'total', label: '应收总额', value: ar.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(ar.total_amount)} /> : '—' },
+        { key: 'remain', label: '剩余', value: ar.remaining_amount != null ? <AmountDisplay resource="sales_order" value={Number(ar.remaining_amount)} /> : '—' },
+        { key: 'due', label: '到期日', value: dash(ar.due_date) },
+      ];
+      return { basics, columns: [], rows: [] };
+    }
+    case 'payable': {
+      const py = await payableService.getPayable(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '应付单号', value: dash(py.payable_code) },
+        { key: 'supplier', label: '供应商', value: dash(py.supplier_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(py.status) },
+        { key: 'total', label: '应付总额', value: py.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(py.total_amount)} /> : '—' },
+        { key: 'remain', label: '剩余', value: py.remaining_amount != null ? <AmountDisplay resource="purchase_order" value={Number(py.remaining_amount)} /> : '—' },
+        { key: 'due', label: '到期日', value: dash(py.due_date) },
+      ];
+      return { basics, columns: [], rows: [] };
+    }
+    case 'sales_invoice': {
+      const inv = await apiRequest<Record<string, unknown>>(`/apps/kuaicaiwu/sales-invoices/${documentId}`, {
+        method: 'GET',
+      });
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '发票编号', value: dash(inv.invoice_code) },
+        { key: 'cust', label: '客户', value: dash(inv.customer_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(inv.status) },
+        { key: 'date', label: '开票日期', value: dash(inv.invoice_date) },
+        {
+          key: 'amt',
+          label: '价税合计',
+          value:
+            inv.total_amount != null ? (
+              <AmountDisplay resource="sales_order" value={Number(inv.total_amount)} />
+            ) : (
+              '—'
+            ),
+        },
+      ];
+      const itemArr = (Array.isArray(inv.items) ? inv.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        item_name: it.item_name,
+        spec_model: it.spec_model,
+        qty: it.quantity,
+        unit: it.unit,
+        amount: it.amount,
+        tax_amount: it.tax_amount,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '名称', dataIndex: 'item_name', ellipsis: true },
+        { title: '规格', dataIndex: 'spec_model', width: 100, ellipsis: true, render: (v: string) => dash(v) },
+        {
+          title: '数量',
+          dataIndex: 'qty',
+          width: 80,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 56, render: (v: string) => dash(v) },
+        {
+          title: '金额(不含税)',
+          dataIndex: 'amount',
+          width: 112,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+        },
+        {
+          title: '税额',
+          dataIndex: 'tax_amount',
+          width: 96,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+        },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'receipt': {
+      const rc = await receiptService.getReceipt(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '收款单号', value: dash(rc.receipt_code) },
+        { key: 'customer', label: '客户', value: dash(rc.customer_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(rc.status) },
+        { key: 'date', label: '收款日期', value: dash(rc.receipt_date) },
+        {
+          key: 'total',
+          label: '收款总额',
+          value: rc.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.total_amount)} /> : '—',
+        },
+        {
+          key: 'settled',
+          label: '已核销',
+          value: rc.settled_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.settled_amount)} /> : '—',
+        },
+        {
+          key: 'unsettled',
+          label: '待核销',
+          value: rc.unsettled_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.unsettled_amount)} /> : '—',
+        },
+        { key: 'method', label: '收款方式', value: dash(rc.payment_method) },
+      ];
+      return { basics, columns: [], rows: [] };
+    }
+    case 'purchase_invoice': {
+      const pi = await purchaseInvoiceService.get(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '发票编码', value: dash(pi.invoice_code) },
+        { key: 'po', label: '采购订单', value: dash(pi.purchase_order_code) },
+        { key: 'supplier', label: '供应商', value: dash(pi.supplier_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(pi.status) },
+        { key: 'review', label: '审核', value: briefDocStatus(pi.review_status) },
+        { key: 'date', label: '发票日期', value: dash(pi.invoice_date) },
+        {
+          key: 'amt',
+          label: '价税合计',
+          value:
+            pi.total_amount != null ? (
+              <AmountDisplay resource="purchase_order" value={Number(pi.total_amount)} />
+            ) : (
+              '—'
+            ),
+        },
+      ];
+      return { basics, columns: [], rows: [] };
+    }
+    case 'payment': {
+      const pm = await apiRequest<Record<string, unknown>>(`/apps/kuaicaiwu/payments/${documentId}`, {
+        method: 'GET',
+      });
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '付款单号', value: dash(pm.payment_code) },
+        { key: 'supplier', label: '供应商', value: dash(pm.supplier_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(pm.status) },
+        { key: 'date', label: '付款日期', value: dash(pm.payment_date) },
+        {
+          key: 'total',
+          label: '付款总额',
+          value: pm.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.total_amount)} /> : '—',
+        },
+        {
+          key: 'settled',
+          label: '已核销',
+          value: pm.settled_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.settled_amount)} /> : '—',
+        },
+        {
+          key: 'unsettled',
+          label: '待核销',
+          value: pm.unsettled_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.unsettled_amount)} /> : '—',
+        },
+        { key: 'method', label: '付款方式', value: dash(pm.payment_method) },
+      ];
+      return { basics, columns: [], rows: [] };
+    }
+    case 'reporting_record': {
+      const r = (await reportingApi.get(String(documentId))) as Record<string, unknown>;
+      const oc = dash(r.operation_code);
+      const on = dash(r.operation_name);
+      const opDisplay =
+        oc !== '—' && on !== '—'
+          ? `${oc} ${on}`.trim()
+          : oc !== '—'
+            ? oc
+            : on;
+      const basics: BriefModel['basics'] = [
+        { key: 'wo', label: '工单', value: dash(r.work_order_code) },
+        { key: 'won', label: '工单名称', value: dash(r.work_order_name) },
+        { key: 'op', label: '工序', value: opDisplay },
+        { key: 'worker', label: '生产人员', value: dash(r.worker_name) },
+        { key: 'recorder', label: '记录人', value: dash(r.recorded_by_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(r.status) },
+        {
+          key: 'reported_at',
+          label: '报工时间',
+          value: r.reported_at != null && r.reported_at !== '' ? String(r.reported_at) : '—',
+        },
+        {
+          key: 'hours',
+          label: '工时(小时)',
+          value: r.work_hours != null && r.work_hours !== '' ? String(r.work_hours) : '—',
+        },
+        { key: 'remarks', label: '备注', value: dash(r.remarks) },
+        ...(r.approved_by_name || r.approved_at
+          ? ([
+              { key: 'approver', label: '审核人', value: dash(r.approved_by_name) },
+              {
+                key: 'approved_at',
+                label: '审核时间',
+                value: r.approved_at != null && r.approved_at !== '' ? String(r.approved_at) : '—',
+              },
+            ] as BriefModel['basics'])
+          : []),
+        ...(r.rejection_reason
+          ? ([{ key: 'reject', label: '驳回原因', value: dash(r.rejection_reason) }] as BriefModel['basics'])
+          : []),
+      ];
+      const qtyFmt = (v: unknown) =>
+        v != null && v !== '' && Number.isFinite(Number(v))
+          ? Number(v).toFixed(4).replace(/\.?0+$/, '')
+          : '—';
+      const rows = [
+        {
+          key: 'report-qty',
+          reported_quantity: r.reported_quantity,
+          qualified_quantity: r.qualified_quantity,
+          unqualified_quantity: r.unqualified_quantity,
+        },
+      ];
+      const columns: BriefModel['columns'] = [
+        {
+          title: '报工数量',
+          dataIndex: 'reported_quantity',
+          width: 96,
+          render: (v: unknown) => qtyFmt(v),
+        },
+        {
+          title: '合格数量',
+          dataIndex: 'qualified_quantity',
+          width: 96,
+          render: (v: unknown) => qtyFmt(v),
+        },
+        {
+          title: '不合格数量',
+          dataIndex: 'unqualified_quantity',
+          width: 96,
+          render: (v: unknown) => qtyFmt(v),
+        },
+      ];
+      return { basics, columns, rows };
+    }
     default:
       throw new Error(`unsupported:${documentType}`);
   }
@@ -661,7 +968,9 @@ export const TraceLinkedDocumentBrief: React.FC<TraceLinkedDocumentBriefProps> =
   const { t } = useTranslation();
   const { token } = useToken();
 
-  const ready = Boolean(documentType && documentId != null && documentId > 0);
+  const ready = Boolean(
+    documentType && documentId != null && !Number.isNaN(Number(documentId))
+  );
 
   const { data, loading, error } = useRequest(() => loadBrief(documentType!, documentId!), {
     ready,
@@ -717,7 +1026,10 @@ export const TraceLinkedDocumentBrief: React.FC<TraceLinkedDocumentBriefProps> =
           <Typography.Text strong style={{ fontSize: 13, color: token.colorText }}>
             {typeTitle}
             <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
-              #{documentId}
+              #
+              {documentType === 'reporting_timeline' && documentId != null
+                ? -documentId
+                : documentId}
             </Typography.Text>
           </Typography.Text>
           {documentType === 'sales_order' && onOpenSalesOrderDetail ? (
@@ -745,20 +1057,24 @@ export const TraceLinkedDocumentBrief: React.FC<TraceLinkedDocumentBriefProps> =
             ))}
           </Descriptions>
 
-          <Divider style={{ margin: '12px 0' }} />
+          {data.columns.length > 0 || data.rows.length > 0 ? (
+            <>
+              <Divider style={{ margin: '12px 0' }} />
 
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-            {t('components.documentTrackingPanel.traceBriefItems')}
-          </Typography.Text>
-          <Table<Record<string, unknown>>
-            size="small"
-            rowKey="key"
-            pagination={false}
-            scroll={{ x: 'max-content' }}
-            columns={data.columns}
-            dataSource={data.rows}
-            locale={{ emptyText: t('components.documentTrackingPanel.traceBriefNoItems') }}
-          />
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+                {t('components.documentTrackingPanel.traceBriefItems')}
+              </Typography.Text>
+              <Table<Record<string, unknown>>
+                size="small"
+                rowKey="key"
+                pagination={false}
+                scroll={{ x: 'max-content' }}
+                columns={data.columns}
+                dataSource={data.rows}
+                locale={{ emptyText: t('components.documentTrackingPanel.traceBriefNoItems') }}
+              />
+            </>
+          ) : null}
         </>
       ) : null}
     </div>

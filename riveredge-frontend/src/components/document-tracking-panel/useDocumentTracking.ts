@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DocumentTrackingResponse } from '../../services/documentTracking';
-import { getDocumentTracking } from '../../services/documentTracking';
+import { getDocumentTracking, normalizeDocumentTrackingResponse } from '../../services/documentTracking';
 
 export interface UseDocumentTrackingResult {
   data: DocumentTrackingResponse | null;
@@ -34,7 +34,7 @@ export function useDocumentTracking(
     setError(null);
     getDocumentTracking(documentType, documentId)
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) setData(normalizeDocumentTrackingResponse(d));
       })
       .catch((e) => {
         if (!cancelled) setError(e?.message || t('components.documentTrackingPanel.loadFailed'));

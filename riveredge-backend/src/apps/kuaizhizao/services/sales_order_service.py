@@ -10,7 +10,7 @@ Date: 2026-01-19
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from tortoise.transactions import in_transaction
 from loguru import logger
 
@@ -23,6 +23,7 @@ from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
@@ -91,6 +92,67 @@ class SalesOrderService:
     @staticmethod
     def _money(value: Decimal) -> Decimal:
         return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _merged_delivery_progress(
+        order: SalesOrder,
+        items: List[Any],
+        shipped_qty: Decimal,
+    ) -> float:
+        """
+        交货进度：订单明细已交货合计 与 「已出库」销售出库单出库数量合计（按订单维度）取较大比例。
+        避免确认出库未回写明细时列表/详情进度与生命周期长期为 0。
+        """
+        total_qty = sum(
+            (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+            start=Decimal("0"),
+        )
+        if total_qty <= 0:
+            total_qty = Decimal(str(order.total_quantity or 0))
+        total_line = sum(
+            (Decimal(str(getattr(it, "delivered_quantity", 0) or 0)) for it in items),
+            start=Decimal("0"),
+        )
+        if total_qty <= 0:
+            return 0.0
+        p_line = float(min(Decimal("100"), (total_line / total_qty) * Decimal("100")))
+        ship = Decimal(str(shipped_qty or 0))
+        p_ship = float(min(Decimal("100"), (ship / total_qty) * Decimal("100"))) if ship > 0 else 0.0
+        return round(max(p_line, p_ship), 1)
+
+    async def _shipped_qty_by_sales_order(
+        self,
+        tenant_id: int,
+        order_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """各销售订单下，状态为已出库的销售出库单明细数量之和。"""
+        if not order_ids:
+            return {}
+        shipped = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+            deleted_at__isnull=True,
+            status="已出库",
+        ).values_list("id", "sales_order_id")
+        if not shipped:
+            return {}
+        ship_ids = [row[0] for row in shipped]
+        order_for: Dict[int, List[int]] = {}
+        for did, oid in shipped:
+            order_for.setdefault(int(oid), []).append(int(did))
+
+        item_rows = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=ship_ids,
+        ).values_list("delivery_id", "delivery_quantity")
+        qty_by_did: Dict[int, Decimal] = {}
+        for did, q in item_rows:
+            qty_by_did[int(did)] = qty_by_did.get(int(did), Decimal("0")) + Decimal(str(q or 0))
+
+        out: Dict[int, Decimal] = {}
+        for oid, dids in order_for.items():
+            out[oid] = sum((qty_by_did.get(d, Decimal("0")) for d in dids), start=Decimal("0"))
+        return out
 
     @classmethod
     def _allocate_total_amount_with_proration(
@@ -711,7 +773,9 @@ class SalesOrderService:
                 tenant_id=tenant_id, sales_order_id=order.id
             ).order_by("id")
             demand = await self._get_linked_demand(tenant_id, order.id)
-            return self._order_to_response(order, items=items, demand=demand)
+            shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [order.id])
+            dp = self._merged_delivery_progress(order, list(items), shipped_by.get(order.id, Decimal("0")))
+            return self._order_to_response(order, items=items, demand=demand, delivery_progress=dp)
 
     async def get_sales_order_by_id(
         self,
@@ -773,6 +837,22 @@ class SalesOrderService:
         duration_info = None
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
+
+        if items is not None:
+            items_for_progress: List[Any] = list(items)
+        else:
+            agg_rows = await SalesOrderItem.filter(
+                tenant_id=tenant_id, sales_order_id=sales_order_id
+            ).values_list("order_quantity", "delivered_quantity")
+            items_for_progress = [
+                type("_AggItem", (), {"order_quantity": q, "delivered_quantity": d})()
+                for q, d in agg_rows
+            ]
+        shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [sales_order_id])
+        delivery_progress = self._merged_delivery_progress(
+            order, items_for_progress, shipped_by.get(sales_order_id, Decimal("0"))
+        )
+
         return self._order_to_response(
             order,
             items=items,
@@ -781,6 +861,7 @@ class SalesOrderService:
             material_code_fallback=material_code_fallback,
             material_fallback=material_fallback,
             milestones=milestones,
+            delivery_progress=delivery_progress,
         )
 
     async def list_sales_orders(
@@ -945,18 +1026,16 @@ class SalesOrderService:
             for oid, dids in order_to_deliveries.items():
                 invoiced_by_order[oid] = sum(delivery_to_invoiced.get(did, Decimal("0")) for did in dids)
 
+        shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
+
         # 6. 组装响应
         sales_orders = []
         for order in orders:
             items = items_by_order.get(order.id) or []
             items_for_response = items if include_items else None
 
-            delivery_progress: Optional[float] = None
-            if items:
-                total_qty = sum(Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items)
-                total_delivered = sum(Decimal(str(getattr(it, "delivered_quantity", 0) or 0)) for it in items)
-                if total_qty and total_qty > 0:
-                    delivery_progress = float(min(100, (total_delivered / total_qty) * 100))
+            ship_q = shipped_by_order.get(order.id, Decimal("0"))
+            delivery_progress = self._merged_delivery_progress(order, items, ship_q)
 
             invoice_progress_val: Optional[float] = None
             order_amount = Decimal(str(order.total_amount or 0))
@@ -2281,6 +2360,35 @@ class SalesOrderService:
             )
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
+    async def pull_sales_order_from_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        销售订单域上拉建单：从报价单创建销售订单（单一直接上游）。
+        """
+        if quotation_id <= 0:
+            raise ValidationError("报价单ID无效")
+
+        from apps.kuaizhizao.services.quotation_service import QuotationService
+
+        sales_order, quotation = await QuotationService().convert_to_sales_order(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            created_by=created_by,
+            selected_item_ids=None,
+        )
+        return {
+            "success": True,
+            "message": "已从报价单创建销售订单",
+            "source_type": "quotation",
+            "source_id": quotation_id,
+            "sales_order": sales_order.model_dump() if hasattr(sales_order, "model_dump") else sales_order,
+            "quotation": quotation.model_dump() if hasattr(quotation, "model_dump") else quotation,
+        }
+
     async def push_sales_order_to_delivery(
         self,
         tenant_id: int,
@@ -2537,6 +2645,11 @@ class SalesOrderService:
         from apps.kuaicaiwu.services.invoice_service import InvoiceService
         from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceItemCreate
 
+        money_q = Decimal("0.01")
+
+        def _q_money(v: Decimal) -> Decimal:
+            return v.quantize(money_q, rounding=ROUND_HALF_UP)
+
         total_excl = Decimal("0")
         total_tax = Decimal("0")
         total_incl = Decimal("0")
@@ -2544,18 +2657,23 @@ class SalesOrderService:
         for it in items:
             qty = it.order_quantity or Decimal("0")
             price = it.unit_price or Decimal("0")
-            rate = (it.tax_rate or Decimal("0")) / Decimal("100")
-            excl = qty * price
-            tax = excl * rate
-            incl = excl + tax
+            traw = it.tax_rate or Decimal("0")
+            # 订单明细税率为「百分比」数值（如 13）；兼容异常录入为小数形式（≤1 视为已为小数税率）
+            rate = traw / Decimal("100") if traw > Decimal("1") else traw
+            excl = _q_money(qty * price)
+            tax = _q_money(excl * rate)
+            incl = _q_money(excl + tax)
             total_excl += excl
             total_tax += tax
             total_incl += incl
+            spec = (it.material_spec or "") if it.material_spec else None
+            if spec and len(spec) > 100:
+                spec = spec[:100]
             invoice_items.append(
                 InvoiceItemCreate(
-                    item_name=it.material_name or f"物料{it.material_id}",
-                    spec_model=it.material_spec,
-                    unit=it.material_unit,
+                    item_name=(it.material_name or f"物料{it.material_id}")[:200],
+                    spec_model=spec,
+                    unit=(it.material_unit or "")[:20] if it.material_unit else None,
                     quantity=qty,
                     unit_price=price,
                     amount=excl,
@@ -2564,7 +2682,15 @@ class SalesOrderService:
                 )
             )
 
-        tax_rate_avg = total_tax / total_excl if total_excl else Decimal("0.13")
+        total_excl = _q_money(total_excl)
+        total_tax = _q_money(total_tax)
+        total_incl = _q_money(total_incl)
+        tax_rate_avg = (
+            _q_money(total_tax / total_excl)
+            if total_excl and total_excl != Decimal("0")
+            else Decimal("0.1300")
+        )
+        # 发票号码（税务票面号）由用户在发票单据中手工填写；下推仅生成草稿，不预填号码
         invoice_data = InvoiceCreate(
             category="OUT",
             invoice_type="VAT_SPECIAL",
@@ -2578,7 +2704,7 @@ class SalesOrderService:
             total_amount=total_incl,
             tax_rate=tax_rate_avg,
             invoice_date=date.today(),
-            invoice_number=f"待开票-{order.order_code}",
+            invoice_number="",
             status="DRAFT",
             source_document_code=order.order_code,
             description=f"由销售订单 {order.order_code} 下推",
@@ -2586,6 +2712,31 @@ class SalesOrderService:
         )
         invoice = await InvoiceService().create_invoice(tenant_id, invoice_data, created_by)
         logger.info("从销售订单 %s 生成销售发票 %s", order.order_code, invoice.invoice_code)
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="sales_order",
+                    source_id=sales_order_id,
+                    source_code=order.order_code,
+                    source_name=getattr(order, "order_name", None),
+                    target_type="sales_invoice",
+                    target_id=invoice.id,
+                    target_code=invoice.invoice_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="销售订单下推生成销项发票",
+                ),
+                created_by=created_by,
+            )
+        except Exception as rel_e:
+            logger.warning("销售订单→销售发票 单据关联失败: %s", rel_e)
+
         return {
             "success": True,
             "message": "已生成销售发票",
@@ -2692,12 +2843,11 @@ class SalesOrderService:
                 status=de.status
             ))
             
-        delivery_progress = 0.0
-        total_qty = sum((it.order_quantity or Decimal("0")) for it in items)
-        total_delivered = sum((it.delivered_quantity or Decimal("0")) for it in items)
-        if total_qty > 0:
-            delivery_progress = float(min(100.0, (total_delivered / total_qty) * 100))
-            
+        shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [sales_order_id])
+        delivery_progress = self._merged_delivery_progress(
+            order, items, shipped_by.get(sales_order_id, Decimal("0"))
+        )
+
         return SalesOrderTrackingResponse(
             sales_order_id=order.id,
             sales_order_code=order.order_code,

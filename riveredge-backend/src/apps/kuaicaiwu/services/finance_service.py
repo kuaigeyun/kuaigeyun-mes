@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from loguru import logger
 
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
@@ -90,6 +91,13 @@ class PayableService(AppBaseService[Payable]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "payable")
         if not is_enabled:
             raise BusinessLogicError("应付账款节点未启用，无法创建应付单")
+        existing = await Payable.get_or_none(
+            tenant_id=tenant_id,
+            source_type=payable_data.source_type,
+            source_id=payable_data.source_id,
+        )
+        if existing:
+            return PayableResponse.model_validate(existing)
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -346,8 +354,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     ) -> None:
         if invoice.payable_id:
             return
-        enabled = await self.business_config_service.get_finance_auto_generate_payable_from_purchase_invoice(tenant_id)
-        if not enabled:
+        _sup_id = getattr(invoice, "supplier_id", None)
+        if not await self.business_config_service.should_auto_generate_payable_from_purchase_invoice_effective(
+            tenant_id, int(_sup_id) if _sup_id is not None else None
+        ):
             return
         if not await self.business_config_service.check_node_enabled(tenant_id, "payable"):
             return
@@ -378,6 +388,30 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         )
         invoice.payable_id = payable.id
         invoice.payable_code = payable.payable_code
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="purchase_invoice",
+                    source_id=invoice.id,
+                    source_code=invoice.invoice_code,
+                    source_name=None,
+                    target_type="payable",
+                    target_id=payable.id,
+                    target_code=payable.payable_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="采购发票自动生成应付单",
+                ),
+                created_by=created_by,
+            )
+        except Exception as rel_e:
+            logger.warning("创建采购发票→应付单 单据关联失败: {}", rel_e)
 
     async def get_purchase_invoice_by_id(self, tenant_id: int, invoice_id: int) -> PurchaseInvoiceResponse:
         """根据ID获取采购发票"""
@@ -482,6 +516,13 @@ class ReceivableService(AppBaseService[Receivable]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "receivable")
         if not is_enabled:
             raise BusinessLogicError("应收账款节点未启用，无法创建应收单")
+        existing = await Receivable.get_or_none(
+            tenant_id=tenant_id,
+            source_type=receivable_data.source_type,
+            source_id=receivable_data.source_id,
+        )
+        if existing:
+            return ReceivableResponse.model_validate(existing)
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")

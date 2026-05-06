@@ -54,6 +54,14 @@ class Invoice(BaseModel):
     attachment_uuid = fields.CharField(max_length=36, null=True, description="发票文件ID")
     description = fields.TextField(null=True, description="备注")
 
+    receivable_id = fields.IntField(null=True, description="关联应收单ID")
+    receivable_code = fields.CharField(max_length=50, null=True, description="关联应收单编码")
+
+    void_reason = fields.TextField(null=True, description="作废原因")
+    voided_at = fields.DatetimeField(null=True, description="作废时间")
+    original_invoice_id = fields.IntField(null=True, description="红字发票对应的蓝字发票ID")
+    red_flush_invoice_id = fields.IntField(null=True, description="蓝字发票被红冲后生成的红字发票ID")
+
     created_by = fields.IntField(null=True, description="创建人ID")
     updated_by = fields.IntField(null=True, description="更新人ID")
 
@@ -64,6 +72,7 @@ class Invoice(BaseModel):
             ("tenant_id", "category", "invoice_date"),
             ("invoice_number",),
             ("partner_id",),
+            ("tenant_id", "receivable_id"),
         ]
 
     def __str__(self):

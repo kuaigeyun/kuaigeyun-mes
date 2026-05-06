@@ -38,7 +38,7 @@ class InvoiceItemResponse(InvoiceItemBase):
 
 
 class InvoiceBase(BaseModel):
-    invoice_number: str = Field(..., description="发票号码")
+    invoice_number: str = Field(default="", max_length=50, description="发票号码（税务票面号码，手工录入；草稿可为空）")
     invoice_details_code: Optional[str] = Field(None, description="发票代码")
     category: str = Field(default="IN", description="IN=进项(采购), OUT=销项(销售)")
     invoice_type: str = Field(default="VAT_SPECIAL", description="发票类型")

@@ -48,11 +48,12 @@ def _http_exception_with_trace(
     message: str,
     route: str,
     tenant_id: Optional[int] = None,
+    trace_id: Optional[str] = None,
 ) -> HTTPException:
-    trace_id = uuid.uuid4().hex
+    tid = trace_id or uuid.uuid4().hex
     logger.warning(
         "sales_order_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
-        trace_id,
+        tid,
         tenant_id,
         route,
         status_code,
@@ -60,7 +61,7 @@ def _http_exception_with_trace(
     )
     return HTTPException(
         status_code=status_code,
-        detail={"message": message, "trace_id": trace_id},
+        detail={"message": message, "trace_id": tid},
     )
 
 
@@ -87,6 +88,33 @@ async def create_sales_order(
     except Exception as e:
         logger.error(f"创建销售订单失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建销售订单失败", "/sales-orders", tenant_id)
+
+
+@router.post("/pull-from-quotation", response_model=Dict[str, Any], summary="从报价单上拉生成销售订单")
+async def pull_sales_order_from_quotation(
+    quotation_id: int = Body(..., embed=True, description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """销售订单域上拉建单：从报价单创建销售订单（单一直接上游）。"""
+    try:
+        return await sales_order_service.pull_sales_order_from_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/pull-from-quotation", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/pull-from-quotation", tenant_id)
+    except Exception as e:
+        logger.error(f"从报价单上拉生成销售订单失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "从报价单上拉生成销售订单失败",
+            "/sales-orders/pull-from-quotation",
+            tenant_id,
+        )
 
 
 # 销售订单可排序字段白名单（防止注入）
@@ -941,8 +969,21 @@ async def push_sales_order_to_invoice(
     except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-invoice", tenant_id)
     except Exception as e:
-        logger.error(f"下推销售发票失败: {e}")
-        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售发票失败", "/sales-orders/{sales_order_id}/push-to-invoice", tenant_id)
+        tid = uuid.uuid4().hex
+        logger.exception(
+            "下推销售发票失败 trace_id={} sales_order_id={} tenant_id={}: {}",
+            tid,
+            sales_order_id,
+            tenant_id,
+            e,
+        )
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"下推销售发票失败：{e}",
+            "/sales-orders/{sales_order_id}/push-to-invoice",
+            tenant_id,
+            trace_id=tid,
+        )
 
 
 @router.post("/{sales_order_id}/push-to-delivery", summary="下推到销售出库")

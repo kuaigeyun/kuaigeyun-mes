@@ -117,6 +117,27 @@ export const supplierFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields
 
 const supplierBusinessFields: FieldConfig[] = [
   {
+    name: 'payableRecognitionOverride',
+    type: 'select',
+    labelKey: 'field.supplier.payableRecognitionOverride',
+    placeholderKey: 'field.partner.recognitionOverrideInherit',
+    colSpan: 12,
+    allowClear: true,
+    extraKey: 'field.supplier.payableRecognitionOverrideDesc',
+    extraAsTooltip: true,
+    options: [
+      { labelKey: 'field.partner.recognitionOverrideInherit', value: null },
+      {
+        labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt',
+        value: 'on_receipt',
+      },
+      {
+        labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice',
+        value: 'on_purchase_invoice',
+      },
+    ],
+  },
+  {
     name: 'industryCode',
     type: 'select',
     labelKey: 'field.supplier.industry',

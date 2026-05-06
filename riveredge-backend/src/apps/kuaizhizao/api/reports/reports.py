@@ -133,7 +133,11 @@ async def query_batch_inventory(
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     batch_number: Optional[str] = Query(None, description="批号"),
     include_expired: bool = Query(False, description="是否包含过期批次"),
+    include_zero_stock: bool = Query(True, description="是否包含0库存记录"),
     summary_only: bool = Query(False, description="是否仅返回物料汇总（material_totals），用于批量检查"),
+    aggregate_by_material: bool = Query(False, description="是否按物料聚合返回（用于即时库存查询）"),
+    include_summary: bool = Query(False, description="是否返回汇总指标（summary）"),
+    group_by: Optional[str] = Query(None, description="分析分组维度（warehouse/material/status/aging_bucket）"),
     include_sales_commitment: bool = Query(False, description="是否扣减销售已承诺未交付数量（用于ATP动态可承诺）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -150,7 +154,9 @@ async def query_batch_inventory(
     - **summary_only**: 是否仅返回物料汇总（默认：否）
     - **include_sales_commitment**: 是否扣减销售承诺量（默认：否）
     
-    返回每个批次的库存数量、生产日期、有效期等信息；summary_only 时返回 { material_totals: { material_id: quantity } }。
+    返回每个批次的库存数量、生产日期、有效期等信息；
+    summary_only 时返回 { material_totals: { material_id: quantity } }；
+    aggregate_by_material=true 时返回按物料聚合后的 items（不按批次拆分）。
     """
     return await report_service.query_batch_inventory(
         tenant_id=tenant_id,
@@ -159,8 +165,116 @@ async def query_batch_inventory(
         warehouse_id=warehouse_id,
         batch_number=batch_number,
         include_expired=include_expired,
+        include_zero_stock=include_zero_stock,
         summary_only=summary_only,
+        aggregate_by_material=aggregate_by_material,
+        include_summary=include_summary,
+        group_by=group_by,
         include_sales_commitment=include_sales_commitment,
+    )
+
+
+@router.get("/inventory/material-balances", summary="即时库存列表（按物料/仓汇总）")
+async def get_inventory_material_balances(
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    include_zero_stock: bool = Query(True, description="是否包含0库存"),
+    status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
+    keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/仓库）"),
+    current: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=500, description="每页条数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    return await report_service.get_inventory_material_balances(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        include_zero_stock=include_zero_stock,
+        status_filter=status_filter,
+        keyword=keyword,
+        current=current,
+        page_size=page_size,
+    )
+
+
+@router.get("/inventory/material-balances/summary", summary="即时库存统计（KPI+分组）")
+async def get_inventory_material_balances_summary(
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    include_zero_stock: bool = Query(True, description="是否包含0库存"),
+    status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    group_by: str = Query("warehouse", description="分组维度（warehouse/material/status/aging_bucket）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    return await report_service.get_inventory_material_balances_summary(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        include_zero_stock=include_zero_stock,
+        status_filter=status_filter,
+        keyword=keyword,
+        group_by=group_by,
+    )
+
+
+@router.get("/inventory/batch-lines", summary="批次库存列表（按批次明细）")
+async def get_inventory_batch_lines(
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    batch_number: Optional[str] = Query(None, description="批号"),
+    include_expired: bool = Query(False, description="是否包含过期批次"),
+    include_zero_stock: bool = Query(True, description="是否包含0库存"),
+    aging_bucket: Optional[str] = Query(None, description="库龄筛选（expired/0-30/31-90/90+）"),
+    status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    current: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=500, description="每页条数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    return await report_service.get_inventory_batch_lines(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        batch_number=batch_number,
+        include_expired=include_expired,
+        include_zero_stock=include_zero_stock,
+        aging_bucket=aging_bucket,
+        status_filter=status_filter,
+        keyword=keyword,
+        current=current,
+        page_size=page_size,
+    )
+
+
+@router.get("/inventory/batch-lines/summary", summary="批次库存统计（KPI+分组）")
+async def get_inventory_batch_lines_summary(
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    batch_number: Optional[str] = Query(None, description="批号"),
+    include_expired: bool = Query(False, description="是否包含过期批次"),
+    include_zero_stock: bool = Query(True, description="是否包含0库存"),
+    aging_bucket: Optional[str] = Query(None, description="库龄筛选（expired/0-30/31-90/90+）"),
+    status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    group_by: str = Query("aging_bucket", description="分组维度（warehouse/material/status/aging_bucket）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    return await report_service.get_inventory_batch_lines_summary(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        batch_number=batch_number,
+        include_expired=include_expired,
+        include_zero_stock=include_zero_stock,
+        aging_bucket=aging_bucket,
+        status_filter=status_filter,
+        keyword=keyword,
+        group_by=group_by,
     )
 
 

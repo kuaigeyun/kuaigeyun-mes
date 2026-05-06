@@ -16,8 +16,32 @@ Author: Luigi Lu
 Date: 2026-01-27
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from loguru import logger
+
+from apps.master_data.models.customer import Customer
+from apps.master_data.models.supplier import Supplier
+
+
+def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enforce mutual exclusion between shipment/receipt-based AR/AP and invoice-based generation.
+    Persisted settings may contain stale booleans; readers should always merge through this.
+    """
+    fin = dict(finance or {})
+    rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
+    if rev not in ("on_shipment", "on_invoice"):
+        rev = "on_shipment"
+    fin["revenue_recognition"] = rev
+    if rev == "on_shipment":
+        fin["auto_generate_receivable_from_sales_invoice"] = False
+    pay = str(fin.get("payable_recognition") or "on_receipt").strip()
+    if pay not in ("on_receipt", "on_purchase_invoice"):
+        pay = "on_receipt"
+    fin["payable_recognition"] = pay
+    if pay == "on_receipt":
+        fin["auto_generate_payable_from_purchase_invoice"] = False
+    return fin
 
 from infra.models.tenant import Tenant
 from infra.exceptions.exceptions import NotFoundError
@@ -144,6 +168,32 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
     "parameters.finance.auto_write_off_precision_limit": {"type": "number", "min": 0, "max": 100},
+    "parameters.finance.revenue_recognition": {
+        "type": "select",
+        "options": [
+            {
+                "value": "on_shipment",
+                "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment",
+            },
+            {
+                "value": "on_invoice",
+                "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice",
+            },
+        ],
+    },
+    "parameters.finance.payable_recognition": {
+        "type": "select",
+        "options": [
+            {
+                "value": "on_receipt",
+                "labelKey": "pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt",
+            },
+            {
+                "value": "on_purchase_invoice",
+                "labelKey": "pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice",
+            },
+        ],
+    },
     "parameters.sales.low_margin_threshold_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
 }
@@ -155,7 +205,6 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
 
 # 流程设置：企业流程控制（流转、领料确认等；单据是否人工审核由「审批流程 ApprovalProcess」单独管理）
 PROCESS_KEYS = {
-    "parameters.planning.require_production_plan",
     "parameters.procurement.require_purchase_requisition",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
@@ -195,6 +244,8 @@ PARAMETER_KEYS = {
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
     "parameters.finance.auto_write_off_precision_limit",
+    "parameters.finance.revenue_recognition",
+    "parameters.finance.payable_recognition",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.sales.low_margin_threshold_percent",
@@ -203,7 +254,6 @@ PARAMETER_KEYS = {
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
 IMPLEMENTED_PARAMETER_KEYS = {
-    "parameters.planning.require_production_plan",
     "parameters.procurement.require_purchase_requisition",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
@@ -236,6 +286,8 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
     "parameters.finance.auto_write_off_precision_limit",
+    "parameters.finance.revenue_recognition",
+    "parameters.finance.payable_recognition",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.sales.low_margin_threshold_percent",
@@ -324,7 +376,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "require_purchase_requisition": False,
     },
     "planning": {
-        "require_production_plan": False,
         "auto_push_sales_to_computation_on_approve": False,
     },
     "bom": {
@@ -332,6 +383,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "finance": {
         "auto_write_off_precision_limit": 0,
+        "revenue_recognition": "on_shipment",
+        "payable_recognition": "on_receipt",
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
     },
@@ -599,6 +652,9 @@ class BusinessConfigService:
             if category not in merged:
                 merged[category] = dict(values or {})
 
+        if "finance" in merged:
+            merged["finance"] = coerce_finance_parameter_dict(merged["finance"])
+
         return {"parameters": merged}
 
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
@@ -653,17 +709,103 @@ class BusinessConfigService:
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("finance", {}).get("auto_generate_payable_from_purchase_invoice", False))
 
+    async def resolve_revenue_recognition(self, tenant_id: int, customer_id: Optional[int]) -> str:
+        """有效应收确认策略：客户覆盖非空则用覆盖，否则用组织 finance.revenue_recognition（已 coerce）。"""
+        config = await self.get_business_config(tenant_id)
+        fin = config["parameters"].get("finance", {}) or {}
+        org_rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
+        if org_rev not in ("on_shipment", "on_invoice"):
+            org_rev = "on_shipment"
+        if not customer_id:
+            return org_rev
+        cust = await Customer.get_or_none(
+            id=int(customer_id), tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not cust or not cust.revenue_recognition_override:
+            return org_rev
+        ov = str(cust.revenue_recognition_override).strip()
+        return ov if ov in ("on_shipment", "on_invoice") else org_rev
+
+    async def resolve_payable_recognition(self, tenant_id: int, supplier_id: Optional[int]) -> str:
+        """有效应付确认策略：供应商覆盖非空则用覆盖，否则用组织 finance.payable_recognition（已 coerce）。"""
+        config = await self.get_business_config(tenant_id)
+        fin = config["parameters"].get("finance", {}) or {}
+        org_pay = str(fin.get("payable_recognition") or "on_receipt").strip()
+        if org_pay not in ("on_receipt", "on_purchase_invoice"):
+            org_pay = "on_receipt"
+        if not supplier_id:
+            return org_pay
+        sup = await Supplier.get_or_none(
+            id=int(supplier_id), tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not sup or not sup.payable_recognition_override:
+            return org_pay
+        ov = str(sup.payable_recognition_override).strip()
+        return ov if ov in ("on_receipt", "on_purchase_invoice") else org_pay
+
+    async def should_auto_generate_receivable_on_sales_delivery(
+        self, tenant_id: int, customer_id: Optional[int] = None
+    ) -> bool:
+        return (await self.resolve_revenue_recognition(tenant_id, customer_id)) == "on_shipment"
+
+    async def should_auto_generate_receivable_from_sales_invoice_effective(
+        self, tenant_id: int, customer_id: Optional[int] = None
+    ) -> bool:
+        """
+        销项发票是否尝试自动生成应收。
+        - 解析策略须为 on_invoice。
+        - 组织默认为「按票」时：仍受 auto_generate_receivable_from_sales_invoice 总开关约束。
+        - 组织默认为「按发货」时：参数互斥会把上述开关 coerce 为 False，此时仅当客户在主数据上
+          显式覆盖为 on_invoice 时，仍允许走发票路径（避免无法为个别客户按票记账）。
+        """
+        resolved = await self.resolve_revenue_recognition(tenant_id, customer_id)
+        if resolved != "on_invoice":
+            return False
+        config = await self.get_business_config(tenant_id)
+        fin = config["parameters"].get("finance", {}) or {}
+        auto = bool(fin.get("auto_generate_receivable_from_sales_invoice", False))
+        org_rev = fin.get("revenue_recognition")
+        if org_rev == "on_invoice":
+            return auto
+        if not customer_id:
+            return False
+        cust = await Customer.get_or_none(
+            id=int(customer_id), tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        return bool(cust and (cust.revenue_recognition_override or "") == "on_invoice")
+
+    async def should_auto_generate_payable_on_purchase_receipt(
+        self, tenant_id: int, supplier_id: Optional[int] = None
+    ) -> bool:
+        return (await self.resolve_payable_recognition(tenant_id, supplier_id)) == "on_receipt"
+
+    async def should_auto_generate_payable_from_purchase_invoice_effective(
+        self, tenant_id: int, supplier_id: Optional[int] = None
+    ) -> bool:
+        """对称于应收：组织按进项发票时看总开关；组织按入库时仅供应商显式覆盖 on_purchase_invoice 可走发票路径。"""
+        resolved = await self.resolve_payable_recognition(tenant_id, supplier_id)
+        if resolved != "on_purchase_invoice":
+            return False
+        config = await self.get_business_config(tenant_id)
+        fin = config["parameters"].get("finance", {}) or {}
+        auto = bool(fin.get("auto_generate_payable_from_purchase_invoice", False))
+        org_pay = fin.get("payable_recognition")
+        if org_pay == "on_purchase_invoice":
+            return auto
+        if not supplier_id:
+            return False
+        sup = await Supplier.get_or_none(
+            id=int(supplier_id), tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        return bool(sup and (sup.payable_recognition_override or "") == "on_purchase_invoice")
+
     # ========================================================
     # 计划 / 工单策略派生逻辑
     # ========================================================
 
     async def can_direct_generate_work_order_from_computation(self, tenant_id: int) -> bool:
-        """需求计算是否可直接生成工单（不经过生产计划）。"""
-        config = await self.get_business_config(tenant_id)
-        require_plan = bool(
-            config["parameters"].get("planning", {}).get("require_production_plan", False)
-        )
-        return not require_plan
+        """生产计划功能下线后，需求计算始终可直接生成工单。"""
+        return True
 
     async def auto_push_sales_to_computation_on_approve(self, tenant_id: int) -> bool:
         """销售订单/销售预测审核通过后是否自动下推到需求计算（组织级开关，默认关闭）。"""
@@ -680,7 +822,7 @@ class BusinessConfigService:
         保留字段值为 True（由菜单控制是否可见）。
         """
         audit_required = await self.check_audit_required(tenant_id, "production_plan")
-        can_direct_wo = await self.can_direct_generate_work_order_from_computation(tenant_id)
+        can_direct_wo = True
         return {
             "production_plan_enabled": True,
             "production_plan_audit_required": audit_required,
@@ -752,6 +894,10 @@ class BusinessConfigService:
         business_config.setdefault("parameters", {})
         business_config["parameters"].setdefault(category, {})
         business_config["parameters"][category][parameter_key] = value
+        if "finance" in business_config["parameters"]:
+            business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
+                business_config["parameters"]["finance"]
+            )
 
         settings["business_config"] = business_config
         await Tenant.filter(id=tenant_id).update(settings=settings)
@@ -779,6 +925,10 @@ class BusinessConfigService:
         business_config.setdefault("parameters", {})
         for category, params in parameters.items():
             business_config["parameters"].setdefault(category, {}).update(params)
+        if "finance" in business_config["parameters"]:
+            business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
+                business_config["parameters"]["finance"]
+            )
 
         settings["business_config"] = business_config
         await Tenant.filter(id=tenant_id).update(settings=settings)

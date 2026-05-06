@@ -107,6 +107,30 @@ export function getPayableLifecycle(record: Record<string, unknown>): LifecycleR
 
 /** 采购/销售发票（中文字段 status + review_status） */
 export function getChineseInvoiceLifecycle(record: Record<string, unknown>): LifecycleResult {
+  const stRaw = String(record.status ?? '').trim();
+  if (stRaw === '已作废') {
+    return {
+      percent: 0,
+      stageName: '已作废',
+      status: 'exception',
+      subStages: [
+        { key: 'rv', label: '审核', status: 'done' },
+        { key: 'inv', label: '发票', status: 'exception' },
+      ],
+    };
+  }
+  if (stRaw === '已红冲') {
+    return {
+      percent: 100,
+      stageName: '已红冲',
+      status: 'success',
+      subStages: [
+        { key: 'blue', label: '蓝字', status: 'done' },
+        { key: 'red', label: '红字', status: 'active' },
+      ],
+    };
+  }
+
   const { reviewRejected, reviewPending, reviewDone } = reviewSubStages(String(record.review_status ?? ''));
   const st = String(record.status ?? '');
 

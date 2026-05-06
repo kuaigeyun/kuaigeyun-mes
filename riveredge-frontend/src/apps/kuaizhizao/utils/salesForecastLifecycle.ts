@@ -18,6 +18,7 @@ const SALES_FORECAST_BACKEND_KEYS = new Set([
   'effective',
   'executing',
   'delivered',
+  'invoicing',
   'completed',
 ]);
 
@@ -81,6 +82,7 @@ const MAIN_STAGE_KEYS = [
   'effective',
   'executing',
   'delivered',
+  'invoicing',
   'completed',
 ] as const;
 const MAIN_STAGE_LABELS: Record<(typeof MAIN_STAGE_KEYS)[number], string> = {
@@ -91,6 +93,7 @@ const MAIN_STAGE_LABELS: Record<(typeof MAIN_STAGE_KEYS)[number], string> = {
   effective: '已生效',
   executing: '执行中',
   delivered: '发货出库',
+  invoicing: '账款发票处理',
   completed: '已完成',
 };
 
@@ -116,7 +119,9 @@ function buildMainStages(currentStageName: string, _isException: boolean): SubSt
     执行中: 5,
     已交货: 6,
     发货出库: 6,
-    已完成: 7,
+    账款发票: 7,
+    账款发票处理: 7,
+    已完成: 8,
     已驳回: 1,
     已取消: 0,
   };

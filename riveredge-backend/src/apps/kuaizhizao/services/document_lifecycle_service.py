@@ -14,9 +14,10 @@ from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED
 
 # ---------------------------------------------------------------------------
 # 销售订单生命周期节点（后端单独控制）
-# 各阶段含义：草稿→待审核→已审核→已生效→执行中→已交货→已完成
+# 各阶段含义：草稿→待审核→已审核→已生效→执行中→已交货→账款发票→已完成
 # - 已生效：订单已确认/已下推，可开始执行，但尚未开始生产（无工单、交货0）
 # - 执行中：已开始执行（BOM/需求/工单/生产/交货进行中）
+# - 账款发票：交货闭环后至开票/收款完成前
 # ---------------------------------------------------------------------------
 SALES_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
@@ -25,6 +26,7 @@ SALES_ORDER_MAIN_STAGES = [
     {"key": "effective", "label": "已生效"},
     {"key": "executing", "label": "执行中"},
     {"key": "delivered", "label": "已交货"},
+    {"key": "invoicing", "label": "账款发票处理"},
     {"key": "completed", "label": "已完成"},
 ]
 
@@ -233,12 +235,12 @@ def get_sales_order_lifecycle(
         }
     if effective and delivery >= 100 and invoice < 100:
         return {
-            "current_stage_key": "delivered",
-            "current_stage_name": "已交货",
+            "current_stage_key": "invoicing",
+            "current_stage_name": "账款发票处理",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "delivered"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "invoicing"),
             "sub_stages": None,
-            "next_step_suggestions": ["下推销售发票"],
+            "next_step_suggestions": ["下推销售发票", "登记收款与对账"],
         }
     # 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度）
     if effective and delivery <= 0:
@@ -601,7 +603,7 @@ def get_purchase_order_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 销售预测生命周期（主轴与执行子阶段与销售订单对齐：草稿→…→已生效→执行中→已交货→已完成）
+# 销售预测生命周期（主轴与执行子阶段与销售订单对齐：草稿→…→已生效→执行中→已交货→账款发票→已完成）
 # pushed_to_computation 由调用方根据关联 Demand.pushed_to_computation 传入（与订单一致）
 # ---------------------------------------------------------------------------
 def get_sales_forecast_lifecycle(
@@ -692,12 +694,12 @@ def get_sales_forecast_lifecycle(
         }
     if effective and delivery >= 100 and invoice < 100:
         return {
-            "current_stage_key": "delivered",
-            "current_stage_name": "已交货",
+            "current_stage_key": "invoicing",
+            "current_stage_name": "账款发票处理",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "delivered"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "invoicing"),
             "sub_stages": None,
-            "next_step_suggestions": ["下推销售发票"],
+            "next_step_suggestions": ["下推销售发票", "登记收款与对账"],
         }
     if effective and delivery <= 0:
         has_wo = False
@@ -874,7 +876,7 @@ def get_purchase_requisition_lifecycle(
         "草稿": "draft", "draft": "draft",
         "待审核": "pending_review", "pending_review": "pending_review",
         "已驳回": "pending_review", "rejected": "pending_review",
-        "已通过": "approved", "approved": "approved",
+        "已通过": "approved", "approved": "approved", "APPROVED": "approved",
         "已确认": "approved", "confirmed": "approved", "CONFIRMED": "approved",
         "部分转单": "partial", "partial": "partial",
         "全部转单": "full", "full": "full",

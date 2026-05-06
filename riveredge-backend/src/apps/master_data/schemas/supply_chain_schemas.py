@@ -81,10 +81,25 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    revenue_recognition_override: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="应收确认策略覆盖：空=跟随组织；on_shipment / on_invoice",
+        alias="revenueRecognitionOverride",
+    )
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     is_public: bool = Field(False, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @validator("revenue_recognition_override", pre=True)
+    def validate_revenue_recognition_override(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip()
+        if s not in ("on_shipment", "on_invoice"):
+            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice 或空")
+        return s
 
     @validator("code")
     def validate_code(cls, v):
@@ -125,10 +140,25 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    revenue_recognition_override: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="应收确认策略覆盖",
+        alias="revenueRecognitionOverride",
+    )
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
     is_public: Optional[bool] = Field(None, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @validator("revenue_recognition_override", pre=True)
+    def validate_revenue_recognition_override_update(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip()
+        if s not in ("on_shipment", "on_invoice"):
+            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice 或空")
+        return s
 
     @validator("code")
     def validate_code(cls, v):
@@ -185,9 +215,24 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
     credit_limit: Optional[Decimal] = Field(None, description="授信额度", alias="creditLimit")
+    payable_recognition_override: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="应付确认策略覆盖：空=跟随组织；on_receipt / on_purchase_invoice",
+        alias="payableRecognitionOverride",
+    )
     is_active: bool = Field(True, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @validator("payable_recognition_override", pre=True)
+    def validate_payable_recognition_override(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip()
+        if s not in ("on_receipt", "on_purchase_invoice"):
+            raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice 或空")
+        return s
 
     @validator("code")
     def validate_code(cls, v):
@@ -227,9 +272,24 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
     credit_limit: Optional[Decimal] = Field(None, description="授信额度", alias="creditLimit")
+    payable_recognition_override: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="应付确认策略覆盖",
+        alias="payableRecognitionOverride",
+    )
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @validator("payable_recognition_override", pre=True)
+    def validate_payable_recognition_override_update(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip()
+        if s not in ("on_receipt", "on_purchase_invoice"):
+            raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice 或空")
+        return s
 
     @validator("code")
     def validate_code(cls, v):

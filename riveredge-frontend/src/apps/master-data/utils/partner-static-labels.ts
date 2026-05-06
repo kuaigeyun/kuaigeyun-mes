@@ -62,3 +62,21 @@ export function partnerEnterpriseTypeLabel(t: TFunction, code?: string | null): 
 export function partnerSettlementMethodLabel(t: TFunction, code?: string | null): string {
   return mapLabel(t, SETTLEMENT_KEYS, code);
 }
+
+/** 客户主数据 — 应收确认覆盖（空=跟随组织） */
+export function partnerRevenueRecognitionOverrideLabel(t: TFunction, code?: string | null): string {
+  if (code == null || code === '') return t('field.partner.recognitionOverrideInherit');
+  if (code === 'on_shipment') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment');
+  if (code === 'on_invoice') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice');
+  return code;
+}
+
+/** 供应商主数据 — 应付确认覆盖（空=跟随组织） */
+export function partnerPayableRecognitionOverrideLabel(t: TFunction, code?: string | null): string {
+  if (code == null || code === '') return t('field.partner.recognitionOverrideInherit');
+  if (code === 'on_receipt') return t('pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt');
+  if (code === 'on_purchase_invoice') {
+    return t('pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice');
+  }
+  return code;
+}

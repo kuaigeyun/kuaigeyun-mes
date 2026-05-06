@@ -11,8 +11,17 @@ import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 
-const MAIN_STAGE_KEYS_AUDIT = ['draft', 'pending_review', 'audited', 'effective', 'executing', 'delivered', 'completed'] as const;
-const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'effective', 'executing', 'delivered', 'completed'] as const;
+const MAIN_STAGE_KEYS_AUDIT = [
+  'draft',
+  'pending_review',
+  'audited',
+  'effective',
+  'executing',
+  'delivered',
+  'invoicing',
+  'completed',
+] as const;
+const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'effective', 'executing', 'delivered', 'invoicing', 'completed'] as const;
 
 const MAIN_STAGE_LABELS = {
   draft: '草稿',
@@ -21,6 +30,7 @@ const MAIN_STAGE_LABELS = {
   effective: '已生效',
   executing: '执行中',
   delivered: '发货出库',
+  invoicing: '账款发票处理',
   completed: '已完成',
 } as const;
 
@@ -91,6 +101,8 @@ function hasWorkOrder(record: SalesOrder): boolean {
 function normalizeStageName(name: string | undefined): string {
   const n = norm(name);
   if (n === '已交货') return '发货出库';
+  if (n === '账款发票') return '账款发票处理';
+  if (n === 'invoicing') return '账款发票处理';
   return n || '';
 }
 
@@ -107,7 +119,10 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     执行中: 4,
     已交货: 5,
     发货出库: 5,
-    已完成: 6,
+    invoicing: 6,
+    账款发票: 6,
+    账款发票处理: 6,
+    已完成: 7,
     已驳回: 1,
     已取消: 0,
   };
@@ -120,7 +135,10 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     执行中: 2,
     已交货: 3,
     发货出库: 3,
-    已完成: 4,
+    invoicing: 4,
+    账款发票: 4,
+    账款发票处理: 4,
+    已完成: 5,
     已驳回: 1,
     已取消: 0,
   };
@@ -146,6 +164,8 @@ const CN_STAGE_NAMES = new Set([
   '执行中',
   '已交货',
   '发货出库',
+  '账款发票',
+  '账款发票处理',
   '已完成',
   '已驳回',
   '已取消',
@@ -297,16 +317,16 @@ export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true)
     );
   }
   if (isEffective(record) && delivery >= 100 && invoice < 100) {
-    const mainStages = buildMainStages('发货出库', auditRequired);
-    const baseDelivered = ringPercentFromStages(mainStages);
+    const mainStages = buildMainStages('账款发票处理', auditRequired);
+    const baseRing = ringPercentFromStages(mainStages);
     return adaptForAuditSwitch(
       {
-        percent: Math.min(100, Math.round(baseDelivered + ((100 - baseDelivered) * invoice) / 100)),
-        stageName: '发货出库',
+        percent: Math.min(100, Math.round(baseRing + ((100 - baseRing) * invoice) / 100)),
+        stageName: '账款发票处理',
         subPercent: invoice,
         subLabel: '开票',
         mainStages,
-        nextStepSuggestions: ['下推销售发票'],
+        nextStepSuggestions: ['下推销售发票', '登记收款与对账'],
       },
       auditRequired,
     );
@@ -358,7 +378,7 @@ export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true)
 }
 
 /** 不视为「交货逾期」高亮的生命周期阶段（与列表展示语义一致） */
-const DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set(['已完成', '已取消', '草稿', '已驳回']);
+const DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set(['已完成', '已取消', '草稿', '已驳回', '账款发票', '账款发票处理']);
 
 /** 整单已交货闭环或处于不提示逾期的阶段 */
 export function isSalesOrderDeliveryHighlightExcluded(record: SalesOrder, auditRequired = true): boolean {

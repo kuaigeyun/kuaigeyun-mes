@@ -178,39 +178,84 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 resps.append(PurchaseRequisitionItemResponse.model_validate(d))
             return resps, cleared
 
+        # 第一遍：用现有 purchase_order_id 链接做正常计算 + 清理孤儿
         item_resps, cleared_orphan = await _build_item_resps(items, clear_orphan=True)
         if cleared_orphan:
             await self.merge_split_requisition_items(tenant_id, requisition_id)
             items = await PurchaseRequisitionItem.filter(
                 tenant_id=tenant_id, requisition_id=requisition_id
             ).all()
-            item_resps, _ = await _build_item_resps(items, clear_orphan=False)
 
-        # 若清除了孤儿引用，需重新计算采购申请状态
-        # ⚠️ 注意：仅当单据处于已通过或转单类状态时才允许自动纠错，防止撤回审核后被刷回已通过
-        current_norm = normalize_status(req.status)
-        if current_norm in (
-            DocumentStatus.AUDITED.value, 
-            DocumentStatus.PARTIAL_CONVERTED.value, 
-            DocumentStatus.FULL_CONVERTED.value
-        ):
-            all_items = await PurchaseRequisitionItem.filter(
+        # 重新加载明细（可能因清孤儿/合并已变化）
+        all_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=requisition_id
+        ).all()
+        req_item_ids = [i.id for i in all_items]
+
+        # 自愈链接：以 PurchaseOrderItem.source_type/source_id 作为权威来源反查
+        # 避免历史数据/异常路径导致 requisition_item.purchase_order_id 被清空但下游 PO 仍存在
+        po_items_back = (
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                source_type="PurchaseRequisition",
+                source_id__in=req_item_ids,
+            ).all()
+            if req_item_ids
+            else []
+        )
+        po_item_by_source: Dict[int, PurchaseOrderItem] = {}
+        for pi in po_items_back:
+            existing = po_item_by_source.get(pi.source_id)
+            # 多次转单时取最新一条（id 最大）
+            if existing is None or pi.id > existing.id:
+                po_item_by_source[pi.source_id] = pi
+
+        healed = False
+        for it in all_items:
+            target = po_item_by_source.get(it.id)
+            if target and not it.purchase_order_id:
+                await it.update_from_dict({
+                    "purchase_order_id": target.order_id,
+                    "purchase_order_item_id": target.id,
+                }).save()
+                it.purchase_order_id = target.order_id
+                it.purchase_order_item_id = target.id
+                healed = True
+
+        # 若有自愈，重建明细响应
+        if healed:
+            items = await PurchaseRequisitionItem.filter(
                 tenant_id=tenant_id, requisition_id=requisition_id
             ).all()
-            has_any = any(i.purchase_order_id for i in all_items)
-            all_converted = (
-                len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
-            )
-            new_status = (
-                DocumentStatus.FULL_CONVERTED.value
-                if all_converted
-                else DocumentStatus.PARTIAL_CONVERTED.value
-                if has_any
-                else "已通过"
-            )
-            if req.status != new_status:
-                req.status = new_status
-                await req.save()
+            item_resps, _ = await _build_item_resps(items, clear_orphan=False)
+            all_items = items
+        elif cleared_orphan:
+            item_resps, _ = await _build_item_resps(all_items, clear_orphan=False)
+
+        # 转单状态判定：以 items.purchase_order_id 与下游 PO 反查的并集为准
+        converted_req_item_ids = {it.id for it in all_items if it.purchase_order_id} | set(po_item_by_source.keys())
+        has_any = len(converted_req_item_ids) > 0
+        all_converted = len(all_items) > 0 and len(converted_req_item_ids) >= len(all_items)
+
+        current_norm = normalize_status(req.status)
+        new_status = req.status
+        if all_converted:
+            new_status = DocumentStatus.FULL_CONVERTED.value
+        elif has_any:
+            new_status = DocumentStatus.PARTIAL_CONVERTED.value
+        elif current_norm in (
+            DocumentStatus.AUDITED.value,
+            DocumentStatus.APPROVED.value,
+            DocumentStatus.CONFIRMED.value,
+            DocumentStatus.PARTIAL_CONVERTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+        ):
+            # 仅在已通过/转单语义区间回落为已通过，避免覆盖草稿/待审核/驳回
+            new_status = "已通过"
+
+        if req.status != new_status:
+            req.status = new_status
+            await req.save()
 
         req_dict = {k: getattr(req, k) for k in req._meta.fields_map if hasattr(req, k)}
         req_dict.pop("items", None)
@@ -270,6 +315,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
         result = []
         for req in reqs:
+            # 列表入口同样自愈转单状态，避免详情未打开前列表显示陈旧状态
+            await self._recalc_conversion_status(tenant_id, req)
             items_count = await PurchaseRequisitionItem.filter(
                 tenant_id=tenant_id, requisition_id=req.id
             ).count()
@@ -282,6 +329,65 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             resp.lifecycle = get_purchase_requisition_lifecycle(req, milestones=milestones, audit_required=audit_required)
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
+
+    async def _recalc_conversion_status(
+        self, tenant_id: int, req: PurchaseRequisition
+    ) -> None:
+        """重新计算并保存采购申请的转单状态：
+        - 自愈断开的链接（PurchaseOrderItem.source_id 反查）
+        - 在「已通过/已确认/已审核/转单」语义区间内回写 PARTIAL_CONVERTED/FULL_CONVERTED
+        草稿/待审核/驳回 等状态保持不变。
+        """
+        all_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=req.id
+        ).all()
+        req_item_ids = [i.id for i in all_items]
+        po_items_back = (
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                source_type="PurchaseRequisition",
+                source_id__in=req_item_ids,
+            ).all()
+            if req_item_ids
+            else []
+        )
+        po_item_by_source: Dict[int, PurchaseOrderItem] = {}
+        for pi in po_items_back:
+            existing = po_item_by_source.get(pi.source_id)
+            if existing is None or pi.id > existing.id:
+                po_item_by_source[pi.source_id] = pi
+
+        for it in all_items:
+            target = po_item_by_source.get(it.id)
+            if target and not it.purchase_order_id:
+                await it.update_from_dict({
+                    "purchase_order_id": target.order_id,
+                    "purchase_order_item_id": target.id,
+                }).save()
+                it.purchase_order_id = target.order_id
+                it.purchase_order_item_id = target.id
+
+        converted_ids = {it.id for it in all_items if it.purchase_order_id} | set(po_item_by_source.keys())
+        has_any = len(converted_ids) > 0
+        all_converted = len(all_items) > 0 and len(converted_ids) >= len(all_items)
+
+        current_norm = normalize_status(req.status)
+        new_status = req.status
+        if all_converted:
+            new_status = DocumentStatus.FULL_CONVERTED.value
+        elif has_any:
+            new_status = DocumentStatus.PARTIAL_CONVERTED.value
+        elif current_norm in (
+            DocumentStatus.AUDITED.value,
+            DocumentStatus.APPROVED.value,
+            DocumentStatus.CONFIRMED.value,
+            DocumentStatus.PARTIAL_CONVERTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+        ):
+            new_status = "已通过"
+        if req.status != new_status:
+            req.status = new_status
+            await req.save()
 
     async def merge_split_requisition_items(
         self, tenant_id: int, requisition_id: int
@@ -351,20 +457,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if cleared_any:
             await self.merge_split_requisition_items(tenant_id, requisition_id)
 
-        all_items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id, requisition_id=requisition_id
-        ).all()
-        has_any = any(i.purchase_order_id for i in all_items)
-        all_converted = (
-            len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
-        )
-        if all_converted:
-            req.status = DocumentStatus.FULL_CONVERTED.value
-        elif has_any:
-            req.status = DocumentStatus.PARTIAL_CONVERTED.value
-        else:
-            req.status = "已通过"
-        await req.save()
+        # 复用统一的状态自愈逻辑（含 PurchaseOrderItem.source_id 反查）
+        await self._recalc_conversion_status(tenant_id, req)
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
     async def delete_requisition(self, tenant_id: int, requisition_id: int) -> bool:
@@ -595,16 +689,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         line_suppliers: List[Tuple[PurchaseRequisitionItem, int]] = []
         for item in items:
             sid = self._resolve_line_supplier_id(item, data)
-            if not sid:
-                raise BusinessLogicError(
-                    f"物料 {item.material_code} 未指定供应商，请在表格中选择或在上方选择统一供应商"
-                )
-            line_suppliers.append((item, sid))
+            # 未维护供应商时，允许先创建草稿采购单，后续在草稿中选择供应商
+            line_suppliers.append((item, int(sid) if sid else 0))
 
         unique_ids = {sid for _, sid in line_suppliers}
-        supplier_rows = await Supplier.filter(tenant_id=tenant_id, id__in=list(unique_ids)).all()
+        supplier_rows = await Supplier.filter(tenant_id=tenant_id, id__in=[sid for sid in unique_ids if sid > 0]).all()
         supplier_by_id = {s.id: s for s in supplier_rows}
         for sid in unique_ids:
+            if sid <= 0:
+                continue
             if sid not in supplier_by_id:
                 raise NotFoundError(f"供应商不存在: {sid}")
 
@@ -626,8 +719,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             rel_svc = None
 
         for supplier_id, group_items in groups.items():
-            sup = supplier_by_id[supplier_id]
-            supplier_name = sup.name or data.supplier_name or ""
+            sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
+            supplier_name = (sup.name if sup else None) or data.supplier_name or "待定供应商"
 
             max_required = max((i.required_date or today for i in group_items), default=today)
             po_items = []
@@ -708,10 +801,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 await item.update_from_dict({
                     "purchase_order_id": po.id,
                     "purchase_order_item_id": po_item_id,
-                    "supplier_id": supplier_id,
+                    "supplier_id": supplier_id if supplier_id > 0 else None,
                 }).save()
 
-                if data.persist_default_supplier_to_material:
+                if data.persist_default_supplier_to_material and supplier_id > 0:
                     ok = await self._persist_buy_default_supplier(
                         tenant_id, item.material_id, supplier_id, supplier_name
                     )

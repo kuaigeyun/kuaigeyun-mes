@@ -14,6 +14,7 @@ import {
   ToolOutlined,
   PartitionOutlined,
   CalculatorOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +35,7 @@ const TRACE_FLOW_GRID_BACKGROUND = {
 /** fitView 时画布内边距（左右留白），与视口选项 padding 一致 */
 const TRACE_FLOW_VIEWPORT_PADDING = { compact: 24, normal: 36 } as const;
 
-/** React 自定义节点基准尺寸 [宽, 高]（与下方 node.style.size 一致） */
+/** React 自定义节点基准尺寸 [宽, 高]；须写在 node.style.size，否则会落回库默认 [100,40] 导致极窄 */
 const TRACE_FLOW_NODE_BASE_SIZE: Record<'compact' | 'normal', [number, number]> = {
   compact: [172, 52],
   normal: [216, 58],
@@ -82,15 +83,34 @@ function TraceDocIcon({ document_type }: { document_type: string }) {
       return <PartitionOutlined />;
     case 'demand_computation':
       return <CalculatorOutlined />;
+    case 'reporting_timeline':
+      return <ScheduleOutlined />;
     default:
       return <FileTextOutlined />;
   }
+}
+
+/**
+ * 追溯接口里 document_name 常与「类型 + 单号」拼接重复（如 需求计算-MRP-xxx），
+ * 与节点上已有类型行、编码行重复时不展示副标题。
+ */
+function traceNodeSubtitleToShow(typeTitle: string, mainCode: string, documentName: string): string | null {
+  const name = documentName.trim();
+  const code = (mainCode || '').trim();
+  const tt = (typeTitle || '').trim();
+  if (!name) return null;
+  const fold = (s: string) => s.replace(/[\s·\-—_:：\/]/g, '').toLowerCase();
+  if (code && fold(name) === fold(code)) return null;
+  if (code && tt && fold(name) === fold(tt + code)) return null;
+  return name;
 }
 
 interface TraceDocumentFlowNodeProps {
   document_type: string;
   document_id: number;
   document_code?: string;
+  /** 追溯接口中的单据名称；报工节点为工序名称 */
+  document_name?: string;
   created_at?: string;
   is_root: boolean;
   /** 画布点击选中（与 UniFlowNode selected 一致的主色描边 + 光晕） */
@@ -103,6 +123,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   document_type,
   document_id,
   document_code,
+  document_name,
   created_at,
   is_root,
   selected,
@@ -112,8 +133,15 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   const { t } = useTranslation();
 
   const isSalesDelivery = document_type === 'sales_delivery';
+  const isReportingTimeline = document_type === 'reporting_timeline';
   const success = token.colorSuccess;
-  const accentBase = is_root ? token.colorPrimary : isSalesDelivery ? success : token.colorTextSecondary;
+  const accentBase = is_root
+    ? token.colorPrimary
+    : isSalesDelivery
+      ? success
+      : isReportingTimeline
+        ? token.colorPrimary
+        : token.colorTextSecondary;
   /** 选中时统一用主色强调条与图标色 */
   const accent = selected ? token.colorPrimary : accentBase;
   const primary = token.colorPrimary;
@@ -123,7 +151,27 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   const code =
     (document_code || '').trim() ||
     `#${document_id}`;
+  const subTitleRaw = (document_name || '').trim();
+  const displaySubtitle = traceNodeSubtitleToShow(typeTitle, code, subTitleRaw);
   const createdAtText = created_at ? new Date(created_at).toLocaleString() : '-';
+
+  const cardBorder =
+    selected
+      ? `2px solid ${primary}`
+      : is_root
+        ? `1px solid ${accentBase}`
+        : isSalesDelivery
+          ? `1px solid ${success}`
+          : isReportingTimeline
+            ? `1px solid ${accentBase}`
+            : `1px solid ${token.colorBorderSecondary}`;
+  const cardShadow = selected
+    ? `0 0 0 2px ${primary}22, ${token.boxShadowSecondary}`
+    : is_root
+      ? `0 0 0 2px ${accentBase}22, ${token.boxShadowSecondary}`
+      : isSalesDelivery
+        ? `0 0 0 2px ${success}22, ${token.boxShadowSecondary}`
+        : token.boxShadowTertiary;
 
   return (
     <div
@@ -142,21 +190,8 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
           boxSizing: 'border-box',
           background: token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
-          border:
-            selected
-              ? `2px solid ${primary}`
-              : is_root
-                ? `1px solid ${accentBase}`
-                : isSalesDelivery
-                  ? `1px solid ${success}`
-                  : `1px solid ${token.colorBorderSecondary}`,
-          boxShadow: selected
-            ? `0 0 0 2px ${primary}22, ${token.boxShadowSecondary}`
-            : is_root
-              ? `0 0 0 2px ${accentBase}22, ${token.boxShadowSecondary}`
-              : isSalesDelivery
-                ? `0 0 0 2px ${success}22, ${token.boxShadowSecondary}`
-                : token.boxShadowTertiary,
+          border: cardBorder,
+          boxShadow: cardShadow,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -222,10 +257,25 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
               whiteSpace: 'nowrap',
               lineHeight: 1.35,
             }}
-            title={code}
+            title={displaySubtitle ? `${code}\n${displaySubtitle}` : code}
           >
             {code}
           </div>
+          {displaySubtitle ? (
+            <div
+              style={{
+                fontSize: compact ? 9 : 10,
+                color: token.colorTextSecondary,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.25,
+              }}
+              title={displaySubtitle}
+            >
+              {displaySubtitle}
+            </div>
+          ) : null}
           <div
             style={{
               fontSize: compact ? 9 : 10,
@@ -398,12 +448,16 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       data: {
         nodes: nodes.map((n) => ({
           id: n.id,
+          style: {
+            size: n.flowNodeSize ?? TRACE_FLOW_NODE_BASE_SIZE[layoutMode],
+          },
           data: {
             label: n.label,
             is_root: n.meta?.is_root,
             document_type: n.meta?.document_type ?? '',
             document_id: n.meta?.document_id ?? 0,
             document_code: n.meta?.document_code,
+            document_name: n.meta?.document_name,
             created_at: n.meta?.created_at,
           },
         })),
@@ -430,6 +484,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               document_type?: string;
               document_id?: number;
               document_code?: string;
+              document_name?: string;
               created_at?: string;
             };
             const document_type = datum?.document_type ?? '';
@@ -440,6 +495,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
                 document_type={document_type}
                 document_id={document_id}
                 document_code={datum?.document_code}
+                document_name={datum?.document_name}
                 created_at={datum?.created_at}
                 is_root={!!datum?.is_root}
                 selected={nid !== '' && nid === selectedGraphNodeId}

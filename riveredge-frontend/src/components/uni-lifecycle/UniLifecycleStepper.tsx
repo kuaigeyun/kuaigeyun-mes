@@ -20,6 +20,7 @@ import {
   FileText,
   Handshake,
   Inbox,
+  JapaneseYen,
   Layers,
   Lightbulb,
   Package,
@@ -92,6 +93,8 @@ const STAGE_KEY_ICONS: Record<string, LucideIcon> = {
   effective: Zap,
   executing: PlayCircle,
   delivered: Truck,
+  /** 人民币/日元共用 ¥ 字形；此处用于账款发票阶段，避免美元 $ 歧义 */
+  invoicing: JapaneseYen,
   pushed: CheckCircle,
   // 仓储/出入库类
   confirmed: CheckCircle,
@@ -333,11 +336,16 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
   const isException = status === 'exception';
   if (!steps.length) return null;
 
-  /** 标签列与节点列同宽下限：至少能容纳 stepLabelMaxWidth，避免文案挤在节点宽度内被截断 */
-  const stepSlotWidth = Math.max(nodeSize, stepLabelMaxWidth);
+  const n = steps.length;
+  /** 步骤多时缩短连线，与 flex 均分列宽配合，尽量一屏排开（抽屉等窄容器） */
+  const connectorPx = Math.min(
+    connectorWidth,
+    n >= 9 ? 14 : n >= 8 ? 16 : n >= 7 ? 18 : n >= 6 ? 22 : n >= 5 ? 28 : connectorWidth,
+  );
+  const labelFontSize = n >= 8 ? 11 : n >= 6 ? 12 : 13;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', minWidth: 0 }}>
       <div
         className="uni-lifecycle-stepper"
         style={{
@@ -345,16 +353,18 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
           flexDirection: 'column',
           gap: showLabels ? 8 : 0,
           width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
         }}
       >
-        {/* 仅圆点 + 连线一行，固定高度与圆直径一致，避免标签占位导致连线垂直跑偏 */}
+        {/* 圆点行：各阶段 flex 均分宽度，避免固定 180px 列导致超出抽屉 */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-start',
-            flexWrap: 'nowrap',
-            gap: 0,
+            justifyContent: 'stretch',
+            width: '100%',
+            minWidth: 0,
             height: nodeSize,
             minHeight: nodeSize,
           }}
@@ -366,13 +376,13 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
             return (
               <React.Fragment key={step.key}>
                 {idx > 0 && (
-                  <ConnectorTrack completed={steps[idx - 1]?.status === 'done'} widthPx={connectorWidth} />
+                  <ConnectorTrack completed={steps[idx - 1]?.status === 'done'} widthPx={connectorPx} />
                 )}
                 <Tooltip title={tooltipTitle}>
                   <div
                     style={{
-                      width: stepSlotWidth,
-                      flexShrink: 0,
+                      flex: '1 1 0',
+                      minWidth: 0,
                       height: nodeSize,
                       display: 'flex',
                       alignItems: 'center',
@@ -411,9 +421,9 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
             style={{
               display: 'flex',
               alignItems: 'flex-start',
-              justifyContent: 'flex-start',
-              flexWrap: 'nowrap',
-              gap: 0,
+              justifyContent: 'stretch',
+              width: '100%',
+              minWidth: 0,
             }}
           >
             {steps.map((step, idx) => {
@@ -421,18 +431,18 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
               return (
                 <React.Fragment key={`${step.key}-lbl`}>
                   {idx > 0 && (
-                    <div style={{ width: connectorWidth, flexShrink: 0, height: 1 }} aria-hidden />
+                    <div style={{ width: connectorPx, flexShrink: 0, height: 1 }} aria-hidden />
                   )}
                   <div
                     style={{
-                      width: stepSlotWidth,
-                      flexShrink: 0,
+                      flex: '1 1 0',
+                      minWidth: 0,
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'flex-start',
                       overflow: 'visible',
-                      paddingLeft: 4,
-                      paddingRight: 4,
+                      paddingLeft: 2,
+                      paddingRight: 2,
                       boxSizing: 'border-box',
                     }}
                   >
@@ -440,6 +450,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                       style={{
                         ...stepLabelInlineStyle(step, stepIsException, 'wrap'),
                         maxWidth: '100%',
+                        fontSize: labelFontSize,
                       }}
                     >
                       {step.label}

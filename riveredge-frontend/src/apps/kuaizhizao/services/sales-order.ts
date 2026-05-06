@@ -390,6 +390,35 @@ export async function pushSalesOrderToShipmentNotice(salesOrderId: number): Prom
   });
 }
 
+export interface PushToDeliveryResponse {
+  success: boolean;
+  message: string;
+  delivery_id?: number;
+  delivery_code?: string;
+}
+
+export async function pushSalesOrderToDelivery(salesOrderId: number): Promise<PushToDeliveryResponse> {
+  return apiRequest<PushToDeliveryResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-delivery`, {
+    method: 'POST',
+  });
+}
+
+export interface PushAutoRouteResponse {
+  success: boolean;
+  message: string;
+  route_summary?: {
+    order_type?: string;
+    mto_item_count?: number;
+    mts_item_count?: number;
+  };
+}
+
+export async function pushSalesOrderAutoRoute(salesOrderId: number): Promise<PushAutoRouteResponse> {
+  return apiRequest<PushAutoRouteResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-auto-route`, {
+    method: 'POST',
+  });
+}
+
 /**
  * 下推销售订单到销售发票
  */
@@ -420,6 +449,27 @@ export async function pushSalesOrderToSalesReturn(data: {
   return apiRequest<PushToSalesReturnResponse>('/apps/kuaizhizao/sales-returns/pull-from-sales-order', {
     method: 'POST',
     data,
+  });
+}
+
+export interface PullFromQuotationResponse {
+  success: boolean;
+  message: string;
+  source_type: 'quotation';
+  source_id: number;
+  sales_order: SalesOrder;
+  quotation: {
+    id?: number;
+    quotation_code?: string;
+    status?: string;
+    [key: string]: any;
+  };
+}
+
+export async function pullSalesOrderFromQuotation(quotationId: number): Promise<PullFromQuotationResponse> {
+  return apiRequest<PullFromQuotationResponse>('/apps/kuaizhizao/sales-orders/pull-from-quotation', {
+    method: 'POST',
+    data: { quotation_id: quotationId },
   });
 }
 

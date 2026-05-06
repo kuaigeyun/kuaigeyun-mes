@@ -39,6 +39,12 @@ import {
   getPurchaseOrderStatistics, expeditePurchaseOrder,
   PurchaseOrder, PurchaseOrderItem
 } from '../../../services/purchase';
+import {
+  listPurchaseRequisitions,
+  getPurchaseRequisition,
+  convertToPurchaseOrder,
+  type PurchaseRequisition,
+} from '../../../services/purchase-requisition';
 import { PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -162,6 +168,28 @@ function renderPurchaseOrderRowActions(nodes: React.ReactNode[], keyPrefix: stri
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
 // PurchaseOrderItem 已在导入中定义
+
+type PullPurchaseRequisitionLineCandidate = {
+  key: string;
+  requisition_id: number;
+  requisition_code: string;
+  requisition_name?: string;
+  applicant_name?: string;
+  requisition_date?: string;
+  requisition_status?: string;
+  review_status?: string;
+  item_id: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  unit?: string;
+  quantity: number;
+  required_date?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  purchase_order_id?: number;
+  converted: boolean;
+};
 
 const defaultOrderItem = {
   material_id: undefined,
@@ -425,6 +453,12 @@ const PurchaseOrdersPage: React.FC = () => {
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
+  const [pullFromRequisitionVisible, setPullFromRequisitionVisible] = useState(false);
+  const [pullRequisitionLoading, setPullRequisitionLoading] = useState(false);
+  const [pullRequisitionSubmitting, setPullRequisitionSubmitting] = useState(false);
+  const [pullRequisitionKeyword, setPullRequisitionKeyword] = useState('');
+  const [selectedPullRequisitionLineKeys, setSelectedPullRequisitionLineKeys] = useState<React.Key[]>([]);
+  const [pullRequisitionLineCandidates, setPullRequisitionLineCandidates] = useState<PullPurchaseRequisitionLineCandidate[]>([]);
 
   // 下推入库 Modal
   const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
@@ -1291,6 +1325,118 @@ const PurchaseOrdersPage: React.FC = () => {
     }, 0);
   };
 
+  const loadPullRequisitionCandidates = async (keyword: string = '') => {
+    setPullRequisitionLoading(true);
+    try {
+      const result = await listPurchaseRequisitions({
+        skip: 0,
+        limit: 30,
+        keyword: keyword.trim() || undefined,
+      });
+      const rows: PurchaseRequisition[] = Array.isArray(result) ? result : (result as any).data || [];
+      const details = await Promise.all(
+        rows
+          .filter((row) => row.id && row.requisition_code)
+          .slice(0, 30)
+          .map(async (row) => {
+            try {
+              const detail = await getPurchaseRequisition(Number(row.id));
+              const status = detail.status || '';
+              const canUseStatus = ['已通过', '部分转单', '全部转单'].includes(status);
+              if (!canUseStatus) return [] as PullPurchaseRequisitionLineCandidate[];
+              return (detail.items || [])
+                .filter((item) => item.id != null)
+                .map((item) => ({
+                  key: `${detail.id}-${item.id}`,
+                  requisition_id: Number(detail.id),
+                  requisition_code: detail.requisition_code || '',
+                  requisition_name: detail.requisition_name || '',
+                  applicant_name: detail.applicant_name || '',
+                  requisition_date: detail.requisition_date || '',
+                  requisition_status: status,
+                  review_status: detail.review_status || '',
+                  item_id: Number(item.id),
+                  material_code: item.material_code || '',
+                  material_name: item.material_name || '',
+                  material_spec: item.material_spec || '',
+                  unit: item.unit || '',
+                  quantity: Number(item.quantity || 0),
+                  required_date: item.required_date || detail.required_date || '',
+                  supplier_id: item.supplier_id ?? undefined,
+                  supplier_name: undefined,
+                  purchase_order_id: item.purchase_order_id ?? undefined,
+                  converted: !!item.purchase_order_id,
+                }));
+            } catch {
+              return [] as PullPurchaseRequisitionLineCandidate[];
+            }
+          }),
+      );
+      setPullRequisitionLineCandidates(details.flat());
+    } catch (error: any) {
+      messageApi.error(error?.message || '加载采购申请列表失败');
+      setPullRequisitionLineCandidates([]);
+    } finally {
+      setPullRequisitionLoading(false);
+    }
+  };
+
+  const handlePullFromRequisition = () => {
+    setPullRequisitionKeyword('');
+    setSelectedPullRequisitionLineKeys([]);
+    setPullRequisitionLineCandidates([]);
+    setPullFromRequisitionVisible(true);
+    loadPullRequisitionCandidates('');
+  };
+
+  const handlePullFromRequisitionConfirm = async () => {
+    const selectedLines = pullRequisitionLineCandidates.filter((line) => selectedPullRequisitionLineKeys.includes(line.key));
+    if (!selectedLines.length) {
+      messageApi.warning('请先选择采购申请明细');
+      return;
+    }
+    try {
+      setPullRequisitionSubmitting(true);
+      const grouped = selectedLines.reduce<Record<number, PullPurchaseRequisitionLineCandidate[]>>((acc, line) => {
+        if (!acc[line.requisition_id]) acc[line.requisition_id] = [];
+        acc[line.requisition_id].push(line);
+        return acc;
+      }, {});
+
+      const createdCodes: string[] = [];
+      for (const [ridText, lines] of Object.entries(grouped)) {
+        const requisitionId = Number(ridText);
+        const itemIds = lines.map((line) => line.item_id);
+        const itemQuantities = Object.fromEntries(lines.map((line) => [line.item_id, Number(line.quantity || 0)]));
+        const itemSuppliers = Object.fromEntries(
+          lines.filter((line) => line.supplier_id != null).map((line) => [line.item_id, Number(line.supplier_id)]),
+        );
+        const res = await convertToPurchaseOrder(requisitionId, {
+          item_ids: itemIds,
+          item_quantities: itemQuantities,
+          item_suppliers: itemSuppliers,
+        });
+        if (res.purchase_orders?.length) {
+          res.purchase_orders.forEach((po) => {
+            if (po.purchase_order_code) createdCodes.push(po.purchase_order_code);
+          });
+        } else if (res.purchase_order_code) {
+          createdCodes.push(res.purchase_order_code);
+        }
+      }
+
+      messageApi.success(createdCodes.length ? `已创建采购订单：${createdCodes.join('、')}` : '已从采购申请明细创建采购订单');
+      setPullFromRequisitionVisible(false);
+      invalidateMenuBadgeCounts();
+      invalidateStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error?.message || '从采购申请创建采购订单失败');
+    } finally {
+      setPullRequisitionSubmitting(false);
+    }
+  };
+
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
@@ -1606,9 +1752,30 @@ const PurchaseOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          showCreateButton
+          showCreateButton={false}
           createButtonText="新建采购订单"
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <Space.Compact key="create-purchase-order-with-pull">
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                新建采购订单
+              </Button>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'pull-from-requisition',
+                      label: '从采购申请创建采购订单',
+                      onClick: handlePullFromRequisition,
+                    },
+                  ],
+                }}
+              >
+                <Button type="primary" icon={<DownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
+          ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
@@ -1688,6 +1855,108 @@ const PurchaseOrdersPage: React.FC = () => {
           scroll={{ x: 1400 }}
         />
       </ListPageTemplate>
+
+      <Modal
+        title="从采购申请创建采购订单"
+        open={pullFromRequisitionVisible}
+        width={1280}
+        onCancel={() => setPullFromRequisitionVisible(false)}
+        onOk={handlePullFromRequisitionConfirm}
+        okText="创建采购订单"
+        cancelText="取消"
+        okButtonProps={{ disabled: selectedPullRequisitionLineKeys.length === 0 || pullRequisitionLoading }}
+        confirmLoading={pullRequisitionSubmitting}
+        destroyOnHidden
+      >
+        <Space direction="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
+          <Input.Search
+            allowClear
+            value={pullRequisitionKeyword}
+            placeholder="搜索采购申请明细（申请单号/申请名称）"
+            enterButton="搜索"
+            onChange={(e) => setPullRequisitionKeyword(e.target.value)}
+            onSearch={(value) => {
+              const keyword = value?.trim?.() || '';
+              setPullRequisitionKeyword(keyword);
+              loadPullRequisitionCandidates(keyword);
+            }}
+          />
+          <Table<PullPurchaseRequisitionLineCandidate>
+            rowKey="key"
+            loading={pullRequisitionLoading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: pullRequisitionKeyword ? '未找到匹配采购申请明细' : '暂无可选采购申请明细' }}
+            rowSelection={{
+              type: 'checkbox',
+              selectedRowKeys: selectedPullRequisitionLineKeys,
+              onChange: (keys) => {
+                setSelectedPullRequisitionLineKeys(keys);
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.converted,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.converted) return;
+                const selected = selectedPullRequisitionLineKeys.includes(record.key);
+                setSelectedPullRequisitionLineKeys((prev) =>
+                  selected ? prev.filter((k) => k !== record.key) : [...prev, record.key],
+                );
+              },
+            })}
+            columns={[
+              { title: '申请单号', dataIndex: 'requisition_code', width: 170 },
+              { title: '申请名称', dataIndex: 'requisition_name', width: 160, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '物料编码', dataIndex: 'material_code', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '物料名称', dataIndex: 'material_name', width: 170, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '规格', dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
+              { title: '单位', dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
+              { title: '需求日期', dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: '申请人', dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
+              {
+                title: '状态',
+                dataIndex: 'requisition_status',
+                width: 100,
+                render: (v: string) => <Tag color={v?.includes('转单') ? 'gold' : 'blue'}>{v || '-'}</Tag>,
+              },
+              {
+                title: '审核',
+                dataIndex: 'review_status',
+                width: 100,
+                render: (v: string) => {
+                  const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+                  const rejected = v === 'REJECTED' || v === '已驳回';
+                  return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+                },
+              },
+              {
+                title: '供应商',
+                width: 160,
+                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
+                  record.supplier_id ? `已指定(${record.supplier_id})` : '待定（草稿中补充）',
+              },
+              {
+                title: '转单状态',
+                width: 180,
+                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
+                  record.converted ? (
+                    <Tag color="gold">已转采购订单#{record.purchase_order_id}</Tag>
+                  ) : (
+                    <Tag color="green">可转单</Tag>
+                  ),
+              },
+            ]}
+            dataSource={pullRequisitionLineCandidates}
+            scroll={{ x: 1600, y: 320 }}
+          />
+          <Typography.Text type="secondary">
+            已选择 {selectedPullRequisitionLineKeys.length} 条明细，将按采购申请与供应商自动拆分创建采购订单草稿。
+          </Typography.Text>
+        </Space>
+      </Modal>
 
       {/* 创建/编辑采购订单 Modal */}
       <FormModalTemplate
@@ -2439,6 +2708,39 @@ const PurchaseOrdersPage: React.FC = () => {
                       }}
                     >
                       {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'purchase_invoice' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${fullChainBriefDoc.document_id}`);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'payable' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(`/apps/kuaicaiwu/finance-management/payables/${fullChainBriefDoc.document_id}`);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPayable')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'payment' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate('/apps/kuaicaiwu/finance-management/payments');
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPayment')}
                     </Button>
                   ) : null}
                 </Space>

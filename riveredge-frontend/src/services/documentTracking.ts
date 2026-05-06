@@ -90,6 +90,19 @@ export interface DocumentTrackingResponse {
   relations_graph?: DocumentTrackingRelationsGraph;
 }
 
+/** 兼容网关/异常 JSON 中缺失或非数组字段，避免详情抽屉渲染崩溃 */
+export function normalizeDocumentTrackingResponse(d: DocumentTrackingResponse): DocumentTrackingResponse {
+  const rel = d.relations;
+  return {
+    ...d,
+    timeline: Array.isArray(d.timeline) ? d.timeline : [],
+    relations: {
+      upstream: Array.isArray(rel?.upstream) ? rel.upstream : [],
+      downstream: Array.isArray(rel?.downstream) ? rel.downstream : [],
+    },
+  };
+}
+
 export async function getDocumentTracking(
   documentType: string,
   documentId: number

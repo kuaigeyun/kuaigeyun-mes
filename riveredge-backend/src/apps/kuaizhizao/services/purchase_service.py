@@ -124,10 +124,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 today = datetime.now().strftime("%Y%m%d")
                 order_data.order_code = await self.generate_code(tenant_id, "PURCHASE_ORDER_CODE", prefix=f"PO{today}")
 
-            # 验证供应商
-            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order_data.supplier_id)
-            if not supplier:
-                raise NotFoundError(f"供应商不存在: {order_data.supplier_id}")
+            # 验证供应商（允许草稿订单临时无供应商：supplier_id<=0）
+            supplier = None
+            if int(order_data.supplier_id or 0) > 0:
+                supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order_data.supplier_id)
+                if not supplier:
+                    raise NotFoundError(f"供应商不存在: {order_data.supplier_id}")
+            else:
+                if (order_data.status or DocumentStatus.DRAFT.value) != DocumentStatus.DRAFT.value:
+                    raise ValidationError("非草稿订单必须指定有效供应商")
+                if not order_data.supplier_name:
+                    order_data.supplier_name = "待定供应商"
 
             # 流程设置强执行：必须先有采购申请才可下采购单
             config_service = BusinessConfigService()

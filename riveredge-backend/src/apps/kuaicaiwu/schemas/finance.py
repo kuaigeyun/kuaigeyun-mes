@@ -321,7 +321,7 @@ class SalesInvoiceBase(BaseSchema):
     sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
-    invoice_number: str = Field(..., max_length=100, description="发票号码")
+    invoice_number: str = Field(default="", max_length=50, description="发票号码（手工录入；草稿可为空，与库字段长度一致）")
     invoice_date: date = Field(..., description="开票日期")
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
     tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
@@ -351,11 +351,41 @@ class SalesInvoiceUpdate(BaseSchema):
     notes: Optional[str] = None
 
 
+class SalesInvoiceLineResponse(BaseSchema):
+    """销售发票明细行"""
+
+    id: int
+    item_name: str
+    spec_model: Optional[str] = None
+    unit: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    unit_price: Optional[Decimal] = None
+    amount: Decimal
+    tax_rate: Decimal
+    tax_amount: Decimal
+
+
+class SalesInvoiceVoidRequest(BaseSchema):
+    """作废请求（当月未抵扣、开票有误等实务场景由企业自行合规）"""
+
+    reason: str = Field(..., min_length=1, max_length=2000, description="作废原因")
+
+
+class SalesInvoiceRedLetterRequest(BaseSchema):
+    """开具红字发票申请（税务红字信息表等线下流程由企业完成，系统生成负数金额蓝字对应的红票草稿）"""
+
+    reason: str = Field(..., min_length=1, max_length=2000, description="红冲原因")
+
+
 class SalesInvoiceResponse(SalesInvoiceBase):
     """销售发票响应schema"""
     id: int
     tenant_id: int
     invoice_code: str
+    original_invoice_id: Optional[int] = None
+    red_flush_invoice_id: Optional[int] = None
+    void_reason: Optional[str] = None
+    voided_at: Optional[datetime] = None
     status: str = "未审核"
     reviewer_id: Optional[int] = None
     reviewer_name: Optional[str] = None
@@ -375,3 +405,9 @@ class SalesInvoiceListResponse(BaseSchema):
     total: int
     skip: int
     limit: int
+
+
+class SalesInvoiceDetailResponse(SalesInvoiceResponse):
+    """销售发票详情（含明细行）"""
+
+    items: List[SalesInvoiceLineResponse] = Field(default_factory=list)

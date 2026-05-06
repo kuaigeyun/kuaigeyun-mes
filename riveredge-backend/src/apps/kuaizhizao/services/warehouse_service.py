@@ -2414,8 +2414,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             created_by=created_by
         )
         
-        # TODO: 更新销售订单明细的已交货数量和剩余数量
-        # 注意：这里暂时不更新，等确认出库后再更新
+        # 已交货/剩余数量在「确认出库」时按实发数量回写订单明细（见 confirm_delivery）
         
         return delivery
 
@@ -2631,6 +2630,68 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 updated_by=updated_by,
             )
 
+    async def _apply_confirmed_delivery_to_sales_order_items(
+        self,
+        *,
+        tenant_id: int,
+        sales_order_id: int,
+        delivery_items: List[SalesDeliveryItem],
+    ) -> None:
+        """
+        销售出库确认后，将本单实发数量按物料匹配并累加到销售订单明细的已交货数量。
+        订单列表/详情中的 delivery_progress 与生命周期「发货出库」阶段依赖该字段。
+        """
+        if not sales_order_id or not delivery_items:
+            return
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        ).order_by("id").all()
+        if not order_items:
+            return
+
+        by_material: Dict[int, List[SalesOrderItem]] = {}
+        for oi in order_items:
+            mid = int(oi.material_id or 0)
+            if mid <= 0:
+                continue
+            by_material.setdefault(mid, []).append(oi)
+
+        for d_item in sorted(delivery_items, key=lambda x: int(x.id or 0)):
+            qty = Decimal(str(d_item.delivery_quantity or 0))
+            if qty <= 0:
+                continue
+            mid = int(d_item.material_id or 0)
+            if mid <= 0:
+                continue
+            candidates = by_material.get(mid) or []
+            for oi in candidates:
+                if qty <= 0:
+                    break
+                order_qty = Decimal(str(oi.order_quantity or 0))
+                delivered = Decimal(str(oi.delivered_quantity or 0))
+                room = order_qty - delivered
+                if room <= 0:
+                    continue
+                take = min(room, qty)
+                new_delivered = delivered + take
+                oi.delivered_quantity = new_delivered
+                oi.remaining_quantity = order_qty - new_delivered
+                if oi.remaining_quantity < 0:
+                    oi.remaining_quantity = Decimal("0")
+                oi.delivery_status = "已交货" if oi.remaining_quantity <= 0 else "部分交货"
+                await oi.save()
+                qty -= take
+            if qty > 0:
+                logger.warning(
+                    "销售出库确认：仍有 %s 数量未能匹配到销售订单行 (material_id=%s, sales_order_id=%s)",
+                    qty,
+                    mid,
+                    sales_order_id,
+                )
+
     async def confirm_delivery(
         self,
         tenant_id: int,
@@ -2765,6 +2826,14 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 updated_by=confirmed_by,
             )
 
+            so_id = getattr(delivery, "sales_order_id", None)
+            if so_id:
+                await self._apply_confirmed_delivery_to_sales_order_items(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(so_id),
+                    delivery_items=items,
+                )
+
             for line in items:
                 qty = line.delivery_quantity or Decimal(0)
                 if qty <= 0:
@@ -2777,6 +2846,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
         # 自动生成应收单：必须在出库主事务提交之后执行。create_receivable 内部另有 in_transaction()，
         # 与外层嵌套时部分环境下会导致出库/库存更新被回滚，但接口仍返回成功体（用户看到成功提示但单据未过账）。
+        # 收入确认策略为「以开票为准」时不在此处生成应收，避免与销项发票路径重复记账。
+        _cust_id = getattr(updated_delivery, "customer_id", None)
+        if not await self.business_config_service.should_auto_generate_receivable_on_sales_delivery(
+            tenant_id, int(_cust_id) if _cust_id is not None else None
+        ):
+            return updated_delivery
         try:
             from apps.kuaicaiwu.services.finance_service import ReceivableService
             from apps.kuaicaiwu.schemas.finance import ReceivableCreate
@@ -3740,65 +3815,68 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         # 详单/生命周期组装在事务提交之后：避免 model_validate 或里程碑查询失败导致整笔入库与库存回滚
 
         # 自动生成应付单（在事务提交后执行，避免嵌套 in_transaction() 干扰外层事务）
-        try:
-            from apps.kuaicaiwu.services.finance_service import PayableService
-            from apps.kuaicaiwu.schemas.finance import PayableCreate
-            
-            payable_service = PayableService()
-            
-            # 获取入库单信息（事务外重新fetch）
-            receipt_for_payable = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
-            
-            # 创建应付单
-            total_amount = Decimal(str(receipt_for_payable.total_amount or 0))
-            if total_amount > 0:
-                payable_data = PayableCreate(
-                    source_type="采购入库",
-                    source_id=receipt_id,
-                    source_code=receipt_for_payable.receipt_code,
-                    supplier_id=receipt_for_payable.supplier_id,
-                    supplier_name=receipt_for_payable.supplier_name,
-                    total_amount=float(total_amount),
-                    paid_amount=0.0,
-                    remaining_amount=float(total_amount),
-                    due_date=(datetime.now() + timedelta(days=30)).date(),
-                    business_date=datetime.now().date(),
-                    status="未付款",
-                    notes=f"由采购入库单 {receipt_for_payable.receipt_code} 自动生成"
-                )
-                
-                payable = await payable_service.create_payable(
-                    tenant_id=tenant_id,
-                    payable_data=payable_data,
-                    created_by=confirmed_by
-                )
-                # 建立采购入库→应付单 的 DocumentRelation
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        # 应付确认策略为「以采购发票为准」时不在此处生成应付，避免与进项发票路径重复记账。
+        receipt_for_payable = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+        _sup_id = getattr(receipt_for_payable, "supplier_id", None)
+        if await self.business_config_service.should_auto_generate_payable_on_purchase_receipt(
+            tenant_id, int(_sup_id) if _sup_id is not None else None
+        ):
+            try:
+                from apps.kuaicaiwu.services.finance_service import PayableService
+                from apps.kuaicaiwu.schemas.finance import PayableCreate
 
-                    rel_svc = DocumentRelationNewService()
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="purchase_receipt",
-                            source_id=receipt_id,
-                            source_code=receipt_for_payable.receipt_code,
-                            source_name=None,
-                            target_type="payable",
-                            target_id=payable.id,
-                            target_code=getattr(payable, "payable_code", None),
-                            target_name=None,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="采购入库确认自动生成应付单",
-                        ),
-                        created_by=confirmed_by,
+                payable_service = PayableService()
+
+                # 创建应付单
+                total_amount = Decimal(str(receipt_for_payable.total_amount or 0))
+                if total_amount > 0:
+                    payable_data = PayableCreate(
+                        source_type="采购入库",
+                        source_id=receipt_id,
+                        source_code=receipt_for_payable.receipt_code,
+                        supplier_id=receipt_for_payable.supplier_id,
+                        supplier_name=receipt_for_payable.supplier_name,
+                        total_amount=float(total_amount),
+                        paid_amount=0.0,
+                        remaining_amount=float(total_amount),
+                        due_date=(datetime.now() + timedelta(days=30)).date(),
+                        business_date=datetime.now().date(),
+                        status="未付款",
+                        notes=f"由采购入库单 {receipt_for_payable.receipt_code} 自动生成"
                     )
-                except Exception as rel_e:
-                    logger.warning("创建采购入库→应付单 单据关联失败: %s", rel_e)
-        except Exception as e:
-            logger.warning(f"自动生成应付单失败（不影响入库确认结果）: {str(e)}")
+
+                    payable = await payable_service.create_payable(
+                        tenant_id=tenant_id,
+                        payable_data=payable_data,
+                        created_by=confirmed_by
+                    )
+                    # 建立采购入库→应付单 的 DocumentRelation
+                    try:
+                        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="purchase_receipt",
+                                source_id=receipt_id,
+                                source_code=receipt_for_payable.receipt_code,
+                                source_name=None,
+                                target_type="payable",
+                                target_id=payable.id,
+                                target_code=getattr(payable, "payable_code", None),
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="采购入库确认自动生成应付单",
+                            ),
+                            created_by=confirmed_by,
+                        )
+                    except Exception as rel_e:
+                        logger.warning("创建采购入库→应付单 单据关联失败: %s", rel_e)
+            except Exception as e:
+                logger.warning(f"自动生成应付单失败（不影响入库确认结果）: {str(e)}")
         # #region agent log
         _agent_debug_ndjson(
             "warehouse_service.confirm_receipt:after_tx",

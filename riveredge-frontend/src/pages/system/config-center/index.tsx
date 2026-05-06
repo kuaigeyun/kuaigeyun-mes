@@ -9,7 +9,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Modal, Descriptions } from 'antd';
-import { SaveOutlined, ReloadOutlined, SettingOutlined, NodeIndexOutlined, AuditOutlined, ControlOutlined, BellOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, SettingOutlined, AuditOutlined, ControlOutlined, BellOutlined } from '@ant-design/icons';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { ProFormSelect, ProFormDependency } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
@@ -192,8 +192,10 @@ const ConfigCenterPage: React.FC = () => {
   const { token } = useToken();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = useMemo(() => ['parameters', 'audit', 'flow', 'automation', 'notification'], []);
-  const initialTab = validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'parameters';
+  const validTabs = useMemo(() => ['parameters', 'audit', 'automation', 'notification'], []);
+  // 兼容历史链接：tab=flow 归并到 parameters
+  const normalizedInitialTab = tabFromUrl === 'flow' ? 'parameters' : tabFromUrl;
+  const initialTab = validTabs.includes(normalizedInitialTab || '') ? normalizedInitialTab! : 'parameters';
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
 
   const [form] = Form.useForm();
@@ -204,7 +206,6 @@ const ConfigCenterPage: React.FC = () => {
   // 为 4 个主 Tab 分别记录选中的侧边栏模块 ID
   const [selectedParamCat, setSelectedParamCat] = useState<string>(PARAMETER_CATEGORIES[0].id);
   const [selectedAuditCat, setSelectedAuditCat] = useState<string>(AUDIT_CATEGORIES[0].id);
-  const [selectedFlowCat, setSelectedFlowCat] = useState<string>(FLOW_CATEGORIES[0].id);
   const [selectedAutoCat, setSelectedAutoCat] = useState<string>(AUTOMATION_CATEGORIES[0].id);
   const notificationFormRef = useRef<ProFormInstance>();
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -318,6 +319,38 @@ const ConfigCenterPage: React.FC = () => {
     if (!categoryImpl) return true;
     return categoryImpl[parameterKey] !== false;
   };
+  const mergedParameterCategories = useMemo<ConfigCategory[]>(() => {
+    // 将“参数设置 + 流程设置”在同一 Tab 内融合展示，按模块合并并按 key 去重。
+    const fromFlow = PARAMETER_CATEGORIES.map((c) => ({ ...c, params: [] as typeof c.params }));
+    const mergedByCat = new Map<string, ConfigCategory>();
+    for (const c of fromFlow) mergedByCat.set(c.id, { ...c, params: [] });
+    // 原参数
+    for (const c of PARAMETER_CATEGORIES) {
+      const target = mergedByCat.get(c.id) || { ...c, params: [] };
+      const seen = new Set(target.params.map((p) => p.key));
+      for (const p of c.params) {
+        if (!seen.has(p.key)) {
+          target.params.push(p);
+          seen.add(p.key);
+        }
+      }
+      mergedByCat.set(c.id, target);
+    }
+    // 流程参数（来自 configTree 的 FLOW_CATEGORIES）
+    // 这里通过 schema 实际下发的 processRegistry 动态注入会更复杂；当前沿用静态树定义并做去重。
+    for (const c of FLOW_CATEGORIES) {
+      const target = mergedByCat.get(c.id) || { ...c, params: [] };
+      const seen = new Set(target.params.map((p) => p.key));
+      for (const p of c.params) {
+        if (!seen.has(p.key)) {
+          target.params.push(p);
+          seen.add(p.key);
+        }
+      }
+      mergedByCat.set(c.id, target);
+    }
+    return Array.from(mergedByCat.values());
+  }, []);
 
   const renderText = (key: string | undefined, fallback?: string) => {
     if (!key) return fallback || '';
@@ -337,7 +370,8 @@ const ConfigCenterPage: React.FC = () => {
 
   useEffect(() => {
     const tVal = searchParams.get('tab');
-    if (tVal && validTabs.includes(tVal) && activeMainTab !== tVal) setActiveMainTab(tVal);
+    const normalized = tVal === 'flow' ? 'parameters' : tVal;
+    if (normalized && validTabs.includes(normalized) && activeMainTab !== normalized) setActiveMainTab(normalized);
   }, [searchParams, activeMainTab, validTabs]);
 
   useEffect(() => {
@@ -710,47 +744,52 @@ const ConfigCenterPage: React.FC = () => {
               </Card>
             )}
 
-            <Spin spinning={loading}>
-              <Form form={form} layout="vertical">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
-                  {currentCat.params.map(param => {
-                    const implemented = isImplementedParam(param.sourcePath);
-                    return (
-                      <Card key={param.key} size="small">
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <div style={{ flex: 1, marginRight: 16 }}>
-                            <Text strong>{renderText(param.nameKey, param.key)}</Text>
-                            <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(param.descriptionKey, '')}</Paragraph>
-                            {!!getParamGuidance(param.key) && <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>{getParamGuidance(param.key)}</Paragraph>}
-                          </div>
-                          <Form.Item
-                            name={[param.key]}
-                            noStyle
-                            valuePropName={param.type === 'boolean' ? 'checked' : undefined}
-                            getValueFromEvent={
-                              param.type === 'color'
-                                ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
-                                : undefined
-                            }
-                          >
-                            {param.type === 'boolean' ? <Switch disabled={!implemented} /> :
-                             param.type === 'number' ? <InputNumber min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
-                             param.type === 'select' ? <Select options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
-                             param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
-                          </Form.Item>
-                        </div>
-                        {!implemented && <Text type="warning" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>该配置项暂未实装，已禁用编辑。</Text>}
-                      </Card>
-                    );
-                  })}
-                </div>
-              </Form>
-            </Spin>
+            {!showAuditSection && (
+              <>
+                <Spin spinning={loading}>
+                  <Form form={form} layout="vertical">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
+                      {currentCat.params
+                        .filter((param) => isImplementedParam(param.sourcePath))
+                        .map(param => {
+                        const implemented = isImplementedParam(param.sourcePath);
+                        return (
+                          <Card key={param.key} size="small">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ flex: 1, marginRight: 16 }}>
+                                <Text strong>{renderText(param.nameKey, param.key)}</Text>
+                                <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(param.descriptionKey, '')}</Paragraph>
+                                {!!getParamGuidance(param.key) && <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>{getParamGuidance(param.key)}</Paragraph>}
+                              </div>
+                              <Form.Item
+                                name={[param.key]}
+                                noStyle
+                                valuePropName={param.type === 'boolean' ? 'checked' : undefined}
+                                getValueFromEvent={
+                                  param.type === 'color'
+                                    ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
+                                    : undefined
+                                }
+                              >
+                                {param.type === 'boolean' ? <Switch disabled={!implemented} /> :
+                                 param.type === 'number' ? <InputNumber size="middle" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
+                                 param.type === 'select' ? <Select size="middle" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
+                                 param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
+                              </Form.Item>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </Form>
+                </Spin>
 
-            <Space style={{ marginTop: 24 }}>
-              <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
-            </Space>
+                <Space style={{ marginTop: 24 }}>
+                  <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
+                  <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
+                </Space>
+              </>
+            )}
           </div>
         </Content>
       </Layout>
@@ -764,9 +803,8 @@ const ConfigCenterPage: React.FC = () => {
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(PARAMETER_CATEGORIES, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
+          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
           { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
-          { key: 'flow', label: <Space><NodeIndexOutlined />{t('pages.system.configCenter.tabFlow')}</Space>, children: renderTabContent(FLOW_CATEGORIES, selectedFlowCat, setSelectedFlowCat, <NodeIndexOutlined />) },
           { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
           { key: 'notification', label: <Space><BellOutlined />消息提醒</Space>, children: renderNotificationTab() },
         ]}

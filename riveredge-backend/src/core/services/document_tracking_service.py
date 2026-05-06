@@ -45,6 +45,10 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
     from apps.kuaicaiwu.models.receivable import Receivable
     from apps.kuaicaiwu.models.payable import Payable
+    from apps.kuaicaiwu.models.invoice import Invoice
+    from apps.kuaicaiwu.models.receipt import Receipt
+    from apps.kuaicaiwu.models.payment import Payment
+    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
     from apps.kuaizhizao.models.equipment import Equipment
     from apps.kuaizhizao.models.equipment_fault import EquipmentFault
     from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
@@ -86,6 +90,10 @@ def _get_model_registry() -> Dict[str, tuple]:
         "sales_return": (SalesReturn, "return_code"),
         "receivable": (Receivable, "receivable_code"),
         "payable": (Payable, "payable_code"),
+        "sales_invoice": (Invoice, "invoice_code"),
+        "receipt": (Receipt, "receipt_code"),
+        "payment": (Payment, "payment_code"),
+        "purchase_invoice": (PurchaseInvoice, "invoice_code"),
         "equipment": (Equipment, "code"),
         "equipment_fault": (EquipmentFault, "fault_no"),
         "maintenance_plan": (MaintenancePlan, "plan_no"),
@@ -133,6 +141,10 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "sales_return": "销售退货单",
     "receivable": "应收单",
     "payable": "应付单",
+    "sales_invoice": "销项发票",
+    "receipt": "收款单",
+    "payment": "付款单",
+    "purchase_invoice": "采购发票",
     "equipment": "设备",
     "equipment_fault": "设备故障",
     "maintenance_plan": "保养计划",
@@ -180,9 +192,22 @@ class DocumentTrackingService:
 
         model, code_field = reg
         try:
-            # 不加 deleted_at 过滤，便于识别软删除状态
-            obj = await model.get_or_none(tenant_id=tenant_id, id=relation_id)
+            # 不加 deleted_at 过滤，便于识别软删除状态（收款/付款/销项发票除外）
+            if relation_type == "sales_invoice":
+                obj = await model.get_or_none(
+                    tenant_id=tenant_id, id=relation_id, category="OUT"
+                )
+            elif relation_type in ("receipt", "payment", "purchase_invoice"):
+                obj = await model.get_or_none(
+                    tenant_id=tenant_id, id=relation_id, deleted_at__isnull=True
+                )
+            else:
+                obj = await model.get_or_none(tenant_id=tenant_id, id=relation_id)
             if not obj:
+                flags["is_deleted"] = True
+                return flags
+
+            if relation_type == "sales_invoice" and getattr(obj, "category", None) != "OUT":
                 flags["is_deleted"] = True
                 return flags
 
@@ -571,6 +596,10 @@ class DocumentTrackingService:
             "sales_return",
             "receivable",
             "payable",
+            "sales_invoice",
+            "receipt",
+            "payment",
+            "purchase_invoice",
             "delivery_notice",
             "shipment_notice",
             "material_return",
@@ -671,7 +700,16 @@ class DocumentTrackingService:
             return None, None
         try:
             model, code_field = reg
-            obj = await model.get_or_none(tenant_id=tenant_id, id=document_id)
+            if document_type == "sales_invoice":
+                obj = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, category="OUT"
+                )
+            elif document_type in ("receipt", "payment", "purchase_invoice"):
+                obj = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+                )
+            else:
+                obj = await model.get_or_none(tenant_id=tenant_id, id=document_id)
             if not obj:
                 return None, None
             code = getattr(obj, code_field, None)

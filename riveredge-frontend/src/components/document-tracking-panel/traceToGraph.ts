@@ -2,7 +2,11 @@
  * 将单据追溯树（upstream_chain / downstream_chain）转为 FlowGraph 所需 nodes / edges
  */
 
-import type { DocumentTraceResponse, DocumentTraceNode } from '../../services/documentRelations';
+import type {
+  DocumentTraceResponse,
+  DocumentTraceNode,
+  DocumentTraceReportingEntry,
+} from '../../services/documentRelations';
 
 export function traceDocumentNodeKey(document_type: string, document_id: number): string {
   return `${document_type}-${document_id}`;
@@ -16,6 +20,8 @@ export interface TraceGraphNodeMeta {
   created_at?: string;
   /** 是否为当前查看的单据 */
   is_root?: boolean;
+  /** 合并报工时间线（仅 reporting_timeline） */
+  reporting_timeline?: DocumentTraceReportingEntry[];
 }
 
 export interface TraceFlowDatum {
@@ -24,6 +30,8 @@ export interface TraceFlowDatum {
   meta: TraceGraphNodeMeta;
   /** FlowGraph 节点样式（可由外层覆盖） */
   style?: { fill?: string; stroke?: string; lineWidth?: number };
+  /** 自定义节点宽高（如报工时间线） */
+  flowNodeSize?: [number, number];
 }
 
 export interface TraceFlowEdgeDatum {
@@ -48,6 +56,9 @@ function upsertNode(map: Map<string, TraceGraphNodeMeta>, meta: TraceGraphNodeMe
   if (meta.document_name && !prev.document_name) prev.document_name = meta.document_name;
   if (meta.created_at && !prev.created_at) prev.created_at = meta.created_at;
   if (meta.is_root) prev.is_root = true;
+  if (meta.reporting_timeline !== undefined && meta.reporting_timeline !== null) {
+    prev.reporting_timeline = meta.reporting_timeline;
+  }
 }
 
 function addEdgeDedup(edges: TraceFlowEdgeDatum[], dedup: Set<string>, source: string, target: string): void {
@@ -81,6 +92,35 @@ function keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(
   rebuildEdgeDedup(edges, edgeDedup);
 }
 
+/** 工单与成品/半成品入库之间插入报工时间线节点后，改线为 工单→时间线→入库 */
+function rewireWorkOrderReceiptsThroughReportingTimeline(
+  nodeMap: Map<string, TraceGraphNodeMeta>,
+  edges: TraceFlowEdgeDatum[],
+  edgeDedup: Set<string>
+): void {
+  const receiptPrefixes = ['semi_finished_goods_receipt-', 'finished_goods_receipt-'] as const;
+  for (const [, meta] of nodeMap) {
+    if (meta.document_type !== 'work_order') continue;
+    const woKey = traceDocumentNodeKey('work_order', meta.document_id);
+    const tlKey = traceDocumentNodeKey('reporting_timeline', -meta.document_id);
+    if (!nodeMap.has(tlKey)) continue;
+
+    const newReceiptEdges: TraceFlowEdgeDatum[] = [];
+    for (let i = edges.length - 1; i >= 0; i--) {
+      const e = edges[i];
+      if (e.source !== woKey) continue;
+      if (!receiptPrefixes.some((p) => e.target.startsWith(p))) continue;
+      newReceiptEdges.push({ source: tlKey, target: e.target });
+      edgeDedup.delete(`${e.source}\n${e.target}`);
+      edges.splice(i, 1);
+    }
+    addEdgeDedup(edges, edgeDedup, woKey, tlKey);
+    for (const ne of newReceiptEdges) {
+      addEdgeDedup(edges, edgeDedup, ne.source, ne.target);
+    }
+  }
+}
+
 function walkUpstream(
   node: DocumentTraceNode,
   nodeMap: Map<string, TraceGraphNodeMeta>,
@@ -93,6 +133,7 @@ function walkUpstream(
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
     created_at: node.created_at ?? undefined,
+    reporting_timeline: node.reporting_timeline ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
   const children = node.children ?? [];
@@ -115,6 +156,7 @@ function walkDownstream(
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
     created_at: node.created_at ?? undefined,
+    reporting_timeline: node.reporting_timeline ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
   const children = node.children ?? [];
@@ -166,6 +208,7 @@ export function traceResponseToFlowGraphData(
   }
 
   keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(nodeMap, edges, edgeDedup);
+  rewireWorkOrderReceiptsThroughReportingTimeline(nodeMap, edges, edgeDedup);
 
   const metaById: Record<string, TraceGraphNodeMeta> = {};
   const nodes: TraceFlowDatum[] = [];

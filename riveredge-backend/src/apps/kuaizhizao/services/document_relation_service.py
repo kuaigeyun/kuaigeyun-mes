@@ -34,6 +34,15 @@ from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.receivable import Receivable
+from apps.kuaicaiwu.models.invoice import Invoice
+from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+from apps.kuaicaiwu.models.receipt import Receipt
+from apps.kuaicaiwu.models.payment import Payment
+from apps.kuaicaiwu.models.settlement import SettlementRecord
+from apps.kuaicaiwu.finance_source_types import (
+    RECEIVABLE_SOURCE_SALES_INVOICE,
+    PAYABLE_SOURCE_PURCHASE_INVOICE,
+)
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
@@ -53,6 +62,21 @@ from apps.master_data.models.employee_performance import PerformanceSummary
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+def _dedupe_relation_documents(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """按 (document_type, document_id) 去重，保持顺序。"""
+    seen: set = set()
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        k = (it.get("document_type"), it.get("document_id"))
+        if not k[0] or k[1] is None:
+            continue
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
 
 
 class DocumentRelationService:
@@ -84,6 +108,14 @@ class DocumentRelationService:
         "purchase_return": {"model": PurchaseReturn, "code_field": "return_code", "name_field": None},
         "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
         "receivable": {"model": Receivable, "code_field": "receivable_code", "name_field": None},
+        "sales_invoice": {"model": Invoice, "code_field": "invoice_code", "name_field": "invoice_number"},
+        "receipt": {"model": Receipt, "code_field": "receipt_code", "name_field": "customer_name"},
+        "payment": {"model": Payment, "code_field": "payment_code", "name_field": "supplier_name"},
+        "purchase_invoice": {
+            "model": PurchaseInvoice,
+            "code_field": "invoice_code",
+            "name_field": "invoice_number",
+        },
         "incoming_inspection": {"model": IncomingInspection, "code_field": "inspection_code", "name_field": None},
         "process_inspection": {"model": ProcessInspection, "code_field": "inspection_code", "name_field": None},
         "finished_goods_inspection": {"model": FinishedGoodsInspection, "code_field": "inspection_code", "name_field": None},
@@ -104,6 +136,41 @@ class DocumentRelationService:
         "performance_summary": {"model": PerformanceSummary, "code_field": "period", "name_field": "employee_name"},
     }
 
+    #: 全链路追溯中，单张工单展开的报工记录条数上限（加工型多工序）
+    REPORTING_RECORD_TRACE_LIMIT = 80
+    #: 与 DocumentRelationResponse.source_code/target_code 的 max_length 一致；超长会导致推导合并校验失败并丢掉整批下游
+    TRACE_RELATION_RESPONSE_CODE_MAX_LEN = 50
+
+    @staticmethod
+    def _reporting_record_trace_dict(record: ReportingRecord) -> Dict[str, Any]:
+        """追溯树中的报工节点：唯一编码 + 工序名称，避免多条显示同一工单号难以区分。"""
+        max_len = DocumentRelationService.TRACE_RELATION_RESPONSE_CODE_MAX_LEN
+        rc = getattr(record, "reporting_code", None)
+        code = (str(rc).strip() if rc is not None else "") or None
+        if not code:
+            op = (record.operation_code or "").strip()
+            suffix = f"-{record.id}"
+            # operation_code 最长 50，拼接 suffix 易超过 API Schema 50 限制，必须在服务端截断或改用短码
+            if op:
+                if len(op) + len(suffix) <= max_len:
+                    code = f"{op}{suffix}"
+                else:
+                    room = max_len - len(suffix)
+                    code = (op[:room] + suffix) if room > 0 else f"BG{record.id}"
+            else:
+                code = f"BG{record.id}"
+        if code and len(code) > max_len:
+            code = code[:max_len]
+        op_name = (record.operation_name or "").strip() or None
+        return {
+            "document_type": "reporting_record",
+            "document_id": record.id,
+            "document_code": code,
+            "document_name": op_name,
+            "status": record.status if hasattr(record, "status") else None,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+        }
+
     async def get_document_relations(
         self,
         tenant_id: int,
@@ -121,6 +188,17 @@ class DocumentRelationService:
         Returns:
             Dict: 包含上游单据和下游单据的字典
         """
+        # 全链路合并节点：无物理表、无策略，避免误入 DOCUMENT_TYPES 校验
+        if document_type == "reporting_timeline":
+            return {
+                "document_type": document_type,
+                "document_id": document_id,
+                "upstream_documents": [],
+                "downstream_documents": [],
+                "upstream_count": 0,
+                "downstream_count": 0,
+            }
+
         if document_type not in self.DOCUMENT_TYPES:
             raise ValidationError(f"不支持的单据类型: {document_type}")
 
@@ -417,17 +495,11 @@ class DocumentRelationService:
         # 关联报工记录
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
-            work_order_id=receipt.work_order_id
-        ).limit(10)
+            work_order_id=receipt.work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT)
         for record in reporting_records:
-            upstream.append({
-                "document_type": "reporting_record",
-                "document_id": record.id,
-                "document_code": record.work_order_code if hasattr(record, 'work_order_code') else None,
-                "document_name": None,
-                "status": record.status if hasattr(record, 'status') else None,
-                "created_at": record.created_at.isoformat() if record.created_at else None
-            })
+            upstream.append(self._reporting_record_trace_dict(record))
 
         return upstream
 
@@ -456,18 +528,10 @@ class DocumentRelationService:
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
             work_order_id=receipt.work_order_id,
-        ).limit(10)
+            deleted_at__isnull=True,
+        ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT)
         for record in reporting_records:
-            upstream.append(
-                {
-                    "document_type": "reporting_record",
-                    "document_id": record.id,
-                    "document_code": record.work_order_code if hasattr(record, "work_order_code") else None,
-                    "document_name": None,
-                    "status": record.status if hasattr(record, "status") else None,
-                    "created_at": record.created_at.isoformat() if record.created_at else None,
-                }
-            )
+            upstream.append(self._reporting_record_trace_dict(record))
         return upstream
 
     async def _get_purchase_order_upstream(
@@ -892,7 +956,7 @@ class DocumentRelationService:
         tenant_id: int,
         payable_id: int
     ) -> List[Dict[str, Any]]:
-        """获取应付单的上游单据（采购入库单）"""
+        """获取应付单的上游单据（采购入库单 / 采购发票）"""
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
             return []
@@ -924,7 +988,99 @@ class DocumentRelationService:
                         "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
                     })
 
+        elif payable.source_type == PAYABLE_SOURCE_PURCHASE_INVOICE and payable.source_id:
+            pinv = await PurchaseInvoice.get_or_none(tenant_id=tenant_id, id=payable.source_id)
+            if pinv:
+                upstream.append({
+                    "document_type": "purchase_invoice",
+                    "document_id": pinv.id,
+                    "document_code": pinv.invoice_code,
+                    "document_name": pinv.invoice_number,
+                    "status": pinv.status,
+                    "created_at": pinv.created_at.isoformat() if pinv.created_at else None,
+                })
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=pinv.purchase_order_id)
+                if po:
+                    upstream.append({
+                        "document_type": "purchase_order",
+                        "document_id": po.id,
+                        "document_code": po.order_code,
+                        "document_name": po.order_name if hasattr(po, "order_name") else None,
+                        "status": po.status,
+                        "created_at": po.created_at.isoformat() if po.created_at else None,
+                    })
+                receipts = await PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    purchase_order_id=pinv.purchase_order_id,
+                    deleted_at__isnull=True,
+                ).order_by("-id").limit(5)
+                for pr in receipts:
+                    upstream.append({
+                        "document_type": "purchase_receipt",
+                        "document_id": pr.id,
+                        "document_code": pr.receipt_code,
+                        "document_name": None,
+                        "status": pr.status if hasattr(pr, "status") else None,
+                        "created_at": pr.created_at.isoformat() if pr.created_at else None,
+                    })
+
         return upstream
+
+    async def _get_payable_downstream(
+        self,
+        tenant_id: int,
+        payable_id: int,
+    ) -> List[Dict[str, Any]]:
+        """应付单下游：核销记录中的付款单"""
+        payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
+        if not payable:
+            return []
+
+        downstream: List[Dict[str, Any]] = []
+
+        pinvs = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            payable_id=payable_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        for inv in pinvs:
+            downstream.append({
+                "document_type": "purchase_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            })
+
+        settlements = await SettlementRecord.filter(
+            tenant_id=tenant_id,
+            debit_doc_type="Payable",
+            debit_doc_id=payable_id,
+            credit_doc_type="Payment",
+            deleted_at__isnull=True,
+            is_active=True,
+        ).limit(100)
+        seen_pid: set = set()
+        for st in settlements:
+            pid = st.credit_doc_id
+            if not pid or pid in seen_pid:
+                continue
+            seen_pid.add(pid)
+            pv = await Payment.get_or_none(
+                tenant_id=tenant_id, id=pid, deleted_at__isnull=True
+            )
+            if not pv:
+                continue
+            downstream.append({
+                "document_type": "payment",
+                "document_id": pv.id,
+                "document_code": pv.payment_code,
+                "document_name": pv.supplier_name,
+                "status": pv.status,
+                "created_at": pv.created_at.isoformat() if pv.created_at else None,
+            })
+        return _dedupe_relation_documents(downstream)
 
     async def _get_incoming_inspection_upstream(
         self,
@@ -1001,14 +1157,7 @@ class DocumentRelationService:
             ).order_by('-created_at').first()
             
             if reporting:
-                upstream.append({
-                    "document_type": "reporting_record",
-                    "document_id": reporting.id,
-                    "document_code": reporting.reporting_code,
-                    "document_name": None,
-                    "status": reporting.status,
-                    "created_at": reporting.created_at.isoformat() if reporting.created_at else None
-                })
+                upstream.append(self._reporting_record_trace_dict(reporting))
 
         return upstream
 
@@ -1185,7 +1334,7 @@ class DocumentRelationService:
         tenant_id: int,
         receivable_id: int
     ) -> List[Dict[str, Any]]:
-        """获取应收单的上游单据（销售出库单）"""
+        """获取应收单的上游单据（销售出库单 / 销项发票→销售订单等）"""
         receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
         if not receivable:
             return []
@@ -1218,7 +1367,388 @@ class DocumentRelationService:
                             "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
                         })
 
+        elif receivable.source_type == RECEIVABLE_SOURCE_SALES_INVOICE and receivable.source_id:
+            inv = await Invoice.get_or_none(
+                tenant_id=tenant_id, id=receivable.source_id, category="OUT"
+            )
+            if inv:
+                upstream.append({
+                    "document_type": "sales_invoice",
+                    "document_id": inv.id,
+                    "document_code": inv.invoice_code,
+                    "document_name": inv.invoice_number,
+                    "status": inv.status,
+                    "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                })
+                so_code = (inv.source_document_code or "").strip()
+                if so_code:
+                    sales_order = await SalesOrder.get_or_none(
+                        tenant_id=tenant_id, order_code=so_code
+                    )
+                    if sales_order:
+                        upstream.append({
+                            "document_type": "sales_order",
+                            "document_id": sales_order.id,
+                            "document_code": sales_order.order_code,
+                            "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                            "status": sales_order.status,
+                            "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None,
+                        })
+
         return upstream
+
+    async def _get_receivable_downstream(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+    ) -> List[Dict[str, Any]]:
+        """应收单下游：关联销项发票、核销产生的收款单"""
+        receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
+        if not receivable:
+            return []
+
+        downstream: List[Dict[str, Any]] = []
+
+        invoices = await Invoice.filter(
+            tenant_id=tenant_id,
+            receivable_id=receivable_id,
+            category="OUT",
+        ).limit(20)
+        for inv in invoices:
+            downstream.append({
+                "document_type": "sales_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            })
+
+        settlements = await SettlementRecord.filter(
+            tenant_id=tenant_id,
+            debit_doc_type="Receivable",
+            debit_doc_id=receivable_id,
+            credit_doc_type="Receipt",
+            deleted_at__isnull=True,
+            is_active=True,
+        ).limit(100)
+        seen_rid: set = set()
+        for st in settlements:
+            rid = st.credit_doc_id
+            if not rid or rid in seen_rid:
+                continue
+            seen_rid.add(rid)
+            rc = await Receipt.get_or_none(
+                tenant_id=tenant_id, id=rid, deleted_at__isnull=True
+            )
+            if not rc:
+                continue
+            downstream.append({
+                "document_type": "receipt",
+                "document_id": rc.id,
+                "document_code": rc.receipt_code,
+                "document_name": rc.customer_name,
+                "status": rc.status,
+                "created_at": rc.created_at.isoformat() if rc.created_at else None,
+            })
+
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_sales_invoice_upstream(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """销项发票上游：蓝字原票、关联表、来源销售订单号"""
+        inv = await Invoice.get_or_none(
+            tenant_id=tenant_id, id=invoice_id, category="OUT"
+        )
+        if not inv:
+            return []
+
+        upstream: List[Dict[str, Any]] = []
+
+        if inv.original_invoice_id:
+            parent = await Invoice.get_or_none(
+                tenant_id=tenant_id, id=inv.original_invoice_id, category="OUT"
+            )
+            if parent:
+                upstream.append({
+                    "document_type": "sales_invoice",
+                    "document_id": parent.id,
+                    "document_code": parent.invoice_code,
+                    "document_name": parent.invoice_number,
+                    "status": parent.status,
+                    "created_at": parent.created_at.isoformat() if parent.created_at else None,
+                })
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="sales_invoice",
+            target_id=invoice_id,
+        ).limit(30)
+        for rel in rels:
+            upstream.append({
+                "document_type": rel.source_type,
+                "document_id": rel.source_id,
+                "document_code": rel.source_code,
+                "document_name": rel.source_name,
+                "status": None,
+                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+            })
+
+        so_code = (inv.source_document_code or "").strip()
+        if so_code:
+            sales_order = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, order_code=so_code, deleted_at__isnull=True
+            )
+            if sales_order:
+                upstream.append({
+                    "document_type": "sales_order",
+                    "document_id": sales_order.id,
+                    "document_code": sales_order.order_code,
+                    "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                    "status": sales_order.status,
+                    "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None,
+                })
+
+        return _dedupe_relation_documents(upstream)
+
+    async def _get_sales_invoice_downstream(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """销项发票下游：应收单、红字发票、关联表下推目标"""
+        inv = await Invoice.get_or_none(
+            tenant_id=tenant_id, id=invoice_id, category="OUT"
+        )
+        if not inv:
+            return []
+
+        downstream: List[Dict[str, Any]] = []
+
+        if inv.receivable_id:
+            ar = await Receivable.get_or_none(tenant_id=tenant_id, id=inv.receivable_id)
+            if ar:
+                downstream.append({
+                    "document_type": "receivable",
+                    "document_id": ar.id,
+                    "document_code": ar.receivable_code,
+                    "document_name": ar.customer_name,
+                    "status": ar.status if hasattr(ar, "status") else None,
+                    "created_at": ar.created_at.isoformat() if ar.created_at else None,
+                })
+
+        red_children = await Invoice.filter(
+            tenant_id=tenant_id,
+            category="OUT",
+            original_invoice_id=invoice_id,
+        ).limit(15)
+        for child in red_children:
+            downstream.append({
+                "document_type": "sales_invoice",
+                "document_id": child.id,
+                "document_code": child.invoice_code,
+                "document_name": child.invoice_number,
+                "status": child.status,
+                "created_at": child.created_at.isoformat() if child.created_at else None,
+            })
+
+        if inv.red_flush_invoice_id:
+            red = await Invoice.get_or_none(
+                tenant_id=tenant_id, id=inv.red_flush_invoice_id, category="OUT"
+            )
+            if red:
+                downstream.append({
+                    "document_type": "sales_invoice",
+                    "document_id": red.id,
+                    "document_code": red.invoice_code,
+                    "document_name": red.invoice_number,
+                    "status": red.status,
+                    "created_at": red.created_at.isoformat() if red.created_at else None,
+                })
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_invoice",
+            source_id=invoice_id,
+        ).limit(30)
+        for rel in rels:
+            downstream.append({
+                "document_type": rel.target_type,
+                "document_id": rel.target_id,
+                "document_code": rel.target_code,
+                "document_name": rel.target_name,
+                "status": None,
+                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+            })
+
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_receipt_upstream(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+    ) -> List[Dict[str, Any]]:
+        """收款单上游：核销记录中的应收单等借方单据"""
+        rc = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not rc:
+            return []
+
+        upstream: List[Dict[str, Any]] = []
+        settlements = await SettlementRecord.filter(
+            tenant_id=tenant_id,
+            credit_doc_type="Receipt",
+            credit_doc_id=receipt_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).limit(100)
+        seen: set = set()
+        for st in settlements:
+            key = (st.debit_doc_type, st.debit_doc_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            if st.debit_doc_type == "Receivable" and st.debit_doc_id:
+                ar = await Receivable.get_or_none(tenant_id=tenant_id, id=st.debit_doc_id)
+                if ar:
+                    upstream.append({
+                        "document_type": "receivable",
+                        "document_id": ar.id,
+                        "document_code": ar.receivable_code,
+                        "document_name": ar.customer_name,
+                        "status": ar.status if hasattr(ar, "status") else None,
+                        "created_at": ar.created_at.isoformat() if ar.created_at else None,
+                    })
+        return _dedupe_relation_documents(upstream)
+
+    async def _get_payment_upstream(
+        self,
+        tenant_id: int,
+        payment_id: int,
+    ) -> List[Dict[str, Any]]:
+        """付款单上游：核销记录中的应付单"""
+        pv = await Payment.get_or_none(
+            tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
+        )
+        if not pv:
+            return []
+
+        upstream: List[Dict[str, Any]] = []
+        settlements = await SettlementRecord.filter(
+            tenant_id=tenant_id,
+            credit_doc_type="Payment",
+            credit_doc_id=payment_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).limit(100)
+        seen: set = set()
+        for st in settlements:
+            key = (st.debit_doc_type, st.debit_doc_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            if st.debit_doc_type == "Payable" and st.debit_doc_id:
+                py = await Payable.get_or_none(tenant_id=tenant_id, id=st.debit_doc_id)
+                if py:
+                    upstream.append({
+                        "document_type": "payable",
+                        "document_id": py.id,
+                        "document_code": py.payable_code,
+                        "document_name": py.supplier_name if hasattr(py, "supplier_name") else None,
+                        "status": py.status if hasattr(py, "status") else None,
+                        "created_at": py.created_at.isoformat() if py.created_at else None,
+                    })
+        return _dedupe_relation_documents(upstream)
+
+    async def _get_purchase_invoice_upstream(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """采购发票上游：采购订单、关联表来源单据"""
+        pinv = await PurchaseInvoice.get_or_none(
+            tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
+        )
+        if not pinv:
+            return []
+
+        upstream: List[Dict[str, Any]] = []
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="purchase_invoice",
+            target_id=invoice_id,
+        ).limit(30)
+        for rel in rels:
+            upstream.append({
+                "document_type": rel.source_type,
+                "document_id": rel.source_id,
+                "document_code": rel.source_code,
+                "document_name": rel.source_name,
+                "status": None,
+                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+            })
+
+        if pinv.purchase_order_id:
+            po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=pinv.purchase_order_id)
+            if po:
+                upstream.append({
+                    "document_type": "purchase_order",
+                    "document_id": po.id,
+                    "document_code": po.order_code,
+                    "document_name": po.order_name if hasattr(po, "order_name") else None,
+                    "status": po.status if hasattr(po, "status") else None,
+                    "created_at": po.created_at.isoformat() if po.created_at else None,
+                })
+
+        return _dedupe_relation_documents(upstream)
+
+    async def _get_purchase_invoice_downstream(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """采购发票下游：应付单、关联表目标单据"""
+        pinv = await PurchaseInvoice.get_or_none(
+            tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
+        )
+        if not pinv:
+            return []
+
+        downstream: List[Dict[str, Any]] = []
+
+        if pinv.payable_id:
+            py = await Payable.get_or_none(tenant_id=tenant_id, id=pinv.payable_id)
+            if py:
+                downstream.append({
+                    "document_type": "payable",
+                    "document_id": py.id,
+                    "document_code": py.payable_code,
+                    "document_name": py.supplier_name if hasattr(py, "supplier_name") else None,
+                    "status": py.status if hasattr(py, "status") else None,
+                    "created_at": py.created_at.isoformat() if py.created_at else None,
+                })
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_invoice",
+            source_id=invoice_id,
+        ).limit(30)
+        for rel in rels:
+            downstream.append({
+                "document_type": rel.target_type,
+                "document_id": rel.target_id,
+                "document_code": rel.target_code,
+                "document_name": rel.target_name,
+                "status": None,
+                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+            })
+
+        return _dedupe_relation_documents(downstream)
 
     # ============ 下游单据查询方法 ============
 
@@ -1435,7 +1965,27 @@ class DocumentRelationService:
                 "created_at": delivery.created_at.isoformat() if delivery.created_at else None
             })
 
-        return downstream
+        so = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if so and (so.order_code or "").strip():
+            oc = so.order_code.strip()
+            invs = await Invoice.filter(
+                tenant_id=tenant_id,
+                category="OUT",
+                source_document_code=oc,
+            ).limit(20)
+            for inv in invs:
+                downstream.append({
+                    "document_type": "sales_invoice",
+                    "document_id": inv.id,
+                    "document_code": inv.invoice_code,
+                    "document_name": inv.invoice_number,
+                    "status": inv.status,
+                    "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                })
+
+        return _dedupe_relation_documents(downstream)
 
     async def get_change_impact_sales_order(
         self,
@@ -1898,17 +2448,11 @@ class DocumentRelationService:
         # 报工记录
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
-        ).limit(10)
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT)
         for record in reporting_records:
-            downstream.append({
-                "document_type": "reporting_record",
-                "document_id": record.id,
-                "document_code": record.work_order_code if hasattr(record, 'work_order_code') else None,
-                "document_name": None,
-                "status": record.status if hasattr(record, 'status') else None,
-                "created_at": record.created_at.isoformat() if record.created_at else None
-            })
+            downstream.append(self._reporting_record_trace_dict(record))
 
         # 成品入库单
         receipts = await FinishedGoodsReceipt.filter(
@@ -2074,17 +2618,11 @@ class DocumentRelationService:
         # 报工记录
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
-            work_order_id=picking.work_order_id
-        ).limit(10)
+            work_order_id=picking.work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT)
         for record in reporting_records:
-            downstream.append({
-                "document_type": "reporting_record",
-                "document_id": record.id,
-                "document_code": record.work_order_code if hasattr(record, 'work_order_code') else None,
-                "document_name": None,
-                "status": record.status if hasattr(record, 'status') else None,
-                "created_at": record.created_at.isoformat() if record.created_at else None
-            })
+            downstream.append(self._reporting_record_trace_dict(record))
 
         return downstream
 
@@ -2167,7 +2705,22 @@ class DocumentRelationService:
                 "created_at": receipt.created_at.isoformat() if receipt.created_at else None
             })
 
-        return downstream
+        pinvs = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        for inv in pinvs:
+            downstream.append({
+                "document_type": "purchase_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            })
+
+        return _dedupe_relation_documents(downstream)
 
     async def _get_purchase_receipt_downstream(
         self,
@@ -2492,11 +3045,31 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
 
     async def strat_payable(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_payable_upstream(tenant_id, document_id)
-        return upstream_documents, []
+        downstream_documents = await svc._get_payable_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
 
     async def strat_receivable(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_receivable_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_receivable_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_sales_invoice(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_sales_invoice_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_sales_invoice_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_receipt(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_receipt_upstream(tenant_id, document_id)
         return upstream_documents, []
+
+    async def strat_payment(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_payment_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_purchase_invoice(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_purchase_invoice_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_purchase_invoice_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
 
     async def strat_incoming_inspection(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_incoming_inspection_upstream(tenant_id, document_id)
@@ -2579,6 +3152,10 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "sales_return": strat_sales_return,
         "payable": strat_payable,
         "receivable": strat_receivable,
+        "sales_invoice": strat_sales_invoice,
+        "receipt": strat_receipt,
+        "payment": strat_payment,
+        "purchase_invoice": strat_purchase_invoice,
         "incoming_inspection": strat_incoming_inspection,
         "process_inspection": strat_process_inspection,
         "finished_goods_inspection": strat_finished_goods_inspection,

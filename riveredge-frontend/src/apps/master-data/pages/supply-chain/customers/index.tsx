@@ -27,6 +27,7 @@ import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import {
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
+  partnerRevenueRecognitionOverrideLabel,
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
@@ -563,6 +564,14 @@ const CustomersPage: React.FC = () => {
       },
     },
     {
+      title: t('field.customer.revenueRecognitionOverride'),
+      dataIndex: 'revenueRecognitionOverride',
+      width: 160,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => partnerRevenueRecognitionOverrideLabel(t, r.revenueRecognitionOverride),
+    },
+    {
       title: t('field.customer.visibility'),
       dataIndex: 'isPublic',
       width: 100,
@@ -695,6 +704,11 @@ const CustomersPage: React.FC = () => {
   ];
 
   const detailColumnsExtended: ProDescriptionsItemProps<Customer>[] = [
+    {
+      title: t('field.customer.revenueRecognitionOverride'),
+      dataIndex: 'revenueRecognitionOverride',
+      render: (_, r) => partnerRevenueRecognitionOverrideLabel(t, r.revenueRecognitionOverride),
+    },
     {
       title: t('field.customer.industry'),
       dataIndex: 'industryCode',

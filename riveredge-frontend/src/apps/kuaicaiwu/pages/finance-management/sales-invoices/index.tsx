@@ -6,6 +6,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -14,6 +15,12 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
+import {
+  INVOICE_TYPE_OPTIONS,
+  formatSalesInvoiceTypeZh,
+  displaySalesInvoiceListCode,
+  isUuidInvoiceCode,
+} from '../../../utils/salesInvoiceUi';
 import dayjs from 'dayjs';
 
 interface SalesInvoice {
@@ -34,14 +41,9 @@ interface SalesInvoice {
   review_status: string;
   notes?: string;
   created_at: string;
+  receivable_id?: number | null;
+  receivable_code?: string | null;
 }
-
-const INVOICE_TYPE_OPTIONS = [
-  { label: '增值税专用发票', value: '增值税专用发票' },
-  { label: '增值税普通发票', value: '增值税普通发票' },
-  { label: '电子发票', value: '电子发票' },
-  { label: '收据', value: '收据' },
-];
 
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
@@ -53,6 +55,7 @@ const TAX_RATE_OPTIONS = [
 
 const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const navigate = useNavigate();
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
@@ -81,7 +84,7 @@ const SalesInvoicesPage: React.FC = () => {
     const data = {
       customer_id: values.customer_id,
       customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
-      invoice_number: values.invoice_number,
+      invoice_number: String(values.invoice_number ?? '').trim(),
       invoice_date: values.invoice_date?.format ? values.invoice_date.format('YYYY-MM-DD') : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
       invoice_type: values.invoice_type || '增值税专用发票',
       tax_rate: taxRate,
@@ -99,7 +102,7 @@ const SalesInvoicesPage: React.FC = () => {
   const handleApprove = async (record: SalesInvoice) => {
     Modal.confirm({
       title: '审核销售发票',
-      content: `确定审核通过发票 ${record.invoice_number}？`,
+      content: `确定审核通过发票 ${record.invoice_number?.trim() || displaySalesInvoiceListCode(record)}？`,
       onOk: async () => {
         try {
           await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}/approve`, { method: 'POST' });
@@ -115,7 +118,7 @@ const SalesInvoicesPage: React.FC = () => {
   const handleDelete = async (record: SalesInvoice) => {
     Modal.confirm({
       title: '删除销售发票',
-      content: `确定删除发票 ${record.invoice_number}？已审核的发票不能删除。`,
+      content: `确定删除发票 ${record.invoice_number?.trim() || displaySalesInvoiceListCode(record)}？已审核的发票不能删除。`,
       onOk: async () => {
         try {
           await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}`, { method: 'DELETE' });
@@ -132,18 +135,23 @@ const SalesInvoicesPage: React.FC = () => {
     {
       title: '发票编号',
       dataIndex: 'invoice_code',
-      width: 168,
+      width: 120,
       fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.invoice_code ?? '') }} ellipsis>
-          {r.invoice_code ?? '-'}
-        </Typography.Text>
-      ),
+      render: (_, r) => {
+        const shown = displaySalesInvoiceListCode(r);
+        const copyText = isUuidInvoiceCode(r.invoice_code) ? shown : String(r.invoice_code ?? '');
+        return (
+          <Typography.Text copyable={copyText ? { text: copyText } : false} ellipsis={{ tooltip: shown }}>
+            {shown}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: '发票号码',
       dataIndex: 'invoice_number',
       width: 160,
+      render: (_, r) => (r.invoice_number?.trim() ? r.invoice_number : '—'),
     },
     {
       title: '客户名称',
@@ -154,6 +162,7 @@ const SalesInvoicesPage: React.FC = () => {
       title: '发票类型',
       dataIndex: 'invoice_type',
       width: 140,
+      render: (_, r) => formatSalesInvoiceTypeZh(r.invoice_type),
     },
     {
       title: '开票日期',
@@ -194,6 +203,20 @@ const SalesInvoicesPage: React.FC = () => {
       ),
     },
     {
+      title: '关联应收',
+      dataIndex: 'receivable_code',
+      width: 140,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.receivable_id != null && r.receivable_id !== undefined ? (
+          <Typography.Link onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${r.receivable_id}`)}>
+            {r.receivable_code || `#${r.receivable_id}`}
+          </Typography.Link>
+        ) : (
+          '—'
+        ),
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       hideInTable: true,
@@ -206,6 +229,8 @@ const SalesInvoicesPage: React.FC = () => {
         待审核: { text: '待审核' },
         已审核: { text: '已审核' },
         已驳回: { text: '已驳回' },
+        已作废: { text: '已作废' },
+        已红冲: { text: '已红冲' },
       },
     },
     {
@@ -245,7 +270,13 @@ const SalesInvoicesPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('销售发票详情开发中')}>
+            <Button
+              key="det"
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${record.id}`)}
+            >
               详情
             </Button>,
             record.review_status === '待审核' ? (
@@ -253,7 +284,7 @@ const SalesInvoicesPage: React.FC = () => {
                 审核
               </Button>
             ) : null,
-            record.status !== '已审核' ? (
+            ['未审核', 'DRAFT'].includes(String(record.status || '')) ? (
               <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
                 删除
               </Button>
@@ -313,8 +344,7 @@ const SalesInvoicesPage: React.FC = () => {
         <ProFormText
           name="invoice_number"
           label="发票号码"
-          rules={[{ required: true, message: '请输入发票号码' }]}
-          placeholder="请输入票面号码"
+          placeholder="可选，取得纸质/电子票面号码后填写"
         />
         <ProFormSelect
           name="invoice_type"

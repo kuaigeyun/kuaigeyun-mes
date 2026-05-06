@@ -89,6 +89,16 @@ class GetDocumentRelationsResponse(BaseModel):
     downstream_count: int = Field(0, description="下游单据数量")
 
 
+class DocumentTraceReportingEntry(BaseModel):
+    """工单下合并报工时间线中的一条报工"""
+
+    document_id: int = Field(..., description="报工记录主键")
+    document_code: Optional[str] = Field(None, description="报工展示编码")
+    document_name: Optional[str] = Field(None, description="工序名称等")
+    created_at: Optional[datetime] = Field(None, description="创建/报工时间")
+    status: Optional[str] = Field(None, description="审核状态")
+
+
 class DocumentTraceNode(BaseModel):
     """单据追溯节点"""
     document_type: str = Field(..., description="单据类型")
@@ -98,6 +108,10 @@ class DocumentTraceNode(BaseModel):
     created_at: Optional[datetime] = Field(None, description="单据创建时间")
     level: int = Field(..., description="层级（从根节点开始的层级）")
     children: List["DocumentTraceNode"] = Field(default_factory=list, description="子节点（下游或上游）")
+    reporting_timeline: List[DocumentTraceReportingEntry] = Field(
+        default_factory=list,
+        description="仅 reporting_timeline 节点：合并后的报工时间线条目",
+    )
 
 
 class DocumentTraceResponse(BaseModel):

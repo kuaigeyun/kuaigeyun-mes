@@ -44,6 +44,8 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   leadSourceCode?: string;
   estimatedAnnualPurchase?: number | string;
   creditLimit?: number | string;
+  /** 应收确认策略覆盖，空=跟随组织参数中心 */
+  revenueRecognitionOverride?: string | null;
   salesmanId?: number;
   salesmanName?: string;
   isActive: boolean;
@@ -68,6 +70,7 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   leadSourceCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
+  revenueRecognitionOverride?: string | null;
   salesmanId?: number;
   salesmanName?: string;
   isActive?: boolean;
@@ -89,6 +92,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   leadSourceCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
+  revenueRecognitionOverride?: string | null;
   salesmanId?: number;
   salesmanName?: string;
   isActive?: boolean;
@@ -129,6 +133,8 @@ export interface Supplier extends PartnerInvoiceAndExtendedFields {
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number | string;
   creditLimit?: number | string;
+  /** 应付确认策略覆盖，空=跟随组织参数中心 */
+  payableRecognitionOverride?: string | null;
   buyerId?: number;
   buyerName?: string;
   isActive: boolean;
@@ -151,6 +157,7 @@ export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
+  payableRecognitionOverride?: string | null;
   buyerId?: number;
   buyerName?: string;
   isActive?: boolean;
@@ -170,6 +177,7 @@ export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
+  payableRecognitionOverride?: string | null;
   buyerId?: number;
   buyerName?: string;
   isActive?: boolean;

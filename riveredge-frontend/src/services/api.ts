@@ -61,9 +61,9 @@ function getCurrentTenantId(): string | null {
 }
 
 /**
- * 将接口错误里的 detail / message 等统一为字符串（避免对数组、对象调用 .includes 报错）
+ * 将接口错误里的 detail / message 等统一为字符串（避免对数组、对象调用 .includes 报错；供 message/notification 展示）
  */
-function formatApiErrorDetail(raw: unknown): string {
+export function formatApiErrorDetail(raw: unknown): string {
   if (raw === undefined || raw === null || raw === '') return '';
   if (typeof raw === 'string') return raw;
   if (Array.isArray(raw)) {

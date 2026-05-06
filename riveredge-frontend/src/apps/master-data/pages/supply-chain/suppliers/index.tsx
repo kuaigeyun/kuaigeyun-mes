@@ -27,6 +27,7 @@ import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import {
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
+  partnerPayableRecognitionOverrideLabel,
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
@@ -563,6 +564,14 @@ const SuppliersPage: React.FC = () => {
       },
     },
     {
+      title: t('field.supplier.payableRecognitionOverride'),
+      dataIndex: 'payableRecognitionOverride',
+      width: 160,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => partnerPayableRecognitionOverrideLabel(t, r.payableRecognitionOverride),
+    },
+    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       width: 100,
@@ -677,6 +686,11 @@ const SuppliersPage: React.FC = () => {
   ];
 
   const detailColumnsExtended: ProDescriptionsItemProps<Supplier>[] = [
+    {
+      title: t('field.supplier.payableRecognitionOverride'),
+      dataIndex: 'payableRecognitionOverride',
+      render: (_, r) => partnerPayableRecognitionOverrideLabel(t, r.payableRecognitionOverride),
+    },
     {
       title: t('field.supplier.industry'),
       dataIndex: 'industryCode',

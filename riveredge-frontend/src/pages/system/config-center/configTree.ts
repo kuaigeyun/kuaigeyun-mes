@@ -2,7 +2,7 @@
  * 统一配置中心 - 配置树结构定义
  *
  * 将配置拆分为 4 个功能大类：参数设置、审核设置、流程设置、业务自动化。
- * 每个大类内部按 7 个系统模块（销售、计划等）组织，实现 1 对 1 菜单映射。
+ * 每个大类内部按 8 个系统模块（销售、计划等）组织，实现 1 对 1 菜单映射。
  */
 
 export type ConfigSource = 'business_config' | 'site_setting' | 'system_parameter';
@@ -44,7 +44,7 @@ export interface ConfigCategory {
   params: ParamMeta[];
 }
 
-/** 7 个标准系统模块的基础定义（按快制造菜单顺序） */
+/** 8 个标准系统模块的基础定义（按快制造菜单顺序） */
 const BASE_MODULES = [
   { id: 'sales', nameKey: 'app.kuaizhizao.menu.sales-management' },
   { id: 'planning', nameKey: 'app.kuaizhizao.menu.plan-management' },
@@ -53,6 +53,7 @@ const BASE_MODULES = [
   { id: 'quality', nameKey: 'app.kuaizhizao.menu.quality-management' },
   { id: 'equipment', nameKey: 'app.kuaizhizao.menu.equipment-management' },
   { id: 'warehouse', nameKey: 'app.kuaizhizao.menu.warehouse-management' },
+  { id: 'finance', nameKey: 'app.kuaizhizao.menu.finance-management' },
 ];
 
 /** 辅助函数：根据模块 ID 快速创建分类列表 */
@@ -83,27 +84,40 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'warehouse.lifo', nameKey: 'pages.system.configCenter.param.warehouse_lifo', descriptionKey: 'pages.system.configCenter.param.warehouse_lifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.lifo', type: 'boolean' },
     { key: 'warehouse.location_management', nameKey: 'pages.system.configCenter.param.warehouse_location_management', descriptionKey: 'pages.system.configCenter.param.warehouse_location_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.location_management', type: 'boolean' },
   ],
+  finance: [
+    { key: 'finance.auto_write_off_precision_limit', nameKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit', descriptionKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit_desc', source: 'business_config', sourcePath: 'parameters.finance.auto_write_off_precision_limit', type: 'number', min: 0, max: 100 },
+    {
+      key: 'finance.revenue_recognition',
+      nameKey: 'pages.system.configCenter.param.finance_revenue_recognition',
+      descriptionKey: 'pages.system.configCenter.param.finance_revenue_recognition_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.revenue_recognition',
+      type: 'select',
+      selectOptions: [
+        { value: 'on_shipment', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment' },
+        { value: 'on_invoice', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice' },
+      ],
+    },
+    {
+      key: 'finance.payable_recognition',
+      nameKey: 'pages.system.configCenter.param.finance_payable_recognition',
+      descriptionKey: 'pages.system.configCenter.param.finance_payable_recognition_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.payable_recognition',
+      type: 'select',
+      selectOptions: [
+        { value: 'on_receipt', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt' },
+        { value: 'on_purchase_invoice', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice' },
+      ],
+    },
+  ],
 });
 
-/** 2. 审核设置（决定业务是否开启审核） */
-export const AUDIT_CATEGORIES: ConfigCategory[] = createCategories({
-  production: [
-    { key: 'reporting.auto_approve', nameKey: 'pages.system.configCenter.param.reporting_auto_approve', descriptionKey: 'pages.system.configCenter.param.reporting_auto_approve_desc', source: 'business_config', sourcePath: 'parameters.reporting.auto_approve', type: 'boolean' },
-  ],
-  quality: [
-    { key: 'quality.require_incoming_inspection_for_receipt', nameKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt', descriptionKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.require_incoming_inspection_for_receipt', type: 'boolean' },
-    { key: 'quality.incoming_inspection', nameKey: 'pages.system.configCenter.param.quality_incoming_inspection', descriptionKey: 'pages.system.configCenter.param.quality_incoming_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.incoming_inspection', type: 'boolean' },
-    { key: 'quality.process_inspection', nameKey: 'pages.system.configCenter.param.quality_process_inspection', descriptionKey: 'pages.system.configCenter.param.quality_process_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.process_inspection', type: 'boolean' },
-    { key: 'quality.finished_inspection', nameKey: 'pages.system.configCenter.param.quality_finished_inspection', descriptionKey: 'pages.system.configCenter.param.quality_finished_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.finished_inspection', type: 'boolean' },
-    { key: 'quality.defect_handling', nameKey: 'pages.system.configCenter.param.quality_defect_handling', descriptionKey: 'pages.system.configCenter.param.quality_defect_handling_desc', source: 'business_config', sourcePath: 'parameters.quality.defect_handling', type: 'boolean' },
-  ],
-});
+/** 2. 审核设置（唯一源：ApprovalProcess 审批流程开关） */
+export const AUDIT_CATEGORIES: ConfigCategory[] = createCategories({});
 
 /** 3. 流程设置（设置业务之间的关系） */
 export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
-  planning: [
-    { key: 'planning.require_production_plan', nameKey: 'pages.system.configCenter.param.planning_require_production_plan', descriptionKey: 'pages.system.configCenter.param.planning_require_production_plan_desc', source: 'business_config', sourcePath: 'parameters.planning.require_production_plan', type: 'boolean' },
-  ],
   procurement: [
     { key: 'procurement.require_purchase_requisition', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_requisition', type: 'boolean' },
   ],
@@ -134,6 +148,24 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
   ],
   warehouse: [
     { key: 'warehouse.auto_outbound', nameKey: 'pages.system.configCenter.param.warehouse_auto_outbound', descriptionKey: 'pages.system.configCenter.param.warehouse_auto_outbound_desc', source: 'business_config', sourcePath: 'parameters.warehouse.auto_outbound', type: 'boolean' },
+  ],
+  finance: [
+    {
+      key: 'finance.auto_generate_receivable_from_sales_invoice',
+      nameKey: 'pages.system.configCenter.param.finance_auto_generate_receivable_from_sales_invoice',
+      descriptionKey: 'pages.system.configCenter.param.finance_auto_generate_receivable_from_sales_invoice_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.auto_generate_receivable_from_sales_invoice',
+      type: 'boolean',
+    },
+    {
+      key: 'finance.auto_generate_payable_from_purchase_invoice',
+      nameKey: 'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice',
+      descriptionKey: 'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.auto_generate_payable_from_purchase_invoice',
+      type: 'boolean',
+    },
   ],
 });
 

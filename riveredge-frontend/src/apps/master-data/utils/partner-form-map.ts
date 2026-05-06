@@ -47,6 +47,7 @@ export function customerDetailToFormValues(d: Customer): Record<string, unknown>
     leadSourceCode: d.leadSourceCode,
     estimatedAnnualPurchase: optNum(d.estimatedAnnualPurchase),
     creditLimit: optNum(d.creditLimit),
+    revenueRecognitionOverride: d.revenueRecognitionOverride ?? undefined,
     salesmanId: d.salesmanId,
     isActive: d.isActive ?? true,
     isPublic: d.isPublic ?? false,
@@ -70,6 +71,7 @@ export function supplierDetailToFormValues(d: Supplier): Record<string, unknown>
     sourceChannelCode: d.sourceChannelCode,
     estimatedAnnualPurchase: optNum(d.estimatedAnnualPurchase),
     creditLimit: optNum(d.creditLimit),
+    payableRecognitionOverride: d.payableRecognitionOverride ?? undefined,
     isActive: d.isActive ?? true,
     ...partnerFormSlice(d),
   };

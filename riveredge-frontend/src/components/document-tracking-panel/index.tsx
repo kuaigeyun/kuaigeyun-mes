@@ -106,6 +106,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
 }> = ({ data }) => {
   const { t } = useTranslation();
   const { renderStatusBadge, renderFieldChangeValue } = useTrackingStatusRender(t);
+  const timeline = Array.isArray(data.timeline) ? data.timeline : [];
 
   const typeLabel: Record<string, string> = useMemo(
     () => ({
@@ -239,13 +240,13 @@ export const DocumentTrackingTimelineBody: React.FC<{
     };
   };
 
-  if (data.timeline.length === 0) {
+  if (timeline.length === 0) {
     return <Empty description={t('components.documentTrackingPanel.noOperations')} />;
   }
   return (
     <Timeline
       styles={{ item: { paddingBottom: 10 } }}
-      items={data.timeline.map(renderTimelineItem)}
+      items={timeline.map(renderTimelineItem)}
     />
   );
 };

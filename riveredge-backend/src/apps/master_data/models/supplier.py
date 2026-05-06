@@ -101,6 +101,11 @@ class Supplier(BaseModel):
     delivery_contact_name = fields.CharField(max_length=100, null=True, description="收货联系人")
     delivery_contact_phone = fields.CharField(max_length=30, null=True, description="收货联系电话")
     delivery_address = fields.TextField(null=True, description="收货地址")
+
+    # 应付确认策略覆盖：null=跟随组织 finance.payable_recognition
+    payable_recognition_override = fields.CharField(
+        max_length=32, null=True, description="应付确认覆盖：on_receipt / on_purchase_invoice"
+    )
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

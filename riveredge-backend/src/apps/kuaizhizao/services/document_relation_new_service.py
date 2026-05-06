@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentRelationListResponse,
     DocumentTraceResponse,
     DocumentTraceNode,
+    DocumentTraceReportingEntry,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -39,6 +40,11 @@ def _relation_key(source_type: str, source_id: int, target_type: str, target_id:
     return (source_type, source_id, target_type, target_id)
 
 
+# 与 DocumentRelationResponse 中 code/name 字段长度上限一致，防止校验失败导致整批推导关联被丢弃
+_DERIVED_DOC_CODE_MAX_LEN = 50
+_DERIVED_DOC_NAME_MAX_LEN = 200
+
+
 def _derived_to_response(
     doc: Dict[str, Any],
     document_type: str,
@@ -50,7 +56,11 @@ def _derived_to_response(
     doc_type = doc.get("document_type", "")
     doc_id = doc.get("document_id", 0)
     doc_code = doc.get("document_code")
+    if doc_code is not None:
+        doc_code = str(doc_code)[:_DERIVED_DOC_CODE_MAX_LEN]
     doc_name = doc.get("name") or doc.get("document_name")
+    if doc_name is not None:
+        doc_name = str(doc_name)[:_DERIVED_DOC_NAME_MAX_LEN]
     created = doc.get("created_at")
     if isinstance(created, str):
         try:
@@ -169,6 +179,9 @@ class DocumentRelationNewService:
         Returns:
             DocumentRelationListResponse: 包含上游和下游单据的响应
         """
+        if document_type == "reporting_timeline":
+            return DocumentRelationListResponse(upstream=[], downstream=[])
+
         # 1. 查询 DocumentRelation 表
         downstream_table = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -202,11 +215,22 @@ class DocumentRelationNewService:
                         document_type,
                         document_id,
                     )
-                    if key not in table_upstream_keys:
-                        table_upstream_keys.add(key)
+                    if key in table_upstream_keys:
+                        continue
+                    try:
                         upstream_responses.append(_derived_to_response(
                             doc, document_type, document_id, tenant_id, is_upstream=True
                         ))
+                        table_upstream_keys.add(key)
+                    except Exception as ex:
+                        logger.warning(
+                            "跳过无效业务推导上游关联 {}:{} -> {}:{} — {}",
+                            doc.get("document_type"),
+                            doc.get("document_id"),
+                            document_type,
+                            document_id,
+                            ex,
+                        )
                 for doc in legacy_result.get("downstream_documents", []):
                     key = _relation_key(
                         document_type,
@@ -214,11 +238,22 @@ class DocumentRelationNewService:
                         doc.get("document_type", ""),
                         doc.get("document_id", 0),
                     )
-                    if key not in table_downstream_keys:
-                        table_downstream_keys.add(key)
+                    if key in table_downstream_keys:
+                        continue
+                    try:
                         downstream_responses.append(_derived_to_response(
                             doc, document_type, document_id, tenant_id, is_upstream=False
                         ))
+                        table_downstream_keys.add(key)
+                    except Exception as ex:
+                        logger.warning(
+                            "跳过无效业务推导下游关联 {}:{} -> {}:{} — {}",
+                            document_type,
+                            document_id,
+                            doc.get("document_type"),
+                            doc.get("document_id"),
+                            ex,
+                        )
         except Exception as e:
             logger.warning(f"业务推导关联获取失败，仅返回表驱动结果: {e}")
 
@@ -455,7 +490,12 @@ class DocumentRelationNewService:
                 max_depth=max_depth,
                 visited=visited_downstream
             )
-        
+
+        if direction in ["upstream", "both"]:
+            upstream_chain = await self._apply_work_order_reporting_timeline(tenant_id, upstream_chain)
+        if direction in ["downstream", "both"]:
+            downstream_chain = await self._apply_work_order_reporting_timeline(tenant_id, downstream_chain)
+
         return DocumentTraceResponse(
             document_type=document_type,
             document_id=document_id,
@@ -549,6 +589,83 @@ class DocumentRelationNewService:
             ))
         
         return nodes
+
+    async def _apply_work_order_reporting_timeline(
+        self,
+        tenant_id: int,
+        nodes: List[DocumentTraceNode],
+    ) -> List[DocumentTraceNode]:
+        """将工单下多条报工合并为 reporting_timeline 节点，并从 DB 补全报工列表（全链路展示）。"""
+        return [await self._transform_reporting_timeline_node(tenant_id, n) for n in nodes]
+
+    async def _transform_reporting_timeline_node(
+        self,
+        tenant_id: int,
+        node: DocumentTraceNode,
+    ) -> DocumentTraceNode:
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+        new_children = [await self._transform_reporting_timeline_node(tenant_id, c) for c in node.children]
+        base = node.model_copy(update={"children": new_children})
+
+        if base.document_type != "work_order":
+            return base
+
+        wo_id = base.document_id
+        records = list(
+            await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=wo_id,
+                deleted_at__isnull=True,
+            )
+            .order_by("operation_id", "id")
+            .limit(DocumentRelationService.REPORTING_RECORD_TRACE_LIMIT)
+        )
+
+        filtered = [c for c in base.children if c.document_type != "reporting_record"]
+        filtered2: List[DocumentTraceNode] = []
+        for c in filtered:
+            if c.document_type == "production_picking":
+                pr_children = [x for x in c.children if x.document_type != "reporting_record"]
+                filtered2.append(c.model_copy(update={"children": pr_children}))
+            else:
+                filtered2.append(c)
+
+        receipt_types = {"semi_finished_goods_receipt", "finished_goods_receipt"}
+        has_receipt = any(c.document_type in receipt_types for c in filtered2)
+
+        if not records and not has_receipt:
+            return base.model_copy(update={"children": filtered2})
+
+        entries = [
+            DocumentTraceReportingEntry(
+                document_id=r.id,
+                document_code=DocumentRelationService._reporting_record_trace_dict(r)["document_code"],
+                document_name=(r.operation_name or "").strip() or None,
+                created_at=r.created_at,
+                status=r.status if hasattr(r, "status") else None,
+            )
+            for r in records
+        ]
+        n_entries = len(entries)
+        doc_code = f"{n_entries}条报工" if n_entries else "暂无报工"
+        synth_created = entries[0].created_at if entries else base.created_at
+
+        synth = DocumentTraceNode(
+            document_type="reporting_timeline",
+            document_id=-wo_id,
+            document_code=doc_code,
+            document_name=None,
+            created_at=synth_created,
+            level=base.level + 1,
+            children=[],
+            reporting_timeline=entries,
+        )
+
+        idx = next((i for i, c in enumerate(filtered2) if c.document_type in receipt_types), len(filtered2))
+        merged_children = filtered2[:idx] + [synth] + filtered2[idx:]
+        return base.model_copy(update={"children": merged_children})
     
     async def _get_document_info(
         self,
@@ -558,6 +675,13 @@ class DocumentRelationNewService:
     ) -> tuple[Optional[str], Optional[str], Optional[datetime]]:
         """获取单据基本信息（编码、名称、创建时间）"""
         try:
+            if document_type == "reporting_timeline":
+                wo_id = -int(document_id)
+                if wo_id <= 0:
+                    return None, None, None
+                wcode, wname, _ = await self._get_document_info(tenant_id, "work_order", wo_id)
+                return ("报工汇总", wname or wcode, None)
+
             from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
             if document_type not in DocumentRelationService.DOCUMENT_TYPES:
                 return None, None, None
@@ -565,7 +689,16 @@ class DocumentRelationNewService:
             model = cfg["model"]
             code_field = cfg["code_field"]
             name_field = cfg.get("name_field")
-            doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
+            if document_type == "sales_invoice":
+                doc = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, category="OUT"
+                )
+            elif document_type in ("receipt", "payment", "purchase_invoice"):
+                doc = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+                )
+            else:
+                doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
             if not doc:
                 return None, None, None
             code = getattr(doc, code_field, None)
@@ -613,7 +746,16 @@ class DocumentRelationNewService:
                 return None
             cfg = DocumentRelationService.DOCUMENT_TYPES[document_type]
             model = cfg["model"]
-            doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
+            if document_type == "sales_invoice":
+                doc = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, category="OUT"
+                )
+            elif document_type in ("receipt", "payment", "purchase_invoice"):
+                doc = await model.get_or_none(
+                    tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+                )
+            else:
+                doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
             if not doc:
                 return None
             status_field = _CHANGE_IMPACT_STATUS_FIELDS.get(

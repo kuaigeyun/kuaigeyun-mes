@@ -36,7 +36,7 @@ class ReportService:
         获取库存报表数据
         """
         if report_type in ["summary", "inventory-summary", "inventory_summary"]:
-            return await self._get_inventory_summary(
+            return await self._get_inventory_summary_v2(
                 tenant_id=tenant_id,
                 warehouse_id=warehouse_id,
             )
@@ -61,7 +61,7 @@ class ReportService:
         else:
             raise ValidationError(f"不支持的报表类型: {report_type}")
 
-    async def _get_inventory_summary(
+    async def _get_inventory_summary_v2(
         self,
         tenant_id: int,
         warehouse_id: Optional[int] = None,
@@ -918,10 +918,289 @@ class ReportService:
         )
         return {"data": items, "success": True, "total": total}
 
+    async def _load_inventory_rows(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        batch_number: Optional[str] = None,
+        include_expired: bool = False,
+    ) -> List[Dict[str, Any]]:
+        from apps.master_data.models.material_batch import MaterialBatch
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        from apps.master_data.models.warehouse import Warehouse
+        from tortoise.expressions import Q
+
+        include_main_batches = True
+        if warehouse_id:
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id, id=warehouse_id, deleted_at__isnull=True
+            )
+            if wh and wh.warehouse_type == "line_side":
+                include_main_batches = False
+
+        batch_query = MaterialBatch.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if material_id:
+            batch_query = batch_query.filter(material_id=material_id)
+        if batch_number:
+            batch_query = batch_query.filter(batch_no__icontains=batch_number)
+        if not include_expired:
+            batch_query = batch_query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=date.today()))
+
+        line_query = LineSideInventory.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="available")
+        if material_id:
+            line_query = line_query.filter(material_id=material_id)
+        if batch_number:
+            line_query = line_query.filter(batch_no__icontains=batch_number)
+        if warehouse_id:
+            line_query = line_query.filter(warehouse_id=warehouse_id)
+        if not include_expired:
+            line_query = line_query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=date.today()))
+
+        batches = await batch_query.prefetch_related("material").all()
+        lines = await line_query.all()
+
+        rows: List[Dict[str, Any]] = []
+        if include_main_batches:
+            for b in batches:
+                expiry_iso = b.expiry_date.isoformat() if b.expiry_date else None
+                qty = float(b.quantity or 0)
+                status = "已过期" if b.expiry_date and b.expiry_date < date.today() else ("在库" if qty > 0 else "无库存")
+                rows.append({
+                    "id": 1000000 + b.id,
+                    "material_id": b.material_id,
+                    "material_code": b.material.main_code if b.material else "UNKNOWN",
+                    "material_name": b.material.name if b.material else "UNKNOWN",
+                    "batch_no": b.batch_no,
+                    "production_date": b.production_date.isoformat() if b.production_date else None,
+                    "expiry_date": expiry_iso,
+                    "supplier_batch_no": b.supplier_batch_no,
+                    "quantity": qty,
+                    "status": status,
+                    "warehouse_name": "主仓",
+                })
+        for l in lines:
+            qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
+            status = "已过期" if l.expiry_date and l.expiry_date < date.today() else ("在库" if qty > 0 else "无库存")
+            rows.append({
+                "id": 2000000 + l.id,
+                "material_id": l.material_id,
+                "material_code": l.material_code,
+                "material_name": l.material_name,
+                "batch_no": l.batch_no,
+                "production_date": l.production_date.isoformat() if l.production_date else None,
+                "expiry_date": l.expiry_date.isoformat() if l.expiry_date else None,
+                "supplier_batch_no": None,
+                "quantity": qty,
+                "status": status,
+                "warehouse_name": l.warehouse_name,
+            })
+        return rows
+
+    @staticmethod
+    def _apply_inventory_filters(
+        rows: List[Dict[str, Any]],
+        include_zero_stock: bool = True,
+        status_filter: Optional[str] = None,
+        aging_bucket: Optional[str] = None,
+        keyword: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        out = rows
+        if not include_zero_stock:
+            out = [r for r in out if float(r.get("quantity") or 0) > 0]
+        if status_filter in {"in_stock", "zero", "expired"}:
+            if status_filter == "in_stock":
+                out = [r for r in out if float(r.get("quantity") or 0) > 0 and r.get("status") != "已过期"]
+            elif status_filter == "zero":
+                out = [r for r in out if float(r.get("quantity") or 0) <= 0]
+            else:
+                out = [r for r in out if r.get("status") == "已过期"]
+        if aging_bucket in {"expired", "0-30", "31-90", "90+"}:
+            today = date.today()
+            filtered: List[Dict[str, Any]] = []
+            for r in out:
+                expiry = r.get("expiry_date")
+                if not expiry:
+                    continue
+                try:
+                    diff = (datetime.fromisoformat(str(expiry)).date() - today).days
+                except Exception:
+                    continue
+                if aging_bucket == "expired" and diff < 0:
+                    filtered.append(r)
+                elif aging_bucket == "0-30" and 0 <= diff <= 30:
+                    filtered.append(r)
+                elif aging_bucket == "31-90" and 31 <= diff <= 90:
+                    filtered.append(r)
+                elif aging_bucket == "90+" and diff >= 91:
+                    filtered.append(r)
+            out = filtered
+        if keyword:
+            k = str(keyword).strip().lower()
+            if k:
+                out = [
+                    r for r in out
+                    if k in str(r.get("material_code") or "").lower()
+                    or k in str(r.get("material_name") or "").lower()
+                    or k in str(r.get("batch_no") or "").lower()
+                    or k in str(r.get("warehouse_name") or "").lower()
+                ]
+        return out
+
+    @staticmethod
+    def _paginate(items: List[Dict[str, Any]], current: int, page_size: int) -> Dict[str, Any]:
+        current = max(int(current or 1), 1)
+        page_size = max(min(int(page_size or 20), 500), 1)
+        total = len(items)
+        start = (current - 1) * page_size
+        end = start + page_size
+        return {
+            "items": items[start:end],
+            "total": total,
+            "current": current,
+            "page_size": page_size,
+        }
+
+    async def get_inventory_batch_lines(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        batch_number: Optional[str] = None,
+        include_expired: bool = False,
+        include_zero_stock: bool = True,
+        aging_bucket: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        keyword: Optional[str] = None,
+        current: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        rows = await self._load_inventory_rows(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            batch_number=batch_number,
+            include_expired=include_expired,
+        )
+        rows = self._apply_inventory_filters(
+            rows,
+            include_zero_stock=include_zero_stock,
+            status_filter=status_filter,
+            aging_bucket=aging_bucket,
+            keyword=keyword,
+        )
+        rows.sort(key=lambda x: (str(x.get("material_code") or ""), str(x.get("batch_no") or ""), str(x.get("warehouse_name") or "")))
+        return self._paginate(rows, current=current, page_size=page_size)
+
+    async def get_inventory_batch_lines_summary(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        batch_number: Optional[str] = None,
+        include_expired: bool = False,
+        include_zero_stock: bool = True,
+        aging_bucket: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        keyword: Optional[str] = None,
+        group_by: str = "aging_bucket",
+    ) -> Dict[str, Any]:
+        rows = await self._load_inventory_rows(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            batch_number=batch_number,
+            include_expired=include_expired,
+        )
+        rows = self._apply_inventory_filters(
+            rows,
+            include_zero_stock=include_zero_stock,
+            status_filter=status_filter,
+            aging_bucket=aging_bucket,
+            keyword=keyword,
+        )
+        return {
+            "summary": self._build_inventory_items_summary(rows),
+            "groups": self._group_inventory_items(rows, group_by) or [],
+        }
+
+    async def get_inventory_material_balances(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        include_zero_stock: bool = True,
+        status_filter: Optional[str] = None,
+        keyword: Optional[str] = None,
+        current: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        rows = await self._load_inventory_rows(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            include_expired=True,
+        )
+        grouped: Dict[tuple, Dict[str, Any]] = {}
+        for it in rows:
+            key = (it.get("material_id"), it.get("warehouse_name") or "主仓")
+            if key not in grouped:
+                grouped[key] = {
+                    "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1]))) % 10000),
+                    "material_id": it.get("material_id"),
+                    "material_code": it.get("material_code"),
+                    "material_name": it.get("material_name"),
+                    "quantity": 0.0,
+                    "status": "无库存",
+                    "warehouse_name": it.get("warehouse_name") or "主仓",
+                }
+            grouped[key]["quantity"] += float(it.get("quantity") or 0)
+        balances = list(grouped.values())
+        for b in balances:
+            b["status"] = "在库" if float(b.get("quantity") or 0) > 0 else "无库存"
+        balances = self._apply_inventory_filters(
+            balances,
+            include_zero_stock=include_zero_stock,
+            status_filter=status_filter,
+            keyword=keyword,
+        )
+        balances.sort(key=lambda x: (str(x.get("material_code") or ""), str(x.get("warehouse_name") or "")))
+        return self._paginate(balances, current=current, page_size=page_size)
+
+    async def get_inventory_material_balances_summary(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        include_zero_stock: bool = True,
+        status_filter: Optional[str] = None,
+        keyword: Optional[str] = None,
+        group_by: str = "warehouse",
+    ) -> Dict[str, Any]:
+        rows = await self.get_inventory_material_balances(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            include_zero_stock=include_zero_stock,
+            status_filter=status_filter,
+            keyword=keyword,
+            current=1,
+            page_size=100000,
+        )
+        items = rows["items"]
+        return {
+            "summary": self._build_inventory_items_summary(items),
+            "groups": self._group_inventory_items(items, group_by) or [],
+        }
+
     async def query_batch_inventory(
         self, tenant_id: int, material_id: Optional[int] = None, material_ids: Optional[List[int]] = None,
         warehouse_id: Optional[int] = None, batch_number: Optional[str] = None, include_expired: bool = False, summary_only: bool = False,
+        include_zero_stock: bool = True,
+        aggregate_by_material: bool = False,
         include_sales_commitment: bool = False,
+        include_summary: bool = False,
+        group_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """批次库存查询"""
         logger.info(f"query_batch_inventory: material_id={material_id}, material_ids={material_ids}, include_sales_commitment={include_sales_commitment}")
@@ -935,11 +1214,21 @@ class ReportService:
         elif material_id: query = query.filter(material_id=material_id)
         if batch_number: query = query.filter(batch_no__icontains=batch_number)
         if not include_expired: query = query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=date.today()))
+        include_main_batches = True
+        if warehouse_id:
+            from apps.master_data.models.warehouse import Warehouse
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id, id=warehouse_id, deleted_at__isnull=True
+            )
+            if wh and wh.warehouse_type == "line_side":
+                include_main_batches = False
         batches = await query.prefetch_related('material').all()
         line_query = LineSideInventory.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="available")
         if material_ids: line_query = line_query.filter(material_id__in=material_ids)
         elif material_id: line_query = line_query.filter(material_id=material_id)
         if batch_number: line_query = line_query.filter(batch_no__icontains=batch_number)
+        if warehouse_id:
+            line_query = line_query.filter(warehouse_id=warehouse_id)
         line_items = await line_query.all()
         logger.info(f"query_batch_inventory found {len(batches)} batches and {len(line_items)} line items")
         if summary_only:
@@ -977,6 +1266,8 @@ class ReportService:
             return {"material_totals": totals}
         items = []
         for b in batches:
+            if not include_main_batches:
+                continue
             status = b.status
             if b.expiry_date and b.expiry_date < date.today(): status = "已过期"
             elif (b.quantity or 0) <= 0: status = "无库存"
@@ -986,6 +1277,9 @@ class ReportService:
                 "material_code": b.material.main_code if b.material else (b.material.code if b.material else "UNKNOWN"), 
                 "material_name": b.material.name if b.material else "UNKNOWN", 
                 "batch_no": b.batch_no, 
+                "production_date": b.production_date.isoformat() if b.production_date else None,
+                "expiry_date": b.expiry_date.isoformat() if b.expiry_date else None,
+                "supplier_batch_no": b.supplier_batch_no,
                 "quantity": float(b.quantity or 0), 
                 "status": status, 
                 "warehouse_name": "主仓"
@@ -998,11 +1292,73 @@ class ReportService:
                 "material_code": l.material_code, 
                 "material_name": l.material_name, 
                 "batch_no": l.batch_no, 
+                "production_date": l.production_date.isoformat() if l.production_date else None,
+                "expiry_date": l.expiry_date.isoformat() if l.expiry_date else None,
+                "supplier_batch_no": None,
                 "quantity": qty, 
                 "status": "在库" if qty > 0 else "无库存", 
                 "warehouse_name": l.warehouse_name
             })
-        return {"total": len(items), "items": items}
+        if aggregate_by_material:
+            # 即时库存口径：按物料（可按仓库）汇总，不按批次拆分
+            grouped: Dict[tuple, Dict[str, Any]] = {}
+            for it in items:
+                key = (it.get("material_id"), it.get("warehouse_name") or "主仓")
+                if key not in grouped:
+                    grouped[key] = {
+                        "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1]))) % 10000),
+                        "material_id": it.get("material_id"),
+                        "material_code": it.get("material_code"),
+                        "material_name": it.get("material_name"),
+                        "quantity": 0.0,
+                        "status": "无库存",
+                        "warehouse_name": it.get("warehouse_name") or "主仓",
+                    }
+                grouped[key]["quantity"] += float(it.get("quantity") or 0)
+            agg_items = []
+            for row in grouped.values():
+                qty = float(row["quantity"] or 0)
+                row["status"] = "在库" if qty > 0 else "无库存"
+                agg_items.append(row)
+            if not include_zero_stock:
+                agg_items = [row for row in agg_items if float(row.get("quantity") or 0) > 0]
+            agg_items.sort(key=lambda x: ((x.get("material_code") or ""), (x.get("warehouse_name") or "")))
+            summary = self._build_inventory_items_summary(agg_items)
+            grouped = self._group_inventory_items(agg_items, group_by)
+            return {
+                "total": len(agg_items),
+                "items": agg_items,
+                "summary": summary if include_summary else None,
+                "groups": grouped if group_by else None,
+                "query_meta": {
+                    "material_id": material_id,
+                    "material_ids": material_ids,
+                    "warehouse_id": warehouse_id,
+                    "batch_number": batch_number,
+                    "include_expired": include_expired,
+                    "include_zero_stock": include_zero_stock,
+                    "aggregate_by_material": aggregate_by_material,
+                },
+            }
+        if not include_zero_stock:
+            items = [it for it in items if float(it.get("quantity") or 0) > 0]
+        summary = self._build_inventory_items_summary(items)
+        grouped = self._group_inventory_items(items, group_by)
+        return {
+            "total": len(items),
+            "items": items,
+            "summary": summary if include_summary else None,
+            "groups": grouped if group_by else None,
+            "query_meta": {
+                "material_id": material_id,
+                "material_ids": material_ids,
+                "warehouse_id": warehouse_id,
+                "batch_number": batch_number,
+                "include_expired": include_expired,
+                "include_zero_stock": include_zero_stock,
+                "aggregate_by_material": aggregate_by_material,
+            },
+        }
 
     async def get_plan_report(self, tenant_id: int, report_type: str = "plan-fulfillment-rate", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
         """计划报表汇总"""
@@ -1267,7 +1623,7 @@ class ReportService:
 
         if report_type in ["inventory-summary", "inventory_summary"]:
             # 库存状况分析
-            return await self._get_inventory_summary(tenant_id, warehouse_id)
+            return await self._get_inventory_summary_v2(tenant_id, warehouse_id)
         elif report_type in ["inventory-ledger", "ledger", "inventory_ledger"]:
             # 库存流水账 - 使用 MaterialBatch 模拟
             items = await MaterialBatch.filter(tenant_id=tenant_id).prefetch_related("material").order_by("-updated_at").limit(100)
@@ -1329,6 +1685,75 @@ class ReportService:
             summary[key]["batch_count"] += 1
         
         return {"data": list(summary.values()), "success": True}
+
+    @staticmethod
+    def _build_inventory_items_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total_quantity = sum(float(it.get("quantity") or 0) for it in items)
+        in_stock_count = sum(1 for it in items if float(it.get("quantity") or 0) > 0)
+        zero_stock_count = sum(1 for it in items if float(it.get("quantity") or 0) <= 0)
+        expired_count = sum(1 for it in items if it.get("status") == "已过期")
+        near_expiry_count = 0
+        today = date.today()
+        for it in items:
+            expiry = it.get("expiry_date")
+            if not expiry:
+                continue
+            try:
+                expiry_d = datetime.fromisoformat(str(expiry)).date()
+                if today <= expiry_d <= (today + timedelta(days=30)):
+                    near_expiry_count += 1
+            except Exception:
+                continue
+        return {
+            "total_records": len(items),
+            "total_quantity": round(total_quantity, 4),
+            "in_stock_count": in_stock_count,
+            "zero_stock_count": zero_stock_count,
+            "expired_count": expired_count,
+            "near_expiry_count": near_expiry_count,
+        }
+
+    @staticmethod
+    def _group_inventory_items(items: List[Dict[str, Any]], group_by: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+        if not group_by:
+            return None
+        group_by = str(group_by).strip()
+        if group_by not in {"warehouse", "material", "status", "aging_bucket"}:
+            return None
+        grouped: Dict[str, Dict[str, Any]] = {}
+        today = date.today()
+        for it in items:
+            if group_by == "warehouse":
+                k = str(it.get("warehouse_name") or "未设置")
+            elif group_by == "material":
+                k = str(it.get("material_code") or it.get("material_name") or "未设置")
+            elif group_by == "status":
+                k = str(it.get("status") or "未知")
+            else:
+                expiry = it.get("expiry_date")
+                if not expiry:
+                    k = "无有效期"
+                else:
+                    try:
+                        expiry_d = datetime.fromisoformat(str(expiry)).date()
+                        diff = (expiry_d - today).days
+                        if diff < 0:
+                            k = "已过期"
+                        elif diff <= 30:
+                            k = "0-30天"
+                        elif diff <= 90:
+                            k = "31-90天"
+                        else:
+                            k = "90天以上"
+                    except Exception:
+                        k = "无有效期"
+            if k not in grouped:
+                grouped[k] = {"group_key": k, "record_count": 0, "total_quantity": 0.0}
+            grouped[k]["record_count"] += 1
+            grouped[k]["total_quantity"] += float(it.get("quantity") or 0)
+        out = list(grouped.values())
+        out.sort(key=lambda x: str(x["group_key"]))
+        return out
 
     async def get_performance_report(self, tenant_id: int, report_type: str = "employee-efficiency-ranking", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
         """绩效报表汇总"""
