@@ -9,13 +9,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
@@ -31,6 +32,7 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -114,6 +116,8 @@ const OutboundPage: React.FC = () => {
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const outboundChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
+  const pullFromWorkOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_work_order');
+  const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_sales_order');
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态（创建出库单）
@@ -820,14 +824,32 @@ const OutboundPage: React.FC = () => {
           });
         }}
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {'新建出库单' + NEW_SHORTCUT_HINT}
-          </Button>,
+          <UniPullCreateToolbar
+            compactKey="create-outbound-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel={'新建出库单' + NEW_SHORTCUT_HINT}
+            onCreate={handleCreate}
+            menuItems={buildKuaizhizaoPullCreateMenuItems([
+              {
+                key: 'pull-from-work-order',
+                actionKey: 'outbound.pull_from_work_order',
+                onClick: () => {
+                  batchForm.resetFields();
+                  setBatchOutboundType('production_picking');
+                  setBatchModalVisible(true);
+                },
+              },
+              {
+                key: 'pull-from-sales-order',
+                actionKey: 'outbound.pull_from_sales_order',
+                onClick: () => {
+                  batchForm.resetFields();
+                  setBatchOutboundType('sales_delivery');
+                  setBatchModalVisible(true);
+                },
+              },
+            ])}
+          />,
           <Button
             key="batch"
             icon={<InboxOutlined />}

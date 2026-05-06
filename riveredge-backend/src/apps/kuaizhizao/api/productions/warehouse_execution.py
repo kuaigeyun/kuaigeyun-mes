@@ -42,6 +42,7 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
 from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
 from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
 from apps.kuaizhizao.services.warehouse_dashboard_service import WarehouseDashboardService
+from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -2604,6 +2605,33 @@ async def create_purchase_receipt(
         tenant_id=tenant_id,
         receipt_data=receipt,
         created_by=current_user.id
+    )
+
+
+@router.post(
+    "/purchase-receipts/pull-from-receipt-notice",
+    response_model=PurchaseReceiptResponse,
+    summary="从收货通知单上拉生成采购入库单",
+)
+async def pull_purchase_receipt_from_receipt_notice(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    notice_id = request.get("receipt_notice_id") or request.get("notice_id")
+    if not notice_id:
+        raise ValidationError("必须提供收货通知单ID")
+    notice = await ReceiptNoticeService().notify_warehouse(
+        tenant_id=tenant_id,
+        notice_id=int(notice_id),
+        notified_by=current_user.id,
+    )
+    receipt_id = getattr(notice, "purchase_receipt_id", None)
+    if not receipt_id:
+        raise BusinessLogicError("收货通知单已处理，但未生成采购入库单")
+    return await PurchaseReceiptService().get_purchase_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=int(receipt_id),
     )
 
 

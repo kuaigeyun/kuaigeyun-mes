@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined, MoreOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined, MoreOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,6 +23,7 @@ import { UniImport } from '../../../../../components/uni-import';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -38,6 +39,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface ShipmentNotice {
   id?: number;
@@ -66,6 +68,17 @@ interface ShipmentNoticeDetail extends ShipmentNotice {
   items?: { id?: number; material_id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
 
+type PullSalesOrderCandidate = {
+  id: number;
+  order_code?: string;
+  customer_name?: string;
+  status?: string;
+  delivery_date?: string;
+  updated_at?: string;
+  notice_id?: number;
+  converted?: boolean;
+};
+
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   待发货: { text: '待发货', color: 'default' },
   已通知: { text: '已通知', color: 'processing' },
@@ -88,6 +101,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('shipment_notice.pull_from_sales_order');
   const actionRef = useRef<ActionType>(null);
   const { token } = AntdTheme.useToken();
   const noticeDetailDrawerZIndex = token.zIndexPopupBase;
@@ -127,6 +141,12 @@ const ShipmentNoticesPage: React.FC = () => {
   }, [detailDrawerVisible, noticeDetail?.id]);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullFromSalesOrderVisible, setPullFromSalesOrderVisible] = useState(false);
+  const [pullSalesOrderLoading, setPullSalesOrderLoading] = useState(false);
+  const [pullSalesOrderSubmitting, setPullSalesOrderSubmitting] = useState(false);
+  const [pullSalesOrderKeyword, setPullSalesOrderKeyword] = useState('');
+  const [pullSalesOrderCandidates, setPullSalesOrderCandidates] = useState<PullSalesOrderCandidate[]>([]);
+  const [selectedPullSalesOrderId, setSelectedPullSalesOrderId] = useState<number | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const formRef = useRef<any>(null);
@@ -396,6 +416,100 @@ const ShipmentNoticesPage: React.FC = () => {
       setPreviewCode(null);
     }
   };
+
+  const loadPullSalesOrderCandidates = useCallback(async (keyword: string = '') => {
+    setPullSalesOrderLoading(true);
+    try {
+      const kw = keyword.trim();
+      const [ordersRes, noticeRes] = await Promise.all([
+        listSalesOrders({ limit: 200, skip: 0, keyword: kw || undefined }).catch(() => ({ data: [] })),
+        shipmentNoticeApi.list({ skip: 0, limit: 5000 }),
+      ]);
+      const orders = ordersRes?.data || [];
+      const notices = Array.isArray(noticeRes) ? noticeRes : (noticeRes as any)?.data ?? (noticeRes as any)?.items ?? [];
+      const noticeByOrderId = new Map<number, any>();
+      notices.forEach((n: any) => {
+        if (n?.sales_order_id != null && !noticeByOrderId.has(Number(n.sales_order_id))) {
+          noticeByOrderId.set(Number(n.sales_order_id), n);
+        }
+      });
+      const candidates: PullSalesOrderCandidate[] = (orders as any[]).map((o: any) => {
+        const linked = noticeByOrderId.get(Number(o.id));
+        return {
+          id: Number(o.id),
+          order_code: o.order_code ?? o.sales_order_code,
+          customer_name: o.customer_name ?? o.customerName,
+          status: o.status,
+          delivery_date: o.delivery_date,
+          updated_at: o.updated_at,
+          notice_id: linked?.id,
+          converted: !!linked,
+        };
+      });
+      setPullSalesOrderCandidates(candidates);
+    } finally {
+      setPullSalesOrderLoading(false);
+    }
+  }, []);
+
+  const handlePullFromSalesOrder = useCallback(async () => {
+    setPullFromSalesOrderVisible(true);
+    setPullSalesOrderKeyword('');
+    setSelectedPullSalesOrderId(null);
+    await loadPullSalesOrderCandidates('');
+  }, [loadPullSalesOrderCandidates]);
+
+  const handlePullFromSalesOrderConfirm = useCallback(async () => {
+    if (!selectedPullSalesOrderId) {
+      messageApi.warning(`请选择${pullFromSalesOrderAction.sourceLabel}`);
+      return;
+    }
+    const selected = pullSalesOrderCandidates.find((i) => i.id === selectedPullSalesOrderId);
+    if (selected?.converted) {
+      messageApi.warning(`该${pullFromSalesOrderAction.sourceLabel}已创建${pullFromSalesOrderAction.targetLabel}，请勿重复创建`);
+      return;
+    }
+    setPullSalesOrderSubmitting(true);
+    try {
+      const detail: any = await getSalesOrder(selectedPullSalesOrderId, true);
+      const custId = detail.customer_id ?? detail.customerId;
+      const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === custId);
+      const validItems = (detail.items || [])
+        .filter((it: any) => (Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0) > 0)
+        .map((it: any, index: number) => ({
+          material_id: it.material_id ?? it.materialId,
+          material_code: it.material_code || it.materialCode || '',
+          material_name: it.material_name || it.materialName || '',
+          material_spec: it.material_spec || '',
+          material_unit: it.material_unit || it.materialUnit || '件',
+          notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
+          unit_price: Number((it.unit_price ?? it.unitPrice) || detail.items?.[index]?.unit_price || 0),
+        }));
+      if (!custId || validItems.length === 0) {
+        throw new Error(`该${pullFromSalesOrderAction.sourceLabel}缺少客户或有效明细，无法创建${pullFromSalesOrderAction.targetLabel}`);
+      }
+      await shipmentNoticeApi.create({
+        sales_order_id: detail.id ?? selectedPullSalesOrderId,
+        sales_order_code: detail.order_code ?? selected?.order_code,
+        customer_id: custId,
+        customer_name: cust?.name || cust?.customer_name || detail.customer_name || detail.customerName || '',
+        customer_contact: detail.customer_contact || cust?.contactPerson || (cust as any)?.contact,
+        customer_phone: detail.customer_phone || cust?.phone,
+        shipping_address: detail.shipping_address || cust?.address,
+        planned_ship_date: detail.delivery_date,
+        items: validItems,
+      });
+      messageApi.success(`已从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}`);
+      setPullFromSalesOrderVisible(false);
+      setSelectedPullSalesOrderId(null);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || `从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}失败`);
+    } finally {
+      setPullSalesOrderSubmitting(false);
+    }
+  }, [actionRef, customerList, invalidateMenuBadgeCounts, messageApi, pullSalesOrderCandidates, selectedPullSalesOrderId]);
 
   const onSalesOrderSelect = async (orderId: number) => {
     let order = salesOrderList.find((o: any) => (o.id ?? o.sales_order_id) === orderId);
@@ -886,9 +1000,28 @@ const ShipmentNoticesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          showCreateButton
+          showCreateButton={false}
           createButtonText="新建发货通知单"
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              compactKey="create-shipment-notice-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建发货通知单"
+              onCreate={() => {
+                void handleCreate();
+              }}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-sales-order',
+                  actionKey: 'shipment_notice.pull_from_sales_order',
+                  onClick: () => {
+                    void handlePullFromSalesOrder();
+                  },
+                },
+              ])}
+            />,
+          ]}
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
@@ -942,6 +1075,74 @@ const ShipmentNoticesPage: React.FC = () => {
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={pullFromSalesOrderAction.label}
+        open={pullFromSalesOrderVisible}
+        width={1200}
+        onCancel={() => {
+          if (pullSalesOrderSubmitting) return;
+          setPullFromSalesOrderVisible(false);
+          setSelectedPullSalesOrderId(null);
+        }}
+        onOk={() => {
+          void handlePullFromSalesOrderConfirm();
+        }}
+        okText={`创建${pullFromSalesOrderAction.targetLabel}`}
+        confirmLoading={pullSalesOrderSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按销售订单号/客户搜索"
+            value={pullSalesOrderKeyword}
+            onChange={(e) => setPullSalesOrderKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullSalesOrderKeyword(value);
+              void loadPullSalesOrderCandidates(value);
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullSalesOrderCandidate>
+            rowKey="id"
+            loading={pullSalesOrderLoading}
+            dataSource={pullSalesOrderCandidates}
+            pagination={false}
+            scroll={{ x: 1080, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullSalesOrderId ? [selectedPullSalesOrderId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0]);
+                if (Number.isFinite(next)) setSelectedPullSalesOrderId(next);
+                else setSelectedPullSalesOrderId(null);
+              },
+              getCheckboxProps: (record) => ({ disabled: !!record.converted }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.converted) return;
+                setSelectedPullSalesOrderId(record.id);
+              },
+            })}
+            columns={[
+              { title: '销售订单号', dataIndex: 'order_code', width: 190, ellipsis: true },
+              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: '订单状态', dataIndex: 'status', width: 130, align: 'center' },
+              { title: '交期', dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 150,
+                align: 'center',
+                render: (_, r) => (r.converted ? <Tag color="gold">{`已创建${pullFromSalesOrderAction.targetLabel}`}</Tag> : <Tag color="success">可创建</Tag>),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       {detailDrawerVisible && noticeDetail?.id != null ? (
         <>

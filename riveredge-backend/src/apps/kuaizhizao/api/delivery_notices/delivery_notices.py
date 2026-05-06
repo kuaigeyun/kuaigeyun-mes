@@ -42,6 +42,8 @@ async def create_delivery_notice(
             notice_data=notice_data,
             created_by=current_user.id,
         )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error("创建送货单失败: %s", e)
         raise HTTPException(

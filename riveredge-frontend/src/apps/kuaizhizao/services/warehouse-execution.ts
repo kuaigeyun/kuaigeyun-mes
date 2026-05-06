@@ -250,6 +250,8 @@ export const warehouseApi = {
   purchaseReceipt: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/purchase-receipts', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/purchase-receipts', { method: 'POST', data }),
+    pullFromReceiptNotice: async (data: { receipt_notice_id: number }) =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/pull-from-receipt-notice', { method: 'POST', data }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'PUT', data }),
     /** POST /delete：避免部分环境对 DELETE 返回 405 */
     delete: async (id: string) =>

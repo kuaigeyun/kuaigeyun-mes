@@ -5,17 +5,20 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { EyeOutlined, CheckOutlined, StopOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckOutlined, StopOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
+import { receivableService } from '../../../services/finance/receivable';
+import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface ReceiptVoucher {
   id: number;
@@ -33,6 +36,17 @@ interface ReceiptVoucher {
   created_at: string;
 }
 
+type PullReceivableCandidate = {
+  id: number;
+  receivable_code: string;
+  customer_id: number;
+  customer_name: string;
+  due_date?: string;
+  review_status?: string;
+  status?: string;
+  remaining_amount: number;
+};
+
 const PAYMENT_METHOD_OPTIONS = [
   { label: '银行转账', value: '银行转账' },
   { label: '现金', value: '现金' },
@@ -45,9 +59,16 @@ const PAYMENT_METHOD_OPTIONS = [
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullVisible, setPullVisible] = useState(false);
+  const [pullLoading, setPullLoading] = useState(false);
+  const [pullSubmitting, setPullSubmitting] = useState(false);
+  const [pullKeyword, setPullKeyword] = useState('');
+  const [pullCandidates, setPullCandidates] = useState<PullReceivableCandidate[]>([]);
+  const [selectedPullReceivableId, setSelectedPullReceivableId] = useState<number | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +100,77 @@ const ReceiptsPage: React.FC = () => {
     messageApi.success('收款单创建成功');
     setCreateModalVisible(false);
     actionRef.current?.reload();
+  };
+
+  const loadPullReceivableCandidates = async (keyword = '') => {
+    setPullLoading(true);
+    try {
+      const kw = keyword.trim().toLowerCase();
+      const res = await receivableService.listReceivables({ skip: 0, limit: 200 });
+      const rows = (res?.items || [])
+        .filter((r: any) => Number(r?.remaining_amount || 0) > 0)
+        .map((r: any) => ({
+          id: Number(r.id),
+          receivable_code: String(r.receivable_code || ''),
+          customer_id: Number(r.customer_id),
+          customer_name: String(r.customer_name || ''),
+          due_date: r.due_date,
+          review_status: r.review_status,
+          status: r.status,
+          remaining_amount: Number(r.remaining_amount || 0),
+        }))
+        .filter((r: PullReceivableCandidate) => {
+          if (!kw) return true;
+          return `${r.receivable_code} ${r.customer_name}`.toLowerCase().includes(kw);
+        });
+      setPullCandidates(rows);
+    } catch {
+      setPullCandidates([]);
+    } finally {
+      setPullLoading(false);
+    }
+  };
+
+  const handleOpenPullFromReceivable = async () => {
+    setPullKeyword('');
+    setSelectedPullReceivableId(null);
+    setPullVisible(true);
+    await loadPullReceivableCandidates('');
+  };
+
+  const handlePullConfirm = async () => {
+    if (!selectedPullReceivableId) {
+      messageApi.warning(`请选择${pullFromReceivableAction.sourceLabel}`);
+      return;
+    }
+    const selected = pullCandidates.find((x) => x.id === selectedPullReceivableId);
+    if (!selected) return;
+    if (selected.remaining_amount <= 0) {
+      messageApi.warning(`${pullFromReceivableAction.sourceLabel}剩余应收为 0，无法创建${pullFromReceivableAction.targetLabel}`);
+      return;
+    }
+    setPullSubmitting(true);
+    try {
+      await apiRequest('/apps/kuaicaiwu/receipts', {
+        method: 'POST',
+        data: {
+          customer_id: selected.customer_id,
+          customer_name: selected.customer_name,
+          total_amount: selected.remaining_amount,
+          receipt_date: dayjs().format('YYYY-MM-DD'),
+          payment_method: '银行转账',
+          notes: `从${pullFromReceivableAction.sourceLabel} ${selected.receivable_code} 创建`,
+        },
+      });
+      messageApi.success(`已创建${pullFromReceivableAction.targetLabel}`);
+      setPullVisible(false);
+      setSelectedPullReceivableId(null);
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || e?.message || '创建失败');
+    } finally {
+      setPullSubmitting(false);
+    }
   };
 
   const handleConfirm = async (record: ReceiptVoucher) => {
@@ -246,9 +338,26 @@ const ReceiptsPage: React.FC = () => {
         scroll={{ x: 1680 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}
-        showCreateButton
+        showCreateButton={false}
         createButtonText="新建收款单"
         onCreate={() => setCreateModalVisible(true)}
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            compactKey="create-receipt-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel="新建收款单"
+            onCreate={() => setCreateModalVisible(true)}
+            menuItems={buildKuaicaiwuPullCreateMenuItems([
+              {
+                key: 'pull-from-receivable',
+                actionKey: 'receipt.pull_from_receivable',
+                onClick: () => {
+                  void handleOpenPullFromReceivable();
+                },
+              },
+            ])}
+          />,
+        ]}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;
           const res = await apiRequest<any>('/apps/kuaicaiwu/receipts', {
@@ -266,6 +375,73 @@ const ReceiptsPage: React.FC = () => {
         }}
         columns={columns}
       />
+
+      <Modal
+        title={pullFromReceivableAction.label}
+        open={pullVisible}
+        width={1100}
+        onCancel={() => {
+          if (pullSubmitting) return;
+          setPullVisible(false);
+          setSelectedPullReceivableId(null);
+        }}
+        onOk={() => {
+          void handlePullConfirm();
+        }}
+        okText={`创建${pullFromReceivableAction.targetLabel}`}
+        confirmLoading={pullSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按应收单号/客户搜索"
+            value={pullKeyword}
+            onChange={(e) => setPullKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullKeyword(value);
+              void loadPullReceivableCandidates(value);
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullReceivableCandidate>
+            rowKey="id"
+            loading={pullLoading}
+            dataSource={pullCandidates}
+            pagination={false}
+            scroll={{ x: 980, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullReceivableId ? [selectedPullReceivableId] : [],
+              onChange: (keys) => setSelectedPullReceivableId(Number(keys?.[0]) || null),
+            }}
+            onRow={(record) => ({
+              onClick: () => setSelectedPullReceivableId(record.id),
+            })}
+            columns={[
+              { title: '应收单号', dataIndex: 'receivable_code', width: 220, ellipsis: true },
+              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: '业务状态', dataIndex: 'status', width: 120, align: 'center' },
+              { title: '审核状态', dataIndex: 'review_status', width: 120, align: 'center' },
+              { title: '到期日期', dataIndex: 'due_date', width: 120, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              {
+                title: '剩余应收',
+                dataIndex: 'remaining_amount',
+                width: 140,
+                align: 'right',
+                render: (v) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+              },
+              {
+                title: '可转单',
+                key: 'can_create',
+                width: 100,
+                align: 'center',
+                render: (_, r) => (Number(r.remaining_amount || 0) > 0 ? <Tag color="success">可创建</Tag> : <Tag>不可创建</Tag>),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       <ModalForm
         title="新建收款单"

@@ -14,6 +14,7 @@ import { DatePicker } from 'antd'
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import {
   ActionType,
   ProColumns,
@@ -84,6 +85,7 @@ import {
   LockOutlined,
   UnlockOutlined,
   ReloadOutlined,
+  DownOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
@@ -105,6 +107,7 @@ import {
   TOUCH_SCREEN_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates'
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import {
   DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
@@ -119,6 +122,7 @@ import {
   getWorkOrderStatistics,
   productionControlApi,
   reportingApi,
+  planningApi,
 } from '../../../services/production'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
@@ -129,6 +133,7 @@ import {
   getSalesForecastItems,
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
+import { listDemandComputations, getPushOptions, generateOrdersFromComputation } from '../../../services/demand-computation'
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../../master-data/services/process'
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain'
 import {
@@ -231,6 +236,30 @@ interface WorkOrder {
   manufacturing_mode?: 'fabrication' | 'assembly'
   /** 齐套率 (%) */
   readiness_rate?: number
+}
+
+type PullDemandComputationCandidate = {
+  id: number
+  computation_code?: string
+  business_mode?: string
+  computation_status?: string
+  created_at?: string
+  updated_at?: string
+  can_push_work_order?: boolean
+  disabled_reason?: string
+}
+
+type PullProductionPlanCandidate = {
+  id: number
+  plan_code?: string
+  plan_name?: string
+  status?: string
+  execution_status?: string
+  plan_start_date?: string
+  plan_end_date?: string
+  updated_at?: string
+  can_push_work_order?: boolean
+  disabled_reason?: string
 }
 
 /** 报工数量框：失焦时若为空则视为未填写，需恢复打开弹窗时的默认值 */
@@ -344,6 +373,8 @@ function manufacturingModeTag(mode: string | undefined | null) {
 const WorkOrdersPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const pullFromDemandComputationAction = getKuaizhizaoDocumentAction('work_order.pull_from_demand_computation')
+  const pullFromProductionPlanAction = getKuaizhizaoDocumentAction('work_order.pull_from_production_plan')
   const { token } = theme.useToken()
   const workOrderDetailDrawerZIndex = token.zIndexPopupBase
   const workOrderChainOverlayZIndex = token.zIndexPopupBase + 1
@@ -359,6 +390,18 @@ const WorkOrdersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [pullFromComputationVisible, setPullFromComputationVisible] = useState(false)
+  const [pullComputationLoading, setPullComputationLoading] = useState(false)
+  const [pullComputationSubmitting, setPullComputationSubmitting] = useState(false)
+  const [pullComputationKeyword, setPullComputationKeyword] = useState('')
+  const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([])
+  const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null)
+  const [pullFromProductionPlanVisible, setPullFromProductionPlanVisible] = useState(false)
+  const [pullProductionPlanLoading, setPullProductionPlanLoading] = useState(false)
+  const [pullProductionPlanSubmitting, setPullProductionPlanSubmitting] = useState(false)
+  const [pullProductionPlanKeyword, setPullProductionPlanKeyword] = useState('')
+  const [pullProductionPlanCandidates, setPullProductionPlanCandidates] = useState<PullProductionPlanCandidate[]>([])
+  const [selectedPullProductionPlanId, setSelectedPullProductionPlanId] = useState<number | null>(null)
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
@@ -1106,6 +1149,172 @@ const WorkOrdersPage: React.FC = () => {
     // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
   }
+
+  const loadPullComputationCandidates = useCallback(async (keyword: string = '') => {
+    setPullComputationLoading(true)
+    try {
+      const kw = keyword.trim()
+      const listRes = await listDemandComputations({
+        skip: 0,
+        limit: 50,
+        computation_status: '完成',
+        computation_code: kw || undefined,
+      })
+      const rows = listRes?.data || []
+      const candidates = await Promise.all(
+        rows
+          .filter((row) => row.id != null)
+          .map(async (row) => {
+            let canPushWorkOrder = true
+            let disabledReason: string | undefined
+            try {
+              const options = await getPushOptions(row.id!)
+              canPushWorkOrder = !!options.has_production_items && (options.production_choices || []).includes('work_order')
+              if (!options.has_production_items) {
+                disabledReason = '无可转生产明细'
+              } else if (!canPushWorkOrder) {
+                disabledReason = '当前不可直接转工单'
+              }
+            } catch {
+              // 能力探测失败时保持可选，由后端最终校验
+            }
+            return {
+              id: row.id!,
+              computation_code: row.computation_code,
+              business_mode: row.business_mode,
+              computation_status: row.computation_status,
+              created_at: row.created_at,
+              updated_at: row.updated_at,
+              can_push_work_order: canPushWorkOrder,
+              disabled_reason: disabledReason,
+            } as PullDemandComputationCandidate
+          }),
+      )
+      setPullComputationCandidates(candidates)
+    } finally {
+      setPullComputationLoading(false)
+    }
+  }, [])
+
+  const handlePullFromComputation = useCallback(async () => {
+    setPullFromComputationVisible(true)
+    setPullComputationKeyword('')
+    setSelectedPullComputationId(null)
+    await loadPullComputationCandidates('')
+  }, [loadPullComputationCandidates])
+
+  const handlePullFromComputationConfirm = useCallback(async () => {
+    if (!selectedPullComputationId) {
+      messageApi.warning(`请选择${pullFromDemandComputationAction.sourceLabel}`)
+      return
+    }
+    const selected = pullComputationCandidates.find((i) => i.id === selectedPullComputationId)
+    if (selected?.can_push_work_order === false) {
+      messageApi.warning(selected.disabled_reason || '该需求运算单当前不可用于创建工单')
+      return
+    }
+
+    setPullComputationSubmitting(true)
+    try {
+      const res = await generateOrdersFromComputation(selectedPullComputationId, 'work_order_only')
+      const count = Number(res?.work_order_count ?? res?.work_orders?.length ?? 0)
+      messageApi.success(count > 0 ? `已从${pullFromDemandComputationAction.sourceLabel}创建 ${count} 张${pullFromDemandComputationAction.targetLabel}` : `已从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}`)
+      setPullFromComputationVisible(false)
+      setSelectedPullComputationId(null)
+      actionRef.current?.reload()
+      invalidateStatistics()
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || `从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}失败`)
+    } finally {
+      setPullComputationSubmitting(false)
+    }
+  }, [actionRef, invalidateStatistics, messageApi, pullComputationCandidates, selectedPullComputationId])
+
+  const loadPullProductionPlanCandidates = useCallback(async (keyword: string = '') => {
+    setPullProductionPlanLoading(true)
+    try {
+      const kw = keyword.trim().toLowerCase()
+      const listRes: any = await planningApi.productionPlan.list({
+        skip: 0,
+        limit: 200,
+      })
+      const rows = Array.isArray(listRes) ? listRes : (listRes?.data ?? listRes?.items ?? [])
+      const filtered = (rows || [])
+        .filter((row: any) => row?.id != null)
+        .filter((row: any) => {
+          if (!kw) return true
+          const text = `${row.plan_code || ''} ${row.plan_name || ''}`.toLowerCase()
+          return text.includes(kw)
+        })
+        .map((row: any) => {
+          const status = String(row.status || '')
+          const executionStatus = String(row.execution_status || '')
+          const canPush = executionStatus !== '已执行' && status === '已审核'
+          const disabledReason =
+            executionStatus === '已执行'
+              ? '已执行'
+              : status !== '已审核'
+                ? '仅已审核计划可转工单'
+                : undefined
+          return {
+            id: Number(row.id),
+            plan_code: row.plan_code,
+            plan_name: row.plan_name,
+            status: row.status,
+            execution_status: row.execution_status,
+            plan_start_date: row.plan_start_date,
+            plan_end_date: row.plan_end_date,
+            updated_at: row.updated_at,
+            can_push_work_order: canPush,
+            disabled_reason: disabledReason,
+          } as PullProductionPlanCandidate
+        })
+      setPullProductionPlanCandidates(filtered)
+    } finally {
+      setPullProductionPlanLoading(false)
+    }
+  }, [])
+
+  const handlePullFromProductionPlan = useCallback(async () => {
+    setPullFromProductionPlanVisible(true)
+    setPullProductionPlanKeyword('')
+    setSelectedPullProductionPlanId(null)
+    await loadPullProductionPlanCandidates('')
+  }, [loadPullProductionPlanCandidates])
+
+  const handlePullFromProductionPlanConfirm = useCallback(async () => {
+    if (!selectedPullProductionPlanId) {
+      messageApi.warning(`请选择${pullFromProductionPlanAction.sourceLabel}`)
+      return
+    }
+    const selected = pullProductionPlanCandidates.find((i) => i.id === selectedPullProductionPlanId)
+    if (selected?.can_push_work_order === false) {
+      messageApi.warning(selected.disabled_reason || '该生产计划当前不可用于创建工单')
+      return
+    }
+
+    setPullProductionPlanSubmitting(true)
+    try {
+      const res: any = await planningApi.productionPlan.pushToWorkOrders(selectedPullProductionPlanId)
+      const count = Number(
+        res?.work_order_count ??
+        res?.created_count ??
+        res?.created_documents?.work_order?.length ??
+        0,
+      )
+      messageApi.success(count > 0 ? `已从${pullFromProductionPlanAction.sourceLabel}创建 ${count} 张${pullFromProductionPlanAction.targetLabel}` : `已从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}`)
+      setPullFromProductionPlanVisible(false)
+      setSelectedPullProductionPlanId(null)
+      actionRef.current?.reload()
+      invalidateStatistics()
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      const msg = typeof detail === 'string' ? detail : detail?.message
+      messageApi.error(msg || `从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}失败`)
+    } finally {
+      setPullProductionPlanSubmitting(false)
+    }
+  }, [actionRef, invalidateStatistics, messageApi, pullProductionPlanCandidates, selectedPullProductionPlanId])
 
   /**
    * 处理编辑工单
@@ -4294,7 +4503,7 @@ const WorkOrdersPage: React.FC = () => {
             staleWhileRevalidate: true,
           }}
           request={handleWorkOrderTableRequest}
-          showCreateButton
+          showCreateButton={false}
           createButtonText="新建工单"
           onCreate={handleCreate}
           enableRowSelection
@@ -4385,6 +4594,28 @@ const WorkOrdersPage: React.FC = () => {
             ], [selectedRowKeys]);
 
             return [
+              <UniPullCreateToolbar
+                compactKey="create-work-order-with-pull"
+                createIcon={<PlusOutlined />}
+                createLabel="新建工单"
+                onCreate={handleCreate}
+                menuItems={buildKuaizhizaoPullCreateMenuItems([
+                  {
+                    key: 'pull-from-demand-computation',
+                    actionKey: 'work_order.pull_from_demand_computation',
+                    onClick: () => {
+                      void handlePullFromComputation()
+                    },
+                  },
+                  {
+                    key: 'pull-from-production-plan',
+                    actionKey: 'work_order.pull_from_production_plan',
+                    onClick: () => {
+                      void handlePullFromProductionPlan()
+                    },
+                  },
+                ])}
+              />,
               <Button
                 key="smartRelease"
                 style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
@@ -4434,6 +4665,183 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={pullFromDemandComputationAction.label}
+        open={pullFromComputationVisible}
+        width={1280}
+        onCancel={() => {
+          if (pullComputationSubmitting) return
+          setPullFromComputationVisible(false)
+          setSelectedPullComputationId(null)
+        }}
+        onOk={() => {
+          void handlePullFromComputationConfirm()
+        }}
+        okText="创建工单"
+        confirmLoading={pullComputationSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按运算单号搜索"
+            value={pullComputationKeyword}
+            onChange={(e) => setPullComputationKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullComputationKeyword(value)
+              void loadPullComputationCandidates(value)
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullDemandComputationCandidate>
+            rowKey="id"
+            loading={pullComputationLoading}
+            dataSource={pullComputationCandidates}
+            pagination={false}
+            scroll={{ x: 1100, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullComputationId ? [selectedPullComputationId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0])
+                if (Number.isFinite(next)) {
+                  setSelectedPullComputationId(next)
+                } else {
+                  setSelectedPullComputationId(null)
+                }
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.can_push_work_order === false,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.can_push_work_order === false) return
+                setSelectedPullComputationId(record.id)
+              },
+            })}
+            columns={[
+              { title: '运算单号', dataIndex: 'computation_code', width: 220, ellipsis: true },
+              { title: '业务模式', dataIndex: 'business_mode', width: 110, align: 'center' },
+              { title: '运算状态', dataIndex: 'computation_status', width: 110, align: 'center' },
+              {
+                title: '创建时间',
+                dataIndex: 'created_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '更新时间',
+                dataIndex: 'updated_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 180,
+                align: 'center',
+                render: (_, record) =>
+                  record.can_push_work_order === false ? (
+                    <Tag color="gold">{record.disabled_reason || '不可创建'}</Tag>
+                  ) : (
+                    <Tag color="success">可创建</Tag>
+                  ),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={pullFromProductionPlanAction.label}
+        open={pullFromProductionPlanVisible}
+        width={1280}
+        onCancel={() => {
+          if (pullProductionPlanSubmitting) return
+          setPullFromProductionPlanVisible(false)
+          setSelectedPullProductionPlanId(null)
+        }}
+        onOk={() => {
+          void handlePullFromProductionPlanConfirm()
+        }}
+        okText="创建工单"
+        confirmLoading={pullProductionPlanSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按计划编号/计划名称搜索"
+            value={pullProductionPlanKeyword}
+            onChange={(e) => setPullProductionPlanKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullProductionPlanKeyword(value)
+              void loadPullProductionPlanCandidates(value)
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullProductionPlanCandidate>
+            rowKey="id"
+            loading={pullProductionPlanLoading}
+            dataSource={pullProductionPlanCandidates}
+            pagination={false}
+            scroll={{ x: 1200, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullProductionPlanId ? [selectedPullProductionPlanId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0])
+                if (Number.isFinite(next)) setSelectedPullProductionPlanId(next)
+                else setSelectedPullProductionPlanId(null)
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.can_push_work_order === false,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.can_push_work_order === false) return
+                setSelectedPullProductionPlanId(record.id)
+              },
+            })}
+            columns={[
+              { title: '计划编号', dataIndex: 'plan_code', width: 180, ellipsis: true },
+              { title: '计划名称', dataIndex: 'plan_name', width: 260, ellipsis: true },
+              { title: '计划状态', dataIndex: 'status', width: 120, align: 'center' },
+              { title: '执行状态', dataIndex: 'execution_status', width: 120, align: 'center' },
+              {
+                title: '计划期间',
+                key: 'plan_range',
+                width: 220,
+                render: (_, r) =>
+                  r.plan_start_date || r.plan_end_date
+                    ? `${r.plan_start_date || '-'} ~ ${r.plan_end_date || '-'}`
+                    : '-',
+              },
+              {
+                title: '更新时间',
+                dataIndex: 'updated_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 180,
+                align: 'center',
+                render: (_, record) =>
+                  record.can_push_work_order === false ? (
+                    <Tag color="gold">{record.disabled_reason || '不可创建'}</Tag>
+                  ) : (
+                    <Tag color="success">可创建</Tag>
+                  ),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       {/* 打印工单 Modal - 懒加载 */}
       {printModalVisible && (

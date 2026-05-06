@@ -67,6 +67,7 @@ import {
   FormModalTemplate,
   type StatCard,
 } from '../../../../../components/layout-templates'
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import {
   DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
@@ -103,7 +104,7 @@ import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../..
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
-import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
+import { listDemands, getDemand, pushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
@@ -113,6 +114,7 @@ import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../.
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 
 /** 详情 Drawer 外左侧全链路浮层（与销售/需求详情一致） */
 const DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN = 16
@@ -141,6 +143,17 @@ interface MaterialInfo {
   material_code: string
   material_name: string
   bomVersions?: BomVersionOption[]
+}
+
+type PullDemandCandidate = {
+  id: number
+  demand_code?: string
+  demand_name?: string
+  demand_type?: string
+  business_mode?: string
+  status?: string
+  updated_at?: string
+  pushed_to_computation?: boolean
 }
 
 /** 详情明细表最小宽度（外层横滚） */
@@ -573,6 +586,7 @@ const DemandComputationPage: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { message: messageApi, modal: modalApi } = App.useApp()
+  const pullFromDemandAction = getKuaizhizaoDocumentAction('demand_computation.pull_from_demand')
   const queryClient = useQueryClient()
   const location = useLocation()
   const actionRef = useRef<ActionType>(null)
@@ -614,6 +628,12 @@ const DemandComputationPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [selectedDemandIds, setSelectedDemandIds] = useState<number[]>([])
+  const [pullFromDemandVisible, setPullFromDemandVisible] = useState(false)
+  const [pullDemandLoading, setPullDemandLoading] = useState(false)
+  const [pullDemandSubmitting, setPullDemandSubmitting] = useState(false)
+  const [pullDemandKeyword, setPullDemandKeyword] = useState('')
+  const [pullDemandCandidates, setPullDemandCandidates] = useState<PullDemandCandidate[]>([])
+  const [selectedPullDemandId, setSelectedPullDemandId] = useState<number | null>(null)
 
   // 执行计算 Modal 相关状态
   const [executeModalVisible, setExecuteModalVisible] = useState(false)
@@ -868,6 +888,71 @@ const DemandComputationPage: React.FC = () => {
       messageApi.error('加载需求列表失败')
     }
   }
+
+  const loadPullDemandCandidates = useCallback(async (keyword: string = '') => {
+    setPullDemandLoading(true)
+    try {
+      const kw = keyword.trim().toLowerCase()
+      const demandsRes = await listDemands({
+        status: DemandStatus.AUDITED,
+        review_status: ReviewStatus.APPROVED,
+        pushed_to_computation: false,
+        limit: 200,
+      })
+      const rows = (demandsRes.data || [])
+        .filter((d) => d.id != null)
+        .filter((d) => {
+          if (!kw) return true
+          const text = `${d.demand_code || ''} ${d.demand_name || ''}`.toLowerCase()
+          return text.includes(kw)
+        })
+        .map((d) => ({
+          id: d.id!,
+          demand_code: d.demand_code,
+          demand_name: d.demand_name,
+          demand_type: d.demand_type,
+          business_mode: d.business_mode,
+          status: d.status,
+          updated_at: d.updated_at,
+          pushed_to_computation: d.pushed_to_computation,
+        }))
+      setPullDemandCandidates(rows)
+    } finally {
+      setPullDemandLoading(false)
+    }
+  }, [])
+
+  const handlePullFromDemand = useCallback(async () => {
+    setPullFromDemandVisible(true)
+    setPullDemandKeyword('')
+    setSelectedPullDemandId(null)
+    await loadPullDemandCandidates('')
+  }, [loadPullDemandCandidates])
+
+  const handlePullFromDemandConfirm = useCallback(async () => {
+    if (!selectedPullDemandId) {
+      messageApi.warning(`请选择${pullFromDemandAction.sourceLabel}`)
+      return
+    }
+    const selected = pullDemandCandidates.find((i) => i.id === selectedPullDemandId)
+    if (selected?.pushed_to_computation) {
+      messageApi.warning(`该${pullFromDemandAction.sourceLabel}已下推过${pullFromDemandAction.targetLabel}，请勿重复创建`)
+      return
+    }
+    setPullDemandSubmitting(true)
+    try {
+      const res = await pushDemandToComputation(selectedPullDemandId)
+      messageApi.success(res?.computation_code ? `已创建${pullFromDemandAction.targetLabel}：${res.computation_code}` : `已从${pullFromDemandAction.sourceLabel}创建${pullFromDemandAction.targetLabel}`)
+      setPullFromDemandVisible(false)
+      setSelectedPullDemandId(null)
+      invalidateStatistics()
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || `从${pullFromDemandAction.sourceLabel}创建${pullFromDemandAction.targetLabel}失败`)
+    } finally {
+      setPullDemandSubmitting(false)
+    }
+  }, [actionRef, messageApi, pullDemandCandidates, selectedPullDemandId])
 
   /**
    * 处理详情查看
@@ -1484,11 +1569,105 @@ const DemandComputationPage: React.FC = () => {
         search={{
           labelWidth: 'auto',
         }}
-        showCreateButton={true}
+        showCreateButton={false}
         createButtonText="新建需求计算"
         onCreate={handleCreate}
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            compactKey="create-demand-computation-with-pull"
+            createIcon={<PlayCircleOutlined />}
+            createLabel="新建需求计算"
+            onCreate={() => {
+              void handleCreate()
+            }}
+            menuItems={buildKuaizhizaoPullCreateMenuItems([
+              {
+                key: 'pull-from-demand',
+                actionKey: 'demand_computation.pull_from_demand',
+                onClick: () => {
+                  void handlePullFromDemand()
+                },
+              },
+            ])}
+          />,
+        ]}
         toolBarActionsAfterDelete={[<MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />]}
       />
+
+      <Modal
+        title={pullFromDemandAction.label}
+        open={pullFromDemandVisible}
+        width={1200}
+        onCancel={() => {
+          if (pullDemandSubmitting) return
+          setPullFromDemandVisible(false)
+          setSelectedPullDemandId(null)
+        }}
+        onOk={() => {
+          void handlePullFromDemandConfirm()
+        }}
+        okText="创建需求运算"
+        confirmLoading={pullDemandSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按需求单号/需求名称搜索"
+            value={pullDemandKeyword}
+            onChange={(e) => setPullDemandKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullDemandKeyword(value)
+              void loadPullDemandCandidates(value)
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullDemandCandidate>
+            rowKey="id"
+            loading={pullDemandLoading}
+            dataSource={pullDemandCandidates}
+            pagination={false}
+            scroll={{ x: 1080, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullDemandId ? [selectedPullDemandId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0])
+                if (Number.isFinite(next)) setSelectedPullDemandId(next)
+                else setSelectedPullDemandId(null)
+              },
+              getCheckboxProps: (record) => ({ disabled: !!record.pushed_to_computation }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.pushed_to_computation) return
+                setSelectedPullDemandId(record.id)
+              },
+            })}
+            columns={[
+              { title: '需求单号', dataIndex: 'demand_code', width: 180, ellipsis: true },
+              { title: '需求名称', dataIndex: 'demand_name', width: 220, ellipsis: true },
+              { title: '需求类型', dataIndex: 'demand_type', width: 130, align: 'center' },
+              { title: '业务模式', dataIndex: 'business_mode', width: 110, align: 'center' },
+              { title: '状态', dataIndex: 'status', width: 120, align: 'center' },
+              {
+                title: '更新时间',
+                dataIndex: 'updated_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 150,
+                align: 'center',
+                render: (_, r) =>
+                  r.pushed_to_computation ? <Tag color="gold">已下推</Tag> : <Tag color="success">可创建</Tag>,
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       {/* 新建计算：FormModalTemplate（UI_Standard 新建/编辑 Modal） */}
       <FormModalTemplate

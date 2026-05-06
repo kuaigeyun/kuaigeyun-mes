@@ -15,6 +15,7 @@ from tortoise.transactions import in_transaction
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
+from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticeCreate,
     DeliveryNoticeUpdate,
@@ -45,6 +46,23 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "delivery_notice")
         if not is_enabled:
             raise BusinessLogicError("送货单节点未启用，无法创建送货单")
+        if notice_data.sales_delivery_id:
+            source_delivery = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id,
+                id=notice_data.sales_delivery_id,
+                deleted_at__isnull=True,
+            )
+            if not source_delivery:
+                raise BusinessLogicError("销售出库单不存在或已删除，无法创建送货单")
+            existed = await DeliveryNotice.get_or_none(
+                tenant_id=tenant_id,
+                sales_delivery_id=notice_data.sales_delivery_id,
+                deleted_at__isnull=True,
+            )
+            if existed:
+                raise BusinessLogicError(
+                    f"该销售出库单已创建送货单（{existed.notice_code}），请勿重复创建"
+                )
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "DELIVERY_NOTICE_CODE", prefix=f"DN{today}")

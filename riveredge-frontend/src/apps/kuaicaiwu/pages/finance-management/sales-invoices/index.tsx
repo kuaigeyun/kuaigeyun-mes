@@ -5,14 +5,15 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { CheckCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import {
@@ -22,6 +23,9 @@ import {
   isUuidInvoiceCode,
 } from '../../../utils/salesInvoiceUi';
 import dayjs from 'dayjs';
+import { listSalesOrders } from '../../../../kuaizhizao/services/sales-order';
+import { warehouseApi } from '../../../../kuaizhizao/services/warehouse-execution';
+import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface SalesInvoice {
   id: number;
@@ -45,6 +49,18 @@ interface SalesInvoice {
   receivable_code?: string | null;
 }
 
+type PullInvoiceCandidate = {
+  source_type: 'sales_order' | 'sales_delivery';
+  source_id: number;
+  source_code: string;
+  customer_id?: number;
+  customer_name?: string;
+  source_date?: string;
+  source_status?: string;
+  amount?: number;
+  converted?: boolean;
+};
+
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
   { label: '9%', value: 9 },
@@ -57,8 +73,17 @@ const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const navigate = useNavigate();
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullVisible, setPullVisible] = useState(false);
+  const [pullLoading, setPullLoading] = useState(false);
+  const [pullSubmitting, setPullSubmitting] = useState(false);
+  const [pullKeyword, setPullKeyword] = useState('');
+  const [pullSourceType, setPullSourceType] = useState<'sales_order' | 'sales_delivery'>('sales_order');
+  const [pullCandidates, setPullCandidates] = useState<PullInvoiceCandidate[]>([]);
+  const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
+  const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
+  const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
 
   useEffect(() => {
     const load = async () => {
@@ -97,6 +122,118 @@ const SalesInvoicesPage: React.FC = () => {
     messageApi.success('销售发票创建成功');
     setCreateModalVisible(false);
     actionRef.current?.reload();
+  };
+
+  const loadPullCandidates = async (sourceType: 'sales_order' | 'sales_delivery', keyword = '') => {
+    setPullLoading(true);
+    try {
+      const kw = keyword.trim().toLowerCase();
+      const invoiceRes = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', { params: { skip: 0, limit: 5000 } });
+      const invoices = invoiceRes?.items || [];
+      const existedCodes = new Set<string>(
+        invoices
+          .map((x: any) => String(x?.sales_order_code || '').trim())
+          .filter((x: string) => !!x),
+      );
+
+      if (sourceType === 'sales_order') {
+        const orderRes = await listSalesOrders({ skip: 0, limit: 200, keyword: kw || undefined });
+        const rows = (orderRes?.data || []).map((row: any) => {
+          const code = String(row.order_code || row.code || row.id || '');
+          const amount = Number(row.total_amount || 0);
+          return {
+            source_type: 'sales_order' as const,
+            source_id: Number(row.id),
+            source_code: code,
+            customer_id: row.customer_id,
+            customer_name: row.customer_name,
+            source_date: row.order_date,
+            source_status: row.status,
+            amount,
+            converted: existedCodes.has(code),
+          };
+        });
+        setPullCandidates(rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true)));
+      } else {
+        const deliveryRes: any = await warehouseApi.salesDelivery.list({ skip: 0, limit: 200, keyword: kw || undefined });
+        const rows = (Array.isArray(deliveryRes) ? deliveryRes : (deliveryRes?.data || [])).map((row: any) => {
+          const code = String(row.delivery_code || row.code || row.id || '');
+          const amount = Number(row.total_amount || 0);
+          return {
+            source_type: 'sales_delivery' as const,
+            source_id: Number(row.id),
+            source_code: code,
+            customer_id: row.customer_id,
+            customer_name: row.customer_name,
+            source_date: row.delivery_date || row.delivery_time,
+            source_status: row.status,
+            amount,
+            converted: existedCodes.has(code),
+          };
+        });
+        setPullCandidates(rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true)));
+      }
+    } catch {
+      setPullCandidates([]);
+    } finally {
+      setPullLoading(false);
+    }
+  };
+
+  const openPullModal = async (sourceType: 'sales_order' | 'sales_delivery') => {
+    setPullSourceType(sourceType);
+    setPullKeyword('');
+    setSelectedPullSourceId(null);
+    setPullVisible(true);
+    await loadPullCandidates(sourceType, '');
+  };
+
+  const handlePullConfirm = async () => {
+    if (!selectedPullSourceId) {
+      messageApi.warning(`请选择${pullSourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel}`);
+      return;
+    }
+    const selected = pullCandidates.find((x) => x.source_id === selectedPullSourceId);
+    if (!selected) return;
+    if (selected.converted) {
+      messageApi.warning(`该${pullSourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel}已创建${pullFromSalesOrderAction.targetLabel}，请勿重复创建`);
+      return;
+    }
+    const invoiceAmount = Number(selected.amount || 0);
+    if (invoiceAmount <= 0) {
+      messageApi.warning(`源单据金额为 0，无法创建${pullFromSalesOrderAction.targetLabel}`);
+      return;
+    }
+    const taxRate = 13;
+    const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
+    const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
+    setPullSubmitting(true);
+    try {
+      await apiRequest('/apps/kuaicaiwu/sales-invoices', {
+        method: 'POST',
+        data: {
+          customer_id: selected.customer_id,
+          customer_name: selected.customer_name || '',
+          sales_order_code: selected.source_code,
+          invoice_number: '',
+          invoice_date: dayjs().format('YYYY-MM-DD'),
+          invoice_type: '增值税专用发票',
+          tax_rate: taxRate,
+          invoice_amount: invoiceAmount,
+          tax_amount: taxAmount,
+          total_amount: totalAmount,
+          notes: `从${selected.source_type === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel} ${selected.source_code} 创建`,
+        },
+      });
+      messageApi.success(`已创建${pullFromSalesOrderAction.targetLabel}`);
+      setPullVisible(false);
+      setSelectedPullSourceId(null);
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || '创建失败');
+    } finally {
+      setPullSubmitting(false);
+    }
   };
 
   const handleApprove = async (record: SalesInvoice) => {
@@ -305,9 +442,33 @@ const SalesInvoicesPage: React.FC = () => {
         scroll={{ x: 1800 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}
-        showCreateButton
+        showCreateButton={false}
         createButtonText="新建销售发票"
         onCreate={() => setCreateModalVisible(true)}
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            compactKey="create-sales-invoice-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel="新建销售发票"
+            onCreate={() => setCreateModalVisible(true)}
+            menuItems={buildKuaicaiwuPullCreateMenuItems([
+              {
+                key: 'pull-from-sales-order',
+                actionKey: 'sales_invoice.pull_from_sales_order',
+                onClick: () => {
+                  void openPullModal('sales_order');
+                },
+              },
+              {
+                key: 'pull-from-sales-delivery',
+                actionKey: 'sales_invoice.pull_from_sales_delivery',
+                onClick: () => {
+                  void openPullModal('sales_delivery');
+                },
+              },
+            ])}
+          />,
+        ]}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;
           const res = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', {
@@ -325,6 +486,81 @@ const SalesInvoicesPage: React.FC = () => {
         }}
         columns={columns}
       />
+
+      <Modal
+        title={pullSourceType === 'sales_order' ? pullFromSalesOrderAction.label : pullFromSalesDeliveryAction.label}
+        open={pullVisible}
+        width={1180}
+        onCancel={() => {
+          if (pullSubmitting) return;
+          setPullVisible(false);
+          setSelectedPullSourceId(null);
+        }}
+        onOk={() => {
+          void handlePullConfirm();
+        }}
+        okText={`创建${pullFromSalesOrderAction.targetLabel}`}
+        confirmLoading={pullSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按单号/客户搜索"
+            value={pullKeyword}
+            onChange={(e) => setPullKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullKeyword(value);
+              void loadPullCandidates(pullSourceType, value);
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullInvoiceCandidate>
+            rowKey={(r) => `${r.source_type}-${r.source_id}`}
+            loading={pullLoading}
+            dataSource={pullCandidates}
+            pagination={false}
+            scroll={{ x: 1100, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullSourceId ? [`${pullSourceType}-${selectedPullSourceId}`] : [],
+              onChange: (keys) => {
+                const key = String(keys?.[0] || '');
+                const id = Number(key.split('-').slice(-1)[0]);
+                if (Number.isFinite(id)) setSelectedPullSourceId(id);
+                else setSelectedPullSourceId(null);
+              },
+              getCheckboxProps: (record) => ({ disabled: !!record.converted }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.converted) return;
+                setSelectedPullSourceId(record.source_id);
+              },
+            })}
+            columns={[
+              { title: '源单号', dataIndex: 'source_code', width: 220, ellipsis: true },
+              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: '单据状态', dataIndex: 'source_status', width: 130, align: 'center' },
+              { title: '业务日期', dataIndex: 'source_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              {
+                title: '金额',
+                dataIndex: 'amount',
+                width: 140,
+                align: 'right',
+                render: (v) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+              },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 140,
+                align: 'center',
+                render: (_, r) => (r.converted ? <Tag color="gold">已创建</Tag> : <Tag color="success">可创建</Tag>),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       <ModalForm
         title="开具销售发票"

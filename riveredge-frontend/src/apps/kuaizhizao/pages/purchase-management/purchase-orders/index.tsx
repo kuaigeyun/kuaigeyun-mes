@@ -22,6 +22,7 @@ import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -72,6 +73,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 /** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
 const PO_DETAIL_CHAIN_FLOAT_MARGIN = 16;
@@ -385,6 +387,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -1425,13 +1428,13 @@ const PurchaseOrdersPage: React.FC = () => {
         }
       }
 
-      messageApi.success(createdCodes.length ? `已创建采购订单：${createdCodes.join('、')}` : '已从采购申请明细创建采购订单');
+      messageApi.success(createdCodes.length ? `已创建${pullFromRequisitionAction.targetLabel}：${createdCodes.join('、')}` : `已从${pullFromRequisitionAction.sourceLabel}明细创建${pullFromRequisitionAction.targetLabel}`);
       setPullFromRequisitionVisible(false);
       invalidateMenuBadgeCounts();
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error?.message || '从采购申请创建采购订单失败');
+      messageApi.error(error?.response?.data?.detail || error?.message || `从${pullFromRequisitionAction.sourceLabel}创建${pullFromRequisitionAction.targetLabel}失败`);
     } finally {
       setPullRequisitionSubmitting(false);
     }
@@ -1756,25 +1759,19 @@ const PurchaseOrdersPage: React.FC = () => {
           createButtonText="新建采购订单"
           onCreate={handleCreate}
           toolBarRender={() => [
-            <Space.Compact key="create-purchase-order-with-pull">
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-                新建采购订单
-              </Button>
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'pull-from-requisition',
-                      label: '从采购申请创建采购订单',
-                      onClick: handlePullFromRequisition,
-                    },
-                  ],
-                }}
-              >
-                <Button type="primary" icon={<DownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
+            <UniPullCreateToolbar
+              compactKey="create-purchase-order-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建采购订单"
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-requisition',
+                  actionKey: 'purchase_order.pull_from_requisition',
+                  onClick: handlePullFromRequisition,
+                },
+              ])}
+            />,
           ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
@@ -1857,7 +1854,7 @@ const PurchaseOrdersPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title="从采购申请创建采购订单"
+        title={pullFromRequisitionAction.label}
         open={pullFromRequisitionVisible}
         width={1280}
         onCancel={() => setPullFromRequisitionVisible(false)}

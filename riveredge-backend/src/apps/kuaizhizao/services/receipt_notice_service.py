@@ -15,6 +15,7 @@ from tortoise.transactions import in_transaction
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
 from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
+from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.schemas.receipt_notice import (
     ReceiptNoticeCreate,
     ReceiptNoticeUpdate,
@@ -69,6 +70,22 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "receipt_notice")
         if not is_enabled:
             raise BusinessLogicError("收货通知单节点未启用，无法创建收货通知单")
+        source_order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=notice_data.purchase_order_id,
+            deleted_at__isnull=True,
+        )
+        if not source_order:
+            raise BusinessLogicError("采购订单不存在或已删除，无法创建收货通知单")
+        existed = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id,
+            purchase_order_id=notice_data.purchase_order_id,
+            deleted_at__isnull=True,
+        )
+        if existed:
+            raise BusinessLogicError(
+                f"该采购订单已创建收货通知单（{existed.notice_code}），请勿重复创建"
+            )
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "RECEIPT_NOTICE_CODE", prefix=f"RN{today}")

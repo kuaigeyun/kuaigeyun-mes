@@ -52,6 +52,8 @@ import {
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   type StatCard,
 } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { buildUniPushMenuItems } from '../../../../../components/uni-push';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
 import {
@@ -115,6 +117,7 @@ import {
   DocumentTrackingRelationsTabsBody,
   TraceLinkedDocumentBrief,
 } from '../../../../../components/document-tracking-panel';
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 /** 销售订单详情抽屉外左侧「关联全链路」浮层布局（zIndex 见页面内 theme.zIndexPopupBase + 1） */
 const SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN = 16;
@@ -414,6 +417,7 @@ const DEFAULT_PAYMENT_TERMS_OPTIONS = [
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const pullFromQuotationAction = getKuaizhizaoDocumentAction('sales_order.pull_from_quotation');
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -1418,7 +1422,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
     if (selectedPullQuotationDuplicated) {
-      messageApi.warning('该报价单已创建过销售订单，不能重复创建');
+      messageApi.warning(`该${pullFromQuotationAction.sourceLabel}已创建过${pullFromQuotationAction.targetLabel}，不能重复创建`);
       return;
     }
     try {
@@ -1433,7 +1437,7 @@ const SalesOrdersPage: React.FC = () => {
         refreshDrawerOrder(result.sales_order.id);
       }
     } catch (error: any) {
-      messageApi.error(salesOrderCatchMessage(error, '从报价单创建销售订单失败'));
+      messageApi.error(salesOrderCatchMessage(error, `从${pullFromQuotationAction.sourceLabel}创建${pullFromQuotationAction.targetLabel}失败`));
     } finally {
       setPullQuotationSubmitting(false);
     }
@@ -1981,7 +1985,7 @@ const SalesOrdersPage: React.FC = () => {
           const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
           const canPushSalesReturn = pushEnabledBase;
           const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
-          const pushMenuItems = [
+          const pushMenuItems = buildUniPushMenuItems([
             {
               key: 'computation',
               label: t('app.kuaizhizao.salesOrder.demandComputation'),
@@ -2036,7 +2040,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                 ]
               : []),
-          ];
+          ]);
           const canUsePush = pushMenuItems.some((it: any) => it.type !== 'divider' && !it.disabled);
           parts.push(
             <Dropdown menu={{ items: pushMenuItems }}>
@@ -2571,25 +2575,19 @@ const SalesOrdersPage: React.FC = () => {
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
-            <Space.Compact key="create-sales-order-with-pull">
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-                {t('app.kuaizhizao.salesOrder.create')}
-              </Button>
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'pull-from-quotation',
-                      label: '从报价单创建销售订单',
-                      onClick: handlePullFromQuotation,
-                    },
-                  ],
-                }}
-              >
-                <Button type="primary" icon={<ArrowDownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
+            <UniPullCreateToolbar
+              compactKey="create-sales-order-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel={t('app.kuaizhizao.salesOrder.create')}
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-quotation',
+                  actionKey: 'sales_order.pull_from_quotation',
+                  onClick: handlePullFromQuotation,
+                },
+              ])}
+            />,
             <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
               <Button
                 disabled={selectedRowKeys.length === 0}
@@ -3835,7 +3833,7 @@ const SalesOrdersPage: React.FC = () => {
                 {isApprovedRecord(currentSalesOrder) && (
                   <Dropdown
                     menu={{
-                      items: [
+                      items: buildUniPushMenuItems([
                         {
                           key: 'computation',
                           label: t('app.kuaizhizao.salesOrder.demandComputation'),
@@ -3889,7 +3887,7 @@ const SalesOrdersPage: React.FC = () => {
                           icon: <RollbackOutlined />,
                           onClick: () => handlePushToSalesReturn(currentSalesOrder.id!),
                         },
-                      ],
+                      ]),
                     }}
                   >
                     <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
@@ -3911,7 +3909,7 @@ const SalesOrdersPage: React.FC = () => {
       ) : null}
 
       <Modal
-        title="从报价单创建销售订单"
+        title={pullFromQuotationAction.label}
         open={pullFromQuotationVisible}
         width={1280}
         zIndex={elevatedModalZIndex}
@@ -4026,7 +4024,7 @@ const SalesOrdersPage: React.FC = () => {
             <Alert
               type="warning"
               showIcon
-              message="该报价单已创建过销售订单，已禁止重复创建"
+              message={`该${pullFromQuotationAction.sourceLabel}已创建过${pullFromQuotationAction.targetLabel}，已禁止重复创建`}
               description={`关联销售订单：${selectedPullQuotation?.sales_order_code || selectedPullQuotation?.sales_order_id || '-'}`}
             />
           )}

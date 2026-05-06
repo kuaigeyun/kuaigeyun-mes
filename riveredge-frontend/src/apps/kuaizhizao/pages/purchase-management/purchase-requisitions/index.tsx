@@ -6,7 +6,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, theme } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, theme } from 'antd';
 import {
   EyeOutlined,
   EditOutlined,
@@ -16,6 +16,7 @@ import {
   PlusOutlined,
   AppstoreAddOutlined,
   ReloadOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -41,6 +42,11 @@ import {
   PurchaseRequisition,
   PurchaseRequisitionItem,
 } from '../../../services/purchase-requisition';
+import {
+  listDemandComputations,
+  pushToPurchaseRequisition,
+  getPushOptions,
+} from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
@@ -86,6 +92,18 @@ const INITIAL_PR_FORM_ITEM_ROW = {
   notes: undefined,
 };
 
+type PullDemandComputationCandidate = {
+  id: number;
+  computation_code?: string;
+  business_mode?: string;
+  computation_status?: string;
+  created_at?: string;
+  updated_at?: string;
+  has_purchase_items?: boolean;
+  can_push_requisition?: boolean;
+  disabled_reason?: string;
+};
+
 function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, keyPrefix);
 }
@@ -105,6 +123,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullFromComputationVisible, setPullFromComputationVisible] = useState(false);
+  const [pullComputationLoading, setPullComputationLoading] = useState(false);
+  const [pullComputationSubmitting, setPullComputationSubmitting] = useState(false);
+  const [pullComputationKeyword, setPullComputationKeyword] = useState('');
+  const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([]);
+  const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null);
   /** 非空表示编辑该 id 的草稿采购申请 */
   const [editingId, setEditingId] = useState<number | null>(null);
   const createFormRef = useRef<any>(null);
@@ -529,6 +553,92 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   };
 
+  const loadPullComputationCandidates = useCallback(
+    async (keyword: string = '') => {
+      setPullComputationLoading(true);
+      try {
+        const kw = keyword.trim();
+        const listRes = await listDemandComputations({
+          skip: 0,
+          limit: 50,
+          computation_status: '完成',
+          computation_code: kw || undefined,
+        });
+        const rows = listRes?.data || [];
+        const candidates = await Promise.all(
+          rows
+            .filter((row) => row.id != null)
+            .map(async (row) => {
+              let hasPurchaseItems = true;
+              let canPushRequisition = true;
+              let disabledReason: string | undefined;
+              try {
+                const options = await getPushOptions(row.id!);
+                hasPurchaseItems = !!options.has_purchase_items;
+                canPushRequisition = hasPurchaseItems && (options.purchase_choices || []).includes('requisition');
+                if (!hasPurchaseItems) {
+                  disabledReason = '无可转采购明细';
+                } else if (!canPushRequisition) {
+                  disabledReason = '采购申请已生成或当前不可转';
+                }
+              } catch {
+                // 能力探测失败时保持可选，由后端最终校验
+              }
+
+              return {
+                id: row.id!,
+                computation_code: row.computation_code,
+                business_mode: row.business_mode,
+                computation_status: row.computation_status,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                has_purchase_items: hasPurchaseItems,
+                can_push_requisition: canPushRequisition,
+                disabled_reason: disabledReason,
+              } as PullDemandComputationCandidate;
+            }),
+        );
+        setPullComputationCandidates(candidates);
+      } finally {
+        setPullComputationLoading(false);
+      }
+    },
+    [],
+  );
+
+  const handlePullFromComputation = useCallback(async () => {
+    setPullFromComputationVisible(true);
+    setPullComputationKeyword('');
+    setSelectedPullComputationId(null);
+    await loadPullComputationCandidates('');
+  }, [loadPullComputationCandidates]);
+
+  const handlePullFromComputationConfirm = useCallback(async () => {
+    if (!selectedPullComputationId) {
+      messageApi.warning('请选择需求运算单');
+      return;
+    }
+    const selected = pullComputationCandidates.find((i) => i.id === selectedPullComputationId);
+    if (selected && selected.can_push_requisition === false) {
+      messageApi.warning(selected.disabled_reason || '该需求运算单当前不可用于创建采购申请');
+      return;
+    }
+
+    setPullComputationSubmitting(true);
+    try {
+      const res = await pushToPurchaseRequisition(selectedPullComputationId);
+      messageApi.success(res?.message || '已从需求运算创建采购申请');
+      setPullFromComputationVisible(false);
+      setSelectedPullComputationId(null);
+      actionRef.current?.reload();
+      invalidateMenuBadgeCounts();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || '从需求运算创建采购申请失败');
+    } finally {
+      setPullComputationSubmitting(false);
+    }
+  }, [actionRef, invalidateMenuBadgeCounts, messageApi, pullComputationCandidates, selectedPullComputationId]);
+
   const mapItemsForApi = (
     validItems: Array<{
       material_id?: number;
@@ -850,9 +960,32 @@ const PurchaseRequisitionsPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           search={false}
-          showCreateButton
+          showCreateButton={false}
           createButtonText="新建采购申请"
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <Space.Compact key="create-purchase-requisition-with-pull">
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                新建采购申请
+              </Button>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'pull-from-demand-computation',
+                      label: '从需求运算创建采购申请',
+                      onClick: () => {
+                        void handlePullFromComputation();
+                      },
+                    },
+                  ],
+                }}
+              >
+                <Button type="primary" icon={<DownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
+          ]}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
@@ -897,6 +1030,94 @@ const PurchaseRequisitionsPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      <Modal
+        title="从需求运算创建采购申请"
+        open={pullFromComputationVisible}
+        width={1280}
+        onCancel={() => {
+          if (pullComputationSubmitting) return;
+          setPullFromComputationVisible(false);
+          setSelectedPullComputationId(null);
+        }}
+        onOk={() => {
+          void handlePullFromComputationConfirm();
+        }}
+        okText="创建采购申请"
+        confirmLoading={pullComputationSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按运算单号搜索"
+            value={pullComputationKeyword}
+            onChange={(e) => setPullComputationKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullComputationKeyword(value);
+              void loadPullComputationCandidates(value);
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullDemandComputationCandidate>
+            rowKey="id"
+            loading={pullComputationLoading}
+            dataSource={pullComputationCandidates}
+            pagination={false}
+            scroll={{ x: 1100, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullComputationId ? [selectedPullComputationId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0]);
+                if (Number.isFinite(next)) {
+                  setSelectedPullComputationId(next);
+                } else {
+                  setSelectedPullComputationId(null);
+                }
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.can_push_requisition === false,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.can_push_requisition === false) return;
+                setSelectedPullComputationId(record.id);
+              },
+            })}
+            columns={[
+              { title: '运算单号', dataIndex: 'computation_code', width: 220, ellipsis: true },
+              { title: '业务模式', dataIndex: 'business_mode', width: 110, align: 'center' },
+              { title: '运算状态', dataIndex: 'computation_status', width: 110, align: 'center' },
+              {
+                title: '创建时间',
+                dataIndex: 'created_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '更新时间',
+                dataIndex: 'updated_at',
+                width: 180,
+                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+              },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 180,
+                align: 'center',
+                render: (_, record) =>
+                  record.can_push_requisition === false ? (
+                    <Tag color="gold">{record.disabled_reason || '不可创建'}</Tag>
+                  ) : (
+                    <Tag color="success">可创建</Tag>
+                  ),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       <FormModalTemplate
         title={editingId != null ? '编辑采购申请' : '新建采购申请'}

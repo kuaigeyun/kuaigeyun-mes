@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
@@ -201,6 +202,22 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "shipment_notice")
         if not is_enabled:
             raise BusinessLogicError("发货通知单节点未启用，无法创建发货通知单")
+        source_order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=notice_data.sales_order_id,
+            deleted_at__isnull=True,
+        )
+        if not source_order:
+            raise BusinessLogicError("销售订单不存在或已删除，无法创建发货通知单")
+        existed = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id,
+            sales_order_id=notice_data.sales_order_id,
+            deleted_at__isnull=True,
+        )
+        if existed:
+            raise BusinessLogicError(
+                f"该销售订单已创建发货通知单（{existed.notice_code}），请勿重复创建"
+            )
         async with in_transaction():
             code = notice_data.notice_code
             if not code:

@@ -33,7 +33,7 @@ import {
   Spin,
   theme,
 } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -50,6 +50,7 @@ import {
   MODAL_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -66,6 +67,7 @@ import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
+import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 /** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
 const RN_DETAIL_CHAIN_FLOAT_MARGIN = 16;
@@ -102,6 +104,18 @@ interface ReceiptNotice {
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
+
+type PullPurchaseOrderCandidate = {
+  id: number;
+  order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  status?: string;
+  order_date?: string;
+  updated_at?: string;
+  notice_id?: number;
+  converted?: boolean;
+};
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   待收货: { text: '待收货', color: 'default' },
@@ -158,6 +172,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const receiptNoticeChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
+  const pullFromPurchaseOrderAction = getKuaizhizaoDocumentAction('receipt_notice.pull_from_purchase_order');
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
@@ -215,6 +230,12 @@ const ReceiptNoticesPage: React.FC = () => {
   }, [detailDrawerVisible, noticeDetail?.id]);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullFromPurchaseOrderVisible, setPullFromPurchaseOrderVisible] = useState(false);
+  const [pullPurchaseOrderLoading, setPullPurchaseOrderLoading] = useState(false);
+  const [pullPurchaseOrderSubmitting, setPullPurchaseOrderSubmitting] = useState(false);
+  const [pullPurchaseOrderKeyword, setPullPurchaseOrderKeyword] = useState('');
+  const [pullPurchaseOrderCandidates, setPullPurchaseOrderCandidates] = useState<PullPurchaseOrderCandidate[]>([]);
+  const [selectedPullPurchaseOrderId, setSelectedPullPurchaseOrderId] = useState<number | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -280,6 +301,25 @@ const ReceiptNoticesPage: React.FC = () => {
     { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
     { title: '入库仓库', dataIndex: 'warehouse_name', width: 120 },
     { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
+    {
+      title: '入库转单',
+      dataIndex: 'purchase_receipt_code',
+      width: 220,
+      hideInSearch: true,
+      render: (_, r) => {
+        if (r.purchase_receipt_id) {
+          return (
+            <Space size={6}>
+              <Tag color="success">已上拉入库</Tag>
+              <Typography.Text copyable={{ text: String(r.purchase_receipt_code || r.purchase_receipt_id) }} ellipsis>
+                {r.purchase_receipt_code || `#${r.purchase_receipt_id}`}
+              </Typography.Text>
+            </Space>
+          );
+        }
+        return <Tag color="default">未上拉</Tag>;
+      },
+    },
     { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
     {
       title: '更新时间',
@@ -389,6 +429,21 @@ const ReceiptNoticesPage: React.FC = () => {
               }}
             >
               撤回通知
+            </Button>
+          );
+        }
+        if (record.purchase_receipt_id) {
+          parts.push(
+            <Button
+              key="to-pr"
+              type="link"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(ROUTES.WM_INBOUND);
+              }}
+            >
+              查看入库单
             </Button>
           );
         }
@@ -570,6 +625,99 @@ const ReceiptNoticesPage: React.FC = () => {
       setPreviewCode(null);
     }
   };
+
+  const loadPullPurchaseOrderCandidates = useCallback(async (keyword: string = '') => {
+    setPullPurchaseOrderLoading(true);
+    try {
+      const kw = keyword.trim();
+      const [poRes, noticeRes] = await Promise.all([
+        listPurchaseOrders({ skip: 0, limit: 200, keyword: kw || undefined }),
+        receiptNoticeApi.list({ skip: 0, limit: 5000 }),
+      ]);
+      const orders = poRes?.data || [];
+      const notices = Array.isArray(noticeRes) ? noticeRes : (noticeRes as any)?.data ?? (noticeRes as any)?.items ?? [];
+      const noticeByOrderId = new Map<number, any>();
+      notices.forEach((n: any) => {
+        if (n?.purchase_order_id != null && !noticeByOrderId.has(Number(n.purchase_order_id))) {
+          noticeByOrderId.set(Number(n.purchase_order_id), n);
+        }
+      });
+      const candidates: PullPurchaseOrderCandidate[] = (orders as any[]).map((o: any) => {
+        const linked = noticeByOrderId.get(Number(o.id));
+        return {
+          id: Number(o.id),
+          order_code: o.order_code ?? o.purchase_order_code,
+          supplier_id: o.supplier_id,
+          supplier_name: o.supplier_name,
+          status: o.status,
+          order_date: o.order_date,
+          updated_at: o.updated_at,
+          notice_id: linked?.id,
+          converted: !!linked,
+        };
+      });
+      setPullPurchaseOrderCandidates(candidates);
+    } finally {
+      setPullPurchaseOrderLoading(false);
+    }
+  }, []);
+
+  const handlePullFromPurchaseOrder = useCallback(async () => {
+    setPullFromPurchaseOrderVisible(true);
+    setPullPurchaseOrderKeyword('');
+    setSelectedPullPurchaseOrderId(null);
+    await loadPullPurchaseOrderCandidates('');
+  }, [loadPullPurchaseOrderCandidates]);
+
+  const handlePullFromPurchaseOrderConfirm = useCallback(async () => {
+    if (!selectedPullPurchaseOrderId) {
+      messageApi.warning(`请选择${pullFromPurchaseOrderAction.sourceLabel}`);
+      return;
+    }
+    const selected = pullPurchaseOrderCandidates.find((i) => i.id === selectedPullPurchaseOrderId);
+    if (selected?.converted) {
+      messageApi.warning(`该${pullFromPurchaseOrderAction.sourceLabel}已创建${pullFromPurchaseOrderAction.targetLabel}，请勿重复创建`);
+      return;
+    }
+    setPullPurchaseOrderSubmitting(true);
+    try {
+      const detail: any = await getPurchaseOrder(selectedPullPurchaseOrderId);
+      const itemRows = Array.isArray(detail?.items) ? detail.items : [];
+      const validItems = itemRows
+        .filter((it: any) => (Number(it.ordered_quantity ?? it.quantity ?? 0) || 0) > 0)
+        .map((it: any) => ({
+          material_id: it.material_id ?? it.materialId,
+          material_code: it.material_code ?? it.materialCode ?? '',
+          material_name: it.material_name ?? it.materialName ?? '',
+          material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? '件',
+          notice_quantity: Number(it.ordered_quantity ?? it.quantity ?? 0) || 0,
+          unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
+        }));
+      if (validItems.length === 0) {
+        throw new Error(`该${pullFromPurchaseOrderAction.sourceLabel}无可通知明细，无法创建${pullFromPurchaseOrderAction.targetLabel}`);
+      }
+      await receiptNoticeApi.create({
+        purchase_order_id: detail.id ?? selectedPullPurchaseOrderId,
+        purchase_order_code: detail.order_code ?? selected?.order_code,
+        supplier_id: detail.supplier_id ?? selected?.supplier_id,
+        supplier_name: detail.supplier_name ?? selected?.supplier_name,
+        supplier_contact: detail.supplier_contact,
+        supplier_phone: detail.supplier_phone,
+        planned_receipt_date: detail.delivery_date,
+        items: validItems,
+      });
+      messageApi.success(`已从${pullFromPurchaseOrderAction.sourceLabel}创建${pullFromPurchaseOrderAction.targetLabel}`);
+      setPullFromPurchaseOrderVisible(false);
+      setSelectedPullPurchaseOrderId(null);
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || e?.message || `从${pullFromPurchaseOrderAction.sourceLabel}创建${pullFromPurchaseOrderAction.targetLabel}失败`);
+    } finally {
+      setPullPurchaseOrderSubmitting(false);
+    }
+  }, [actionRef, invalidateMenuBadgeCounts, messageApi, pullPurchaseOrderCandidates, selectedPullPurchaseOrderId]);
 
   const onPurchaseOrderSelect = async (orderId: number) => {
     let order = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === orderId);
@@ -999,9 +1147,26 @@ const ReceiptNoticesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          showCreateButton
+          showCreateButton={false}
           createButtonText="新建收货通知单"
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              compactKey="create-receipt-notice-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建收货通知单"
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-purchase-order',
+                  actionKey: 'receipt_notice.pull_from_purchase_order',
+                  onClick: () => {
+                    void handlePullFromPurchaseOrder();
+                  },
+                },
+              ])}
+            />,
+          ]}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
@@ -1031,6 +1196,74 @@ const ReceiptNoticesPage: React.FC = () => {
           })}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={pullFromPurchaseOrderAction.label}
+        open={pullFromPurchaseOrderVisible}
+        width={1200}
+        onCancel={() => {
+          if (pullPurchaseOrderSubmitting) return;
+          setPullFromPurchaseOrderVisible(false);
+          setSelectedPullPurchaseOrderId(null);
+        }}
+        onOk={() => {
+          void handlePullFromPurchaseOrderConfirm();
+        }}
+        okText={`创建${pullFromPurchaseOrderAction.targetLabel}`}
+        confirmLoading={pullPurchaseOrderSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按采购订单号/供应商搜索"
+            value={pullPurchaseOrderKeyword}
+            onChange={(e) => setPullPurchaseOrderKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullPurchaseOrderKeyword(value);
+              void loadPullPurchaseOrderCandidates(value);
+            }}
+            enterButton="搜索"
+          />
+          <Table<PullPurchaseOrderCandidate>
+            rowKey="id"
+            loading={pullPurchaseOrderLoading}
+            dataSource={pullPurchaseOrderCandidates}
+            pagination={false}
+            scroll={{ x: 1080, y: 360 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullPurchaseOrderId ? [selectedPullPurchaseOrderId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0]);
+                if (Number.isFinite(next)) setSelectedPullPurchaseOrderId(next);
+                else setSelectedPullPurchaseOrderId(null);
+              },
+              getCheckboxProps: (record) => ({ disabled: !!record.converted }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.converted) return;
+                setSelectedPullPurchaseOrderId(record.id);
+              },
+            })}
+            columns={[
+              { title: '采购订单号', dataIndex: 'order_code', width: 190, ellipsis: true },
+              { title: '供应商', dataIndex: 'supplier_name', width: 220, ellipsis: true },
+              { title: '订单状态', dataIndex: 'status', width: 120, align: 'center' },
+              { title: '订单日期', dataIndex: 'order_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+              {
+                title: '转单状态',
+                key: 'convert_status',
+                width: 150,
+                align: 'center',
+                render: (_, r) => (r.converted ? <Tag color="gold">{`已创建${pullFromPurchaseOrderAction.targetLabel}`}</Tag> : <Tag color="success">可创建</Tag>),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       {detailDrawerVisible && noticeDetail?.id != null ? (
         <>
