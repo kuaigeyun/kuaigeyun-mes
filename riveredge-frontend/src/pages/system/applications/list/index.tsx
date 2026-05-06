@@ -1189,15 +1189,33 @@ const ApplicationListPage: React.FC = () => {
                           <div style={{ display: 'flex', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, overflow: 'hidden' }}>
                               {application.code === 'master-data' && renderBadge('BASE', '#f0f5ff', '#2f54eb')}
-                              {['kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu', 'kuaireport', 'bi', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code) && renderBadge('APP', '#f9f0ff', '#722ed1')}
+                              {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) && ['kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu', 'kuaireport', 'bi', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code) && renderBadge('APP', '#f9f0ff', '#722ed1')}
                               {application.code === 'kuaiai' && renderBadge('AI', '#fff7e6', '#fa8c16')}
                               {application.code === 'kuaiiot' && renderBadge('IOT', '#e6fffb', '#13c2c2')}
                               {['kuaizhizao'].includes(application.code) && renderBadge('一体版', '#fff7e6', '#d46b08')}
                               {['kuaierp', 'kuaimes'].includes(application.code) && renderBadge('拆分版', '#f0f9ff', '#1677ff')}
-                              {INDUSTRY_VALUE_PACK_CODES.includes(application.code) && renderBadge('行业增值包', '#fff7e6', '#ad6800')}
+                              {INDUSTRY_VALUE_PACK_CODES.includes(application.code) && renderBadge('增值包', '#fff7e6', '#ad6800')}
                               {OTHER_PLACEHOLDER_CODES.includes(application.code) && renderBadge('其他类', '#f6ffed', '#389e0d')}
                               {(application.is_pro || ['kuaireport', 'bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
-                                renderBadge(t('pages.system.applications.proLockedTag'), '#f5f5f5', '#595959', <LockOutlined style={{ fontSize: 11 }} />)
+                                <Tooltip title={t('pages.system.applications.proLockedTag')}>
+                                  <span
+                                    style={{
+                                      height: 18,
+                                      width: 18,
+                                      borderRadius: 4,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      marginLeft: 4,
+                                      flexShrink: 0,
+                                      backgroundColor: '#f5f5f5',
+                                      color: '#595959',
+                                      cursor: 'help',
+                                    }}
+                                  >
+                                    <LockOutlined style={{ fontSize: 11 }} />
+                                  </span>
+                                </Tooltip>
                               )}
                             </div>
                             <div style={{ flex: 1, minWidth: 8 }} />
