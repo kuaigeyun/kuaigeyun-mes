@@ -5,7 +5,7 @@
 """
 
 import uuid
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
@@ -363,6 +363,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         tenant_id: int,
         call_req: MaterialCallRequest,
         user: User,
+        batch_by_item_id: Optional[Dict[int, str]] = None,
     ) -> None:
         """
         叫料标记完成后：生成已确认的生产领料单，主仓扣减 + 线边仓增加（与配料业务一致）。
@@ -371,6 +372,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         from apps.kuaizhizao.models.production_picking import ProductionPicking
         from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
         from apps.kuaizhizao.services.inventory_service import InventoryService
+        from apps.master_data.models.material import Material
 
         if getattr(call_req, "production_picking_id", None):
             return
@@ -420,8 +422,16 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             notes=f"由叫料单 {call_req.code} 完成自动生成（主仓→线边）",
         )
 
+        batch_map = batch_by_item_id or {}
         for it, dq in lines_to_move:
             unit = it.material_unit or ""
+            confirmed = (batch_map.get(it.id) or "").strip()
+            mat = await Material.get_or_none(
+                tenant_id=tenant_id, id=it.material_id, deleted_at__isnull=True
+            )
+            batch_managed = bool(mat and getattr(mat, "batch_managed", False))
+            inv_batch_no = confirmed if batch_managed else None
+
             await ProductionPickingItem.create(
                 tenant_id=tenant_id,
                 picking_id=picking.id,
@@ -437,13 +447,14 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 warehouse_name=src_wh_name or "",
                 status="已领料",
                 picking_time=datetime.now(),
+                batch_number=confirmed or None,
             )
             await InventoryService.decrease_stock(
                 tenant_id=tenant_id,
                 material_id=it.material_id,
                 quantity=Decimal(str(dq)),
                 warehouse_id=src_wh_id,
-                batch_no=None,
+                batch_no=inv_batch_no,
                 source_type="production_picking",
                 source_doc_id=picking.id,
                 source_doc_code=picking.picking_code,
@@ -454,7 +465,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 material_id=it.material_id,
                 quantity=Decimal(str(dq)),
                 warehouse_id=tgt_wh_id,
-                batch_no=None,
+                batch_no=inv_batch_no,
                 source_type="production_picking",
                 source_doc_id=picking.id,
                 source_doc_code=picking.picking_code,
@@ -529,14 +540,29 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             existing_picking_id = getattr(call_req, "production_picking_id", None)
 
             data = update_data.model_dump(exclude_unset=True)
+            data.pop("completion_batches", None)
 
             becoming_completed = (
                 data.get("status") == "completed" and call_req.status != "completed"
             )
+            batch_by_item_id: Optional[Dict[int, str]] = None
             if becoming_completed:
                 items = await MaterialCallRequestItem.filter(
                     tenant_id=tenant_id, request_id=call_id
                 ).all()
+                if items:
+                    cb = update_data.completion_batches
+                    if not cb:
+                        raise ValidationError("完成叫料前请逐行确认批号")
+                    batch_by_item_id = {}
+                    for row in cb:
+                        bn = (row.batch_no or "").strip()
+                        if not bn:
+                            raise ValidationError("批号不能为空")
+                        batch_by_item_id[row.item_id] = bn
+                    expected_ids = {i.id for i in items}
+                    if set(batch_by_item_id.keys()) != expected_ids:
+                        raise ValidationError("批号确认须与全部明细行一一对应")
                 for i in items:
                     i.delivered_quantity = i.requested_quantity or Decimal("0")
                     await i.save()
@@ -568,7 +594,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
 
             if call_req.status == "completed" and not existing_picking_id:
                 await self._create_picking_and_line_side_transfer_for_completed_call(
-                    tenant_id, call_req, user
+                    tenant_id, call_req, user, batch_by_item_id=batch_by_item_id
                 )
                 call_req = await MaterialCallRequest.get(id=call_id, tenant_id=tenant_id)
 

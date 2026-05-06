@@ -4,12 +4,13 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -23,6 +24,7 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefFooter } from '../WarehouseTraceBriefFooter';
 import CodeField from '../../../../../components/code-field';
+import { apiRequest } from '../../../../../services/api';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
@@ -65,6 +67,31 @@ interface OutboundOrderItem {
   quantity?: number;
   unit?: string;
   notes?: string;
+}
+
+type SalesBatchPickOption = { value: string; label: string };
+
+function normalizeSalesBatchFormValue(raw: unknown): string {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw).trim();
+  if (typeof raw === 'object' && raw !== null && 'value' in (raw as object)) {
+    const v = (raw as { value?: unknown }).value;
+    return v != null && v !== '' ? String(v).trim() : '';
+  }
+  return String(raw).trim();
+}
+
+/** 解析 confirm 接口响应中的出库单对象（兼容 { data: {...} } 等包装） */
+function parseSalesDeliveryConfirmResult(raw: unknown): { status?: string } {
+  if (!raw || typeof raw !== 'object') return {};
+  const o = raw as Record<string, unknown>;
+  if (typeof o.status === 'string') return { status: o.status };
+  const inner = o.data;
+  if (inner && typeof inner === 'object' && typeof (inner as Record<string, unknown>).status === 'string') {
+    return { status: (inner as { status: string }).status };
+  }
+  return {};
 }
 
 /** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
@@ -113,6 +140,86 @@ const OutboundPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [executionConfig, setExecutionConfig] = useState<any>(null);
+
+  /** 销售出库确认前批号预览 */
+  const [salesConfirmOpen, setSalesConfirmOpen] = useState(false);
+  const [salesConfirmRecord, setSalesConfirmRecord] = useState<OutboundOrder | null>(null);
+  const [salesConfirmDetail, setSalesConfirmDetail] = useState<any>(null);
+  const [salesConfirmSubmitting, setSalesConfirmSubmitting] = useState(false);
+  const [salesBatchOptionsByMaterialId, setSalesBatchOptionsByMaterialId] = useState<
+    Record<number, SalesBatchPickOption[]>
+  >({});
+  const [salesBatchOptionsLoading, setSalesBatchOptionsLoading] = useState(false);
+  const [salesConfirmForm] = Form.useForm();
+
+  const salesConfirmActiveLines: any[] = useMemo(() => {
+    const items = Array.isArray(salesConfirmDetail?.items) ? salesConfirmDetail.items : [];
+    return items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
+  }, [salesConfirmDetail]);
+
+  useEffect(() => {
+    if (!salesConfirmOpen || !salesConfirmDetail?.items?.length) {
+      setSalesBatchOptionsByMaterialId({});
+      return;
+    }
+    const active = salesConfirmDetail.items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
+    if (!active.length) {
+      setSalesBatchOptionsByMaterialId({});
+      return;
+    }
+    const mids = [
+      ...new Set(active.map((x: { material_id?: number }) => x.material_id).filter(Boolean) as number[]),
+    ];
+    if (!mids.length) return;
+
+    let cancelled = false;
+    (async () => {
+      setSalesBatchOptionsLoading(true);
+      try {
+        const wid = salesConfirmDetail.warehouse_id;
+        const res = await apiRequest<{ items?: Record<string, unknown>[] }>(
+          '/apps/kuaizhizao/reports/inventory/batch-query',
+          {
+            method: 'GET',
+            params: {
+              material_ids: mids,
+              include_expired: false,
+              ...(wid != null && wid !== '' ? { warehouse_id: wid } : {}),
+            },
+          },
+        );
+        const rows = res.items ?? [];
+        const map: Record<number, SalesBatchPickOption[]> = {};
+        for (const row of rows) {
+          const mid = row.material_id as number;
+          if (!mid) continue;
+          const isMainBatch =
+            row.warehouse_name === '主仓' ||
+            (typeof row.id === 'number' && row.id >= 1_000_000 && row.id < 2_000_000);
+          if (!isMainBatch) continue;
+          const qty = Number(row.quantity ?? 0);
+          if (qty <= 0) continue;
+          if (row.status === '已过期' || row.status === '无库存') continue;
+          const bn = String(row.batch_no ?? '').trim();
+          if (!bn) continue;
+          if (!map[mid]) map[mid] = [];
+          if (map[mid].some((o) => o.value === bn)) continue;
+          map[mid].push({ value: bn, label: `${bn}（可用 ${qty}）` });
+        }
+        for (const k of Object.keys(map)) {
+          map[+k].sort((a, b) => a.value.localeCompare(b.value, 'zh-CN'));
+        }
+        if (!cancelled) setSalesBatchOptionsByMaterialId(map);
+      } catch {
+        if (!cancelled) setSalesBatchOptionsByMaterialId({});
+      } finally {
+        if (!cancelled) setSalesBatchOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [salesConfirmOpen, salesConfirmDetail?.id]);
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
@@ -283,8 +390,156 @@ const OutboundPage: React.FC = () => {
     }
   };
 
+  const refreshOrderAfterConfirm = async (record: OutboundOrder) => {
+    actionRef.current?.reload();
+    if (currentOrder?.id === record.id) {
+      try {
+        let detailData: any;
+        if (record.outbound_type === 'production_picking') {
+          detailData = await warehouseApi.productionPicking.get(record.id!.toString());
+        } else if (record.outbound_type === 'sales_delivery') {
+          detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+        }
+        if (detailData) {
+          setCurrentOrder({ ...detailData, outbound_type: record.outbound_type });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    setOutboundTrackingRefreshKey((k) => k + 1);
+    setFullChainRefreshKey((k) => k + 1);
+  };
+
+  const openSalesDeliveryConfirmModal = async (record: OutboundOrder) => {
+    try {
+      const detail = await warehouseApi.salesDelivery.get(record.id!.toString());
+      const items = Array.isArray(detail?.items) ? detail.items : [];
+      const active = items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
+      if (!active.length) {
+        messageApi.warning('没有可出库明细');
+        return;
+      }
+      setSalesConfirmRecord(record);
+      setSalesConfirmDetail(detail);
+      salesConfirmForm.resetFields();
+      const init: Record<string, string> = {};
+      active.forEach((it: any) => {
+        if (it.id != null) init[`batch_${it.id}`] = it.batch_number ? String(it.batch_number) : '';
+      });
+      salesConfirmForm.setFieldsValue(init);
+      setSalesConfirmOpen(true);
+    } catch {
+      messageApi.error('获取出库单详情失败');
+    }
+  };
+
+  const submitSalesDeliveryConfirm = async () => {
+    if (!salesConfirmRecord?.id || !salesConfirmDetail) return;
+    const vals = salesConfirmForm.getFieldsValue(true);
+    const item_batches = salesConfirmActiveLines
+      .map((it: any) => {
+        const lineId = Number(it.id);
+        const key = Number.isFinite(lineId) ? `batch_${lineId}` : '';
+        const fromForm = key ? vals[key] : undefined;
+        const trimmedForm = normalizeSalesBatchFormValue(fromForm);
+        const fallback = String(it.batch_number ?? '').trim();
+        const batch_no = trimmedForm || fallback;
+        return { item_id: lineId, batch_no };
+      })
+      .filter((row) => Number.isFinite(row.item_id) && row.item_id > 0);
+    const rec = salesConfirmRecord;
+    try {
+      setSalesConfirmSubmitting(true);
+      const updated = parseSalesDeliveryConfirmResult(
+        await warehouseApi.salesDelivery.confirm(rec.id!.toString(), {
+          item_batches,
+        }),
+      );
+      const st = (updated?.status ?? '').trim();
+      const posted = st === '已出库' || st === '已完成' || st === 'completed';
+      if (!posted) {
+        messageApi.error(
+          `出库未生效（接口返回状态：${st || '未知'}）。若列表仍显示待出库，请刷新页面后重试。`,
+        );
+        await refreshOrderAfterConfirm({ ...rec, outbound_type: 'sales_delivery' });
+        return;
+      }
+      messageApi.success('出库确认成功，库存已更新');
+      invalidateMenuBadgeCounts();
+      setSalesConfirmOpen(false);
+      setSalesConfirmRecord(null);
+      setSalesConfirmDetail(null);
+      await refreshOrderAfterConfirm({ ...rec, outbound_type: 'sales_delivery' });
+    } catch (e: any) {
+      messageApi.error(e?.message || '出库确认失败');
+      throw e;
+    } finally {
+      setSalesConfirmSubmitting(false);
+    }
+  };
+
+  const salesDeliveryConfirmColumns: ColumnsType<any> = useMemo(
+    () => [
+      {
+        title: '行',
+        key: 'idx',
+        width: 52,
+        align: 'center',
+        render: (_: unknown, __: unknown, index: number) => index + 1,
+      },
+      {
+        title: '物料编码',
+        dataIndex: 'material_code',
+        width: 112,
+        ellipsis: true,
+        render: (v: unknown) => v ?? '—',
+      },
+      {
+        title: '物料名称',
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (v: unknown) => v ?? '—',
+      },
+      {
+        title: '出库数量',
+        key: 'qty',
+        width: 120,
+        align: 'right',
+        render: (_: unknown, it: any) =>
+          `${it.delivery_quantity ?? ''}${it.material_unit ? ` ${it.material_unit}` : ''}`,
+      },
+      {
+        title: '批号',
+        key: 'batch',
+        width: 260,
+        render: (_: unknown, it: any) => {
+          const opts = salesBatchOptionsByMaterialId[it.material_id] ?? [];
+          return (
+            <Form.Item name={`batch_${it.id}`} style={{ marginBottom: 0 }}>
+              <AutoComplete
+                size="small"
+                allowClear
+                options={opts}
+                placeholder="下拉选择或扫描/输入批号"
+                filterOption={(input, option) => {
+                  const q = (input || '').toLowerCase();
+                  const lab = String(option?.label ?? '').toLowerCase();
+                  const val = String(option?.value ?? '').toLowerCase();
+                  return lab.includes(q) || val.includes(q);
+                }}
+                notFoundContent={salesBatchOptionsLoading ? '加载批次…' : '无主仓可选批次，请手输'}
+              />
+            </Form.Item>
+          );
+        },
+      },
+    ],
+    [salesBatchOptionsByMaterialId, salesBatchOptionsLoading],
+  );
+
   /**
-   * 处理确认出库
+   * 处理确认出库（销售出库先弹出批号预览；生产领料保持原确认框）
    */
   const handleConfirm = async (record: OutboundOrder) => {
     if (
@@ -295,37 +550,22 @@ const OutboundPage: React.FC = () => {
       messageApi.warning('当前业务配置下，您无权限确认生产领料');
       return;
     }
+    if (record.outbound_type === 'sales_delivery') {
+      await openSalesDeliveryConfirmModal(record);
+      return;
+    }
     Modal.confirm({
       title: '确认出库',
       content: `确定要确认出库单 "${record.delivery_code || record.picking_code}" 吗？确认后将更新库存。`,
       onOk: async () => {
         try {
-          if (record.outbound_type === 'production_picking') {
-            await warehouseApi.productionPicking.confirm(record.id!.toString());
-          } else if (record.outbound_type === 'sales_delivery') {
-            await warehouseApi.salesDelivery.confirm(record.id!.toString());
-          }
+          await warehouseApi.productionPicking.confirm(record.id!.toString());
           messageApi.success('出库确认成功，库存已更新');
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          if (currentOrder?.id === record.id) {
-            try {
-              let detailData: any;
-              if (record.outbound_type === 'production_picking') {
-                detailData = await warehouseApi.productionPicking.get(record.id!.toString());
-              } else if (record.outbound_type === 'sales_delivery') {
-                detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
-              }
-              if (detailData) {
-                setCurrentOrder({ ...detailData, outbound_type: record.outbound_type });
-              }
-            } catch { /* ignore */ }
-          }
-          setOutboundTrackingRefreshKey((k) => k + 1);
-          setFullChainRefreshKey((k) => k + 1);
-        } catch {
-          messageApi.error('出库确认失败');
+          await refreshOrderAfterConfirm(record);
+        } catch (e: any) {
+          messageApi.error(e?.message || '出库确认失败');
+          throw e;
         }
       },
     });
@@ -781,6 +1021,48 @@ const OutboundPage: React.FC = () => {
               </Form.Item>
             </>
           )}
+        </Form>
+      </Modal>
+
+      <Modal
+        title="确认出库 — 批号核对"
+        open={salesConfirmOpen}
+        okText="确认出库并过账"
+        cancelText="取消"
+        confirmLoading={salesConfirmSubmitting}
+        destroyOnClose
+        width={880}
+        styles={{ body: { paddingTop: 12 } }}
+        onCancel={() => {
+          setSalesConfirmOpen(false);
+          setSalesConfirmRecord(null);
+          setSalesConfirmDetail(null);
+        }}
+        onOk={submitSalesDeliveryConfirm}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          请核对实物批号：可从下拉选择主仓可用批次，或直接扫描/输入。启用批号管理的物料在确认时会校验；未启用的行可留空由系统按策略分摊。
+        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 12 }}>
+          先进先出/后进先出等策略见 <Link to="/system/config-center">配置中心 → 仓储参数</Link>。
+        </Typography.Paragraph>
+        {salesConfirmRecord?.delivery_code ? (
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            出库单号：<Typography.Text strong>{salesConfirmRecord.delivery_code}</Typography.Text>
+          </Typography.Text>
+        ) : null}
+        <Form form={salesConfirmForm} component={false}>
+          <Table<any>
+            size="small"
+            rowKey={(it) => String(it.id ?? `${it.material_id}-${it.material_code}`)}
+            columns={salesDeliveryConfirmColumns}
+            dataSource={salesConfirmActiveLines}
+            pagination={false}
+            scroll={{
+              x: 700,
+              y: Math.min(salesConfirmActiveLines.length * 46 + 40, 420),
+            }}
+          />
         </Form>
       </Modal>
 

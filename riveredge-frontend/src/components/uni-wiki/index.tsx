@@ -20,6 +20,7 @@ import {
   LeftOutlined,
   RightOutlined,
 } from '@ant-design/icons';
+import './index.less';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -36,18 +37,22 @@ export interface WikiTreeData {
   children?: WikiTreeData[];
 }
 
-interface UniWikiProps {
+export interface UniWikiProps {
   items: WikiItem[];
   treeData: WikiTreeData[];
   defaultSelectedKey?: string;
   defaultExpandedKeys?: string[];
+  directoryTitle?: React.ReactNode;
+  feedbackQuestion?: React.ReactNode;
 }
 
 const UniWiki: React.FC<UniWikiProps> = ({ 
   items, 
   treeData, 
   defaultSelectedKey = '1',
-  defaultExpandedKeys = []
+  defaultExpandedKeys = [],
+  directoryTitle = '帮助目录',
+  feedbackQuestion = '这篇文章对您有帮助吗？'
 }) => {
   const [selectedKey, setSelectedKey] = useState(defaultSelectedKey);
   const [expandedKeys, setExpandedKeys] = useState<string[]>(defaultExpandedKeys);
@@ -63,7 +68,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
   const prevItem = currentIndex > 0 ? items[currentIndex - 1] : null;
   const nextItem = currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
 
-  const renderCustomMenuItem = (item: any, level: number = 0) => {
+  const renderCustomMenuItem = (item: WikiTreeData, level: number = 0) => {
     const isSelected = selectedKey === item.key;
     const isExpanded = expandedKeys.includes(item.key);
     const hasChildren = item.children && item.children.length > 0;
@@ -126,7 +131,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
         
         {hasChildren && isExpanded && (
           <div style={{ paddingBottom: 4 }}>
-            {item.children.map((child: any) => renderCustomMenuItem(child, level + 1))}
+            {item.children!.map((child: WikiTreeData) => renderCustomMenuItem(child, level + 1))}
           </div>
         )}
       </div>
@@ -147,7 +152,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
         }}
       >
         <div style={{ padding: '24px 20px 12px', fontWeight: 600, fontSize: 16, color: token.colorTextHeading }}>
-          帮助目录
+          {directoryTitle}
         </div>
         <div className="scrollbar-like-modal" style={{ flex: 1, overflowY: 'auto', padding: '0 12px 24px' }}>
           {treeData.map(item => renderCustomMenuItem(item, 0))}
@@ -183,62 +188,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
         {/* 滚动内容区 */}
         <div className="wiki-help-container" style={{ flex: 1, overflowY: 'auto', padding: '48px 40px', scrollBehavior: 'smooth' }}>
           <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <style>{`
-              .wiki-help-container .ant-typography, 
-              .wiki-help-container p, 
-              .wiki-help-container ul, 
-              .wiki-help-container ol, 
-              .wiki-help-container li,
-              .wiki-help-container span.ant-typography {
-                font-size: 16px !important;
-                line-height: 1.8;
-                color: #333;
-              }
-              .wiki-help-container li {
-                margin-bottom: 8px;
-              }
-              .wiki-help-container h2.ant-typography {
-                font-size: 28px !important;
-                font-weight: 600;
-                margin-top: 48px;
-                margin-bottom: 24px;
-                border-bottom: 1px solid ${token.colorBorderSecondary};
-                padding-bottom: 16px;
-                color: #1f1f1f;
-              }
-              .wiki-help-container h2.ant-typography:first-child {
-                margin-top: 0;
-              }
-              .wiki-help-container .ant-alert {
-                padding: 16px 20px;
-                border-radius: 8px;
-                border: 1px solid ${token.colorInfoBorder};
-                background-color: ${token.colorInfoBg};
-                margin-top: 24px;
-                margin-bottom: 24px;
-              }
-              .wiki-help-container .ant-alert-error {
-                border-color: ${token.colorErrorBorder};
-                background-color: ${token.colorErrorBg};
-              }
-              .wiki-help-container .ant-alert-warning {
-                border-color: ${token.colorWarningBorder};
-                background-color: ${token.colorWarningBg};
-              }
-              .wiki-help-container .ant-alert .ant-alert-message {
-                font-size: 15px !important;
-                color: rgba(0, 0, 0, 0.88);
-              }
-              .wiki-help-container code {
-                font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
-                background-color: rgba(0,0,0,0.04);
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-size: 14px;
-                color: #e83e8c;
-              }
-            `}</style>
-            
+
             <Typography style={{ flex: 1 }}>
               {currentItem?.content}
             </Typography>
@@ -247,7 +197,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
 
             {/* 反馈组件 */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 64, gap: 24 }}>
-              <Text type="secondary" style={{ fontSize: 15 }}>这篇文章对您有帮助吗？</Text>
+              <Text type="secondary" style={{ fontSize: 15 }}>{feedbackQuestion}</Text>
               <Space size="middle">
                 <Button 
                   type={feedback === 'like' ? 'primary' : 'default'} 

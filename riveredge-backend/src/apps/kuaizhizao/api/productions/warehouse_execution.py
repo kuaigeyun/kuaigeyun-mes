@@ -73,6 +73,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesDeliveryCreate,
     SalesDeliveryResponse,
     SalesDeliveryWithItemsResponse,
+    SalesDeliveryConfirmRequest,
     SalesReturnCreate,
     SalesReturnUpdate,
     SalesReturnResponse,
@@ -2129,6 +2130,7 @@ async def get_sales_delivery(
 @router.post("/sales-deliveries/{delivery_id}/confirm", response_model=SalesDeliveryResponse, summary="确认销售出库")
 async def confirm_sales_delivery(
     delivery_id: int,
+    body: Optional[SalesDeliveryConfirmRequest] = Body(default=None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesDeliveryResponse:
@@ -2136,11 +2138,14 @@ async def confirm_sales_delivery(
     确认销售出库
 
     - **delivery_id**: 出库单ID
+    - **body.item_batches**: 可选；提交时须覆盖所有出库数量大于 0 的明细行，用于写入批号后再过账
     """
+    batches = body.item_batches if body else None
     return await SalesDeliveryService().confirm_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        item_batches=batches,
     )
 
 

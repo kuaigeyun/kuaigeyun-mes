@@ -13,6 +13,8 @@ import { getDemand } from '../../apps/kuaizhizao/services/demand';
 import { getDemandComputation } from '../../apps/kuaizhizao/services/demand-computation';
 import { workOrderApi } from '../../apps/kuaizhizao/services/production';
 import { getPurchaseOrder } from '../../apps/kuaizhizao/services/purchase';
+import { getPurchaseRequisition } from '../../apps/kuaizhizao/services/purchase-requisition';
+import { warehouseApi } from '../../apps/kuaizhizao/services/warehouse-execution';
 import { AmountDisplay } from '../permission';
 import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { getStatusLabel } from '../../apps/kuaizhizao/constants/documentStatus';
@@ -346,6 +348,302 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
             v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
         },
         { title: '要求到货', dataIndex: 'required_date', width: 108, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'purchase_requisition': {
+      const r = await getPurchaseRequisition(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '申请单号', value: dash(r.requisition_code) },
+        { key: 'name', label: '主题', value: dash(r.requisition_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(r.status) },
+        { key: 'date', label: '申请日期', value: dash(r.requisition_date) },
+        { key: 'required', label: '要求到货', value: dash(r.required_date) },
+        { key: 'applicant', label: '申请人', value: dash(r.applicant_name) },
+        { key: 'source', label: '来源', value: dash(r.source_code || r.source_type) },
+      ];
+      const rows = (r.items ?? []).map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        qty: it.quantity,
+        unit: unitCell(it.unit),
+        unit_price: it.suggested_unit_price,
+        required_date: it.required_date,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '数量',
+          dataIndex: 'qty',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        {
+          title: '参考单价',
+          dataIndex: 'unit_price',
+          width: 96,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+        },
+        { title: '要求到货', dataIndex: 'required_date', width: 108, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'production_picking': {
+      const p = (await warehouseApi.productionPicking.get(String(documentId))) as Record<string, unknown>;
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '领料单号', value: dash(p.picking_code) },
+        { key: 'wo', label: '工单', value: dash(p.work_order_code) },
+        { key: 'workshop', label: '车间', value: dash(p.workshop_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(p.status) },
+        { key: 'picker', label: '领料人', value: dash(p.picker_name) },
+        { key: 'review', label: '审核状态', value: briefDocStatus(p.review_status) },
+      ];
+      const itemArr = (Array.isArray(p.items) ? p.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        required_quantity: it.required_quantity,
+        picked_quantity: it.picked_quantity,
+        unit: unitCell(it.material_unit),
+        warehouse_name: it.warehouse_name,
+        batch_number: it.batch_number,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '需求数量',
+          dataIndex: 'required_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        {
+          title: '已领数量',
+          dataIndex: 'picked_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        { title: '仓库', dataIndex: 'warehouse_name', width: 100, ellipsis: true },
+        { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'finished_goods_receipt': {
+      const rec = (await warehouseApi.finishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '入库单号', value: dash(rec.receipt_code) },
+        { key: 'wo', label: '工单', value: dash(rec.work_order_code) },
+        { key: 'so', label: '销售订单', value: dash(rec.sales_order_code) },
+        { key: 'wh', label: '仓库', value: dash(rec.warehouse_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(rec.status) },
+        { key: 'receiver', label: '入库人', value: dash(rec.receiver_name) },
+        { key: 'total', label: '总数量', value: rec.total_quantity != null ? String(rec.total_quantity) : '—' },
+      ];
+      const itemArr = (Array.isArray(rec.items) ? rec.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        receipt_quantity: it.receipt_quantity,
+        qualified_quantity: it.qualified_quantity,
+        unit: unitCell(it.material_unit),
+        batch_number: it.batch_number,
+        quality_status: it.quality_status,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '入库数量',
+          dataIndex: 'receipt_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        {
+          title: '合格数',
+          dataIndex: 'qualified_quantity',
+          width: 80,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
+        { title: '质量状态', dataIndex: 'quality_status', width: 88, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'semi_finished_goods_receipt': {
+      const rec = (await warehouseApi.semiFinishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '入库单号', value: dash(rec.receipt_code) },
+        { key: 'wo', label: '工单', value: dash(rec.work_order_code) },
+        { key: 'so', label: '销售订单', value: dash(rec.sales_order_code) },
+        { key: 'wh', label: '仓库', value: dash(rec.warehouse_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(rec.status) },
+        { key: 'receiver', label: '入库人', value: dash(rec.receiver_name) },
+        { key: 'total', label: '总数量', value: rec.total_quantity != null ? String(rec.total_quantity) : '—' },
+      ];
+      const itemArr = (Array.isArray(rec.items) ? rec.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        receipt_quantity: it.receipt_quantity,
+        qualified_quantity: it.qualified_quantity,
+        unit: unitCell(it.material_unit),
+        batch_number: it.batch_number,
+        quality_status: it.quality_status,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '入库数量',
+          dataIndex: 'receipt_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        {
+          title: '合格数',
+          dataIndex: 'qualified_quantity',
+          width: 80,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
+        { title: '质量状态', dataIndex: 'quality_status', width: 88, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'sales_delivery': {
+      const d = (await warehouseApi.salesDelivery.get(String(documentId))) as Record<string, unknown>;
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '出库单号', value: dash(d.delivery_code) },
+        { key: 'customer', label: '客户', value: dash(d.customer_name) },
+        { key: 'so', label: '销售订单', value: dash(d.sales_order_code) },
+        { key: 'wh', label: '仓库', value: dash(d.warehouse_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(d.status) },
+        {
+          key: 'amount',
+          label: '总金额',
+          value: d.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(d.total_amount)} /> : '—',
+        },
+        { key: 'ship', label: '物流单号', value: dash(d.tracking_number) },
+      ];
+      const itemArr = (Array.isArray(d.items) ? d.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        delivery_quantity: it.delivery_quantity,
+        unit: unitCell(it.material_unit),
+        unit_price: it.unit_price,
+        amount: it.total_amount,
+        batch_number: it.batch_number,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '出库数量',
+          dataIndex: 'delivery_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        {
+          title: '单价',
+          dataIndex: 'unit_price',
+          width: 96,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+        },
+        {
+          title: '金额',
+          dataIndex: 'amount',
+          width: 104,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+        },
+        { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'purchase_receipt': {
+      const pr = (await warehouseApi.purchaseReceipt.get(String(documentId))) as Record<string, unknown>;
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '入库单号', value: dash(pr.receipt_code) },
+        { key: 'po', label: '采购订单', value: dash(pr.purchase_order_code) },
+        { key: 'supplier', label: '供应商', value: dash(pr.supplier_name) },
+        { key: 'wh', label: '仓库', value: dash(pr.warehouse_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(pr.status) },
+        {
+          key: 'amount',
+          label: '总金额',
+          value: pr.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pr.total_amount)} /> : '—',
+        },
+        { key: 'delivery_note', label: '送货单号', value: dash(pr.delivery_note) },
+      ];
+      const itemArr = (Array.isArray(pr.items) ? pr.items : []) as Record<string, unknown>[];
+      const rows = itemArr.map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_spec: it.material_spec,
+        receipt_quantity: it.receipt_quantity,
+        unit: unitCell(it.material_unit),
+        unit_price: it.unit_price,
+        amount: it.total_amount,
+        batch_number: it.batch_number,
+        qualified_quantity: it.qualified_quantity,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        { title: '规格', dataIndex: 'material_spec', ellipsis: true },
+        {
+          title: '入库数量',
+          dataIndex: 'receipt_quantity',
+          width: 88,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        {
+          title: '合格数',
+          dataIndex: 'qualified_quantity',
+          width: 80,
+          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+        },
+        { title: '单位', dataIndex: 'unit', width: 64 },
+        {
+          title: '单价',
+          dataIndex: 'unit_price',
+          width: 96,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+        },
+        {
+          title: '金额',
+          dataIndex: 'amount',
+          width: 104,
+          render: (v: number) =>
+            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+        },
+        { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
       ];
       return { basics, columns, rows };
     }

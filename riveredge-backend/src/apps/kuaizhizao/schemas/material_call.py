@@ -60,6 +60,13 @@ class MaterialCallRequestCreate(BaseModel):
     remarks: Optional[str] = None
 
 
+class MaterialCallCompletionBatch(BaseModel):
+    """完成叫料时单行批号确认（与明细主键对应）"""
+
+    item_id: int = Field(..., description="叫料明细行 ID（material_call_request_items.id）")
+    batch_no: str = Field(..., min_length=1, max_length=50, description="确认的出库批号")
+
+
 class MaterialCallRequestUpdate(BaseModel):
     """更新叫料请求（处理状态/头汇总送达数量等）"""
 
@@ -70,6 +77,10 @@ class MaterialCallRequestUpdate(BaseModel):
     handler_name: Optional[str] = None
     priority: Optional[str] = None
     remarks: Optional[str] = None
+    completion_batches: Optional[List[MaterialCallCompletionBatch]] = Field(
+        default=None,
+        description="标记「已完成」且存在明细时必填：逐行确认的批号",
+    )
 
 
 class MaterialCallRequestResponse(BaseModel):

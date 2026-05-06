@@ -43,4 +43,4 @@ export { SimpleSparkline } from './common/SimpleSparkline';
 export { StatCardTrendArea, strokeColorWithAlpha } from './common/StatCardTrendArea';
 export type { StatCardTrendData, StatCardTrendPoint, StatCardTrendAreaProps } from './common/StatCardTrendArea';
 export { default as UniWiki } from './uni-wiki';
-export type { WikiItem, WikiTreeData } from './uni-wiki';
+export type { WikiItem, WikiTreeData, UniWikiProps } from './uni-wiki';

@@ -151,7 +151,10 @@ export const warehouseApi = {
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST' }),
+    confirm: async (
+      id: string,
+      data?: { item_batches?: { item_id: number; batch_no: string }[] },
+    ) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST', data: data ?? {} }),
     import: async (data: any[][]) => apiRequest('/apps/kuaizhizao/sales-deliveries/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>
       apiRequest('/apps/kuaizhizao/sales-deliveries/export', { method: 'GET', params, responseType: 'blob' }),

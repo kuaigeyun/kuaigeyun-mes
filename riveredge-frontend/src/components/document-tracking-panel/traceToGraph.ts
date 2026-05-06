@@ -57,6 +57,30 @@ function addEdgeDedup(edges: TraceFlowEdgeDatum[], dedup: Set<string>, source: s
   edges.push({ source, target });
 }
 
+function rebuildEdgeDedup(edges: TraceFlowEdgeDatum[], dedup: Set<string>): void {
+  dedup.clear();
+  for (const e of edges) {
+    dedup.add(`${e.source}\n${e.target}`);
+  }
+}
+
+/** 全链路图上销售出库只保留「成品入库 → 销售出库」，去掉其它歧义入边。 */
+function keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(
+  nodeMap: Map<string, TraceGraphNodeMeta>,
+  edges: TraceFlowEdgeDatum[],
+  edgeDedup: Set<string>,
+): void {
+  const sdTarget = /^sales_delivery-\d+$/;
+  const kept = edges.filter((e) => {
+    if (!sdTarget.test(e.target)) return true;
+    return nodeMap.get(e.source)?.document_type === 'finished_goods_receipt';
+  });
+  if (kept.length === edges.length) return;
+  edges.length = 0;
+  edges.push(...kept);
+  rebuildEdgeDedup(edges, edgeDedup);
+}
+
 function walkUpstream(
   node: DocumentTraceNode,
   nodeMap: Map<string, TraceGraphNodeMeta>,
@@ -140,6 +164,8 @@ export function traceResponseToFlowGraphData(
     const tk = traceDocumentNodeKey(top.document_type, top.document_id);
     addEdgeDedup(edges, edgeDedup, rootKey, tk);
   }
+
+  keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(nodeMap, edges, edgeDedup);
 
   const metaById: Record<string, TraceGraphNodeMeta> = {};
   const nodes: TraceFlowDatum[] = [];

@@ -268,6 +268,8 @@ export async function apiRequest<T = any>(
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
     headers,
+    // 避免浏览器对同源 GET（如列表）使用启发式缓存，导致确认后仍看到旧状态
+    cache: 'no-store',
   };
 
   // 处理请求体：如果提供了 data，则序列化为 JSON；否则使用 body

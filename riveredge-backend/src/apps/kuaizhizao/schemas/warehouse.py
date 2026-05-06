@@ -526,6 +526,22 @@ class SalesDeliveryItemResponse(SalesDeliveryItemBase):
         from_attributes = True
 
 
+class SalesDeliveryConfirmItemBatch(BaseSchema):
+    """确认销售出库时单行批号提交"""
+
+    item_id: int = Field(..., description="销售出库明细 ID（sales_delivery_items.id）")
+    batch_no: str = Field(default="", max_length=50, description="出库批号（批号管理物料必填）")
+
+
+class SalesDeliveryConfirmRequest(BaseSchema):
+    """确认销售出库请求体（可选，用于提交各行批号预览结果）"""
+
+    item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = Field(
+        default=None,
+        description="各行批号；传入时须覆盖本单所有「出库数量>0」的明细行 id",
+    )
+
+
 # === 采购入库单 ===
 
 class PurchaseReceiptBase(BaseSchema):

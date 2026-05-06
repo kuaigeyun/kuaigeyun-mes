@@ -407,10 +407,12 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         
         delivery_service = SalesDeliveryService()
+        # 通知仓库仅生成「待出库」单，批号/序列号在仓库确认出库时核对（与业务场景一致）
         delivery = await delivery_service.create_sales_delivery(
             tenant_id=tenant_id,
             delivery_data=delivery_data,
-            created_by=notified_by
+            created_by=notified_by,
+            require_batch_serial_on_create=False,
         )
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(

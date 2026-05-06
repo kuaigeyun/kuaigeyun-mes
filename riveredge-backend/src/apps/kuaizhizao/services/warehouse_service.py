@@ -79,6 +79,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesDeliveryCreate, SalesDeliveryUpdate, SalesDeliveryResponse,
     SalesDeliveryWithItemsResponse,
     SalesDeliveryItemCreate, SalesDeliveryItemUpdate, SalesDeliveryItemResponse,
+    SalesDeliveryConfirmItemBatch,
     # 销售退货单
     SalesReturnCreate, SalesReturnUpdate, SalesReturnResponse,
     SalesReturnItemCreate, SalesReturnItemUpdate, SalesReturnItemResponse,
@@ -224,6 +225,24 @@ async def _validate_batch_serial_policy(
             raise ValidationError(
                 f"{scene}失败：物料 {material.name}（{material_code}）序列号数量不足"
             )
+
+
+def _coerce_sales_delivery_item_serials(serial_numbers: Any) -> Any:
+    """将明细表中的序列号字段解析为列表（供确认出库校验）。"""
+    if serial_numbers is None:
+        return None
+    if isinstance(serial_numbers, list):
+        return serial_numbers
+    if isinstance(serial_numbers, str):
+        s = serial_numbers.strip()
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s)
+            return parsed if isinstance(parsed, list) else None
+        except Exception:
+            return None
+    return serial_numbers
 
 
 async def _get_warehouse_policy_flags(tenant_id: int) -> tuple[bool, bool]:
@@ -1988,8 +2007,21 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         super().__init__(SalesDelivery)
         self.business_config_service = BusinessConfigService()
 
-    async def create_sales_delivery(self, tenant_id: int, delivery_data: SalesDeliveryCreate, created_by: int) -> SalesDeliveryResponse:
-        """创建销售出库单"""
+    async def create_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_data: SalesDeliveryCreate,
+        created_by: int,
+        *,
+        require_batch_serial_on_create: bool = True,
+    ) -> SalesDeliveryResponse:
+        """创建销售出库单
+
+        require_batch_serial_on_create:
+            为 False 时跳过明细上的批号/序列号策略校验（如发货通知「通知仓库」下推出库单，
+            批号在仓库「确认出库」前补录）。HTTP 创建接口始终为默认 True。
+            此时即使开启「自动出库」也不会在创建后立即 confirm，否则会因无批号再次失败。
+        """
         # 1. 检查模块是否启用
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_delivery")
         if not is_enabled:
@@ -2092,7 +2124,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     )
                     batch_number = getattr(item_data, 'batch_number', None)
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
-                    if material:
+                    if material and require_batch_serial_on_create:
                         await _validate_batch_serial_policy(
                             tenant_id=tenant_id,
                             material=material,
@@ -2207,7 +2239,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     logger.warning("建立销售预测→销售出库 单据关联失败: %s", e)
             created_delivery_id = delivery.id
 
-        if auto_outbound_enabled and created_delivery_id:
+        # 未在创建时校验批号的单据（如发货通知下推）不能自动确认出库，否则 confirm 会因缺批号失败
+        if (
+            auto_outbound_enabled
+            and created_delivery_id
+            and require_batch_serial_on_create
+        ):
             delivery_obj = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=created_delivery_id)
             if delivery_obj and delivery_obj.status == "待出库":
                 return await self.confirm_delivery(
@@ -2594,7 +2631,14 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 updated_by=updated_by,
             )
 
-    async def confirm_delivery(self, tenant_id: int, delivery_id: int, confirmed_by: int) -> SalesDeliveryResponse:
+    async def confirm_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        confirmed_by: int,
+        *,
+        item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = None,
+    ) -> SalesDeliveryResponse:
         """确认出库"""
         async with in_transaction():
             delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
@@ -2609,15 +2653,47 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 delivery_items=list(delivery.items or []),
             )
 
-            confirmer_name = await self.get_user_name(confirmed_by)
+            if item_batches is not None:
+                line_rows = await SalesDeliveryItem.filter(
+                    tenant_id=tenant_id, delivery_id=delivery_id
+                ).all()
+                active_ids = {
+                    it.id
+                    for it in line_rows
+                    if Decimal(str(it.delivery_quantity or 0)) > Decimal("0")
+                }
+                patch = {row.item_id: (row.batch_no or "").strip() for row in item_batches}
+                if active_ids and set(patch.keys()) != active_ids:
+                    raise ValidationError(
+                        "确认出库须逐行提交批号（需与所有出库数量大于 0 的明细 id 一一对应）"
+                    )
+                # 仅在有非空批号时写入；避免前端表格内控件未同步到 Form 时提交空串，把库内已有批号清空，
+                # 进而导致批号管理物料扣库校验失败并整单事务回滚（单据仍为待出库）。
+                for it in line_rows:
+                    if it.id not in patch:
+                        continue
+                    bn = patch[it.id]
+                    if bn:
+                        it.batch_number = bn
+                        await it.save()
 
-            await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
-                status='已出库',
-                deliverer_id=confirmed_by,
-                deliverer_name=confirmer_name,
-                delivery_time=datetime.now(),
-                updated_by=confirmed_by
+            confirmer_name = await self.get_user_name(confirmed_by)
+            confirm_time = datetime.now()
+
+            # 使用 ORM save 更新表头，避免部分环境下 QuerySet.update 命中异常或与事务交互问题
+            sd_row = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id,
+                id=delivery_id,
+                deleted_at__isnull=True,
             )
+            if not sd_row:
+                raise NotFoundError(f"销售出库单不存在或已删除: {delivery_id}")
+            sd_row.status = "已出库"
+            sd_row.deliverer_id = confirmed_by
+            sd_row.deliverer_name = confirmer_name
+            sd_row.delivery_time = confirm_time
+            sd_row.updated_by = confirmed_by
+            await sd_row.save()
 
             # 更新库存（扣减）
             try:
@@ -2635,6 +2711,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     deleted_at__isnull=True,
                 ).all() if material_ids else []
                 material_by_id = {m.id: m for m in materials}
+                for item in items:
+                    qty = item.delivery_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    mat = material_by_id.get(item.material_id)
+                    if mat:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=mat,
+                            batch_number=getattr(item, "batch_number", None),
+                            serial_numbers=_coerce_sales_delivery_item_serials(
+                                getattr(item, "serial_numbers", None)
+                            ),
+                            quantity=qty,
+                            scene="销售出库确认",
+                        )
                 biz_config = await BusinessConfigService().get_business_config(tenant_id)
                 enforce_fifo = (
                     biz_config.get("parameters", {})
@@ -2673,69 +2765,72 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 updated_by=confirmed_by,
             )
 
-            # 自动生成应收单
+            for line in items:
+                qty = line.delivery_quantity or Decimal(0)
+                if qty <= 0:
+                    continue
+                line.status = "已出库"
+                line.delivery_time = confirm_time
+                await line.save()
+
+        updated_delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        # 自动生成应收单：必须在出库主事务提交之后执行。create_receivable 内部另有 in_transaction()，
+        # 与外层嵌套时部分环境下会导致出库/库存更新被回滚，但接口仍返回成功体（用户看到成功提示但单据未过账）。
+        try:
+            from apps.kuaicaiwu.services.finance_service import ReceivableService
+            from apps.kuaicaiwu.schemas.finance import ReceivableCreate
+
+            receivable_service = ReceivableService()
+            delivery_row = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
+            total_amount = Decimal(str(delivery_row.total_amount))
+            receivable_data = ReceivableCreate(
+                source_type="销售出库",
+                source_id=delivery_id,
+                source_code=delivery_row.delivery_code,
+                customer_id=delivery_row.customer_id,
+                customer_name=delivery_row.customer_name,
+                total_amount=float(total_amount),
+                received_amount=0.0,
+                remaining_amount=float(total_amount),
+                due_date=(datetime.now() + timedelta(days=30)).date(),
+                business_date=datetime.now().date(),
+                status="未收款",
+                notes=f"由销售出库单 {delivery_row.delivery_code} 自动生成",
+            )
+            receivable = await receivable_service.create_receivable(
+                tenant_id=tenant_id,
+                receivable_data=receivable_data,
+                created_by=confirmed_by,
+            )
             try:
-                from apps.kuaicaiwu.services.finance_service import ReceivableService
-                from apps.kuaicaiwu.schemas.finance import ReceivableCreate
-                
-                receivable_service = ReceivableService()
-                
-                # 获取出库单信息
-                delivery = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
-                
-                # 创建应收单
-                total_amount = Decimal(str(delivery.total_amount))
-                receivable_data = ReceivableCreate(
-                    source_type="销售出库",
-                    source_id=delivery_id,
-                    source_code=delivery.delivery_code,
-                    customer_id=delivery.customer_id,
-                    customer_name=delivery.customer_name,
-                    total_amount=float(total_amount),
-                    received_amount=0.0,
-                    remaining_amount=float(total_amount),
-                    due_date=(datetime.now() + timedelta(days=30)).date(),  # 默认30天账期
-                    business_date=datetime.now().date(),
-                    status="未收款",
-                    notes=f"由销售出库单 {delivery.delivery_code} 自动生成"
-                )
-                
-                receivable = await receivable_service.create_receivable(
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
                     tenant_id=tenant_id,
-                    receivable_data=receivable_data,
-                    created_by=confirmed_by
+                    relation_data=DocumentRelationCreate(
+                        source_type="sales_delivery",
+                        source_id=delivery_id,
+                        source_code=delivery_row.delivery_code,
+                        source_name=None,
+                        target_type="receivable",
+                        target_id=receivable.id,
+                        target_code=getattr(receivable, "receivable_code", None),
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="销售出库确认自动生成应收单",
+                    ),
+                    created_by=confirmed_by,
                 )
-                # 建立销售出库→应收单 的 DocumentRelation（支持单据追溯）
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            except Exception as rel_e:
+                logger.warning("创建销售出库→应收单 单据关联失败: %s", rel_e)
+        except Exception as e:
+            logger.error("自动生成应收单失败: %s", e)
 
-                    rel_svc = DocumentRelationNewService()
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="sales_delivery",
-                            source_id=delivery_id,
-                            source_code=delivery.delivery_code,
-                            source_name=None,
-                            target_type="receivable",
-                            target_id=receivable.id,
-                            target_code=getattr(receivable, "receivable_code", None),
-                            target_name=None,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="销售出库确认自动生成应收单",
-                        ),
-                        created_by=confirmed_by,
-                    )
-                except Exception as rel_e:
-                    logger.warning("创建销售出库→应收单 单据关联失败: %s", rel_e)
-            except Exception as e:
-                logger.error(f"自动生成应收单失败: {str(e)}")
-                # 不抛出异常，避免影响出库确认
-
-            updated_delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
-            return updated_delivery
+        return updated_delivery
 
     async def import_from_data(
         self,

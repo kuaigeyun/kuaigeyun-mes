@@ -8475,6 +8475,9 @@ export default {
   'components.documentRelationGraph.layoutHorizontal': '水平布局',
   'components.documentRelationGraph.layoutVertical': '垂直布局',
   'components.documentRelationGraph.refresh': '刷新',
+  'components.documentRelationGraph.fullscreen': '全屏查看',
+  'components.documentRelationGraph.exitFullscreen': '退出全屏',
+  'components.documentRelationGraph.fullscreenUnsupported': '当前浏览器无法进入全屏',
 
   // 单据跟踪面板
   'components.documentTrackingPanel.loadingTip': '加载操作记录...',

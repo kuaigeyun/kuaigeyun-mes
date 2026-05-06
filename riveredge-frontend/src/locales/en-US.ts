@@ -8431,6 +8431,9 @@ export default {
   'components.documentRelationGraph.layoutHorizontal': 'Horizontal',
   'components.documentRelationGraph.layoutVertical': 'Vertical',
   'components.documentRelationGraph.refresh': 'Refresh',
+  'components.documentRelationGraph.fullscreen': 'Full screen',
+  'components.documentRelationGraph.exitFullscreen': 'Exit full screen',
+  'components.documentRelationGraph.fullscreenUnsupported': 'Fullscreen is not available in this browser',
 
   // Document tracking panel
   'components.documentTrackingPanel.loadingTip': 'Loading operations...',
