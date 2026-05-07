@@ -108,6 +108,7 @@ import type {
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
 import { SecureImage } from '../../../../components/secure-image'
+import FilePreviewModal from '../../../../components/file-preview'
 import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services/file'
 import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
@@ -128,6 +129,8 @@ const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
 const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({ fileUuid, alt }) => {
   const { t } = useTranslation()
   const [ext, setExt] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [fileName, setFileName] = useState<string>('')
 
   useEffect(() => {
     let cancelled = false
@@ -139,6 +142,7 @@ const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({
         const fromName =
           name.lastIndexOf('.') >= 0 ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
         setExt(fromField || fromName || '')
+        setFileName(name)
       })
       .catch(() => {
         if (!cancelled) setExt('')
@@ -158,6 +162,10 @@ const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({
   }
 
   const open = async () => {
+    if (ext === 'pdf') {
+      setPreviewOpen(true)
+      return
+    }
     try {
       const url = await getFileDownloadUrlWithToken(fileUuid)
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -167,21 +175,37 @@ const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({
   }
 
   return (
-    <Tooltip title={t('app.master-data.materials.openAttachment')}>
-      <Button
-        type="link"
-        size="small"
-        style={{ padding: 0, height: 40, width: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-        icon={
-          ext === 'pdf' ? (
-            <FilePdfOutlined style={{ fontSize: 22 }} />
-          ) : (
-            <FileOutlined style={{ fontSize: 22 }} />
-          )
-        }
-        onClick={open}
-      />
-    </Tooltip>
+    <>
+      <Tooltip title={t('app.master-data.materials.openAttachment')}>
+        <Button
+          type="link"
+          size="small"
+          style={{ padding: 0, height: 40, width: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          icon={
+            ext === 'pdf' ? (
+              <FilePdfOutlined style={{ fontSize: 22 }} />
+            ) : (
+              <FileOutlined style={{ fontSize: 22 }} />
+            )
+          }
+          onClick={open}
+        />
+      </Tooltip>
+
+      {ext === 'pdf' ? (
+        <FilePreviewModal
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUuid={fileUuid}
+          fileName={fileName || alt || 'PDF'}
+          fileType="application/pdf"
+          fileExtension="pdf"
+          title={t('app.master-data.materials.openAttachment')}
+          width="calc(100vw - 32px)"
+          height="calc(100vh - 32px)"
+        />
+      ) : null}
+    </>
   )
 }
 
