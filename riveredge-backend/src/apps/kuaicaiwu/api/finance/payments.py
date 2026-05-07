@@ -18,10 +18,10 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from datetime import datetime
 
-router = APIRouter(prefix="/payments", tags=["Kuaicaiwu Finance"])
+router = APIRouter(prefix="/payments", tags=["App · Kuaicaiwu · Finance"])
 
 
 def _http_exception_with_trace(

@@ -17,7 +17,7 @@ from infra.schemas.license_center import (
 )
 from infra.services.license_center_service import LicenseCenterService
 
-router = APIRouter(prefix="/license-center", tags=["License Center"])
+router = APIRouter(prefix="/license-center", tags=["Platform · License"])
 
 
 @router.get("/licenses", response_model=List[PlatformLicenseResponse])

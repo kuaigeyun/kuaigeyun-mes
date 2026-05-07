@@ -12,7 +12,7 @@ from apps.kuaireport.schemas.report import (
     ReportCreate, ReportUpdate, ReportResponse, ReportListResponse
 )
 
-router = APIRouter(prefix="/reports", tags=["报表中心 - Reports"])
+router = APIRouter(prefix="/reports", tags=["App · KuanReport · Reports"])
 
 report_service = ReportService()
 
@@ -45,7 +45,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ── 系统报表 ─────────────────────────────────────────────────────
 
-@router.get("/system-reports", response_model=ReportListResponse, summary="获取系统报表列表")
+@router.get("/system-reports", response_model=ReportListResponse, summary="List system reports")
 async def list_system_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -63,7 +63,7 @@ async def list_system_reports(
 
 # ── 用户自制报表 ───────────────────────────────────────────────
 
-@router.get("/my", response_model=ReportListResponse, summary="获取我的自制报表")
+@router.get("/my", response_model=ReportListResponse, summary="List my custom reports")
 async def list_my_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -77,7 +77,7 @@ async def list_my_reports(
 
 # ── 公开分享（需在 /{id} 之前定义）──────────────────────────────────
 
-@router.get("/shared", response_model=ReportResponse, summary="通过分享链接获取报表（公开）")
+@router.get("/shared", response_model=ReportResponse, summary="Get report by share link (public)")
 async def get_report_by_share_token(
     token: str = Query(..., description="分享令牌"),
 ):
@@ -88,7 +88,7 @@ async def get_report_by_share_token(
     return ReportResponse.model_validate(report)
 
 
-@router.post("/shared/execute", summary="通过分享链接执行报表查询（公开）")
+@router.post("/shared/execute", summary="Execute report query by share link (public)")
 async def execute_report_by_share_token_route(
     token: str = Query(..., description="分享令牌"),
     filters: Dict[str, Any] = Body(default_factory=dict),
@@ -99,7 +99,7 @@ async def execute_report_by_share_token_route(
 
 # ── 通用 CRUD ────────────────────────────────────────────────────
 
-@router.get("", response_model=ReportListResponse, summary="获取报表列表（管理员）")
+@router.get("", response_model=ReportListResponse, summary="List reports (admin)")
 async def list_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -109,7 +109,7 @@ async def list_reports(
     return await report_service.list(tenant_id=tenant_id, skip=skip, limit=limit)
 
 
-@router.post("", response_model=ReportResponse, summary="创建报表")
+@router.post("", response_model=ReportResponse, summary="Create report")
 async def create_report(
     data: ReportCreate,
     current_user: User = Depends(get_current_user),
@@ -120,7 +120,7 @@ async def create_report(
     )
 
 
-@router.get("/{id}", response_model=ReportResponse, summary="获取报表详情")
+@router.get("/{id}", response_model=ReportResponse, summary="Get report")
 async def get_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -129,7 +129,7 @@ async def get_report(
     return await report_service.get_by_id(tenant_id=tenant_id, id=id)
 
 
-@router.put("/{id}", response_model=ReportResponse, summary="更新报表")
+@router.put("/{id}", response_model=ReportResponse, summary="Update report")
 async def update_report(
     id: int,
     data: ReportUpdate,
@@ -145,7 +145,7 @@ async def update_report(
     )
 
 
-@router.delete("/{id}", summary="删除报表")
+@router.delete("/{id}", summary="Delete report")
 async def delete_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -159,7 +159,7 @@ async def delete_report(
 
 # ── 数据执行 ─────────────────────────────────────────────────────
 
-@router.post("/{id}/execute", summary="执行报表查询")
+@router.post("/{id}/execute", summary="Execute report query")
 async def execute_report(
     id: int,
     filters: Dict[str, Any] = {},
@@ -174,7 +174,7 @@ async def execute_report(
 
 # ── 分享与挂载 ───────────────────────────────────────────────────
 
-@router.post("/{id}/share", summary="生成分享链接")
+@router.post("/{id}/share", summary="Create share link")
 async def share_report(
     id: int,
     expires_days: Optional[int] = Body(30, embed=True),
@@ -186,7 +186,7 @@ async def share_report(
     return result
 
 
-@router.post("/{id}/unshare", summary="取消分享")
+@router.post("/{id}/unshare", summary="Revoke share link")
 async def unshare_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -197,7 +197,7 @@ async def unshare_report(
     return {"success": True}
 
 
-@router.post("/{id}/mount-to-menu", summary="挂载到菜单")
+@router.post("/{id}/mount-to-menu", summary="Mount report to sidebar menu")
 async def mount_report_to_menu(
     id: int,
     menu_name: Optional[str] = Body(None, embed=True),

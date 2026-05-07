@@ -54,7 +54,7 @@ scrap_record_service = ScrapRecordService()
 defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
 
-router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
 
 
 def _parse_iso_datetime_or_400(value: Optional[str], field_name: str) -> Optional[datetime]:
@@ -148,7 +148,7 @@ async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_m
 @router.get(
     "/reporting/overview-statistics",
     response_model=ReportingOverviewStatisticsResponse,
-    summary="获取报工统计（用于指标卡片）",
+    summary="Reporting statistics (KPI cards)",
 )
 async def get_reporting_overview_statistics(
     current_user: User = Depends(get_current_user),
@@ -232,7 +232,7 @@ async def get_reporting_overview_statistics(
     })
 
 
-@router.post("/reporting", response_model=ReportingRecordResponse, summary="创建报工记录")
+@router.post("/reporting", response_model=ReportingRecordResponse, summary="Create reporting record")
 async def create_reporting_record(
     reporting: ReportingRecordCreate,
     current_user: User = Depends(get_current_user),
@@ -258,7 +258,7 @@ async def create_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting", tenant_id)
 
 
-@router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="快捷报工（扫码/工位机）")
+@router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="Quick reporting (scan / terminal)")
 async def create_quick_reporting_record(
     reporting: ReportingRecordCreate,
     current_user: User = Depends(get_current_user),
@@ -282,7 +282,7 @@ async def create_quick_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting/quick", tenant_id)
 
 
-@router.get("/reporting", response_model=List[ReportingRecordListResponse], summary="获取报工记录列表")
+@router.get("/reporting", response_model=List[ReportingRecordListResponse], summary="List reporting records")
 async def list_reporting_records(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -318,7 +318,7 @@ async def list_reporting_records(
     )
 
 
-@router.get("/reporting/statistics", response_model=ReportingDetailedStatisticsResponse, summary="获取报工统计信息")
+@router.get("/reporting/statistics", response_model=ReportingDetailedStatisticsResponse, summary="Reporting statistics")
 async def get_reporting_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
     date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
@@ -341,7 +341,7 @@ async def get_reporting_statistics(
     return ReportingDetailedStatisticsResponse.model_validate(statistics)
 
 
-@router.get("/reporting/{record_id}", response_model=ReportingRecordResponse, summary="获取报工记录详情")
+@router.get("/reporting/{record_id}", response_model=ReportingRecordResponse, summary="Get reporting record")
 async def get_reporting_record(
     record_id: int,
     current_user: User = Depends(get_current_user),
@@ -365,7 +365,7 @@ async def get_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}", tenant_id)
 
 
-@router.post("/reporting/{record_id}/approve", response_model=ReportingRecordResponse, summary="审核报工记录")
+@router.post("/reporting/{record_id}/approve", response_model=ReportingRecordResponse, summary="Approve reporting record")
 async def approve_reporting_record(
     record_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -393,7 +393,7 @@ async def approve_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/approve", tenant_id)
 
 
-@router.post("/reporting/{record_id}/revoke", response_model=ReportingRecordResponse, summary="撤销审核报工记录")
+@router.post("/reporting/{record_id}/revoke", response_model=ReportingRecordResponse, summary="Revoke reporting approval")
 async def revoke_reporting_approval(
     record_id: int,
     current_user: User = Depends(get_current_user),
@@ -418,7 +418,7 @@ async def revoke_reporting_approval(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/revoke", tenant_id)
 
 
-@router.post("/reporting/batch-revoke", summary="批量撤回报工记录审核")
+@router.post("/reporting/batch-revoke", summary="Batch revoke reporting approvals")
 async def batch_revoke_reporting_approval(
     record_ids: list[int] = Body(..., embed=True),
     current_user: User = Depends(get_current_user),
@@ -441,7 +441,7 @@ async def batch_revoke_reporting_approval(
         raise _http_exception_with_trace(400, str(e), "/reporting/batch-revoke", tenant_id)
 
 
-@router.put("/reporting/{record_id}/correct", response_model=ReportingRecordResponse, summary="修正报工数据")
+@router.put("/reporting/{record_id}/correct", response_model=ReportingRecordResponse, summary="Correct reporting data")
 async def correct_reporting_data(
     record_id: int,
     correct_data: ReportingRecordUpdate,
@@ -474,7 +474,7 @@ async def correct_reporting_data(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/correct", tenant_id)
 
 
-@router.delete("/reporting/{record_id}", summary="删除报工记录")
+@router.delete("/reporting/{record_id}", summary="Delete reporting record")
 async def delete_reporting_record(
     record_id: int,
     current_user: User = Depends(get_current_user),
@@ -503,7 +503,7 @@ async def delete_reporting_record(
     )
 
 
-@router.post("/reporting/{record_id}/scrap", response_model=ScrapRecordResponse, summary="从报工记录创建报废记录")
+@router.post("/reporting/{record_id}/scrap", response_model=ScrapRecordResponse, summary="Create scrap record from reporting")
 async def create_scrap_record_from_reporting(
     record_id: int,
     scrap_data: ScrapRecordCreateFromReporting,
@@ -535,7 +535,7 @@ async def create_scrap_record_from_reporting(
 
 # ============ 物料绑定 API ============
 
-@router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="从报工记录创建上料绑定")
+@router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="Create feeding binding from reporting")
 async def create_feeding_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,
@@ -566,7 +566,7 @@ async def create_feeding_binding_from_reporting(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
 
 
-@router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="从报工记录创建下料绑定")
+@router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="Create discharging binding from reporting")
 async def create_discharging_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,
@@ -597,7 +597,7 @@ async def create_discharging_binding_from_reporting(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/discharging", tenant_id)
 
 
-@router.get("/reporting/{record_id}/material-binding", response_model=List[MaterialBindingListResponse], summary="获取报工记录的物料绑定记录")
+@router.get("/reporting/{record_id}/material-binding", response_model=List[MaterialBindingListResponse], summary="List material bindings for reporting")
 async def get_material_bindings_by_reporting_record(
     record_id: int,
     current_user: User = Depends(get_current_user),
@@ -621,7 +621,7 @@ async def get_material_bindings_by_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding", tenant_id)
 
 
-@router.delete("/material-binding/{binding_id}", summary="删除物料绑定记录")
+@router.delete("/material-binding/{binding_id}", summary="Delete material binding")
 async def delete_material_binding(
     binding_id: int,
     current_user: User = Depends(get_current_user),
@@ -652,7 +652,7 @@ async def delete_material_binding(
 
 # ============ 报废管理 API ============
 
-@router.post("/scrap/{scrap_id}/approve", response_model=ScrapRecordResponse, summary="审批报废记录")
+@router.post("/scrap/{scrap_id}/approve", response_model=ScrapRecordResponse, summary="Approve scrap record")
 async def approve_scrap_record(
     scrap_id: int = Path(..., description="报废记录ID"),
     approved: bool = Query(..., description="是否同意（true=同意，false=不同意）"),
@@ -683,7 +683,7 @@ async def approve_scrap_record(
         raise _http_exception_with_trace(400, str(e), "/scrap/{scrap_id}/approve", tenant_id)
 
 
-@router.get("/scrap", response_model=List[ScrapRecordListResponse], summary="查询报废记录列表")
+@router.get("/scrap", response_model=List[ScrapRecordListResponse], summary="List scrap records")
 async def list_scrap_records(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -724,7 +724,7 @@ async def list_scrap_records(
     )
 
 
-@router.get("/scrap/statistics", summary="获取报废统计分析")
+@router.get("/scrap/statistics", summary="Scrap statistics")
 async def get_scrap_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
     date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
@@ -763,7 +763,7 @@ async def get_scrap_statistics(
 
 # ============ 不良品管理 API ============
 
-@router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="从报工记录创建不良品记录")
+@router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="Create defect record from reporting")
 async def create_defect_record_from_reporting(
     record_id: int,
     defect_data: DefectRecordCreateFromReporting,
@@ -794,7 +794,7 @@ async def create_defect_record_from_reporting(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/defect", tenant_id)
 
 
-@router.post("/defect/{defect_id}/approve-acceptance", response_model=DefectRecordResponse, summary="审批不良品让步接收")
+@router.post("/defect/{defect_id}/approve-acceptance", response_model=DefectRecordResponse, summary="Approve defect concession")
 async def approve_defect_acceptance(
     defect_id: int = Path(..., description="不良品记录ID"),
     approved: bool = Query(..., description="是否同意（true=同意，false=不同意）"),
@@ -825,7 +825,7 @@ async def approve_defect_acceptance(
         raise _http_exception_with_trace(400, str(e), "/defect/{defect_id}/approve-acceptance", tenant_id)
 
 
-@router.get("/defect", response_model=List[DefectRecordListResponse], summary="查询不良品记录列表")
+@router.get("/defect", response_model=List[DefectRecordListResponse], summary="List defect records")
 async def list_defect_records(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -869,7 +869,7 @@ async def list_defect_records(
     )
 
 
-@router.get("/defect/statistics", summary="获取不良品统计分析")
+@router.get("/defect/statistics", summary="Defect statistics")
 async def get_defect_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
     date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),

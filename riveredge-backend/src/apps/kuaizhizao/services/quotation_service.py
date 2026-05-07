@@ -335,7 +335,7 @@ class QuotationService:
         auto_approved=True：蓝图无需人工审核，同步标记审核通过。
         auto_approved=False：进入待人工审核（review_status=待审核）。
         """
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         now = datetime.now()
         op_name = await AppBaseService().get_user_name(operator_id)
@@ -531,7 +531,7 @@ class QuotationService:
             raise BusinessLogicError(
                 f"只能撤回待审核的报价单，当前审核状态: {quotation.review_status}"
             )
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(withdrawn_by)
         async with in_transaction():
@@ -565,7 +565,7 @@ class QuotationService:
         review_remarks: Optional[str] = None,
     ) -> QuotationResponse:
         """审核通过：已发送 + 待审核 → 审核通过（保持已发送）。"""
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
@@ -607,7 +607,7 @@ class QuotationService:
         review_remarks: Optional[str] = None,
     ) -> QuotationResponse:
         """审核驳回：已发送 + 待审核 → 已拒绝。"""
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
@@ -660,7 +660,7 @@ class QuotationService:
             raise BusinessLogicError(
                 f"仅已审核通过的报价单可撤回审核，当前审核状态: {quotation.review_status}"
             )
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
         async with in_transaction():
@@ -701,7 +701,7 @@ class QuotationService:
             raise BusinessLogicError(
                 f"请先完成审核通过后再标记客户确认，当前审核状态: {quotation.review_status}"
             )
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
         async with in_transaction():
@@ -734,7 +734,7 @@ class QuotationService:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
         if quotation.status != "已拒绝":
             raise BusinessLogicError(f"仅已驳回的报价单可重新编辑，当前状态: {quotation.status}")
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
         async with in_transaction():
@@ -781,7 +781,7 @@ class QuotationService:
                 raise BusinessLogicError(
                     "下游销售订单仍存在，无法撤回下推；请先作废或删除销售订单"
                 )
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
         async with in_transaction():
@@ -1307,7 +1307,7 @@ class QuotationService:
             created_by=created_by,
         )
 
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
 
         prev_status = (quotation.status or "").strip() or "已发送"
         op_name = await AppBaseService().get_user_name(created_by)

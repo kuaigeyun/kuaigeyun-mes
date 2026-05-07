@@ -16,10 +16,10 @@ from apps.kuaizhizao.services.document_relation_new_service import DocumentRelat
 from apps.kuaizhizao.schemas.document_relation import DocumentRelationListResponse, DocumentTraceResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/document-relations", tags=["单据关联关系"])
+router = APIRouter(prefix="/document-relations", tags=["App · Kuaige Zhizao · Document Relations"])
 
 
-@router.get("/{document_type}/{document_id}", response_model=DocumentRelationListResponse, summary="获取单据关联关系")
+@router.get("/{document_type}/{document_id}", response_model=DocumentRelationListResponse, summary="List document relations")
 async def get_document_relations(
     document_type: str,
     document_id: int,
@@ -52,7 +52,7 @@ async def get_document_relations(
         raise HTTPException(status_code=500, detail=f"获取单据关联关系失败: {str(e)}")
 
 
-@router.get("/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="追溯单据关联链")
+@router.get("/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="Trace document relation chain")
 async def trace_document_chain(
     document_type: str,
     document_id: int,

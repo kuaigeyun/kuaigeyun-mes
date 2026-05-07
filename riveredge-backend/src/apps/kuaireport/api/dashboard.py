@@ -11,7 +11,7 @@ from apps.kuaireport.schemas.dashboard import (
     DashboardCreate, DashboardUpdate, DashboardResponse, DashboardListResponse
 )
 
-router = APIRouter(prefix="/dashboards", tags=["KuanReport - Dashboards"])
+router = APIRouter(prefix="/dashboards", tags=["App · KuanReport · Dashboards"])
 
 dashboard_service = DashboardService()
 
@@ -41,7 +41,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
     message = detail.get("message") if isinstance(detail, dict) else str(detail)
     return _http_exception_with_trace(status_code, message)
 
-@router.post("", response_model=DashboardResponse, summary="创建看板")
+@router.post("", response_model=DashboardResponse, summary="Create dashboard")
 async def create_dashboard(
     data: DashboardCreate,
     current_user: dict = Depends(get_current_user),
@@ -49,7 +49,7 @@ async def create_dashboard(
 ):
     return await dashboard_service.create(tenant_id=tenant_id, data=data, created_by=current_user.id)
 
-@router.get("", response_model=DashboardListResponse, summary="获取看板列表")
+@router.get("", response_model=DashboardListResponse, summary="List dashboards")
 async def list_dashboards(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -59,7 +59,7 @@ async def list_dashboards(
     return await dashboard_service.list(tenant_id=tenant_id, skip=skip, limit=limit)
 
 
-@router.get("/shared", response_model=DashboardResponse, summary="通过分享链接获取大屏（公开）")
+@router.get("/shared", response_model=DashboardResponse, summary="Get dashboard by share link (public)")
 async def get_dashboard_by_share_token(
     token: str = Query(..., description="分享令牌"),
 ):
@@ -70,7 +70,7 @@ async def get_dashboard_by_share_token(
     return DashboardResponse.model_validate(dashboard)
 
 
-@router.get("/{id}", response_model=DashboardResponse, summary="获取看板详情")
+@router.get("/{id}", response_model=DashboardResponse, summary="Get dashboard")
 async def get_dashboard(
     id: int,
     current_user: dict = Depends(get_current_user),
@@ -78,7 +78,7 @@ async def get_dashboard(
 ):
     return await dashboard_service.get_by_id(tenant_id=tenant_id, id=id)
 
-@router.put("/{id}", response_model=DashboardResponse, summary="更新看板")
+@router.put("/{id}", response_model=DashboardResponse, summary="Update dashboard")
 async def update_dashboard(
     id: int,
     data: DashboardUpdate,
@@ -87,7 +87,7 @@ async def update_dashboard(
 ):
     return await dashboard_service.update(tenant_id=tenant_id, id=id, data=data, updated_by=current_user.id)
 
-@router.delete("/{id}", summary="删除看板")
+@router.delete("/{id}", summary="Delete dashboard")
 async def delete_dashboard(
     id: int,
     current_user: dict = Depends(get_current_user),
@@ -97,7 +97,7 @@ async def delete_dashboard(
     return {"success": True}
 
 
-@router.post("/{id}/share", summary="生成分享链接")
+@router.post("/{id}/share", summary="Create share link")
 async def share_dashboard(
     id: int,
     expires_days: Optional[int] = Body(30, embed=True),
@@ -108,7 +108,7 @@ async def share_dashboard(
     return await dashboard_service.share(tenant_id=tenant_id, dashboard_id=id, expires_days=expires_days)
 
 
-@router.post("/{id}/unshare", summary="取消分享")
+@router.post("/{id}/unshare", summary="Revoke share link")
 async def unshare_dashboard(
     id: int,
     current_user: dict = Depends(get_current_user),
@@ -119,7 +119,7 @@ async def unshare_dashboard(
     return {"success": True}
 
 
-@router.post("/{id}/mount-to-menu", summary="挂载到菜单")
+@router.post("/{id}/mount-to-menu", summary="Mount dashboard to sidebar menu")
 async def mount_dashboard_to_menu(
     id: int,
     menu_name: Optional[str] = Body(None, embed=True),

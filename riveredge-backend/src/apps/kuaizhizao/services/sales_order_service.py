@@ -1219,7 +1219,7 @@ class SalesOrderService:
             field_changes.append({"field": "items", "label": "订单明细", "from": "", "to": "已修改"})
         if changed_fields:
             import json as _json
-            from apps.base_service import AppBaseService
+            from apps.common.base_service import AppBaseService
             operator_name = await AppBaseService().get_user_name(updated_by)
             reason_extra = _json.dumps(
                 {"changed_fields": changed_fields, "field_changes": field_changes},
@@ -1299,7 +1299,7 @@ class SalesOrderService:
             logger.info("销售订单 %s 命中价格偏差审批阈值，强制走审批: %s", sales_order_id, force_reason)
         if not audit_required:
             logger.info("销售订单 %s 审核流程关闭，提交后直接进入已确认", sales_order_id)
-            from apps.base_service import AppBaseService
+            from apps.common.base_service import AppBaseService
             submitter_name = await AppBaseService().get_user_name(submitted_by)
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
@@ -1330,7 +1330,7 @@ class SalesOrderService:
             content=f"客户: {order.customer_name}, 金额: {order.total_amount}",
         )
         if instance:
-            from apps.base_service import AppBaseService
+            from apps.common.base_service import AppBaseService
             submitter_name = await AppBaseService().get_user_name(submitted_by)
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
@@ -1346,7 +1346,7 @@ class SalesOrderService:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         # 审批流程不存在，设为待审核，需手动调用审核接口
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         submitter_name = await AppBaseService().get_user_name(submitted_by)
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
@@ -1389,7 +1389,7 @@ class SalesOrderService:
             order_code=order.order_code,
         )
 
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         approver_name = await AppBaseService().get_user_name(approved_by)
 
         async with in_transaction():
@@ -1436,7 +1436,7 @@ class SalesOrderService:
         if not self._is_review_pending(order.review_status):
             raise BusinessLogicError(f"只能审核待审核状态的订单，当前: {order.review_status}")
 
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         approver_name = await AppBaseService().get_user_name(approved_by)
 
         async with in_transaction():
@@ -1490,7 +1490,7 @@ class SalesOrderService:
         if demand and demand.pushed_to_computation:
             await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)
 
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         unapprover_name = await AppBaseService().get_user_name(unapproved_by)
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(

@@ -40,6 +40,7 @@ import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
 import dayjs from 'dayjs';
+import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
 addCollection(fluentColorIcons);
@@ -875,19 +876,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       if (isUUID(logoValue)) {
         const cached = getCachedSiteLogoUrl(logoValue);
         if (cached) return cached;
+        // 预览 URL 未就绪时先用极小 SVG，避免先拉 34KB 默认 PNG 再切换
+        return SITE_LOGO_FALLBACK_SVG_URL;
       } else {
         return logoValue;
       }
     }
 
-    return '/img/logo.png';
+    return DEFAULT_SITE_LOGO_URL;
   });
 
   // 处理LOGO URL（UUID 需通过 getFilePreview 获取，带 TTL 缓存并转为相对路径）
   useEffect(() => {
     const loadSiteLogo = async () => {
       if (!siteLogoValue) {
-        setSiteLogoUrl('/img/logo.png');
+        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
         return;
       }
 
@@ -901,7 +904,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         } catch (error) {
           console.error(t('ui.error.loadLogo'), error);
           clearCachedSiteLogoUrl(siteLogoValue);
-          setSiteLogoUrl('/img/logo.png');
+          setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
         }
       } else {
         setSiteLogoUrl(siteLogoValue);
@@ -911,7 +914,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     loadSiteLogo();
   }, [siteLogoValue]);
 
-  const siteLogo = siteLogoUrl;
+  // 传入 ReactNode，避免 ProLayout 对 string 固定渲染 alt="logo"；加载失败：自定义 → /img/logo.png → /favicon.svg → 内置 data URI
+  const siteLogo = useMemo(
+    () => (
+      <img
+        src={siteLogoUrl}
+        alt=""
+        width="auto"
+        height={22}
+        fetchPriority="high"
+        decoding="async"
+        onError={() => {
+          setSiteLogoUrl((prev) => nextSiteLogoUrlAfterImageError(prev));
+        }}
+      />
+    ),
+    [siteLogoUrl],
+  );
 
   // 站点设置更新由 site-settings 等页面保存时直接 invalidateQueries，不再依赖 siteThemeUpdated
 
@@ -4967,33 +4986,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  {avatarUrl ? (
-                    <Avatar
-                      size={24}
-                      src={avatarUrl}
-                      style={{
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    />
-                  ) : (
-                    <Avatar
-                      size={24}
-                      style={{
-                        backgroundColor: token.colorPrimary,
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: getAvatarFontSize(24),
-                        fontWeight: 500,
-                      }}
-                    >
-                      {getAvatarText(currentUser.full_name, currentUser.username)}
-                    </Avatar>
-                  )}
+                  <Avatar
+                    size={24}
+                    src={avatarUrl}
+                    style={{
+                      backgroundColor: token.colorPrimary,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: getAvatarFontSize(24),
+                      fontWeight: 500,
+                    }}
+                  >
+                    {getAvatarText(currentUser.full_name, currentUser.username)}
+                  </Avatar>
                   <span
                     style={{
                       fontSize: token.fontSize,

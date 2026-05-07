@@ -259,7 +259,7 @@ from .document_relations_legacy import router as document_relations_legacy_route
 
 # 创建路由
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
-router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
 router.include_router(work_orders_router)
 router.include_router(reporting_router)
 router.include_router(warehouse_execution_router)
@@ -291,7 +291,7 @@ def _http_exception_with_trace(
 # ============ 质量异常与质检标准 API ============
 # 注：来料检验、过程检验、成品检验 API 已迁移至 quality_execution.py
 
-@router.get("/quality/inspection-center-summary", summary="质检中心看板汇总（待检、今日合格率、近7日趋势）")
+@router.get("/quality/inspection-center-summary", summary="QC center dashboard summary")
 async def get_inspection_center_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -300,7 +300,7 @@ async def get_inspection_center_summary(
     return JSONResponse(content=data, status_code=http_status.HTTP_200_OK)
 
 
-@router.get("/quality/anomalies", summary="查询质量异常记录")
+@router.get("/quality/anomalies", summary="List quality anomaly records")
 async def get_quality_anomalies(
     inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
     start_date: Optional[datetime] = Query(None, description="开始日期"),
@@ -340,7 +340,7 @@ async def get_quality_anomalies(
 
 # ============ 质检标准管理 API ============
 
-@router.post("/quality-standards", response_model=QualityStandardResponse, summary="创建质检标准")
+@router.post("/quality-standards", response_model=QualityStandardResponse, summary="Create quality standard")
 async def create_quality_standard(
     standard: QualityStandardCreate,
     current_user: User = Depends(get_current_user),
@@ -367,7 +367,7 @@ async def create_quality_standard(
         raise _http_exception_with_trace(404, str(e), "/quality-standards", tenant_id)
 
 
-@router.get("/quality-standards", response_model=List[QualityStandardListResponse], summary="获取质检标准列表")
+@router.get("/quality-standards", response_model=List[QualityStandardListResponse], summary="List quality standards")
 async def list_quality_standards(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -400,7 +400,7 @@ async def list_quality_standards(
         raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/quality-standards", tenant_id)
 
 
-@router.get("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="获取质检标准详情")
+@router.get("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="Get quality standard")
 async def get_quality_standard(
     standard_id: int = Path(..., description="质检标准ID"),
     current_user: User = Depends(get_current_user),
@@ -420,7 +420,7 @@ async def get_quality_standard(
         raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
-@router.put("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="更新质检标准")
+@router.put("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="Update quality standard")
 async def update_quality_standard(
     standard_id: int = Path(..., description="质检标准ID"),
     standard: QualityStandardUpdate = Body(..., description="质检标准更新数据"),
@@ -444,7 +444,7 @@ async def update_quality_standard(
         raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
-@router.delete("/quality-standards/{standard_id}", summary="删除质检标准")
+@router.delete("/quality-standards/{standard_id}", summary="Delete quality standard")
 async def delete_quality_standard(
     standard_id: int = Path(..., description="质检标准ID"),
     current_user: User = Depends(get_current_user),
@@ -468,7 +468,7 @@ async def delete_quality_standard(
         raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
-@router.get("/quality-standards/by-material/{material_id}", response_model=List[QualityStandardListResponse], summary="根据物料ID获取质检标准")
+@router.get("/quality-standards/by-material/{material_id}", response_model=List[QualityStandardListResponse], summary="List quality standards by material")
 async def get_standards_by_material(
     material_id: int = Path(..., description="物料ID"),
     standard_type: Optional[str] = Query(None, description="标准类型（incoming/process/finished）"),
@@ -496,7 +496,7 @@ async def get_standards_by_material(
 
 # ============ 质检方案管理 API ============
 
-@router.post("/inspection-plans", response_model=InspectionPlanResponse, summary="创建质检方案")
+@router.post("/inspection-plans", response_model=InspectionPlanResponse, summary="Create inspection plan")
 async def create_inspection_plan(
     plan: InspectionPlanCreate,
     current_user: User = Depends(get_current_user),
@@ -515,7 +515,7 @@ async def create_inspection_plan(
         raise _http_exception_with_trace(404, str(e), "/inspection-plans", tenant_id)
 
 
-@router.get("/inspection-plans", response_model=List[InspectionPlanListResponse], summary="获取质检方案列表")
+@router.get("/inspection-plans", response_model=List[InspectionPlanListResponse], summary="List inspection plans")
 async def list_inspection_plans(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -548,7 +548,7 @@ async def list_inspection_plans(
         raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/inspection-plans", tenant_id)
 
 
-@router.get("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="获取质检方案详情")
+@router.get("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="Get inspection plan")
 async def get_inspection_plan(
     plan_id: int = Path(..., description="质检方案ID"),
     current_user: User = Depends(get_current_user),
@@ -564,7 +564,7 @@ async def get_inspection_plan(
         raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
-@router.put("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="更新质检方案")
+@router.put("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="Update inspection plan")
 async def update_inspection_plan(
     plan_id: int = Path(..., description="质检方案ID"),
     plan: InspectionPlanUpdate = Body(..., description="质检方案更新数据"),
@@ -585,7 +585,7 @@ async def update_inspection_plan(
         raise _http_exception_with_trace(400, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
-@router.delete("/inspection-plans/{plan_id}", summary="删除质检方案")
+@router.delete("/inspection-plans/{plan_id}", summary="Delete inspection plan")
 async def delete_inspection_plan(
     plan_id: int = Path(..., description="质检方案ID"),
     current_user: User = Depends(get_current_user),
@@ -605,7 +605,7 @@ async def delete_inspection_plan(
         raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
-@router.get("/inspection-plans/by-material/{material_id}", response_model=List[InspectionPlanListResponse], summary="根据物料ID获取质检方案")
+@router.get("/inspection-plans/by-material/{material_id}", response_model=List[InspectionPlanListResponse], summary="List inspection plans by material")
 async def get_inspection_plans_by_material(
     material_id: int = Path(..., description="物料ID"),
     plan_type: Optional[str] = Query(None, description="方案类型（incoming/process/finished）"),
@@ -624,7 +624,7 @@ async def get_inspection_plans_by_material(
         raise _http_exception_with_trace(500, f"获取方案失败: {str(e)}", "/inspection-plans/by-material/{material_id}", tenant_id)
 
 
-@router.get("/quality/statistics", summary="质量统计分析")
+@router.get("/quality/statistics", summary="Quality analytics")
 async def get_quality_statistics(
     inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
     start_date: Optional[datetime] = Query(None, description="开始日期"),
@@ -670,7 +670,7 @@ async def get_quality_statistics(
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
-@router.get("/work-orders/{id}/print", summary="打印工单")
+@router.get("/work-orders/{id}/print", summary="Print work order")
 async def print_work_order(
     id: int = Path(..., description="工单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -695,7 +695,7 @@ async def print_work_order(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/work-orders/{id}/print-variables", summary="工单打印变量")
+@router.get("/work-orders/{id}/print-variables", summary="Work order print variables")
 async def get_work_order_print_variables(
     id: int = Path(..., description="工单ID"),
     current_user: User = Depends(get_current_user),
@@ -717,7 +717,7 @@ async def get_work_order_print_variables(
 
 # ============ 销售预测管理 API ============
 
-@router.post("/sales-forecasts", response_model=SalesForecastResponse, summary="创建销售预测")
+@router.post("/sales-forecasts", response_model=SalesForecastResponse, summary="Create sales forecast")
 async def create_sales_forecast(
     forecast: SalesForecastCreate,
     current_user: User = Depends(get_current_user),
@@ -740,7 +740,7 @@ async def create_sales_forecast(
     )
 
 
-@router.get("/sales-forecasts", response_model=SalesForecastListResult, summary="获取销售预测列表")
+@router.get("/sales-forecasts", response_model=SalesForecastListResult, summary="List sales forecasts")
 async def list_sales_forecasts(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -770,7 +770,7 @@ async def list_sales_forecasts(
     return SalesForecastListResult(**result)
     
 
-@router.get("/sales-forecasts/statistics", summary="获取销售预测统计分析")
+@router.get("/sales-forecasts/statistics", summary="Sales forecast analytics")
 async def get_sales_forecast_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -784,7 +784,7 @@ async def get_sales_forecast_statistics(
     )
     
 
-@router.get("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="获取销售预测详情")
+@router.get("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="Get sales forecast")
 async def get_sales_forecast(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
@@ -802,7 +802,7 @@ async def get_sales_forecast(
     )
 
 
-@router.post("/sales-forecasts/{forecast_id}/push-to-computation", summary="下推到需求计算")
+@router.post("/sales-forecasts/{forecast_id}/push-to-computation", summary="Push to demand computation")
 async def push_sales_forecast_to_computation(
     forecast_id: int = Path(..., description="销售预测ID"),
     planning_horizon: int = Query(12, ge=1, le=24, description="计划周期（月数）"),
@@ -830,7 +830,7 @@ async def push_sales_forecast_to_computation(
     return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
 
 
-@router.post("/sales-forecasts/{forecast_id}/push-to-mrp", summary="下推到MRP运算（兼容接口，将废弃）")
+@router.post("/sales-forecasts/{forecast_id}/push-to-mrp", summary="Push to MRP run (legacy)")
 async def push_sales_forecast_to_mrp_legacy(
     forecast_id: int = Path(..., description="销售预测ID"),
     planning_horizon: int = Query(12, ge=1, le=24, description="计划周期（月数）"),
@@ -849,7 +849,7 @@ async def push_sales_forecast_to_mrp_legacy(
     )
 
 
-@router.put("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="更新销售预测")
+@router.put("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="Update sales forecast")
 async def update_sales_forecast(
     forecast_id: int,
     forecast: SalesForecastUpdate,
@@ -875,7 +875,7 @@ async def update_sales_forecast(
     )
 
 
-@router.delete("/sales-forecasts/{forecast_id}", summary="删除销售预测")
+@router.delete("/sales-forecasts/{forecast_id}", summary="Delete sales forecast")
 async def delete_sales_forecast(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
@@ -902,7 +902,7 @@ async def delete_sales_forecast(
         return JSONResponse(content={"message": "销售预测删除失败"}, status_code=http_status.HTTP_400_BAD_REQUEST)
 
 
-@router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="提交销售预测")
+@router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="Submit sales forecast")
 async def submit_sales_forecast(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
@@ -923,7 +923,7 @@ async def submit_sales_forecast(
     )
 
 
-@router.post("/sales-forecasts/{forecast_id}/approve", response_model=SalesForecastResponse, summary="审核销售预测")
+@router.post("/sales-forecasts/{forecast_id}/approve", response_model=SalesForecastResponse, summary="Approve sales forecast")
 async def approve_sales_forecast(
     forecast_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -945,7 +945,7 @@ async def approve_sales_forecast(
     )
 
 
-@router.post("/sales-forecasts/{forecast_id}/withdraw-approval", response_model=SalesForecastResponse, summary="撤回销售预测审核")
+@router.post("/sales-forecasts/{forecast_id}/withdraw-approval", response_model=SalesForecastResponse, summary="Withdraw sales forecast approval")
 async def withdraw_sales_forecast_approval(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
@@ -964,7 +964,7 @@ async def withdraw_sales_forecast_approval(
     )
 
 
-@router.post("/sales-forecasts/{forecast_id}/items", response_model=SalesForecastItemResponse, summary="添加销售预测明细")
+@router.post("/sales-forecasts/{forecast_id}/items", response_model=SalesForecastItemResponse, summary="Add forecast line")
 async def add_sales_forecast_item(
     forecast_id: int,
     item: SalesForecastItemCreate,
@@ -985,7 +985,7 @@ async def add_sales_forecast_item(
     )
 
 
-@router.get("/sales-forecasts/{forecast_id}/items", response_model=List[SalesForecastItemResponse], summary="获取销售预测明细")
+@router.get("/sales-forecasts/{forecast_id}/items", response_model=List[SalesForecastItemResponse], summary="List sales forecast lines")
 async def get_sales_forecast_items(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
@@ -1016,7 +1016,7 @@ async def get_sales_forecast_items(
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
-@router.get("/production-pickings/{id}/print", summary="打印生产领料单")
+@router.get("/production-pickings/{id}/print", summary="Print production picking")
 async def print_production_picking(
     id: int = Path(..., description="生产领料单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1041,7 +1041,7 @@ async def print_production_picking(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/semi-finished-goods-receipts/{id}/print", summary="打印半成品入库单")
+@router.get("/semi-finished-goods-receipts/{id}/print", summary="Print semi-finished receipt")
 async def print_semi_finished_goods_receipt(
     id: int = Path(..., description="半成品入库单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1066,7 +1066,7 @@ async def print_semi_finished_goods_receipt(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/finished-goods-receipts/{id}/print", summary="打印成品入库单")
+@router.get("/finished-goods-receipts/{id}/print", summary="Print finished goods receipt")
 async def print_finished_goods_receipt(
     id: int = Path(..., description="成品入库单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1105,7 +1105,7 @@ from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
 # 批量操作相关的schema导入在函数内部进行，避免循环导入
 
-@router.post("/work-orders/batch-create", response_model=BatchResponse, summary="批量创建工单")
+@router.post("/work-orders/batch-create", response_model=BatchResponse, summary="Batch create work orders")
 async def batch_create_work_orders(
     request: BatchCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -1142,7 +1142,7 @@ async def batch_create_work_orders(
     )
 
 
-@router.put("/work-orders/batch-update", response_model=BatchResponse, summary="批量更新工单")
+@router.put("/work-orders/batch-update", response_model=BatchResponse, summary="Batch update work orders")
 async def batch_update_work_orders(
     request: BatchUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -1185,7 +1185,7 @@ async def batch_update_work_orders(
     )
 
 
-@router.delete("/work-orders/batch-delete", response_model=BatchResponse, summary="批量删除工单")
+@router.delete("/work-orders/batch-delete", response_model=BatchResponse, summary="Batch delete work orders")
 async def batch_delete_work_orders(
     request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
@@ -1217,7 +1217,7 @@ async def batch_delete_work_orders(
     )
 
 
-@router.post("/sales-forecasts/batch-create", response_model=BatchResponse, summary="批量创建销售预测")
+@router.post("/sales-forecasts/batch-create", response_model=BatchResponse, summary="Batch create sales forecasts")
 async def batch_create_sales_forecasts(
     request: BatchCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -1253,7 +1253,7 @@ async def batch_create_sales_forecasts(
     )
 
 
-@router.delete("/sales-forecasts/batch-delete", response_model=BatchResponse, summary="批量删除销售预测")
+@router.delete("/sales-forecasts/batch-delete", response_model=BatchResponse, summary="Batch delete sales forecasts")
 async def batch_delete_sales_forecasts(
     request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
@@ -1285,7 +1285,7 @@ async def batch_delete_sales_forecasts(
     )
 
 
-@router.post("/sales-forecasts/import", summary="批量导入销售预测")
+@router.post("/sales-forecasts/import", summary="Batch import sales forecasts")
 async def import_sales_forecasts(
     request: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -1341,7 +1341,7 @@ async def import_sales_forecasts(
         )
 
 
-@router.get("/sales-forecasts/export", response_class=FileResponse, summary="批量导出销售预测")
+@router.get("/sales-forecasts/export", response_class=FileResponse, summary="Batch export sales forecasts")
 async def export_sales_forecasts(
     status: Optional[str] = Query(None, description="预测状态筛选"),
     forecast_period: Optional[str] = Query(None, description="预测周期筛选"),
@@ -1408,7 +1408,7 @@ async def export_sales_forecasts(
 # 统一使用 DemandComputationService 进行需求计算。
 
 
-@router.get("/production-plans/planning-config", summary="获取计划管理配置")
+@router.get("/production-plans/planning-config", summary="Planning configuration")
 async def get_planning_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1421,7 +1421,7 @@ async def get_planning_config(
     return await BusinessConfigService().get_planning_config(tenant_id)
 
 
-@router.post("/production-plans", response_model=ProductionPlanResponse, summary="手动创建生产计划")
+@router.post("/production-plans", response_model=ProductionPlanResponse, summary="Create production plan manually")
 async def create_production_plan(
     plan_data: ProductionPlanCreate,
     current_user: User = Depends(get_current_user),
@@ -1440,7 +1440,7 @@ async def create_production_plan(
 
 
 
-@router.get("/production-plans", response_model=List[ProductionPlanListResponse], summary="获取生产计划列表")
+@router.get("/production-plans", response_model=List[ProductionPlanListResponse], summary="List production plans")
 async def list_production_plans(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -1466,7 +1466,7 @@ async def list_production_plans(
     )
 
 
-@router.get("/production-plans/statistics", summary="获取生产计划统计信息")
+@router.get("/production-plans/statistics", summary="Production plan statistics")
 async def get_production_plan_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1475,7 +1475,7 @@ async def get_production_plan_statistics(
     return await ProductionPlanningService().get_production_plan_statistics(tenant_id)
 
 
-@router.get("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="获取生产计划详情")
+@router.get("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="Get production plan")
 async def get_production_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1492,7 +1492,7 @@ async def get_production_plan(
     )
 
 
-@router.get("/production-plans/{plan_id}/items", response_model=List[ProductionPlanItemResponse], summary="获取生产计划明细")
+@router.get("/production-plans/{plan_id}/items", response_model=List[ProductionPlanItemResponse], summary="List production plan lines")
 async def get_production_plan_items(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1509,7 +1509,7 @@ async def get_production_plan_items(
     )
 
 
-@router.post("/production-plans/{plan_id}/submit", response_model=ProductionPlanResponse, summary="提交生产计划审核")
+@router.post("/production-plans/{plan_id}/submit", response_model=ProductionPlanResponse, summary="Submit production plan for approval")
 async def submit_production_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1527,7 +1527,7 @@ async def submit_production_plan(
     )
 
 
-@router.post("/production-plans/{plan_id}/approve", response_model=ProductionPlanResponse, summary="审核生产计划")
+@router.post("/production-plans/{plan_id}/approve", response_model=ProductionPlanResponse, summary="Approve production plan")
 async def approve_production_plan(
     plan_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -1548,7 +1548,7 @@ async def approve_production_plan(
     )
 
 
-@router.post("/production-plans/{plan_id}/execute", response_model=ProductionPlanResponse, summary="执行生产计划")
+@router.post("/production-plans/{plan_id}/execute", response_model=ProductionPlanResponse, summary="Execute production plan")
 async def execute_production_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1568,7 +1568,7 @@ async def execute_production_plan(
     )
 
 
-@router.put("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="更新生产计划")
+@router.put("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="Update production plan")
 async def update_production_plan(
     plan_id: int,
     plan_data: ProductionPlanUpdate,
@@ -1584,7 +1584,7 @@ async def update_production_plan(
     )
 
 
-@router.delete("/production-plans/{plan_id}", summary="删除生产计划")
+@router.delete("/production-plans/{plan_id}", summary="Delete production plan")
 async def delete_production_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1599,7 +1599,7 @@ async def delete_production_plan(
     return {"success": True, "message": "删除成功"}
 
 
-@router.post("/production-plans/{plan_id}/push-to-work-orders", summary="生产计划转工单")
+@router.post("/production-plans/{plan_id}/push-to-work-orders", summary="Convert production plan to work orders")
 async def push_production_plan_to_work_orders(
     plan_id: int,
     current_user: User = Depends(get_current_user),
@@ -1640,7 +1640,7 @@ async def push_production_plan_to_work_orders(
 
 # ============ 高级排产 API ============
 
-@router.post("/scheduling/intelligent", response_model=IntelligentSchedulingResponse, summary="智能排产")
+@router.post("/scheduling/intelligent", response_model=IntelligentSchedulingResponse, summary="Intelligent scheduling")
 async def intelligent_scheduling(
     request: IntelligentSchedulingRequest,
     current_user: User = Depends(get_current_user),
@@ -1670,7 +1670,7 @@ async def intelligent_scheduling(
     return IntelligentSchedulingResponse(**result)
 
 
-@router.post("/scheduling/optimize", response_model=OptimizeScheduleResponse, summary="优化排产计划")
+@router.post("/scheduling/optimize", response_model=OptimizeScheduleResponse, summary="Optimize schedule")
 async def optimize_schedule(
     request: OptimizeScheduleRequest,
     current_user: User = Depends(get_current_user),
@@ -1707,7 +1707,7 @@ async def optimize_schedule(
 
 # ============ 异常处理 API ============
 
-@router.get("/exceptions/material-shortage", response_model=List[MaterialShortageExceptionListResponse], summary="获取缺料异常列表")
+@router.get("/exceptions/material-shortage", response_model=List[MaterialShortageExceptionListResponse], summary="List material shortage exceptions")
 async def list_material_shortage_exceptions(
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     status: Optional[str] = Query(None, description="状态"),
@@ -1732,7 +1732,7 @@ async def list_material_shortage_exceptions(
     )
 
 
-@router.post("/exceptions/material-shortage/{exception_id}/handle", response_model=MaterialShortageExceptionResponse, summary="处理缺料异常")
+@router.post("/exceptions/material-shortage/{exception_id}/handle", response_model=MaterialShortageExceptionResponse, summary="Handle material shortage exception")
 async def handle_material_shortage_exception(
     exception_id: int = Path(..., description="异常记录ID"),
     action: str = Query(..., description="处理操作（purchase/substitute/resolve/cancel）"),
@@ -1754,7 +1754,7 @@ async def handle_material_shortage_exception(
     )
 
 
-@router.post("/work-orders/{work_order_id}/detect-shortage", response_model=List[MaterialShortageExceptionResponse], summary="检测工单缺料")
+@router.post("/work-orders/{work_order_id}/detect-shortage", response_model=List[MaterialShortageExceptionResponse], summary="Detect work order shortage")
 async def detect_work_order_shortage(
     work_order_id: int = Path(..., description="工单ID"),
     current_user: User = Depends(get_current_user),
@@ -1769,7 +1769,7 @@ async def detect_work_order_shortage(
     )
 
 
-@router.get("/exceptions/delivery-delay", response_model=List[DeliveryDelayExceptionListResponse], summary="获取延期异常列表")
+@router.get("/exceptions/delivery-delay", response_model=List[DeliveryDelayExceptionListResponse], summary="List delivery delay exceptions")
 async def list_delivery_delay_exceptions(
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     status: Optional[str] = Query(None, description="状态"),
@@ -1794,7 +1794,7 @@ async def list_delivery_delay_exceptions(
     )
 
 
-@router.post("/exceptions/delivery-delay/{exception_id}/handle", response_model=DeliveryDelayExceptionResponse, summary="处理延期异常")
+@router.post("/exceptions/delivery-delay/{exception_id}/handle", response_model=DeliveryDelayExceptionResponse, summary="Handle delivery delay exception")
 async def handle_delivery_delay_exception(
     exception_id: int = Path(..., description="异常记录ID"),
     action: str = Query(..., description="处理操作（adjust_plan/increase_resources/expedite/resolve/cancel）"),
@@ -1814,7 +1814,7 @@ async def handle_delivery_delay_exception(
     )
 
 
-@router.post("/work-orders/{work_order_id}/detect-delay", response_model=List[DeliveryDelayExceptionResponse], summary="检测工单延期")
+@router.post("/work-orders/{work_order_id}/detect-delay", response_model=List[DeliveryDelayExceptionResponse], summary="Detect work order delay")
 async def detect_work_order_delay(
     work_order_id: int = Path(..., description="工单ID"),
     days_threshold: int = Query(0, description="延期天数阈值"),
@@ -1834,7 +1834,7 @@ async def detect_work_order_delay(
     )
 
 
-@router.get("/exceptions/quality", response_model=List[QualityExceptionListResponse], summary="获取质量异常列表")
+@router.get("/exceptions/quality", response_model=List[QualityExceptionListResponse], summary="List quality exceptions")
 async def list_quality_exceptions(
     exception_type: Optional[str] = Query(None, description="异常类型"),
     work_order_id: Optional[int] = Query(None, description="工单ID"),
@@ -1861,7 +1861,7 @@ async def list_quality_exceptions(
     )
 
 
-@router.post("/exceptions/quality/{exception_id}/handle", response_model=QualityExceptionResponse, summary="处理质量异常")
+@router.post("/exceptions/quality/{exception_id}/handle", response_model=QualityExceptionResponse, summary="Handle quality exception")
 async def handle_quality_exception(
     exception_id: int = Path(..., description="异常记录ID"),
     action: str = Query(..., description="处理操作（investigate/correct/close/cancel）"),
@@ -1893,7 +1893,7 @@ async def handle_quality_exception(
     )
 
 
-@router.get("/exceptions/statistics", summary="获取异常统计分析")
+@router.get("/exceptions/statistics", summary="Exception statistics")
 async def get_exception_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
@@ -1929,7 +1929,7 @@ async def get_exception_statistics(
     )
 
 
-@router.post("/exceptions/detect", summary="手动触发异常检测")
+@router.post("/exceptions/detect", summary="Run exception detection manually")
 async def trigger_exception_detection(
     work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果指定则只检测该工单）"),
     current_user: User = Depends(get_current_user),
@@ -1973,7 +1973,7 @@ async def trigger_exception_detection(
 
 # ============ 异常处理流程 API ============
 
-@router.post("/exceptions/process/start", response_model=ExceptionProcessRecordResponse, summary="启动异常处理流程")
+@router.post("/exceptions/process/start", response_model=ExceptionProcessRecordResponse, summary="Start exception process")
 async def start_exception_process(
     data: ExceptionProcessRecordCreate,
     current_user: User = Depends(get_current_user),
@@ -2000,7 +2000,7 @@ async def start_exception_process(
         raise _http_exception_with_trace(404, str(e), "/exceptions/process/start", tenant_id)
 
 
-@router.get("/exceptions/process", response_model=List[ExceptionProcessRecordListResponse], summary="获取异常处理流程列表")
+@router.get("/exceptions/process", response_model=List[ExceptionProcessRecordListResponse], summary="List exception processes")
 async def list_exception_processes(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -2036,7 +2036,7 @@ async def list_exception_processes(
         raise _http_exception_with_trace(500, str(e), "/exceptions/process", tenant_id)
 
 
-@router.get("/exceptions/process/{process_record_id}", response_model=ExceptionProcessRecordDetailResponse, summary="获取异常处理流程详情")
+@router.get("/exceptions/process/{process_record_id}", response_model=ExceptionProcessRecordDetailResponse, summary="Get exception process")
 async def get_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
     current_user: User = Depends(get_current_user),
@@ -2058,7 +2058,7 @@ async def get_exception_process(
         raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}", tenant_id)
 
 
-@router.post("/exceptions/process/{process_record_id}/assign", response_model=ExceptionProcessRecordResponse, summary="分配异常处理流程")
+@router.post("/exceptions/process/{process_record_id}/assign", response_model=ExceptionProcessRecordResponse, summary="Assign exception process")
 async def assign_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
     data: ExceptionProcessAssignRequest = Body(...),
@@ -2085,7 +2085,7 @@ async def assign_exception_process(
         raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/assign", tenant_id)
 
 
-@router.post("/exceptions/process/{process_record_id}/step-transition", response_model=ExceptionProcessRecordResponse, summary="异常处理步骤流转")
+@router.post("/exceptions/process/{process_record_id}/step-transition", response_model=ExceptionProcessRecordResponse, summary="Exception process step transition")
 async def transition_exception_process_step(
     process_record_id: int = Path(..., description="处理记录ID"),
     data: ExceptionProcessStepTransitionRequest = Body(...),
@@ -2112,7 +2112,7 @@ async def transition_exception_process_step(
         raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/step-transition", tenant_id)
 
 
-@router.post("/exceptions/process/{process_record_id}/resolve", response_model=ExceptionProcessRecordResponse, summary="解决异常处理流程")
+@router.post("/exceptions/process/{process_record_id}/resolve", response_model=ExceptionProcessRecordResponse, summary="Resolve exception process")
 async def resolve_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
     data: ExceptionProcessResolveRequest = Body(...),
@@ -2139,7 +2139,7 @@ async def resolve_exception_process(
         raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/resolve", tenant_id)
 
 
-@router.post("/exceptions/process/{process_record_id}/cancel", response_model=ExceptionProcessRecordResponse, summary="取消异常处理流程")
+@router.post("/exceptions/process/{process_record_id}/cancel", response_model=ExceptionProcessRecordResponse, summary="Cancel exception process")
 async def cancel_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
     comment: Optional[str] = Body(None, description="取消说明"),
@@ -2167,7 +2167,7 @@ async def cancel_exception_process(
 
 # ============ 报表 API ============
 
-@router.get("/reports/inventory", summary="获取库存报表")
+@router.get("/reports/inventory", summary="Inventory report")
 async def get_inventory_report(
     report_type: str = Query("summary", description="报表类型（summary/turnover/abc/slow_moving）"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -2211,7 +2211,7 @@ async def get_inventory_report(
     )
 
 
-@router.get("/reports/production", summary="获取生产报表")
+@router.get("/reports/production", summary="Production report")
 async def get_production_report(
     report_type: str = Query("efficiency", description="报表类型（efficiency/completion/reporting/equipment）"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -2260,7 +2260,7 @@ async def get_production_report(
     )
 
 
-@router.get("/reports/quality", summary="获取质量报表")
+@router.get("/reports/quality", summary="Quality report")
 async def get_quality_report(
     report_type: str = Query("analysis", description="报表类型（analysis/defect/pass_rate/trend）"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -2311,7 +2311,7 @@ async def get_quality_report(
 
 # ============ 库存盘点 API ============
 
-@router.post("/stocktakings", response_model=StocktakingResponse, summary="创建库存盘点单")
+@router.post("/stocktakings", response_model=StocktakingResponse, summary="Create stocktaking")
 async def create_stocktaking(
     stocktaking: StocktakingCreate,
     current_user: User = Depends(get_current_user),
@@ -2338,7 +2338,7 @@ async def create_stocktaking(
         raise _http_exception_with_trace(500, f"创建盘点单失败: {str(e)}", "/stocktakings", tenant_id)
 
 
-@router.get("/stocktakings", response_model=StocktakingListResponse, summary="获取库存盘点单列表")
+@router.get("/stocktakings", response_model=StocktakingListResponse, summary="List stocktakings")
 async def list_stocktakings(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -2374,7 +2374,7 @@ async def list_stocktakings(
     )
 
 
-@router.get("/stocktakings/{stocktaking_id}", response_model=StocktakingWithItemsResponse, summary="获取库存盘点单详情")
+@router.get("/stocktakings/{stocktaking_id}", response_model=StocktakingWithItemsResponse, summary="Get stocktaking")
 async def get_stocktaking(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2398,7 +2398,7 @@ async def get_stocktaking(
         raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
-@router.put("/stocktakings/{stocktaking_id}", response_model=StocktakingResponse, summary="更新库存盘点单")
+@router.put("/stocktakings/{stocktaking_id}", response_model=StocktakingResponse, summary="Update stocktaking")
 async def update_stocktaking(
     stocktaking_id: int,
     stocktaking: StocktakingUpdate,
@@ -2428,7 +2428,7 @@ async def update_stocktaking(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/start", response_model=StocktakingResponse, summary="开始盘点")
+@router.post("/stocktakings/{stocktaking_id}/start", response_model=StocktakingResponse, summary="Start stocktaking")
 async def start_stocktaking(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2455,7 +2455,7 @@ async def start_stocktaking(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/start", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/items", response_model=StocktakingItemResponse, summary="添加盘点明细")
+@router.post("/stocktakings/{stocktaking_id}/items", response_model=StocktakingItemResponse, summary="Add stocktaking line")
 async def create_stocktaking_item(
     stocktaking_id: int,
     item: StocktakingItemCreate,
@@ -2485,7 +2485,7 @@ async def create_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items", tenant_id)
 
 
-@router.put("/stocktakings/{stocktaking_id}/items/{item_id}", response_model=StocktakingItemResponse, summary="更新盘点明细")
+@router.put("/stocktakings/{stocktaking_id}/items/{item_id}", response_model=StocktakingItemResponse, summary="Update stocktaking line")
 async def update_stocktaking_item(
     stocktaking_id: int,
     item_id: int,
@@ -2517,7 +2517,7 @@ async def update_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/items/{item_id}/execute", response_model=StocktakingItemResponse, summary="执行盘点明细")
+@router.post("/stocktakings/{stocktaking_id}/items/{item_id}/execute", response_model=StocktakingItemResponse, summary="Execute stocktaking line")
 async def execute_stocktaking_item(
     stocktaking_id: int,
     item_id: int,
@@ -2552,7 +2552,7 @@ async def execute_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}/execute", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/adjust", response_model=StocktakingResponse, summary="处理盘点差异")
+@router.post("/stocktakings/{stocktaking_id}/adjust", response_model=StocktakingResponse, summary="Post stocktaking variance")
 async def adjust_stocktaking_differences(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2579,7 +2579,7 @@ async def adjust_stocktaking_differences(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/adjust", tenant_id)
 
 
-@router.delete("/stocktakings/{stocktaking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除盘点单")
+@router.delete("/stocktakings/{stocktaking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete stocktaking")
 async def delete_stocktaking(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2594,7 +2594,7 @@ async def delete_stocktaking(
 
 # ============ 库存调拨 API ============
 
-@router.post("/inventory-transfers", response_model=InventoryTransferResponse, summary="创建库存调拨单")
+@router.post("/inventory-transfers", response_model=InventoryTransferResponse, summary="Create inventory transfer")
 async def create_inventory_transfer(
     transfer: InventoryTransferCreate,
     current_user: User = Depends(get_current_user),
@@ -2621,7 +2621,7 @@ async def create_inventory_transfer(
         raise _http_exception_with_trace(500, f"创建调拨单失败: {str(e)}", "/inventory-transfers", tenant_id)
 
 
-@router.get("/inventory-transfers", response_model=InventoryTransferListResponse, summary="获取库存调拨单列表")
+@router.get("/inventory-transfers", response_model=InventoryTransferListResponse, summary="List inventory transfers")
 async def list_inventory_transfers(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -2657,7 +2657,7 @@ async def list_inventory_transfers(
     )
 
 
-@router.get("/inventory-transfers/{transfer_id}", response_model=InventoryTransferWithItemsResponse, summary="获取库存调拨单详情")
+@router.get("/inventory-transfers/{transfer_id}", response_model=InventoryTransferWithItemsResponse, summary="Get inventory transfer")
 async def get_inventory_transfer(
     transfer_id: int,
     current_user: User = Depends(get_current_user),
@@ -2681,7 +2681,7 @@ async def get_inventory_transfer(
         raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}", tenant_id)
 
 
-@router.put("/inventory-transfers/{transfer_id}", response_model=InventoryTransferResponse, summary="更新库存调拨单")
+@router.put("/inventory-transfers/{transfer_id}", response_model=InventoryTransferResponse, summary="Update inventory transfer")
 async def update_inventory_transfer(
     transfer_id: int,
     transfer: InventoryTransferUpdate,
@@ -2711,7 +2711,7 @@ async def update_inventory_transfer(
         raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}", tenant_id)
 
 
-@router.post("/inventory-transfers/{transfer_id}/items", response_model=InventoryTransferItemResponse, summary="添加调拨明细")
+@router.post("/inventory-transfers/{transfer_id}/items", response_model=InventoryTransferItemResponse, summary="Add transfer line")
 async def create_inventory_transfer_item(
     transfer_id: int,
     item: InventoryTransferItemCreate,
@@ -2741,7 +2741,7 @@ async def create_inventory_transfer_item(
         raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/items", tenant_id)
 
 
-@router.put("/inventory-transfers/{transfer_id}/items/{item_id}", response_model=InventoryTransferItemResponse, summary="更新调拨明细")
+@router.put("/inventory-transfers/{transfer_id}/items/{item_id}", response_model=InventoryTransferItemResponse, summary="Update transfer line")
 async def update_inventory_transfer_item(
     transfer_id: int,
     item_id: int,
@@ -2773,7 +2773,7 @@ async def update_inventory_transfer_item(
         raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/items/{item_id}", tenant_id)
 
 
-@router.post("/inventory-transfers/{transfer_id}/execute", response_model=InventoryTransferResponse, summary="执行调拨")
+@router.post("/inventory-transfers/{transfer_id}/execute", response_model=InventoryTransferResponse, summary="Execute transfer")
 async def execute_inventory_transfer(
     transfer_id: int,
     current_user: User = Depends(get_current_user),
@@ -2800,7 +2800,7 @@ async def execute_inventory_transfer(
         raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/execute", tenant_id)
 
 
-@router.delete("/inventory-transfers/{transfer_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除调拨单")
+@router.delete("/inventory-transfers/{transfer_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete inventory transfer")
 async def delete_inventory_transfer(
     transfer_id: int,
     current_user: User = Depends(get_current_user),
@@ -2815,7 +2815,7 @@ async def delete_inventory_transfer(
 
 # ============ 组装单 API ============
 
-@router.post("/assembly-orders", response_model=AssemblyOrderResponse, summary="创建组装单")
+@router.post("/assembly-orders", response_model=AssemblyOrderResponse, summary="Create assembly order")
 async def create_assembly_order(
     data: AssemblyOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -2834,7 +2834,7 @@ async def create_assembly_order(
         raise _http_exception_with_trace(400, str(e), "/assembly-orders", tenant_id)
 
 
-@router.get("/assembly-orders", response_model=AssemblyOrderListResponse, summary="获取组装单列表")
+@router.get("/assembly-orders", response_model=AssemblyOrderListResponse, summary="List assembly orders")
 async def list_assembly_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -2855,7 +2855,7 @@ async def list_assembly_orders(
     )
 
 
-@router.get("/assembly-orders/{order_id}", response_model=AssemblyOrderWithItemsResponse, summary="获取组装单详情")
+@router.get("/assembly-orders/{order_id}", response_model=AssemblyOrderWithItemsResponse, summary="Get assembly order")
 async def get_assembly_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
@@ -2871,7 +2871,7 @@ async def get_assembly_order(
         raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}", tenant_id)
 
 
-@router.put("/assembly-orders/{order_id}", response_model=AssemblyOrderResponse, summary="更新组装单")
+@router.put("/assembly-orders/{order_id}", response_model=AssemblyOrderResponse, summary="Update assembly order")
 async def update_assembly_order(
     order_id: int,
     data: AssemblyOrderUpdate,
@@ -2892,7 +2892,7 @@ async def update_assembly_order(
         raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}", tenant_id)
 
 
-@router.post("/assembly-orders/{order_id}/items", response_model=AssemblyOrderItemResponse, summary="添加组装明细")
+@router.post("/assembly-orders/{order_id}/items", response_model=AssemblyOrderItemResponse, summary="Add assembly line")
 async def create_assembly_order_item(
     order_id: int,
     item: AssemblyOrderItemCreateInput,
@@ -2913,7 +2913,7 @@ async def create_assembly_order_item(
         raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items", tenant_id)
 
 
-@router.put("/assembly-orders/{order_id}/items/{item_id}", response_model=AssemblyOrderItemResponse, summary="更新组装明细")
+@router.put("/assembly-orders/{order_id}/items/{item_id}", response_model=AssemblyOrderItemResponse, summary="Update assembly line")
 async def update_assembly_order_item(
     order_id: int,
     item_id: int,
@@ -2935,7 +2935,7 @@ async def update_assembly_order_item(
         raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
 
 
-@router.delete("/assembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除组装单")
+@router.delete("/assembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete assembly order")
 async def delete_assembly_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
@@ -2948,7 +2948,7 @@ async def delete_assembly_order(
     )
 
 
-@router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="执行组装")
+@router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="Execute assembly")
 async def execute_assembly_order(
     order_id: int,
     request_data: Optional[ExecuteAssemblyOrderRequest] = None,
@@ -2971,7 +2971,7 @@ async def execute_assembly_order(
 
 # ============ 拆卸单 API ============
 
-@router.post("/disassembly-orders", response_model=DisassemblyOrderResponse, summary="创建拆卸单")
+@router.post("/disassembly-orders", response_model=DisassemblyOrderResponse, summary="Create disassembly order")
 async def create_disassembly_order(
     data: DisassemblyOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -2990,7 +2990,7 @@ async def create_disassembly_order(
         raise _http_exception_with_trace(400, str(e), "/disassembly-orders", tenant_id)
 
 
-@router.get("/disassembly-orders", response_model=DisassemblyOrderListResponse, summary="获取拆卸单列表")
+@router.get("/disassembly-orders", response_model=DisassemblyOrderListResponse, summary="List disassembly orders")
 async def list_disassembly_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3011,7 +3011,7 @@ async def list_disassembly_orders(
     )
 
 
-@router.get("/disassembly-orders/{order_id}", response_model=DisassemblyOrderWithItemsResponse, summary="获取拆卸单详情")
+@router.get("/disassembly-orders/{order_id}", response_model=DisassemblyOrderWithItemsResponse, summary="Get disassembly order")
 async def get_disassembly_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
@@ -3027,7 +3027,7 @@ async def get_disassembly_order(
         raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}", tenant_id)
 
 
-@router.put("/disassembly-orders/{order_id}", response_model=DisassemblyOrderResponse, summary="更新拆卸单")
+@router.put("/disassembly-orders/{order_id}", response_model=DisassemblyOrderResponse, summary="Update disassembly order")
 async def update_disassembly_order(
     order_id: int,
     data: DisassemblyOrderUpdate,
@@ -3048,7 +3048,7 @@ async def update_disassembly_order(
         raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}", tenant_id)
 
 
-@router.post("/disassembly-orders/{order_id}/items", response_model=DisassemblyOrderItemResponse, summary="添加拆卸明细")
+@router.post("/disassembly-orders/{order_id}/items", response_model=DisassemblyOrderItemResponse, summary="Add disassembly line")
 async def create_disassembly_order_item(
     order_id: int,
     item: DisassemblyOrderItemCreateInput,
@@ -3069,7 +3069,7 @@ async def create_disassembly_order_item(
         raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/items", tenant_id)
 
 
-@router.put("/disassembly-orders/{order_id}/items/{item_id}", response_model=DisassemblyOrderItemResponse, summary="更新拆卸明细")
+@router.put("/disassembly-orders/{order_id}/items/{item_id}", response_model=DisassemblyOrderItemResponse, summary="Update disassembly line")
 async def update_disassembly_order_item(
     order_id: int,
     item_id: int,
@@ -3091,7 +3091,7 @@ async def update_disassembly_order_item(
         raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)
 
 
-@router.delete("/disassembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除拆卸单")
+@router.delete("/disassembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete disassembly order")
 async def delete_disassembly_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
@@ -3104,7 +3104,7 @@ async def delete_disassembly_order(
     )
 
 
-@router.post("/disassembly-orders/{order_id}/execute", response_model=DisassemblyOrderResponse, summary="执行拆卸")
+@router.post("/disassembly-orders/{order_id}/execute", response_model=DisassemblyOrderResponse, summary="Execute disassembly")
 async def execute_disassembly_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
@@ -3125,7 +3125,7 @@ async def execute_disassembly_order(
 
 # ==================== 工单委外管理 API ====================
 
-@router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="创建工单委外")
+@router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="Create outsourced work order")
 async def create_outsource_work_order(
     data: OutsourceWorkOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -3152,7 +3152,7 @@ async def create_outsource_work_order(
         raise _http_exception_with_trace(404, str(e), "/outsource-work-orders", tenant_id)
 
 
-@router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="获取工单委外列表")
+@router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="List outsourced work orders")
 async def list_outsource_work_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3192,7 +3192,7 @@ async def list_outsource_work_orders(
         raise _http_exception_with_trace(500, str(e), "/outsource-work-orders", tenant_id)
 
 
-@router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="获取工单委外详情")
+@router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="Get outsourced work order")
 async def get_outsource_work_order(
     work_order_id: int = Path(..., description="工单委外ID"),
     current_user: User = Depends(get_current_user),
@@ -3216,7 +3216,7 @@ async def get_outsource_work_order(
         raise _http_exception_with_trace(404, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
-@router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="更新工单委外")
+@router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="Update outsourced work order")
 async def update_outsource_work_order(
     work_order_id: int = Path(..., description="工单委外ID"),
     data: OutsourceWorkOrderUpdate = Body(...),
@@ -3246,7 +3246,7 @@ async def update_outsource_work_order(
         raise _http_exception_with_trace(400, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
-@router.delete("/outsource-work-orders/{work_order_id}", summary="删除工单委外")
+@router.delete("/outsource-work-orders/{work_order_id}", summary="Delete outsourced work order")
 async def delete_outsource_work_order(
     work_order_id: int = Path(..., description="工单委外ID"),
     current_user: User = Depends(get_current_user),
@@ -3276,7 +3276,7 @@ async def delete_outsource_work_order(
 
 # ==================== 委外发料 API ====================
 
-@router.post("/outsource-material-issues", response_model=OutsourceMaterialIssueResponse, summary="创建委外发料单")
+@router.post("/outsource-material-issues", response_model=OutsourceMaterialIssueResponse, summary="Create subcontract issue")
 async def create_outsource_material_issue(
     data: OutsourceMaterialIssueCreate,
     current_user: User = Depends(get_current_user),
@@ -3303,7 +3303,7 @@ async def create_outsource_material_issue(
         raise _http_exception_with_trace(404, str(e), "/outsource-material-issues", tenant_id)
 
 
-@router.get("/outsource-material-issues", response_model=List[OutsourceMaterialIssueResponse], summary="获取委外发料单列表")
+@router.get("/outsource-material-issues", response_model=List[OutsourceMaterialIssueResponse], summary="List subcontract issues")
 async def list_outsource_material_issues(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3340,7 +3340,7 @@ async def list_outsource_material_issues(
         raise _http_exception_with_trace(500, str(e), "/outsource-material-issues", tenant_id)
 
 
-@router.get("/outsource-material-issues/{issue_id}", response_model=OutsourceMaterialIssueResponse, summary="获取委外发料单详情")
+@router.get("/outsource-material-issues/{issue_id}", response_model=OutsourceMaterialIssueResponse, summary="Get subcontract issue")
 async def get_outsource_material_issue(
     issue_id: int = Path(..., description="委外发料单ID"),
     current_user: User = Depends(get_current_user),
@@ -3364,7 +3364,7 @@ async def get_outsource_material_issue(
         raise _http_exception_with_trace(404, str(e), "/outsource-material-issues/{issue_id}", tenant_id)
 
 
-@router.post("/outsource-material-issues/{issue_id}/complete", response_model=OutsourceMaterialIssueResponse, summary="完成委外发料")
+@router.post("/outsource-material-issues/{issue_id}/complete", response_model=OutsourceMaterialIssueResponse, summary="Complete subcontract issue")
 async def complete_outsource_material_issue(
     issue_id: int = Path(..., description="委外发料单ID"),
     current_user: User = Depends(get_current_user),
@@ -3393,7 +3393,7 @@ async def complete_outsource_material_issue(
 
 # ==================== 委外收货 API ====================
 
-@router.post("/outsource-material-receipts", response_model=OutsourceMaterialReceiptResponse, summary="创建委外收货单")
+@router.post("/outsource-material-receipts", response_model=OutsourceMaterialReceiptResponse, summary="Create subcontract receipt")
 async def create_outsource_material_receipt(
     data: OutsourceMaterialReceiptCreate,
     current_user: User = Depends(get_current_user),
@@ -3420,7 +3420,7 @@ async def create_outsource_material_receipt(
         raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts", tenant_id)
 
 
-@router.get("/outsource-material-receipts", response_model=List[OutsourceMaterialReceiptResponse], summary="获取委外收货单列表")
+@router.get("/outsource-material-receipts", response_model=List[OutsourceMaterialReceiptResponse], summary="List subcontract receipts")
 async def list_outsource_material_receipts(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3457,7 +3457,7 @@ async def list_outsource_material_receipts(
         raise _http_exception_with_trace(500, str(e), "/outsource-material-receipts", tenant_id)
 
 
-@router.get("/outsource-material-receipts/{receipt_id}", response_model=OutsourceMaterialReceiptResponse, summary="获取委外收货单详情")
+@router.get("/outsource-material-receipts/{receipt_id}", response_model=OutsourceMaterialReceiptResponse, summary="Get subcontract receipt")
 async def get_outsource_material_receipt(
     receipt_id: int = Path(..., description="委外收货单ID"),
     current_user: User = Depends(get_current_user),
@@ -3481,7 +3481,7 @@ async def get_outsource_material_receipt(
         raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}", tenant_id)
 
 
-@router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="完成委外收货")
+@router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="Complete subcontract receipt")
 async def complete_outsource_material_receipt(
     receipt_id: int = Path(..., description="委外收货单ID"),
     current_user: User = Depends(get_current_user),
@@ -3510,7 +3510,7 @@ async def complete_outsource_material_receipt(
 
 # ==================== 供应商协同 API ====================
 
-@router.post("/purchase-orders/{purchase_order_id}/send-to-supplier", summary="下发采购订单到供应商协同平台")
+@router.post("/purchase-orders/{purchase_order_id}/send-to-supplier", summary="Send PO to supplier portal")
 async def send_purchase_order_to_supplier(
     purchase_order_id: int = Path(..., description="采购订单ID"),
     current_user: User = Depends(get_current_user),
@@ -3537,7 +3537,7 @@ async def send_purchase_order_to_supplier(
         raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/send-to-supplier", tenant_id)
 
 
-@router.post("/purchase-orders/{purchase_order_id}/update-progress", summary="更新采购订单进度")
+@router.post("/purchase-orders/{purchase_order_id}/update-progress", summary="Update purchase order progress")
 async def update_purchase_order_progress(
     purchase_order_id: int = Path(..., description="采购订单ID"),
     progress_data: PurchaseOrderProgressUpdateRequest = Body(...),
@@ -3567,7 +3567,7 @@ async def update_purchase_order_progress(
         raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/update-progress", tenant_id)
 
 
-@router.post("/purchase-orders/{purchase_order_id}/submit-delivery-notice", summary="提交发货通知")
+@router.post("/purchase-orders/{purchase_order_id}/submit-delivery-notice", summary="Submit shipping notice")
 async def submit_delivery_notice(
     purchase_order_id: int = Path(..., description="采购订单ID"),
     delivery_data: DeliveryNoticeRequest = Body(...),
@@ -3597,7 +3597,7 @@ async def submit_delivery_notice(
         raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/submit-delivery-notice", tenant_id)
 
 
-@router.get("/suppliers/{supplier_id}/purchase-orders", summary="获取供应商的采购订单列表")
+@router.get("/suppliers/{supplier_id}/purchase-orders", summary="List purchase orders for supplier")
 async def get_supplier_purchase_orders(
     supplier_id: int = Path(..., description="供应商ID"),
     status: Optional[str] = Query(None, description="订单状态"),
@@ -3626,7 +3626,7 @@ async def get_supplier_purchase_orders(
 
 # ==================== 客户协同 API ====================
 
-@router.get("/customers/{customer_id}/sales-orders", summary="获取客户的销售订单列表")
+@router.get("/customers/{customer_id}/sales-orders", summary="List sales orders for customer")
 async def get_customer_sales_orders(
     customer_id: int = Path(..., description="客户ID"),
     status: Optional[str] = Query(None, description="订单状态"),
@@ -3653,7 +3653,7 @@ async def get_customer_sales_orders(
         raise _http_exception_with_trace(404, str(e), "/customers/{customer_id}/sales-orders", tenant_id)
 
 
-@router.get("/sales-orders/{sales_order_id}/production-progress", response_model=SalesOrderProductionProgressResponse, summary="获取销售订单生产进度")
+@router.get("/sales-orders/{sales_order_id}/production-progress", response_model=SalesOrderProductionProgressResponse, summary="Sales order production progress")
 async def get_sales_order_production_progress(
     sales_order_id: int = Path(..., description="销售订单ID"),
     current_user: User = Depends(get_current_user),
@@ -3677,7 +3677,7 @@ async def get_sales_order_production_progress(
         raise _http_exception_with_trace(404, str(e), "/sales-orders/{sales_order_id}/production-progress", tenant_id)
 
 
-@router.get("/customers/{customer_id}/order-summary", response_model=CustomerOrderSummaryResponse, summary="获取客户订单汇总")
+@router.get("/customers/{customer_id}/order-summary", response_model=CustomerOrderSummaryResponse, summary="Customer order summary")
 async def get_customer_order_summary(
     customer_id: int = Path(..., description="客户ID"),
     current_user: User = Depends(get_current_user),

@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Any, Dict
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaireport.models.dashboard import Dashboard
 from apps.kuaireport.schemas.dashboard import DashboardCreate, DashboardUpdate
 from infra.exceptions.exceptions import NotFoundError

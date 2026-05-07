@@ -423,24 +423,17 @@ const UserProfilePage: React.FC = () => {
         <Col xs={24} md={8}>
           <Card title={t('pages.personal.profile.userInfo')} loading={loading} style={{ marginBottom: 16 }}>
             <Space orientation="vertical" align="center" style={{ width: '100%' }}>
-              {avatarUrl ? (
-                <Avatar
-                  size={120}
-                  src={avatarUrl}
-                />
-              ) : (
-                <Avatar
-                  size={120}
-                  style={{
-                    backgroundColor: token.colorPrimary,
-                    fontSize: getAvatarFontSize(120),
-                    fontWeight: 500,
-                  }}
-                >
-                  {/* 显示首字母（优先全名，否则用户名） */}
-                  {getAvatarText(profileData?.full_name, profileData?.username)}
-                </Avatar>
-              )}
+              <Avatar
+                size={120}
+                src={avatarUrl}
+                style={{
+                  backgroundColor: token.colorPrimary,
+                  fontSize: getAvatarFontSize(120),
+                  fontWeight: 500,
+                }}
+              >
+                {getAvatarText(profileData?.full_name, profileData?.username)}
+              </Avatar>
               <div style={{ textAlign: 'center', width: '100%' }}>
                 <Title level={4} style={{ margin: '16px 0 8px 0' }}>
                   {profileData?.full_name || profileData?.username || t('pages.personal.profile.noName')}
@@ -530,24 +523,17 @@ const UserProfilePage: React.FC = () => {
                     >
               <ProForm.Item name="avatar" label={t('pages.personal.profile.avatar')}>
                 <Space orientation="vertical" align="center">
-                  {avatarUrl ? (
-                    <Avatar
-                      size={100}
-                      src={avatarUrl}
-                    />
-                  ) : (
-                    <Avatar
-                      size={100}
-                      style={{
-                        backgroundColor: token.colorPrimary,
-                        fontSize: getAvatarFontSize(100),
-                        fontWeight: 500,
-                      }}
-                    >
-                      {/* 显示首字母（优先全名，否则用户名） */}
-                      {getAvatarText(profileData?.full_name, profileData?.username)}
-                    </Avatar>
-                  )}
+                  <Avatar
+                    size={100}
+                    src={avatarUrl}
+                    style={{
+                      backgroundColor: token.colorPrimary,
+                      fontSize: getAvatarFontSize(100),
+                      fontWeight: 500,
+                    }}
+                  >
+                    {getAvatarText(profileData?.full_name, profileData?.username)}
+                  </Avatar>
                   <Space>
                     <Upload
                       customRequest={handleAvatarUpload}

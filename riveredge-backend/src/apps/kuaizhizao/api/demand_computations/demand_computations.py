@@ -26,12 +26,12 @@ from apps.kuaizhizao.schemas.demand_computation import (
     ExecuteComputationRequest,
 )
 
-router = APIRouter(prefix="/demand-computations", tags=["统一需求计算管理"])
+router = APIRouter(prefix="/demand-computations", tags=["App · Kuaige Zhizao · Unified Demand Computation"])
 
 computation_service = DemandComputationService()
 
 
-@router.post("", response_model=DemandComputationResponse, summary="创建需求计算")
+@router.post("", response_model=DemandComputationResponse, summary="Create demand computation")
 async def create_computation(
     computation_data: DemandComputationCreate,
     current_user: User = Depends(get_current_user),
@@ -57,7 +57,7 @@ async def create_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求计算失败")
 
 
-@router.get("/statistics", summary="获取需求计算统计（用于指标卡片）")
+@router.get("/statistics", summary="Demand computation statistics (KPI cards)")
 async def get_demand_computation_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -114,7 +114,7 @@ async def get_demand_computation_statistics(
     }
 
 
-@router.get("", summary="获取需求计算列表")
+@router.get("", summary="List demand computations")
 async def list_computations(
     demand_id: Optional[int] = Query(None, description="需求ID"),
     demand_code: Optional[str] = Query(None, description="需求编码"),
@@ -156,7 +156,7 @@ async def list_computations(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求计算列表失败")
 
 
-@router.get("/{computation_id}", response_model=DemandComputationResponse, summary="获取需求计算详情")
+@router.get("/{computation_id}", response_model=DemandComputationResponse, summary="Get demand computation")
 async def get_computation(
     computation_id: int = Path(..., description="计算ID"),
     include_items: bool = Query(True, description="是否包含明细"),
@@ -181,7 +181,7 @@ async def get_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求计算详情失败")
 
 
-@router.post("/{computation_id}/execute/preview", summary="执行计算预览")
+@router.post("/{computation_id}/execute/preview", summary="Preview computation run")
 async def preview_execute_computation(
     computation_id: int = Path(..., description="计算ID"),
     body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
@@ -209,7 +209,7 @@ async def preview_execute_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 
-@router.post("/{computation_id}/execute", response_model=DemandComputationResponse, summary="执行需求计算")
+@router.post("/{computation_id}/execute", response_model=DemandComputationResponse, summary="Run demand computation")
 async def execute_computation(
     computation_id: int = Path(..., description="计算ID"),
     body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
@@ -240,7 +240,7 @@ async def execute_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 
-@router.post("/{computation_id}/recompute", response_model=DemandComputationResponse, summary="重新计算")
+@router.post("/{computation_id}/recompute", response_model=DemandComputationResponse, summary="Recompute")
 async def recompute_computation(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -266,7 +266,7 @@ async def recompute_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 
-@router.get("/{computation_id}/recalc-history", summary="获取需求计算重算历史")
+@router.get("/{computation_id}/recalc-history", summary="Demand computation recalc history")
 async def get_computation_recalc_history(
     computation_id: int = Path(..., description="计算ID"),
     limit: int = Query(50, ge=1, le=100),
@@ -282,7 +282,7 @@ async def get_computation_recalc_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/{computation_id}/snapshots", summary="获取需求计算快照列表")
+@router.get("/{computation_id}/snapshots", summary="List demand computation snapshots")
 async def get_computation_snapshots(
     computation_id: int = Path(..., description="计算ID"),
     limit: int = Query(20, ge=1, le=50),
@@ -300,7 +300,7 @@ async def get_computation_snapshots(
 
 @router.get(
     "/{computation_id}/snapshots/{snapshot_id}",
-    summary="获取单条需求计算快照",
+    summary="Get demand computation snapshot",
 )
 async def get_computation_snapshot_one(
     computation_id: int = Path(..., description="计算ID"),
@@ -317,7 +317,7 @@ async def get_computation_snapshot_one(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/{computation_id}/dynamic-monitor", summary="获取需求计算动态变动监控")
+@router.get("/{computation_id}/dynamic-monitor", summary="Demand computation change monitor")
 async def get_dynamic_monitor(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -339,7 +339,7 @@ async def get_dynamic_monitor(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/{computation_id}/push-records", summary="获取需求计算下推记录")
+@router.get("/{computation_id}/push-records", summary="Demand computation push records")
 async def get_push_records(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -361,7 +361,7 @@ async def get_push_records(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取下推记录失败")
 
 
-@router.delete("/{computation_id}", summary="删除需求计算")
+@router.delete("/{computation_id}", summary="Delete demand computation")
 async def delete_computation(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -388,7 +388,7 @@ async def delete_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求计算失败")
 
 
-@router.put("/{computation_id}", response_model=DemandComputationResponse, summary="更新需求计算")
+@router.put("/{computation_id}", response_model=DemandComputationResponse, summary="Update demand computation")
 async def update_computation(
     computation_id: int = Path(..., description="计算ID"),
     computation_data: DemandComputationUpdate = ...,
@@ -416,7 +416,7 @@ async def update_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求计算失败")
 
 
-@router.post("/{computation_id}/generate-orders", summary="一键生成工单和采购单")
+@router.post("/{computation_id}/generate-orders", summary="Generate work orders and POs (one click)")
 async def generate_orders(
     computation_id: int = Path(..., description="计算ID"),
     generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单"),
@@ -465,7 +465,7 @@ async def generate_orders(
         )
 
 
-@router.get("/{computation_id}/push-options", summary="获取下推能力与配置")
+@router.get("/{computation_id}/push-options", summary="Get push capabilities and config")
 async def get_push_options(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -486,7 +486,7 @@ async def get_push_options(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/{computation_id}/push-preview", summary="下推预览")
+@router.get("/{computation_id}/push-preview", summary="Preview push targets")
 async def get_push_preview(
     computation_id: int = Path(..., description="计算ID"),
     production: Optional[str] = Query(None, description="生产路径：plan|work_order"),
@@ -518,7 +518,7 @@ async def get_push_preview(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/{computation_id}/push-all", summary="一键下推")
+@router.post("/{computation_id}/push-all", summary="Push all (one click)")
 async def push_all(
     computation_id: int = Path(..., description="计算ID"),
     body: Optional[Dict[str, Any]] = Body(default=None, description="配置：production, purchase, include_outsource"),
@@ -546,7 +546,7 @@ async def push_all(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/{computation_id}/push-to-purchase-requisition", summary="下推到采购申请")
+@router.post("/{computation_id}/push-to-purchase-requisition", summary="Push to purchase requisition")
 async def push_to_purchase_requisition(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -574,7 +574,7 @@ async def push_to_purchase_requisition(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到采购申请失败")
 
 
-@router.post("/{computation_id}/push-to-production-plan", summary="下推到生产计划")
+@router.post("/{computation_id}/push-to-production-plan", summary="Push to production plan")
 async def push_to_production_plan(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -602,7 +602,7 @@ async def push_to_production_plan(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到生产计划失败")
 
 
-@router.get("/history", summary="查询需求计算历史记录")
+@router.get("/history", summary="List demand computation history")
 async def list_computation_history(
     demand_id: Optional[int] = Query(None, description="需求ID"),
     computation_type: Optional[str] = Query(
@@ -664,7 +664,7 @@ async def list_computation_history(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询需求计算历史记录失败")
 
 
-@router.get("/compare", summary="对比两个需求计算结果")
+@router.get("/compare", summary="Compare two demand computations")
 async def compare_computations(
     computation_id1: int = Query(..., description="第一个计算ID"),
     computation_id2: int = Query(..., description="第二个计算ID"),
@@ -690,7 +690,7 @@ async def compare_computations(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="对比需求计算结果失败")
 
 
-@router.get("/{computation_id}/material-sources", summary="获取需求计算的物料来源信息")
+@router.get("/{computation_id}/material-sources", summary="Demand computation material sources")
 async def get_material_sources(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -738,7 +738,7 @@ async def get_material_sources(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取物料来源信息失败")
 
 
-@router.post("/{computation_id}/validate-material-sources", summary="验证需求计算的物料来源配置")
+@router.post("/{computation_id}/validate-material-sources", summary="Validate demand computation material sources")
 async def validate_material_sources(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),

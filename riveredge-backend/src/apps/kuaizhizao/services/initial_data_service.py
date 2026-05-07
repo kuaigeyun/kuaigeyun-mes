@@ -32,7 +32,7 @@ from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
 from apps.master_data.schemas.material_schemas import MaterialCodeConvertRequest
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -278,7 +278,7 @@ class InitialDataService:
                 try:
                     # 生成入库单编码
                     today = datetime.now().strftime("%Y%m%d")
-                    from apps.base_service import AppBaseService
+                    from apps.common.base_service import AppBaseService
                     base_service = AppBaseService(PurchaseReceipt)
                     receipt_code = await base_service.generate_code(
                         tenant_id, 

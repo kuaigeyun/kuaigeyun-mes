@@ -12,7 +12,7 @@ from tortoise.functions import Sum
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
 from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceUpdate
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 

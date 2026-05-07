@@ -1,7 +1,7 @@
 """
 定时任务管理服务模块
 
-提供定时任务的 CRUD 操作和 Inngest 集成功能。
+提供定时任务的 CRUD；执行侧由 Taskiq 事件管道（如 scheduled-task/execute）触发。
 """
 
 from typing import Optional, List
@@ -21,8 +21,8 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 class ScheduledTaskService:
     """
     定时任务管理服务类
-    
-    提供定时任务的 CRUD 操作和 Inngest 集成功能。
+
+    提供定时任务的 CRUD；与运行记录字段（如历史 inngest_run_id）兼容，调度由 Taskiq 承担。
     """
     
     @staticmethod
@@ -50,10 +50,10 @@ class ScheduledTaskService:
             )
             await scheduled_task.save()
             
-            # TODO: 集成 Inngest 函数注册
-            # 当任务启用时，注册到 Inngest
+            # TODO: 集成工作流函数注册
+            # 当任务启用时，注册到工作流执行器
             # if scheduled_task.is_active:
-            #     from core.inngest.functions.scheduled_task_executor import register_scheduled_task
+            #     from core.workflows.functions.scheduled_task_executor import register_scheduled_task
             #     function_id = await register_scheduled_task(scheduled_task)
             #     scheduled_task.inngest_function_id = function_id
             #     await scheduled_task.save()

@@ -17,12 +17,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 
 from apps.kuaizhizao.services.state_transition_service import StateTransitionService
 
-router = APIRouter(prefix="/state-transitions", tags=["状态流转管理"])
+router = APIRouter(prefix="/state-transitions", tags=["App · Kuaige Zhizao · State Transitions"])
 
 state_transition_service = StateTransitionService()
 
 
-@router.post("/{entity_type}/{entity_id}", summary="执行状态流转")
+@router.post("/{entity_type}/{entity_id}", summary="Run state transition")
 async def transition_state(
     entity_type: str = Path(..., description="实体类型"),
     entity_id: int = Path(..., description="实体ID"),
@@ -97,7 +97,7 @@ async def transition_state(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="执行状态流转失败")
 
 
-@router.get("/history/{entity_type}/{entity_id}", summary="获取状态流转历史")
+@router.get("/history/{entity_type}/{entity_id}", summary="List state transition history")
 async def get_transition_history(
     entity_type: str = Path(..., description="实体类型"),
     entity_id: int = Path(..., description="实体ID"),
@@ -120,7 +120,7 @@ async def get_transition_history(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取状态流转历史失败")
 
 
-@router.get("/available/{entity_type}", summary="获取可用状态流转选项")
+@router.get("/available/{entity_type}", summary="List available state transitions")
 async def get_available_transitions(
     entity_type: str = Path(..., description="实体类型"),
     current_state: str = Query(..., description="当前状态"),

@@ -20,7 +20,7 @@ from core.api.deps import get_current_user, get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/customer-follow-ups", tags=["Kuaige Zhizao - Customer Follow-up"])
+router = APIRouter(prefix="/customer-follow-ups", tags=["App · Kuaige Zhizao · Customer Follow-up"])
 
 _service = CustomerFollowUpService()
 
@@ -51,7 +51,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, message)
 
 
-@router.post("", response_model=CustomerFollowUpResponse, summary="创建客户跟进")
+@router.post("", response_model=CustomerFollowUpResponse, summary="Create customer follow-up")
 async def create_follow_up(
     body: CustomerFollowUpCreate,
     current_user: User = Depends(get_current_user),
@@ -63,7 +63,7 @@ async def create_follow_up(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=CustomerFollowUpListEnvelope, summary="客户跟进列表")
+@router.get("", response_model=CustomerFollowUpListEnvelope, summary="List customer follow-ups")
 async def list_follow_ups(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -88,7 +88,7 @@ async def list_follow_ups(
     )
 
 
-@router.get("/{follow_id}", response_model=CustomerFollowUpResponse, summary="客户跟进详情")
+@router.get("/{follow_id}", response_model=CustomerFollowUpResponse, summary="Get customer follow-up")
 async def get_follow_up(
     follow_id: int = Path(..., description="跟进记录ID"),
     current_user: User = Depends(get_current_user),
@@ -100,7 +100,7 @@ async def get_follow_up(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/{follow_id}", response_model=CustomerFollowUpResponse, summary="更新客户跟进")
+@router.put("/{follow_id}", response_model=CustomerFollowUpResponse, summary="Update customer follow-up")
 async def update_follow_up(
     body: CustomerFollowUpUpdate,
     follow_id: int = Path(..., description="跟进记录ID"),
@@ -115,7 +115,7 @@ async def update_follow_up(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{follow_id}", summary="删除客户跟进")
+@router.delete("/{follow_id}", summary="Delete customer follow-up")
 async def delete_follow_up(
     follow_id: int = Path(..., description="跟进记录ID"),
     current_user: User = Depends(get_current_user),

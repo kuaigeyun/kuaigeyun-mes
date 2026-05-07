@@ -24,7 +24,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Conflict
 from typing import Any
 
 # 创建路由
-router = APIRouter(prefix="/tenants", tags=["Infra Tenants"])
+router = APIRouter(prefix="/tenants", tags=["Platform · Tenants"])
 
 
 class BulkInactivityTimeoutBody(BaseModel):
@@ -427,7 +427,7 @@ async def delete_tenant_by_superadmin(
 @router.post(
     "/bulk-inactivity-timeout",
     response_model=BulkInactivityTimeoutResponse,
-    summary="批量设置所有租户的站点「不活动超时」",
+    summary="Batch-set site inactivity timeout for all tenants",
 )
 async def bulk_set_inactivity_timeout_for_all_tenants(
     body: BulkInactivityTimeoutBody,

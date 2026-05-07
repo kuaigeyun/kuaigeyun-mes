@@ -20,7 +20,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/message-configs", tags=["MessageConfigs"])
+router = APIRouter(prefix="/message-configs", tags=["Core · Message Configs"])
 
 
 @router.post("/test-connection", response_model=MessageConfigTestResponse)

@@ -28,10 +28,10 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderResponse
 
 quotation_service = QuotationService()
-router = APIRouter(prefix="/quotations", tags=["Kuaige Zhizao - Quotation Management"])
+router = APIRouter(prefix="/quotations", tags=["App · Kuaige Zhizao · Quotation Management"])
 
 
-@router.post("", response_model=QuotationResponse, summary="创建报价单")
+@router.post("", response_model=QuotationResponse, summary="Create quotation")
 async def create_quotation(
     quotation_data: QuotationCreate,
     current_user: User = Depends(get_current_user),
@@ -52,7 +52,7 @@ async def create_quotation(
         )
 
 
-@router.get("", response_model=QuotationListResponse, summary="获取报价单列表")
+@router.get("", response_model=QuotationListResponse, summary="List quotations")
 async def list_quotations(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -89,7 +89,7 @@ async def list_quotations(
         )
 
 
-@router.get("/{quotation_id}", response_model=QuotationResponse, summary="获取报价单详情")
+@router.get("/{quotation_id}", response_model=QuotationResponse, summary="Get quotation")
 async def get_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     include_items: bool = Query(True, description="是否包含明细"),
@@ -116,7 +116,7 @@ async def get_quotation(
 @router.post(
     "/{quotation_id}/revision",
     response_model=QuotationResponse,
-    summary="新建修订版（复制系列最新版为新草稿修订）",
+    summary="New revision (copy latest as draft)",
 )
 async def create_quotation_revision(
     quotation_id: int = Path(..., description="报价单ID（系列内任一行，系统解析最新版）"),
@@ -147,7 +147,7 @@ async def create_quotation_revision(
         )
 
 
-@router.put("/{quotation_id}", response_model=QuotationResponse, summary="更新报价单")
+@router.put("/{quotation_id}", response_model=QuotationResponse, summary="Update quotation")
 async def update_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     quotation_data: QuotationUpdate = ...,
@@ -174,7 +174,7 @@ async def update_quotation(
         )
 
 
-@router.post("/{quotation_id}/withdraw", response_model=QuotationResponse, summary="撤回已提交的报价单")
+@router.post("/{quotation_id}/withdraw", response_model=QuotationResponse, summary="Withdraw submitted quotation")
 async def withdraw_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -199,7 +199,7 @@ async def withdraw_quotation(
         )
 
 
-@router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="提交报价单")
+@router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="Submit quotation")
 async def submit_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -224,7 +224,7 @@ async def submit_quotation(
         )
 
 
-@router.post("/{quotation_id}/approve", response_model=QuotationResponse, summary="审核通过报价单")
+@router.post("/{quotation_id}/approve", response_model=QuotationResponse, summary="Approve quotation")
 async def approve_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     body: QuotationReviewAction = Body(default_factory=QuotationReviewAction),
@@ -251,7 +251,7 @@ async def approve_quotation(
         )
 
 
-@router.post("/{quotation_id}/reject", response_model=QuotationResponse, summary="驳回报价单")
+@router.post("/{quotation_id}/reject", response_model=QuotationResponse, summary="Reject quotation")
 async def reject_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     body: QuotationReviewAction = Body(default_factory=QuotationReviewAction),
@@ -278,7 +278,7 @@ async def reject_quotation(
         )
 
 
-@router.post("/{quotation_id}/revoke-review", response_model=QuotationResponse, summary="撤回审核（回到待审核）")
+@router.post("/{quotation_id}/revoke-review", response_model=QuotationResponse, summary="Withdraw review (back to pending)")
 async def revoke_review_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -303,7 +303,7 @@ async def revoke_review_quotation(
         )
 
 
-@router.post("/{quotation_id}/confirm-customer", response_model=QuotationResponse, summary="客户确认（标记已接受）")
+@router.post("/{quotation_id}/confirm-customer", response_model=QuotationResponse, summary="Customer confirm (accepted)")
 async def confirm_customer_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -328,7 +328,7 @@ async def confirm_customer_quotation(
         )
 
 
-@router.post("/{quotation_id}/reopen", response_model=QuotationResponse, summary="驳回后重新编辑")
+@router.post("/{quotation_id}/reopen", response_model=QuotationResponse, summary="Reopen after rejection")
 async def reopen_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -353,7 +353,7 @@ async def reopen_quotation(
         )
 
 
-@router.post("/{quotation_id}/revoke-push", response_model=QuotationResponse, summary="撤回下推")
+@router.post("/{quotation_id}/revoke-push", response_model=QuotationResponse, summary="Reverse push")
 async def revoke_push_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -378,7 +378,7 @@ async def revoke_push_quotation(
         )
 
 
-@router.get("/{quotation_id}/print", summary="打印报价单")
+@router.get("/{quotation_id}/print", summary="Print quotation")
 async def print_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -425,7 +425,7 @@ async def print_quotation(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/{quotation_id}/print-variables", summary="报价单打印变量")
+@router.get("/{quotation_id}/print-variables", summary="Quotation print variables")
 async def get_quotation_print_variables(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -443,7 +443,7 @@ async def get_quotation_print_variables(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/{quotation_id}/record-print", summary="记录报价单已打印（正式文档生成时间戳）")
+@router.post("/{quotation_id}/record-print", summary="Record quotation printed timestamp")
 async def record_quotation_print(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -463,7 +463,7 @@ async def record_quotation_print(
         )
 
 
-@router.delete("/{quotation_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除报价单")
+@router.delete("/{quotation_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete quotation")
 async def delete_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
@@ -494,7 +494,7 @@ class ConvertToOrderResponse(QuotationResponse):
 
 @router.post(
     "/{quotation_id}/convert-to-order",
-    summary="转为销售订单",
+    summary="Convert to sales order",
 )
 async def convert_to_sales_order(
     quotation_id: int = Path(..., description="报价单ID"),

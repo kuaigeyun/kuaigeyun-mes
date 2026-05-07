@@ -31,7 +31,7 @@ from apps.kuaizhizao.schemas.demand import (
 )
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

@@ -18,9 +18,9 @@ from apps.kuaizhizao.schemas.wave_picking import (
     WavePickingResponse
 )
 
-router = APIRouter(prefix="/wave-pickings", tags=["波次拣货管理"])
+router = APIRouter(prefix="/wave-pickings", tags=["App · Kuaige Zhizao · Wave Picking"])
 
-@router.post("/generate", response_model=WavePickingResponse, summary="生成报表合并拣货单")
+@router.post("/generate", response_model=WavePickingResponse, summary="Generate consolidated wave picking list")
 async def generate_picking_wave(
     request: WavePickingGenerateRequest,
     current_user: User = Depends(get_current_user),

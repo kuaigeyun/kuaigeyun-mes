@@ -20,7 +20,7 @@ from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.payable import Payable
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import ValidationError
 
 

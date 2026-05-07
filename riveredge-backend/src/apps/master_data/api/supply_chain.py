@@ -24,7 +24,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/supply-chain", tags=["Supply Chain"])
+router = APIRouter(prefix="/supply-chain", tags=["App · Master Data · Supply Chain"])
 
 
 def _http_exception_with_trace(
@@ -55,7 +55,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 客户相关接口 ====================
 
-@router.post("/customers", response_model=CustomerResponse, summary="创建客户")
+@router.post("/customers", response_model=CustomerResponse, summary="Create customer")
 async def create_customer(
     data: CustomerCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -85,7 +85,7 @@ def _is_missing_db_column_error(exc: BaseException) -> bool:
     return "column" in msg and "does not exist" in msg
 
 
-@router.get("/customers", response_model=CustomerListResponse, summary="获取客户列表")
+@router.get("/customers", response_model=CustomerListResponse, summary="List customers")
 async def list_customers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -137,7 +137,7 @@ async def list_customers(
         raise
 
 
-@router.get("/customers/{customer_uuid}", response_model=CustomerResponse, summary="获取客户详情")
+@router.get("/customers/{customer_uuid}", response_model=CustomerResponse, summary="Get customer")
 async def get_customer(
     customer_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -154,7 +154,7 @@ async def get_customer(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/customers/{customer_uuid}", response_model=CustomerResponse, summary="更新客户")
+@router.put("/customers/{customer_uuid}", response_model=CustomerResponse, summary="Update customer")
 async def update_customer(
     customer_uuid: str,
     data: CustomerUpdate,
@@ -183,7 +183,7 @@ async def update_customer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/customers/{customer_uuid}", summary="删除客户")
+@router.delete("/customers/{customer_uuid}", summary="Delete customer")
 async def delete_customer(
     customer_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -203,7 +203,7 @@ async def delete_customer(
 
 # ==================== 供应商相关接口 ====================
 
-@router.post("/suppliers", response_model=SupplierResponse, summary="创建供应商")
+@router.post("/suppliers", response_model=SupplierResponse, summary="Create supplier")
 async def create_supplier(
     data: SupplierCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -228,7 +228,7 @@ async def create_supplier(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/suppliers", response_model=SupplierListResponse, summary="获取供应商列表")
+@router.get("/suppliers", response_model=SupplierListResponse, summary="List suppliers")
 async def list_suppliers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -271,7 +271,7 @@ async def list_suppliers(
     return SupplierListResponse(data=items, total=total)
 
 
-@router.get("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="获取供应商详情")
+@router.get("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="Get supplier")
 async def get_supplier(
     supplier_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -288,7 +288,7 @@ async def get_supplier(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="更新供应商")
+@router.put("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="Update supplier")
 async def update_supplier(
     supplier_uuid: str,
     data: SupplierUpdate,
@@ -317,7 +317,7 @@ async def update_supplier(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/suppliers/{supplier_uuid}", summary="删除供应商")
+@router.delete("/suppliers/{supplier_uuid}", summary="Delete supplier")
 async def delete_supplier(
     supplier_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],

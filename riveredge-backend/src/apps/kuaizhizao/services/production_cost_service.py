@@ -15,7 +15,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.process import ProcessRoute, Operation
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation

@@ -27,10 +27,10 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 report_template_service = ReportTemplateService()
 
 # 创建路由
-router = APIRouter(prefix="/reports/templates", tags=["报表模板"])
+router = APIRouter(prefix="/reports/templates", tags=["Core · Report Templates"])
 
 
-@router.post("", response_model=ReportTemplateResponse, status_code=status.HTTP_201_CREATED, summary="创建报表模板")
+@router.post("", response_model=ReportTemplateResponse, status_code=status.HTTP_201_CREATED, summary="Create report template")
 async def create_report_template(
     template_data: ReportTemplateCreate,
     current_user: User = Depends(get_current_user),
@@ -51,7 +51,7 @@ async def create_report_template(
     )
 
 
-@router.get("", response_model=List[ReportTemplateListResponse], summary="获取报表模板列表")
+@router.get("", response_model=List[ReportTemplateListResponse], summary="List report templates")
 async def list_report_templates(
     type: Optional[str] = Query(None, description="报表类型"),
     category: Optional[str] = Query(None, description="分类"),
@@ -76,7 +76,7 @@ async def list_report_templates(
     )
 
 
-@router.get("/{template_id}", response_model=ReportTemplateResponse, summary="获取报表模板详情")
+@router.get("/{template_id}", response_model=ReportTemplateResponse, summary="Get report template")
 async def get_report_template(
     template_id: int = Path(..., description="模板ID"),
     current_user: User = Depends(get_current_user),
@@ -93,7 +93,7 @@ async def get_report_template(
     )
 
 
-@router.put("/{template_id}", response_model=ReportTemplateResponse, summary="更新报表模板")
+@router.put("/{template_id}", response_model=ReportTemplateResponse, summary="Update report template")
 async def update_report_template(
     template_id: int = Path(..., description="模板ID"),
     template_data: ReportTemplateUpdate = ...,
@@ -114,7 +114,7 @@ async def update_report_template(
     )
 
 
-@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除报表模板")
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete report template")
 async def delete_report_template(
     template_id: int = Path(..., description="模板ID"),
     current_user: User = Depends(get_current_user),
@@ -131,7 +131,7 @@ async def delete_report_template(
     )
 
 
-@router.post("/{template_id}/generate", summary="生成报表")
+@router.post("/{template_id}/generate", summary="Generate report from template")
 async def generate_report(
     template_id: int = Path(..., description="模板ID"),
     format: str = Query("excel", description="输出格式（excel/pdf）"),

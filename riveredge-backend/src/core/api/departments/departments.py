@@ -30,7 +30,7 @@ class LoadDepartmentPresetRequest(BaseModel):
     codes: Optional[List[str]] = Field(None, description="部门编码列表；不传则加载全部预设")
 
 
-router = APIRouter(prefix="/departments", tags=["Core Departments"])
+router = APIRouter(prefix="/departments", tags=["Core · Departments"])
 
 
 @router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)

@@ -25,7 +25,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from loguru import logger
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["App · Kuaige Zhizao · Dashboard"])
 
 
 class TodoItem(BaseModel):
@@ -66,7 +66,7 @@ class DashboardResponse(BaseModel):
     statistics: StatisticsResponse = Field(..., description="统计数据")
 
 
-@router.get("/todos", response_model=TodoListResponse, summary="获取待办事项列表")
+@router.get("/todos", response_model=TodoListResponse, summary="List todos")
 @cache_by_kwargs(namespace="dashboard:todos", ttl=30)
 async def get_todos(
     current_user: User = Depends(get_current_user),
@@ -655,7 +655,7 @@ async def get_todos(
     )
 
 
-@router.post("/todos/{todo_id}/handle", summary="处理待办事项")
+@router.post("/todos/{todo_id}/handle", summary="Handle todo")
 async def handle_todo(
     todo_id: str,
     action: str = Query("handle", description="处理动作（handle: 跳转处理, ignore: 忽略）"),
@@ -850,7 +850,7 @@ async def handle_todo(
         }
 
 
-@router.get("/statistics", response_model=StatisticsResponse, summary="获取统计数据")
+@router.get("/statistics", response_model=StatisticsResponse, summary="Statistics overview")
 @cache_by_kwargs(namespace="dashboard:statistics", ttl=60)
 async def get_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -1062,7 +1062,7 @@ class ProcessProgressResponse(BaseModel):
     items: List[ProcessProgressItem] = Field(default_factory=list, description="工序执行进展列表")
 
 
-@router.get("/process-progress", response_model=ProcessProgressResponse, summary="获取工序执行进展")
+@router.get("/process-progress", response_model=ProcessProgressResponse, summary="Operation execution progress")
 @cache_by_kwargs(namespace="dashboard:process_progress", ttl=30)
 async def get_process_progress(
     include_unstarted: bool = Query(False, description="是否包含未开始生产任务"),
@@ -1189,7 +1189,7 @@ class ManagementMetricsResponse(BaseModel):
     on_time_delivery_rate: float = Field(..., description="准交率（%）")
 
 
-@router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="获取管理指标")
+@router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="Management metrics")
 @cache_by_kwargs(namespace="dashboard:management_metrics", ttl=60)
 async def get_management_metrics(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -1327,7 +1327,7 @@ class ProductionBroadcastResponse(BaseModel):
     items: List[ProductionBroadcastItem] = Field(default_factory=list, description="播报列表")
 
 
-@router.get("/production-broadcast", response_model=ProductionBroadcastResponse, summary="获取生产实时播报")
+@router.get("/production-broadcast", response_model=ProductionBroadcastResponse, summary="Production live broadcast")
 @cache_by_kwargs(namespace="dashboard:broadcast", ttl=30)
 async def get_production_broadcast(
     limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
@@ -1397,7 +1397,7 @@ async def get_production_broadcast(
         return ProductionBroadcastResponse(items=[])
 
 
-@router.get("/menu-badge-counts", summary="获取左侧菜单业务单据未完成数量（用于徽标）")
+@router.get("/menu-badge-counts", summary="Menu badge open-document counts")
 @cache_by_kwargs(namespace="dashboard:badges", ttl=45)
 async def get_menu_badge_counts(
     current_user: User = Depends(get_current_user),
@@ -2149,7 +2149,7 @@ WORK_ORDER_IN_PROGRESS_STATUS = [
 ]
 
 
-@router.get("/sales-summary", summary="获取销售中心汇总数据")
+@router.get("/sales-summary", summary="Sales center summary")
 @cache_by_kwargs(namespace="dashboard:sales_summary", ttl=45)
 async def get_sales_summary(
     current_user: User = Depends(get_current_user),
@@ -2240,7 +2240,7 @@ async def get_sales_summary(
     }
 
 
-@router.get("/purchase-summary", summary="获取采购中心汇总数据")
+@router.get("/purchase-summary", summary="Purchase center summary")
 @cache_by_kwargs(namespace="dashboard:purchase_summary", ttl=45)
 async def get_purchase_summary(
     current_user: User = Depends(get_current_user),
@@ -2303,7 +2303,7 @@ async def get_purchase_summary(
     }
 
 
-@router.get("/manufacturing-summary", summary="获取制造中心汇总数据")
+@router.get("/manufacturing-summary", summary="Manufacturing center summary")
 @cache_by_kwargs(namespace="dashboard:manufacturing_summary", ttl=45)
 async def get_manufacturing_summary(
     current_user: User = Depends(get_current_user),
@@ -2383,7 +2383,7 @@ async def get_manufacturing_summary(
     }
 
 
-@router.get("/equipment-summary", summary="获取设备看板汇总数据")
+@router.get("/equipment-summary", summary="Equipment dashboard summary")
 @cache_by_kwargs(namespace="dashboard:equipment_summary", ttl=60)
 async def get_equipment_summary(
     current_user: User = Depends(get_current_user),
@@ -2464,7 +2464,7 @@ def _resolve_month_range(
     return start_dt, end_dt, start_dt.date(), end_dt.date()
 
 
-@router.get("/sales-top10", summary="获取销售产品排行 TOP10")
+@router.get("/sales-top10", summary="Top 10 sold products")
 @cache_by_kwargs(namespace="dashboard:sales_top10", ttl=60)
 async def get_sales_top10(
     current_user: User = Depends(get_current_user),
@@ -2517,7 +2517,7 @@ async def get_sales_top10(
     return {"items": items}
 
 
-@router.get("/purchase-top10", summary="获取原料采购排行 TOP10")
+@router.get("/purchase-top10", summary="Top 10 purchased materials")
 @cache_by_kwargs(namespace="dashboard:purchase_top10", ttl=60)
 async def get_purchase_top10(
     current_user: User = Depends(get_current_user),
@@ -2567,7 +2567,7 @@ async def get_purchase_top10(
     return {"items": items}
 
 
-@router.get("/work-orders-active", summary="获取执行中工单及工序进度")
+@router.get("/work-orders-active", summary="Active work orders and operation progress")
 @cache_by_kwargs(namespace="dashboard:work_orders_active", ttl=20)
 async def get_work_orders_active(
     current_user: User = Depends(get_current_user),
@@ -2646,7 +2646,7 @@ async def get_work_orders_active(
     return {"items": items}
 
 
-@router.get("/warehouse-summary", summary="获取仓储中心汇总指标")
+@router.get("/warehouse-summary", summary="Warehouse center KPI summary")
 @cache_by_kwargs(namespace="dashboard:warehouse_summary", ttl=60)
 async def get_warehouse_summary(
     current_user: User = Depends(get_current_user),
@@ -2697,7 +2697,7 @@ async def get_warehouse_summary(
     }
 
 
-@router.get("/warehouse-trend", summary="获取仓储入/出库按日走势")
+@router.get("/warehouse-trend", summary="Warehouse inbound/outbound daily trend")
 @cache_by_kwargs(namespace="dashboard:warehouse_trend", ttl=60)
 async def get_warehouse_trend(
     current_user: User = Depends(get_current_user),

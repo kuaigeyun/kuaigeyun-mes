@@ -45,7 +45,7 @@ from apps.master_data.schemas.bom_change_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/materials", tags=["Material"])
+router = APIRouter(prefix="/materials", tags=["App · Master Data · Materials"])
 
 
 def _http_error(
@@ -73,7 +73,7 @@ def _http_error(
 
 # ==================== 物料分组相关接口 ====================
 
-@router.post("/groups", response_model=MaterialGroupResponse, summary="创建物料分组")
+@router.post("/groups", response_model=MaterialGroupResponse, summary="Create material group")
 async def create_material_group(
     data: MaterialGroupCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -94,7 +94,7 @@ async def create_material_group(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/groups", response_model=List[MaterialGroupResponse], summary="获取物料分组列表")
+@router.get("/groups", response_model=List[MaterialGroupResponse], summary="List material groups")
 async def list_material_groups(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -114,7 +114,7 @@ async def list_material_groups(
     return await MaterialService.list_material_groups(tenant_id, skip, limit, parent_id, is_active)
 
 
-@router.get("/groups/tree", response_model=List[MaterialGroupTreeResponse], response_model_by_alias=True, summary="获取物料分组树形结构")
+@router.get("/groups/tree", response_model=List[MaterialGroupTreeResponse], response_model_by_alias=True, summary="Get material group tree")
 async def get_material_group_tree(
     is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）"),
     current_user: User = Depends(get_current_user),
@@ -160,7 +160,7 @@ async def get_material_group_tree(
     return await MaterialService.get_material_group_tree(tenant_id, is_active)
 
 
-@router.get("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="获取物料分组详情")
+@router.get("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="Get material group")
 async def get_material_group(
     group_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -177,7 +177,7 @@ async def get_material_group(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="更新物料分组")
+@router.put("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="Update material group")
 async def update_material_group(
     group_uuid: str,
     data: MaterialGroupUpdate,
@@ -202,7 +202,7 @@ async def update_material_group(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/groups/{group_uuid}", summary="删除物料分组")
+@router.delete("/groups/{group_uuid}", summary="Delete material group")
 async def delete_material_group(
     group_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -227,7 +227,7 @@ async def delete_material_group(
 # ==================== BOM相关接口 ====================
 # 注意：BOM 路由必须在物料详情路由之前，避免 /bom 被 /{material_uuid} 匹配
 
-@router.post("/bom", response_model=List[BOMResponse], summary="创建BOM（支持批量创建）")
+@router.post("/bom", response_model=List[BOMResponse], summary="Create BOM (batch supported)")
 async def create_bom(
     data: BOMBatchCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -253,7 +253,7 @@ async def create_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/groups", response_model=List[BOMGroupSummary], summary="获取BOM分组摘要（用于列表树按需加载）")
+@router.get("/bom/groups", response_model=List[BOMGroupSummary], summary="List BOM group summaries")
 async def list_bom_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -266,7 +266,7 @@ async def list_bom_groups(
     return await MaterialService.list_bom_groups(tenant_id=tenant_id, include_obsolete=include_obsolete)
 
 
-@router.get("/bom/component-ids", summary="获取作为子件出现的物料ID（用于区分成品/半成品）")
+@router.get("/bom/component-ids", summary="List component material IDs")
 async def list_bom_component_ids(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -276,7 +276,7 @@ async def list_bom_component_ids(
     return await MaterialService.list_bom_component_ids(tenant_id=tenant_id, include_obsolete=include_obsolete)
 
 
-@router.post("/bom/batch-items", summary="批量按物料+版本拉取BOM子件明细")
+@router.post("/bom/batch-items", summary="Batch fetch BOM line items by material and version")
 async def list_bom_items_batch(
     body: BOMBatchItemsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -294,7 +294,7 @@ async def list_bom_items_batch(
     )
 
 
-@router.get("/bom", response_model=List[BOMResponse], summary="获取BOM列表")
+@router.get("/bom", response_model=List[BOMResponse], summary="List BOMs")
 async def list_bom(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=10000, description="限制数量（树形列表建议 10000 以加载完整层级）"),
@@ -319,7 +319,7 @@ async def list_bom(
     return result if result is not None else []
 
 
-@router.get("/bom/batch-check", summary="批量检查物料是否有BOM")
+@router.get("/bom/batch-check", summary="Batch check materials have BOM")
 async def batch_check_has_bom(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -342,7 +342,7 @@ async def batch_check_has_bom(
     return {str(k): v for k, v in result.items()}
 
 
-@router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="获取BOM详情")
+@router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="Get BOM")
 async def get_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -359,7 +359,7 @@ async def get_bom(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/bom/{bom_uuid}", response_model=BOMResponse, summary="更新BOM")
+@router.put("/bom/{bom_uuid}", response_model=BOMResponse, summary="Update BOM")
 async def update_bom(
     bom_uuid: str,
     data: BOMUpdate,
@@ -388,7 +388,7 @@ async def update_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/bom/{bom_uuid}", summary="删除BOM")
+@router.delete("/bom/{bom_uuid}", summary="Delete BOM")
 async def delete_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -406,7 +406,7 @@ async def delete_bom(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/bom/{bom_uuid}/approve", response_model=BOMResponse, summary="审核BOM")
+@router.post("/bom/{bom_uuid}/approve", response_model=BOMResponse, summary="Approve BOM")
 async def approve_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -435,7 +435,7 @@ async def approve_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/batch-approve", response_model=List[BOMResponse], summary="批量审核BOM")
+@router.post("/bom/batch-approve", response_model=List[BOMResponse], summary="Batch approve BOMs")
 async def batch_approve_bom(
     bom_uuids: List[str] = Body(..., description="BOM UUID列表"),
     approved: bool = Body(True, description="是否通过审核"),
@@ -466,7 +466,7 @@ async def batch_approve_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/{bom_uuid}/copy", response_model=BOMResponse, summary="复制BOM（创建新版本）")
+@router.post("/bom/{bom_uuid}/copy", response_model=BOMResponse, summary="Copy BOM (new version)")
 async def copy_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -491,7 +491,7 @@ async def copy_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/{bom_uuid}/revise", response_model=BOMResponse, summary="BOM升版（创建新修订版本）")
+@router.post("/bom/{bom_uuid}/revise", response_model=BOMResponse, summary="Revise BOM (new revision)")
 async def revise_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -517,7 +517,7 @@ async def revise_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")
+@router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="List BOMs by header material")
 async def get_bom_by_material(
     material_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -548,7 +548,7 @@ async def get_bom_by_material(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/versions/{bom_code}", response_model=List[BOMResponse], summary="获取BOM所有版本")
+@router.get("/bom/versions/{bom_code}", response_model=List[BOMResponse], summary="List all BOM versions")
 async def get_bom_versions(
     bom_code: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -575,7 +575,7 @@ async def get_bom_versions(
 
 @router.post(
     "/bom/material/{material_id}/version/{version}/obsolete",
-    summary="将指定BOM版本设为失效"
+    summary="Mark BOM version obsolete"
 )
 async def set_bom_version_obsolete(
     material_id: int,
@@ -603,7 +603,7 @@ async def set_bom_version_obsolete(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/batch-import", response_model=List[BOMResponse], summary="批量导入BOM（支持部门编码）")
+@router.post("/bom/batch-import", response_model=List[BOMResponse], summary="Batch import BOMs")
 async def batch_import_bom(
     data: BOMBatchImport,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -644,7 +644,7 @@ async def batch_import_bom(
 
 # ==================== BOM 工程变更（ECN）相关接口 ====================
 
-@router.post("/bom/changes", response_model=BOMChangeResponse, summary="创建BOM工程变更记录")
+@router.post("/bom/changes", response_model=BOMChangeResponse, summary="Create BOM change record")
 async def create_bom_change(
     data: BOMChangeCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -669,7 +669,7 @@ async def create_bom_change(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/changes", response_model=BOMChangeListResponse, summary="获取BOM工程变更记录列表")
+@router.get("/bom/changes", response_model=BOMChangeListResponse, summary="List BOM change records")
 async def list_bom_changes(
     material_uuid: Optional[str] = Query(None, description="主物料UUID（筛选条件）"),
     change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
@@ -696,7 +696,7 @@ async def list_bom_changes(
         )
 
 
-@router.get("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="获取BOM工程变更记录详情")
+@router.get("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="Get BOM change record")
 async def get_bom_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -709,7 +709,7 @@ async def get_bom_change(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="更新BOM工程变更记录")
+@router.put("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="Update BOM change record")
 async def update_bom_change(
     change_uuid: str,
     data: BOMChangeUpdate,
@@ -725,7 +725,7 @@ async def update_bom_change(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/changes/{change_uuid}/approve", response_model=BOMChangeResponse, summary="审批BOM工程变更记录")
+@router.post("/bom/changes/{change_uuid}/approve", response_model=BOMChangeResponse, summary="Approve BOM change record")
 async def approve_bom_change(
     change_uuid: str,
     approved: bool = Query(..., description="是否同意（true:同意, false:拒绝）"),
@@ -744,7 +744,7 @@ async def approve_bom_change(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/changes/{change_uuid}/execute", response_model=BOMChangeResponse, summary="执行BOM工程变更记录")
+@router.post("/bom/changes/{change_uuid}/execute", response_model=BOMChangeResponse, summary="Execute BOM change record")
 async def execute_bom_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -759,7 +759,7 @@ async def execute_bom_change(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/bom/changes/{change_uuid}", summary="删除BOM工程变更记录")
+@router.delete("/bom/changes/{change_uuid}", summary="Delete BOM change record")
 async def delete_bom_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -773,7 +773,7 @@ async def delete_bom_change(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/bom/material/{material_id}/hierarchy", summary="生成BOM层级结构")
+@router.get("/bom/material/{material_id}/hierarchy", summary="Build BOM hierarchy")
 async def get_bom_hierarchy(
     material_id: int,
     version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）"),
@@ -798,7 +798,7 @@ async def get_bom_hierarchy(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/material/{material_id}/quantity", summary="计算BOM用量（考虑损耗率）")
+@router.get("/bom/material/{material_id}/quantity", summary="Calculate BOM quantities with scrap")
 async def calculate_bom_quantity(
     material_id: int,
     parent_quantity: float = Query(1.0, ge=0, description="父物料数量（默认1.0）"),
@@ -828,7 +828,7 @@ async def calculate_bom_quantity(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/material/{material_id}/version", response_model=List[BOMResponse], summary="创建BOM新版本")
+@router.post("/bom/material/{material_id}/version", response_model=List[BOMResponse], summary="Create new BOM version")
 async def create_bom_version(
     material_id: int,
     data: BOMVersionCreate,
@@ -856,7 +856,7 @@ async def create_bom_version(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/bom/material/{material_id}/compare-versions", summary="对比BOM版本")
+@router.post("/bom/material/{material_id}/compare-versions", summary="Compare BOM versions")
 async def compare_bom_versions(
     material_id: int,
     data: BOMVersionCompare,
@@ -882,7 +882,7 @@ async def compare_bom_versions(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/detect-cycle", summary="检测BOM循环依赖")
+@router.get("/bom/detect-cycle", summary="Detect BOM cycles")
 async def detect_bom_cycle(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     current_user: Annotated[User, Depends(get_current_user)],
@@ -909,7 +909,7 @@ async def detect_bom_cycle(
 # ==================== 物料编码映射相关接口 ====================
 # 注意：映射路由必须在物料详情路由之前，避免 /mapping 被 /{material_uuid} 匹配
 
-@router.post("/mapping", response_model=MaterialCodeMappingResponse, summary="创建物料编码映射")
+@router.post("/mapping", response_model=MaterialCodeMappingResponse, summary="Create material code mapping")
 async def create_material_code_mapping(
     data: MaterialCodeMappingCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -935,7 +935,7 @@ async def create_material_code_mapping(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/mapping", response_model=MaterialCodeMappingListResponse, summary="获取物料编码映射列表")
+@router.get("/mapping", response_model=MaterialCodeMappingListResponse, summary="List material code mappings")
 async def list_material_code_mappings(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -970,7 +970,7 @@ async def list_material_code_mappings(
     )
 
 
-@router.get("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="获取物料编码映射详情")
+@router.get("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="Get material code mapping")
 async def get_material_code_mapping(
     mapping_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -987,7 +987,7 @@ async def get_material_code_mapping(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="更新物料编码映射")
+@router.put("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="Update material code mapping")
 async def update_material_code_mapping(
     mapping_uuid: str,
     data: MaterialCodeMappingUpdate,
@@ -1013,7 +1013,7 @@ async def update_material_code_mapping(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/mapping/{mapping_uuid}", summary="删除物料编码映射")
+@router.delete("/mapping/{mapping_uuid}", summary="Delete material code mapping")
 async def delete_material_code_mapping(
     mapping_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1031,7 +1031,7 @@ async def delete_material_code_mapping(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/mapping/convert", response_model=MaterialCodeConvertResponse, summary="编码转换")
+@router.post("/mapping/convert", response_model=MaterialCodeConvertResponse, summary="Convert material codes")
 async def convert_material_code(
     request: MaterialCodeConvertRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1055,7 +1055,7 @@ async def convert_material_code(
     return await MaterialCodeMappingService.convert_code(tenant_id, request)
 
 
-@router.post("/mapping/batch-import", summary="批量导入物料编码映射")
+@router.post("/mapping/batch-import", summary="Batch import material code mappings")
 async def batch_import_material_code_mappings(
     mappings_data: List[MaterialCodeMappingCreate],
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1080,7 +1080,7 @@ async def batch_import_material_code_mappings(
 # ==================== 物料批号相关接口 ====================
 # 注意：批号路由必须在物料详情路由之前，避免 /batches 被 /{material_uuid} 匹配
 
-@router.post("/batches", response_model=MaterialBatchResponse, summary="创建物料批号")
+@router.post("/batches", response_model=MaterialBatchResponse, summary="Create material batch")
 async def create_material_batch(
     data: MaterialBatchCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1106,7 +1106,7 @@ async def create_material_batch(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/batches", response_model=MaterialBatchListResponse, summary="获取物料批号列表")
+@router.get("/batches", response_model=MaterialBatchListResponse, summary="List material batches")
 async def list_material_batches(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     batch_no: Optional[str] = Query(None, description="批号（模糊搜索）"),
@@ -1146,7 +1146,7 @@ async def list_material_batches(
         )
 
 
-@router.get("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="获取物料批号详情")
+@router.get("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="Get material batch")
 async def get_material_batch(
     batch_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1161,7 +1161,7 @@ async def get_material_batch(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="更新物料批号")
+@router.put("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="Update material batch")
 async def update_material_batch(
     batch_uuid: str,
     data: MaterialBatchUpdate,
@@ -1179,7 +1179,7 @@ async def update_material_batch(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/batches/{batch_uuid}", summary="删除物料批号")
+@router.delete("/batches/{batch_uuid}", summary="Delete material batch")
 async def delete_material_batch(
     batch_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1195,7 +1195,7 @@ async def delete_material_batch(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/batches/generate", summary="生成批号")
+@router.post("/batches/generate", summary="Generate batch numbers")
 async def generate_batch_no(
     payload: GenerateBatchNoRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1226,7 +1226,7 @@ async def generate_batch_no(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/batches/{batch_uuid}/trace", summary="批号追溯")
+@router.get("/batches/{batch_uuid}/trace", summary="Trace material batch")
 async def trace_batch(
     batch_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1246,7 +1246,7 @@ async def trace_batch(
 # ==================== 物料序列号相关接口 ====================
 # 注意：序列号路由必须在物料详情路由之前，避免 /serials 被 /{material_uuid} 匹配
 
-@router.post("/serials", response_model=MaterialSerialResponse, summary="创建物料序列号")
+@router.post("/serials", response_model=MaterialSerialResponse, summary="Create material serial")
 async def create_material_serial(
     data: MaterialSerialCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1271,7 +1271,7 @@ async def create_material_serial(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/serials", response_model=MaterialSerialListResponse, summary="获取物料序列号列表")
+@router.get("/serials", response_model=MaterialSerialListResponse, summary="List material serials")
 async def list_material_serials(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     serial_no: Optional[str] = Query(None, description="序列号（模糊搜索）"),
@@ -1311,7 +1311,7 @@ async def list_material_serials(
         )
 
 
-@router.get("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="获取物料序列号详情")
+@router.get("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="Get material serial")
 async def get_material_serial(
     serial_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1326,7 +1326,7 @@ async def get_material_serial(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="更新物料序列号")
+@router.put("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="Update material serial")
 async def update_material_serial(
     serial_uuid: str,
     data: MaterialSerialUpdate,
@@ -1344,7 +1344,7 @@ async def update_material_serial(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/serials/{serial_uuid}", summary="删除物料序列号")
+@router.delete("/serials/{serial_uuid}", summary="Delete material serial")
 async def delete_material_serial(
     serial_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1360,7 +1360,7 @@ async def delete_material_serial(
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/serials/generate", summary="生成序列号（批量）")
+@router.post("/serials/generate", summary="Generate serial numbers (batch)")
 async def generate_serial_nos(
     material_uuid: str = Query(..., description="物料UUID"),
     count: int = Query(1, ge=1, le=1000, description="生成数量"),
@@ -1386,7 +1386,7 @@ async def generate_serial_nos(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/serials/{serial_uuid}/trace", summary="序列号追溯")
+@router.get("/serials/{serial_uuid}/trace", summary="Trace material serial")
 async def trace_serial(
     serial_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1409,7 +1409,7 @@ async def trace_serial(
 # 注意：物料详情路由必须在批号路由之后，避免 /batches 被 /{material_uuid} 匹配
 # 注意：物料详情路由必须在序列号路由之后，避免 /serials 被 /{material_uuid} 匹配
 
-@router.post("", response_model=MaterialResponse, summary="创建物料")
+@router.post("", response_model=MaterialResponse, summary="Create material")
 async def create_material(
     data: MaterialCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1438,7 +1438,7 @@ async def create_material(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=MaterialListResponse, summary="获取物料列表")
+@router.get("", response_model=MaterialListResponse, summary="List materials")
 async def list_materials(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=2000, description="限制数量"),
@@ -1503,7 +1503,7 @@ async def list_materials(
 @router.post(
     "/batch-tracking",
     response_model=MaterialBulkTrackingResponse,
-    summary="批量更新批号/序列号管理",
+    summary="Bulk update batch/serial tracking",
 )
 async def bulk_update_material_tracking(
     data: MaterialBulkTrackingRequest,
@@ -1525,7 +1525,7 @@ async def bulk_update_material_tracking(
 @router.post(
     "/batch-delete",
     response_model=MaterialBatchDeleteResponse,
-    summary="批量删除物料",
+    summary="Batch delete materials",
 )
 async def bulk_delete_materials(
     data: MaterialBatchDeleteRequest,
@@ -1584,7 +1584,7 @@ class LoadStandardPartsPresetRequest(BaseModel):
         return self
 
 
-@router.get("/standard-parts/preset-preview", summary="获取标准件预设目录")
+@router.get("/standard-parts/preset-preview", summary="List standard-part preset catalog")
 async def get_standard_parts_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1593,7 +1593,7 @@ async def get_standard_parts_preset_preview(
     return MaterialService.get_standard_parts_preset_catalog()
 
 
-@router.post("/standard-parts/load-preset", summary="按勾选导入标准件物料")
+@router.post("/standard-parts/load-preset", summary="Import selected standard-part materials")
 async def load_standard_parts_preset(
     body: LoadStandardPartsPresetRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1628,7 +1628,7 @@ async def load_standard_parts_preset(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")
+@router.get("/{material_uuid}", response_model=MaterialResponse, summary="Get material")
 async def get_material(
     material_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1646,7 +1646,7 @@ async def get_material(
         raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
 
 
-@router.put("/{material_uuid}", response_model=MaterialResponse, summary="更新物料")
+@router.put("/{material_uuid}", response_model=MaterialResponse, summary="Update material")
 async def update_material(
     material_uuid: str,
     data: MaterialUpdate,
@@ -1682,7 +1682,7 @@ async def update_material(
         raise _http_error(status.HTTP_400_BAD_REQUEST, str(e), tenant_id=tenant_id)
 
 
-@router.delete("/{material_uuid}", summary="删除物料")
+@router.delete("/{material_uuid}", summary="Delete material")
 async def delete_material(
     material_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1706,7 +1706,7 @@ async def delete_material(
 
 # ==================== 物料来源控制相关接口 ====================
 
-@router.get("/{material_uuid}/source/validate", summary="验证物料来源配置")
+@router.get("/{material_uuid}/source/validate", summary="Validate material source config")
 async def validate_material_source(
     material_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1731,7 +1731,7 @@ async def validate_material_source(
         )
 
 
-@router.post("/{material_uuid}/source/validate-batch", summary="批量验证物料来源配置")
+@router.post("/{material_uuid}/source/validate-batch", summary="Batch validate material source config")
 async def validate_batch_material_sources(
     material_uuids: List[str],
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1754,7 +1754,7 @@ async def validate_batch_material_sources(
         )
 
 
-@router.get("/{material_uuid}/source/change-impact", summary="检查物料来源类型变更影响")
+@router.get("/{material_uuid}/source/change-impact", summary="Check impact of material source type change")
 async def check_source_change_impact(
     material_uuid: str = Path(..., description="物料UUID"),
     new_source_type: str = Query(..., description="新的来源类型"),
@@ -1783,7 +1783,7 @@ async def check_source_change_impact(
         )
 
 
-@router.put("/{material_uuid}/source/change", response_model=MaterialResponse, summary="变更物料来源类型")
+@router.put("/{material_uuid}/source/change", response_model=MaterialResponse, summary="Change material source type")
 async def change_material_source(
     material_uuid: str = Path(..., description="物料UUID"),
     new_source_type: str = Body(..., description="新的来源类型"),
@@ -1816,7 +1816,7 @@ async def change_material_source(
         )
 
 
-@router.get("/{material_uuid}/source/check-completeness", summary="检查物料来源配置完整性")
+@router.get("/{material_uuid}/source/check-completeness", summary="Check material source config completeness")
 async def check_source_config_completeness(
     material_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],

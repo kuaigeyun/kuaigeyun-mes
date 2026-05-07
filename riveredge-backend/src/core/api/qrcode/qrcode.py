@@ -29,10 +29,10 @@ from core.schemas.qrcode import (
 )
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
-router = APIRouter(prefix="/qrcode", tags=["QRCode"])
+router = APIRouter(prefix="/qrcode", tags=["Core · QR Code"])
 
 
-@router.post("/generate", response_model=QRCodeGenerateResponse, summary="生成二维码")
+@router.post("/generate", response_model=QRCodeGenerateResponse, summary="Generate QR code")
 async def generate_qrcode(
     request: QRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -62,7 +62,7 @@ async def generate_qrcode(
         )
 
 
-@router.post("/parse", response_model=QRCodeParseResponse, summary="解析二维码")
+@router.post("/parse", response_model=QRCodeParseResponse, summary="Parse QR code")
 async def parse_qrcode(
     request: QRCodeParseRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -92,7 +92,7 @@ async def parse_qrcode(
         )
 
 
-@router.post("/material/generate", response_model=QRCodeGenerateResponse, summary="生成物料二维码")
+@router.post("/material/generate", response_model=QRCodeGenerateResponse, summary="Generate material QR code")
 async def generate_material_qrcode(
     request: MaterialQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -123,7 +123,7 @@ async def generate_material_qrcode(
         )
 
 
-@router.post("/work-order/generate", response_model=QRCodeGenerateResponse, summary="生成工单二维码")
+@router.post("/work-order/generate", response_model=QRCodeGenerateResponse, summary="Generate work order QR code")
 async def generate_work_order_qrcode(
     request: WorkOrderQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -154,7 +154,7 @@ async def generate_work_order_qrcode(
         )
 
 
-@router.post("/operation/generate", response_model=QRCodeGenerateResponse, summary="生成工序二维码")
+@router.post("/operation/generate", response_model=QRCodeGenerateResponse, summary="Generate operation QR code")
 async def generate_operation_qrcode(
     request: OperationQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -185,7 +185,7 @@ async def generate_operation_qrcode(
         )
 
 
-@router.post("/equipment/generate", response_model=QRCodeGenerateResponse, summary="生成设备二维码")
+@router.post("/equipment/generate", response_model=QRCodeGenerateResponse, summary="Generate equipment QR code")
 async def generate_equipment_qrcode(
     request: EquipmentQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -216,7 +216,7 @@ async def generate_equipment_qrcode(
         )
 
 
-@router.post("/employee/generate", response_model=QRCodeGenerateResponse, summary="生成人员二维码")
+@router.post("/employee/generate", response_model=QRCodeGenerateResponse, summary="Generate employee QR code")
 async def generate_employee_qrcode(
     request: EmployeeQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -247,7 +247,7 @@ async def generate_employee_qrcode(
         )
 
 
-@router.post("/box/generate", response_model=QRCodeGenerateResponse, summary="生成装箱二维码")
+@router.post("/box/generate", response_model=QRCodeGenerateResponse, summary="Generate packing box QR code")
 async def generate_box_qrcode(
     request: BoxQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -278,7 +278,7 @@ async def generate_box_qrcode(
         )
 
 
-@router.post("/trace/generate", response_model=QRCodeGenerateResponse, summary="生成追溯二维码")
+@router.post("/trace/generate", response_model=QRCodeGenerateResponse, summary="Generate traceability QR code")
 async def generate_trace_qrcode(
     request: TraceQRCodeGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],

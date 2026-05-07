@@ -23,7 +23,7 @@ from apps.master_data.schemas.batch_serial_rule_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/materials", tags=["Batch & Serial Rules"])
+router = APIRouter(prefix="/materials", tags=["App · Master Data · Batch & Serial Rules"])
 
 
 def _http_exception_with_trace(
@@ -54,7 +54,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 批号规则 ====================
 
-@router.post("/batch-rules", response_model=BatchRuleResponse, summary="创建批号规则")
+@router.post("/batch-rules", response_model=BatchRuleResponse, summary="Create batch number rule")
 async def create_batch_rule(
     data: BatchRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -68,7 +68,7 @@ async def create_batch_rule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/batch-rules", response_model=BatchRuleListResponse, summary="获取批号规则列表")
+@router.get("/batch-rules", response_model=BatchRuleListResponse, summary="List batch number rules")
 async def list_batch_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
@@ -95,7 +95,7 @@ async def list_batch_rules(
     return BatchRuleListResponse(items=[BatchRuleResponse.model_validate(r) for r in rules], total=total)
 
 
-@router.get("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="获取批号规则详情")
+@router.get("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Get batch number rule")
 async def get_batch_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -108,7 +108,7 @@ async def get_batch_rule(
     return BatchRuleResponse.model_validate(rule)
 
 
-@router.put("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="更新批号规则")
+@router.put("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Update batch number rule")
 async def update_batch_rule(
     rule_uuid: str,
     data: BatchRuleUpdate,
@@ -126,7 +126,7 @@ async def update_batch_rule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/batch-rules/{rule_uuid}", summary="删除批号规则")
+@router.delete("/batch-rules/{rule_uuid}", summary="Delete batch number rule")
 async def delete_batch_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -144,7 +144,7 @@ async def delete_batch_rule(
 
 # ==================== 序列号规则 ====================
 
-@router.post("/serial-rules", response_model=SerialRuleResponse, summary="创建序列号规则")
+@router.post("/serial-rules", response_model=SerialRuleResponse, summary="Create serial number rule")
 async def create_serial_rule(
     data: SerialRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -158,7 +158,7 @@ async def create_serial_rule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/serial-rules", response_model=SerialRuleListResponse, summary="获取序列号规则列表")
+@router.get("/serial-rules", response_model=SerialRuleListResponse, summary="List serial number rules")
 async def list_serial_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
@@ -185,7 +185,7 @@ async def list_serial_rules(
     return SerialRuleListResponse(items=[SerialRuleResponse.model_validate(r) for r in rules], total=total)
 
 
-@router.get("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="获取序列号规则详情")
+@router.get("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Get serial number rule")
 async def get_serial_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -198,7 +198,7 @@ async def get_serial_rule(
     return SerialRuleResponse.model_validate(rule)
 
 
-@router.put("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="更新序列号规则")
+@router.put("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Update serial number rule")
 async def update_serial_rule(
     rule_uuid: str,
     data: SerialRuleUpdate,
@@ -216,7 +216,7 @@ async def update_serial_rule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/serial-rules/{rule_uuid}", summary="删除序列号规则")
+@router.delete("/serial-rules/{rule_uuid}", summary="Delete serial number rule")
 async def delete_serial_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],

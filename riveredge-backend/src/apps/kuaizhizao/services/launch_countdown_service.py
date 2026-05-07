@@ -14,7 +14,7 @@ from loguru import logger
 
 import uuid
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 

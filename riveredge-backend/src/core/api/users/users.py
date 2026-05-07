@@ -99,7 +99,7 @@ async def _user_to_response(user) -> UserResponse:
         roles=roles_data,
     )
 
-router = APIRouter(prefix="/users", tags=["Core Users"])
+router = APIRouter(prefix="/users", tags=["Core · Users"])
 
 
 class UserImportRequest(BaseModel):

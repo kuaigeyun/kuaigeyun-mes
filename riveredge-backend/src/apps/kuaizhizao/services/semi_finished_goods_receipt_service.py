@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 from loguru import logger
 from tortoise.transactions import in_transaction
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder

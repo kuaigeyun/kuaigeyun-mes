@@ -16,12 +16,12 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/launch-checklist", tags=["Launch Checklist"])
+router = APIRouter(prefix="/launch-checklist", tags=["Core · Launch Checklist"])
 
 launch_checklist_service = LaunchChecklistService()
 
 
-@router.get("/checklist", summary="获取检查清单")
+@router.get("/checklist", summary="Get launch checklist")
 async def get_checklist(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -50,7 +50,7 @@ async def get_checklist(
         )
 
 
-@router.get("/check", summary="执行检查")
+@router.get("/check", summary="Run launch checklist checks")
 async def check_items(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -79,7 +79,7 @@ async def check_items(
         )
 
 
-@router.get("/report", summary="生成检查报告")
+@router.get("/report", summary="Generate checklist report")
 async def generate_check_report(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),

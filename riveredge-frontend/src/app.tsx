@@ -88,6 +88,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     pathname === '/infra/login' ||
     pathname.startsWith('/lock-screen') ||
     pathname.startsWith('/init/') ||
+    pathname.startsWith('/docs') ||
     pathname.startsWith('/debug/') ||
     pathname.startsWith('/qrcode/');
   const isInfraLoginPage = pathname === '/infra/login';
@@ -416,7 +417,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
   if (shouldShowLoading) {
     // 根节点加载：使用延迟渲染的极简骨架屏，避免超快速跳转时的闪烁
-    return <DelayedFallback variant="minimal" delayMs={200} fullHeight />;
+    return <DelayedFallback variant="compact" delayMs={200} fullHeight />;
   }
 
   if (shouldRedirect) {
@@ -424,7 +425,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   return (
-    <Suspense fallback={<DelayedFallback variant="minimal" delayMs={200} />}>
+    <Suspense fallback={<DelayedFallback variant="content" delayMs={200} />}>
       {children}
     </Suspense>
   );
@@ -434,14 +435,14 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
  * 延迟加载的骨架屏包装器
  * 针对首屏和应用切入点优化
  */
-const DelayedFallback: React.FC<{ 
-  variant?: PageSkeletonProps['variant']; 
+const DelayedFallback: React.FC<{
+  variant?: PageSkeletonProps['variant'];
   delayMs?: number;
   fullHeight?: boolean;
-}> = ({ 
-  variant = 'minimal', 
+}> = ({
+  variant = 'content',
   delayMs = 150,
-  fullHeight = false
+  fullHeight = false,
 }) => {
   const [show, setShow] = useState(delayMs === 0);
   useEffect(() => {
@@ -501,7 +502,7 @@ const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
   React.useEffect(() => {
     getPlatformSettingsPublic()
       .then((settings) => applyFavicon(settings?.favicon))
-      .catch(() => {});
+      .catch(() => applyFavicon(undefined));
   }, []);
 
   const routesElement = React.useMemo(() => <MainRoutes />, []);

@@ -3,14 +3,14 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 from apps.kuaizhizao.services.traceability import TraceabilityService
 
-router = APIRouter(tags=["追溯管理"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Traceability"])
 service = TraceabilityService()
 
 class TraceGraphResponse(BaseModel):
     nodes: List[Dict]
     edges: List[Dict]
 
-@router.get("/graph", response_model=TraceGraphResponse, summary="获取追溯图谱")
+@router.get("/graph", response_model=TraceGraphResponse, summary="Get traceability graph")
 async def get_trace_graph(
     batch_no: str = Query(..., description="批次号/条码"), 
     direction: Literal["forward", "backward", "both"] = Query("both", description="追溯方向 (forward: 原料->成品, backward: 成品->原料, both: 双向)")

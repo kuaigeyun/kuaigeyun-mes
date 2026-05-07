@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
 from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder

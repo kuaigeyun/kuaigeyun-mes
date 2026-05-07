@@ -9,7 +9,16 @@
 import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, WindowsFilled, AndroidFilled, DownloadOutlined } from '@ant-design/icons';
+import {
+  UserOutlined,
+  LockOutlined,
+  ThunderboltOutlined,
+  GlobalOutlined,
+  WindowsFilled,
+  AndroidFilled,
+  DownloadOutlined,
+  AppstoreOutlined,
+} from '@ant-design/icons';
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import {
@@ -33,6 +42,13 @@ import { Spin } from 'antd';
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
+import { applyFavicon } from '../../utils/favicon';
+import {
+  DEFAULT_SITE_LOGO_URL,
+  EMBEDDED_FRAMEWORK_LOGO_DATA_URI,
+  SITE_LOGO_FALLBACK_SVG_URL,
+  nextSiteLogoUrlAfterImageError,
+} from '../../constants/siteAssets';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -112,10 +128,13 @@ export default function LoginPage() {
     let cancelled = false;
     void getPlatformSettingsPublic()
       .then((data) => {
-        if (!cancelled) setPlatformSettings(data);
+        if (!cancelled) {
+          setPlatformSettings(data);
+          void applyFavicon(data?.favicon);
+        }
       })
       .catch(() => {
-        if (!cancelled) setPlatformSettings((prev) => prev);
+        if (!cancelled) void applyFavicon(undefined);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingPlatformSettings(false);
@@ -159,29 +178,41 @@ export default function LoginPage() {
         }
         if (parsed?.platform_logo) {
           const logoValue = parsed.platform_logo.trim();
-          // 如果是URL格式，直接返回；如果是UUID，需要异步加载，先返回默认值
+          // 如果是URL格式，直接返回；如果是UUID，需要异步加载，先用轻量 SVG 占位
           if (!logoValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
             return logoValue;
           }
+          return SITE_LOGO_FALLBACK_SVG_URL;
         }
       }
     } catch (error) {
       // 忽略解析错误
     }
-    return '/img/logo.png';
+    return DEFAULT_SITE_LOGO_URL;
   });
 
-  // 记录是否已加载LOGO，用于控制显示
-  const [isLogoLoaded, setIsLogoLoaded] = useState<boolean>(() => logoUrl !== '/img/logo.png');
+  /** 默认 SVG 仍加载失败时用浅色图标占位（避免出现深色字母） */
+  const [logoBroken, setLogoBroken] = useState(false);
+  useEffect(() => {
+    setLogoBroken(false);
+  }, [logoUrl]);
 
-  // 图片加载失败时的重试次数（提高加载成功率，最多重试 2 次）
-  const [logoRetryKey, setLogoRetryKey] = useState(0);
-  // logoUrl 变化时重置重试计数
-  useEffect(() => setLogoRetryKey(0), [logoUrl]);
+  const handleLogoImgLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.parentElement?.querySelector('.logo-placeholder')?.remove();
+  }, []);
+
+  const handleLogoImgError = useCallback(() => {
+    const next = nextSiteLogoUrlAfterImageError(logoUrl);
+    if (next !== logoUrl) {
+      setLogoUrl(next);
+      return;
+    }
+    setLogoBroken(true);
+  }, [logoUrl]);
 
   // 预加载 LOGO 图片，提高首屏加载成功率
   useEffect(() => {
-    if (!logoUrl || logoUrl.startsWith('blob:')) return;
+    if (!logoUrl || logoUrl.startsWith('blob:') || logoUrl.startsWith('data:')) return;
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'image';
@@ -255,6 +286,36 @@ export default function LoginPage() {
     return uuidRegex.test(str);
   };
 
+  // 缓存仅有 UUID、尚无预览 URL 时，与 getPlatformSettingsPublic 并行拉预览，缩短首屏
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = localStorage.getItem('platformSettingsPublic');
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const pl = typeof parsed.platform_logo === 'string' ? parsed.platform_logo.trim() : '';
+        const existingUrl =
+          typeof parsed.platform_logo_url === 'string' ? parsed.platform_logo_url.trim() : '';
+        if (!pl || existingUrl) return;
+        if (!isUUID(pl)) return;
+        const response = await fetchWithRetry(
+          `/api/v1/core/files/${pl}/preview/public?category=platform-logo`,
+        );
+        const previewInfo = (await response.json()) as { preview_url?: string };
+        if (cancelled || !previewInfo.preview_url) return;
+        setLogoUrl(previewInfo.preview_url);
+        const merged = { ...parsed, platform_logo: pl, platform_logo_url: previewInfo.preview_url };
+        localStorage.setItem('platformSettingsPublic', JSON.stringify(merged));
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 加载LOGO URL
   useEffect(() => {
     const loadLogo = async () => {
@@ -265,8 +326,7 @@ export default function LoginPage() {
 
       // 如果平台设置加载完成但没有LOGO，使用默认值
       if (!platformSettings?.platform_logo) {
-        setLogoUrl('/img/logo.png');
-        setIsLogoLoaded(true);
+        setLogoUrl(DEFAULT_SITE_LOGO_URL);
         // 更新缓存
         try {
           localStorage.setItem('platformSettingsPublic', JSON.stringify({ platform_logo: null }));
@@ -286,7 +346,6 @@ export default function LoginPage() {
           );
           const previewInfo = await response.json();
           setLogoUrl(previewInfo.preview_url);
-          setIsLogoLoaded(true);
           // 更新缓存
           try {
             localStorage.setItem('platformSettingsPublic', JSON.stringify({
@@ -298,13 +357,11 @@ export default function LoginPage() {
           }
         } catch (error) {
           console.error('获取LOGO预览URL失败（已重试）:', error);
-          setLogoUrl('/img/logo.png');
-          setIsLogoLoaded(true);
+          setLogoUrl(DEFAULT_SITE_LOGO_URL);
         }
       } else {
         // 如果是URL格式，直接使用
         setLogoUrl(logoValue);
-        setIsLogoLoaded(true);
         // 更新缓存
         try {
           localStorage.setItem('platformSettingsPublic', JSON.stringify({
@@ -326,7 +383,12 @@ export default function LoginPage() {
       try {
         const cachedData: any = { ...platformSettings };
         // 如果有LOGO URL，也缓存
-        if (logoUrl && logoUrl !== '/img/logo.png') {
+        if (
+          logoUrl &&
+          logoUrl !== DEFAULT_SITE_LOGO_URL &&
+          logoUrl !== SITE_LOGO_FALLBACK_SVG_URL &&
+          logoUrl !== EMBEDDED_FRAMEWORK_LOGO_DATA_URI
+        ) {
           cachedData.platform_logo_url = logoUrl;
         }
         localStorage.setItem('platformSettingsPublic', JSON.stringify(cachedData));
@@ -725,7 +787,7 @@ export default function LoginPage() {
   };
 
   // 平台主题颜色（与 infra 登录页一致，从平台设置读取）
-  /** 与 login.html 首屏骨架、Ant Design 5 默认主色一致，避免 MPA 首帧与 React 首帧色差闪烁 */
+  /** 未拉到平台主题时与 Ant Design 5 默认主色一致（独立登录 MPA 无静态骨架，首帧由本页渲染） */
   const themeColor = platformSettings?.theme_color || '#1677ff';
 
   /**
@@ -1477,52 +1539,29 @@ export default function LoginPage() {
           transition: 'opacity 0.3s ease-in-out',
         }}
       >
-        <img 
-          key={logoRetryKey}
-          src={logoUrl} 
-          alt={localizedPlatformName} 
-          className="logo-img"
-          width={48}
-          height={48}
-          loading="eager"
-          style={{
-            opacity: 1,
-            transition: 'opacity 0.3s ease-in-out',
-          }}
-          onLoad={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.parentElement?.querySelector('.logo-placeholder')?.remove();
-          }}
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            if (logoRetryKey < 2) {
-              setLogoRetryKey((k) => k + 1);
-              return;
-            }
-            target.style.display = 'none';
-            const placeholder = target.parentElement?.querySelector('.logo-placeholder');
-            if (!placeholder) {
-              target.parentElement?.appendChild(
-                Object.assign(document.createElement('div'), {
-                  className: 'logo-placeholder',
-                  style: {
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    color: themeColor,
-                  },
-                  textContent: localizedPlatformName?.substring(0, 2).toUpperCase() || 'RE',
-                })
-              );
-            }
-          }}
-        />
+        {logoBroken ? (
+          <div className="logo-img logo-img-fallback" aria-hidden>
+            <AppstoreOutlined />
+          </div>
+        ) : (
+          <img
+            key={logoUrl}
+            src={logoUrl}
+            alt={localizedPlatformName}
+            className="logo-img"
+            width={48}
+            height={48}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            style={{
+              opacity: 1,
+              transition: 'opacity 0.3s ease-in-out',
+            }}
+            onLoad={handleLogoImgLoad}
+            onError={handleLogoImgError}
+          />
+        )}
         <Title level={2} className="logo-title" style={{
           opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
@@ -1543,53 +1582,29 @@ export default function LoginPage() {
           opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
         }}>
-          <img 
-            key={logoRetryKey}
-            src={logoUrl} 
-            alt={localizedPlatformName} 
-            className="logo-img"
-            width={48}
-            height={48}
-            loading="eager"
-            style={{
-              opacity: 1,
-              transition: 'opacity 0.3s ease-in-out',
-            }}
-            onLoad={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.parentElement?.querySelector('.logo-placeholder')?.remove();
-            }}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              if (logoRetryKey < 2) {
-                setLogoRetryKey((k) => k + 1);
-                return;
-              }
-              target.style.display = 'none';
-              const placeholder = target.parentElement?.querySelector('.logo-placeholder');
-              if (!placeholder) {
-                target.parentElement?.appendChild(
-                  Object.assign(document.createElement('div'), {
-                    className: 'logo-placeholder',
-                    style: {
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      background: 'rgba(255, 255, 255, 0.9)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      color: themeColor,
-                      marginRight: '16px',
-                    },
-                    textContent: localizedPlatformName?.substring(0, 2).toUpperCase() || 'RE',
-                  })
-                );
-              }
-            }}
-          />
+          {logoBroken ? (
+            <div className="logo-img logo-img-fallback" aria-hidden>
+              <AppstoreOutlined />
+            </div>
+          ) : (
+            <img
+              key={logoUrl}
+              src={logoUrl}
+              alt={localizedPlatformName}
+              className="logo-img"
+              width={48}
+              height={48}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              style={{
+                opacity: 1,
+                transition: 'opacity 0.3s ease-in-out',
+              }}
+              onLoad={handleLogoImgLoad}
+              onError={handleLogoImgError}
+            />
+          )}
           <Title level={2} className="logo-title" style={{
             opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
             transition: 'opacity 0.3s ease-in-out',

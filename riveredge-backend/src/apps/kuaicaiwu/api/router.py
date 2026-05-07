@@ -30,7 +30,7 @@ from .cost import (
 from .management_report import router as management_report_router
 from .finance_settlement import router as settlement_router
 
-router = APIRouter(tags=["Kuaicaiwu"])
+router = APIRouter(tags=["App · Kuaicaiwu · Overview"])
 
 # 注册财务管理路由
 router.include_router(receivables_router)

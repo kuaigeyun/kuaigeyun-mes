@@ -7,7 +7,7 @@ from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory, Spa
 from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.equipment_extra import SparePartResponse
 
-router = APIRouter(prefix="/spare-parts", tags=["Kuaige Zhizao Spare Parts"])
+router = APIRouter(prefix="/spare-parts", tags=["App · Kuaige Zhizao · Spare Parts"])
 service = SparePartService()
 
 @router.get("", response_model=List[SparePartResponse])

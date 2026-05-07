@@ -26,7 +26,7 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionCreate, FinishedGoodsInspectionUpdate, FinishedGoodsInspectionResponse, FinishedGoodsInspectionListResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.inspection_policy_service import (
     get_quality_inspection_stage_toggles,
     resolve_inspection_policy,

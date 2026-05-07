@@ -1584,7 +1584,7 @@ export default function DashboardPage() {
                         flexShrink: 0, // ⚠️ 极致保护：Avatar 自身不缩
                       }}
                     >
-                      {!avatarUrl && getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
+                      {getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
                     </Avatar>
                   </div>
                   <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>

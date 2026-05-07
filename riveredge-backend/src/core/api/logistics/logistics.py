@@ -11,10 +11,10 @@ from fastapi import APIRouter, Depends, Query
 from core.api.deps import get_current_user, get_current_tenant
 from core.services.logistics_service import LogisticsService
 
-router = APIRouter(prefix="/logistics", tags=["物流查询"])
+router = APIRouter(prefix="/logistics", tags=["Core · Logistics"])
 
 
-@router.get("/track", summary="查询物流轨迹")
+@router.get("/track", summary="Track shipment")
 async def track_logistics(
     carrier: str = Query(..., description="承运商/物流公司"),
     tracking_number: str = Query(..., description="运单号"),

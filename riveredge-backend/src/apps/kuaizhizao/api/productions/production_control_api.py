@@ -13,7 +13,7 @@ from apps.kuaizhizao.schemas.production_control import (
 )
 from apps.kuaizhizao.models.work_order import WorkOrder
 
-router = APIRouter(prefix="/production-control", tags=["生产计划管控塔"])
+router = APIRouter(prefix="/production-control", tags=["App · Kuaige Zhizao · Production Planning Control"])
 service = ProductionControlService()
 
 

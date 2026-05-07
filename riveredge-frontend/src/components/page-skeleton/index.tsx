@@ -1,116 +1,175 @@
 /**
- * 页面骨架屏组件
+ * 页面骨架屏（主内容区统一视觉）
  *
- * 用于页面加载时的占位显示，提供简约、专业的工业化美感。
- * 针对不同页面模板提供对应的骨架形态，减少首屏加载时的视觉突变。
+ * 后台各路由懒加载时共用同一套占位：顶栏摘要 + 多卡栅格 + 中下区块，
+ * 与工作台/统计类页面结构对齐，减少「一种路由一种骨架」的割裂感。
  *
- * Author: Luigi Lu
- * Date: 2025-12-27
- * Modified: 2024-04-25
+ * - content：默认，主内容区标准骨架（绝大多数路由 Suspense）
+ * - compact：极轻量，仅用于全屏鉴权等待等不宜铺满内容的场景
+ * - rolesPermissions：保留左右分栏轮廓，卡片壳样式与 content 一致
  */
 
 import React from 'react';
 import { Skeleton, theme } from 'antd';
+import type { GlobalToken } from 'antd/es/theme/interface';
 import { PAGE_SPACING } from '../layout-templates/constants';
 
 const { useToken } = theme;
 
+export type PageSkeletonVariant = 'content' | 'compact' | 'rolesPermissions';
+
+/** @deprecated 与 content 相同，保留别名便于渐进替换 */
+export type LegacyPageSkeletonVariant = PageSkeletonVariant | 'default' | 'minimal' | 'dashboard';
+
 export interface PageSkeletonProps {
-  /**
-   * - default：极简基础骨架（标题 + 少量正文行）
-   * - minimal：最简洁骨架（仅三行占位），用于局部加载或路由闪过
-   * - dashboard：对齐工作台页面的边距与结构
-   * - rolesPermissions：对齐角色权限页的左右分栏结构
-   */
-  variant?: 'default' | 'minimal' | 'dashboard' | 'rolesPermissions';
+  variant?: LegacyPageSkeletonVariant;
 }
 
-/**
- * 页面骨架屏组件
- */
-const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
-  const { token } = useToken();
-  const P = PAGE_SPACING.PADDING;
-  
-  const padding =
-    variant === 'dashboard' || variant === 'rolesPermissions'
-      ? `${P}px`
-      : `${P}px`;
+function cardShell(token: GlobalToken): React.CSSProperties {
+  return {
+    padding: 16,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: token.borderRadiusLG,
+    background: token.colorBgContainer,
+    minWidth: 0,
+  };
+}
 
-  // 极简变体：用于路由极速切换或局部加载
-  if (variant === 'minimal') {
-    return (
-      <div style={{ padding, width: '100%', maxWidth: 600 }}>
-        <Skeleton
-          active
-          title={false}
-          paragraph={{ rows: 2, width: ['70%', '40%'] }}
-        />
-      </div>
-    );
-  }
+function normalizeVariant(v: PageSkeletonProps['variant']): PageSkeletonVariant {
+  if (v === 'compact' || v === 'rolesPermissions') return v;
+  // default | minimal | dashboard | content | undefined → 统一主内容骨架
+  return 'content';
+}
 
-  // 角色权限页专用：保持左右分栏结构一致，防止页面抖动
-  if (variant === 'rolesPermissions') {
-    return (
-      <div style={{ padding, display: 'flex', height: '100%', gap: 16, boxSizing: 'border-box' }}>
-        {/* 左侧栏骨架 */}
-        <div style={{ width: 260, flexShrink: 0 }}>
-          <Skeleton.Input active size="small" style={{ width: '100%', height: 24, marginBottom: 12 }} />
-          <Skeleton active paragraph={{ rows: 6, width: '100%' }} title={false} />
-        </div>
-        {/* 右侧主区骨架 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Skeleton.Input active size="small" style={{ width: 120, height: 24, marginBottom: 20 }} />
-          <Skeleton
-            active
-            title={{ width: '40%', style: { marginBottom: 24 } }}
-            paragraph={{ rows: 5, width: ['100%', '100%', '95%', '90%', '60%'] }}
-          />
-        </div>
-      </div>
-    );
-  }
+/** 主内容区统一骨架（与工作台信息密度大致同级，响应式栅格） */
+function UnifiedContentSkeleton({ token }: { token: GlobalToken }) {
+  const gap = PAGE_SPACING.BLOCK_GAP;
+  const shell = cardShell(token);
+  const gridGap = 16;
 
-  // 工作台专用：顶部大标题 + 栅格卡片感
-  if (variant === 'dashboard') {
-    return (
-      <div style={{ padding }}>
-        <Skeleton.Input active size="small" style={{ width: 140, height: 24, marginBottom: 24 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{ padding: 16, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: token.borderRadius }}>
-              <Skeleton active paragraph={{ rows: 2 }} title={{ width: '40%' }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // 默认：工业极简风（标题 + 四行正文）
   return (
-    <div style={{ padding, width: '100%' }}>
-      <div style={{ marginBottom: 32 }}>
-        <Skeleton.Input
-          active
-          size="small"
-          style={{ width: 160, height: 24 }}
-        />
+    <div
+      style={{
+        width: '100%',
+        boxSizing: 'border-box',
+        padding: 0,
+        margin: 0,
+        minHeight: 'min(58vh, 520px)',
+      }}
+    >
+      {/* 顶距由 .uni-tabs-content 的 margin-top:16px 承担，此处不再加 margin，避免与标签栏下形成双 16 */}
+      <div style={{ marginBottom: gap }}>
+        <Skeleton.Input active size="small" style={{ width: 220, height: 22, marginBottom: 12 }} />
+        <Skeleton active title={false} paragraph={{ rows: 1, width: ['48%'] }} />
       </div>
-      
-      <Skeleton
-        active
-        paragraph={{
-          rows: 4,
-          width: ['100%', '95%', '90%', '40%'],
-          style: { marginTop: 0 }
+
+      {/* 上区：多卡横排 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: gridGap,
+          marginBottom: gap,
         }}
-        title={{ width: '60%', style: { marginBottom: 20 } }}
-      />
+      >
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={shell}>
+            <Skeleton active title={{ width: '42%' }} paragraph={{ rows: 2, width: ['100%', '72%'] }} />
+          </div>
+        ))}
+      </div>
+
+      {/* 中区：指标卡栅格 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: gridGap,
+          marginBottom: gap,
+        }}
+      >
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} style={shell}>
+            <Skeleton active title={{ width: '50%' }} paragraph={{ rows: 2, width: ['100%', '65%'] }} />
+          </div>
+        ))}
+      </div>
+
+      {/* 下区：主列表 + 侧栏 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: gridGap,
+        }}
+      >
+        <div style={shell}>
+          <Skeleton active title={{ width: '28%' }} paragraph={{ rows: 6, width: ['100%', '100%', '96%', '92%', '88%', '40%'] }} />
+        </div>
+        <div style={shell}>
+          <Skeleton active title={{ width: '36%' }} paragraph={{ rows: 5, width: ['100%', '90%', '85%', '70%', '55%'] }} />
+        </div>
+      </div>
     </div>
   );
+}
+
+function CompactSkeleton() {
+  return (
+    <div
+      style={{
+        width: '100%',
+        maxWidth: 420,
+        boxSizing: 'border-box',
+        padding: PAGE_SPACING.PADDING,
+      }}
+    >
+      <Skeleton active title={false} paragraph={{ rows: 2, width: ['72%', '44%'] }} />
+    </div>
+  );
+}
+
+function RolesPermissionsSkeleton({ token }: { token: GlobalToken }) {
+  const shell = cardShell(token);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        height: '100%',
+        gap: 16,
+        minHeight: 'min(58vh, 480px)',
+        boxSizing: 'border-box',
+        padding: 0,
+        margin: 0,
+      }}
+    >
+      <div style={{ width: 260, flexShrink: 0, ...shell }}>
+        <Skeleton.Input active size="small" style={{ width: '100%', height: 24, marginBottom: 12 }} />
+        <Skeleton active paragraph={{ rows: 6, width: '100%' }} title={false} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0, ...shell }}>
+        <Skeleton.Input active size="small" style={{ width: 140, height: 24, marginBottom: 20 }} />
+        <Skeleton
+          active
+          title={{ width: '38%', style: { marginBottom: 20 } }}
+          paragraph={{ rows: 5, width: ['100%', '100%', '95%', '90%', '52%'] }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant: rawVariant }) => {
+  const { token } = useToken();
+  const variant = normalizeVariant(rawVariant);
+
+  if (variant === 'compact') {
+    return <CompactSkeleton />;
+  }
+  if (variant === 'rolesPermissions') {
+    return <RolesPermissionsSkeleton token={token} />;
+  }
+  return <UnifiedContentSkeleton token={token} />;
 };
 
 export default PageSkeleton;
-

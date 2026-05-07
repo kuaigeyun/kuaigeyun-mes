@@ -476,30 +476,19 @@ export default function LockScreenPage() {
         >
           {/* 用户信息 */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            {avatarUrl ? (
-              <Avatar
-                size={80}
-                src={avatarUrl}
-                style={{
-                  marginBottom: 16,
-                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-                }}
-              />
-            ) : (
-              <Avatar
-                size={80}
-                style={{
-                  backgroundColor: FIXED_THEME_COLOR,
-                  marginBottom: 16,
-                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-                  fontSize: getAvatarFontSize(80),
-                  fontWeight: 500,
-                }}
-              >
-                {/* 显示首字母（优先全名，否则用户名） */}
-                {getAvatarText(currentUser?.full_name, currentUser?.username)}
-              </Avatar>
-            )}
+            <Avatar
+              size={80}
+              src={avatarUrl}
+              style={{
+                backgroundColor: FIXED_THEME_COLOR,
+                marginBottom: 16,
+                boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                fontSize: getAvatarFontSize(80),
+                fontWeight: 500,
+              }}
+            >
+              {getAvatarText(currentUser?.full_name, currentUser?.username)}
+            </Avatar>
             <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
               {displayName}
             </Title>

@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/purchase-invoices", tags=["Kuaicaiwu Finance"])
+router = APIRouter(prefix="/purchase-invoices", tags=["App · Kuaicaiwu · Finance"])
 
 invoice_service = PurchaseInvoiceService()
 

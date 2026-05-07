@@ -26,7 +26,7 @@ from apps.kuaicaiwu.schemas.finance import (
     ReceivableCreate,
 )
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
-from apps.kuaicaiwu.finance_source_types import RECEIVABLE_SOURCE_SALES_INVOICE
+from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
@@ -35,7 +35,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 
-router = APIRouter(prefix="/sales-invoices", tags=["Kuaicaiwu Finance"])
+router = APIRouter(prefix="/sales-invoices", tags=["App · Kuaicaiwu · Finance"])
 business_config_service = BusinessConfigService()
 receivable_service = ReceivableService()
 

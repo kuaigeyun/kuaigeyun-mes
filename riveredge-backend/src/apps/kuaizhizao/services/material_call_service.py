@@ -11,7 +11,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 from loguru import logger
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.models.user import User
 from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
 from apps.kuaizhizao.models.material_call_request_item import MaterialCallRequestItem

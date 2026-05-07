@@ -18,14 +18,14 @@ from apps.kuaizhizao.services.print_service import DocumentPrintService
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.kuaizhizao.schemas.document_node_timing import DocumentTimingSummaryResponse
 
-router = APIRouter(tags=["Kuaige Zhizao - Document Print & Timing"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Document Print & Timing"])
 document_timing_service = DocumentTimingService()
 
 
 # ============ 单据打印 API ============
 
 
-@router.get("/documents/{document_type}/{document_id}/print", summary="打印单据")
+@router.get("/documents/{document_type}/{document_id}/print", summary="Print document")
 async def print_document(
     document_type: str = Path(..., description="单据类型（如：work_order, production_picking等）"),
     document_id: int = Path(..., description="单据ID"),
@@ -64,7 +64,7 @@ async def print_document(
 # ============ 单据节点耗时统计 API ============
 
 
-@router.get("/documents/timing", response_model=List[DocumentTimingSummaryResponse], summary="获取单据耗时统计列表")
+@router.get("/documents/timing", response_model=List[DocumentTimingSummaryResponse], summary="List document timing statistics")
 async def list_documents_timing(
     document_type: Optional[str] = Query(None, description="单据类型（如：work_order/purchase_order/sales_order）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -89,7 +89,7 @@ async def list_documents_timing(
     )
 
 
-@router.get("/documents/{document_type}/{document_id}/timing", response_model=DocumentTimingSummaryResponse, summary="获取单据耗时统计")
+@router.get("/documents/{document_type}/{document_id}/timing", response_model=DocumentTimingSummaryResponse, summary="Get document timing statistics")
 async def get_document_timing(
     document_type: str = Path(..., description="单据类型（如：work_order/purchase_order/sales_order）"),
     document_id: int = Path(..., description="单据ID"),
@@ -111,7 +111,7 @@ async def get_document_timing(
     )
 
 
-@router.get("/documents/efficiency", summary="获取单据执行效率分析")
+@router.get("/documents/efficiency", summary="Analyze document execution efficiency")
 async def get_document_efficiency(
     document_type: Optional[str] = Query(None, description="单据类型（如：work_order/purchase_order/sales_order）"),
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),

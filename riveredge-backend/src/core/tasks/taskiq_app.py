@@ -109,7 +109,7 @@ async def online_user_cleanup_task() -> None:
 @task(schedule=[{"cron": "* * * * *"}])
 async def scheduled_tasks_minute_tick() -> dict:
     """每分钟扫描 ScheduledTask 并投递 scheduled-task/execute。"""
-    from core.inngest.functions.scheduled_task_scheduler import run_scheduled_task_scheduler_tick
+    from core.workflows.functions.scheduled_task_scheduler import run_scheduled_task_scheduler_tick
 
     return await run_scheduled_task_scheduler_tick()
 
@@ -117,7 +117,7 @@ async def scheduled_tasks_minute_tick() -> dict:
 @task(schedule=[{"cron": "0 * * * *"}])
 async def exception_detection_hourly_tick() -> dict:
     """每小时投递 exception/detect-all（与原小时级 cron 一致）。"""
-    from apps.kuaizhizao.inngest.functions.exception_detection_workflow import (
+    from apps.kuaizhizao.workflows.functions.exception_detection_workflow import (
         run_exception_detection_scheduler,
     )
 
@@ -127,7 +127,7 @@ async def exception_detection_hourly_tick() -> dict:
 @task(schedule=[{"cron": "0 8 * * *"}])
 async def maintenance_reminder_daily_tick() -> dict:
     """每天 8:00 投递 maintenance-reminder/check。"""
-    from apps.kuaizhizao.inngest.functions.maintenance_reminder_workflow import (
+    from apps.kuaizhizao.workflows.functions.maintenance_reminder_workflow import (
         run_maintenance_reminder_scheduler,
     )
 

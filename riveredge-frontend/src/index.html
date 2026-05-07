@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- 顶栏/登录页 LOGO 常用静态资源：尽早发起请求，减轻首帧后再补请求的延迟 -->
+    <link rel="preload" as="image" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/img/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RiverEdge SaaS</title>
 

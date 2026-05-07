@@ -17,7 +17,7 @@ from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPull
 from apps.kuaizhizao.services.document_state_engine import DocumentStateEngine
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/document-push-pull", tags=["单据下推和上拉"])
+router = APIRouter(prefix="/document-push-pull", tags=["App · Kuaige Zhizao · Document Push & Pull"])
 
 
 class PushDocumentRequest(BaseModel):
@@ -47,7 +47,7 @@ class ReverseDocumentRequest(BaseModel):
     reason: Optional[str] = Field(None, description="撤回原因")
 
 
-@router.post("/push", summary="单据下推")
+@router.post("/push", summary="Push document")
 async def push_document(
     request: PushDocumentRequest,
     current_user: User = Depends(get_current_user),
@@ -85,7 +85,7 @@ async def push_document(
         raise HTTPException(status_code=500, detail=f"下推失败: {str(e)}")
 
 
-@router.post("/pull", summary="单据上拉")
+@router.post("/pull", summary="Pull document")
 async def pull_document(
     request: PullDocumentRequest,
     current_user: User = Depends(get_current_user),
@@ -121,7 +121,7 @@ async def pull_document(
         raise HTTPException(status_code=500, detail=f"上拉失败: {str(e)}")
 
 
-@router.post("/reverse", summary="单据撤回")
+@router.post("/reverse", summary="Reverse document push/pull")
 async def reverse_document(
     request: ReverseDocumentRequest,
     current_user: User = Depends(get_current_user),
@@ -155,7 +155,7 @@ async def reverse_document(
         raise HTTPException(status_code=500, detail=f"撤回失败: {str(e)}")
 
 
-@router.get("/reverse/supported", summary="获取支持的撤回类型")
+@router.get("/reverse/supported", summary="List supported reverse types")
 async def get_supported_reverses() -> Dict[str, list]:
     """返回各单据类型支持的撤回类型，供前端展示"""
     engine = DocumentStateEngine()

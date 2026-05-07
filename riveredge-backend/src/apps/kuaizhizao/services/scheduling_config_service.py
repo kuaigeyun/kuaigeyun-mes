@@ -17,7 +17,7 @@ from apps.kuaizhizao.schemas.scheduling_config import (
     SchedulingConfigResponse,
     SchedulingConfigListResponse,
 )
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 

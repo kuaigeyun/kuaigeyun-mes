@@ -17,7 +17,7 @@ from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation

@@ -16,7 +16,7 @@ from infra.models.user import User
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/user-profile", tags=["UserProfile"])
+router = APIRouter(prefix="/user-profile", tags=["Core · User Profile"])
 
 
 class ChangePasswordRequest(BaseModel):

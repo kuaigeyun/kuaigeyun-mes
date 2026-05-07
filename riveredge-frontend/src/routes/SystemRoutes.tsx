@@ -16,7 +16,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
-import LoginSkeleton from '../components/login-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
 
@@ -24,10 +23,8 @@ import { hasAnyPermission } from '../utils/permission';
 import IndexPage from '../pages';
 import NotFoundPage from '../pages/404';
 
-// 登录页懒加载（第一印象页，按需加载以减小主包）
-// 注意：登录页统一走主应用 SPA 渲染。曾经存在的独立 MPA（src/login.html + vite.login.config.ts）
-// 因双轨制（首次 SPA navigate / 刷新 Caddy 加载 login.html）以及独立 bundle 在生产环境运行时挂载失败等问题，
-// 已废弃；Caddy @login 块 try_files 也改为 /index.html，确保 /login 任何来源都走同一份主应用 bundle。
+// 登录页懒加载（按需加载以减小主包）。Suspense fallback 不用骨架屏：与独立 login.html 入口一致，chunk 就绪前留白即可。
+// 独立 MPA：开发服 Vite 将 /login 指向 login.html；生产多为 index.html + 本路由懒加载。
 const LoginPage = React.lazy(() => import('../pages/login'));
 // 公开页面按需懒加载，减小主包体积，加快登录首屏
 const InfraLoginPage = React.lazy(() => import('../pages/infra/login'));
@@ -35,14 +32,15 @@ const LockScreenPage = React.lazy(() => import('../pages/lock-screen'));
 const InitWizardPage = React.lazy(() => import('../pages/init/wizard'));
 const TemplateSelectPage = React.lazy(() => import('../pages/init/template-select'));
 const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
+const DocsPage = React.lazy(() => import('../pages/docs'));
 
 /**
  * 延迟显示的 Fallback 组件
  * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
  */
-const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayMs?: number }> = ({ 
-  variant = 'minimal', 
-  delayMs = 150 
+const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayMs?: number }> = ({
+  variant = 'content',
+  delayMs = 150,
 }) => {
   const [show, setShow] = React.useState(delayMs === 0);
   useEffect(() => {
@@ -53,21 +51,17 @@ const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayM
   return show ? <PageSkeleton variant={variant} /> : null;
 };
 
-// 懒加载包装（极简 fallback）
-// 与 hover/父分组 prefetch 配合：大多数点击发生时 chunk 已在缓存，
-// fallback 仅在极短窗口内（>150ms）出现，采用最轻量骨架屏。
+// 懒加载包装：主内容区统一骨架（DelayedFallback 默认 variant=content）
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<DelayedFallback variant="minimal" />}><LazyComponent /></Suspense>
+  <Suspense fallback={<DelayedFallback />}><LazyComponent /></Suspense>
 );
 
-// 登录页专用骨架屏（与登录页布局一致）
 const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<LoginSkeleton />}><LazyComponent /></Suspense>
+  <Suspense fallback={null}><LazyComponent /></Suspense>
 );
 
-// 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
 const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<DelayedFallback variant="dashboard" />}><LazyComponent /></Suspense>
+  <Suspense fallback={<DelayedFallback />}><LazyComponent /></Suspense>
 );
 
 // 角色权限页专用，骨架屏边距与左右分栏布局一致
@@ -178,11 +172,12 @@ const SystemRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<IndexPage />} />
     <Route path="/login" element={withLoginSuspense(LoginPage)} />
-    <Route path="/infra/login" element={<Suspense fallback={<LoginSkeleton />}><InfraLoginPage /></Suspense>} />
+    <Route path="/infra/login" element={<Suspense fallback={null}><InfraLoginPage /></Suspense>} />
     <Route path="/lock-screen" element={<Suspense fallback={<PageSkeleton />}><LockScreenPage /></Suspense>} />
     <Route path="/init/wizard" element={<Suspense fallback={<PageSkeleton />}><InitWizardPage /></Suspense>} />
     <Route path="/init/template-select" element={<Suspense fallback={<PageSkeleton />}><TemplateSelectPage /></Suspense>} />
     <Route path="/qrcode/scan" element={<Suspense fallback={<PageSkeleton />}><QRCodeScanPage /></Suspense>} />
+    <Route path="/docs" element={<Suspense fallback={<PageSkeleton />}><DocsPage /></Suspense>} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />

@@ -55,7 +55,7 @@ from .line_side_warehouses.line_side_warehouses import router as line_side_wareh
 from .management import router as management_router
 
 # 创建主路由
-router = APIRouter(tags=["Kuaige Zhizao MES"])
+router = APIRouter(tags=["App · Kuaige Zhizao · MES"])
 
 # 注意：路由前缀使用 kuaizhizao（不带连字符），因为这是 URL 路径
 # 但目录名使用 kuaizhizao（不带下划线），保持一致性

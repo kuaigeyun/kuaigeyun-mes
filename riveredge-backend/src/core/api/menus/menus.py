@@ -25,7 +25,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
-router = APIRouter(prefix="/menus", tags=["Menus"])
+router = APIRouter(prefix="/menus", tags=["Core · Menus"])
 
 
 @router.post("", response_model=MenuResponse, status_code=status.HTTP_201_CREATED)

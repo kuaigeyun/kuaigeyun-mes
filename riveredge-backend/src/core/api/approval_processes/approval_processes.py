@@ -20,7 +20,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/approval-processes", tags=["ApprovalProcesses"])
+router = APIRouter(prefix="/approval-processes", tags=["Core · Approval Processes"])
 
 
 def _normalize_json_object(value: Any, field_name: str, process_uuid: Any) -> Dict[str, Any]:

@@ -37,7 +37,7 @@ demand_service = DemandService()
 document_relation_service = DocumentRelationNewService()
 
 # 创建路由
-router = APIRouter(prefix="/demands", tags=["Kuaige Zhizao - Demand Management"])
+router = APIRouter(prefix="/demands", tags=["App · Kuaige Zhizao · Demand Management"])
 
 
 def _http_exception_with_trace(
@@ -61,7 +61,7 @@ def _http_exception_with_trace(
     )
 
 
-@router.post("", response_model=DemandResponse, summary="创建需求")
+@router.post("", response_model=DemandResponse, summary="Create demand")
 async def create_demand(
     demand_data: DemandCreate,
     current_user: User = Depends(get_current_user),
@@ -89,7 +89,7 @@ async def create_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建需求失败", "/demands", tenant_id)
 
 
-@router.post("/batch", response_model=Dict[str, Any], summary="批量创建需求")
+@router.post("/batch", response_model=Dict[str, Any], summary="Batch create demands")
 async def batch_create_demands(
     demands_data: List[DemandCreate],
     current_user: User = Depends(get_current_user),
@@ -142,7 +142,7 @@ async def batch_create_demands(
         )
 
 
-@router.get("/statistics", summary="获取需求统计（用于指标卡片）")
+@router.get("/statistics", summary="Demand statistics (KPI cards)")
 async def get_demand_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -218,7 +218,7 @@ async def get_demand_statistics(
     }
 
 
-@router.get("", summary="获取需求列表")
+@router.get("", summary="List demands")
 async def list_demands(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
@@ -258,7 +258,7 @@ async def list_demands(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求列表失败", "/demands", tenant_id)
 
 
-@router.get("/orphan-report", response_model=Dict[str, Any], summary="巡检孤儿需求（仅查询）")
+@router.get("/orphan-report", response_model=Dict[str, Any], summary="Scan orphan demands (read-only)")
 async def inspect_orphan_demands(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -282,7 +282,7 @@ async def inspect_orphan_demands(
         )
 
 
-@router.get("/{demand_id}", response_model=DemandResponse, summary="获取需求详情")
+@router.get("/{demand_id}", response_model=DemandResponse, summary="Get demand")
 async def get_demand(
     demand_id: int = Path(..., description="需求ID"),
     include_items: bool = Query(False, description="是否包含明细"),
@@ -311,7 +311,7 @@ async def get_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求详情失败", "/demands/{demand_id}", tenant_id)
 
 
-@router.get("/{demand_id}/change-impact", response_model=ChangeImpactResponse, summary="获取需求变更影响")
+@router.get("/{demand_id}/change-impact", response_model=ChangeImpactResponse, summary="Demand change impact")
 async def get_demand_change_impact(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -333,7 +333,7 @@ async def get_demand_change_impact(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取变更影响失败", "/demands/{demand_id}/change-impact", tenant_id)
 
 
-@router.get("/{demand_id}/recalc-history", summary="获取需求重算历史")
+@router.get("/{demand_id}/recalc-history", summary="Demand recalc history")
 async def get_demand_recalc_history(
     demand_id: int = Path(..., description="需求ID"),
     limit: int = Query(50, ge=1, le=100),
@@ -349,7 +349,7 @@ async def get_demand_recalc_history(
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/recalc-history", tenant_id)
 
 
-@router.get("/{demand_id}/snapshots", summary="获取需求快照列表")
+@router.get("/{demand_id}/snapshots", summary="List demand snapshots")
 async def get_demand_snapshots(
     demand_id: int = Path(..., description="需求ID"),
     limit: int = Query(20, ge=1, le=50),
@@ -365,7 +365,7 @@ async def get_demand_snapshots(
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/snapshots", tenant_id)
 
 
-@router.delete("/{demand_id}", summary="删除需求")
+@router.delete("/{demand_id}", summary="Delete demand")
 async def delete_demand(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -388,7 +388,7 @@ async def delete_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求失败", "/demands/{demand_id}", tenant_id)
 
 
-@router.put("/{demand_id}", response_model=DemandResponse, summary="更新需求")
+@router.put("/{demand_id}", response_model=DemandResponse, summary="Update demand")
 async def update_demand(
     demand_id: int = Path(..., description="需求ID"),
     demand_data: DemandUpdate = ...,
@@ -418,7 +418,7 @@ async def update_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求失败", "/demands/{demand_id}", tenant_id)
 
 
-@router.post("/{demand_id}/submit", response_model=DemandResponse, summary="提交需求")
+@router.post("/{demand_id}/submit", response_model=DemandResponse, summary="Submit demand")
 async def submit_demand(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -445,7 +445,7 @@ async def submit_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "提交需求失败", "/demands/{demand_id}/submit", tenant_id)
 
 
-@router.post("/{demand_id}/approve", response_model=DemandResponse, summary="审核通过需求")
+@router.post("/{demand_id}/approve", response_model=DemandResponse, summary="Approve demand")
 async def approve_demand(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -473,7 +473,7 @@ async def approve_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "审核需求失败", "/demands/{demand_id}/approve", tenant_id)
 
 
-@router.post("/{demand_id}/reject", response_model=DemandResponse, summary="驳回需求")
+@router.post("/{demand_id}/reject", response_model=DemandResponse, summary="Reject demand")
 async def reject_demand(
     demand_id: int = Path(..., description="需求ID"),
     rejection_reason: str = Query(..., description="驳回原因"),
@@ -504,7 +504,7 @@ async def reject_demand(
 
 # ==================== 需求明细管理 ====================
 
-@router.post("/{demand_id}/items", response_model=DemandItemResponse, summary="添加需求明细")
+@router.post("/{demand_id}/items", response_model=DemandItemResponse, summary="Add demand line")
 async def add_demand_item(
     demand_id: int = Path(..., description="需求ID"),
     item_data: DemandItemCreate = ...,
@@ -534,7 +534,7 @@ async def add_demand_item(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "添加需求明细失败", "/demands/{demand_id}/items", tenant_id)
 
 
-@router.put("/{demand_id}/items/{item_id}", response_model=DemandItemResponse, summary="更新需求明细")
+@router.put("/{demand_id}/items/{item_id}", response_model=DemandItemResponse, summary="Update demand line")
 async def update_demand_item(
     demand_id: int = Path(..., description="需求ID"),
     item_id: int = Path(..., description="明细ID"),
@@ -564,7 +564,7 @@ async def update_demand_item(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
 
 
-@router.delete("/{demand_id}/items/{item_id}", summary="删除需求明细")
+@router.delete("/{demand_id}/items/{item_id}", summary="Delete demand line")
 async def delete_demand_item(
     demand_id: int = Path(..., description="需求ID"),
     item_id: int = Path(..., description="明细ID"),
@@ -590,7 +590,7 @@ async def delete_demand_item(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
 
 
-@router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="下推需求到物料需求运算")
+@router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="Push demand to material planning")
 async def push_demand_to_computation(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -624,7 +624,7 @@ async def push_demand_to_computation(
         )
 
 
-@router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="撤回需求计算")
+@router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="Withdraw demand computation")
 async def withdraw_demand_from_computation(
     demand_id: int = Path(..., description="需求ID"),
     current_user: User = Depends(get_current_user),
@@ -656,7 +656,7 @@ async def withdraw_demand_from_computation(
         )
 
 
-@router.post("/clean-orphans", response_model=Dict[str, Any], summary="清理孤儿需求")
+@router.post("/clean-orphans", response_model=Dict[str, Any], summary="Clean orphan demands")
 async def clean_orphan_demands(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

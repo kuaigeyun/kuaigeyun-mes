@@ -24,7 +24,7 @@ from apps.kuaizhizao.schemas.material_binding import (
     MaterialBindingListResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

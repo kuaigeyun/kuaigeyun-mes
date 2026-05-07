@@ -19,7 +19,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/login-logs", tags=["LoginLogs"])
+router = APIRouter(prefix="/login-logs", tags=["Core · Login Logs"])
 
 
 @router.get("", response_model=LoginLogListResponse)

@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.quality import (
     QualityStandardListResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.services.business.code_rule_service import CodeRuleService
 

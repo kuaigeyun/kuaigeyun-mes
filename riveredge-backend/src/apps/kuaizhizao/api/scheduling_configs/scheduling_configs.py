@@ -23,7 +23,7 @@ from apps.kuaizhizao.schemas.scheduling_config import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/scheduling-configs", tags=["排程配置"])
+router = APIRouter(prefix="/scheduling-configs", tags=["App · Kuaige Zhizao · Scheduling Configuration"])
 
 config_service = SchedulingConfigService()
 
@@ -54,7 +54,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, message)
 
 
-@router.post("", response_model=SchedulingConfigResponse, summary="创建排程配置")
+@router.post("", response_model=SchedulingConfigResponse, summary="Create scheduling config")
 async def create_scheduling_config(
     config_data: SchedulingConfigCreate,
     current_user: User = Depends(get_current_user),
@@ -74,7 +74,7 @@ async def create_scheduling_config(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建排程配置失败")
 
 
-@router.get("", response_model=SchedulingConfigListResponse, summary="查询排程配置列表")
+@router.get("", response_model=SchedulingConfigListResponse, summary="List scheduling configs")
 async def list_scheduling_configs(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
@@ -95,7 +95,7 @@ async def list_scheduling_configs(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询排程配置列表失败")
 
 
-@router.get("/default", summary="获取默认排程配置")
+@router.get("/default", summary="Get default scheduling config")
 async def get_default_scheduling_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -111,7 +111,7 @@ async def get_default_scheduling_config(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取默认排程配置失败")
 
 
-@router.get("/{config_id}", response_model=SchedulingConfigResponse, summary="获取排程配置详情")
+@router.get("/{config_id}", response_model=SchedulingConfigResponse, summary="Get scheduling config")
 async def get_scheduling_config(
     config_id: int = Path(..., description="配置ID"),
     current_user: User = Depends(get_current_user),
@@ -127,7 +127,7 @@ async def get_scheduling_config(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取排程配置详情失败")
 
 
-@router.put("/{config_id}", response_model=SchedulingConfigResponse, summary="更新排程配置")
+@router.put("/{config_id}", response_model=SchedulingConfigResponse, summary="Update scheduling config")
 async def update_scheduling_config(
     config_id: int = Path(..., description="配置ID"),
     config_data: SchedulingConfigUpdate = ...,
@@ -151,7 +151,7 @@ async def update_scheduling_config(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新排程配置失败")
 
 
-@router.delete("/{config_id}", summary="删除排程配置")
+@router.delete("/{config_id}", summary="Delete scheduling config")
 async def delete_scheduling_config(
     config_id: int = Path(..., description="配置ID"),
     current_user: User = Depends(get_current_user),

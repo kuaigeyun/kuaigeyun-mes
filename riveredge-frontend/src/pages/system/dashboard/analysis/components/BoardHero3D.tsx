@@ -4,11 +4,9 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment, Stars, ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
-/** ===== 3D 模型：高精尖运算核心 (Precision Operational Core) ===== */
-/** 使用本地成品高精度模型 (DamagedHelmet)，具备极致的金属质感与工业细节 */
+/** ===== 3D 模型：仪表盘地球 / 星球主体 ===== */
 function OperationalCore() {
-  // 加载本地成品模型
-  const { scene } = useGLTF('/models/hero-core.glb');
+  const { scene } = useGLTF('/models/tech-planet.glb');
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((state) => {
@@ -21,13 +19,7 @@ function OperationalCore() {
   return (
     <group ref={groupRef}>
       <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
-        {/* 核心成品模型：放大并调整姿态 */}
-        <primitive 
-          object={scene} 
-          scale={3.2} 
-          position={[0, -0.5, 0]} 
-          rotation={[0, Math.PI / 2, 0]} 
-        />
+        <primitive object={scene} scale={3.2} position={[0, -0.5, 0]} rotation={[0, Math.PI / 2, 0]} />
         
         {/* 为满足“圆形”需求，添加多层科技能量环 */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>

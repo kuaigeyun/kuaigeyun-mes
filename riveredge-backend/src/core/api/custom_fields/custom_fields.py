@@ -21,7 +21,7 @@ from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/custom-fields", tags=["Custom Fields"])
+router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
 
 
 @router.post("", response_model=CustomFieldResponse, status_code=status.HTTP_201_CREATED)

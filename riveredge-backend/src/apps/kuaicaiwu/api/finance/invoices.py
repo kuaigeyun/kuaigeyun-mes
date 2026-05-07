@@ -23,7 +23,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/invoices", tags=["Kuaicaiwu Finance"])
+router = APIRouter(prefix="/invoices", tags=["App · Kuaicaiwu · Finance"])
 
 invoice_service = InvoiceService()
 
@@ -96,7 +96,7 @@ async def list_invoices(
     )
 
 
-@router.get("/statistics", response_model=InvoiceStatisticsResponse, summary="发票列表统计（指标卡）")
+@router.get("/statistics", response_model=InvoiceStatisticsResponse, summary="Invoice list statistics (KPI cards)")
 async def get_invoice_statistics(
     _auth: object = Depends(
         require_access(

@@ -78,7 +78,7 @@ export default function PlatformSettingsPage() {
       queryClient.setQueryData(['platformSettings'], data);
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
       queryClient.invalidateQueries({ queryKey: ['platformSettingsPublic'] });
-      applyFavicon(data.favicon).catch(() => {});
+      applyFavicon(data.favicon).catch(() => applyFavicon(undefined));
     },
     onError: (error: any) => {
       messageApi.error(error?.message || t('pages.infra.platform.updateFailed'));

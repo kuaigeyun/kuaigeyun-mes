@@ -19,7 +19,7 @@ from core.services.system.language_service import LanguageService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/languages", tags=["Languages"])
+router = APIRouter(prefix="/languages", tags=["Core · Languages"])
 
 
 @router.post("", response_model=LanguageResponse, status_code=status.HTTP_201_CREATED)

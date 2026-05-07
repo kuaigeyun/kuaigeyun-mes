@@ -18,7 +18,7 @@ from tortoise.exceptions import IntegrityError
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.cost_rule import CostRule
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from apps.kuaicaiwu.models.standard_cost import StandardCost

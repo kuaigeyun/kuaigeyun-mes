@@ -5,9 +5,9 @@
  */
 
 import { Modal, List, Typography, Tag } from 'antd';
-import { ApartmentOutlined, CheckOutlined } from '@ant-design/icons';
+import { CheckOutlined } from '@ant-design/icons';
+import { Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { LoginResponse } from '../../services/auth';
 
 const { Text } = Typography;
 
@@ -120,7 +120,20 @@ export default function TenantSelectionModal({
             }}
           >
             <List.Item.Meta
-              avatar={<ApartmentOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
+              avatar={
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 40,
+                    height: 40,
+                  }}
+                  aria-hidden
+                >
+                  <Building2 size={26} strokeWidth={2} color="#1677ff" />
+                </span>
+              }
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{tenant.name}</span>

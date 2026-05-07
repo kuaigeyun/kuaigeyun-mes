@@ -31,7 +31,7 @@ except ImportError:
     psutil = None
 
 # 创建路由器
-router = APIRouter(prefix="/monitoring", tags=["Infra Monitoring"])
+router = APIRouter(prefix="/monitoring", tags=["Platform · Monitoring"])
 
 # 响应模型
 class TenantStatisticsResponse:

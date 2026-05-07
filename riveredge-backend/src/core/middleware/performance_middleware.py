@@ -26,14 +26,8 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
     # 慢API阈值（毫秒）
     SLOW_API_THRESHOLD = 1000  # 1秒
     
-    # 排除的路径（不需要监控的路径）
-    EXCLUDED_PATHS = [
-        "/health",
-        "/docs",
-        "/openapi.json",
-        "/redoc",
-        "/api/inngest",
-    ]
+    # 排除的路径（不需要监控的路径；仅统计 /api/ 时，非 API 路径已在 _should_monitor 末尾排除）
+    EXCLUDED_PATHS: List[str] = []
     
     # 性能统计（内存中，重启后丢失）
     _stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
@@ -102,10 +96,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         # 排除的路径
         if request.url.path in self.EXCLUDED_PATHS:
             return False
-        
-        if request.url.path.startswith("/api/inngest"):
-            return False
-            
+
         # 只监控API路径
         if not request.url.path.startswith("/api/"):
             return False

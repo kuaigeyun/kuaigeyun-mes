@@ -17,7 +17,7 @@ from core.schemas.permission_policy import (
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.exceptions.exceptions import ValidationError
 
-router = APIRouter(prefix="/permission-policies", tags=["Core Permission Policies"])
+router = APIRouter(prefix="/permission-policies", tags=["Core · Permission Policies"])
 
 
 @router.get("/roles/{role_uuid}/data", response_model=List[DataPermissionPolicyResponse])

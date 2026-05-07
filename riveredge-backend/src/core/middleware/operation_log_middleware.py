@@ -23,10 +23,6 @@ _UUID_PATTERN = re.compile(
 
 _EXCLUDED_PATHS = frozenset(
     {
-        "/health",
-        "/docs",
-        "/openapi.json",
-        "/redoc",
         "/api/v1/auth/login",
         "/api/v1/auth/logout",
         "/api/v1/auth/refresh",

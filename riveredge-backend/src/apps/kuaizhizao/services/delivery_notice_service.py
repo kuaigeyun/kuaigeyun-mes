@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery

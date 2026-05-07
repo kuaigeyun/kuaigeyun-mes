@@ -23,7 +23,7 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 )
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
-router = APIRouter(tags=["采购申请管理"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Requisition Management"])
 
 
 def _http_exception_with_trace(
@@ -51,7 +51,7 @@ def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, str(detail))
 
 
-@router.post("/purchase-requisitions", response_model=PurchaseRequisitionResponse, summary="创建采购申请")
+@router.post("/purchase-requisitions", response_model=PurchaseRequisitionResponse, summary="Create purchase requisition")
 async def create_requisition(
     data: PurchaseRequisitionCreate,
     current_user: User = Depends(get_current_user),
@@ -65,7 +65,7 @@ async def create_requisition(
     )
 
 
-@router.get("/purchase-requisitions", summary="获取采购申请列表")
+@router.get("/purchase-requisitions", summary="List purchase requisitions")
 async def list_requisitions(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -93,7 +93,7 @@ async def list_requisitions(
     )
 
 
-@router.get("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="获取采购申请详情")
+@router.get("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="Get purchase requisition")
 async def get_requisition(
     requisition_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
@@ -105,7 +105,7 @@ async def get_requisition(
     )
 
 
-@router.get("/purchase-requisitions/{requisition_id}/demand-source-chain", summary="获取采购申请需求来源链路")
+@router.get("/purchase-requisitions/{requisition_id}/demand-source-chain", summary="Purchase requisition demand source chain")
 async def get_requisition_demand_chain(
     requisition_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -131,7 +131,7 @@ async def get_requisition_demand_chain(
         )
 
 
-@router.put("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="更新采购申请")
+@router.put("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="Update purchase requisition")
 async def update_requisition(
     data: PurchaseRequisitionUpdate,
     requisition_id: int = Path(...),
@@ -147,7 +147,7 @@ async def update_requisition(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/approve", response_model=PurchaseRequisitionResponse, summary="审核采购申请")
+@router.post("/purchase-requisitions/{requisition_id}/approve", response_model=PurchaseRequisitionResponse, summary="Approve purchase requisition")
 async def approve_requisition(
     data: ApproveRequisitionRequest,
     requisition_id: int = Path(...),
@@ -164,7 +164,7 @@ async def approve_requisition(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/withdraw-approval", response_model=PurchaseRequisitionResponse, summary="撤回审核")
+@router.post("/purchase-requisitions/{requisition_id}/withdraw-approval", response_model=PurchaseRequisitionResponse, summary="Withdraw approval")
 async def withdraw_approval(
     requisition_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -178,7 +178,7 @@ async def withdraw_approval(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/submit", response_model=PurchaseRequisitionResponse, summary="提交采购申请")
+@router.post("/purchase-requisitions/{requisition_id}/submit", response_model=PurchaseRequisitionResponse, summary="Submit purchase requisition")
 async def submit_requisition(
     requisition_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -192,7 +192,7 @@ async def submit_requisition(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/convert-to-purchase-order", summary="下推采购单")
+@router.post("/purchase-requisitions/{requisition_id}/convert-to-purchase-order", summary="Push to purchase order")
 async def convert_to_purchase_order(
     data: ConvertToPurchaseOrderRequest,
     requisition_id: int = Path(...),
@@ -213,7 +213,7 @@ async def convert_to_purchase_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/purchase-requisitions/{requisition_id}/fix-status", response_model=PurchaseRequisitionResponse, summary="修正采购申请状态")
+@router.post("/purchase-requisitions/{requisition_id}/fix-status", response_model=PurchaseRequisitionResponse, summary="Fix purchase requisition status")
 async def fix_requisition_status(
     requisition_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -229,7 +229,7 @@ async def fix_requisition_status(
     )
 
 
-@router.delete("/purchase-requisitions/{requisition_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除采购申请")
+@router.delete("/purchase-requisitions/{requisition_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete purchase requisition")
 async def delete_requisition(
     requisition_id: int = Path(...),
     current_user: User = Depends(get_current_user),

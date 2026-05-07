@@ -15,7 +15,7 @@ import PageSkeleton from '../../components/page-skeleton';
 
 /** 页面懒加载包装：Suspense + PageSkeleton fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton variant="minimal" />}>
+  <Suspense fallback={<PageSkeleton variant="content" />}>
     <LazyComponent />
   </Suspense>
 );

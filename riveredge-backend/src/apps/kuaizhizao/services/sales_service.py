@@ -30,7 +30,7 @@ from apps.kuaizhizao.schemas.sales import (
     SalesOrderItemCreate, SalesOrderItemUpdate, SalesOrderItemResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import ReviewStatus
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.user_service import UserService

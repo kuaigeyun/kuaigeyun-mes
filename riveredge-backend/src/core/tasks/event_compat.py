@@ -1,0 +1,72 @@
+"""
+Taskiq 事件兼容层。
+
+保留旧的 Event / TriggerEvent / Inngest API 形态，内部映射到
+core.tasks.dispatcher（由 Taskiq + PostgreSQL broker 执行）。
+"""
+
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable
+
+from core.tasks.dispatcher import TaskEvent, dispatch_event, register_event_handler
+
+
+@dataclass
+class Event:
+    name: str
+    data: dict[str, Any] | None = None
+    id: str | None = None
+
+
+@dataclass
+class TriggerEvent:
+    event: str
+
+
+@dataclass
+class TriggerCron:
+    cron: str
+
+
+class Step:
+    async def run(self, _name: str, fn: Callable[[], Any]) -> Any:
+        if callable(fn):
+            result = fn()
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        return None
+
+
+@dataclass
+class Context:
+    event: Event
+    run_id: str | None = None
+
+
+class Inngest:
+    def __init__(self, app_id: str, event_api_base_url: str, is_production: bool = False):
+        self.app_id = app_id
+        self.event_api_base_url = event_api_base_url
+        self.is_production = is_production
+
+    def create_function(
+        self,
+        fn_id: str,
+        trigger: TriggerEvent | TriggerCron | None = None,
+        name: str = "",
+        retries: int = 0,
+    ):
+        _ = fn_id, name, retries
+
+        def decorator(func: Callable[..., Awaitable[Any]]):
+            if isinstance(trigger, TriggerEvent):
+                register_event_handler(trigger.event, func)
+            return func
+
+        return decorator
+
+    async def send(self, event: Event) -> list[str]:
+        return await dispatch_event(
+            TaskEvent(name=event.name, data=event.data or {}, id=event.id),
+        )

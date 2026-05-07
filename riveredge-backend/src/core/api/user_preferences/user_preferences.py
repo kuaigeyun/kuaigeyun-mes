@@ -13,7 +13,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/user-preferences", tags=["UserPreferences"])
+router = APIRouter(prefix="/user-preferences", tags=["Core · User Preferences"])
 
 
 @router.get("", response_model=UserPreferenceResponse)

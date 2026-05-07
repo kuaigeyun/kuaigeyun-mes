@@ -24,7 +24,7 @@ from core.services.business.material_code_rule_service import MaterialCodeRuleSe
 from core.api.deps.deps import get_current_tenant, get_current_user_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/material-code-rules", tags=["Material Code Rules"])
+router = APIRouter(prefix="/material-code-rules", tags=["Core · Material Code Rules"])
 
 
 # ==================== 主编码规则配置 ====================

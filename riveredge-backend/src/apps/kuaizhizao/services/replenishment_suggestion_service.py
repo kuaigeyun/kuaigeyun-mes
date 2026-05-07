@@ -23,7 +23,7 @@ from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionProcessRequest,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

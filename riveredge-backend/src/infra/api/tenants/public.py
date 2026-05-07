@@ -14,7 +14,7 @@ from infra.schemas.tenant import TenantSearchResponse, TenantCheckResponse, Tena
 from infra.models.tenant import Tenant, TenantStatus
 
 # 创建路由（公开接口，不需要认证）
-router = APIRouter(prefix="/tenants", tags=["Public Tenants"])
+router = APIRouter(prefix="/tenants", tags=["Platform · Tenants (Public)"])
 
 
 @router.get("/search", response_model=TenantSearchResponse)

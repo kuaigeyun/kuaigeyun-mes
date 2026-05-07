@@ -13,10 +13,10 @@ from core.api.deps import get_current_user, get_current_tenant
 from core.services.document_tracking_service import DocumentTrackingService
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/document-tracking", tags=["单据跟踪中心"])
+router = APIRouter(prefix="/document-tracking", tags=["Core · Document Tracking"])
 
 
-@router.get("/{document_type}/{document_id}", summary="获取单据跟踪信息")
+@router.get("/{document_type}/{document_id}", summary="Get document tracking timeline")
 async def get_document_tracking(
     document_type: str,
     document_id: int,

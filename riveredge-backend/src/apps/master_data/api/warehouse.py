@@ -22,7 +22,7 @@ from apps.master_data.schemas.warehouse_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/warehouse", tags=["Warehouse"])
+router = APIRouter(prefix="/warehouse", tags=["App · Master Data · Warehouse"])
 
 
 def _http_exception_with_trace(
@@ -53,7 +53,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 仓库相关接口 ====================
 
-@router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="创建仓库")
+@router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="Create warehouse")
 async def create_warehouse(
     data: WarehouseCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -73,7 +73,7 @@ async def create_warehouse(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/warehouses", response_model=WarehouseListResponse, response_model_by_alias=True, summary="获取仓库列表")
+@router.get("/warehouses", response_model=WarehouseListResponse, response_model_by_alias=True, summary="List warehouses")
 async def list_warehouses(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -113,7 +113,7 @@ class LoadWarehousePresetRequest(BaseModel):
     names: Optional[List[str]] = Field(None, description="要创建的预设仓库名称列表，不传则创建全部")
 
 
-@router.get("/warehouses/preset-preview", summary="获取仓库预设预览")
+@router.get("/warehouses/preset-preview", summary="Preview warehouse preset")
 async def get_warehouse_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
@@ -122,7 +122,7 @@ async def get_warehouse_preset_preview(
     return list(WarehouseService.PRESET_WAREHOUSES)
 
 
-@router.post("/warehouses/load-preset", summary="加载仓库预设")
+@router.post("/warehouses/load-preset", summary="Load warehouse preset")
 async def load_preset_warehouses(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -137,7 +137,7 @@ async def load_preset_warehouses(
     return {"created": count, "message": f"已加载 {count} 个仓库"}
 
 
-@router.post("/warehouses/sync-line-side", summary="同步线边仓")
+@router.post("/warehouses/sync-line-side", summary="Sync line-side warehouses")
 async def sync_line_side_warehouses(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
@@ -154,7 +154,7 @@ async def sync_line_side_warehouses(
     }
 
 
-@router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="获取仓库详情")
+@router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="Get warehouse")
 async def get_warehouse(
     warehouse_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -171,7 +171,7 @@ async def get_warehouse(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="更新仓库")
+@router.put("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="Update warehouse")
 async def update_warehouse(
     warehouse_uuid: str,
     data: WarehouseUpdate,
@@ -195,7 +195,7 @@ async def update_warehouse(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/warehouses/batch-delete", summary="批量删除仓库")
+@router.delete("/warehouses/batch-delete", summary="Batch delete warehouses")
 async def batch_delete_warehouses(
     request: BatchDeleteWarehousesRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -224,7 +224,7 @@ async def batch_delete_warehouses(
         )
 
 
-@router.delete("/warehouses/{warehouse_uuid}", summary="删除仓库")
+@router.delete("/warehouses/{warehouse_uuid}", summary="Delete warehouse")
 async def delete_warehouse(
     warehouse_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -248,7 +248,7 @@ async def delete_warehouse(
 
 # ==================== 库区相关接口 ====================
 
-@router.post("/storage-areas", response_model=StorageAreaResponse, summary="创建库区")
+@router.post("/storage-areas", response_model=StorageAreaResponse, summary="Create storage area")
 async def create_storage_area(
     data: StorageAreaCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -269,7 +269,7 @@ async def create_storage_area(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/storage-areas", response_model=StorageAreaListResponse, summary="获取库区列表")
+@router.get("/storage-areas", response_model=StorageAreaListResponse, summary="List storage areas")
 async def list_storage_areas(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -296,7 +296,7 @@ async def list_storage_areas(
     )
 
 
-@router.get("/storage-areas/{storage_area_uuid}", response_model=StorageAreaResponse, summary="获取库区详情")
+@router.get("/storage-areas/{storage_area_uuid}", response_model=StorageAreaResponse, summary="Get storage area")
 async def get_storage_area(
     storage_area_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -313,7 +313,7 @@ async def get_storage_area(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/storage-areas/{storage_area_uuid}", response_model=StorageAreaResponse, summary="更新库区")
+@router.put("/storage-areas/{storage_area_uuid}", response_model=StorageAreaResponse, summary="Update storage area")
 async def update_storage_area(
     storage_area_uuid: str,
     data: StorageAreaUpdate,
@@ -338,7 +338,7 @@ async def update_storage_area(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/storage-areas/batch-delete", summary="批量删除库区")
+@router.delete("/storage-areas/batch-delete", summary="Batch delete storage areas")
 async def batch_delete_storage_areas(
     request: BatchDeleteStorageAreasRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -367,7 +367,7 @@ async def batch_delete_storage_areas(
         )
 
 
-@router.delete("/storage-areas/{storage_area_uuid}", summary="删除库区")
+@router.delete("/storage-areas/{storage_area_uuid}", summary="Delete storage area")
 async def delete_storage_area(
     storage_area_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -391,7 +391,7 @@ async def delete_storage_area(
 
 # ==================== 库位相关接口 ====================
 
-@router.post("/storage-locations", response_model=StorageLocationResponse, summary="创建库位")
+@router.post("/storage-locations", response_model=StorageLocationResponse, summary="Create storage location")
 async def create_storage_location(
     data: StorageLocationCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -412,7 +412,7 @@ async def create_storage_location(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/storage-locations", response_model=StorageLocationListResponse, summary="获取库位列表")
+@router.get("/storage-locations", response_model=StorageLocationListResponse, summary="List storage locations")
 async def list_storage_locations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -439,7 +439,7 @@ async def list_storage_locations(
     )
 
 
-@router.get("/storage-locations/{storage_location_uuid}", response_model=StorageLocationResponse, summary="获取库位详情")
+@router.get("/storage-locations/{storage_location_uuid}", response_model=StorageLocationResponse, summary="Get storage location")
 async def get_storage_location(
     storage_location_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -456,7 +456,7 @@ async def get_storage_location(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/storage-locations/{storage_location_uuid}", response_model=StorageLocationResponse, summary="更新库位")
+@router.put("/storage-locations/{storage_location_uuid}", response_model=StorageLocationResponse, summary="Update storage location")
 async def update_storage_location(
     storage_location_uuid: str,
     data: StorageLocationUpdate,
@@ -481,7 +481,7 @@ async def update_storage_location(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/storage-locations/batch-delete", summary="批量删除库位")
+@router.delete("/storage-locations/batch-delete", summary="Batch delete storage locations")
 async def batch_delete_storage_locations(
     request: BatchDeleteStorageLocationsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -508,7 +508,7 @@ async def batch_delete_storage_locations(
         )
 
 
-@router.delete("/storage-locations/{storage_location_uuid}", summary="删除库位")
+@router.delete("/storage-locations/{storage_location_uuid}", summary="Delete storage location")
 async def delete_storage_location(
     storage_location_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -528,7 +528,7 @@ async def delete_storage_location(
 
 # ==================== 级联查询接口 ====================
 
-@router.get("/tree", response_model=List[WarehouseTreeResponse], response_model_by_alias=True, summary="获取仓库数据树形结构")
+@router.get("/tree", response_model=List[WarehouseTreeResponse], response_model_by_alias=True, summary="Get warehouse tree")
 async def get_warehouse_tree(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],

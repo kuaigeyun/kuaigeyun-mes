@@ -1,0 +1,986 @@
+{
+  "code": "kuaimes",
+  "name": "快车间",
+  "version": "1.0.0",
+  "description": "精益车间执行与生产计划实时协同平台",
+  "icon": "production",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaizhizao/index.tsx",
+  "route_path": "/apps/kuaimes",
+  "sort_order": 22,
+  "menu_config": {
+    "title": "快车间",
+    "icon": "production",
+    "path": "/apps/kuaimes",
+    "children": [
+      {
+        "title": "app.kuaizhizao.menu.plan-management",
+        "icon": "calendar",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.plan-management.dashboard",
+            "path": "/apps/kuaimes/plan-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "demand",
+              "node": "demand"
+            },
+            "permission": "kuaizhizao:demand:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.plan-management.demand-management",
+            "path": "/apps/kuaimes/plan-management/demand-management",
+            "sort_order": 2,
+            "meta": {
+              "module": "demand"
+            },
+            "permission": "kuaizhizao:plan-management-demand-management:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.plan-management.demand-computation",
+            "path": "/apps/kuaimes/plan-management/demand-computation",
+            "sort_order": 3,
+            "meta": {
+              "module": "demand"
+            },
+            "permission": "kuaizhizao:plan-management-demand-computation:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.plan-management.scheduling",
+            "path": "/apps/kuaimes/plan-management/scheduling",
+            "sort_order": 4,
+            "meta": {
+              "module": "demand"
+            },
+            "permission": "kuaizhizao:plan-management-scheduling:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.plan-management.reports",
+            "icon": "fileText",
+            "sort_order": 5,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.demand-plan-detail",
+                "path": "/apps/kuaimes/plan-management/reports/demand-plan-detail",
+                "sort_order": 1,
+                "permission": "kuaizhizao:plan-management-reports-demand-plan-detail:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.production-plan-comparison",
+                "path": "/apps/kuaimes/plan-management/reports/production-plan-comparison",
+                "sort_order": 2,
+                "permission": "kuaizhizao:plan-management-reports-production-plan-comparison:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.purchase-plan-comparison",
+                "path": "/apps/kuaimes/plan-management/reports/purchase-plan-comparison",
+                "sort_order": 3,
+                "permission": "kuaizhizao:plan-management-reports-purchase-plan-comparison:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.capacity-load-analysis",
+                "path": "/apps/kuaimes/plan-management/reports/capacity-load-analysis",
+                "sort_order": 4,
+                "permission": "kuaizhizao:plan-management-reports-capacity-load-analysis:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.material-shortage-alert",
+                "path": "/apps/kuaimes/plan-management/reports/material-shortage-alert",
+                "sort_order": 5,
+                "permission": "kuaizhizao:plan-management-reports-material-shortage-alert:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.plan-fulfillment-rate",
+                "path": "/apps/kuaimes/plan-management/reports/plan-fulfillment-rate",
+                "sort_order": 6,
+                "permission": "kuaizhizao:plan-management-reports-plan-fulfillment-rate:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.production-delay-analysis",
+                "path": "/apps/kuaimes/plan-management/reports/production-delay-analysis",
+                "sort_order": 7,
+                "permission": "kuaizhizao:plan-management-reports-production-delay-analysis:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.production-execution",
+        "icon": "activity",
+        "sort_order": 4,
+        "meta": {
+          "module": "production"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.production-execution.dashboard",
+            "path": "/apps/kuaimes/production-execution/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "production",
+              "node": "work_order"
+            },
+            "permission": "kuaizhizao:production-execution-dashboard:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.work-orders",
+            "path": "/apps/kuaimes/production-execution/work-orders",
+            "sort_order": 1,
+            "meta": {
+              "node": "work_order",
+              "module": "production"
+            },
+            "permission": "kuaizhizao:work-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.reporting",
+            "path": "/apps/kuaimes/production-execution/reporting",
+            "sort_order": 3,
+            "meta": {
+              "module": "production"
+            },
+            "permission": "kuaizhizao:production-execution-reporting:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.rework-orders",
+            "path": "/apps/kuaimes/production-execution/rework-orders",
+            "sort_order": 4,
+            "meta": {
+              "module": "production",
+              "node": "rework_order"
+            },
+            "permission": "kuaizhizao:rework-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.outsource-management",
+            "path": "/apps/kuaimes/production-execution/outsource-management",
+            "sort_order": 5,
+            "meta": {
+              "module": "production",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.packing-binding",
+            "path": "/apps/kuaimes/production-execution/packing-binding",
+            "sort_order": 6,
+            "meta": {
+              "module": "production",
+              "node": "work_order"
+            },
+            "permission": "kuaizhizao:production-execution-packing-binding:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
+            "path": "/apps/kuaimes/production-execution/reporting/statistics",
+            "sort_order": 7,
+            "meta": {
+              "module": "production"
+            },
+            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.exception-management",
+            "icon": "alert-circle",
+            "sort_order": 8,
+            "meta": {
+              "module": "production"
+            },
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.production-execution.material-shortage-exceptions",
+                "path": "/apps/kuaimes/production-execution/material-shortage-exceptions",
+                "sort_order": 1,
+                "meta": {
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:production-execution-material-shortage-exceptions:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.production-execution.delivery-delay-exceptions",
+                "path": "/apps/kuaimes/production-execution/delivery-delay-exceptions",
+                "sort_order": 2,
+                "meta": {
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:production-execution-delivery-delay-exceptions:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.production-execution.quality-exceptions",
+                "path": "/apps/kuaimes/production-execution/quality-exceptions",
+                "sort_order": 3,
+                "meta": {
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:production-execution-quality-exceptions:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.production-execution.exception-process",
+                "path": "/apps/kuaimes/production-execution/exception-process",
+                "sort_order": 4,
+                "meta": {
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:production-execution-exception-process:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.production-execution.exception-statistics",
+                "path": "/apps/kuaimes/production-execution/exception-statistics",
+                "sort_order": 5,
+                "meta": {
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:production-execution-exception-statistics:read"
+              }
+            ]
+          },
+          {
+            "title": "app.kuaizhizao.menu.production-execution.reports",
+            "icon": "fileText",
+            "sort_order": 9,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.work-order-query",
+                "path": "/apps/kuaimes/production-execution/reports/work-order-query",
+                "sort_order": 1,
+                "permission": "kuaizhizao:production-execution-reports-work-order-query:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.work-order-tracking",
+                "path": "/apps/kuaimes/production-execution/reports/work-order-tracking",
+                "sort_order": 2,
+                "permission": "kuaizhizao:production-execution-reports-work-order-tracking:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.work-order-material-usage",
+                "path": "/apps/kuaimes/production-execution/reports/work-order-material-usage",
+                "sort_order": 3,
+                "permission": "kuaizhizao:production-execution-reports-work-order-material-usage:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.work-order-labor-detail",
+                "path": "/apps/kuaimes/production-execution/reports/work-order-labor-detail",
+                "sort_order": 4,
+                "permission": "kuaizhizao:production-execution-reports-work-order-labor-detail:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.production-efficiency",
+                "path": "/apps/kuaimes/production-execution/reports/production-efficiency",
+                "sort_order": 5,
+                "permission": "kuaizhizao:production-execution-reports-production-efficiency:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.process-progress-detail",
+                "path": "/apps/kuaimes/production-execution/reports/process-progress-detail",
+                "sort_order": 6,
+                "permission": "kuaizhizao:production-execution-reports-process-progress-detail:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.rework-order-analysis",
+                "path": "/apps/kuaimes/production-execution/reports/rework-order-analysis",
+                "sort_order": 7,
+                "permission": "kuaizhizao:production-execution-reports-rework-order-analysis:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.outsource-order-query",
+                "path": "/apps/kuaimes/production-execution/reports/outsource-order-query",
+                "sort_order": 8,
+                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.outsource-material-reconciliation",
+                "path": "/apps/kuaimes/production-execution/reports/outsource-material-reconciliation",
+                "sort_order": 9,
+                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.wip-inventory",
+                "path": "/apps/kuaimes/production-execution/reports/wip-inventory",
+                "sort_order": 10,
+                "permission": "kuaizhizao:production-execution-reports-wip-inventory:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.scrap-defect-analysis",
+                "path": "/apps/kuaimes/production-execution/reports/scrap-defect-analysis",
+                "sort_order": 11,
+                "permission": "kuaizhizao:production-execution-reports-scrap-defect-analysis:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.production-lead-time",
+                "path": "/apps/kuaimes/production-execution/reports/production-lead-time",
+                "sort_order": 12,
+                "permission": "kuaizhizao:production-execution-reports-production-lead-time:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.quality-management",
+        "icon": "quality",
+        "sort_order": 5,
+        "meta": {
+          "module": "quality"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.quality-management.dashboard",
+            "path": "/apps/kuaimes/quality-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-dashboard:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.incoming-inspection",
+            "path": "/apps/kuaimes/quality-management/incoming-inspection",
+            "sort_order": 1,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-incoming-inspection:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.process-inspection",
+            "path": "/apps/kuaimes/quality-management/process-inspection",
+            "sort_order": 2,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-process-inspection:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.finished-goods-inspection",
+            "path": "/apps/kuaimes/quality-management/finished-goods-inspection",
+            "sort_order": 3,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.traceability",
+            "path": "/apps/kuaimes/quality-management/traceability",
+            "sort_order": 4,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-traceability:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
+            "path": "/apps/kuaimes/quality-management/inspection-plans",
+            "sort_order": 5,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-inspection-plans:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.reports",
+            "icon": "fileText",
+            "sort_order": 6,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.incoming-inspection-report",
+                "path": "/apps/kuaimes/quality-management/reports/incoming-inspection-report",
+                "sort_order": 1,
+                "permission": "kuaizhizao:quality-management-reports-incoming-inspection-report:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.process-inspection-report",
+                "path": "/apps/kuaimes/quality-management/reports/process-inspection-report",
+                "sort_order": 2,
+                "permission": "kuaizhizao:quality-management-reports-process-inspection-report:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.finished-inspection-report",
+                "path": "/apps/kuaimes/quality-management/reports/finished-inspection-report",
+                "sort_order": 3,
+                "permission": "kuaizhizao:quality-management-reports-finished-inspection-report:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.quality-exception-tracking",
+                "path": "/apps/kuaimes/quality-management/reports/quality-exception-tracking",
+                "sort_order": 4,
+                "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
+                "path": "/apps/kuaimes/quality-management/reports/nonconforming-summary",
+                "sort_order": 5,
+                "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
+                "path": "/apps/kuaimes/quality-management/reports/quality-rate-trend",
+                "sort_order": 6,
+                "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.defect-pareto-analysis",
+                "path": "/apps/kuaimes/quality-management/reports/defect-pareto-analysis",
+                "sort_order": 7,
+                "permission": "kuaizhizao:quality-management-reports-defect-pareto-analysis:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.equipment-management",
+        "icon": "wrench",
+        "sort_order": 6,
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.dashboard",
+            "path": "/apps/kuaimes/equipment-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "equipment",
+              "node": "equipment"
+            },
+            "permission": "kuaizhizao:equipment:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.equipment",
+                "path": "/apps/kuaimes/equipment-management/equipment",
+                "permission": "kuaizhizao:equipment-management-equipment:read",
+                "sort_order": 1,
+                "meta": {
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.molds",
+                "path": "/apps/kuaimes/equipment-management/molds",
+                "permission": "kuaizhizao:equipment-management-molds:read",
+                "sort_order": 2,
+                "meta": {
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.tooling-management.ledger",
+                "path": "/apps/kuaimes/equipment-management/tool-ledger",
+                "permission": "kuaizhizao:equipment-management-tool-ledger:read",
+                "sort_order": 3,
+                "meta": {
+                  "module": "equipment"
+                }
+              }
+            ],
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.equipment-ops",
+            "sort_order": 2,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
+                "path": "/apps/kuaimes/equipment-management/equipment-faults",
+                "permission": "kuaizhizao:equipment-fault:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "equipment_fault",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
+                "path": "/apps/kuaimes/equipment-management/maintenance-plans",
+                "permission": "kuaizhizao:maintenance-plan:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "maintenance_plan",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
+                "path": "/apps/kuaimes/equipment-management/maintenance-reminders",
+                "permission": "kuaizhizao:maintenance-reminder:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "maintenance_reminder",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
+                "path": "/apps/kuaimes/equipment-management/equipment-status",
+                "permission": "kuaizhizao:equipment-status:read",
+                "sort_order": 4,
+                "meta": {
+                  "node": "equipment_status",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.mold-ops",
+            "sort_order": 3,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.mold-usages",
+                "path": "/apps/kuaimes/equipment-management/mold-usages",
+                "permission": "kuaizhizao:mold-usage:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "mold_usage",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
+                "path": "/apps/kuaimes/equipment-management/mold-calibrations",
+                "permission": "kuaizhizao:mold-calibration:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "mold_calibration",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
+                "path": "/apps/kuaimes/equipment-management/mold-maintenance-reminders",
+                "permission": "kuaizhizao:mold-maintenance-reminder:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "mold_maintenance_reminder",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.tool-ops",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.tool-usages",
+                "path": "/apps/kuaimes/equipment-management/tool-usages",
+                "permission": "kuaizhizao:tool-usage:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "tool_usage",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
+                "path": "/apps/kuaimes/equipment-management/tool-maintenances",
+                "permission": "kuaizhizao:tool-maintenance:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "tool_maintenance",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
+                "path": "/apps/kuaimes/equipment-management/tool-calibrations",
+                "permission": "kuaizhizao:tool-calibration:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "tool_calibration",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
+                "path": "/apps/kuaimes/equipment-management/tool-maintenance-reminders",
+                "permission": "kuaizhizao:tool-maintenance-reminder:read",
+                "sort_order": 4,
+                "meta": {
+                  "node": "tool_maintenance_reminder",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.reports",
+            "icon": "fileText",
+            "sort_order": 5,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
+                "path": "/apps/kuaimes/equipment-management/reports/equipment-maintenance-detail",
+                "sort_order": 1,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.equipment-maintenance-plan",
+                "path": "/apps/kuaimes/equipment-management/reports/equipment-maintenance-plan",
+                "sort_order": 2,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.equipment-fault-analysis",
+                "path": "/apps/kuaimes/equipment-management/reports/equipment-fault-analysis",
+                "sort_order": 3,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.equipment-status-log",
+                "path": "/apps/kuaimes/equipment-management/reports/equipment-status-log",
+                "sort_order": 4,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.equipment-oee-analysis",
+                "path": "/apps/kuaimes/equipment-management/reports/equipment-oee-analysis",
+                "sort_order": 5,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-oee-analysis:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.warehouse-management",
+        "icon": "warehouse",
+        "sort_order": 7,
+        "meta": {
+          "module": "warehouse"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.dashboard",
+            "path": "/apps/kuaimes/warehouse-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "warehouse",
+              "node": "inventory"
+            },
+            "permission": "kuaizhizao:inventory:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.inbound",
+                "path": "/apps/kuaimes/warehouse-management/inbound",
+                "permission": "kuaizhizao:inbound:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "inbound",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.other-inbound",
+                "path": "/apps/kuaimes/warehouse-management/other-inbound",
+                "permission": "kuaizhizao:other-inbound:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "other_inbound",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.material-returns",
+                "path": "/apps/kuaimes/warehouse-management/material-returns",
+                "permission": "kuaizhizao:material-return:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "material_return",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.customer-material-registration",
+                "path": "/apps/kuaimes/warehouse-management/customer-material-registration",
+                "permission": "kuaizhizao:warehouse-management-customer-material-registration:read",
+                "sort_order": 4
+              }
+            ],
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.outbound-group",
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.outbound",
+                "path": "/apps/kuaimes/warehouse-management/outbound",
+                "permission": "kuaizhizao:outbound:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "outbound",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.other-outbound",
+                "path": "/apps/kuaimes/warehouse-management/other-outbound",
+                "permission": "kuaizhizao:other-outbound:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "other_outbound",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.material-borrows",
+                "path": "/apps/kuaimes/warehouse-management/material-borrows",
+                "permission": "kuaizhizao:material-borrow:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "material_borrow",
+                  "module": "warehouse"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.delivery-notes",
+                "path": "/apps/kuaimes/warehouse-management/delivery-notes",
+                "permission": "kuaizhizao:delivery-notice:read",
+                "sort_order": 4,
+                "meta": {
+                  "node": "delivery_notice",
+                  "module": "warehouse"
+                }
+              }
+            ],
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.function-group",
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.batching-center",
+                "path": "/apps/kuaimes/warehouse-management/batching-center",
+                "permission": "kuaizhizao:warehouse-management-batching-center:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.material-calls",
+                "path": "/apps/kuaimes/warehouse-management/material-calls",
+                "permission": "kuaizhizao:warehouse-management-material-calls:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.stocktaking",
+                "path": "/apps/kuaimes/warehouse-management/stocktaking",
+                "permission": "kuaizhizao:warehouse-management-stocktaking:read",
+                "sort_order": 3
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.inventory-transfer",
+                "path": "/apps/kuaimes/warehouse-management/inventory-transfer",
+                "permission": "kuaizhizao:warehouse-management-inventory-transfer:read",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.assembly-orders",
+                "path": "/apps/kuaimes/warehouse-management/assembly-orders",
+                "permission": "kuaizhizao:warehouse-management-assembly-orders:read",
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.disassembly-orders",
+                "path": "/apps/kuaimes/warehouse-management/disassembly-orders",
+                "permission": "kuaizhizao:warehouse-management-disassembly-orders:read",
+                "sort_order": 6
+              }
+            ],
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.inventory-group",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.inventory",
+                "path": "/apps/kuaimes/warehouse-management/inventory",
+                "permission": "kuaizhizao:warehouse-management-inventory:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.batch-inventory-query",
+                "path": "/apps/kuaimes/warehouse-management/batch-inventory-query",
+                "permission": "kuaizhizao:warehouse-management-batch-inventory-query:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.line-side-warehouse",
+                "path": "/apps/kuaimes/warehouse-management/line-side-warehouse",
+                "permission": "kuaizhizao:warehouse-management-line-side-warehouse:read",
+                "sort_order": 3
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.backflush-records",
+                "path": "/apps/kuaimes/warehouse-management/backflush-records",
+                "permission": "kuaizhizao:warehouse-management-backflush-records:read",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.replenishment-suggestions",
+                "path": "/apps/kuaimes/warehouse-management/replenishment-suggestions",
+                "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:read",
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.inventory-alert",
+                "path": "/apps/kuaimes/warehouse-management/inventory-alert",
+                "permission": "kuaizhizao:warehouse-management-inventory-alert:read",
+                "sort_order": 6
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.barcode-mapping-rules",
+                "path": "/apps/kuaimes/warehouse-management/barcode-mapping-rules",
+                "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
+                "sort_order": 7
+              }
+            ]
+          },
+          {
+            "title": "app.kuaizhizao.menu.warehouse-management.reports",
+            "icon": "fileText",
+            "sort_order": 5,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.inventory-summary",
+                "path": "/apps/kuaimes/warehouse-management/reports/inventory-summary",
+                "sort_order": 1,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-summary:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.inventory-ledger",
+                "path": "/apps/kuaimes/warehouse-management/reports/inventory-ledger",
+                "sort_order": 2,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-ledger:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.inventory-age-analysis",
+                "path": "/apps/kuaimes/warehouse-management/reports/inventory-age-analysis",
+                "sort_order": 3,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-age-analysis:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.slow-moving-inventory",
+                "path": "/apps/kuaimes/warehouse-management/reports/slow-moving-inventory",
+                "sort_order": 4,
+                "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.inbound-summary",
+                "path": "/apps/kuaimes/warehouse-management/reports/inbound-summary",
+                "sort_order": 5,
+                "permission": "kuaizhizao:warehouse-management-reports-inbound-summary:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.outbound-summary",
+                "path": "/apps/kuaimes/warehouse-management/reports/outbound-summary",
+                "sort_order": 6,
+                "permission": "kuaizhizao:warehouse-management-reports-outbound-summary:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.stocktaking-history",
+                "path": "/apps/kuaimes/warehouse-management/reports/stocktaking-history",
+                "sort_order": 7,
+                "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.transfer-tracking",
+                "path": "/apps/kuaimes/warehouse-management/reports/transfer-tracking",
+                "sort_order": 8,
+                "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.inventory-turnover-analysis",
+                "path": "/apps/kuaimes/warehouse-management/reports/inventory-turnover-analysis",
+                "sort_order": 9,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.performance-management",
+        "icon": "trophy",
+        "sort_order": 10,
+        "meta": {
+          "module": "performance"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.performance-management.holidays",
+            "path": "/apps/kuaimes/performance/holidays",
+            "permission": "kuaizhizao:performance-holidays:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.skills",
+            "path": "/apps/kuaimes/performance/skills",
+            "permission": "kuaizhizao:performance-skills:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.employee-configs",
+            "path": "/apps/kuaimes/performance/employee-configs",
+            "permission": "kuaizhizao:performance-employee-configs:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.piece-rates",
+            "path": "/apps/kuaimes/performance/piece-rates",
+            "permission": "kuaizhizao:performance-piece-rates:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
+            "path": "/apps/kuaimes/performance/hourly-rates",
+            "permission": "kuaizhizao:performance-hourly-rates:read",
+            "sort_order": 5
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
+            "path": "/apps/kuaimes/performance/kpi-definitions",
+            "permission": "kuaizhizao:performance-kpi-definitions:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.summaries",
+            "path": "/apps/kuaimes/performance/summaries",
+            "permission": "kuaizhizao:performance-summaries:read",
+            "sort_order": 7
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.reports",
+            "icon": "fileText",
+            "sort_order": 8,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
+                "path": "/apps/kuaimes/performance/reports/employee-efficiency-ranking",
+                "sort_order": 1,
+                "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.piece-rate-salary-summary",
+                "path": "/apps/kuaimes/performance/reports/piece-rate-salary-summary",
+                "sort_order": 2,
+                "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:read"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

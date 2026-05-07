@@ -30,7 +30,7 @@ from apps.master_data.schemas.process_route_change_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/process", tags=["Process"])
+router = APIRouter(prefix="/process", tags=["App · Master Data · Process"])
 
 
 def _http_exception_with_trace(
@@ -61,7 +61,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 不良品相关接口 ====================
 
-@router.post("/defect-types", response_model=DefectTypeResponse, summary="创建不良品")
+@router.post("/defect-types", response_model=DefectTypeResponse, summary="Create defect type")
 async def create_defect_type(
     data: DefectTypeCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -82,7 +82,7 @@ async def create_defect_type(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/defect-types", response_model=DefectTypeListResponse, summary="获取不良品列表")
+@router.get("/defect-types", response_model=DefectTypeListResponse, summary="List defect types")
 async def list_defect_types(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -120,7 +120,7 @@ class BatchResolveOrCreateDefectTypesRequest(BaseModel):
     items: List[str] = Field(..., description="不良品编码或名称列表，支持混合；已存在则使用，不存在则创建（编码按规则自动）")
 
 
-@router.post("/defect-types/batch-resolve-or-create", summary="批量解析或创建不良品项")
+@router.post("/defect-types/batch-resolve-or-create", summary="Batch resolve or create defect types")
 async def batch_resolve_or_create_defect_types(
     data: BatchResolveOrCreateDefectTypesRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -144,7 +144,7 @@ _DEFECT_PRESET_DEPRECATED_DETAIL = (
 )
 
 
-@router.get("/defect-types/preset-preview", summary="[已废弃] 获取不良品项预设预览")
+@router.get("/defect-types/preset-preview", summary="[Deprecated] Preview defect type preset")
 async def get_defect_type_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
@@ -156,7 +156,7 @@ async def get_defect_type_preset_preview(
     )
 
 
-@router.post("/defect-types/load-preset", summary="[已废弃] 加载不良品项预设")
+@router.post("/defect-types/load-preset", summary="[Deprecated] Load defect type preset")
 async def load_preset_defect_types(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -168,7 +168,7 @@ async def load_preset_defect_types(
     )
 
 
-@router.get("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="获取不良品详情")
+@router.get("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="Get defect type")
 async def get_defect_type(
     defect_type_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -185,7 +185,7 @@ async def get_defect_type(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="更新不良品")
+@router.put("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="Update defect type")
 async def update_defect_type(
     defect_type_uuid: str,
     data: DefectTypeUpdate,
@@ -210,7 +210,7 @@ async def update_defect_type(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/defect-types/{defect_type_uuid}", summary="删除不良品")
+@router.delete("/defect-types/{defect_type_uuid}", summary="Delete defect type")
 async def delete_defect_type(
     defect_type_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -230,7 +230,7 @@ async def delete_defect_type(
 
 # ==================== 工序相关接口 ====================
 
-@router.post("/operations", response_model=OperationResponse, summary="创建工序")
+@router.post("/operations", response_model=OperationResponse, summary="Create operation")
 async def create_operation(
     data: OperationCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -250,7 +250,7 @@ async def create_operation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/operations", response_model=OperationListResponse, summary="获取工序列表")
+@router.get("/operations", response_model=OperationListResponse, summary="List operations")
 async def list_operations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -301,7 +301,7 @@ class LoadOperationPresetRequest(BaseModel):
     )
 
 
-@router.get("/operations/preset-preview", summary="获取工序行业预设目录")
+@router.get("/operations/preset-preview", summary="List operation industry preset catalog")
 async def get_operation_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
@@ -310,7 +310,7 @@ async def get_operation_preset_preview(
     return ProcessService.get_operation_preset_catalog()
 
 
-@router.post("/operations/load-preset", summary="按行业加载工序预设")
+@router.post("/operations/load-preset", summary="Load operation presets by industry")
 async def load_preset_operations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -338,7 +338,7 @@ async def load_preset_operations(
         raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/operations/{operation_uuid}", response_model=OperationResponse, summary="获取工序详情")
+@router.get("/operations/{operation_uuid}", response_model=OperationResponse, summary="Get operation")
 async def get_operation(
     operation_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -355,7 +355,7 @@ async def get_operation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/operations/{operation_uuid}", response_model=OperationResponse, summary="更新工序")
+@router.put("/operations/{operation_uuid}", response_model=OperationResponse, summary="Update operation")
 async def update_operation(
     operation_uuid: str,
     data: OperationUpdate,
@@ -379,7 +379,7 @@ async def update_operation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/operations/{operation_uuid}", summary="删除工序")
+@router.delete("/operations/{operation_uuid}", summary="Delete operation")
 async def delete_operation(
     operation_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -403,7 +403,7 @@ async def delete_operation(
 
 # ==================== 工艺路线相关接口 ====================
 
-@router.post("/routes", response_model=ProcessRouteResponse, summary="创建工艺路线")
+@router.post("/routes", response_model=ProcessRouteResponse, summary="Create process route")
 async def create_process_route(
     data: ProcessRouteCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -424,7 +424,7 @@ async def create_process_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/routes", response_model=ProcessRouteListResponse, summary="获取工艺路线列表")
+@router.get("/routes", response_model=ProcessRouteListResponse, summary="List process routes")
 async def list_process_routes(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -454,7 +454,7 @@ async def list_process_routes(
     return ProcessRouteListResponse(data=items, total=total)
 
 
-@router.get("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="获取工艺路线详情")
+@router.get("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="Get process route")
 async def get_process_route(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -471,7 +471,7 @@ async def get_process_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="更新工艺路线")
+@router.put("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="Update process route")
 async def update_process_route(
     process_route_uuid: str,
     data: ProcessRouteUpdate,
@@ -496,7 +496,7 @@ async def update_process_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/routes/{process_route_uuid}", summary="删除工艺路线")
+@router.delete("/routes/{process_route_uuid}", summary="Delete process route")
 async def delete_process_route(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -516,7 +516,7 @@ async def delete_process_route(
 
 # ==================== 工艺路线版本管理相关接口 ====================
 
-@router.post("/routes/{process_route_code}/version", response_model=ProcessRouteResponse, summary="创建工艺路线新版本")
+@router.post("/routes/{process_route_code}/version", response_model=ProcessRouteResponse, summary="Create new process route version")
 async def create_process_route_version(
     process_route_code: str,
     data: ProcessRouteVersionCreate,
@@ -544,7 +544,7 @@ async def create_process_route_version(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/routes/{process_route_code}/versions", response_model=List[ProcessRouteResponse], summary="获取工艺路线所有版本")
+@router.get("/routes/{process_route_code}/versions", response_model=List[ProcessRouteResponse], summary="List all process route versions")
 async def get_process_route_versions(
     process_route_code: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -563,7 +563,7 @@ async def get_process_route_versions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/routes/{process_route_code}/compare-versions", response_model=ProcessRouteVersionCompareResult, summary="对比工艺路线版本")
+@router.post("/routes/{process_route_code}/compare-versions", response_model=ProcessRouteVersionCompareResult, summary="Compare process route versions")
 async def compare_process_route_versions(
     process_route_code: str,
     data: ProcessRouteVersionCompare,
@@ -593,7 +593,7 @@ async def compare_process_route_versions(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/routes/{process_route_code}/rollback-version", response_model=ProcessRouteResponse, summary="回退工艺路线到指定版本")
+@router.post("/routes/{process_route_code}/rollback-version", response_model=ProcessRouteResponse, summary="Roll back process route to version")
 async def rollback_process_route_version(
     process_route_code: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -624,7 +624,7 @@ async def rollback_process_route_version(
 
 # ==================== 工艺路线绑定管理相关接口 ====================
 
-@router.post("/routes/{process_route_uuid}/bind-material-group", summary="绑定工艺路线到物料分组")
+@router.post("/routes/{process_route_uuid}/bind-material-group", summary="Bind process route to material group")
 async def bind_material_group(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -648,7 +648,7 @@ async def bind_material_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.delete("/routes/{process_route_uuid}/unbind-material-group", summary="解绑物料分组的工艺路线")
+@router.delete("/routes/{process_route_uuid}/unbind-material-group", summary="Unbind process route from material group")
 async def unbind_material_group(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -668,7 +668,7 @@ async def unbind_material_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/routes/{process_route_uuid}/bind-material", summary="绑定工艺路线到物料")
+@router.post("/routes/{process_route_uuid}/bind-material", summary="Bind process route to material")
 async def bind_material(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -693,7 +693,7 @@ async def bind_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.delete("/routes/{process_route_uuid}/unbind-material", summary="解绑物料的工艺路线")
+@router.delete("/routes/{process_route_uuid}/unbind-material", summary="Unbind process route from material")
 async def unbind_material(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -713,7 +713,7 @@ async def unbind_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/routes/{process_route_uuid}/bound-materials", summary="获取工艺路线绑定的物料和物料分组")
+@router.get("/routes/{process_route_uuid}/bound-materials", summary="List materials and groups bound to process route")
 async def get_bound_materials(
     process_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -732,7 +732,7 @@ async def get_bound_materials(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/materials/{material_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="获取物料匹配的工艺路线")
+@router.get("/materials/{material_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="Get process route matched to material")
 async def get_process_route_for_material(
     material_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -758,7 +758,7 @@ async def get_process_route_for_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/material-groups/{material_group_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="获取物料组匹配的工艺路线")
+@router.get("/material-groups/{material_group_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="Get process route matched to material group")
 async def get_process_route_for_material_group(
     material_group_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -781,7 +781,7 @@ async def get_process_route_for_material_group(
 
 # ==================== 子工艺路线管理相关接口 ====================
 
-@router.post("/routes/{parent_route_uuid}/sub-routes", response_model=ProcessRouteResponse, summary="创建子工艺路线")
+@router.post("/routes/{parent_route_uuid}/sub-routes", response_model=ProcessRouteResponse, summary="Create sub process route")
 async def create_sub_route(
     parent_route_uuid: str,
     data: ProcessRouteCreate,
@@ -808,7 +808,7 @@ async def create_sub_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/routes/{parent_route_uuid}/sub-routes", response_model=List[ProcessRouteResponse], summary="获取子工艺路线列表")
+@router.get("/routes/{parent_route_uuid}/sub-routes", response_model=List[ProcessRouteResponse], summary="List sub process routes")
 async def get_sub_routes(
     parent_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -829,7 +829,7 @@ async def get_sub_routes(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.delete("/routes/sub-routes/{sub_route_uuid}", summary="删除子工艺路线")
+@router.delete("/routes/sub-routes/{sub_route_uuid}", summary="Delete sub process route")
 async def delete_sub_route(
     sub_route_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -853,7 +853,7 @@ async def delete_sub_route(
 
 # ==================== 工艺路线模板管理相关接口 ====================
 
-@router.post("/route-templates", response_model=ProcessRouteTemplateResponse, status_code=status.HTTP_201_CREATED, summary="创建工艺路线模板")
+@router.post("/route-templates", response_model=ProcessRouteTemplateResponse, status_code=status.HTTP_201_CREATED, summary="Create process route template")
 async def create_process_route_template(
     data: ProcessRouteTemplateCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -874,7 +874,7 @@ async def create_process_route_template(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/route-templates", response_model=List[ProcessRouteTemplateResponse], summary="获取工艺路线模板列表")
+@router.get("/route-templates", response_model=List[ProcessRouteTemplateResponse], summary="List process route templates")
 async def list_process_route_templates(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -897,7 +897,7 @@ async def list_process_route_templates(
     )
 
 
-@router.get("/route-templates/{template_uuid}", response_model=ProcessRouteTemplateResponse, summary="获取工艺路线模板详情")
+@router.get("/route-templates/{template_uuid}", response_model=ProcessRouteTemplateResponse, summary="Get process route template")
 async def get_process_route_template(
     template_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -912,7 +912,7 @@ async def get_process_route_template(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/routes/from-template", response_model=ProcessRouteResponse, status_code=status.HTTP_201_CREATED, summary="基于模板创建工艺路线")
+@router.post("/routes/from-template", response_model=ProcessRouteResponse, status_code=status.HTTP_201_CREATED, summary="Create process route from template")
 async def create_process_route_from_template(
     data: ProcessRouteFromTemplateCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -937,7 +937,7 @@ async def create_process_route_from_template(
 
 # ==================== 级联查询接口 ====================
 
-@router.get("/routes/tree", response_model=List[ProcessRouteTreeResponse], response_model_by_alias=True, summary="获取工艺路线树形结构")
+@router.get("/routes/tree", response_model=List[ProcessRouteTreeResponse], response_model_by_alias=True, summary="Get process route tree")
 async def get_process_route_tree(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -984,7 +984,7 @@ async def get_process_route_tree(
 # 注意：/sop/batch-create-from-route、/sop/for-material 等具体路径必须定义在 /sop/{sop_uuid} 之前，
 # 否则会被路径参数匹配导致 405 Method Not Allowed
 
-@router.post("/sop/batch-create-from-route", response_model=List[SOPResponse], summary="按工艺路线批量创建 SOP")
+@router.post("/sop/batch-create-from-route", response_model=List[SOPResponse], summary="Batch create SOPs from process route")
 async def batch_create_sops_from_route(
     data: SOPBatchCreateFromRouteRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1003,7 +1003,7 @@ async def batch_create_sops_from_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/sop", response_model=SOPResponse, summary="创建作业程序（SOP）")
+@router.post("/sop", response_model=SOPResponse, summary="Create SOP")
 async def create_sop(
     data: SOPCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1026,7 +1026,7 @@ async def create_sop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/sop", response_model=SOPListResponse, summary="获取作业程序（SOP）列表")
+@router.get("/sop", response_model=SOPListResponse, summary="List SOPs")
 async def list_sops(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1066,7 +1066,7 @@ async def list_sops(
 @router.get(
     "/sop/for-material",
     response_model=Optional[SOPResponse],
-    summary="按物料匹配 SOP（工单/报工依据）",
+    summary="Match SOP by material",
 )
 async def get_sop_for_material(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1086,7 +1086,7 @@ async def get_sop_for_material(
 @router.get(
     "/sop/for-reporting",
     response_model=Optional[SOPResponse],
-    summary="按工单+工序匹配 SOP（报工依据）",
+    summary="Match SOP by work order and operation",
 )
 async def get_sop_for_reporting(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1103,7 +1103,7 @@ async def get_sop_for_reporting(
     )
 
 
-@router.get("/sop/{sop_uuid}", response_model=SOPResponse, summary="获取作业程序（SOP）详情")
+@router.get("/sop/{sop_uuid}", response_model=SOPResponse, summary="Get SOP")
 async def get_sop(
     sop_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1120,7 +1120,7 @@ async def get_sop(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/sop/{sop_uuid}", response_model=SOPResponse, summary="更新作业程序（SOP）")
+@router.put("/sop/{sop_uuid}", response_model=SOPResponse, summary="Update SOP")
 async def update_sop(
     sop_uuid: str,
     data: SOPUpdate,
@@ -1147,7 +1147,7 @@ async def update_sop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/sop/{sop_uuid}", summary="删除作业程序（SOP）")
+@router.delete("/sop/{sop_uuid}", summary="Delete SOP")
 async def delete_sop(
     sop_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1167,7 +1167,7 @@ async def delete_sop(
 
 # ==================== 工艺路线变更管理相关接口 ====================
 
-@router.post("/routes/changes", response_model=ProcessRouteChangeResponse, summary="创建工艺路线变更记录")
+@router.post("/routes/changes", response_model=ProcessRouteChangeResponse, summary="Create process route change record")
 async def create_process_route_change(
     data: ProcessRouteChangeCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1192,7 +1192,7 @@ async def create_process_route_change(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/routes/changes", response_model=ProcessRouteChangeListResponse, summary="获取工艺路线变更记录列表")
+@router.get("/routes/changes", response_model=ProcessRouteChangeListResponse, summary="List process route change records")
 async def list_process_route_changes(
     process_route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选条件）"),
     change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
@@ -1223,7 +1223,7 @@ async def list_process_route_changes(
         )
 
 
-@router.get("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="获取工艺路线变更记录详情")
+@router.get("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Get process route change record")
 async def get_process_route_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1238,7 +1238,7 @@ async def get_process_route_change(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="更新工艺路线变更记录")
+@router.put("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Update process route change record")
 async def update_process_route_change(
     change_uuid: str,
     data: ProcessRouteChangeUpdate,
@@ -1256,7 +1256,7 @@ async def update_process_route_change(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/routes/changes/{change_uuid}/approve", response_model=ProcessRouteChangeResponse, summary="审批工艺路线变更记录")
+@router.post("/routes/changes/{change_uuid}/approve", response_model=ProcessRouteChangeResponse, summary="Approve process route change record")
 async def approve_process_route_change(
     change_uuid: str,
     approved: bool = Query(..., description="是否同意（true:同意, false:拒绝）"),
@@ -1281,7 +1281,7 @@ async def approve_process_route_change(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/routes/changes/{change_uuid}/execute", response_model=ProcessRouteChangeResponse, summary="执行工艺路线变更记录")
+@router.post("/routes/changes/{change_uuid}/execute", response_model=ProcessRouteChangeResponse, summary="Execute process route change record")
 async def execute_process_route_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1300,7 +1300,7 @@ async def execute_process_route_change(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/routes/changes/{change_uuid}", summary="删除工艺路线变更记录")
+@router.delete("/routes/changes/{change_uuid}", summary="Delete process route change record")
 async def delete_process_route_change(
     change_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],

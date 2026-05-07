@@ -4,10 +4,10 @@ from .dashboard import router as dashboard_router
 from .data_source import router as data_source_router
 from apps.kuaireport.constants import ChartType
 
-router = APIRouter(tags=["KuanReport"])
+router = APIRouter(tags=["App · KuanReport · Overview"])
 
 
-@router.get("/chart-types", summary="获取图表类型列表")
+@router.get("/chart-types", summary="List chart types")
 async def get_chart_types() -> list:
     """返回可用图表类型，供前端选择器使用，单一数据源"""
     return [e.value for e in ChartType]

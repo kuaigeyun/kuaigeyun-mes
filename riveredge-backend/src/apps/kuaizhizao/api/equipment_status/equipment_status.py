@@ -26,7 +26,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/equipment-status", tags=["Kuaige Zhizao Equipment Status Monitor"])
+router = APIRouter(prefix="/equipment-status", tags=["App · Kuaige Zhizao · Equipment Status Monitor"])
 
 
 @router.post("/monitors", response_model=EquipmentStatusMonitorResponse, status_code=status.HTTP_201_CREATED)

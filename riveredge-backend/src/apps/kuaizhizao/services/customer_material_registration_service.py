@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
     ParseBarcodeResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

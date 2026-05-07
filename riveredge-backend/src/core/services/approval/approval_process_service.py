@@ -13,7 +13,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.approval_process import ApprovalProcess
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
-from core.inngest.approval_registration import register_approval_workflow, unregister_approval_workflow
+from core.workflows.approval_registration import register_approval_workflow, unregister_approval_workflow
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 

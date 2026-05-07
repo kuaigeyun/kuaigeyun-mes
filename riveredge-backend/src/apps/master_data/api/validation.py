@@ -27,7 +27,7 @@ class ValidationResponse(BaseModel):
         from_attributes = True
 
 
-router = APIRouter(prefix="/validation", tags=["Data Validation"])
+router = APIRouter(prefix="/validation", tags=["App · Master Data · Data Validation"])
 
 
 def _http_exception_with_trace(
@@ -58,7 +58,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 数据验证接口 ====================
 
-@router.get("/product/{product_id}/for-work-order", response_model=ValidationResponse, summary="验证产品是否可以用于创建工单")
+@router.get("/product/{product_id}/for-work-order", response_model=ValidationResponse, summary="Validate product for work order creation")
 async def validate_product_for_work_order(
     product_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -110,7 +110,7 @@ async def validate_product_for_work_order(
         )
 
 
-@router.get("/process-route/{process_route_id}/for-work-order", response_model=ValidationResponse, summary="验证工艺路线是否可以用于创建工单")
+@router.get("/process-route/{process_route_id}/for-work-order", response_model=ValidationResponse, summary="Validate process route for work order creation")
 async def validate_process_route_for_work_order(
     process_route_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -140,7 +140,7 @@ async def validate_process_route_for_work_order(
         )
 
 
-@router.get("/work-order-data-integrity", response_model=ValidationResponse, summary="验证工单数据的完整性")
+@router.get("/work-order-data-integrity", response_model=ValidationResponse, summary="Validate work order data integrity")
 async def validate_work_order_data_integrity(
     product_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

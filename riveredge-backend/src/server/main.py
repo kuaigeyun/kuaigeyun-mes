@@ -12,8 +12,6 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 from loguru import logger
 
@@ -21,6 +19,7 @@ from loguru import logger
 src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
 
+from infra.config.infra_config import infra_settings
 from infra.infrastructure.database.database import register_db
 from tortoise import Tortoise
 from core.services.application.application_registry_service import ApplicationRegistryService
@@ -125,9 +124,9 @@ from core.api.plugin_manager.plugin_manager import router as plugin_manager_rout
 
 # Task dispatcher bootstrap
 try:
-    from core.inngest.functions import *  # noqa: F401,F403 - 仅用于注册事件处理器
-    from apps.master_data.inngest.functions import *  # noqa: F401,F403
-    from apps.kuaizhizao.inngest.functions import *  # noqa: F401,F403
+    from core.workflows.functions import *  # noqa: F401,F403 - 仅用于注册事件处理器
+    from apps.master_data.workflows.functions import *  # noqa: F401,F403
+    from apps.kuaizhizao.workflows.functions import *  # noqa: F401,F403
     TASK_DISPATCHER_READY = True
 except Exception as e:
     TASK_DISPATCHER_READY = False
@@ -260,7 +259,20 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Taskiq PostgreSQL broker 已启动（API 可投递异步任务）")
     except Exception as e:
         logger.warning(f"⚠️ Taskiq broker 启动失败，异步任务投递将不可用: {e}")
-    
+
+    # OpenAPI schema 较大（约 MB 级）：启动时在后台线程预热，避免首个访问 /redoc 时在请求线程里卡数秒
+    try:
+        import time as _time
+
+        _t0 = _time.perf_counter()
+        await asyncio.to_thread(app.openapi)
+        logger.info(
+            "✅ OpenAPI schema 已预热（ReDoc 首次打开更快）：{:.2f}s",
+            _time.perf_counter() - _t0,
+        )
+    except Exception as e:
+        logger.warning("⚠️ OpenAPI 预热失败，首次 /openapi.json 仍将按需生成: {}", e)
+
     # 验证路由注册情况
     from core.services.application.application_route_manager import get_route_manager
     route_manager = get_route_manager()
@@ -325,8 +337,43 @@ app = FastAPI(
     version="1.0.2",
     lifespan=lifespan,
     docs_url=None,  # 禁用默认docs，使用修复版本
-    redoc_url="/redoc",
+    redoc_url=None,  # 使用下方自定义 /redoc（关闭 Google Fonts、可配置 JS CDN）
 )
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_documentation(request: Request):
+    """ReDoc：默认不加载 Google Fonts，避免国内首屏长时间空白；见 REDOC_* 环境变量。"""
+    from fastapi.openapi.docs import get_redoc_html
+
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    openapi_url = root_path + app.openapi_url
+    js = (infra_settings.REDOC_JS_URL or "").strip()
+    if not js:
+        js = "/static/redoc/redoc.standalone.js"
+    return get_redoc_html(
+        openapi_url=openapi_url,
+        title=f"{app.title} - ReDoc",
+        redoc_js_url=js,
+        with_google_fonts=infra_settings.REDOC_USE_GOOGLE_FONTS,
+    )
+
+
+_REDOC_STATIC_DIR = Path(__file__).resolve().parent / "doc_assets" / "redoc"
+if (_REDOC_STATIC_DIR / "redoc.standalone.js").is_file():
+    from starlette.staticfiles import StaticFiles
+
+    app.mount(
+        "/static/redoc",
+        StaticFiles(directory=str(_REDOC_STATIC_DIR)),
+        name="redoc_standalone",
+    )
+else:
+    logger.warning(
+        "未找到 ReDoc 静态资源 {} ，请放置文件或设置 REDOC_JS_URL 为 CDN",
+        _REDOC_STATIC_DIR / "redoc.standalone.js",
+    )
+
 
 @app.get("/api/debug/batches")
 async def debug_batches():
@@ -347,7 +394,6 @@ async def debug_materials():
         return {"error": str(e)}
 
 # 配置CORS（从配置文件读取）
-from infra.config.infra_config import infra_settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=infra_settings.get_cors_origins(),  # 从环境变量配置读取
@@ -355,6 +401,10 @@ app.add_middleware(
     allow_methods=infra_settings.CORS_ALLOW_METHODS,
     allow_headers=infra_settings.CORS_ALLOW_HEADERS,
 )
+
+# ReDoc / OpenAPI 文档：可选 HTTP Basic（DOCS_BASIC_AUTH_USER + DOCS_BASIC_AUTH_PASSWORD 均配置时生效）
+from core.middleware.docs_auth_middleware import DocsBasicAuthMiddleware
+app.add_middleware(DocsBasicAuthMiddleware)
 
 # 启用 GZip 压缩（Caddy 透明代理时也会压缩，直连后端时生效）
 from starlette.middleware.gzip import GZipMiddleware
@@ -371,6 +421,10 @@ app.add_middleware(PerformanceMiddleware)
 # 注册操作日志中间件
 from core.middleware.operation_log_middleware import OperationLogMiddleware
 app.add_middleware(OperationLogMiddleware)
+
+# ReDoc / openapi.json 缓存头（缩小重复加载时的等待）
+from core.middleware.docs_asset_cache_middleware import DocsAssetCacheMiddleware
+app.add_middleware(DocsAssetCacheMiddleware)
 
 # 动态加载插件路由
 # 使用新的插件管理器进行动态插件加载
@@ -423,12 +477,6 @@ def load_plugin_routes():
 
 # 注意：插件路由现在在lifespan中加载，确保路由管理器和应用注册服务都已初始化
 # load_plugin_routes()  # 已移至lifespan中调用
-
-# 挂载静态文件目录
-import os
-static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
-os.makedirs(static_dir, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 if TASK_DISPATCHER_READY:
     logger.info("✅ 事件任务处理器已注册（Task dispatcher）")
@@ -629,39 +677,6 @@ async def health_check_services():
             "error": str(e),
             "message": "服务健康检查失败，请检查服务注册状态"
         }
-
-# 修复的FastAPI原生文档
-@app.get("/docs", include_in_schema=False)
-async def docs():
-    """修复的Swagger UI文档"""
-    html_content = """<!DOCTYPE html>
-<html>
-<head>
-<link type="text/css" rel="stylesheet" href="/static/swagger-ui/swagger-ui.css">
-<link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
-<title>RiverEdge SaaS Platform - Swagger UI</title>
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="/static/swagger-ui/swagger-ui-bundle.js"></script>
-<script>
-const ui = SwaggerUIBundle({
-    url: '/openapi.json',
-    dom_id: '#swagger-ui',
-    layout: 'BaseLayout',
-    deepLinking: true,
-    showExtensions: true,
-    showCommonExtensions: true,
-    oauth2RedirectUrl: window.location.origin + '/docs/oauth2-redirect',
-    presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset
-    ]
-});
-</script>
-</body>
-</html>"""
-    return HTMLResponse(content=html_content)
 
 # 注册API路由
 

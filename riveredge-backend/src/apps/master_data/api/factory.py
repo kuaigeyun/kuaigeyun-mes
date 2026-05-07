@@ -37,7 +37,7 @@ from apps.master_data.schemas.work_group_schemas import (
 from apps.master_data.services.work_group_service import WorkGroupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/factory", tags=["Factory"])
+router = APIRouter(prefix="/factory", tags=["App · Master Data · Factory"])
 
 
 def _http_exception_with_trace(
@@ -68,7 +68,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 厂区相关接口 ====================
 
-@router.post("/plants", response_model=PlantResponse, response_model_by_alias=True, summary="创建厂区")
+@router.post("/plants", response_model=PlantResponse, response_model_by_alias=True, summary="Create plant")
 async def create_plant(
     data: PlantCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -89,7 +89,7 @@ async def create_plant(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/plants", response_model=PlantListResult, response_model_by_alias=True, summary="获取厂区列表")
+@router.get("/plants", response_model=PlantListResult, response_model_by_alias=True, summary="List plants")
 async def list_plants(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -125,7 +125,7 @@ async def list_plants(
         )
 
 
-@router.get("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="获取厂区详情")
+@router.get("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="Get plant")
 async def get_plant(
     plant_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -142,7 +142,7 @@ async def get_plant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="更新厂区")
+@router.put("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="Update plant")
 async def update_plant(
     plant_uuid: str,
     data: PlantUpdate,
@@ -167,7 +167,7 @@ async def update_plant(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/plants/batch-delete", summary="批量删除厂区")
+@router.delete("/plants/batch-delete", summary="Batch delete plants")
 async def batch_delete_plants(
     request: BatchDeletePlantsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -196,7 +196,7 @@ async def batch_delete_plants(
         )
 
 
-@router.delete("/plants/{plant_uuid}", summary="删除厂区")
+@router.delete("/plants/{plant_uuid}", summary="Delete plant")
 async def delete_plant(
     plant_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -220,7 +220,7 @@ async def delete_plant(
 
 # ==================== 车间相关接口 ====================
 
-@router.post("/workshops", response_model=WorkshopResponse, response_model_by_alias=True, summary="创建车间")
+@router.post("/workshops", response_model=WorkshopResponse, response_model_by_alias=True, summary="Create workshop")
 async def create_workshop(
     data: WorkshopCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -240,7 +240,7 @@ async def create_workshop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/workshops", response_model=WorkshopListResult, response_model_by_alias=True, summary="获取车间列表")
+@router.get("/workshops", response_model=WorkshopListResult, response_model_by_alias=True, summary="List workshops")
 async def list_workshops(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -277,7 +277,7 @@ async def list_workshops(
         )
 
 
-@router.get("/workshops/{workshop_uuid}", response_model=WorkshopResponse, response_model_by_alias=True, summary="获取车间详情")
+@router.get("/workshops/{workshop_uuid}", response_model=WorkshopResponse, response_model_by_alias=True, summary="Get workshop")
 async def get_workshop(
     workshop_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -294,7 +294,7 @@ async def get_workshop(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/workshops/{workshop_uuid}", response_model=WorkshopResponse, response_model_by_alias=True, summary="更新车间")
+@router.put("/workshops/{workshop_uuid}", response_model=WorkshopResponse, response_model_by_alias=True, summary="Update workshop")
 async def update_workshop(
     workshop_uuid: str,
     data: WorkshopUpdate,
@@ -318,7 +318,7 @@ async def update_workshop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/workshops/batch-delete", summary="批量删除车间")
+@router.delete("/workshops/batch-delete", summary="Batch delete workshops")
 async def batch_delete_workshops(
     request: BatchDeleteWorkshopsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -347,7 +347,7 @@ async def batch_delete_workshops(
         )
 
 
-@router.delete("/workshops/{workshop_uuid}", summary="删除车间")
+@router.delete("/workshops/{workshop_uuid}", summary="Delete workshop")
 async def delete_workshop(
     workshop_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -371,7 +371,7 @@ async def delete_workshop(
 
 # ==================== 产线相关接口 ====================
 
-@router.post("/production-lines", response_model=ProductionLineResponse, response_model_by_alias=True, summary="创建产线")
+@router.post("/production-lines", response_model=ProductionLineResponse, response_model_by_alias=True, summary="Create production line")
 async def create_production_line(
     data: ProductionLineCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -392,7 +392,7 @@ async def create_production_line(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/production-lines", response_model=ProductionLineListResult, response_model_by_alias=True, summary="获取产线列表")
+@router.get("/production-lines", response_model=ProductionLineListResult, response_model_by_alias=True, summary="List production lines")
 async def list_production_lines(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -417,7 +417,7 @@ async def list_production_lines(
     )
 
 
-@router.get("/production-lines/{production_line_uuid}", response_model=ProductionLineResponse, response_model_by_alias=True, summary="获取产线详情")
+@router.get("/production-lines/{production_line_uuid}", response_model=ProductionLineResponse, response_model_by_alias=True, summary="Get production line")
 async def get_production_line(
     production_line_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -434,7 +434,7 @@ async def get_production_line(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/production-lines/{production_line_uuid}", response_model=ProductionLineResponse, response_model_by_alias=True, summary="更新产线")
+@router.put("/production-lines/{production_line_uuid}", response_model=ProductionLineResponse, response_model_by_alias=True, summary="Update production line")
 async def update_production_line(
     production_line_uuid: str,
     data: ProductionLineUpdate,
@@ -459,7 +459,7 @@ async def update_production_line(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/production-lines/batch-delete", summary="批量删除产线")
+@router.delete("/production-lines/batch-delete", summary="Batch delete production lines")
 async def batch_delete_production_lines(
     request: BatchDeleteProductionLinesRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -488,7 +488,7 @@ async def batch_delete_production_lines(
         )
 
 
-@router.delete("/production-lines/{production_line_uuid}", summary="删除产线")
+@router.delete("/production-lines/{production_line_uuid}", summary="Delete production line")
 async def delete_production_line(
     production_line_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -512,7 +512,7 @@ async def delete_production_line(
 
 # ==================== 工位相关接口 ====================
 
-@router.post("/workstations", response_model=WorkstationResponse, response_model_by_alias=True, summary="创建工位")
+@router.post("/workstations", response_model=WorkstationResponse, response_model_by_alias=True, summary="Create workstation")
 async def create_workstation(
     data: WorkstationCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -533,7 +533,7 @@ async def create_workstation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/workstations", response_model=WorkstationListResult, response_model_by_alias=True, summary="获取工位列表")
+@router.get("/workstations", response_model=WorkstationListResult, response_model_by_alias=True, summary="List workstations")
 async def list_workstations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -558,7 +558,7 @@ async def list_workstations(
     )
 
 
-@router.get("/workstations/{workstation_uuid}", response_model=WorkstationResponse, response_model_by_alias=True, summary="获取工位详情")
+@router.get("/workstations/{workstation_uuid}", response_model=WorkstationResponse, response_model_by_alias=True, summary="Get workstation")
 async def get_workstation(
     workstation_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -575,7 +575,7 @@ async def get_workstation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/workstations/{workstation_uuid}", response_model=WorkstationResponse, response_model_by_alias=True, summary="更新工位")
+@router.put("/workstations/{workstation_uuid}", response_model=WorkstationResponse, response_model_by_alias=True, summary="Update workstation")
 async def update_workstation(
     workstation_uuid: str,
     data: WorkstationUpdate,
@@ -600,7 +600,7 @@ async def update_workstation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/workstations/batch-delete", summary="批量删除工位")
+@router.delete("/workstations/batch-delete", summary="Batch delete workstations")
 async def batch_delete_workstations(
     request: BatchDeleteWorkstationsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -627,7 +627,7 @@ async def batch_delete_workstations(
         )
 
 
-@router.delete("/workstations/{workstation_uuid}", summary="删除工位")
+@router.delete("/workstations/{workstation_uuid}", summary="Delete workstation")
 async def delete_workstation(
     workstation_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -647,7 +647,7 @@ async def delete_workstation(
 
 # ==================== 工作中心相关接口 ====================
 
-@router.post("/work-centers", response_model=WorkCenterResponse, response_model_by_alias=True, summary="创建工作中心")
+@router.post("/work-centers", response_model=WorkCenterResponse, response_model_by_alias=True, summary="Create work center")
 async def create_work_center(
     data: WorkCenterCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -667,7 +667,7 @@ async def create_work_center(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/work-centers", response_model=WorkCenterListResult, response_model_by_alias=True, summary="获取工作中心列表")
+@router.get("/work-centers", response_model=WorkCenterListResult, response_model_by_alias=True, summary="List work centers")
 async def list_work_centers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -703,7 +703,7 @@ async def list_work_centers(
         )
 
 
-@router.get("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="获取工作中心详情")
+@router.get("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="Get work center")
 async def get_work_center(
     work_center_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -720,7 +720,7 @@ async def get_work_center(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="更新工作中心")
+@router.put("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="Update work center")
 async def update_work_center(
     work_center_uuid: str,
     data: WorkCenterUpdate,
@@ -744,7 +744,7 @@ async def update_work_center(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/work-centers/batch-delete", summary="批量删除工作中心")
+@router.delete("/work-centers/batch-delete", summary="Batch delete work centers")
 async def batch_delete_work_centers(
     request: BatchDeleteWorkCentersRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -771,7 +771,7 @@ async def batch_delete_work_centers(
         )
 
 
-@router.delete("/work-centers/{work_center_uuid}", summary="删除工作中心")
+@router.delete("/work-centers/{work_center_uuid}", summary="Delete work center")
 async def delete_work_center(
     work_center_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -791,7 +791,7 @@ async def delete_work_center(
 
 # ==================== 工作小组相关接口 ====================
 
-@router.post("/work-groups", response_model=WorkGroupResponse, response_model_by_alias=True, summary="创建工作小组")
+@router.post("/work-groups", response_model=WorkGroupResponse, response_model_by_alias=True, summary="Create work group")
 async def create_work_group(
     data: WorkGroupCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -812,7 +812,7 @@ async def create_work_group(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/work-groups", response_model=WorkGroupListResult, response_model_by_alias=True, summary="获取工作小组列表")
+@router.get("/work-groups", response_model=WorkGroupListResult, response_model_by_alias=True, summary="List work groups")
 async def list_work_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -848,7 +848,7 @@ async def list_work_groups(
         )
 
 
-@router.get("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="获取工作小组详情")
+@router.get("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="Get work group")
 async def get_work_group(
     work_group_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -865,7 +865,7 @@ async def get_work_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="更新工作小组")
+@router.put("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="Update work group")
 async def update_work_group(
     work_group_uuid: str,
     data: WorkGroupUpdate,
@@ -890,7 +890,7 @@ async def update_work_group(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/work-groups/batch-delete", summary="批量删除工作小组")
+@router.delete("/work-groups/batch-delete", summary="Batch delete work groups")
 async def batch_delete_work_groups(
     request: BatchDeleteWorkGroupsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -917,7 +917,7 @@ async def batch_delete_work_groups(
         )
 
 
-@router.delete("/work-groups/{work_group_uuid}", summary="删除工作小组")
+@router.delete("/work-groups/{work_group_uuid}", summary="Delete work group")
 async def delete_work_group(
     work_group_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -937,7 +937,7 @@ async def delete_work_group(
 
 # ==================== 级联查询接口 ====================
 
-@router.get("/tree", response_model=List[WorkshopTreeResponse], response_model_by_alias=True, summary="获取工厂数据树形结构")
+@router.get("/tree", response_model=List[WorkshopTreeResponse], response_model_by_alias=True, summary="Get factory tree")
 async def get_factory_tree(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],

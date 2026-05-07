@@ -988,7 +988,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: visible !important;
           height: 38px !important;
           display: flex !important;
-          align-items: center !important;
+          align-items: flex-end !important;
         }
         /* 覆盖所有可能的边框颜色 #F0F0F0 */
         .uni-tabs-container .ant-tabs-nav,
@@ -1004,8 +1004,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* Chrome 式标签样式 - 所有标签都有顶部圆角 - 支持自定义背景色（支持透明度） */
         .uni-tabs-container .ant-tabs-tab {
           margin: 0 !important;
-          padding: 8px 16px !important;
-          padding-bottom: 8px !important;
+          padding: 6px 16px 8px !important;
           border: none !important;
           border-bottom: none !important;
           background: ${tabsBgColor} !important;
@@ -1015,7 +1014,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom-right-radius: 0 !important;
           position: relative;
           overflow: visible !important;
-          height: 38px !important;
+          height: 36px !important;
           line-height: 22px !important;
           display: flex !important;
           align-items: center !important;
@@ -1076,8 +1075,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: visible !important;
           /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
           border-radius: 8px 8px 0 0 !important;
-          padding: 8px 16px !important;
-          padding-bottom: 8px !important;
+          padding: 6px 16px 8px !important;
+          height: 36px !important;
           box-sizing: border-box !important;
           display: flex !important;
           align-items: center !important;

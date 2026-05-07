@@ -80,7 +80,7 @@ class ProductionPlanningService(BaseService):
         if plan.execution_status == "已执行":
             raise BusinessLogicError("已执行的生产计划不允许审核")
 
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         reviewer_name = await AppBaseService().get_user_name(approved_by)
 
         if rejection_reason:

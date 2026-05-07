@@ -36,11 +36,11 @@ from loguru import logger
 
 
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
-router = APIRouter(tags=["采购订单管理"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Order Management"])
 
 
 # === 采购订单CRUD接口 ===
-@router.post("/purchase-orders", response_model=PurchaseOrderResponse, summary="创建采购订单")
+@router.post("/purchase-orders", response_model=PurchaseOrderResponse, summary="Create purchase order")
 async def create_purchase_order(
     order: PurchaseOrderCreate,
     current_user: CurrentUser = Depends(get_current_user),
@@ -62,7 +62,7 @@ async def create_purchase_order(
     )
 
 
-@router.get("/purchase-orders", summary="获取采购订单列表")
+@router.get("/purchase-orders", summary="List purchase orders")
 async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
@@ -98,7 +98,7 @@ async def list_purchase_orders(
     return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)
 
 
-@router.get("/purchase-orders/statistics", summary="获取采购订单统计（用于指标卡片）")
+@router.get("/purchase-orders/statistics", summary="Purchase Orders statistics (KPI cards)")
 async def get_purchase_order_statistics(
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -185,7 +185,7 @@ async def get_purchase_order_statistics(
 
 
 
-@router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
+@router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="Get purchase order")
 async def get_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     tenant_id: int = Depends(get_current_tenant)
@@ -198,7 +198,7 @@ async def get_purchase_order(
     return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
 
 
-@router.get("/purchase-orders/{order_id}/demand-source-chain", summary="获取采购单需求来源链路")
+@router.get("/purchase-orders/{order_id}/demand-source-chain", summary="Purchase order demand source chain")
 async def get_purchase_order_demand_chain(
     order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -222,7 +222,7 @@ async def get_purchase_order_demand_chain(
         )
 
 
-@router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
+@router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="Update purchase order")
 async def update_purchase_order(
     order: PurchaseOrderUpdate,
     order_id: int = Path(..., description="采购订单ID"),
@@ -245,7 +245,7 @@ async def update_purchase_order(
     )
 
 
-@router.delete("/purchase-orders/{order_id}", summary="删除采购订单")
+@router.delete("/purchase-orders/{order_id}", summary="Delete purchase order")
 async def delete_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -265,7 +265,7 @@ async def delete_purchase_order(
 
 
 # === 采购订单业务操作接口 ===
-@router.post("/purchase-orders/{order_id}/submit", response_model=PurchaseOrderResponse, summary="提交采购订单")
+@router.post("/purchase-orders/{order_id}/submit", response_model=PurchaseOrderResponse, summary="Submit purchase order")
 async def submit_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -283,7 +283,7 @@ async def submit_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
+@router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="Approve purchase order")
 async def approve_purchase_order(
     approve_data: PurchaseOrderApprove,
     order_id: int = Path(..., description="采购订单ID"),
@@ -304,7 +304,7 @@ async def approve_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
+@router.post("/purchase-orders/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="Confirm purchase order")
 async def confirm_purchase_order(
     confirm_data: PurchaseOrderConfirm,
     order_id: int = Path(..., description="采购订单ID"),
@@ -325,7 +325,7 @@ async def confirm_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{order_id}/push-to-receipt-preview", summary="下推采购入库预览")
+@router.post("/purchase-orders/{order_id}/push-to-receipt-preview", summary="Preview push to purchase receipt")
 async def push_purchase_order_to_receipt_preview(
     order_id: int = Path(..., description="采购订单ID"),
     receipt_quantities: Optional[dict] = Body(None, description="入库数量字典 {item_id: quantity}"),
@@ -354,7 +354,7 @@ async def push_purchase_order_to_receipt_preview(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
+@router.post("/purchase-orders/{order_id}/push-to-receipt", summary="Push to purchase receipt")
 async def push_purchase_order_to_receipt(
     order_id: int = Path(..., description="采购订单ID"),
     body: Optional[dict] = Body(None, description="receipt_quantities 和可选的 batch_numbers"),
@@ -405,7 +405,7 @@ async def push_purchase_order_to_receipt(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@router.post("/purchase-orders/{order_id}/push-to-receipt-notice", summary="下推到收货通知")
+@router.post("/purchase-orders/{order_id}/push-to-receipt-notice", summary="Push to receipt notice")
 async def push_purchase_order_to_receipt_notice(
     order_id: int = Path(..., description="采购订单ID"),
     notice_quantities: Optional[dict] = Body(None, description="通知数量字典 {item_id: quantity}"),
@@ -441,7 +441,7 @@ async def push_purchase_order_to_receipt_notice(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@router.post("/purchase-orders/{order_id}/push-to-invoice", summary="下推到采购发票")
+@router.post("/purchase-orders/{order_id}/push-to-invoice", summary="Push to purchase invoice")
 async def push_purchase_order_to_invoice(
     order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -464,7 +464,7 @@ async def push_purchase_order_to_invoice(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@router.get("/purchase-orders/{order_id}/print", summary="打印采购订单")
+@router.get("/purchase-orders/{order_id}/print", summary="Print purchase order")
 async def print_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -493,7 +493,7 @@ async def print_purchase_order(
         )
     return HTMLResponse(content=result.get("content") or "", status_code=200)
 
-@router.get("/material-price-history/{material_id}", response_model=MaterialPriceHistoryResponse, summary="获取物料历史成交价")
+@router.get("/material-price-history/{material_id}", response_model=MaterialPriceHistoryResponse, summary="Material historical purchase price")
 async def get_material_price_history(
     material_id: int = Path(..., description="物料ID"),
     tenant_id: int = Depends(get_current_tenant)
@@ -502,7 +502,7 @@ async def get_material_price_history(
     return await PurchaseService().get_material_price_history(tenant_id, material_id)
 
 
-@router.get("/purchase-orders/{order_id}/tracking", response_model=PurchaseTrackingResponse, summary="获取采购订单履约追踪")
+@router.get("/purchase-orders/{order_id}/tracking", response_model=PurchaseTrackingResponse, summary="Purchase order fulfillment tracking")
 async def get_purchase_order_tracking(
     order_id: int = Path(..., description="采购订单ID"),
     tenant_id: int = Depends(get_current_tenant)
@@ -511,7 +511,7 @@ async def get_purchase_order_tracking(
     return await PurchaseService().get_purchase_order_tracking(tenant_id, order_id)
 
 
-@router.post("/purchase-orders/{order_id}/expedite", response_model=ExpediteResponse, summary="一键催单")
+@router.post("/purchase-orders/{order_id}/expedite", response_model=ExpediteResponse, summary="Expedite purchase (one click)")
 async def expedite_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     request: ExpediteRequest = Body(None),
@@ -519,7 +519,7 @@ async def expedite_purchase_order(
 ):
     """记录催单日志并模拟发出催单通知"""
     return await PurchaseService().expedite_purchase_order(tenant_id, order_id, request.remarks if request else None)
-@router.get("/price-comparison", response_model=PriceComparisonResponse, summary="多物料价格对比")
+@router.get("/price-comparison", response_model=PriceComparisonResponse, summary="Multi-material price comparison")
 async def get_price_comparison(
     material_ids: str = Query(..., description="物料ID列表，逗号分隔"),
     tenant_id: int = Depends(get_current_tenant)
@@ -532,7 +532,7 @@ async def get_price_comparison(
         raise ValidationError(f"无法获取价格对比: {str(e)}")
 
 
-@router.post("/purchase-orders/{order_id}/allocate-costs", summary="分摊采购落地成本")
+@router.post("/purchase-orders/{order_id}/allocate-costs", summary="Allocate landed cost")
 async def allocate_purchase_costs(
     order_id: int = Path(..., description="采购订单ID"),
     request: LandingCostAllocationRequest = Body(...),
@@ -549,7 +549,7 @@ async def allocate_purchase_costs(
         raise ValidationError(f"分摊失败: {str(e)}")
 
 
-@router.get("/purchase-orders/{order_id}/changes", response_model=List[PurchaseOrderChangeResponse], summary="获取采购订单变更历史")
+@router.get("/purchase-orders/{order_id}/changes", response_model=List[PurchaseOrderChangeResponse], summary="Purchase order change history")
 async def get_purchase_order_changes(
     order_id: int = Path(..., description="采购订单ID"),
     tenant_id: int = Depends(get_current_tenant)

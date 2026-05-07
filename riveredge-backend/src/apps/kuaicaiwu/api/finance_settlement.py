@@ -12,7 +12,7 @@ from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 
-router = APIRouter(prefix="/settlement", tags=["往来核销与对账"])
+router = APIRouter(prefix="/settlement", tags=["App · Kuaicaiwu · Settlement & Reconciliation"])
 service = AccountSettlementService()
 
 
@@ -37,7 +37,7 @@ def _http_exception_with_trace(
     )
 
 
-@router.get("/suggestions/receivable", summary="应收核销建议列表")
+@router.get("/suggestions/receivable", summary="Receivable settlement suggestions")
 async def get_receivable_suggestions(
     customer_id: int | None = Query(None, description="客户ID（可选，不传则返回全部客户建议）"),
     limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
@@ -58,7 +58,7 @@ async def get_receivable_suggestions(
     return {"items": items, "total": len(items)}
 
 
-@router.get("/suggestions/payable", summary="应付核销建议列表")
+@router.get("/suggestions/payable", summary="Payable settlement suggestions")
 async def get_payable_suggestions(
     supplier_id: int | None = Query(None, description="供应商ID（可选，不传则返回全部供应商建议）"),
     limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
@@ -78,7 +78,7 @@ async def get_payable_suggestions(
     )
     return {"items": items, "total": len(items)}
 
-@router.post("/receivable", summary="执行应收核销")
+@router.post("/receivable", summary="Settle receivable")
 async def settle_receivable(
     receivable_id: int,
     receipt_id: int,
@@ -106,7 +106,7 @@ async def settle_receivable(
         payment_exchange_rate=payment_exchange_rate,
     )
 
-@router.post("/payable", summary="执行应付核销")
+@router.post("/payable", summary="Settle payable")
 async def settle_payable(
     payable_id: int,
     payment_id: int,
@@ -134,7 +134,7 @@ async def settle_payable(
         payment_exchange_rate=payment_exchange_rate,
     )
 
-@router.post("/auto-settle/receivables", summary="自动核销客户所有应收 (FIFO)")
+@router.post("/auto-settle/receivables", summary="Auto-settle all receivables for customer (FIFO)")
 async def auto_settle_receivables(
     customer_id: int,
     _auth: object = Depends(
@@ -152,7 +152,7 @@ async def auto_settle_receivables(
     return {"message": f"Successfully settled {count} transactions."}
 
 
-@router.post("/fx-revaluation/period-end", summary="期末调汇并生成汇兑凭证候选")
+@router.post("/fx-revaluation/period-end", summary="Period-end FX revaluation (draft exchange entries)")
 async def revaluate_period_end(
     period: str = Query(..., description="期间，格式 YYYY-MM"),
     currency: str = Query("USD", description="外币币种"),
@@ -185,7 +185,7 @@ async def revaluate_period_end(
         doc_type=doc_type,
     )
 
-@router.get("/partner-statement", summary="生成往来对账单预览")
+@router.get("/partner-statement", summary="Partner account statement preview")
 async def get_statement(
     partner_id: int,
     partner_type: str = Query(..., description="Customer/Supplier"),
@@ -204,7 +204,7 @@ async def get_statement(
         current_user.tenant_id, partner_id, partner_type, start_date, end_date
     )
 
-@router.post("/archive-statement", summary="存档正式往来对账单")
+@router.post("/archive-statement", summary="Archive partner account statement")
 async def archive_statement(
     partner_id: int,
     partner_type: str,

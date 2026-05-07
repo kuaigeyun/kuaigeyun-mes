@@ -26,7 +26,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/tools", tags=["Kuaige Zhizao Tools"])
+router = APIRouter(prefix="/tools", tags=["App · Kuaige Zhizao · Tools"])
 
 
 def _http_exception_with_trace(

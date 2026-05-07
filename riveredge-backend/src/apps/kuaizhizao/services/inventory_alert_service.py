@@ -26,7 +26,7 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertHandleRequest,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

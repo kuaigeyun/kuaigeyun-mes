@@ -10,7 +10,7 @@ from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
 from core.services.system.site_setting_service import SiteSettingService
 from core.api.deps.deps import get_current_tenant
 
-router = APIRouter(prefix="/site-settings", tags=["Site Settings"])
+router = APIRouter(prefix="/site-settings", tags=["Core · Site Settings"])
 
 
 @router.get("", response_model=SiteSettingResponse)

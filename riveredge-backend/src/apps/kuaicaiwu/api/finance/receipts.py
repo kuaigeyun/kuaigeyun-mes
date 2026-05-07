@@ -19,7 +19,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/receipts", tags=["Kuaicaiwu Finance"])
+router = APIRouter(prefix="/receipts", tags=["App · Kuaicaiwu · Finance"])
 
 
 def _http_exception_with_trace(

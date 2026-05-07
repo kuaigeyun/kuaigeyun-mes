@@ -21,7 +21,7 @@ from infra.domain.package_config import get_package_config, get_all_package_conf
 from typing import Dict, Any
 
 # 创建路由 - 测试专用，只包含公开接口
-router = APIRouter(prefix="/packages", tags=["Infra Packages"])
+router = APIRouter(prefix="/packages", tags=["Platform · Packages"])
 
 
 @router.get("/config", response_model=Dict[str, Any])

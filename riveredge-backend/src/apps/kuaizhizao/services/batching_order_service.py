@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.batching_order import (
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 

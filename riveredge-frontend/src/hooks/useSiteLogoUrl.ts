@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useConfigStore } from '../stores/configStore';
 import { getFilePreview } from '../services/file';
 import { toRelativeIfLocalhost } from '../utils/avatar';
+import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL } from '../constants/siteAssets';
 
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
 
@@ -49,17 +50,18 @@ export function useSiteLogoUrl(): string {
       if (isUUID(logoValue)) {
         const cached = getCachedSiteLogoUrl(logoValue);
         if (cached) return cached;
+        return SITE_LOGO_FALLBACK_SVG_URL;
       } else {
         return logoValue;
       }
     }
-    return '/img/logo.png';
+    return DEFAULT_SITE_LOGO_URL;
   });
 
   useEffect(() => {
     const loadSiteLogo = async () => {
       if (!siteLogoValue) {
-        setSiteLogoUrl('/img/logo.png');
+        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
         return;
       }
       if (isUUID(siteLogoValue)) {
@@ -70,7 +72,7 @@ export function useSiteLogoUrl(): string {
           setCachedSiteLogoUrl(siteLogoValue, newUrl);
         } catch {
           clearCachedSiteLogoUrl(siteLogoValue);
-          setSiteLogoUrl('/img/logo.png');
+          setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
         }
       } else {
         setSiteLogoUrl(siteLogoValue);

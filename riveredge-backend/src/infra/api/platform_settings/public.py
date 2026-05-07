@@ -16,7 +16,7 @@ from infra.schemas.platform_settings import PlatformSettingsResponse
 from infra.services.platform_settings_service import PlatformSettingsService
 
 # 创建路由
-router = APIRouter(prefix="/platform-settings", tags=["Platform Settings (Public)"])
+router = APIRouter(prefix="/platform-settings", tags=["Platform · Settings (Public)"])
 
 # 降级默认值：数据库异常时返回，确保登录页可加载
 DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(

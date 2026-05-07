@@ -4,9 +4,9 @@ from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.kuaizhizao.services.reset_data_service import ResetDataService
 
-router = APIRouter(prefix="/management", tags=["App Management"])
+router = APIRouter(prefix="/management", tags=["App · Kuaige Zhizao · App Management"])
 
-@router.post("/reset-data", summary="重置应用数据（快制造专用）")
+@router.post("/reset-data", summary="Reset app data (Kuaige Zhizao)")
 async def reset_app_data(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

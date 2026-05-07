@@ -39,6 +39,10 @@ export { default as DocumentRelationDisplay } from './document-relation-display'
 export type { DocumentRelationDisplayProps, DocumentRelationData, RelatedDocument } from './document-relation-display';
 export { SchemaFormRenderer } from './schema-form';
 export type { SchemaFormRendererProps, FieldConfig, FieldType, RuleConfig } from './schema-form';
+export { StructuredCostDataView } from './structured-cost-data-view';
+export type { StructuredCostDataViewProps } from './structured-cost-data-view';
+export { default as SkeuomorphicSwitch } from './skeuomorphic-switch';
+export type { SkeuomorphicSwitchProps } from './skeuomorphic-switch';
 export { SimpleSparkline } from './common/SimpleSparkline';
 export { StatCardTrendArea, strokeColorWithAlpha } from './common/StatCardTrendArea';
 export type { StatCardTrendData, StatCardTrendPoint, StatCardTrendAreaProps } from './common/StatCardTrendArea';

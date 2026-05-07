@@ -31,7 +31,7 @@ from infra.models.tenant import Tenant
 from infra.domain.package_config import can_use_pro_apps
 from loguru import logger
 
-router = APIRouter(prefix="/applications", tags=["Applications"])
+router = APIRouter(prefix="/applications", tags=["Core · Applications"])
 PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
 
 
@@ -875,7 +875,7 @@ async def sync_application_manifest(
         )
 
 
-@router.post("/{app_code}/reload-routes", summary="重新加载应用路由")
+@router.post("/{app_code}/reload-routes", summary="Reload application routes")
 async def reload_app_routes(
     app_code: str,
     tenant_id: int = Depends(get_current_tenant),

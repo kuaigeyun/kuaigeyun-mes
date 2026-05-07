@@ -15,9 +15,9 @@ from apps.kuaizhizao.schemas.material_call import (
     MaterialCallBatchFromWorkOrderRequest,
 )
 
-router = APIRouter(prefix="/material-calls", tags=["Kuaige Zhizao - Material Call"])
+router = APIRouter(prefix="/material-calls", tags=["App · Kuaige Zhizao · Material Call"])
 
-@router.post("", response_model=MaterialCallRequestResponse, summary="发起叫料请求")
+@router.post("", response_model=MaterialCallRequestResponse, summary="Create material call request")
 async def create_material_call(
     create_data: MaterialCallRequestCreate,
     current_user: User = Depends(get_current_user),
@@ -30,7 +30,7 @@ async def create_material_call(
 @router.post(
     "/batch-from-work-order",
     response_model=MaterialCallRequestResponse,
-    summary="整单叫料（齐套缺料生成一张叫料单及多行明细）",
+    summary="Full-order material call from kitting shortages",
 )
 async def batch_material_calls_from_work_order(
     body: MaterialCallBatchFromWorkOrderRequest,
@@ -45,7 +45,7 @@ async def batch_material_calls_from_work_order(
     )
 
 
-@router.get("", response_model=List[MaterialCallRequestResponse], summary="查询叫料请求列表")
+@router.get("", response_model=List[MaterialCallRequestResponse], summary="List material call requests")
 async def list_material_calls(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -63,7 +63,7 @@ async def list_material_calls(
         work_order_id=work_order_id
     )
 
-@router.patch("/{call_id}", response_model=MaterialCallRequestResponse, summary="更新叫料请求状态/信息")
+@router.patch("/{call_id}", response_model=MaterialCallRequestResponse, summary="Update material call request")
 async def update_material_call(
     call_id: int = Path(..., description="叫料请求ID"),
     update_data: MaterialCallRequestUpdate = None,
@@ -78,7 +78,7 @@ async def update_material_call(
         user=current_user
     )
 
-@router.post("/{call_id}/cancel", summary="取消叫料请求")
+@router.post("/{call_id}/cancel", summary="Cancel material call request")
 async def cancel_material_call(
     call_id: int = Path(..., description="叫料请求ID"),
     current_user: User = Depends(get_current_user),

@@ -36,7 +36,7 @@ const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 0 }) => {
     const t = setTimeout(() => setShow(true), delayMs);
     return () => clearTimeout(t);
   }, [delayMs]);
-  return show ? <PageSkeleton variant="minimal" /> : null;
+  return show ? <PageSkeleton variant="content" /> : null;
 };
 
 /** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */

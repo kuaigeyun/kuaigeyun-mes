@@ -111,7 +111,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     InboundConfirmationRequest,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_before_sales_delivery_confirm
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService

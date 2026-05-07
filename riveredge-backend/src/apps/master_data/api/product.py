@@ -18,7 +18,7 @@ from apps.master_data.schemas.product_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/product", tags=["Product"])
+router = APIRouter(prefix="/product", tags=["App · Master Data · Product"])
 
 
 def _http_exception_with_trace(
@@ -49,7 +49,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 产品相关接口 ====================
 
-@router.post("", response_model=ProductResponse, summary="创建产品")
+@router.post("", response_model=ProductResponse, summary="Create product")
 async def create_product(
     data: ProductCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -72,7 +72,7 @@ async def create_product(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=List[ProductResponse], summary="获取产品列表")
+@router.get("", response_model=List[ProductResponse], summary="List products")
 async def list_products(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -90,7 +90,7 @@ async def list_products(
     return await ProductService.list_products(tenant_id, skip, limit, is_active)
 
 
-@router.get("/{product_uuid}", response_model=ProductResponse, summary="获取产品详情")
+@router.get("/{product_uuid}", response_model=ProductResponse, summary="Get product")
 async def get_product(
     product_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -107,7 +107,7 @@ async def get_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/{product_uuid}", response_model=ProductResponse, summary="更新产品")
+@router.put("/{product_uuid}", response_model=ProductResponse, summary="Update product")
 async def update_product(
     product_uuid: str,
     data: ProductUpdate,
@@ -134,7 +134,7 @@ async def update_product(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{product_uuid}", summary="删除产品")
+@router.delete("/{product_uuid}", summary="Delete product")
 async def delete_product(
     product_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -156,7 +156,7 @@ async def delete_product(
 
 # ==================== BOM相关接口 ====================
 
-@router.get("/{product_uuid}/bom", response_model=ProductBOMResponse, summary="获取产品BOM结构")
+@router.get("/{product_uuid}/bom", response_model=ProductBOMResponse, summary="Get product BOM")
 async def get_product_bom(
     product_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -197,7 +197,7 @@ async def get_product_bom(
 
 # ==================== 级联选择相关接口 ====================
 
-@router.get("/grouped", response_model=Dict[str, List[ProductResponse]], summary="获取分组的产品列表")
+@router.get("/grouped", response_model=Dict[str, List[ProductResponse]], summary="List products grouped")
 async def get_products_grouped(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -233,7 +233,7 @@ async def get_products_grouped(
     return await ProductService.get_products_grouped(tenant_id, is_active)
 
 
-@router.get("/by-category/{category_prefix}", response_model=List[ProductResponse], summary="根据分类前缀获取产品列表")
+@router.get("/by-category/{category_prefix}", response_model=List[ProductResponse], summary="List products by category prefix")
 async def get_products_by_category(
     category_prefix: str,
     current_user: Annotated[User, Depends(get_current_user)],

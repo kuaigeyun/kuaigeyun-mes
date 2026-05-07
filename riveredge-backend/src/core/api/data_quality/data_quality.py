@@ -22,7 +22,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/data-quality", tags=["Data Quality"])
+router = APIRouter(prefix="/data-quality", tags=["Core · Data Quality"])
 
 
 class DataValidationRequest(BaseModel):
@@ -41,7 +41,7 @@ class DataCleaningRequest(BaseModel):
     key_fields: List[str] = Field(default_factory=list, description="关键字段列表（用于检测重复）")
 
 
-@router.post("/validate", summary="数据验证（导入前）")
+@router.post("/validate", summary="Validate import data")
 async def validate_data(
     request: DataValidationRequest,
     current_user: User = Depends(soil_get_current_user),
@@ -89,7 +89,7 @@ async def validate_data(
         )
 
 
-@router.post("/detect-issues", summary="检测数据问题")
+@router.post("/detect-issues", summary="Detect data issues")
 async def detect_data_issues(
     request: DataCleaningRequest,
     current_user: User = Depends(soil_get_current_user),
@@ -130,7 +130,7 @@ async def detect_data_issues(
         )
 
 
-@router.post("/quality-report", summary="生成数据质量报告")
+@router.post("/quality-report", summary="Generate data quality report")
 async def generate_quality_report(
     validation_request: DataValidationRequest,
     cleaning_request: Optional[DataCleaningRequest] = None,

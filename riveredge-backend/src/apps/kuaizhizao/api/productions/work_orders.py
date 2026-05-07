@@ -53,12 +53,12 @@ from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderListResponse,
 )
 
-router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
 
 
 # ============ 工单管理 API ============
 
-@router.post("/work-orders", response_model=WorkOrderResponse, summary="创建工单")
+@router.post("/work-orders", response_model=WorkOrderResponse, summary="Create work order")
 async def create_work_order(
     work_order: WorkOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -80,7 +80,7 @@ async def create_work_order(
     )
 
 
-@router.get("/work-orders/statistics", summary="获取工单统计（用于指标卡片）")
+@router.get("/work-orders/statistics", summary="Work order statistics (KPI cards)")
 async def get_work_order_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -307,7 +307,7 @@ WORK_ORDER_SORTABLE_FIELDS = frozenset({
 })
 
 
-@router.get("/work-orders", summary="获取工单列表")
+@router.get("/work-orders", summary="List work orders")
 async def list_work_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -382,7 +382,7 @@ async def list_work_orders(
 
 
 # 静态子路径须注册在 /work-orders/{work_order_id} 之前，否则 execution-config 会被当成整数 ID 解析（422）
-@router.get("/work-orders/execution-config", summary="获取工单执行配置（领料确认策略）")
+@router.get("/work-orders/execution-config", summary="Work order execution config")
 async def get_work_order_execution_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -408,7 +408,7 @@ async def get_work_order_execution_config(
     }
 
 
-@router.get("/work-orders/delayed", summary="查询延期工单")
+@router.get("/work-orders/delayed", summary="List delayed work orders")
 async def get_delayed_work_orders(
     days_threshold: int = Query(0, ge=0, description="延期天数阈值（默认0，即只要超过计划结束日期就算延期）"),
     status: Optional[str] = Query(None, description="工单状态过滤（可选）"),
@@ -437,7 +437,7 @@ async def get_delayed_work_orders(
     )
 
 
-@router.get("/work-orders/delay-analysis", summary="延期原因分析")
+@router.get("/work-orders/delay-analysis", summary="Delay root-cause analysis")
 async def analyze_delay_reasons(
     work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果为None则分析所有延期工单）"),
     current_user: User = Depends(get_current_user),
@@ -460,7 +460,7 @@ async def analyze_delay_reasons(
     )
 
 
-@router.get("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="获取工单详情")
+@router.get("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="Get work order")
 async def get_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -477,7 +477,7 @@ async def get_work_order(
     )
 
 
-@router.get("/work-orders/{work_order_id}/demand-source-chain", summary="获取工单需求来源链路")
+@router.get("/work-orders/{work_order_id}/demand-source-chain", summary="Work order demand source chain")
 async def get_work_order_demand_chain(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -501,7 +501,7 @@ async def get_work_order_demand_chain(
         )
 
 
-@router.get("/work-orders/{work_order_id}/operations", summary="获取工单工序列表")
+@router.get("/work-orders/{work_order_id}/operations", summary="List work order operations")
 async def get_work_order_operations(
     work_order_id: int,
     include_meta: bool = Query(
@@ -524,7 +524,7 @@ async def get_work_order_operations(
     )
 
 
-@router.put("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="更新工单工序")
+@router.put("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="Update work order operation")
 async def update_work_order_operations(
     work_order_id: int,
     operations_data: WorkOrderOperationsUpdateRequest,
@@ -547,7 +547,7 @@ async def update_work_order_operations(
     )
 
 
-@router.post("/work-orders/{work_order_id}/operations/{operation_id}/dispatch", response_model=WorkOrderOperationResponse, summary="派工工单工序")
+@router.post("/work-orders/{work_order_id}/operations/{operation_id}/dispatch", response_model=WorkOrderOperationResponse, summary="Dispatch work order operation")
 async def dispatch_work_order_operation(
     work_order_id: int,
     operation_id: int,
@@ -573,7 +573,7 @@ async def dispatch_work_order_operation(
     )
 
 
-@router.post("/work-orders/{work_order_id}/operations/{operation_id}/start", response_model=WorkOrderOperationResponse, summary="开始工单工序")
+@router.post("/work-orders/{work_order_id}/operations/{operation_id}/start", response_model=WorkOrderOperationResponse, summary="Start work order operation")
 async def start_work_order_operation(
     work_order_id: int,
     operation_id: int,
@@ -596,7 +596,7 @@ async def start_work_order_operation(
     )
 
 
-@router.get("/work-orders/{work_order_id}/picking-confirmation-status", summary="检查工单领料确认状态")
+@router.get("/work-orders/{work_order_id}/picking-confirmation-status", summary="Check picking confirmation status")
 async def get_work_order_picking_confirmation_status(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -610,7 +610,7 @@ async def get_work_order_picking_confirmation_status(
     }
 
 
-@router.put("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="更新工单")
+@router.put("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="Update work order")
 async def update_work_order(
     work_order_id: int,
     work_order: WorkOrderUpdate,
@@ -631,7 +631,7 @@ async def update_work_order(
     )
 
 
-@router.put("/work-orders/batch-update-dates", summary="批量更新工单计划日期")
+@router.put("/work-orders/batch-update-dates", summary="Batch update work order planned dates")
 async def batch_update_work_order_dates(
     request: WorkOrderBatchUpdateDatesRequest,
     current_user: User = Depends(get_current_user),
@@ -650,7 +650,7 @@ async def batch_update_work_order_dates(
     return {"success": True, "message": "更新成功"}
 
 
-@router.put("/work-orders/batch-update-operation-dates", summary="批量更新工序计划日期")
+@router.put("/work-orders/batch-update-operation-dates", summary="Batch update operation planned dates")
 async def batch_update_work_order_operation_dates(
     request: WorkOrderOperationBatchUpdateDatesRequest,
     current_user: User = Depends(get_current_user),
@@ -669,7 +669,7 @@ async def batch_update_work_order_operation_dates(
     return {"success": True, "message": "更新成功"}
 
 
-@router.delete("/work-orders/{work_order_id}", summary="删除工单")
+@router.delete("/work-orders/{work_order_id}", summary="Delete work order")
 async def delete_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -691,7 +691,7 @@ async def delete_work_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/split", response_model=WorkOrderSplitResponse, summary="拆分工单")
+@router.post("/work-orders/{work_order_id}/split", response_model=WorkOrderSplitResponse, summary="Split work order")
 async def split_work_order(
     work_order_id: int,
     split_data: WorkOrderSplitRequest,
@@ -715,7 +715,7 @@ async def split_work_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/freeze", response_model=WorkOrderResponse, summary="冻结工单")
+@router.post("/work-orders/{work_order_id}/freeze", response_model=WorkOrderResponse, summary="Freeze work order")
 async def freeze_work_order(
     work_order_id: int,
     freeze_data: WorkOrderFreezeRequest,
@@ -736,7 +736,7 @@ async def freeze_work_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/unfreeze", response_model=WorkOrderResponse, summary="解冻工单")
+@router.post("/work-orders/{work_order_id}/unfreeze", response_model=WorkOrderResponse, summary="Unfreeze work order")
 async def unfreeze_work_order(
     work_order_id: int,
     unfreeze_data: WorkOrderUnfreezeRequest,
@@ -757,7 +757,7 @@ async def unfreeze_work_order(
     )
 
 
-@router.put("/work-orders/{work_order_id}/priority", response_model=WorkOrderResponse, summary="设置工单优先级")
+@router.put("/work-orders/{work_order_id}/priority", response_model=WorkOrderResponse, summary="Set work order priority")
 async def set_work_order_priority(
     work_order_id: int,
     priority_data: WorkOrderPriorityRequest,
@@ -778,7 +778,7 @@ async def set_work_order_priority(
     )
 
 
-@router.put("/work-orders/batch-priority", response_model=List[WorkOrderResponse], summary="批量设置工单优先级")
+@router.put("/work-orders/batch-priority", response_model=List[WorkOrderResponse], summary="Batch set work order priority")
 async def batch_set_work_order_priority(
     batch_data: WorkOrderBatchPriorityRequest,
     current_user: User = Depends(get_current_user),
@@ -796,7 +796,7 @@ async def batch_set_work_order_priority(
     )
 
 
-@router.post("/work-orders/merge", response_model=WorkOrderMergeResponse, summary="合并工单")
+@router.post("/work-orders/merge", response_model=WorkOrderMergeResponse, summary="Merge work orders")
 async def merge_work_orders(
     merge_data: WorkOrderMergeRequest,
     current_user: User = Depends(get_current_user),
@@ -814,7 +814,7 @@ async def merge_work_orders(
     )
 
 
-@router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
+@router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="Create rework order from work order")
 async def create_rework_order_from_work_order(
     work_order_id: int,
     request_data: ReworkOrderFromWorkOrderRequest,
@@ -839,7 +839,7 @@ async def create_rework_order_from_work_order(
 
 # ============ 返工单管理 API ============
 
-@router.post("/rework-orders", response_model=ReworkOrderResponse, summary="创建返工单")
+@router.post("/rework-orders", response_model=ReworkOrderResponse, summary="Create rework order")
 async def create_rework_order(
     rework_order: ReworkOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -857,7 +857,7 @@ async def create_rework_order(
     )
 
 
-@router.get("/rework-orders", response_model=List[ReworkOrderListResponse], summary="获取返工单列表")
+@router.get("/rework-orders", response_model=List[ReworkOrderListResponse], summary="List rework orders")
 async def list_rework_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -886,7 +886,7 @@ async def list_rework_orders(
     )
 
 
-@router.get("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="获取返工单详情")
+@router.get("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="Get rework order")
 async def get_rework_order(
     rework_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -903,7 +903,7 @@ async def get_rework_order(
     )
 
 
-@router.put("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="更新返工单")
+@router.put("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="Update rework order")
 async def update_rework_order(
     rework_order_id: int,
     rework_order: ReworkOrderUpdate,
@@ -924,7 +924,7 @@ async def update_rework_order(
     )
 
 
-@router.delete("/rework-orders/{rework_order_id}", summary="删除返工单")
+@router.delete("/rework-orders/{rework_order_id}", summary="Delete rework order")
 async def delete_rework_order(
     rework_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -946,7 +946,7 @@ async def delete_rework_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="从工单创建工序委外")
+@router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="Create outsourced operation from work order")
 async def create_outsource_order_from_work_order(
     work_order_id: int,
     outsource_data: OutsourceOrderCreateFromWorkOrder,
@@ -977,7 +977,7 @@ async def create_outsource_order_from_work_order(
 
 # ============ 工序委外管理 API ============
 
-@router.post("/outsource-orders", response_model=OutsourceOrderResponse, summary="创建工序委外")
+@router.post("/outsource-orders", response_model=OutsourceOrderResponse, summary="Create outsourced operation")
 async def create_outsource_order(
     outsource_order: OutsourceOrderCreate,
     current_user: User = Depends(get_current_user),
@@ -995,7 +995,7 @@ async def create_outsource_order(
     )
 
 
-@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="获取工序委外列表")
+@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="List outsourced operations")
 async def list_outsource_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -1022,7 +1022,7 @@ async def list_outsource_orders(
     )
 
 
-@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="获取工序委外详情")
+@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="Get outsourced operation")
 async def get_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -1039,7 +1039,7 @@ async def get_outsource_order(
     )
 
 
-@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="更新工序委外")
+@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="Update outsourced operation")
 async def update_outsource_order(
     outsource_order_id: int,
     outsource_order: OutsourceOrderUpdate,
@@ -1060,7 +1060,7 @@ async def update_outsource_order(
     )
 
 
-@router.delete("/outsource-orders/{outsource_order_id}", summary="删除工序委外")
+@router.delete("/outsource-orders/{outsource_order_id}", summary="Delete outsourced operation")
 async def delete_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -1083,7 +1083,7 @@ async def delete_outsource_order(
     )
 
 
-@router.post("/outsource-orders/{outsource_order_id}/link-purchase-receipt", response_model=OutsourceOrderResponse, summary="关联采购入库单")
+@router.post("/outsource-orders/{outsource_order_id}/link-purchase-receipt", response_model=OutsourceOrderResponse, summary="Link purchase receipt")
 async def link_purchase_receipt_to_outsource_order(
     outsource_order_id: int,
     purchase_receipt_id: int = Query(..., description="采购入库单ID"),
@@ -1104,7 +1104,7 @@ async def link_purchase_receipt_to_outsource_order(
     )
 
 
-@router.get("/work-orders/{work_order_id}/check-shortage", response_model=MaterialShortageResponse, summary="检查工单缺料")
+@router.get("/work-orders/{work_order_id}/check-shortage", response_model=MaterialShortageResponse, summary="Check work order material shortage")
 async def check_work_order_shortage(
     work_order_id: int,
     warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
@@ -1130,7 +1130,7 @@ async def check_work_order_shortage(
 @router.get(
     "/work-orders/{work_order_id}/kitting-analysis",
     response_model=WorkOrderKittingAnalysisResponse,
-    summary="工单齐套性分析",
+    summary="Work order kitting analysis",
 )
 async def get_work_order_kitting_analysis(
     work_order_id: int,
@@ -1146,7 +1146,7 @@ async def get_work_order_kitting_analysis(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="下达工单")
+@router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="Release work order")
 async def release_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -1172,7 +1172,7 @@ async def release_work_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/revoke", response_model=WorkOrderResponse, summary="撤回工单")
+@router.post("/work-orders/{work_order_id}/revoke", response_model=WorkOrderResponse, summary="Withdraw work order")
 async def revoke_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -1195,7 +1195,7 @@ async def revoke_work_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/complete", response_model=WorkOrderResponse, summary="指定结束工单")
+@router.post("/work-orders/{work_order_id}/complete", response_model=WorkOrderResponse, summary="Force-close work order")
 async def manually_complete_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),

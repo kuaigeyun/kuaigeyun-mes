@@ -27,7 +27,7 @@ from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferWithItemsResponse,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 

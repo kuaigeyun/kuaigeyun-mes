@@ -9,52 +9,19 @@
 
     <meta name="theme-color" content="#141414" />
 
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; }
+      *, *::before, *::after { box-sizing: border-box; }
+      #root { min-height: 100%; }
+    </style>
+
     <!-- 入口脚本：构建后由 Vite 注入 hash -->
     <script type="module" src="./login.tsx"></script>
 </head>
 
 <body>
-    <div id="root" data-login-mpa="true">
-        <!--
-          首屏骨架：与登录页左右分栏一致，在 JS 执行前即呈现，避免长时间全白+转圈。
-          React 挂载后会替换 #root 子节点。
-        -->
-        <div class="login-fp" aria-busy="true" aria-label="登录页">
-            <div class="login-fp-left"></div>
-            <div class="login-fp-right">
-                <div class="login-fp-bar login-fp-bar--title"></div>
-                <div class="login-fp-bar login-fp-bar--input"></div>
-                <div class="login-fp-bar login-fp-bar--input"></div>
-                <div class="login-fp-bar login-fp-bar--btn"></div>
-            </div>
-        </div>
-    </div>
-    <style>
-      html,body{margin:0;padding:0;height:100%;box-sizing:border-box}
-      *{box-sizing:border-box}
-      .login-fp{
-        display:flex;min-height:100vh;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-      }
-      /* 与 pages/login 默认 themeColor（#1677ff）及 login-left 纯色背景一致，避免挂载时色相跳变 */
-      .login-fp-left{
-        flex:1;min-height:120px;background:#1677ff;
-      }
-      /* 与 .login-right 一致：整半幅白底、无 max-width，避免宽屏下骨架与真实布局切换时「闪一下」 */
-      .login-fp-right{
-        flex:1;display:flex;flex-direction:column;justify-content:center;
-        padding:40px;background:#fff;box-shadow:-12px 0 40px rgba(0,0,0,.06);
-      }
-      .login-fp-bar{border-radius:8px;background:rgba(0,0,0,.06);animation:login-fp-pulse 1.1s ease-in-out infinite}
-      .login-fp-bar--title{height:18px;width:38%;max-width:160px;margin-bottom:28px}
-      .login-fp-bar--input{height:42px;width:100%;margin-bottom:14px;border:1px solid rgba(0,0,0,.06)}
-      .login-fp-bar--btn{height:42px;width:100%;margin-top:8px;background:rgba(22,119,255,.25);border:none}
-      @keyframes login-fp-pulse{0%,100%{opacity:1}50%{opacity:.55}}
-      @media (max-width:768px){
-        .login-fp{flex-direction:column}
-        .login-fp-left{min-height:96px;flex:0 0 auto}
-        .login-fp-right{max-width:none;box-shadow:none;padding:28px 20px 40px}
-      }
-    </style>
+    <!-- 独立登录 MPA：无静态骨架，由 login.tsx 最小 bundle 尽快挂载 React -->
+    <div id="root" data-login-mpa="true"></div>
 </body>
 
 </html>

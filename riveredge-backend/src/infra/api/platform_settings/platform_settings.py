@@ -18,7 +18,7 @@ from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
 
 # 创建路由
-router = APIRouter(prefix="/platform-settings", tags=["Platform Settings"])
+router = APIRouter(prefix="/platform-settings", tags=["Platform · Settings"])
 
 
 @router.get("", response_model=PlatformSettingsResponse)

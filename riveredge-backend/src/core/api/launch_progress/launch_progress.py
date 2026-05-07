@@ -17,12 +17,12 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/launch-progress", tags=["Launch Progress"])
+router = APIRouter(prefix="/launch-progress", tags=["Core · Launch Progress"])
 
 launch_progress_service = LaunchProgressService()
 
 
-@router.get("/tracking", summary="获取上线进度跟踪")
+@router.get("/tracking", summary="Get go-live progress tracking")
 async def get_progress_tracking(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -51,7 +51,7 @@ async def get_progress_tracking(
         )
 
 
-@router.get("/report", summary="生成进度报告")
+@router.get("/report", summary="Generate progress report")
 async def generate_progress_report(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),

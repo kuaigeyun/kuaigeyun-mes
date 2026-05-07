@@ -25,7 +25,7 @@ from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/code-rules", tags=["Code Rules"])
+router = APIRouter(prefix="/code-rules", tags=["Core · Code Rules"])
 
 
 @router.post("", response_model=CodeRuleResponse, status_code=status.HTTP_201_CREATED)

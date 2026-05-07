@@ -22,7 +22,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
 # 创建路由
-router = APIRouter(prefix="/init", tags=["Init Wizard"])
+router = APIRouter(prefix="/init", tags=["Platform · Init Wizard"])
 
 
 def get_init_wizard_service() -> InitWizardService:

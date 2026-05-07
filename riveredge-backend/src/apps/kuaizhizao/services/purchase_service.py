@@ -15,7 +15,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.models.user import User as CurrentUser
 from loguru import logger
@@ -364,7 +364,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             operator_name = ""
             try:
-                from apps.base_service import AppBaseService
+                from apps.common.base_service import AppBaseService
                 operator_name = await AppBaseService().get_user_name(updated_by) or str(updated_by)
             except Exception:
                 operator_name = str(updated_by)
@@ -715,7 +715,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.models import PurchaseRequisition, PurchaseRequisitionItem
         from apps.kuaizhizao.models.state_transition import StateTransitionLog
         from apps.kuaizhizao.constants import DocumentStatus
-        from apps.base_service import AppBaseService
+        from apps.common.base_service import AppBaseService
         from datetime import datetime
 
         items = await PurchaseRequisitionItem.filter(

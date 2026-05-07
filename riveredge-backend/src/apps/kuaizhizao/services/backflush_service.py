@@ -18,7 +18,7 @@ from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.master_data.models.warehouse import Warehouse
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

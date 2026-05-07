@@ -111,6 +111,11 @@ const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
   kuaisemiconductor: 215,
 };
 
+const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
+  // 快财务当前聚焦管理会计，不包含总账
+  kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
+};
+
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other';
 
 const PRO_KNOWN_CODES = [
@@ -1702,14 +1707,18 @@ const ApplicationListPage: React.FC = () => {
 
               let filteredData = [...(allData || []), ...placeholders].map(app => {
                 const overriddenSortOrder = APP_SORT_ORDER_OVERRIDES[app.code as string];
+                const overriddenDescription = APP_DESCRIPTION_OVERRIDES[app.code as string];
                 const appWithSort = overriddenSortOrder !== undefined
                   ? { ...app, sort_order: overriddenSortOrder }
                   : app;
+                const appWithDisplay = overriddenDescription !== undefined
+                  ? { ...appWithSort, description: overriddenDescription }
+                  : appWithSort;
                 // 强制将快报表和 BI 识别为非授权 PRO 模式，与 AI 保持一致
-                if (['kuaireport', 'bi'].includes(appWithSort.code)) {
-                  return { ...appWithSort, is_pro: true, can_access: false };
+                if (['kuaireport', 'bi'].includes(appWithDisplay.code)) {
+                  return { ...appWithDisplay, is_pro: true, can_access: false };
                 }
-                return appWithSort;
+                return appWithDisplay;
               });
 
               // 前端筛选（因为后端可能不支持某些筛选）

@@ -26,7 +26,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
 )
 
 shipment_notice_service = ShipmentNoticeService()
-router = APIRouter(prefix="/shipment-notices", tags=["Kuaige Zhizao - Shipment Notice"])
+router = APIRouter(prefix="/shipment-notices", tags=["App · Kuaige Zhizao · Shipment Notice"])
 
 
 def _http_exception_with_trace(
@@ -54,7 +54,7 @@ def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, str(detail))
 
 
-@router.post("", response_model=ShipmentNoticeResponse, summary="创建发货通知单")
+@router.post("", response_model=ShipmentNoticeResponse, summary="Create shipment notice")
 async def create_shipment_notice(
     notice_data: ShipmentNoticeCreate,
     current_user: User = Depends(get_current_user),
@@ -77,7 +77,7 @@ async def create_shipment_notice(
         )
 
 
-@router.get("", response_model=List[ShipmentNoticeListResponse], summary="获取发货通知单列表")
+@router.get("", response_model=List[ShipmentNoticeListResponse], summary="List shipment notices")
 async def list_shipment_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -98,7 +98,7 @@ async def list_shipment_notices(
     )
 
 
-@router.get("/{notice_id}", response_model=ShipmentNoticeWithItemsResponse, summary="获取发货通知单详情")
+@router.get("/{notice_id}", response_model=ShipmentNoticeWithItemsResponse, summary="Get shipment notice")
 async def get_shipment_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -114,7 +114,7 @@ async def get_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/{notice_id}", response_model=ShipmentNoticeResponse, summary="更新发货通知单")
+@router.put("/{notice_id}", response_model=ShipmentNoticeResponse, summary="Update shipment notice")
 async def update_shipment_notice(
     notice_id: int = Path(..., description="通知单ID"),
     notice_data: ShipmentNoticeUpdate = ...,
@@ -135,7 +135,7 @@ async def update_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{notice_id}", summary="删除发货通知单")
+@router.delete("/{notice_id}", summary="Delete shipment notice")
 async def delete_shipment_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -154,7 +154,7 @@ async def delete_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{notice_id}/notify", response_model=ShipmentNoticeResponse, summary="通知仓库")
+@router.post("/{notice_id}/notify", response_model=ShipmentNoticeResponse, summary="Notify warehouse")
 async def notify_warehouse(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -173,7 +173,7 @@ async def notify_warehouse(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{notice_id}/withdraw", response_model=ShipmentNoticeResponse, summary="撤回通知")
+@router.post("/{notice_id}/withdraw", response_model=ShipmentNoticeResponse, summary="Withdraw notice")
 async def withdraw_shipment_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),

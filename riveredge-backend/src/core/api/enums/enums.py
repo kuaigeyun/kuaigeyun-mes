@@ -14,7 +14,7 @@ from apps.kuaizhizao.constants import (
     REVIEW_STATUS_ALIASES,
 )
 
-router = APIRouter(prefix="/enums", tags=["Enums"])
+router = APIRouter(prefix="/enums", tags=["Core · Enums"])
 
 # 单据状态展示配置（与后端常量一致，单一数据源）
 STATUS_DISPLAY: Dict[str, Dict[str, str]] = {
@@ -39,7 +39,7 @@ REVIEW_STATUS_DISPLAY: Dict[str, Dict[str, str]] = {
 }
 
 
-@router.get("/document-status", summary="获取单据状态枚举")
+@router.get("/document-status", summary="Get document status enums")
 async def get_document_status() -> Dict[str, Any]:
     """
     获取业务单据状态枚举及展示配置

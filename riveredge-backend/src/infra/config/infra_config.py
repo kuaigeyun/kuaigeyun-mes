@@ -38,6 +38,17 @@ class InfraSettings(BaseSettings):
     HOST: str = Field(default="127.0.0.1", description="服务器地址（Windows 使用 127.0.0.1，Linux/Mac 使用 0.0.0.0）")
     PORT: int = Field(default=8200, description="后端服务端口")
 
+    # API 文档（/redoc、/openapi.json、可选 /docs）HTTP Basic；二者均非空时才启用，留空则文档仍可匿名访问
+    DOCS_BASIC_AUTH_USER: str = Field(default="", description="ReDoc/OpenAPI 文档 Basic 用户名")
+    DOCS_BASIC_AUTH_PASSWORD: str = Field(default="", description="ReDoc/OpenAPI 文档 Basic 密码")
+
+    # ReDoc 性能：默认不拉 Google Fonts（国内常见阻塞）；JS 可改为内网/static 自托管以进一步加速
+    REDOC_USE_GOOGLE_FONTS: bool = Field(default=False, description="ReDoc 是否加载 Google Fonts")
+    REDOC_JS_URL: str = Field(
+        default="/static/redoc/redoc.standalone.js",
+        description="ReDoc standalone.js（同源路径默认 /static/redoc/...，文件位于 server/doc_assets/redoc；可改为 CDN URL）",
+    )
+
     # 数据库配置 (PostgreSQL)
     DB_HOST: str = Field(default="localhost", description="数据库主机")
     DB_PORT: int = Field(default=5432, description="数据库端口")
@@ -65,7 +76,7 @@ class InfraSettings(BaseSettings):
     FRONTEND_HOST: str = Field(default="127.0.0.1", description="前端服务主机地址")
     FRONTEND_PORT: int = Field(default=8100, description="前端服务端口")
     
-    # 历史字段名保留：兼容层 ``core.inngest.client`` 仍读取；实际异步任务由 Taskiq + PostgreSQL 处理，无需外部 Inngest 服务。
+    # 历史字段名保留：兼容层 ``core.workflows.client`` 仍读取；实际异步任务由 Taskiq + PostgreSQL 处理。
     INNGEST_HOST: str = Field(default="127.0.0.1", description="兼容配置：原 Inngest Dev 主机（可忽略；异步任务由 Taskiq 承担）")
     INNGEST_PORT: int = Field(default=8288, description="兼容配置：原 Inngest Dev 端口（可忽略）")
 
@@ -255,6 +266,13 @@ class InfraSettings(BaseSettings):
             str: JWT 密钥
         """
         return self.JWT_SECRET_KEY
+
+    @property
+    def docs_basic_auth_enabled(self) -> bool:
+        """是否对 /redoc、/openapi.json 等启用 Basic 认证。"""
+        u = (self.DOCS_BASIC_AUTH_USER or "").strip()
+        p = (self.DOCS_BASIC_AUTH_PASSWORD or "")
+        return bool(u and p)
 
 
 # 创建全局配置实例

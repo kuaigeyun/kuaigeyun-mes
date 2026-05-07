@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Any, Dict
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaireport.models.report import Report
 from apps.kuaireport.schemas.report import ReportCreate, ReportUpdate
 from apps.kuaireport.constants import ReportCategory

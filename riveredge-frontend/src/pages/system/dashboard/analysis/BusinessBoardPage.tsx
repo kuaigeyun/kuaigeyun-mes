@@ -18,6 +18,7 @@ import { businessBoardChartTheme } from './chartTheme';
 import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
 import { getFilePreview, uploadFile } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
+import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
 import {
   getSalesSummary,
   getPurchaseSummary,
@@ -916,30 +917,7 @@ const BusinessBoardPage: React.FC = () => {
   }, [timeRange]);
 
   const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || 'RiverEdge SaaS';
-  const siteLogoValue = (useConfigStore((state) => state.configs['site_logo']) as string) || '';
-  const [siteLogoUrl, setSiteLogoUrl] = useState('/img/logo.png');
-
-  /** 动态解析站点 LOGO URL (处理 UUID) */
-  useEffect(() => {
-    const loadSiteLogo = async () => {
-      if (!siteLogoValue) {
-        setSiteLogoUrl('/img/logo.png');
-        return;
-      }
-      const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-      if (isUUID(siteLogoValue)) {
-        try {
-          const previewInfo = await getFilePreview(siteLogoValue, { forAvatar: true });
-          setSiteLogoUrl(previewInfo.preview_url);
-        } catch {
-          setSiteLogoUrl('/img/logo.png');
-        }
-      } else {
-        setSiteLogoUrl(siteLogoValue);
-      }
-    };
-    loadSiteLogo();
-  }, [siteLogoValue]);
+  const siteLogoUrl = useSiteLogoUrl();
 
   const defaultBoardTitle = `${siteName}运营看板`;
   const displayBoardTitle = customBoardTitle || defaultBoardTitle;

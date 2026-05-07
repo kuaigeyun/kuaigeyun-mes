@@ -19,7 +19,7 @@ from apps.kuaizhizao.constants import (
     is_draft_status, is_pending_review_status, LEGACY_AUDITED_VALUES
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger

@@ -4,9 +4,9 @@ from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaireport.models.data_source import DataSource
 from apps.kuaireport.constants import DataSourceType
 
-router = APIRouter(prefix="/data-sources", tags=["KuanReport - Data Sources"])
+router = APIRouter(prefix="/data-sources", tags=["App · KuanReport · Data Sources"])
 
-@router.get("", summary="获取数据源列表")
+@router.get("", summary="List data sources")
 async def list_data_sources(
     current_user: dict = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
@@ -30,7 +30,7 @@ async def list_data_sources(
     records = await DataSource.filter(tenant_id=tenant_id).order_by("-is_default", "id").all()
     return {"data": records, "success": True}
 
-@router.post("", summary="创建数据源")
+@router.post("", summary="Create data source")
 async def create_data_source(
     data: dict,
     current_user: dict = Depends(get_current_user),
@@ -47,7 +47,7 @@ async def create_data_source(
     )
     return record
 
-@router.put("/{id}", summary="修改数据源")
+@router.put("/{id}", summary="Update data source")
 async def update_data_source(
     id: int,
     data: dict,
@@ -60,7 +60,7 @@ async def update_data_source(
     await DataSource.filter(tenant_id=tenant_id, id=id).update(**data)
     return await DataSource.get(tenant_id=tenant_id, id=id)
 
-@router.get("/{id}", summary="获取数据源详情")
+@router.get("/{id}", summary="Get data source")
 async def get_data_source(
     id: int,
     current_user: dict = Depends(get_current_user),
@@ -68,7 +68,7 @@ async def get_data_source(
 ):
     return await DataSource.get(tenant_id=tenant_id, id=id)
 
-@router.delete("/{id}", summary="删除数据源")
+@router.delete("/{id}", summary="Delete data source")
 async def delete_data_source(
     id: int,
     current_user: dict = Depends(get_current_user),
@@ -81,7 +81,7 @@ async def delete_data_source(
     await DataSource.filter(tenant_id=tenant_id, id=id).delete()
     return {"success": True}
 
-@router.post("/test-connection", summary="测试数据源连接")
+@router.post("/test-connection", summary="Test data source connection")
 async def test_connection(
     data: dict,
     current_user: dict = Depends(get_current_user),

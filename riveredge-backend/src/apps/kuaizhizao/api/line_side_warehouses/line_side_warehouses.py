@@ -22,13 +22,13 @@ from apps.kuaizhizao.schemas.line_side_warehouse import (
 from apps.master_data.models.warehouse import Warehouse
 from apps.kuaizhizao.services.backflush_service import BackflushService
 from core.api.deps import get_current_tenant, get_current_user_id
-router = APIRouter(prefix="/line-side-warehouse", tags=["线边仓管理"])
-backflush_router = APIRouter(prefix="/backflush-records", tags=["倒冲记录"])
+router = APIRouter(prefix="/line-side-warehouse", tags=["App · Kuaige Zhizao · Line-Side Warehouse"])
+backflush_router = APIRouter(prefix="/backflush-records", tags=["App · Kuaige Zhizao · Backflush Records"])
 
 
 @router.get(
     "/warehouses",
-    summary="获取线边仓列表",
+    summary="List line-side warehouses",
     description="获取所有类型为线边仓的仓库列表",
 )
 async def list_line_side_warehouses(
@@ -56,7 +56,7 @@ async def list_line_side_warehouses(
 
 @router.get(
     "/inventory",
-    summary="获取线边仓库存列表",
+    summary="List line-side inventory",
     description="按仓库、物料等条件查询线边仓库存",
 )
 async def list_line_side_inventory(
@@ -90,7 +90,7 @@ async def list_line_side_inventory(
 
 @backflush_router.get(
     "",
-    summary="获取倒冲记录列表",
+    summary="List backflush records",
     description="按工单、日期、物料等条件查询倒冲记录",
 )
 async def list_backflush_records(
@@ -124,7 +124,7 @@ async def list_backflush_records(
 
 @backflush_router.get(
     "/{record_id}",
-    summary="获取倒冲记录详情",
+    summary="Get backflush record",
 )
 async def get_backflush_record(
     record_id: int,
@@ -145,7 +145,7 @@ async def get_backflush_record(
 
 @backflush_router.post(
     "/{record_id}/retry",
-    summary="重试失败的倒冲",
+    summary="Retry failed backflush",
     description="对状态为 failed 的倒冲记录进行重试",
 )
 async def retry_backflush_record(

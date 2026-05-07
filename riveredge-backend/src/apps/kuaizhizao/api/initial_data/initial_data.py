@@ -27,7 +27,7 @@ from apps.kuaizhizao.schemas.initial_data import (
     WizardCountdownPatchRequest,
 )
 
-router = APIRouter(prefix="/initial-data", tags=["Initial Data Import"])
+router = APIRouter(prefix="/initial-data", tags=["App · Kuaige Zhizao · Initial Data Import"])
 
 # 初始化服务实例
 initial_data_service = InitialDataService()
@@ -35,7 +35,7 @@ launch_countdown_service = LaunchCountdownService()
 data_compensation_service = DataCompensationService()
 
 
-@router.post("/inventory/import", summary="导入期初库存")
+@router.post("/inventory/import", summary="Import opening inventory")
 async def import_initial_inventory(
     payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
@@ -88,7 +88,7 @@ async def import_initial_inventory(
         )
 
 
-@router.post("/wip/import", summary="导入期初在制品")
+@router.post("/wip/import", summary="Import opening WIP")
 async def import_initial_wip(
     payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
@@ -142,7 +142,7 @@ async def import_initial_wip(
         )
 
 
-@router.post("/receivables-payables/import", summary="导入期初应收应付")
+@router.post("/receivables-payables/import", summary="Import opening AR/AP")
 async def import_initial_receivables_payables(
     payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
@@ -201,7 +201,7 @@ async def import_initial_receivables_payables(
         )
 
 
-@router.post("/countdown", response_model=LaunchCountdownResponse, summary="创建或更新上线倒计时")
+@router.post("/countdown", response_model=LaunchCountdownResponse, summary="Create or update go-live countdown")
 async def create_or_update_countdown(
     data: LaunchCountdownCreate,
     current_user: User = Depends(get_current_user),
@@ -224,7 +224,7 @@ async def create_or_update_countdown(
         )
 
 
-@router.get("/countdown", response_model=Optional[LaunchCountdownResponse], summary="获取上线倒计时")
+@router.get("/countdown", response_model=Optional[LaunchCountdownResponse], summary="Get go-live countdown")
 async def get_countdown(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -236,7 +236,7 @@ async def get_countdown(
     return LaunchCountdownResponse.model_validate(countdown)
 
 
-@router.patch("/countdown/wizard", response_model=LaunchCountdownResponse, summary="更新期初向导快照与步骤")
+@router.patch("/countdown/wizard", response_model=LaunchCountdownResponse, summary="Update opening-data wizard snapshot and step")
 async def patch_countdown_wizard(
     payload: WizardCountdownPatchRequest,
     current_user: User = Depends(get_current_user),
@@ -278,7 +278,7 @@ async def patch_countdown_wizard(
         )
 
 
-@router.post("/countdown/complete", response_model=LaunchCountdownResponse, summary="完成上线倒计时")
+@router.post("/countdown/complete", response_model=LaunchCountdownResponse, summary="Complete go-live countdown")
 async def complete_countdown(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -307,7 +307,7 @@ async def complete_countdown(
         )
 
 
-@router.post("/compensation", response_model=DataCompensationResponse, summary="计算动态数据补偿")
+@router.post("/compensation", response_model=DataCompensationResponse, summary="Compute dynamic data compensation")
 async def calculate_compensation(
     data: DataCompensationRequest,
     current_user: User = Depends(get_current_user),

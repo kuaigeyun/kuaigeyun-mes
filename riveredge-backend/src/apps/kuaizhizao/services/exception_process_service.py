@@ -30,7 +30,7 @@ from apps.kuaizhizao.schemas.exception_process_record import (
     ExceptionProcessAssignRequest,
     ExceptionProcessResolveRequest,
 )
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError

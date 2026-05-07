@@ -32,7 +32,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PaymentRecordCreate, ReceiptRecordCreate,
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from core.services.logging.operation_log_service import OperationLogService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService

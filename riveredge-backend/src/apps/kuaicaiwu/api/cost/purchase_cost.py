@@ -24,7 +24,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/purchase-cost", tags=["Kuaicaiwu Purchase Cost"])
+router = APIRouter(prefix="/purchase-cost", tags=["App · Kuaicaiwu · Purchase Cost"])
 
 
 def _http_exception_with_trace(

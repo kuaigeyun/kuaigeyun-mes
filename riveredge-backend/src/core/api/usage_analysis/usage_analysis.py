@@ -18,12 +18,12 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/usage-analysis", tags=["Usage Analysis"])
+router = APIRouter(prefix="/usage-analysis", tags=["Core · Usage Analysis"])
 
 usage_analysis_service = UsageAnalysisService()
 
 
-@router.get("/function-usage", summary="分析功能使用情况")
+@router.get("/function-usage", summary="Analyze feature usage")
 async def analyze_function_usage(
     start_date: Optional[datetime] = Query(None, description="开始日期"),
     end_date: Optional[datetime] = Query(None, description="结束日期"),
@@ -60,7 +60,7 @@ async def analyze_function_usage(
         )
 
 
-@router.get("/data-quality", summary="分析数据质量")
+@router.get("/data-quality", summary="Analyze data quality")
 async def analyze_data_quality(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -89,7 +89,7 @@ async def analyze_data_quality(
         )
 
 
-@router.get("/performance", summary="分析系统性能")
+@router.get("/performance", summary="Analyze system performance")
 async def analyze_performance(
     start_date: Optional[datetime] = Query(None, description="开始日期"),
     end_date: Optional[datetime] = Query(None, description="结束日期"),
@@ -126,7 +126,7 @@ async def analyze_performance(
         )
 
 
-@router.get("/report", summary="生成使用情况分析报告")
+@router.get("/report", summary="Generate usage analysis report")
 async def generate_usage_report(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),

@@ -23,7 +23,7 @@ from core.services.business.material_variant_attribute_service import MaterialVa
 from core.api.deps.deps import get_current_tenant, get_current_user_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/variant-attributes", tags=["Variant Attributes"])
+router = APIRouter(prefix="/variant-attributes", tags=["Core · Variant Attributes"])
 
 
 # ==================== 预设 ====================
@@ -34,7 +34,7 @@ class LoadPresetRequest(BaseModel):
     attribute_names: Optional[List[str]] = Field(None, description="要创建的预设属性名称列表，不传则创建全部")
 
 
-@router.get("/preset-preview", summary="获取属性定义预设预览")
+@router.get("/preset-preview", summary="Preview variant-attribute preset definitions")
 async def get_preset_preview():
     """
     返回预设属性定义列表，用于预览与勾选后再确认创建。
@@ -42,7 +42,7 @@ async def get_preset_preview():
     return list(MaterialVariantAttributeService.PRESET_ATTRIBUTE_DEFINITIONS)
 
 
-@router.post("/load-preset", summary="加载属性定义预设")
+@router.post("/load-preset", summary="Load variant-attribute preset definitions")
 async def load_preset_attribute_definitions(
     body: Optional[LoadPresetRequest] = Body(None),
     tenant_id: int = Depends(get_current_tenant),

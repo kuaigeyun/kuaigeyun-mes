@@ -55,7 +55,7 @@ def model_to_response(model_obj, response_class, **extra_fields):
 
     return response
 
-router = APIRouter(prefix="/roles", tags=["Core Roles"])
+router = APIRouter(prefix="/roles", tags=["Core · Roles"])
 
 
 class LoadRolePresetRequest(BaseModel):

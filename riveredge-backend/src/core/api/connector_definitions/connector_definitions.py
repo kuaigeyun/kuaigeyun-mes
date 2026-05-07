@@ -16,7 +16,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/connector-definitions", tags=["ConnectorDefinitions"])
+router = APIRouter(prefix="/connector-definitions", tags=["Core · Connector Definitions"])
 
 # 预置应用连接器定义（与前端 connectors.tsx 保持一致，icon 为字符串供前端映射）
 PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [

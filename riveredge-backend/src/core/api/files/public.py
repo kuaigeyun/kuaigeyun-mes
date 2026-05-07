@@ -15,7 +15,7 @@ from infra.exceptions.exceptions import NotFoundError
 from loguru import logger
 
 # 创建路由（公开接口，不需要认证）
-router = APIRouter(prefix="/files", tags=["Files (Public)"])
+router = APIRouter(prefix="/files", tags=["Core · Files (Public)"])
 
 
 @router.get("/{uuid}/preview/public", response_model=FilePreviewResponse)

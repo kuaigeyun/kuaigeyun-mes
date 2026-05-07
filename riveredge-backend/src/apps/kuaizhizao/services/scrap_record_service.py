@@ -23,7 +23,7 @@ from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordUpdate
 )
 
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 

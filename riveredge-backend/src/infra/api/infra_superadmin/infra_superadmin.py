@@ -21,7 +21,7 @@ from infra.models.infra_superadmin import InfraSuperAdmin
 from typing import Any
 
 # 创建路由
-router = APIRouter(prefix="/admin", tags=["Infra Admin"])
+router = APIRouter(prefix="/admin", tags=["Platform · Admin"])
 
 
 @router.get("", response_model=InfraSuperAdminResponse)

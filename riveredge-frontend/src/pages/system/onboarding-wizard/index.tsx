@@ -12,8 +12,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert, theme, ConfigProvider, Row, Col, Menu, Popover, Progress, Modal, Table } from 'antd';
-import Lottie from 'lottie-react';
-import guideAnimation from '../../../../static/lottie/guide.json';
 import { getTenantId } from '../../../utils/auth';
 import {
   AlertCircle,

@@ -115,6 +115,31 @@ export const PAGE_SPACING = {
 } as const;
 
 /**
+ * 主内容区「自管留白」的推荐数值（px）：用于未走 UniTabs 水平 padding 的页面根、表单模板等。
+ * ⚠️ 路由级 `PageSkeleton` 不应再叠加本 inset：桌面端 `UniTabs` 已对子节点施加左右 16px（见 uni-tabs/index.tsx），
+ * 骨架外层若再 padding 16，肉眼会呈约 32px（双 16）并与真实页不一致。
+ */
+export const MAIN_CONTENT_VIEW_INSET_PX = {
+  top: PAGE_SPACING.CONTENT_TOP,
+  right: PAGE_SPACING.PADDING,
+  bottom: PAGE_SPACING.CONTENT_BOTTOM,
+  left: PAGE_SPACING.PADDING,
+} as const;
+
+/** 用于页面根容器等需自行承担四边留白的场景 */
+export function mainContentViewInsetStyle(base?: CSSProperties): CSSProperties {
+  const { top, right, bottom, left } = MAIN_CONTENT_VIEW_INSET_PX;
+  return {
+    boxSizing: 'border-box',
+    paddingTop: top,
+    paddingRight: right,
+    paddingBottom: bottom,
+    paddingLeft: left,
+    ...base,
+  };
+}
+
+/**
  * 两栏布局配置
  */
 export const TWO_COLUMN_LAYOUT = {

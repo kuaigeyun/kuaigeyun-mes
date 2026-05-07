@@ -27,8 +27,7 @@ from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingWithItemsResponse,
 )
 
-from apps.base_service import AppBaseService
-from apps.base_service import AppBaseService
+from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 

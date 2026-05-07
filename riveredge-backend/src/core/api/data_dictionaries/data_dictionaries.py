@@ -24,7 +24,7 @@ from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/data-dictionaries", tags=["Core Data Dictionaries"])
+router = APIRouter(prefix="/data-dictionaries", tags=["Core · Data Dictionaries"])
 
 
 @router.post("/initialize-system", status_code=status.HTTP_200_OK)

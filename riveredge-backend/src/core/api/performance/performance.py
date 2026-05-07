@@ -18,10 +18,10 @@ from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 
 # 创建路由
-router = APIRouter(prefix="/performance", tags=["Performance"])
+router = APIRouter(prefix="/performance", tags=["Core · Performance"])
 
 
-@router.get("/stats", summary="获取性能统计信息")
+@router.get("/stats", summary="Get performance statistics")
 async def get_performance_stats(
     limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
     current_user: User = Depends(get_current_user),
@@ -47,7 +47,7 @@ async def get_performance_stats(
         raise
 
 
-@router.get("/slow-apis", summary="获取慢API列表")
+@router.get("/slow-apis", summary="List slow APIs")
 async def get_slow_apis(
     limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
     current_user: User = Depends(get_current_user),
@@ -70,7 +70,7 @@ async def get_slow_apis(
         raise
 
 
-@router.post("/reset-stats", summary="重置性能统计")
+@router.post("/reset-stats", summary="Reset performance statistics")
 async def reset_performance_stats(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

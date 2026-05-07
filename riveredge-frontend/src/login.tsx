@@ -1,8 +1,9 @@
 /**
  * 登录页独立入口（MPA）
  *
- * 性能优化：为 /login 提供最小化 bundle，不加载主应用的 App、MainRoutes、AuthGuard 等
- * 登录成功后 window.location.href 跳转主应用，实现首屏快速加载
+ * 性能：为 /login 提供最小化 bundle，不加载主应用的 App、MainRoutes、AuthGuard 等；
+ * login.html 仅保留空 #root，无首屏静态骨架，由本入口尽快挂载 React。
+ * 登录成功后 window.location.href 跳转主应用。
  */
 
 import './pages/login/index.less';

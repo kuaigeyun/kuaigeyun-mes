@@ -26,10 +26,10 @@ from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
-router = APIRouter(prefix="/business-config", tags=["Business Config"])
+router = APIRouter(prefix="/business-config", tags=["Platform · Business Config"])
 
 
-@router.get("/schema", summary="获取业务配置 schema")
+@router.get("/schema", summary="Get business config schema")
 async def get_config_schema(
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -68,7 +68,7 @@ async def get_config_schema(
     }
 
 
-@router.get("", response_model=BusinessConfigResponse, summary="获取业务配置")
+@router.get("", response_model=BusinessConfigResponse, summary="Get business config")
 async def get_business_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -86,7 +86,7 @@ async def get_business_config(
         raise HTTPException(status_code=500, detail=f"获取业务配置失败: {str(e)}")
 
 
-@router.get("/audit-required", summary="批量获取单据审核开关")
+@router.get("/audit-required", summary="Batch get document approval switches")
 async def get_audit_required_map(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -103,7 +103,7 @@ async def get_audit_required_map(
         raise HTTPException(status_code=500, detail=f"获取审核开关失败: {str(e)}")
 
 
-@router.post("/parameters/update", summary="更新流程参数")
+@router.post("/parameters/update", summary="Update process parameter")
 async def update_process_parameter(
     request: ProcessParameterUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -126,7 +126,7 @@ async def update_process_parameter(
         raise HTTPException(status_code=500, detail=f"更新流程参数失败: {str(e)}")
 
 
-@router.post("/parameters/batch-update", summary="批量更新流程参数")
+@router.post("/parameters/batch-update", summary="Batch update process parameters")
 async def batch_update_process_parameters(
     request: BatchProcessParameterUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -147,7 +147,7 @@ async def batch_update_process_parameters(
         raise HTTPException(status_code=500, detail=f"批量更新流程参数失败: {str(e)}")
 
 
-@router.get("/pro-features/check", summary="检查 PRO 版功能访问权限")
+@router.get("/pro-features/check", summary="Check PRO feature access")
 async def check_pro_feature_access(
     feature_type: str,
     feature_code: str,
@@ -169,7 +169,7 @@ async def check_pro_feature_access(
         raise HTTPException(status_code=500, detail=f"检查 PRO 版功能访问权限失败: {str(e)}")
 
 
-@router.get("/pro-features/list", summary="获取 PRO 版功能列表")
+@router.get("/pro-features/list", summary="List PRO features")
 async def get_pro_features_list(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

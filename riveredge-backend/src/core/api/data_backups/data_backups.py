@@ -11,7 +11,7 @@ from infra.models.user import User
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
 from core.services.system.data_backup_service import DataBackupService
 
-router = APIRouter(prefix="/data-backups", tags=["Data Backups"])
+router = APIRouter(prefix="/data-backups", tags=["Core · Data Backups"])
 
 
 @router.get("", response_model=DataBackupListResponse)

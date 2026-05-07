@@ -17,7 +17,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 from loguru import logger
 
-router = APIRouter(tags=["Role Scenarios"])
+router = APIRouter(tags=["Core · Role Scenarios"])
 
 
 @router.get("/{role_id}/scenarios")

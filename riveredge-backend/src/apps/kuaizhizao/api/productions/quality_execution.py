@@ -46,7 +46,7 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 
 defect_record_service = DefectRecordService()
 
-router = APIRouter(tags=["Kuaige Zhizao - Quality Execution"])
+router = APIRouter(tags=["App · Kuaige Zhizao · Quality Execution"])
 
 
 def _http_exception_with_trace(
@@ -77,7 +77,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ============ 来料检验管理 API ============
 
-@router.post("/incoming-inspections", response_model=IncomingInspectionResponse, summary="创建来料检验单")
+@router.post("/incoming-inspections", response_model=IncomingInspectionResponse, summary="Create incoming inspection")
 async def create_incoming_inspection(
     inspection: IncomingInspectionCreate,
     current_user: User = Depends(get_current_user),
@@ -100,7 +100,7 @@ async def create_incoming_inspection(
     )
 
 
-@router.get("/incoming-inspections/statistics", summary="获取来料检验统计（用于指标卡片）")
+@router.get("/incoming-inspections/statistics", summary="Incoming inspection statistics (KPI cards)")
 async def get_incoming_inspection_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -144,7 +144,7 @@ async def get_incoming_inspection_statistics(
     }
 
 
-@router.get("/incoming-inspections", summary="获取来料检验单列表")
+@router.get("/incoming-inspections", summary="List incoming inspections")
 async def list_incoming_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -172,7 +172,7 @@ async def list_incoming_inspections(
     )
 
 
-@router.get("/incoming-inspections/{inspection_id}", response_model=IncomingInspectionResponse, summary="获取来料检验单详情")
+@router.get("/incoming-inspections/{inspection_id}", response_model=IncomingInspectionResponse, summary="Get incoming inspection")
 async def get_incoming_inspection(
     inspection_id: int,
     current_user: User = Depends(get_current_user),
@@ -190,7 +190,7 @@ async def get_incoming_inspection(
     )
 
 
-@router.post("/incoming-inspections/{inspection_id}/conduct", response_model=IncomingInspectionResponse, summary="执行来料检验")
+@router.post("/incoming-inspections/{inspection_id}/conduct", response_model=IncomingInspectionResponse, summary="Run incoming inspection")
 async def conduct_incoming_inspection(
     inspection_id: int,
     inspection_data: Dict[str, Any],
@@ -212,7 +212,7 @@ async def conduct_incoming_inspection(
     )
 
 
-@router.post("/incoming-inspections/{inspection_id}/approve", response_model=IncomingInspectionResponse, summary="审核来料检验单")
+@router.post("/incoming-inspections/{inspection_id}/approve", response_model=IncomingInspectionResponse, summary="Approve incoming inspection")
 async def approve_incoming_inspection(
     inspection_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -234,7 +234,7 @@ async def approve_incoming_inspection(
     )
 
 
-@router.post("/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}", response_model=List[IncomingInspectionResponse], summary="从采购入库单创建来料检验单")
+@router.post("/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}", response_model=List[IncomingInspectionResponse], summary="Create incoming inspection from purchase receipt")
 async def create_inspection_from_purchase_receipt(
     purchase_receipt_id: int = Path(..., description="采购入库单ID"),
     current_user: User = Depends(get_current_user),
@@ -254,7 +254,7 @@ async def create_inspection_from_purchase_receipt(
     )
 
 
-@router.post("/incoming-inspections/import", summary="批量导入来料检验单")
+@router.post("/incoming-inspections/import", summary="Batch import incoming inspections")
 async def import_incoming_inspections(
     request: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -274,7 +274,7 @@ async def import_incoming_inspections(
     return JSONResponse(content=result)
 
 
-@router.get("/incoming-inspections/export", response_class=FileResponse, summary="导出来料检验单")
+@router.get("/incoming-inspections/export", response_class=FileResponse, summary="Export incoming inspections")
 async def export_incoming_inspections(
     status: Optional[str] = Query(None, description="检验状态"),
     quality_status: Optional[str] = Query(None, description="质量状态"),
@@ -309,7 +309,7 @@ async def export_incoming_inspections(
         )
 
 
-@router.post("/incoming-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从来料检验单创建不合格品记录")
+@router.post("/incoming-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from incoming inspection")
 async def create_defect_from_incoming_inspection(
     inspection_id: int = Path(..., description="来料检验单ID"),
     defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
@@ -341,7 +341,7 @@ async def create_defect_from_incoming_inspection(
 
 # ============ 过程检验管理 API ============
 
-@router.post("/process-inspections", response_model=ProcessInspectionResponse, summary="创建过程检验单")
+@router.post("/process-inspections", response_model=ProcessInspectionResponse, summary="Create in-process inspection")
 async def create_process_inspection(
     inspection: ProcessInspectionCreate,
     current_user: User = Depends(get_current_user),
@@ -363,7 +363,7 @@ async def create_process_inspection(
     )
 
 
-@router.get("/process-inspections/statistics", summary="获取过程检验统计（用于指标卡片）")
+@router.get("/process-inspections/statistics", summary="In-process inspection statistics (KPI cards)")
 async def get_process_inspection_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -407,7 +407,7 @@ async def get_process_inspection_statistics(
     }
 
 
-@router.get("/process-inspections", response_model=List[ProcessInspectionListResponse], summary="获取过程检验单列表")
+@router.get("/process-inspections", response_model=List[ProcessInspectionListResponse], summary="List in-process inspections")
 async def list_process_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -434,7 +434,7 @@ async def list_process_inspections(
     )
 
 
-@router.get("/process-inspections/{inspection_id}", response_model=ProcessInspectionResponse, summary="获取过程检验单详情")
+@router.get("/process-inspections/{inspection_id}", response_model=ProcessInspectionResponse, summary="Get in-process inspection")
 async def get_process_inspection(
     inspection_id: int,
     current_user: User = Depends(get_current_user),
@@ -451,7 +451,7 @@ async def get_process_inspection(
     )
 
 
-@router.post("/process-inspections/{inspection_id}/approve", response_model=ProcessInspectionResponse, summary="审核工序检验单")
+@router.post("/process-inspections/{inspection_id}/approve", response_model=ProcessInspectionResponse, summary="Approve in-process inspection")
 async def approve_process_inspection(
     inspection_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -472,7 +472,7 @@ async def approve_process_inspection(
     )
 
 
-@router.post("/process-inspections/{inspection_id}/conduct", response_model=ProcessInspectionResponse, summary="执行过程检验")
+@router.post("/process-inspections/{inspection_id}/conduct", response_model=ProcessInspectionResponse, summary="Run in-process inspection")
 async def conduct_process_inspection(
     inspection_id: int,
     inspection_data: Dict[str, Any],
@@ -493,7 +493,7 @@ async def conduct_process_inspection(
     )
 
 
-@router.post("/process-inspections/from-work-order", response_model=ProcessInspectionResponse, summary="从工单和工序创建过程检验单")
+@router.post("/process-inspections/from-work-order", response_model=ProcessInspectionResponse, summary="Create in-process inspection from work order")
 async def create_process_inspection_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
     operation_id: int = Query(..., description="工序ID"),
@@ -514,7 +514,7 @@ async def create_process_inspection_from_work_order(
     )
 
 
-@router.post("/process-inspections/import", summary="批量导入过程检验单")
+@router.post("/process-inspections/import", summary="Batch import in-process inspections")
 async def import_process_inspections(
     request: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -530,7 +530,7 @@ async def import_process_inspections(
     return JSONResponse(content=result)
 
 
-@router.get("/process-inspections/export", response_class=FileResponse, summary="导出过程检验单")
+@router.get("/process-inspections/export", response_class=FileResponse, summary="Export in-process inspections")
 async def export_process_inspections(
     status: Optional[str] = Query(None, description="检验状态"),
     quality_status: Optional[str] = Query(None, description="质量状态"),
@@ -561,7 +561,7 @@ async def export_process_inspections(
         )
 
 
-@router.post("/process-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从过程检验单创建不合格品记录")
+@router.post("/process-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from in-process inspection")
 async def create_defect_from_process_inspection(
     inspection_id: int = Path(..., description="过程检验单ID"),
     defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
@@ -593,7 +593,7 @@ async def create_defect_from_process_inspection(
 
 # ============ 成品检验管理 API ============
 
-@router.post("/finished-goods-inspections", response_model=FinishedGoodsInspectionResponse, summary="创建成品检验单")
+@router.post("/finished-goods-inspections", response_model=FinishedGoodsInspectionResponse, summary="Create finished goods inspection")
 async def create_finished_goods_inspection(
     inspection: FinishedGoodsInspectionCreate,
     current_user: User = Depends(get_current_user),
@@ -616,7 +616,7 @@ async def create_finished_goods_inspection(
     )
 
 
-@router.get("/finished-goods-inspections/statistics", summary="获取成品检验统计（用于指标卡片）")
+@router.get("/finished-goods-inspections/statistics", summary="FG inspection statistics (KPI cards)")
 async def get_finished_goods_inspection_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -660,7 +660,7 @@ async def get_finished_goods_inspection_statistics(
     }
 
 
-@router.get("/finished-goods-inspections", response_model=List[FinishedGoodsInspectionListResponse], summary="获取成品检验单列表")
+@router.get("/finished-goods-inspections", response_model=List[FinishedGoodsInspectionListResponse], summary="List finished goods inspections")
 async def list_finished_goods_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -688,7 +688,7 @@ async def list_finished_goods_inspections(
     )
 
 
-@router.get("/finished-goods-inspections/{inspection_id}", response_model=FinishedGoodsInspectionResponse, summary="获取成品检验单详情")
+@router.get("/finished-goods-inspections/{inspection_id}", response_model=FinishedGoodsInspectionResponse, summary="Get finished goods inspection")
 async def get_finished_goods_inspection(
     inspection_id: int,
     current_user: User = Depends(get_current_user),
@@ -706,7 +706,7 @@ async def get_finished_goods_inspection(
     )
 
 
-@router.post("/finished-goods-inspections/{inspection_id}/approve", response_model=FinishedGoodsInspectionResponse, summary="审核成品检验单")
+@router.post("/finished-goods-inspections/{inspection_id}/approve", response_model=FinishedGoodsInspectionResponse, summary="Approve finished goods inspection")
 async def approve_finished_goods_inspection(
     inspection_id: int,
     rejection_reason: Optional[str] = Query(None, description="驳回原因"),
@@ -727,7 +727,7 @@ async def approve_finished_goods_inspection(
     )
 
 
-@router.post("/finished-goods-inspections/{inspection_id}/conduct", response_model=FinishedGoodsInspectionResponse, summary="执行成品检验")
+@router.post("/finished-goods-inspections/{inspection_id}/conduct", response_model=FinishedGoodsInspectionResponse, summary="Run finished goods inspection")
 async def conduct_finished_goods_inspection(
     inspection_id: int,
     inspection_data: Dict[str, Any],
@@ -749,7 +749,7 @@ async def conduct_finished_goods_inspection(
     )
 
 
-@router.post("/finished-goods-inspections/{inspection_id}/certificate", response_model=FinishedGoodsInspectionResponse, summary="出具放行证书")
+@router.post("/finished-goods-inspections/{inspection_id}/certificate", response_model=FinishedGoodsInspectionResponse, summary="Issue release certificate")
 async def issue_certificate(
     inspection_id: int,
     certificate_number: str = Query(..., description="证书编号"),
@@ -770,7 +770,7 @@ async def issue_certificate(
     )
 
 
-@router.post("/finished-goods-inspections/from-work-order", response_model=FinishedGoodsInspectionResponse, summary="从工单创建成品检验单")
+@router.post("/finished-goods-inspections/from-work-order", response_model=FinishedGoodsInspectionResponse, summary="Create finished goods inspection from work order")
 async def create_finished_goods_inspection_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
     current_user: User = Depends(get_current_user),
@@ -788,7 +788,7 @@ async def create_finished_goods_inspection_from_work_order(
     )
 
 
-@router.post("/finished-goods-inspections/import", summary="批量导入成品检验单")
+@router.post("/finished-goods-inspections/import", summary="Batch import finished goods inspections")
 async def import_finished_goods_inspections(
     request: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -804,7 +804,7 @@ async def import_finished_goods_inspections(
     return JSONResponse(content=result)
 
 
-@router.get("/finished-goods-inspections/export", response_class=FileResponse, summary="导出成品检验单")
+@router.get("/finished-goods-inspections/export", response_class=FileResponse, summary="Export finished goods inspections")
 async def export_finished_goods_inspections(
     status: Optional[str] = Query(None, description="检验状态"),
     quality_status: Optional[str] = Query(None, description="质量状态"),
@@ -833,7 +833,7 @@ async def export_finished_goods_inspections(
         )
 
 
-@router.post("/finished-goods-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从成品检验单创建不合格品记录")
+@router.post("/finished-goods-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from FG inspection")
 async def create_defect_from_finished_goods_inspection(
     inspection_id: int = Path(..., description="成品检验单ID"),
     defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
@@ -869,7 +869,7 @@ async def create_defect_from_finished_goods_inspection(
 @router.get(
     "/quality-inspection-stage-toggles",
     response_model=QualityInspectionStageTogglesResponse,
-    summary="获取组织质检环节总开关",
+    summary="Org QC stage master switch",
 )
 async def api_get_quality_inspection_stage_toggles(
     current_user: User = Depends(get_current_user),
@@ -883,7 +883,7 @@ async def api_get_quality_inspection_stage_toggles(
 @router.put(
     "/quality-inspection-stage-toggles",
     response_model=QualityInspectionStageTogglesResponse,
-    summary="更新组织质检环节总开关",
+    summary="Update org QC stage master switch",
 )
 async def api_put_quality_inspection_stage_toggles(
     body: QualityInspectionStageTogglesUpdate,

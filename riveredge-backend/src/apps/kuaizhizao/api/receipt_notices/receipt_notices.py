@@ -26,7 +26,7 @@ from apps.kuaizhizao.schemas.receipt_notice import (
 )
 
 receipt_notice_service = ReceiptNoticeService()
-router = APIRouter(prefix="/receipt-notices", tags=["Kuaige Zhizao - Receipt Notice"])
+router = APIRouter(prefix="/receipt-notices", tags=["App · Kuaige Zhizao · Receipt Notice"])
 
 
 def _http_exception_with_trace(
@@ -54,7 +54,7 @@ def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, str(detail))
 
 
-@router.post("", response_model=ReceiptNoticeResponse, summary="创建收货通知单")
+@router.post("", response_model=ReceiptNoticeResponse, summary="Create receipt notice")
 async def create_receipt_notice(
     notice_data: ReceiptNoticeCreate,
     current_user: User = Depends(get_current_user),
@@ -77,7 +77,7 @@ async def create_receipt_notice(
         )
 
 
-@router.get("", response_model=List[ReceiptNoticeListResponse], summary="获取收货通知单列表")
+@router.get("", response_model=List[ReceiptNoticeListResponse], summary="List receipt notices")
 async def list_receipt_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -99,7 +99,7 @@ async def list_receipt_notices(
 
 
 # 固定子路径需注册在 /{notice_id} 之前，避免个别 ASGI/匹配顺序下误配
-@router.post("/{notice_id}/notify", response_model=ReceiptNoticeResponse, summary="通知仓库")
+@router.post("/{notice_id}/notify", response_model=ReceiptNoticeResponse, summary="Notify warehouse")
 async def notify_warehouse(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -120,7 +120,7 @@ async def notify_warehouse(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{notice_id}/withdraw", response_model=ReceiptNoticeResponse, summary="撤回通知")
+@router.post("/{notice_id}/withdraw", response_model=ReceiptNoticeResponse, summary="Withdraw notice")
 async def withdraw_receipt_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -139,7 +139,7 @@ async def withdraw_receipt_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{notice_id}", response_model=ReceiptNoticeWithItemsResponse, summary="获取收货通知单详情")
+@router.get("/{notice_id}", response_model=ReceiptNoticeWithItemsResponse, summary="Get receipt notice")
 async def get_receipt_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
@@ -155,7 +155,7 @@ async def get_receipt_notice(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/{notice_id}", response_model=ReceiptNoticeResponse, summary="更新收货通知单")
+@router.put("/{notice_id}", response_model=ReceiptNoticeResponse, summary="Update receipt notice")
 async def update_receipt_notice(
     notice_id: int = Path(..., description="通知单ID"),
     notice_data: ReceiptNoticeUpdate = ...,
@@ -176,7 +176,7 @@ async def update_receipt_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{notice_id}", summary="删除收货通知单")
+@router.delete("/{notice_id}", summary="Delete receipt notice")
 async def delete_receipt_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),

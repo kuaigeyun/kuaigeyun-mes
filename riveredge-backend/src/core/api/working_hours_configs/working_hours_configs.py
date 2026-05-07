@@ -23,12 +23,12 @@ from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/working-hours-configs", tags=["Core Working Hours"])
+router = APIRouter(prefix="/working-hours-configs", tags=["Core · Working Hours"])
 
 working_hours_config_service = WorkingHoursConfigService()
 
 
-@router.post("", response_model=WorkingHoursConfigResponse, status_code=status.HTTP_201_CREATED, summary="创建工作时间段配置")
+@router.post("", response_model=WorkingHoursConfigResponse, status_code=status.HTTP_201_CREATED, summary="Create working-hours config")
 async def create_working_hours_config(
     data: WorkingHoursConfigCreate,
     tenant_id: int = Depends(get_current_tenant),
@@ -53,7 +53,7 @@ async def create_working_hours_config(
         )
 
 
-@router.get("", response_model=List[WorkingHoursConfigListResponse], summary="获取工作时间段配置列表")
+@router.get("", response_model=List[WorkingHoursConfigListResponse], summary="List working-hours configs")
 async def list_working_hours_configs(
     scope_type: Optional[str] = Query(None, description="适用范围类型"),
     scope_id: Optional[int] = Query(None, description="适用范围ID"),
@@ -77,7 +77,7 @@ async def list_working_hours_configs(
     )
 
 
-@router.get("/{config_id}", response_model=WorkingHoursConfigResponse, summary="获取工作时间段配置详情")
+@router.get("/{config_id}", response_model=WorkingHoursConfigResponse, summary="Get working-hours config")
 async def get_working_hours_config(
     config_id: int = Path(..., description="配置ID"),
     tenant_id: int = Depends(get_current_tenant),
@@ -93,7 +93,7 @@ async def get_working_hours_config(
     return WorkingHoursConfigResponse.model_validate(config)
 
 
-@router.put("/{config_id}", response_model=WorkingHoursConfigResponse, summary="更新工作时间段配置")
+@router.put("/{config_id}", response_model=WorkingHoursConfigResponse, summary="Update working-hours config")
 async def update_working_hours_config(
     config_id: int = Path(..., description="配置ID"),
     data: WorkingHoursConfigUpdate = ...,
@@ -123,7 +123,7 @@ async def update_working_hours_config(
         )
 
 
-@router.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除工作时间段配置")
+@router.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete working-hours config")
 async def delete_working_hours_config(
     config_id: int = Path(..., description="配置ID"),
     tenant_id: int = Depends(get_current_tenant),
@@ -139,7 +139,7 @@ async def delete_working_hours_config(
     await working_hours_config_service.delete(config_id)
 
 
-@router.post("/calculate", summary="计算工作时间")
+@router.post("/calculate", summary="Calculate working hours")
 async def calculate_working_hours(
     start_time: datetime = Query(..., description="开始时间"),
     end_time: datetime = Query(..., description="结束时间"),

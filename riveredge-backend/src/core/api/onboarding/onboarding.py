@@ -17,7 +17,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 from loguru import logger
 
-router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
+router = APIRouter(prefix="/onboarding", tags=["Core · Onboarding"])
 
 
 @router.get("/roles/{role_id}/guide")

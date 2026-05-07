@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/operation-guide", tags=["Operation Guide"])
+router = APIRouter(prefix="/operation-guide", tags=["Core · Operation Guide"])
 
 
 class OperationGuideStep(BaseModel):
@@ -36,7 +36,7 @@ class OperationGuideCreate(BaseModel):
     steps: List[OperationGuideStep] = Field(..., description="引导步骤列表")
 
 
-@router.get("/{page_key}", summary="获取操作引导")
+@router.get("/{page_key}", summary="Get operation guide for page")
 async def get_operation_guide(
     page_key: str,
     current_user: User = Depends(soil_get_current_user),
@@ -70,7 +70,7 @@ async def get_operation_guide(
         )
 
 
-@router.get("", summary="列出所有操作引导")
+@router.get("", summary="List operation guides")
 async def list_operation_guides(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -99,7 +99,7 @@ async def list_operation_guides(
         )
 
 
-@router.post("", summary="创建或更新操作引导")
+@router.post("", summary="Create or update operation guide")
 async def create_or_update_operation_guide(
     request: OperationGuideCreate,
     current_user: User = Depends(soil_get_current_user),

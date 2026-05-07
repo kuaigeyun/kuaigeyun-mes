@@ -16,12 +16,12 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/optimization-suggestion", tags=["Optimization Suggestion"])
+router = APIRouter(prefix="/optimization-suggestion", tags=["Core · Optimization Suggestion"])
 
 optimization_suggestion_service = OptimizationSuggestionService()
 
 
-@router.get("/suggestions", summary="获取优化建议")
+@router.get("/suggestions", summary="List optimization suggestions")
 async def get_suggestions(
     category: Optional[str] = Query(None, description="分类（可选：function_optimization/data_optimization/performance_optimization）"),
     priority: Optional[str] = Query(None, description="优先级（可选：high/medium/low）"),
@@ -73,7 +73,7 @@ async def get_suggestions(
         )
 
 
-@router.get("/suggestions/by-category", summary="按分类获取优化建议")
+@router.get("/suggestions/by-category", summary="List suggestions by category")
 async def get_suggestions_by_category(
     category: Optional[str] = Query(None, description="分类"),
     current_user: User = Depends(soil_get_current_user),
@@ -107,7 +107,7 @@ async def get_suggestions_by_category(
         )
 
 
-@router.get("/suggestions/by-priority", summary="按优先级获取优化建议")
+@router.get("/suggestions/by-priority", summary="List suggestions by priority")
 async def get_suggestions_by_priority(
     priority: Optional[str] = Query(None, description="优先级"),
     current_user: User = Depends(soil_get_current_user),

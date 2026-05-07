@@ -39,9 +39,9 @@ from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.models.payment import Payment
 from apps.kuaicaiwu.models.settlement import SettlementRecord
-from apps.kuaicaiwu.finance_source_types import (
-    RECEIVABLE_SOURCE_SALES_INVOICE,
+from apps.kuaicaiwu.constants import (
     PAYABLE_SOURCE_PURCHASE_INVOICE,
+    RECEIVABLE_SOURCE_SALES_INVOICE,
 )
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection

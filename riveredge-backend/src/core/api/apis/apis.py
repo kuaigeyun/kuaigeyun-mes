@@ -21,7 +21,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/apis", tags=["APIs"])
+router = APIRouter(prefix="/apis", tags=["Core · APIs"])
 
 
 def model_to_response(model_obj, response_class, **extra_fields):

@@ -22,10 +22,10 @@ from apps.kuaizhizao.services.report_service import ReportService
 report_service = ReportService()
 
 # 创建路由
-router = APIRouter(prefix="/reports", tags=["报表"])
+router = APIRouter(prefix="/reports", tags=["App · Kuaige Zhizao · Reports"])
 
 
-@router.get("/inventory/statistics", summary="获取库存统计（用于指标卡片）")
+@router.get("/inventory/statistics", summary="Inventory statistics (KPI cards)")
 async def get_inventory_statistics(
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     current_user: User = Depends(get_current_user),
@@ -79,7 +79,7 @@ async def get_inventory_statistics(
     }
 
 
-@router.get("/inventory", summary="获取库存报表")
+@router.get("/inventory", summary="Inventory report")
 async def get_inventory_report(
     report_type: str = Query("summary", description="报表类型（summary/turnover/abc/slow_moving）"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -126,7 +126,7 @@ async def get_inventory_report(
     )
 
 
-@router.get("/inventory/batch-query", summary="批次库存查询")
+@router.get("/inventory/batch-query", summary="Batch inventory query")
 async def query_batch_inventory(
     material_id: Optional[int] = Query(None, description="物料ID（与 material_ids 二选一）"),
     material_ids: Optional[List[int]] = Query(None, description="物料ID列表（批量查询，与 material_id 二选一）"),
@@ -174,7 +174,7 @@ async def query_batch_inventory(
     )
 
 
-@router.get("/inventory/material-balances", summary="即时库存列表（按物料/仓汇总）")
+@router.get("/inventory/material-balances", summary="On-hand inventory by material/warehouse")
 async def get_inventory_material_balances(
     material_id: Optional[int] = Query(None, description="物料ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
@@ -198,7 +198,7 @@ async def get_inventory_material_balances(
     )
 
 
-@router.get("/inventory/material-balances/summary", summary="即时库存统计（KPI+分组）")
+@router.get("/inventory/material-balances/summary", summary="On-hand inventory KPI summary")
 async def get_inventory_material_balances_summary(
     material_id: Optional[int] = Query(None, description="物料ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
@@ -220,7 +220,7 @@ async def get_inventory_material_balances_summary(
     )
 
 
-@router.get("/inventory/batch-lines", summary="批次库存列表（按批次明细）")
+@router.get("/inventory/batch-lines", summary="Batch stock lines")
 async def get_inventory_batch_lines(
     material_id: Optional[int] = Query(None, description="物料ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
@@ -250,7 +250,7 @@ async def get_inventory_batch_lines(
     )
 
 
-@router.get("/inventory/batch-lines/summary", summary="批次库存统计（KPI+分组）")
+@router.get("/inventory/batch-lines/summary", summary="Batch stock KPI summary")
 async def get_inventory_batch_lines_summary(
     material_id: Optional[int] = Query(None, description="物料ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
@@ -278,7 +278,7 @@ async def get_inventory_batch_lines_summary(
     )
 
 
-@router.get("/sales", summary="获取销售报表")
+@router.get("/sales", summary="Sales report")
 async def get_sales_report(
     report_type: str = Query("summary", description="报表类型（summary/execution/customer_summary/product_ranking/forecast_actual）"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -331,7 +331,7 @@ async def get_sales_report(
         customer_keyword=customer_keyword,
     )
     
-@router.get("/plans", summary="获取计划报表")
+@router.get("/plans", summary="Planning report")
 async def get_plan_report(
     report_type: str = Query("fulfillment", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -358,7 +358,7 @@ async def get_plan_report(
         date_end=date_end_dt,
     )
 
-@router.get("/purchases", summary="获取采购报表")
+@router.get("/purchases", summary="Purchase report")
 async def get_purchase_report(
     report_type: str = Query("requisition_tracking", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -385,7 +385,7 @@ async def get_purchase_report(
         date_end=date_end_dt,
     )
 
-@router.get("/quality", summary="获取质量报表")
+@router.get("/quality", summary="Quality report")
 async def get_quality_report(
     report_type: str = Query("analysis", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -412,7 +412,7 @@ async def get_quality_report(
         date_end=date_end_dt,
     )
 
-@router.get("/equipment", summary="获取设备报表")
+@router.get("/equipment", summary="Equipment report")
 async def get_equipment_report(
     report_type: str = Query("maintenance", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -439,7 +439,7 @@ async def get_equipment_report(
         date_end=date_end_dt,
     )
 
-@router.get("/warehouse", summary="获取仓库相关报表")
+@router.get("/warehouse", summary="Warehouse reports")
 async def get_warehouse_report(
     report_type: str = Query("inbound_summary", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -466,7 +466,7 @@ async def get_warehouse_report(
         date_end=date_end_dt,
     )
 
-@router.get("/performance", summary="获取绩效报表")
+@router.get("/performance", summary="Performance report")
 async def get_performance_report(
     report_type: str = Query("efficiency_ranking", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),

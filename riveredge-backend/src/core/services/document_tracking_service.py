@@ -723,7 +723,7 @@ class DocumentTrackingService:
                 }
                 if created_by:
                     try:
-                        from apps.base_service import AppBaseService
+                        from apps.common.base_service import AppBaseService
                         meta["creator_name"] = await AppBaseService().get_user_name(created_by)
                     except Exception:
                         meta["creator_name"] = str(created_by)
