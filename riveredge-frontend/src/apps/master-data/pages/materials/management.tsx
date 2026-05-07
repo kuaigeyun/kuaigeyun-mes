@@ -1540,6 +1540,25 @@ const MaterialsManagementPage: React.FC = () => {
 
   return (
     <>
+      {/* #region agent log */}
+      <div
+        style={{
+          position: 'fixed',
+          right: 8,
+          bottom: 8,
+          zIndex: 2147483647,
+          fontSize: 10,
+          lineHeight: '14px',
+          padding: '2px 6px',
+          borderRadius: 4,
+          background: 'rgba(255,77,79,0.9)',
+          color: '#fff',
+          pointerEvents: 'none',
+        }}
+      >
+        MGDBG-4d2004
+      </div>
+      {/* #endregion */}
       <TwoColumnLayout
         leftPanel={{
           collapsed: leftPanelCollapsed,
