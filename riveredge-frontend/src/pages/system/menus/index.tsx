@@ -517,7 +517,7 @@ const MenuListPage: React.FC = () => {
     {
         title: t('common.actions'),
         valueType: 'option',
-        width: 360,
+        minWidth: 120,
         fixed: 'right',
         render: (_: any, record: Menu) => {
             const isAppMenu = !!record.application_uuid;
@@ -579,7 +579,7 @@ const MenuListPage: React.FC = () => {
   return (
     <ListPageTemplate>
         <UniTable<Menu>
-            columnPersistenceId="pages.system.menus"
+            columnPersistenceId="pages.system.menus.v2"
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"

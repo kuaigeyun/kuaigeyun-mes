@@ -53,20 +53,6 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const restoreBodyInteraction = React.useCallback(() => {
-    // Ant Image 预览关闭后可能遗留 pointer-events: none 样式导致页面无法点击
-    if (typeof document === 'undefined') return;
-    
-    // 强制恢复样式，不论 DOM 是否还存在预览容器
-    document.body.style.pointerEvents = 'auto';
-    document.body.style.overflow = 'auto';
-    // 移除 Ant 可能添加的全局类名
-    document.body.classList.remove('ant-scrolling-effect');
-    // 兜底清空 inline style
-    document.body.style.removeProperty('pointer-events');
-    document.body.style.removeProperty('overflow');
-  }, []);
-
   // 1. 延迟加载：仅当组件进入可视区域时才触发 API 请求鉴权 URL
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -118,48 +104,16 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     };
   }, [fileUuid, forAvatar, isVisible, initialSrc]);
 
-  useEffect(() => {
-    return () => {
-      restoreBodyInteraction();
-    };
-  }, [restoreBodyInteraction]);
-
   const previewConfig = React.useMemo(() => {
     if (!preview) return false;
-    const base = typeof preview === 'object' ? { ...preview } : {};
+    if (preview === true) {
+      return { src: src || undefined };
+    }
     return {
-      ...base,
-      src: src || undefined,
-      onVisibleChange: (visible: boolean) => {
-        if (!visible) {
-          // 动画结束后强制恢复交互，分多个延时周期循环清理，直到确认 body 样式恢复
-          // 这是由于 Ant Design 5 内部清理有时会被 React 并发渲染打断或产生竞争
-          let count = 0;
-          const interval = setInterval(() => {
-            restoreBodyInteraction();
-            count++;
-            if (count > 5) clearInterval(interval);
-          }, 200);
-        }
-      },
+      ...preview,
+      src: preview.src || src || undefined,
     };
-  }, [preview, src, restoreBodyInteraction]);
-
-  // 全局逃生口：在 window 层侦测 mousedown，如果有任何卡死迹象，强制恢复
-  useEffect(() => {
-    const handleGlobalRecovery = () => {
-      if (typeof document !== 'undefined' && 
-          document.body.style.pointerEvents === 'none') {
-        restoreBodyInteraction();
-      }
-    };
-    window.addEventListener('mousedown', handleGlobalRecovery, { capture: true });
-    window.addEventListener('touchstart', handleGlobalRecovery, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener('mousedown', handleGlobalRecovery, { capture: true });
-      window.removeEventListener('touchstart', handleGlobalRecovery, { capture: true });
-    };
-  }, [restoreBodyInteraction]);
+  }, [preview, src]);
 
   const placeholder = (
     <div

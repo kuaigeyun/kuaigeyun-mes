@@ -19,6 +19,10 @@ import '@univerjs/presets/lib/styles/preset-sheets-core.css';
 import { createUniver, defaultTheme, LocaleType, merge } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/presets/preset-sheets-core';
 import UniverPresetSheetsCoreZhCN from '@univerjs/presets/preset-sheets-core/locales/zh-CN';
+import {
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
+} from '../layout-templates/constants';
 
 /**
  * Univer Import 导入弹窗组件属性
@@ -883,7 +887,9 @@ export const UniImport: React.FC<UniImportProps> = ({
         styles={{
           body: {
             padding: '16px',
-            height: isFullscreen ? 'calc(100vh - 130px)' : `${height}px`,
+            height: isFullscreen
+              ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_BODY_PX)
+              : `${height}px`,
             overflow: 'hidden',
           },
         }}
@@ -893,7 +899,9 @@ export const UniImport: React.FC<UniImportProps> = ({
           style={{
             width: '100%',
             height: '100%',
-            minHeight: isFullscreen ? 'calc(100vh - 162px)' : `${height - 32}px`,
+            minHeight: isFullscreen
+              ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_CONTAINER_PX)
+              : `${height - 32}px`,
             border: `1px solid ${token.colorBorder}`,
           }}
         />

@@ -12,6 +12,7 @@ import {
   parsePrintTemplateDesignImport,
   type PrintTemplateDesignPortableV1,
 } from '../../../../utils/printTemplateDesignPortable';
+import { SYSTEM_VIEWPORT_OFFSETS, getViewportHeightExpr } from '../../../../components/layout-templates/constants';
 
 import {
   DndContext, 
@@ -338,16 +339,17 @@ function resolveDetailTableStyle(ts?: DetailTableStyle): Required<DetailTableSty
 
 const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { content, style, tag = 'div' } = block;
   const Tag = tag as any;
   return (
     <div
       style={{
         padding: 10,
-        border: selected ? '1px solid #1677ff' : '1px dashed #d9d9d9',
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
         borderRadius: 6,
         marginBottom: 0,
-        background: '#fff',
+        background: token.colorBgContainer,
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
         color: style?.color || 'inherit',
         letterSpacing: style?.letterSpacing || 'normal',
@@ -373,19 +375,20 @@ const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; select
 
 const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { key: fieldKey, label, style, showLabel = true } = block;
   return (
     <div
       style={{
         padding: 10,
-        border: selected ? '1px solid #1677ff' : '1px solid #91caff',
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorPrimaryBorder}`,
         borderRadius: 6,
         marginBottom: 0,
-        background: '#e6f4ff',
+        background: token.colorPrimaryBg,
         fontSize: normalizeFontSize(style?.fontSize) || 'inherit',
         fontWeight: style?.fontWeight || 'bold',
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
-        color: style?.color || '#1677ff',
+        color: style?.color || token.colorPrimary,
         letterSpacing: style?.letterSpacing || 'normal',
         position: 'relative'
       }}
@@ -395,7 +398,7 @@ const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; sele
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontWeight: 600 }}>{label || fieldKey}</div>
           {!showLabel && (
-            <div style={{ fontSize: 9, background: '#bae7ff', color: '#0050b3', padding: '1px 4px', borderRadius: 4 }}>{t('pages.system.printTemplatesDesign.valueOnly')}</div>
+            <div style={{ fontSize: 9, background: token.colorPrimaryBgHover, color: token.colorPrimary, padding: '1px 4px', borderRadius: 4 }}>{t('pages.system.printTemplatesDesign.valueOnly')}</div>
           )}
         </div>
         <div style={{ fontFamily: 'monospace', opacity: 0.8 }}>
@@ -426,30 +429,32 @@ const DividerBlock: React.FC<{ selected?: boolean; onSelect?: () => void }> = ({
 
 
 const BarcodeBlock: React.FC<{ block: DesignerNodeSchema & { type: 'barcode' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { token } = theme.useToken();
   return (
     <div
       style={{
         padding: 10,
-        border: selected ? '1px solid #1677ff' : '1px dashed #d9d9d9',
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
         borderRadius: 6,
         marginBottom: 0,
-        background: '#fff',
+        background: token.colorBgContainer,
         textAlign: (block.style?.textAlign as React.CSSProperties['textAlign']) || 'center',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
-      <div style={{ display: 'inline-block', padding: 8, border: '1px solid #f0f0f0' }}>
-        <div style={{ height: block.height || 40, width: 150, background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ccc' }}>
+      <div style={{ display: 'inline-block', padding: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+        <div style={{ height: block.height || 40, width: 150, background: token.colorFillTertiary, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${token.colorBorder}` }}>
           <DashOutlined style={{ fontSize: 24, opacity: 0.5 }} />
           <span style={{ fontSize: 10, marginLeft: 4 }}>Barcode Preview</span>
         </div>
-        <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 4 }}>{block.format}: {block.key}</div>
+        <div style={{ fontSize: 10, color: token.colorTextSecondary, marginTop: 4 }}>{block.format}: {block.key}</div>
       </div>
     </div>
   );
 };
 
 const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { token } = theme.useToken();
   // Placeholders like {{ logo }} / {{ company_logo }} will be replaced by the backend with the site logo;
   // In the designer, we use the current site logo URL for a WYSIWYG experience.
   const siteLogoUrl = useSiteLogoUrl();
@@ -459,10 +464,10 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
     <div
       style={{
         padding: 10,
-        border: selected ? '1px solid #1677ff' : '1px dashed #d9d9d9',
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
         borderRadius: 6,
         marginBottom: 0,
-        background: '#fff',
+        background: token.colorBgContainer,
         textAlign: (block.style?.textAlign as React.CSSProperties['textAlign']) || 'left',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
@@ -479,7 +484,7 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
             }} 
           />
         ) : (
-          <div style={{ width: block.width || 100, height: block.height || 60, background: '#fafafa', border: '1px dashed #d9d9d9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bfbfbf' }}>
+          <div style={{ width: block.width || 100, height: block.height || 60, background: token.colorFillTertiary, border: `1px dashed ${token.colorBorderSecondary}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: token.colorTextQuaternary }}>
             <PictureOutlined style={{ fontSize: 24, marginBottom: 4 }} />
             <span style={{ fontSize: 10 }}>IMAGE / LOGO</span>
           </div>
@@ -491,18 +496,19 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
 
 const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   return (
     <div
       style={{
         height: block.height || 20,
-        border: selected ? '1px solid #1677ff' : '1px dashed #f0f0f0',
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
         borderRadius: 4,
-        background: selected ? 'rgba(22, 119, 255, 0.05)' : 'transparent',
+        background: selected ? token.colorPrimaryBg : 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: 11,
-        color: '#bfbfbf',
+        color: token.colorTextQuaternary,
         cursor: 'pointer',
         marginBottom: 0,
         transition: 'all 0.2s'
@@ -863,15 +869,15 @@ const OrientationSelector: React.FC<{
             style={{
               flex: 1,
               padding: '12px 8px',
-              border: `2px solid ${isActive ? token.colorPrimary : '#f0f0f0'}`,
+              border: `2px solid ${isActive ? token.colorPrimary : token.colorBorderSecondary}`,
               borderRadius: 8,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: 8,
-              background: isActive ? token.colorPrimaryBg : '#fff',
-              color: isActive ? token.colorPrimary : '#8c8c8c',
+              background: isActive ? token.colorPrimaryBg : token.colorBgContainer,
+              color: isActive ? token.colorPrimary : token.colorTextSecondary,
               transition: 'all 0.3s'
             }}
           >
@@ -885,6 +891,7 @@ const OrientationSelector: React.FC<{
 };
 
 const PaperRuler: React.FC<{ orientation: 'horizontal' | 'vertical'; size: number }> = ({ orientation, size }) => {
+  const { token } = theme.useToken();
   const ticks: React.ReactNode[] = [];
   // Render labels every 20mm to avoid overlap
   for (let i = 0; i <= size; i += 20) {
@@ -895,7 +902,7 @@ const PaperRuler: React.FC<{ orientation: 'horizontal' | 'vertical'; size: numbe
           position: 'absolute', 
           [orientation === 'horizontal' ? 'left' : 'top']: `${i}mm`,
           fontSize: 9,
-          color: '#8c8c8c',
+          color: token.colorTextTertiary,
           lineHeight: '1',
           padding: 2
         }}
@@ -912,16 +919,16 @@ const PaperRuler: React.FC<{ orientation: 'horizontal' | 'vertical'; size: numbe
       left: orientation === 'horizontal' ? '10mm' : 0,
       [orientation === 'horizontal' ? 'width' : 'height']: `${size}mm`,
       [orientation === 'horizontal' ? 'height' : 'width']: '10mm',
-      background: '#f5f5f5',
-      border: '1px solid #d9d9d9',
+      background: token.colorFillQuaternary,
+      border: `1px solid ${token.colorBorderSecondary}`,
       boxSizing: 'border-box',
       backgroundImage: orientation === 'horizontal' 
-        ? `repeating-linear-gradient(90deg, #d9d9d9 0, #d9d9d9 1px, transparent 1px, transparent 1mm),
-           repeating-linear-gradient(90deg, #8c8c8c 0, #8c8c8c 1px, transparent 1px, transparent 5mm),
-           repeating-linear-gradient(90deg, #595959 0, #595959 1px, transparent 1px, transparent 10mm)`
-        : `repeating-linear-gradient(180deg, #d9d9d9 0, #d9d9d9 1px, transparent 1px, transparent 1mm),
-           repeating-linear-gradient(180deg, #8c8c8c 0, #8c8c8c 1px, transparent 1px, transparent 5mm),
-           repeating-linear-gradient(180deg, #595959 0, #595959 1px, transparent 1px, transparent 10mm)`,
+        ? `repeating-linear-gradient(90deg, ${token.colorBorderSecondary} 0, ${token.colorBorderSecondary} 1px, transparent 1px, transparent 1mm),
+           repeating-linear-gradient(90deg, ${token.colorTextTertiary} 0, ${token.colorTextTertiary} 1px, transparent 1px, transparent 5mm),
+           repeating-linear-gradient(90deg, ${token.colorTextSecondary} 0, ${token.colorTextSecondary} 1px, transparent 1px, transparent 10mm)`
+        : `repeating-linear-gradient(180deg, ${token.colorBorderSecondary} 0, ${token.colorBorderSecondary} 1px, transparent 1px, transparent 1mm),
+           repeating-linear-gradient(180deg, ${token.colorTextTertiary} 0, ${token.colorTextTertiary} 1px, transparent 1px, transparent 5mm),
+           repeating-linear-gradient(180deg, ${token.colorTextSecondary} 0, ${token.colorTextSecondary} 1px, transparent 1px, transparent 10mm)`,
       backgroundSize: orientation === 'horizontal' ? 'auto 4px, auto 8px, auto 12px' : '4px auto, 8px auto, 12px auto',
       backgroundPosition: orientation === 'horizontal' ? 'bottom' : 'right',
       backgroundRepeat: orientation === 'horizontal' ? 'repeat-x' : 'repeat-y',
@@ -939,6 +946,7 @@ const SortableTableColumnItem: React.FC<{
   onRemove: (index: number) => void;
 }> = ({ id, index, col, onUpdate, onRemove }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const {
     attributes,
     listeners,
@@ -952,15 +960,15 @@ const SortableTableColumnItem: React.FC<{
     transform: CSS.Translate.toString(transform),
     transition,
     marginBottom: 10,
-    background: isDragging ? '#e6f4ff' : '#fff',
+    background: isDragging ? token.colorPrimaryBg : token.colorBgContainer,
     zIndex: isDragging ? 10 : 1,
     position: 'relative',
     borderRadius: 4,
-    border: '1px solid #f0f0f0',
+    border: `1px solid ${token.colorBorderSecondary}`,
     padding: '8px 10px',
   };
 
-  const miniLabel = { marginBottom: 2, fontSize: 11, color: '#8c8c8c' } as const;
+  const miniLabel = { marginBottom: 2, fontSize: 11, color: token.colorTextSecondary } as const;
 
   return (
     <div ref={setNodeRef} style={outerStyle}>
@@ -968,7 +976,7 @@ const SortableTableColumnItem: React.FC<{
         <div
           {...attributes}
           {...listeners}
-          style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#bfbfbf', padding: '2px 4px' }}
+          style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: token.colorTextQuaternary, padding: '2px 4px' }}
         >
           <HolderOutlined />
         </div>
@@ -1157,16 +1165,17 @@ const TableColumnDesigner: React.FC<{
 };
 
 const QRBlock: React.FC<{ block: DesignerNodeSchema & { type: 'qrcode' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { token } = theme.useToken();
   // In design mode, show a real QR code with the field key as preview value
   const previewValue = `{{ ${block.key} }}`;
   return (
     <div
       style={{
         padding: 10,
-        border: selected ? '2px solid #1677ff' : '1px dashed #91caff',
+        border: selected ? `2px solid ${token.colorPrimary}` : `1px dashed ${token.colorPrimaryBorder}`,
         borderRadius: 6,
         marginBottom: 0,
-        background: '#e6f4ff',
+        background: token.colorPrimaryBg,
         display: 'inline-flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -1179,7 +1188,7 @@ const QRBlock: React.FC<{ block: DesignerNodeSchema & { type: 'qrcode' }; select
         value={previewValue}
         size={block.size || 100}
       />
-      <div style={{ fontSize: 11, color: '#1677ff', fontFamily: 'monospace', background: '#bae7ff', padding: '2px 8px', borderRadius: 4 }}>
+      <div style={{ fontSize: 11, color: token.colorPrimary, fontFamily: 'monospace', background: token.colorPrimaryBgHover, padding: '2px 8px', borderRadius: 4 }}>
         {previewValue}
       </div>
     </div>
@@ -1194,6 +1203,7 @@ const DroppableColumn: React.FC<{
   isDragging?: boolean;
 }> = ({ id, children, style, isSelected, isDragging }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { setNodeRef, isOver } = useDroppable({
     id,
     data: { type: 'column', colId: id }
@@ -1206,20 +1216,20 @@ const DroppableColumn: React.FC<{
         ...style,
         // When ANY drag is active: show the column as a bright landing zone
         background: isOver
-          ? 'rgba(22, 119, 255, 0.10)'
+          ? token.colorPrimaryBgHover
           : isDragging
-          ? 'rgba(22, 119, 255, 0.04)'
+          ? token.colorPrimaryBg
           : style?.background,
         border: isOver
-          ? '2px solid #1677ff'
+          ? `2px solid ${token.colorPrimary}`
           : isDragging
-          ? '1.5px dashed #91caff'
-          : (style?.border as string) || '1px dotted #d9d9d9',
+          ? `1.5px dashed ${token.colorPrimaryBorder}`
+          : (style?.border as string) || `1px dotted ${token.colorBorderSecondary}`,
         transition: 'all 0.2s',
         minHeight: isDragging ? 80 : undefined,
       }}
     >
-      <div style={{ fontSize: 10, color: isOver ? '#1677ff' : '#bfbfbf', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
+      <div style={{ fontSize: 10, color: isOver ? token.colorPrimary : token.colorTextQuaternary, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
         <span>{isOver ? t('pages.system.printTemplatesDesign.dropToColumn') : t('pages.system.printTemplatesDesign.colLayout')}</span>
       </div>
       {children}
@@ -1235,6 +1245,7 @@ const ColumnsBlock: React.FC<{
   isDragging?: boolean;
 }> = ({ block, selectedId, onSelect, renderBlocks, isDragging }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const isSelected = selectedId === block.id;
   const justifyContentMap: Record<string, React.CSSProperties['justifyContent']> = {
     start: 'flex-start',
@@ -1270,10 +1281,10 @@ const ColumnsBlock: React.FC<{
         alignItems: 'stretch',
         padding: 8, 
         border: isDragging
-          ? '1.5px dashed #69b1ff'
-          : isSelected ? '1px solid #1677ff' : '1px dashed #bfbfbf',
+          ? `1.5px dashed ${token.colorPrimaryBorder}`
+          : isSelected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
         borderRadius: 6,
-        background: isDragging ? 'rgba(230, 244, 255, 0.5)' : isSelected ? '#f0f7ff' : 'transparent',
+        background: isDragging ? token.colorPrimaryBgHover : isSelected ? token.colorPrimaryBg : 'transparent',
         marginBottom: 0,
         minHeight: isDragging ? 120 : 60,
         transition: 'all 0.2s',
@@ -1314,10 +1325,10 @@ const ColumnsBlock: React.FC<{
               <div style={{ 
                 padding: isDragging ? '28px 10px' : '20px 10px', 
                 textAlign: 'center', 
-                color: isDragging ? '#69b1ff' : '#d9d9d9', 
+                color: isDragging ? token.colorPrimary : token.colorTextQuaternary, 
                 fontSize: isDragging ? 12 : 11, 
                 fontWeight: isDragging ? 600 : 400,
-                border: isDragging ? '1px dashed #91caff' : '1px dashed #d9d9d9',
+                border: isDragging ? `1px dashed ${token.colorPrimaryBorder}` : `1px dashed ${token.colorBorderSecondary}`,
                 borderRadius: 4,
                 transition: 'all 0.2s',
                 width: '100%',
@@ -1359,6 +1370,7 @@ const CanvasArea: React.FC<{ children?: React.ReactNode; style?: React.CSSProper
 
 const RootEndDropZone: React.FC<{ activeDragId: string }> = ({ activeDragId }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { setNodeRef, isOver } = useDroppable({
     id: 'root-end-drop',
     data: { type: 'root-end' }
@@ -1371,10 +1383,10 @@ const RootEndDropZone: React.FC<{ activeDragId: string }> = ({ activeDragId }) =
         marginTop: 12,
         padding: '24px',
         textAlign: 'center',
-        background: isOver ? 'rgba(22, 119, 255, 0.1)' : 'rgba(22, 119, 255, 0.05)',
-        border: isOver ? '2px dashed #1677ff' : '2px dashed #91caff',
+        background: isOver ? token.colorPrimaryBgHover : token.colorPrimaryBg,
+        border: isOver ? `2px dashed ${token.colorPrimary}` : `2px dashed ${token.colorPrimaryBorder}`,
         borderRadius: 8,
-        color: '#1677ff',
+        color: token.colorPrimary,
         fontWeight: 500,
         transition: 'all 0.2s'
       }}
@@ -2509,8 +2521,10 @@ const PrintTemplateDesignPage: React.FC = () => {
       onDragEnd={handleDragEnd}
     >
       <div style={{ 
-      height: 'calc(100vh - 48px)', 
-      background: '#f0f2f5', 
+      height: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.PRINT_TEMPLATE_DESIGN_PX, {
+        compensateHeaderInFullscreen: true,
+      }), 
+      background: token.colorBgLayout, 
       overflow: 'hidden'
     }}>
       <div style={{ 
@@ -2519,12 +2533,12 @@ const PrintTemplateDesignPage: React.FC = () => {
         overflow: 'hidden',
         borderRadius: token.borderRadiusLG,
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        border: '1px solid #e8e8e8'
+        border: `1px solid ${token.colorBorderSecondary}`
       }}>
         {/* 1. Icon Sidebar (Left Rail) */}
         <div style={{
           width: 72,
-          background: '#fff',
+          background: token.colorBgContainer,
           borderRight: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
           flexDirection: 'column',
@@ -2584,15 +2598,15 @@ const PrintTemplateDesignPage: React.FC = () => {
         <div style={{
           width: 300,
           height: '100%',
-          background: '#fff',
-          borderRight: '1px solid #f0f0f0',
+          background: token.colorBgContainer,
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '4px 0 10px rgba(0,0,0,0.02)',
           overflow: 'hidden',
           flex: '0 0 300px'
         }}>
-          <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
             <Title level={5} style={{ margin: 0 }}>
               {activeSidebarKey === 'components' && t('pages.system.printTemplatesDesign.navComponents')}
               {activeSidebarKey === 'variables' && t('pages.system.printTemplatesDesign.navVariables')}
@@ -2635,8 +2649,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                     key={blk.id}
                     style={{
                       padding: '10px 12px',
-                      background: selectedBlockId === blk.id ? '#e6f4ff' : '#fafafa',
-                      border: `1px solid ${selectedBlockId === blk.id ? '#91caff' : '#f0f0f0'}`,
+                      background: selectedBlockId === blk.id ? token.colorPrimaryBg : token.colorFillTertiary,
+                      border: `1px solid ${selectedBlockId === blk.id ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
                       borderRadius: 6,
                       cursor: 'pointer',
                       display: 'flex',
@@ -2645,7 +2659,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     }}
                     onClick={() => setSelectedBlockId(blk.id)}
                   >
-                    <span style={{ color: '#8c8c8c', fontSize: 12 }}>{idx + 1}</span>
+                    <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{idx + 1}</span>
                     <span style={{ fontWeight: 500 }}>{blk.type.toUpperCase()}</span>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
                       <Button size="small" type="text" icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); setSelectedBlockId(blk.id); removeSelected(); }} />
@@ -2659,8 +2673,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                  <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.compileControl')}</div>
                  <Button block type="primary" onClick={handleCompilePreview}>{t('pages.system.printTemplatesDesign.refreshSource')}</Button>
                  {compileWarnings.length > 0 && (
-                   <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', padding: 10, borderRadius: 6, fontSize: 12 }}>
-                     <div style={{ color: '#d46b08', fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.compileWarning')}</div>
+                   <div style={{ background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`, padding: 10, borderRadius: 6, fontSize: 12 }}>
+                     <div style={{ color: token.colorWarningText, fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.compileWarning')}</div>
                      {compileWarnings.map((w, i) => <div key={i}>• {w}</div>)}
                    </div>
                  )}
@@ -2782,12 +2796,12 @@ const PrintTemplateDesignPage: React.FC = () => {
         </div>
 
         {/* 3. Main Workspace (Canvas) */}
-        <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', background: '#f0f2f5', minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', background: token.colorBgLayout, minWidth: 0, overflow: 'hidden' }}>
           {/* Workspace Toolbar */}
           <div style={{ 
             height: 64, 
-            background: '#fff', 
-            borderBottom: '1px solid #f0f0f0', 
+            background: token.colorBgContainer, 
+            borderBottom: `1px solid ${token.colorBorderSecondary}`, 
             display: 'flex', 
             alignItems: 'center', 
             padding: '0 24px',
@@ -2840,7 +2854,7 @@ const PrintTemplateDesignPage: React.FC = () => {
               flex: 1, 
               padding: '0 24px', // Side padding, vertical margin handled by inner wrapper
               overflow: 'auto', 
-              background: '#e9ebed', // Slightly darker industrial background for contrast
+              background: token.colorFillQuaternary,
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start'
@@ -2874,7 +2888,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {renderMode === 'design' ? (
                     <>
                       {schemaBlocks.length === 0 && (
-                        <div style={{ color: '#8c8c8c', padding: 40, textAlign: 'center', border: '2px dashed #d9d9d9', borderRadius: 8 }}>
+                        <div style={{ color: token.colorTextSecondary, padding: 40, textAlign: 'center', border: `2px dashed ${token.colorBorderSecondary}`, borderRadius: 8 }}>
                           <AppstoreOutlined style={{ fontSize: 32, marginBottom: 12, opacity: 0.5 }} />
                           <div>{t('pages.system.printTemplatesDesign.dragToStart')}</div>
                         </div>
@@ -2958,22 +2972,22 @@ const PrintTemplateDesignPage: React.FC = () => {
         {/* 4. Property Panel (Right) */}
         <div style={{
           width: 320,
-          background: '#fff',
-          borderLeft: '1px solid #f0f0f0',
+          background: token.colorBgContainer,
+          borderLeft: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '-4px 0 10px rgba(0,0,0,0.02)',
           overflow: 'hidden',
           flex: '0 0 320px'
         }}>
-          <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
             <Title level={5} style={{ margin: 0 }}>{t('pages.system.printTemplatesDesign.propertyPanel')}</Title>
           </div>
           <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
             {selectedBlock ? (
               <Space orientation="vertical" style={{ width: '100%' }} size={16}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, color: '#333' }}>
+                  <span style={{ fontWeight: 600, color: token.colorText }}>
                     {selectedBlock.type === 'text' && t('pages.system.printTemplatesDesign.compText')}
                     {selectedBlock.type === 'field' && t('pages.system.printTemplatesDesign.compVariables')}
                     {selectedBlock.type === 'divider' && t('pages.system.printTemplatesDesign.compDivider')}
@@ -2993,7 +3007,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                 </div>
 
                 {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image') && (
-                  <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
+                  <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <Input
@@ -3028,7 +3042,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   </Card>
                 )}
 
-                <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
+                <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
                   {selectedBlock.type === 'text' && (
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div>
@@ -3060,7 +3074,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   )}
                   {selectedBlock.type === 'field' && (
                     <Space orientation="vertical" style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6 }}>
                         <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.showLabel')}</span>
                         <Radio.Group 
                           size="small" 
@@ -3120,7 +3134,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   )}
                   {selectedBlock.type === 'image' && (
                     <Space orientation="vertical" style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6 }}>
                         <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.keepRatio')}</span>
                         <Radio.Group 
                           size="small" 
@@ -3170,11 +3184,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                   )}
                   {selectedBlock.type === 'detail_table' && (
                     <Space orientation="vertical" style={{ width: '100%' }} size={16}>
-                      <div style={{ background: '#fffbe6', padding: '8px 12px', border: '1px solid #ffe58f', borderRadius: 6, fontSize: 12, color: '#856404' }}>
+                      <div style={{ background: token.colorWarningBg, padding: '8px 12px', border: `1px solid ${token.colorWarningBorder}`, borderRadius: 6, fontSize: 12, color: token.colorWarningText }}>
                         <TableOutlined style={{ marginRight: 8 }} />
                         {t('pages.system.printTemplatesDesign.compDetailTableHint')}
                       </div>
-                      <Card size="small" title={t('pages.system.printTemplatesDesign.tableStyle')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
+                      <Card size="small" title={t('pages.system.printTemplatesDesign.tableStyle')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
                         <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>

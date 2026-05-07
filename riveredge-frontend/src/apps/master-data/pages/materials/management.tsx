@@ -84,7 +84,11 @@ function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boole
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable } from '../../../../components/uni-table'
 import { TwoColumnLayout, FormModalTemplate, flushDrawerOpen } from '../../../../components/layout-templates'
-import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates/constants'
+import {
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  LIST_PAGE_TABLE_SCROLL,
+} from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
 import { QRCodeGenerator } from '../../../../components/qrcode'
@@ -252,6 +256,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false)
   const selectedGroupIdRef = useRef<number | null>(null)
+  const hasGroupSelectionInitializedRef = useRef(false)
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false)
@@ -810,11 +815,17 @@ const MaterialsManagementPage: React.FC = () => {
         selectedGroupIdRef.current = groupId
         setSelectedGroupId(groupId)
       }
-
-      // 刷新物料列表
-      actionRef.current?.reload()
     }
   }
+
+  useEffect(() => {
+    // 首次渲染不触发，避免页面初始化时重复请求
+    if (!hasGroupSelectionInitializedRef.current) {
+      hasGroupSelectionInitializedRef.current = true
+      return
+    }
+    actionRef.current?.reload()
+  }, [selectedGroupKeys])
 
   const handleGroupExpand: TreeProps['onExpand'] = expandedKeys => {
     setExpandedKeys(expandedKeys)
@@ -1585,55 +1596,61 @@ const MaterialsManagementPage: React.FC = () => {
         rightPanel={{
           // header removed as per request to only show material list
           content: (
-            <UniTable<Material>
-              columnPersistenceId="apps.master-data.pages.materials.management"
-              size="small"
-              defaultPageSize={20}
-              actionRef={actionRef}
-              columns={columns}
-              beforeSearchButtons={
-                <Tooltip title={leftPanelCollapsed ? t('app.master-data.materials.expandGroup') : t('app.master-data.materials.collapseGroup')}>
-                  <Button
-                    icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                    style={{ marginRight: 8 }}
-                  />
-                </Tooltip>
-              }
-              headerActions={
-                <Space>
-                  <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
-                    {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
-                  </Button>
-                  <Button
-                    icon={<AppstoreOutlined />}
-                    loading={standardPresetLoading}
-                    onClick={handleOpenStandardPreset}
-                  >
-                    {t('app.master-data.materials.loadStandardPreset')}
-                  </Button>
-                  <Button
-                    icon={<TagsOutlined />}
-                    disabled={selectedRowKeys.length === 0}
-                    onClick={handleOpenBatchSerialModal}
-                  >
-                    {t('app.master-data.materials.batchTrackingToolbar')}
-                  </Button>
-                  <Popconfirm
-                    title={t('app.master-data.materials.batchDeleteConfirm', {
-                      count: selectedRowKeys.length,
-                    })}
-                    description={t('app.master-data.materials.deleteMaterialDesc')}
-                    onConfirm={executeBatchDelete}
-                    disabled={selectedRowKeys.length === 0}
-                  >
-                    <Button danger disabled={selectedRowKeys.length === 0} icon={<DeleteOutlined />}>
-                      {t('app.master-data.materials.batchDelete')}
+            <div
+              style={{
+                ['--uni-table-scroll-offset' as string]: `${LIST_PAGE_TABLE_SCROLL.BASE_OFFSET_PX + (2 * LIST_PAGE_TABLE_SCROLL.GAP_PX)}px`,
+              }}
+            >
+              <UniTable<Material>
+                columnPersistenceId="apps.master-data.pages.materials.management"
+                tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}
+                size="small"
+                defaultPageSize={20}
+                actionRef={actionRef}
+                columns={columns}
+                beforeSearchButtons={
+                  <Tooltip title={leftPanelCollapsed ? t('app.master-data.materials.expandGroup') : t('app.master-data.materials.collapseGroup')}>
+                    <Button
+                      icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                      onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                      style={{ marginRight: 8 }}
+                    />
+                  </Tooltip>
+                }
+                headerActions={
+                  <Space>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
+                      {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
                     </Button>
-                  </Popconfirm>
-                </Space>
-              }
-              request={async (params, sort, _filter, searchFormValues) => {
+                    <Button
+                      icon={<AppstoreOutlined />}
+                      loading={standardPresetLoading}
+                      onClick={handleOpenStandardPreset}
+                    >
+                      {t('app.master-data.materials.loadStandardPreset')}
+                    </Button>
+                    <Button
+                      icon={<TagsOutlined />}
+                      disabled={selectedRowKeys.length === 0}
+                      onClick={handleOpenBatchSerialModal}
+                    >
+                      {t('app.master-data.materials.batchTrackingToolbar')}
+                    </Button>
+                    <Popconfirm
+                      title={t('app.master-data.materials.batchDeleteConfirm', {
+                        count: selectedRowKeys.length,
+                      })}
+                      description={t('app.master-data.materials.deleteMaterialDesc')}
+                      onConfirm={executeBatchDelete}
+                      disabled={selectedRowKeys.length === 0}
+                    >
+                      <Button danger disabled={selectedRowKeys.length === 0} icon={<DeleteOutlined />}>
+                        {t('app.master-data.materials.batchDelete')}
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                }
+                request={async (params, sort, _filter, searchFormValues) => {
                 const apiParams: any = {
                   skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                   limit: params.pageSize || 20,
@@ -1736,40 +1753,41 @@ const MaterialsManagementPage: React.FC = () => {
                     total: 0,
                   }
                 }
-              }}
-              rowKey="uuid"
-              showAdvancedSearch={true}
-              toolBarRender={() => []}
-              rowSelection={{
-                selectedRowKeys,
-                onChange: setSelectedRowKeys,
-              }}
-              showImportButton={true}
-              onImport={handleMaterialImport}
-              importHeaders={[
+                }}
+                rowKey="uuid"
+                showAdvancedSearch={true}
+                toolBarRender={() => []}
+                rowSelection={{
+                  selectedRowKeys,
+                  onChange: setSelectedRowKeys,
+                }}
+                showImportButton={true}
+                onImport={handleMaterialImport}
+                importHeaders={[
                 t('app.master-data.materials.materialCode'),
                 `*${t('app.master-data.materials.materialName')}`,
                 `*${t('app.master-data.materials.baseUnit')}`,
                 t('app.master-data.materials.specification'),
                 t('app.master-data.materials.sourceType'),
                 t('app.master-data.materials.materialGroup'),
-              ]}
-              importExampleRow={['MAT-WX-E001', '无锡精工电控单元', '个', 'SK-WX-001', 'Buy', 'DEPT001']}
-              importFieldMap={{
+                ]}
+                importExampleRow={['MAT-WX-E001', '无锡精工电控单元', '个', 'SK-WX-001', 'Buy', 'DEPT001']}
+                importFieldMap={{
                 [t('app.master-data.materials.materialCode')]: 'mainCode',
                 [t('app.master-data.materials.materialName')]: 'name',
                 [t('app.master-data.materials.baseUnit')]: 'baseUnit',
                 [t('app.master-data.materials.specification')]: 'specification',
                 [t('app.master-data.materials.sourceType')]: 'sourceType',
                 [t('app.master-data.materials.materialGroup')]: 'groupCode',
-              }}
-              importFieldRules={{
+                }}
+                importFieldRules={{
                 name: { required: true },
                 baseUnit: { required: true },
-              }}
-              showExportButton={true}
-              onExport={handleMaterialExport}
-            />
+                }}
+                showExportButton={true}
+                onExport={handleMaterialExport}
+              />
+            </div>
           ),
         }}
       />

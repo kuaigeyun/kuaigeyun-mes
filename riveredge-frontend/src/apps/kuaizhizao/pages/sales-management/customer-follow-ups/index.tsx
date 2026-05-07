@@ -391,7 +391,6 @@ const CustomerFollowUpsPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
@@ -413,7 +412,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 300,
+      minWidth: 120,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -458,7 +457,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-v2"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}
@@ -470,7 +469,6 @@ const CustomerFollowUpsPage: React.FC = () => {
             isCustomerFollowUpRevisitOverdue(record) ? 'customer-follow-up-row-overdue' : ''
           }
           options={{ reload: true, density: true, setting: true }}
-          scroll={{ x: 1580 }}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,

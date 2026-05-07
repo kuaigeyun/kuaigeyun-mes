@@ -34,6 +34,7 @@
         "@ant-design/x": "^2.4.0",
         "@ant-design/x-sdk": "^2.4.0",
         "@craftjs/core": "^0.2.12",
+        "@cyntler/react-doc-viewer": "^1.17.1",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^7.0.2",
         "@dnd-kit/utilities": "^3.2.2",

@@ -19,6 +19,8 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
   getDrawerFloatingWrapperStyle,
 } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -579,7 +581,9 @@ const LanguageListPage: React.FC = () => {
       body: {
         display: 'flex',
         flexDirection: 'column' as const,
-        height: `calc(100vh - ${110 + floatPad}px)`,
+        height: getViewportHeightExpr(
+          SYSTEM_VIEWPORT_OFFSETS.LANG_TRANSLATION_DRAWER_BODY_BASE_PX + floatPad,
+        ),
         overflow: 'hidden',
         paddingBottom: 24,
       },
@@ -813,7 +817,11 @@ const LanguageListPage: React.FC = () => {
             pagination={false}
             tableLayout="fixed"
             style={{ width: '100%' }}
-            scroll={{ y: `calc(100vh - ${220 + floatPad}px)` }}
+            scroll={{
+              y: getViewportHeightExpr(
+                SYSTEM_VIEWPORT_OFFSETS.LANG_TRANSLATION_TABLE_BASE_PX + floatPad,
+              ),
+            }}
           />
         </div>
       </Drawer>

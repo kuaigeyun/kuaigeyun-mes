@@ -12,7 +12,12 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Modal, Tabs, Table, Tag, Typography, Space, Divider, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import { ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
-import { MODAL_CONFIG, PAGE_SPACING } from '../layout-templates/constants';
+import {
+  MODAL_CONFIG,
+  PAGE_SPACING,
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
+} from '../layout-templates/constants';
 import { COPYRIGHT_COMPANY_NAME, COPYRIGHT_TRADEMARK } from '../../constants/copyrightContent';
 import { verifyCopyright } from '../../utils/copyrightIntegrity';
 
@@ -1019,7 +1024,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       style={{ top: 24 }}
       styles={{
         body: {
-          maxHeight: 'calc(100vh - 180px)',
+          maxHeight: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.TECH_STACK_MODAL_PX),
           overflowY: 'auto',
           padding: token.paddingLG,
         },

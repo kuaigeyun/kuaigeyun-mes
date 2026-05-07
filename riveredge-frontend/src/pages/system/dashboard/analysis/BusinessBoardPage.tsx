@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { businessBoardChartTheme } from './chartTheme';
+import { SYSTEM_VIEWPORT_OFFSETS, getViewportHeightExpr } from '../../../../components/layout-templates/constants';
 import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
 import { getFilePreview, uploadFile } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
@@ -1221,7 +1222,11 @@ const BusinessBoardPage: React.FC = () => {
       ref={containerRef}
       style={{
         width: isFullscreen ? '100vw' : '100%',
-        height: isFullscreen ? '100vh' : 'calc(100vh - 100px)',
+        height: isFullscreen
+          ? '100vh'
+          : getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.BUSINESS_BOARD_PX, {
+              compensateHeaderInFullscreen: true,
+            }),
         position: isFullscreen ? 'fixed' : 'relative',
         top: isFullscreen ? 0 : 'auto',
         left: isFullscreen ? 0 : 'auto',

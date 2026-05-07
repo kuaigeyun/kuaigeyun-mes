@@ -12,7 +12,13 @@
 import React, { ReactNode, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card } from 'antd';
-import { PAGE_SPACING, CANVAS_PAGE_LAYOUT } from './constants';
+import {
+  PAGE_SPACING,
+  CANVAS_PAGE_LAYOUT,
+  CANVAS_VISUAL_BASE,
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
+} from './constants';
 
 /** 侧边面板配置 */
 export interface CanvasPageSidePanelConfig {
@@ -86,7 +92,9 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: 'calc(100vh - 132px)',
+        minHeight: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.CANVAS_PAGE_MIN_HEIGHT_PX, {
+          compensateHeaderInFullscreen: true,
+        }),
         overflow: 'hidden',
         ...style,
       }}
@@ -154,6 +162,10 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
               height: '100%',
               flex: 1,
               position: 'relative',
+              border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+              borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+              overflow: 'hidden',
+              boxSizing: 'border-box',
             }}
           >
             {canvas}

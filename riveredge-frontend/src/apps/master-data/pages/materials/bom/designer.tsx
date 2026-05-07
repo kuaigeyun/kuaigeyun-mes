@@ -48,7 +48,13 @@ import { processRouteApi, unwrapProcessPagedList } from '../../../services/proce
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
-import { CanvasPageTemplate, CANVAS_GRID_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
+import {
+  CanvasPageTemplate,
+  CANVAS_GRID_STYLE,
+  PAGE_SPACING,
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
+} from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -61,10 +67,10 @@ const BOM_COLORS = {
   configurableBorder: '#14b8a6',
   dragActive: '#0ea5e9',
   dragActiveRing: 'rgba(14, 165, 233, 0.4)',
-  defaultBorder: '#e2e8f0',
-  defaultBg: '#ffffff',
-  textPrimary: '#0f172a',
-  textMuted: '#64748b',
+  defaultBorder: 'var(--ant-color-border-secondary, #e2e8f0)',
+  defaultBg: 'var(--ant-color-bg-container, #ffffff)',
+  textPrimary: 'var(--ant-color-text, #0f172a)',
+  textMuted: 'var(--ant-color-text-secondary, #64748b)',
 } as const;
 
 /** 物料来源类型 key -> Ant Design Tag color（label 由 i18n 提供，已移除 Configure 配置件） */
@@ -78,11 +84,26 @@ const SOURCE_TYPE_COLORS: Record<string, string> = {
 
 /** 物料来源类型对应的节点背景/边框（现代化柔和配色） */
 const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = {
-  Make: { bg: '#e0f2fe', border: '#0ea5e9' },
-  Buy: { bg: '#d1fae5', border: '#10b981' },
-  Phantom: { bg: '#f1f5f9', border: '#64748b' },
-  Outsource: { bg: '#fef3c7', border: '#f59e0b' },
-  Service: { bg: '#ccfbf1', border: '#14b8a6' },
+  Make: {
+    bg: 'color-mix(in srgb, #0ea5e9 16%, var(--ant-color-bg-container, #ffffff))',
+    border: '#0ea5e9',
+  },
+  Buy: {
+    bg: 'color-mix(in srgb, #10b981 16%, var(--ant-color-bg-container, #ffffff))',
+    border: '#10b981',
+  },
+  Phantom: {
+    bg: 'color-mix(in srgb, #64748b 14%, var(--ant-color-bg-container, #ffffff))',
+    border: '#64748b',
+  },
+  Outsource: {
+    bg: 'color-mix(in srgb, #f59e0b 14%, var(--ant-color-bg-container, #ffffff))',
+    border: '#f59e0b',
+  },
+  Service: {
+    bg: 'color-mix(in srgb, #14b8a6 14%, var(--ant-color-bg-container, #ffffff))',
+    border: '#14b8a6',
+  },
 };
 
 const KBD_STYLE: React.CSSProperties = {
@@ -2468,7 +2489,11 @@ const BOMDesignerPage: React.FC = () => {
     <style>{`.bom-alternative-list .ant-list-item-main, .bom-configurable-list .ant-list-item-main { min-width: 0; }`}</style>
     <CanvasPageTemplate
       functionalTitle="BOM设计"
-      style={{ height: 'calc(100vh - 110px)' }}
+      style={{
+        height: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.BOM_DESIGNER_PX, {
+          compensateHeaderInFullscreen: true,
+        }),
+      }}
       toolbar={
         <Space>
           <Select
@@ -2654,7 +2679,7 @@ const BOMDesignerPage: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(255,255,255,0.96)',
+                background: token.colorBgElevated,
                 boxShadow: '0 4px 16px rgba(15, 23, 42, 0.08)',
                 border: `1px solid ${token.colorBorderSecondary}`,
                 cursor: 'pointer',
@@ -2664,12 +2689,12 @@ const BOMDesignerPage: React.FC = () => {
               onMouseEnter={(e) => {
                  e.currentTarget.style.color = token.colorPrimary;
                  e.currentTarget.style.borderColor = token.colorPrimary;
-                 e.currentTarget.style.background = '#fff';
+                 e.currentTarget.style.background = token.colorBgContainer;
               }}
               onMouseLeave={(e) => {
                  e.currentTarget.style.color = token.colorTextSecondary;
                  e.currentTarget.style.borderColor = token.colorBorderSecondary;
-                 e.currentTarget.style.background = 'rgba(255,255,255,0.96)';
+                 e.currentTarget.style.background = token.colorBgElevated;
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>

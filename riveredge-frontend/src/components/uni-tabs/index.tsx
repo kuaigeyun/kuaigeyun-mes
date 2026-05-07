@@ -1226,11 +1226,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: relative;
           background: var(--ant-colorBgLayout);
           margin-top: 16px !important;
+          margin-right: ${isFullscreen ? '16px' : '0'} !important;
+          margin-bottom: ${isFullscreen ? '16px' : '0'} !important;
+          margin-left: ${isFullscreen ? '16px' : '0'} !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;
-          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距） */
-          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px) !important;
-          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px) !important;
+          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距）。
+             全屏时四边等距 16px，因此垂直需扣减 32px。 */
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
           /* 彻底隐藏滚动条且不占用空间 */
           scrollbar-width: none !important;
           -ms-overflow-style: none !important;

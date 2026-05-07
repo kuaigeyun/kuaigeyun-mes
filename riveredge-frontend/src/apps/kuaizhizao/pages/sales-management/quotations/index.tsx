@@ -776,8 +776,6 @@ const QuotationsPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 1,
-      minWidth: 80,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,

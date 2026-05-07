@@ -13,7 +13,11 @@ import { useTranslation } from 'react-i18next';
 import { ProFormText, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, theme } from 'antd';
 import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../../components/layout-templates/constants';
+import {
+  MODAL_CONFIG,
+  SYSTEM_VIEWPORT_OFFSETS,
+  getViewportHeightExpr,
+} from '../../../../components/layout-templates/constants';
 import { 
   EditOutlined, 
   DeleteOutlined, 
@@ -49,13 +53,12 @@ import {
   uploadFile,
   updateFile,
   batchDeleteFiles,
-  getFilePreview,
   getFileDownloadUrlWithToken,
   type File,
   FileUpdate,
   FileListParams,
-  FilePreviewResponse,
 } from '../../../../services/file';
+import FilePreviewModal from '../../../../components/file-preview';
 
 /**
  * 判断是否为图片类型（用于图标视图缩略图与预览）
@@ -175,7 +178,7 @@ const FileListPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadFileList, setUploadFileList] = useState<AntdUploadFile[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewInfo, setPreviewInfo] = useState<FilePreviewResponse | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [renameFile, setRenameFile] = useState<File | null>(null);
@@ -420,13 +423,8 @@ const FileListPage: React.FC = () => {
    * 处理文件预览
    */
   const handlePreview = async (file: File) => {
-    try {
-      const preview = await getFilePreview(file.uuid);
-      setPreviewInfo(preview);
-      setPreviewVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.files.previewFailed'));
-    }
+    setPreviewFile(file);
+    setPreviewVisible(true);
   };
 
   /**
@@ -978,29 +976,20 @@ const FileListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 文件预览 Modal */}
-      <Modal
-        title={t('pages.system.files.previewModalTitle')}
+      <FilePreviewModal
         open={previewVisible}
-        onCancel={() => {
+        onClose={() => {
           setPreviewVisible(false);
-          setPreviewInfo(null);
+          setPreviewFile(null);
         }}
-        footer={null}
+        fileUuid={previewFile?.uuid}
+        fileName={previewFile?.original_name}
+        fileType={previewFile?.file_type}
+        fileExtension={previewFile?.file_extension}
+        title={t('pages.system.files.previewModalTitle')}
         width="90%"
-        style={{ top: 20 }}
-      >
-        {previewInfo && (
-          <iframe
-            src={previewInfo.preview_url}
-            style={{
-              width: '100%',
-              height: 'calc(100vh - 200px)',
-              border: 'none',
-            }}
-            title={t('pages.system.files.previewModalTitle')}
-          />
-        )}
-      </Modal>
+        height={getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.FILE_PREVIEW_MODAL_PX)}
+      />
 
       {/* 重命名 Modal */}
       <Modal

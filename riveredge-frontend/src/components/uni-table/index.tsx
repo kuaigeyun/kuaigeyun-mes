@@ -126,6 +126,11 @@ function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T
   })
 }
 
+/** 生命周期列内容自适应策略：注入收缩锚点并保底最小宽度，避免吃掉右侧剩余空白。 */
+const UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR = 1
+const UNI_TABLE_LIFECYCLE_MIN_WIDTH = 80
+const UNI_TABLE_OPERATION_MIN_WIDTH = 120
+
 /** 表格密度仅 ProTable 的 large | middle | small；系统默认紧凑（small），兼容历史偏好值 default */
 function normalizeProTableDensityPreference(v: unknown): 'large' | 'middle' | 'small' {
   if (v === 'large' || v === 'middle' || v === 'small') return v
@@ -732,6 +737,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   allowCustomScrollY?: boolean
   /**
+   * 是否允许页面层自定义 `scroll.x`（默认 false）。
+   * 为 false 时，UniTable 会忽略调用方传入的 `scroll.x`，统一使用内容自适应横向策略。
+   */
+  allowCustomScrollX?: boolean
+  /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
@@ -839,6 +849,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   virtualized = false,
   virtualTableBodyMaxHeight = 520,
   allowCustomScrollY = false,
+  allowCustomScrollX = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   tanstackQuery,
@@ -1046,14 +1057,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
         }
       }
-      /**
-       * 生命周期列：列宽遵循 antd Table —— 由页面列上的 `width` / `minWidth` / `ellipsis` 控制，
-       * UniTable 不再注入默认像素宽度或破坏布局的单元格样式。
-       */
+      /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白。 */
       if (isUniTableLifecycleColumn(col)) {
         const userOnCell = col.onCell
         return {
           ...col,
+          width: UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR,
+          minWidth: col.minWidth ?? UNI_TABLE_LIFECYCLE_MIN_WIDTH,
           resizable: false,
           onCell: (record: any, rowIndex?: number) => {
             const base =
@@ -1066,9 +1076,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
       if (isOperationColumn(col)) {
-        const { uniActionRenderOptions, render: baseRender, ...rest } = col
+        const {
+          uniActionRenderOptions,
+          render: baseRender,
+          minWidth: userOperationMinWidth,
+          ...rest
+        } = col
         return {
           ...rest,
+          width: undefined,
+          minWidth: userOperationMinWidth ?? UNI_TABLE_OPERATION_MIN_WIDTH,
           resizable: false,
           render: baseRender
             ? (...args: any[]) => {
@@ -1974,31 +1991,36 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                         },
                       }
                     : userComponents
-                /**
-                 * 列宽与横向滚动：与 antd Table 文档一致。
-                 * - 调用方若传 `scroll.x`（含 `true` / 数值 / `'max-content'`），原样尊重；
-                 * - 未传 `scroll.x` 时默认 `x: 'max-content'`，总宽随列 `width`/`minWidth` 与单元格内容计算，
-                 *   不再由 UniTable 用「列宽求和」代替 antd/rc-table 的布局算法。
-                 * - 启用列拖拽且 hook 给出 tableWidth 时，仍以数值 x 覆盖（拖拽路径专用）。
-                 */
+                /** 统一滚动策略：默认忽略页面旧式 scroll.x/scroll.y，仅保留白名单开关。 */
                 const ourScrollX = effectiveTableWidth
                 const normalizedUserScroll =
-                  !allowCustomScrollY && userScroll
-                    ? ({ ...userScroll, y: undefined } as typeof userScroll)
+                  (!allowCustomScrollY || !allowCustomScrollX) && userScroll
+                    ? ({
+                        ...userScroll,
+                        ...(allowCustomScrollX ? {} : { x: undefined }),
+                        ...(allowCustomScrollY ? {} : { y: undefined }),
+                      } as typeof userScroll)
                     : userScroll
                 let mergedScroll =
                   ourScrollX != null
                     ? { ...(normalizedUserScroll || {}), x: ourScrollX }
-                    : normalizedUserScroll?.x !== undefined
+                    : allowCustomScrollX && normalizedUserScroll?.x !== undefined
                       ? normalizedUserScroll
                       : { ...(normalizedUserScroll || {}), x: 'max-content' as const }
                 const useVirtual = virtualized || userVirtual === true
+                const hasTreeRows =
+                  Array.isArray(tableData) &&
+                  tableData.some((row) => Array.isArray((row as { children?: unknown[] })?.children) && (row as { children?: unknown[] }).children!.length > 0)
+                const hasExpandable = !!otherProps.expandable || hasTreeRows
                 const shouldDisableAutoScrollY =
-                  !allowCustomScrollY && tableData.length > 0 && tableData.length < currentPageSize
+                  !allowCustomScrollY &&
+                  !hasExpandable &&
+                  tableData.length > 0 &&
+                  tableData.length < currentPageSize
                 if (!useVirtual && mergedScroll?.y === undefined && !shouldDisableAutoScrollY) {
                   mergedScroll = {
                     ...(mergedScroll || {}),
-                    y: `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px))`,
+                    y: `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (56px - var(--header-height, 56px)))`,
                   }
                 }
                 if (useVirtual) {

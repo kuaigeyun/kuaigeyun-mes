@@ -5,7 +5,7 @@
  * 支持应用的 CRUD 操作、安装/卸载、启用/禁用功能。
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -517,6 +517,11 @@ const ApplicationListPage: React.FC = () => {
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetStage, setResetStage] = useState(1); // 1, 2, 3
   const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('general');
+  // 分类切换后再触发刷新，避免与 setState 同帧导致 request 读取旧值
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [appCategoryFilter]);
+
 
   /**
    * 处理扫描应用（从 src/apps 发现并注册）
@@ -1542,6 +1547,7 @@ const ApplicationListPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Application>
           columnPersistenceId="pages.system.applications.list"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.applications.list', appCategoryFilter] }}
           key={`application-list-${appCategoryFilter}`}
           headerTitle={t('pages.system.applications.headerTitle')}
           actionRef={actionRef}
@@ -1947,7 +1953,6 @@ const ApplicationListPage: React.FC = () => {
               ]}
               onChange={(value) => {
                 setAppCategoryFilter(value as AppCategoryFilter);
-                actionRef.current?.reload();
               }}
             />
           }

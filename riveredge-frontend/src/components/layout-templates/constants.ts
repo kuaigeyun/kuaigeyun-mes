@@ -165,10 +165,28 @@ export const CANVAS_PAGE_LAYOUT = {
   CANVAS_MIN_HEIGHT: 600,
 } as const;
 
+/**
+ * 全项目画板视觉基线（主流画板色 + 点状格栅 + 系统默认框线）
+ */
+export const CANVAS_VISUAL_BASE = {
+  // 主流画板底色：明确与容器拉开层级（浅色更灰、深色更暗）
+  BACKGROUND_COLOR:
+    'color-mix(in srgb, var(--ant-color-bg-container, #ffffff) 70%, var(--ant-color-fill-secondary, #eef1f4) 30%)',
+  // 点阵再提升一档对比，避免与容器/底色混在一起
+  DOT_COLOR: 'color-mix(in srgb, var(--ant-color-text-tertiary, #94a3b8) 82%, transparent)',
+  DOT_SIZE_PX: 1, // 统一点大小
+  DOT_GAP_PX: 24, // 统一点间距
+  BORDER_COLOR: 'var(--ant-color-border-secondary, #d9d9d9)', // 系统默认边框色（主题自适应）
+  BORDER_RADIUS_PX: 8,
+} as const;
+
 export const CANVAS_GRID_STYLE: CSSProperties = {
-  backgroundColor: '#f1f5f9', // Slate 100
-  backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)', // Sharp, round 1px dots
-  backgroundSize: '24px 24px',
+  backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
+  backgroundImage: `radial-gradient(circle, ${CANVAS_VISUAL_BASE.DOT_COLOR} ${CANVAS_VISUAL_BASE.DOT_SIZE_PX}px, transparent ${CANVAS_VISUAL_BASE.DOT_SIZE_PX}px)`,
+  backgroundSize: `${CANVAS_VISUAL_BASE.DOT_GAP_PX}px ${CANVAS_VISUAL_BASE.DOT_GAP_PX}px`,
+  border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+  borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+  boxSizing: 'border-box',
 };
 
 /**
@@ -176,11 +194,14 @@ export const CANVAS_GRID_STYLE: CSSProperties = {
  */
 export const CANVAS_GRID_REACTFLOW = {
   variant: 'dots' as const,
-  gap: 24,
-  size: 1, // Standardized 1px dots
-  color: '#94a3b8', // Slate 400
+  gap: CANVAS_VISUAL_BASE.DOT_GAP_PX,
+  size: CANVAS_VISUAL_BASE.DOT_SIZE_PX,
+  color: CANVAS_VISUAL_BASE.DOT_COLOR,
   style: {
-    backgroundColor: '#f1f5f9', // Slate 100
+    backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
+    border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+    borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+    boxSizing: 'border-box' as const,
   },
 } as const;
 
@@ -209,7 +230,7 @@ export const LIST_PAGE_TABLE_SCROLL = {
   /** 桌面端展示 ListPageTemplate 指标卡行时追加（一行 Card + marginBottom 16） */
   STAT_CARDS_ROW_EXTRA_PX: 120,
   /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
-  MULTI_TAB_CARD_EXTRA_PX: 48,
+  MULTI_TAB_CARD_EXTRA_PX: 78,
   /** UniTable 无模板变量时使用的默认回退（312 + 136） */
   DEFAULT_FALLBACK_OFFSET_PX: 448,
 } as const;
@@ -251,6 +272,36 @@ export function listPageShowsStatCardsRow(
   if (!statCards || statCards.length === 0) return false;
   const isMobile = !screens.md && !!screens.xs;
   return !isMobile;
+}
+
+/**
+ * 系统页视口扣减常量（用于替换分散在页面里的 `calc(100vh - Npx)` 硬编码）。
+ * 约束：页面只引用命名常量，不再在业务页手写裸数字。
+ */
+export const SYSTEM_VIEWPORT_OFFSETS = {
+  BUSINESS_BOARD_PX: 100,
+  PRINT_TEMPLATE_DESIGN_PX: 48,
+  FILE_PREVIEW_MODAL_PX: 200,
+  LANG_TRANSLATION_DRAWER_BODY_BASE_PX: 110,
+  LANG_TRANSLATION_TABLE_BASE_PX: 220,
+  CANVAS_PAGE_MIN_HEIGHT_PX: 132,
+  BOM_DESIGNER_PX: 110,
+  TECH_STACK_MODAL_PX: 180,
+  UNIVER_IMPORT_FULLSCREEN_BODY_PX: 130,
+  UNIVER_IMPORT_FULLSCREEN_CONTAINER_PX: 162,
+} as const;
+
+/**
+ * 统一生成视口高度表达式；可选补偿 UniTabs 全屏时顶栏扣减（仅回补 header 56）。
+ */
+export function getViewportHeightExpr(
+  offsetPx: number,
+  options?: { compensateHeaderInFullscreen?: boolean },
+): string {
+  if (options?.compensateHeaderInFullscreen) {
+    return `calc(100vh - ${offsetPx}px + (${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px - var(--header-height, ${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px)))`;
+  }
+  return `calc(100vh - ${offsetPx}px)`;
 }
 
 /**
