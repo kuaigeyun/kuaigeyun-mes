@@ -1,0 +1,69 @@
+/**
+ * CopyableCode：单一布局源。
+ * - 文本省略仅用 CSS（不用 Typography ellipsis / ResizeObserver，避免加载后再测量导致的抖动）
+ * - 复制按钮固定 22×22px，无编号时 visibility:hidden 仍占位，避免数据到达后横向错位
+ */
+
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ellipsis=false：不截断，避免与宽列叠加多层 overflow */
+.textPlain {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.copyBtn {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ant-color-link, #1677ff);
+  border-radius: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.copyBtn:hover:not(:disabled) {
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+}
+
+.copyBtn:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 1px;
+}
+
+/* 无可复制内容时仍占同一几何尺寸，避免列宽在「占位符→真实编号」时突变 */
+.copyBtnHidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.copyIcon {
+  font-size: 12px;
+}

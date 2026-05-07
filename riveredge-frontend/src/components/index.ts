@@ -59,3 +59,5 @@ export { StatCardTrendArea, strokeColorWithAlpha } from './common/StatCardTrendA
 export type { StatCardTrendData, StatCardTrendPoint, StatCardTrendAreaProps } from './common/StatCardTrendArea';
 export { default as UniWiki } from './uni-wiki';
 export type { WikiItem, WikiTreeData, UniWikiProps } from './uni-wiki';
+export { default as CopyableCode } from './copyable-code';
+export type { CopyableCodeProps } from './copyable-code';

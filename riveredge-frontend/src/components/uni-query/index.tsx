@@ -2426,6 +2426,8 @@ interface QuerySearchButtonProps {
    * 搜索参数存储 ref（可选，用于直接传递搜索参数）
    */
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
+  /** 是否显示内置重置按钮（默认 true；被 UniSearch 包装时通常设为 false） */
+  showReset?: boolean;
 }
 
 /**
@@ -2436,6 +2438,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   formRef,
   actionRef,
   searchParamsRef,
+  showReset = true,
 }) => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -2781,14 +2784,16 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         {t('components.uniQuery.advancedSearch')}
           <DownOutlined style={{ marginLeft: 4 }} />
       </Button>
-        <Button
-          onClick={handleReset}
-          icon={<ReloadOutlined />}
-          type="default"
-          style={{ height: '32px' }}
-        >
-          {t('components.uniQuery.reset')}
-        </Button>
+        {showReset && (
+          <Button
+            onClick={handleReset}
+            icon={<ReloadOutlined />}
+            type="default"
+            style={{ height: '32px' }}
+          >
+            {t('components.uniQuery.reset')}
+          </Button>
+        )}
         {/* 显示钉住的搜索条件 - 使用 TAB 样式，与模糊搜索相同的阴影效果 */}
         {pinnedSearches.length > 0 && (
           <div 
@@ -2797,7 +2802,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
               display: 'flex', 
               alignItems: 'center', 
               gap: 0, 
-              marginLeft: 8,
+              margin: '0 8px',
               borderRadius: token.borderRadius,
               border: `1px solid ${token.colorBorder}`,
               overflow: 'hidden',

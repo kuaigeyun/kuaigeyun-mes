@@ -256,7 +256,7 @@ export function renderRowActionsOverflow(
         }}
         trigger={['click']}
       >
-        <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
+        <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
           {overflow.length > 0 ? (
             <Space size={4}>
               <span>更多</span>

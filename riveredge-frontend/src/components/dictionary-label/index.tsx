@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { getDictionaryItemList, getDataDictionaryByCode, type DictionaryItem } from '../../services/dataDictionary';
+import type { DictionaryItem } from '../../services/dataDictionary';
+import {
+  getDictionaryItemsCached,
+  getDictionaryItemsSync,
+} from '../../services/dataDictionaryCache';
 
 interface DictionaryLabelProps {
   /** 字典代码 */
   dictionaryCode: string;
   /** 字典项的值 */
   value?: string | number;
-  /** 加载中显示的占位符 */
+  /** 加载中显示的占位符（默认空串，避免列表里闪烁原始 code） */
   loadingPlaceholder?: string;
-  /** 未找到值时显示的占位符 */
+  /** 未找到值时显示的占位符（默认空串，避免回退到原始 code） */
   notFoundPlaceholder?: string;
   /** 容器样式 */
   style?: React.CSSProperties;
   /** 容器类名 */
   className?: string;
 }
-
-const dictionaryCache: Record<string, DictionaryItem[]> = {};
 
 function findDictionaryItem(items: DictionaryItem[], raw: string | number): DictionaryItem | undefined {
   const s = String(raw).trim();
@@ -32,60 +34,67 @@ function findDictionaryItem(items: DictionaryItem[], raw: string | number): Dict
   );
 }
 
+function resolveLabelSync(
+  code: string,
+  value: string | number | undefined,
+  notFoundPlaceholder: string | undefined,
+): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const items = getDictionaryItemsSync(code);
+  if (!items) return null;
+  const item = findDictionaryItem(items, value);
+  return item ? item.label : (notFoundPlaceholder ?? '');
+}
+
 /**
  * 数据字典标签显示组件
- * 
+ *
  * 根据字典代码和值，显示对应的字典项标签（Label）。
+ *
+ * 缓存策略：与 `getDictionaryOptions/Sync` 共用 `dataDictionaryCache` 模块缓存。
+ * 同一会话下任意页面/组件加载过该字典后，本组件首屏即可同步取到标签，
+ * 不再出现「先显示原始 code → 再替换为标签」的闪烁。
  */
 export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
   dictionaryCode,
   value,
-  loadingPlaceholder = '...',
+  loadingPlaceholder = '',
   notFoundPlaceholder,
   style,
   className,
 }) => {
-  const [label, setLabel] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [label, setLabel] = useState<string | null>(() =>
+    resolveLabelSync(dictionaryCode, value, notFoundPlaceholder),
+  );
 
   useEffect(() => {
-    if (value === undefined || value === null || value === '') {
-      setLabel(null);
-      return;
-    }
+    let cancelled = false;
+    const sync = resolveLabelSync(dictionaryCode, value, notFoundPlaceholder);
+    setLabel(sync);
+    if (sync !== null) return;
+    if (value === undefined || value === null || value === '') return;
 
-    const fetchLabel = async () => {
-      // 检查缓存
-      if (dictionaryCache[dictionaryCode]) {
-        const item = findDictionaryItem(dictionaryCache[dictionaryCode], value);
-        setLabel(item ? item.label : (notFoundPlaceholder ?? String(value)));
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const dictionary = await getDataDictionaryByCode(dictionaryCode);
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        dictionaryCache[dictionaryCode] = items;
-        
+    getDictionaryItemsCached(dictionaryCode)
+      .then((items) => {
+        if (cancelled) return;
         const item = findDictionaryItem(items, value);
-        setLabel(item ? item.label : (notFoundPlaceholder ?? String(value)));
-      } catch (error) {
+        setLabel(item ? item.label : (notFoundPlaceholder ?? ''));
+      })
+      .catch((error) => {
         console.error(`加载字典标签失败 (${dictionaryCode}):`, error);
-        setLabel(notFoundPlaceholder ?? String(value));
-      } finally {
-        setLoading(false);
-      }
-    };
+        if (!cancelled) setLabel(notFoundPlaceholder ?? '');
+      });
 
-    fetchLabel();
+    return () => {
+      cancelled = true;
+    };
   }, [dictionaryCode, value, notFoundPlaceholder]);
 
-  if (loading && !label) {
-    return <span style={style} className={className}>{loadingPlaceholder}</span>;
-  }
-
-  return <span style={style} className={className}>{label ?? ''}</span>;
+  return (
+    <span style={style} className={className}>
+      {label ?? loadingPlaceholder}
+    </span>
+  );
 };
 
 export default DictionaryLabel;

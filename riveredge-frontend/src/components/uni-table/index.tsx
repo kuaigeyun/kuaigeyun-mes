@@ -116,6 +116,12 @@ function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T
   })
 }
 
+/** 表格密度仅 ProTable 的 large | middle | small；系统默认紧凑（small），兼容历史偏好值 default */
+function normalizeProTableDensityPreference(v: unknown): 'large' | 'middle' | 'small' {
+  if (v === 'large' || v === 'middle' || v === 'small') return v
+  return 'small'
+}
+
 /** 与 ProTable genColumnKey / 列设置持久化 key 一致（无 key 且无 dataIndex 时用列下标） */
 function getProColumnStateKey(col: any, columnIndex: number): string {
   const key = col?.key ?? col?.dataIndex
@@ -717,9 +723,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   /**
    * 用 TanStack Query 缓存列表：相同分页+筛选在 staleTime 内即显缓存；工具栏刷新会先 invalidate 再拉数。
    * 不改变 ProTable 外观，仅替换底层请求去重/缓存（与 patch 后 debounceTime=0 配合）。
+   *
+   * **默认启用**：当传入稳定的 `columnPersistenceId` 时，组件会自动启用：
+   * - `queryKeyPrefix = [columnPersistenceId]`
+   * - `staleTime = 60_000`，`gcTime = 300_000`
+   * - `prefetchNextPage = true`，`staleWhileRevalidate = true`
+   *
+   * 若需关闭：传 `tanstackQuery={{ enabled: false }}`。如需自定义则传完整对象覆盖。
    */
   tanstackQuery?: {
-    queryKeyPrefix: readonly unknown[]
+    /** 显式 false 可关闭自动缓存（默认启用） */
+    enabled?: boolean
+    queryKeyPrefix?: readonly unknown[]
     staleTime?: number
     gcTime?: number
     /**
@@ -832,8 +847,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)
   const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
   
-  // 表格密度优先级：User Preference > Default('large')
-  const defaultSize = getPreference('ui.default_table_density', 'large') as 'large' | 'middle' | 'small'
+  // 表格密度：用户偏好 / 站点配置 > 默认紧凑（small）
+  const defaultSize = normalizeProTableDensityPreference(
+    getPreference('ui.default_table_density', 'small'),
+  )
 
   const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 0)
 
@@ -868,8 +885,38 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const requestRef = useRef(request)
   requestRef.current = request
 
-  const tanstackQueryRef = useRef(tanstackQuery)
-  tanstackQueryRef.current = tanstackQuery
+  /**
+   * 自动启用 TanStack Query 缓存：
+   * - 全量列表页已带稳定 `columnPersistenceId`，可直接作为缓存命名空间。
+   * - 默认开启 staleWhileRevalidate（即点即显） + prefetchNextPage（翻页瞬开），
+   *   并设置 60s 内视为新鲜、5min 后回收。
+   * - 显式传入 `tanstackQuery` 时与默认值合并（`queryKeyPrefix` 缺省时取 `columnPersistenceId`）。
+   * - 显式传入 `tanstackQuery={{ enabled: false }}` 可彻底关闭。
+   */
+  const resolvedTanstackQuery = useMemo(() => {
+    if (tanstackQuery && (tanstackQuery as any).enabled === false) return undefined
+    const fallbackPrefix = columnPersistenceId
+      ? ([columnPersistenceId] as readonly unknown[])
+      : undefined
+    const queryKeyPrefix = tanstackQuery?.queryKeyPrefix ?? fallbackPrefix
+    if (!queryKeyPrefix || queryKeyPrefix.length === 0) return undefined
+    return {
+      queryKeyPrefix,
+      staleTime: tanstackQuery?.staleTime ?? 60_000,
+      gcTime: tanstackQuery?.gcTime ?? 300_000,
+      prefetchNextPage: tanstackQuery?.prefetchNextPage ?? true,
+      staleWhileRevalidate: tanstackQuery?.staleWhileRevalidate ?? true,
+    }
+  }, [tanstackQuery, columnPersistenceId])
+
+  const tanstackQueryRef = useRef(resolvedTanstackQuery)
+  tanstackQueryRef.current = resolvedTanstackQuery
+
+  /**
+   * 请求序号：用户翻页/改筛选时，旧请求若仍在飞行（含 SWR 后台 revalidate），
+   * 其结果不应再 setState 或触发 reload。仅最新一次请求允许写状态。
+   */
+  const requestSeqRef = useRef(0)
 
   // 存储选中的行键（支持外部受控与内部自持两种模式）
   const [internalSelectedRowKeys, setInternalSelectedRowKeys] = useState<React.Key[]>([])
@@ -905,6 +952,26 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
   }, [columns])
 
+  /**
+   * 把所有「会变」的运行期值都收敛到一个 ref，让 `handleRequest` 的 useCallback
+   * 依赖永远稳定（仅 [queryClient]），避免父级重渲染时回调身份抖动导致 ProTable
+   * 内部失效检查、上层 actionRef 闭包错乱。
+   */
+  const requestRuntimeRef = useRef({
+    showLoading,
+    loadingDelay,
+    defaultPageSize,
+    columnsForPinyinSearch,
+    resolvedTanstackQuery,
+  })
+  requestRuntimeRef.current = {
+    showLoading,
+    loadingDelay,
+    defaultPageSize,
+    columnsForPinyinSearch,
+    resolvedTanstackQuery,
+  }
+
   // 预加载 UniImport（UniverSheet ~2MB）：直接在挂载时触发 import，让浏览器与页面其它资源并行下载。
   // 不再用 requestIdleCallback 做"空闲时"调度，那属于不确定时序的妥协。
   useEffect(() => {
@@ -932,7 +999,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
-  // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
   const processedColumns = React.useMemo(() => {
     return effectiveColumns.map((col: any) => {
       // 自动处理日期和时间列的展示
@@ -961,30 +1027,30 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
         }
       }
-      /** 生命周期列：不参与拖拽改宽，宽度以页面列定义为准（避免持久化盖住代码里的 width） */
+      /**
+       * 生命周期列：列宽遵循 antd Table —— 由页面列上的 `width` / `minWidth` / `ellipsis` 控制，
+       * UniTable 不再注入默认像素宽度或破坏布局的单元格样式。
+       */
       if (isUniTableLifecycleColumn(col)) {
-        const w = typeof col.width === 'number' ? col.width : 112
+        const userOnCell = col.onCell
         return {
           ...col,
-          width: w,
           resizable: false,
+          onCell: (record: any, rowIndex?: number) => {
+            const base =
+              typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
+            return {
+              ...base,
+              className: `uni-table-lifecycle-cell ${base.className || ''}`.trim(),
+            }
+          },
         }
       }
       if (isOperationColumn(col)) {
-        const { width, uniActionRenderOptions, ...rest } = col
-        const baseRender = col.render
-        // 操作列统一规范：内容不换行、宽度自适应（width: auto + scroll.x: max-content 由浏览器根据内容计算）
+        const { uniActionRenderOptions, render: baseRender, ...rest } = col
         return {
           ...rest,
-          width: 'auto',
           resizable: false,
-          ellipsis: false,
-          onCell: () => ({
-            style: {
-              whiteSpace: 'nowrap',
-              overflow: 'visible',
-            },
-          }),
           render: baseRender
             ? (...args: any[]) => {
                 const rendered = baseRender(...args)
@@ -1026,7 +1092,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [tableId, resetColumns, refresh, syncTablePreference])
 
-  // 操作列：宽度自适应内容、不换行（不参与拖拽，不设固定 width）
+  // 操作列：不换行；列宽与 scroll 交由 antd（见下方 mergedScroll）
   const effectiveTableColumns = React.useMemo(() => {
     const baseCols = resizableColumns.length > 0 ? resizableColumns : processedColumns.filter((c: any) => !isOperationColumn(c) && !c.hideInTable)
     const opCols = processedColumns.filter((c: any) => isOperationColumn(c))
@@ -1046,25 +1112,23 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const baseOnCell = opCol.onCell
         const mergedOnCell =
           baseOnCell && typeof baseOnCell === 'function'
-            ? (cellProps: any) => {
-                const base = baseOnCell(cellProps)
+            ? (record: any, rowIndex?: number) => {
+                const base = baseOnCell(record, rowIndex) || {}
                 return {
                   ...base,
                   className: `uni-table-operation-cell ${base?.className || ''}`.trim(),
                   style: {
                     whiteSpace: 'nowrap',
-                    overflow: 'visible',
                     ...(base?.style || {}),
                   },
                 }
               }
             : () => ({
                 className: 'uni-table-operation-cell',
-                style: { whiteSpace: 'nowrap', overflow: 'visible' },
+                style: { whiteSpace: 'nowrap' },
               })
-        const { width: _w, ...opRest } = opCol
         result.push({
-          ...opRest,
+          ...opCol,
           resizable: false,
           ellipsis: false,
           onCell: mergedOnCell,
@@ -1091,15 +1155,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return { headers: undefined, exampleRow: undefined }
   }, [importHeaders, importExampleRow, autoGenerateImportConfig, processedColumns, t])
 
-  // 检测是否有操作列（用于决定scroll配置）
-  // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
-  const hasActionColumn = React.useMemo(() => {
-    return effectiveColumns.some((col) => isUniTableOperationColumn(col))
-  }, [effectiveColumns])
-
-  // 有操作列时：scroll.x 用 max-content 让表格自适应内容宽度，操作列不换行
-  const effectiveTableWidth =
-    hasActionColumn ? 'max-content' : resizableColumns.length > 0 ? (tableWidth ?? 'max-content') : undefined
+  /** 仅列拖拽开启时使用 hook 算出的 tableWidth；否则不注入数值 scroll.x，交给 antd 默认策略 */
+  const effectiveTableWidth: number | string | undefined =
+    resizableColumns.length > 0 && tableWidth != null ? tableWidth : undefined
 
   /** 合并列状态：为右侧固定列写入默认 order，保证生命周期在操作列左侧（与 normalizeFixedRightColumnOrder 一致） */
   const mergedColumnsStateProp = React.useMemo(() => {
@@ -1303,16 +1361,36 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [])
 
   /**
-   * 处理排序参数转换和搜索参数获取
-   * useCallback 稳定引用，降低 ProTable 因父组件重渲染而重复触发请求的概率
+   * 表格数据请求（核心性能路径）
+   *
+   * 设计原则（与 TanStack Query 原生模型对齐）：
+   * 1. 缓存命中（fresh）→ 同步从 `queryClient.getQueryData` 取值；不发起网络请求。
+   * 2. 缓存命中（stale）+ `staleWhileRevalidate` → 立刻返回旧数据；后台用 `fetchQuery`
+   *    revalidate；TanStack 默认开启 `structuralSharing`，结果与旧数据「内容相同」时
+   *    返回同一引用，因此用 `===` 判断是否需要 `reload`，避免无变更时多余渲染。
+   * 3. 缓存未命中 / 已禁用 SWR → `fetchQuery` 发起请求；`fetchQuery` 内部按 queryKey
+   *    去重并发，相同 key 的并发请求只会触发一次网络往返。
+   * 4. `prefetchNextPage`：成功拿到当前页后，在后台用与「下一页正常请求一致」的 key
+   *    预取下一页（拼音前端过滤场景跳过，避免缓存与展示不一致）。
+   * 5. 竞态：`requestSeqRef` 单调自增，仅最新一次请求允许写状态 / 触发 reload。
+   * 6. `useCallback` 依赖仅 `[queryClient]`，永远稳定 —— 所有「会变」的运行期值都从
+   *    `requestRuntimeRef.current` 读取，避免父组件重渲染时回调身份抖动。
    */
   const handleRequest = useCallback(async (
     params: any,
     sort: Record<string, 'ascend' | 'descend' | null>,
     filter: Record<string, React.ReactText[] | null>
   ) => {
-    // ⭐ 延迟 loading：仅在 showLoading 且 loadingDelay 毫秒后才显示
-    if (showLoading && loadingDelay > 0) {
+    const seq = ++requestSeqRef.current
+    const {
+      showLoading: liveShowLoading,
+      loadingDelay: liveLoadingDelay,
+      defaultPageSize: liveDefaultPageSize,
+      columnsForPinyinSearch: livePinyinCols,
+      resolvedTanstackQuery: tq,
+    } = requestRuntimeRef.current
+
+    if (liveShowLoading && liveLoadingDelay > 0) {
       isLoadingRef.current = true
       if (loadingDelayTimerRef.current) {
         clearTimeout(loadingDelayTimerRef.current)
@@ -1322,14 +1400,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         if (isLoadingRef.current) {
           setShowDelayedLoading(true)
         }
-      }, loadingDelay)
+      }, liveLoadingDelay)
     }
 
-    // ⭐ 关键：获取搜索表单值（优先使用 searchParamsRef，避免表单值更新时机问题）
+    /**
+     * 取搜索表单值：`searchParamsRef.current` 可能是空对象（表示主动清空筛选），
+     * 仅在 `undefined` 时回退到 ProForm `getFieldsValue`，避免覆盖「清空」语义。
+     */
     const formValues = formRef.current?.getFieldsValue() || {}
-    // ⚠️ 修复：优先使用 searchParamsRef.current，如果不存在则回退到 formValues
-    // searchParamsRef.current 可能为空对象 {}（表示清空搜索条件），这是有效的
-    // 只有当 searchParamsRef.current 是 undefined 时，才回退到 formValues
     const searchFormValues =
       searchParamsRef.current !== undefined ? searchParamsRef.current : formValues
 
@@ -1338,20 +1416,32 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     try {
       const runRequest = () => requestRef.current(params, sort, filter, searchFormValues)
-      const tq = tanstackQueryRef.current
       let result: Awaited<ReturnType<typeof runRequest>>
+
       if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
-        const pageSize = params.pageSize ?? defaultPageSize
+        const pageSize = params.pageSize ?? liveDefaultPageSize
         const current = params.current ?? 1
         const staleTimeMs = tq.staleTime ?? 60_000
+        const gcTimeMs = tq.gcTime ?? 300_000
+        const paramsKey = stableJsonForQueryKey(params)
+        const sortKey = stableJsonForQueryKey(sort)
+        const filterKey = stableJsonForQueryKey(filter)
+        const searchKey = stableJsonForQueryKey(searchFormValues ?? {})
         const fullQueryKey = [
           'uniTable',
           ...tq.queryKeyPrefix,
-          stableJsonForQueryKey(params), // 包含 current, pageSize 以及通过 params 传递的自定义参数
-          stableJsonForQueryKey(sort),
-          stableJsonForQueryKey(filter),
-          stableJsonForQueryKey(searchFormValues ?? {}),
+          paramsKey,
+          sortKey,
+          filterKey,
+          searchKey,
         ] as const
+
+        const fetchOpts = {
+          queryKey: [...fullQueryKey],
+          queryFn: runRequest,
+          staleTime: staleTimeMs,
+          gcTime: gcTimeMs,
+        } as const
 
         if (tq.staleWhileRevalidate) {
           const cached = queryClient.getQueryData(fullQueryKey) as
@@ -1361,33 +1451,26 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           const updatedAt = state?.dataUpdatedAt ?? 0
           const cacheStale = !cached || Date.now() - updatedAt > staleTimeMs
           if (cached != null && cacheStale) {
+            // 后台 revalidate；TanStack `structuralSharing` 会在内容相同时复用旧引用，
+            // 因此严格用 `===` 判断「真的变化了」再触发 reload，避免无谓渲染。
             void queryClient
-              .fetchQuery({
-                queryKey: [...fullQueryKey],
-                queryFn: runRequest,
-                staleTime: staleTimeMs,
-                gcTime: tq.gcTime,
+              .fetchQuery(fetchOpts)
+              .then((fresh) => {
+                if (fresh !== cached && requestSeqRef.current === seq) {
+                  actionRef.current?.reload?.()
+                }
               })
-              .then(() => {
-                actionRef.current?.reload?.()
+              .catch(() => {
+                /* 失败由全局错误处理；旧数据继续展示 */
               })
             result = cached
           } else {
-            result = await queryClient.fetchQuery({
-              queryKey: [...fullQueryKey],
-              queryFn: runRequest,
-              staleTime: staleTimeMs,
-              gcTime: tq.gcTime,
-            })
+            result = await queryClient.fetchQuery(fetchOpts)
           }
         } else {
-          result = await queryClient.fetchQuery({
-            queryKey: [...fullQueryKey],
-            queryFn: runRequest,
-            staleTime: staleTimeMs,
-            gcTime: tq.gcTime,
-          })
+          result = await queryClient.fetchQuery(fetchOpts)
         }
+
         if (
           tq.prefetchNextPage &&
           !skipPrefetchForPinyin &&
@@ -1401,85 +1484,71 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           const nextKey = [
             'uniTable',
             ...tq.queryKeyPrefix,
-            nextCurrent,
-            pageSize,
-            stableJsonForQueryKey(sort),
-            stableJsonForQueryKey(filter),
-            stableJsonForQueryKey(searchFormValues ?? {}),
+            stableJsonForQueryKey(nextParams),
+            sortKey,
+            filterKey,
+            searchKey,
           ] as const
+          // prefetchQuery 会按 queryKey 去重；若已在飞行或缓存仍 fresh，则直接返回。
           void queryClient.prefetchQuery({
             queryKey: [...nextKey],
             queryFn: () => requestRef.current(nextParams, sort, filter, searchFormValues),
             staleTime: staleTimeMs,
-            gcTime: tq.gcTime,
+            gcTime: gcTimeMs,
           })
         }
       } else {
         result = await runRequest()
       }
 
-    // 支持拼音搜索：如果关键词是拼音格式，在前端对返回的数据进行二次过滤
-    const keyword = searchFormValues?.keyword
-    if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
-      // 避免改写 TanStack Query 缓存中的对象引用
-      result = { ...result, data: [...result.data] }
-      const keywordUpper = keyword.toUpperCase()
+      // 拼音搜索：关键词为拼音首字母时在前端对返回数据二次过滤
+      const keyword = searchFormValues?.keyword
+      if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
+        // 避免改写 TanStack 缓存中的对象引用
+        const keywordLower = keyword.toLowerCase()
+        const keywordUpper = keyword.toUpperCase()
 
-      // 使用 Promise.all 进行异步拼音匹配
-      const filteredDataPromises = result.data.map(async (record: any) => {
-        // 遍历所有列，检查是否有匹配的字段
-        for (const column of columnsForPinyinSearch) {
-          if (!column.dataIndex) continue
-
-          // 获取字段值（支持嵌套字段，如 'user.name'）
-          const getFieldValue = (obj: any, path: string | string[] | number): any => {
-            if (Array.isArray(path)) {
-              return path.reduce((acc, key) => acc?.[key], obj)
+        const filteredDataPromises = result.data.map(async (record: any) => {
+          for (const column of livePinyinCols) {
+            if (!column.dataIndex) continue
+            const getFieldValue = (obj: any, path: string | string[] | number): any => {
+              if (Array.isArray(path)) {
+                return path.reduce((acc, key) => acc?.[key], obj)
+              }
+              if (typeof path === 'number') return obj?.[path]
+              const keys = String(path).split('.')
+              return keys.reduce((acc, key) => acc?.[key], obj)
             }
-            if (typeof path === 'number') {
-              return obj?.[path]
-            }
-            const keys = String(path).split('.')
-            return keys.reduce((acc, key) => acc?.[key], obj)
+            const fieldValue = getFieldValue(record, column.dataIndex as string | string[] | number)
+            if (!fieldValue) continue
+            const valueStr = String(fieldValue)
+            if (valueStr.toLowerCase().includes(keywordLower)) return record
+            const pinyinMatch = await matchPinyinInitialsAsync(valueStr, keywordUpper)
+            if (pinyinMatch) return record
           }
+          return null
+        })
 
-          const fieldValue = getFieldValue(record, column.dataIndex as string | string[] | number)
-          if (!fieldValue) continue
-
-          // 将字段值转换为字符串进行匹配
-          const valueStr = String(fieldValue)
-
-          // 1. 文本匹配
-          const textMatch = valueStr.toLowerCase().includes(keyword.toLowerCase())
-          if (textMatch) return record
-
-          // 2. 拼音首字母匹配（异步）
-          const pinyinMatch = await matchPinyinInitialsAsync(valueStr, keywordUpper)
-          if (pinyinMatch) return record
+        const filteredResults = await Promise.all(filteredDataPromises)
+        const filteredData = filteredResults.filter((item) => item !== null)
+        result = {
+          ...result,
+          data: filteredData,
+          ...(result.total !== undefined ? { total: filteredData.length } : {}),
         }
-        return null
-      })
-
-      // 等待所有匹配完成
-      const filteredResults = await Promise.all(filteredDataPromises)
-      const filteredData = filteredResults.filter(item => item !== null)
-
-      // 更新结果数据
-      result.data = filteredData
-      // 更新总数（如果前端过滤，总数可能不准确，但至少显示过滤后的数量）
-      if (result.total !== undefined) {
-        result.total = filteredData.length
       }
-    }
 
-    // 保存数据到 state（用于其他视图）
-    if (result.data) {
-      setTableData(result.data)
-    }
+      // 竞态：旧请求的结果到达时丢弃；只让最新请求写状态
+      if (requestSeqRef.current !== seq) return result
 
-    return result
+      // 仅在数据引用变化时 setState（结合 TanStack 结构共享，避免无变更渲染）
+      if (result.data) {
+        setTableData((prev) => (prev === result.data ? prev : result.data))
+      }
+
+      return result
     } finally {
-      if (showLoading && loadingDelay > 0) {
+      if (liveShowLoading && liveLoadingDelay > 0 && requestSeqRef.current === seq) {
         isLoadingRef.current = false
         if (loadingDelayTimerRef.current) {
           clearTimeout(loadingDelayTimerRef.current)
@@ -1488,7 +1557,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         setShowDelayedLoading(false)
       }
     }
-  }, [showLoading, loadingDelay, columnsForPinyinSearch, queryClient, defaultPageSize])
+  }, [queryClient])
 
   const mergedToolbarOptions = (restProps.options || (restProps.toolbar as any)?.options || {}) as any
 
@@ -1723,7 +1792,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0;
           width: 100%;
         }
-        /* ... 省略了其他样式（见下方替换内容） ... */
+        /**
+         * 单元格默认不换行（贴合原生 antd 单行表格风格）。
+         * 例外：uni-lifecycle / uni-action 由列上 width/minWidth 与 rc-table 布局决定，不在此强行 overflow:visible（否则会视觉上「溢出到邻列」）。
+         */
+        .uni-table-container .ant-table-tbody > tr > td:not(.uni-table-operation-cell):not(.uni-table-lifecycle-cell) {
+          white-space: nowrap;
+        }
+        .uni-table-container .ant-table-tbody > tr > td.uni-table-operation-cell {
+          white-space: nowrap;
+        }
+        .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell {
+          white-space: nowrap;
+        }
       `}</style>
       <div
         ref={containerRef}
@@ -1851,8 +1932,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 return memoizedRightActions ? [memoizedRightActions] : []
               }}
               {...(() => {
-                // 过滤 toolBarRender/search，合并 components/scroll 以遵守原生 ProTable 设定
-                // （固定列、scroll.y 等由 rc-table 处理，仅注入列宽拖拽的 header.cell 与 scroll.x）
+                // 过滤 toolBarRender/search；scroll：调用方优先，否则默认 x 为 max-content（antd）；拖拽开启时注入数值 x
                 const {
                   toolBarRender,
                   search,
@@ -1872,11 +1952,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                         },
                       }
                     : userComponents
+                /**
+                 * 列宽与横向滚动：与 antd Table 文档一致。
+                 * - 调用方若传 `scroll.x`（含 `true` / 数值 / `'max-content'`），原样尊重；
+                 * - 未传 `scroll.x` 时默认 `x: 'max-content'`，总宽随列 `width`/`minWidth` 与单元格内容计算，
+                 *   不再由 UniTable 用「列宽求和」代替 antd/rc-table 的布局算法。
+                 * - 启用列拖拽且 hook 给出 tableWidth 时，仍以数值 x 覆盖（拖拽路径专用）。
+                 */
                 const ourScrollX = effectiveTableWidth
                 let mergedScroll =
                   ourScrollX != null
                     ? { ...(userScroll || {}), x: ourScrollX }
-                    : userScroll
+                    : userScroll?.x !== undefined
+                      ? userScroll
+                      : { ...(userScroll || {}), x: 'max-content' as const }
                 const useVirtual = virtualized || userVirtual === true
                 if (useVirtual) {
                   mergedScroll = {

@@ -6,7 +6,10 @@
 
 import { api } from '../../../services/api';
 import { getUserList } from '../../../services/user';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
+import {
+  getDictionaryItemsCached,
+  getDictionaryItemsSync,
+} from '../../../services/dataDictionaryCache';
 import type {
   Customer,
   CustomerCreate,
@@ -123,16 +126,25 @@ export const getUserOptions = async () => {
   }
 };
 
-/** 数据字典下拉选项（用于客户/供应商表单 optionsMap） */
+/**
+ * 数据字典下拉选项（用于客户/供应商表单 optionsMap、列表标签映射等）。
+ * 命中模块级缓存即同步返回；首次按 code 异步拉取并写缓存。
+ * 同步缓存读取请改用 `getDictionaryOptionsSync(code)`。
+ */
 export const getDictionaryOptions = async (dictionaryCode: string) => {
   try {
-    const dict = await getDataDictionaryByCode(dictionaryCode);
-    const items = await getDictionaryItemList(dict.uuid, true);
-    return items
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((item) => ({ label: item.label, value: item.value }));
+    const items = await getDictionaryItemsCached(dictionaryCode);
+    return items.map((item) => ({ label: item.label, value: item.value }));
   } catch {
     return [];
   }
+};
+
+/** 同步读取已缓存的字典选项；未命中返回 undefined（用于 useState 初始值） */
+export const getDictionaryOptionsSync = (
+  dictionaryCode: string,
+): { label: string; value: string }[] | undefined => {
+  const items = getDictionaryItemsSync(dictionaryCode);
+  return items?.map((item) => ({ label: item.label, value: item.value }));
 };
 

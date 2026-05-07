@@ -935,10 +935,13 @@ code {
   vertical-align: middle !important;
 }
 
-/* 表格滚动条：与全局完全统一（6px、@scrollbar-thumb/@scrollbar-thumb-hover） */
+/* 表格滚动条：与全局完全统一（6px、@scrollbar-thumb/@scrollbar-thumb-hover）
+ * scrollbar-gutter：预留纵向滚动条占位，避免内容加载后滚动条出现导致整表横向轻微错位（固定列「左移」观感）
+ */
 .ant-table-wrapper .ant-table-body,
 .ant-table-wrapper .ant-table-content {
   overflow-x: auto !important;
+  scrollbar-gutter: stable;
   scrollbar-width: thin !important;
   scrollbar-color: @scrollbar-thumb transparent !important;
 }

@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -1778,26 +1778,9 @@ const SalesOrdersPage: React.FC = () => {
       sorter: true,
       hideInSearch: false,
       render: (_: unknown, record: SalesOrder) => (
-        <Space size={4}>
-          <span>{record.order_code ?? '-'}</span>
-          <Tooltip title={t('field.invitationCode.copy')}>
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined style={{ fontSize: 12 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                const text = record.order_code ?? '';
-                if (text) {
-                  navigator.clipboard.writeText(text).then(
-                    () => messageApi.success(t('common.copySuccess')),
-                    () => messageApi.error(t('common.copyFailed'))
-                  );
-                }
-              }}
-            />
-          </Tooltip>
-        </Space>
+        <Typography.Text copyable={{ text: String(record.order_code ?? '') }} ellipsis>
+          {record.order_code ?? '-'}
+        </Typography.Text>
       ),
     },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true, hideInSearch: false },
@@ -1851,7 +1834,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 140,
       align: 'left' as const,
       fixed: 'right' as const,
       valueType: 'select',
@@ -2064,26 +2047,9 @@ const SalesOrdersPage: React.FC = () => {
       fixed: 'left' as const,
       ellipsis: true,
       render: (_, record) => (
-        <Space size={4}>
-          <span>{record.order_code ?? '-'}</span>
-          <Tooltip title={t('field.invitationCode.copy')}>
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined style={{ fontSize: 12 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                const text = record.order_code ?? '';
-                if (text) {
-                  navigator.clipboard.writeText(text).then(
-                    () => messageApi.success(t('common.copySuccess')),
-                    () => messageApi.error(t('common.copyFailed'))
-                  );
-                }
-              }}
-            />
-          </Tooltip>
-        </Space>
+        <Typography.Text copyable={{ text: String(record.order_code ?? '') }} ellipsis>
+          {record.order_code ?? '-'}
+        </Typography.Text>
       ),
     },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 130, ellipsis: true, hideInSearch: false },

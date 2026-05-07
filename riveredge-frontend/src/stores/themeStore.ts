@@ -37,10 +37,7 @@ export interface ThemeConfig {
 }
 
 export interface ResolvedTheme {
-  algorithm:
-    | typeof theme.defaultAlgorithm
-    | typeof theme.darkAlgorithm
-    | Array<typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm>;
+  algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm;
   token: {
     colorPrimary?: string;
     borderRadius?: number;
@@ -65,6 +62,7 @@ function normalizeThemeConfig(c: ThemeConfig): ThemeConfig {
   const br = typeof c.borderRadius === 'number' ? c.borderRadius : Number(c.borderRadius);
   return {
     ...c,
+    compact: false,
     fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
     borderRadius: clampFinite(br, 0, 24, DEFAULT_CONFIG.borderRadius),
   };
@@ -95,7 +93,7 @@ function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
 function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedTheme {
   const effectiveMode = resolveTheme(themeMode);
   const baseAlgorithm = effectiveMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
-  const algorithm = config.compact ? [baseAlgorithm, theme.compactAlgorithm] : baseAlgorithm;
+  const algorithm = baseAlgorithm;
   const isDark = effectiveMode === 'dark';
 
   return {

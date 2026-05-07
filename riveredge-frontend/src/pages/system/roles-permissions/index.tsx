@@ -41,7 +41,6 @@ import {
   SaveOutlined,
   ReloadOutlined,
   SearchOutlined,
-  FolderOutlined,
   AppstoreOutlined,
   CopyOutlined,
   NodeCollapseOutlined,
@@ -346,7 +345,6 @@ function parseResourceAndAction(code: string): { resource: string; action: strin
 function buildMenuPermissionTreeData(
   menus: MenuTree[],
   pool: Permission[],
-  globallyUsed: Set<string>,
   expandKeys: React.Key[],
   t: (key: string, opts?: { defaultValue?: string }) => string,
   token: { colorPrimary: string },
@@ -363,7 +361,6 @@ function buildMenuPermissionTreeData(
       ? buildMenuPermissionTreeData(
           m.children,
           pool,
-          globallyUsed,
           expandKeys,
           t,
           token,
@@ -376,9 +373,7 @@ function buildMenuPermissionTreeData(
     if (code) {
       let matchPool = permissionsMatchingMenuCode(code, pool);
       // 菜单展示不做全局占用去重，避免前序节点“吃掉”后序分组导致菜单被误判为空。
-      // globallyUsed 仅用于未挂载统计。
       const matched = matchPool;
-      matched.forEach((p) => globallyUsed.add(p.uuid));
       const parsedMenu = parseResourceAndAction(code);
       const preferredByAction = new Map<string, Permission>();
       matched.forEach((permission) => {
@@ -450,28 +445,6 @@ function buildMenuPermissionTreeData(
 
 function isAssignablePermissionTreeKey(key: string): boolean {
   return !key.startsWith('menu-');
-}
-
-/** 未挂载权限按 code 首段（应用 code）分组，便于看出自哪个应用 manifest / 同步 */
-function groupOrphanPermissionsByApp(orphans: Permission[]): [string, Permission[]][] {
-  const byApp = new Map<string, Permission[]>();
-  for (const p of orphans) {
-    const i = p.code.indexOf(':');
-    // 无应用前缀（不含 ":"）的权限不在未挂载分组中展示
-    if (i <= 0) continue;
-    const app = p.code.slice(0, i);
-    if (!byApp.has(app)) byApp.set(app, []);
-    byApp.get(app)!.push(p);
-  }
-  return [...byApp.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
-function isMenuMountRequiredPermission(code: string): boolean {
-  const c = (code || '').trim().toLowerCase();
-  if (!c) return false;
-  // 系统治理类接口权限（system:*）不以菜单挂载为目标，避免误报“未挂载”。
-  if (c.startsWith('system:')) return false;
-  return true;
 }
 
 const FieldNameInput: React.FC<{
@@ -837,55 +810,10 @@ const RolesPermissionsPage: React.FC = () => {
     });
 
     const expandKeys: React.Key[] = [];
-    const globallyUsed = new Set<string>();
-
-    const orphanChildren = (list: Permission[]): DataNode[] =>
-      [...list].sort((a, b) => a.code.localeCompare(b.code)).map((permission) => {
-        const actionLabel = permissionLeafDisplayLabel(permission, t);
-        return {
-          title: <span style={{ whiteSpace: 'nowrap' }}>{actionLabel}</span>,
-          key: permission.uuid,
-          isLeaf: true,
-          className: 'permission-action-leaf',
-        };
-      });
-
-    const buildOrphanRootNode = (list: Permission[]): DataNode | null => {
-      if (list.length === 0) return null;
-      const appFolders: DataNode[] = groupOrphanPermissionsByApp(list).map(([app, plist]) => {
-        const key = `menu-orphan-app-${app}`;
-        expandKeys.push(key);
-        const label = `${getAppDisplayName(app, t, app)} (${app}) · ${plist.length}`;
-        return {
-          title: <span style={{ fontWeight: 500 }}>{label}</span>,
-          key,
-          disableCheckbox: true,
-          icon: <FolderOutlined />,
-          children: orphanChildren(plist),
-        };
-      });
-      if (appFolders.length === 0) return null;
-      expandKeys.push('menu-orphan-root');
-      return {
-        title: (
-          <Tooltip title={t('pages.system.roles.orphanPermissionsTooltip')}>
-            <span style={{ fontWeight: 600, color: token.colorPrimary }}>
-              {t('pages.system.roles.permissionsNotInMenu')}
-            </span>
-          </Tooltip>
-        ),
-        key: 'menu-orphan-root',
-        disableCheckbox: true,
-        icon: <FolderOutlined />,
-        children: appFolders,
-      };
-    };
 
     if (!menuTree.length) {
-      const treeData: DataNode[] = [];
-      const orphanRoot = buildOrphanRootNode(filteredItems);
-      if (orphanRoot) treeData.push(orphanRoot);
-      setPermissionTreeData(treeData);
+      /** 无菜单树时不展示「未挂载」聚合节点（产品要求前端直接过滤，避免干扰配置） */
+      setPermissionTreeData([]);
       if (!initializedExpandRef.current) {
         setPermissionTreeExpandedKeys(expandKeys);
         initializedExpandRef.current = true;
@@ -900,18 +828,11 @@ const RolesPermissionsPage: React.FC = () => {
     const treeData = buildMenuPermissionTreeData(
       menusForPool,
       filteredItems,
-      globallyUsed,
       expandKeys,
       t,
       token,
       mergedMap
     );
-
-      const orphans = filteredItems.filter(
-        (p) => !globallyUsed.has(p.uuid) && isMenuMountRequiredPermission(p.code)
-      );
-    const orphanRoot = buildOrphanRootNode(orphans);
-    if (orphanRoot) treeData.push(orphanRoot);
 
     setPermissionTreeData(treeData);
     if (!initializedExpandRef.current) {

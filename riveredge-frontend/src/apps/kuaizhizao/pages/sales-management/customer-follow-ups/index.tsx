@@ -27,7 +27,10 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
-import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
+import {
+  getDictionaryOptions,
+  getDictionaryOptionsSync,
+} from '../../../../master-data/services/supply-chain';
 import {
   CustomerFollowUpFormModal,
   type CustomerFollowUpPreset,
@@ -62,7 +65,9 @@ const CustomerFollowUpsPage: React.FC = () => {
   const detailIdRef = useRef<number | null>(null);
   const pendingOnlySkipReloadRef = useRef(true);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>([]);
+  const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>(
+    () => getDictionaryOptionsSync(DICT_CODE) ?? [],
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerFollowUp | null>(null);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
@@ -102,7 +107,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         dataIndex: 'activity_type_code',
         width: 100,
         ellipsis: true,
-        render: (_, r) => activityLabelMap[r.activity_type_code] || r.activity_type_code || '—',
+        render: (_, r) => activityLabelMap[r.activity_type_code] ?? '—',
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colContent'),
@@ -119,7 +124,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
-        render: (_, row) => activityLabelMap[row.activity_type_code] || row.activity_type_code || '—',
+        render: (_, row) => activityLabelMap[row.activity_type_code] ?? '—',
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
@@ -319,7 +324,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       dataIndex: 'activity_type_code',
       width: 120,
       hideInSearch: true,
-      render: (_, row) => activityLabelMap[row.activity_type_code] || row.activity_type_code,
+      render: (_, row) => activityLabelMap[row.activity_type_code] ?? '—',
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colContent'),

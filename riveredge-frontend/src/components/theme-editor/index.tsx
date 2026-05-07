@@ -113,7 +113,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewTheme, setPreviewTheme] = useState<{
-    algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm | Array<typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm>;
+    algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm;
     token: {
       colorPrimary?: string;
       borderRadius?: number;
@@ -122,8 +122,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   } | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
   const [tabsPersistenceValue, setTabsPersistenceValue] = useState<boolean>(false);
-  const [compactValue, setCompactValue] = useState<boolean>(false); // 颜色模式：浅色/深色/跟随系统
-
   /**
    * B端主流配色最佳实践 - 统一预设颜色配置
    * 
@@ -342,7 +340,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         colorPrimary: colorPrimaryValue,
         borderRadius: currentBorderRadius,
         fontSize: currentFontSize,
-        compact: !!applied.compact,
         siderBgColor: applied.siderBgColor || '',
         headerBgColor: applied.headerBgColor || '',
         tabsBgColor: applied.tabsBgColor || '',
@@ -358,7 +355,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setHeaderBgColorValue(applied.headerBgColor || '');
       setTabsBgColorValue(applied.tabsBgColor || '');
       setTabsPersistenceValue(tabsPersistence);
-      setCompactValue(!!applied.compact);
 
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
@@ -387,10 +383,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       baseAlgorithm = theme.defaultAlgorithm;
     }
 
-    // 如果启用了紧凑模式，组合紧凑算法
-    const algorithm = values.compact
-      ? [baseAlgorithm, theme.compactAlgorithm]
-      : baseAlgorithm;
+    const algorithm = baseAlgorithm;
 
     const token = {
       colorPrimary: values.colorPrimary || '#1890ff',
@@ -407,9 +400,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const handleValuesChange = (changedValues: any, allValues: any) => {
     if (changedValues.tabsPersistence !== undefined) {
       setTabsPersistenceValue(changedValues.tabsPersistence);
-    }
-    if (changedValues.compact !== undefined) {
-      setCompactValue(changedValues.compact);
     }
     // 确保 colorPrimary 是字符串格式
     if (changedValues.colorPrimary) {
@@ -519,7 +509,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         colorPrimary: colorPrimaryValue,
         borderRadius: values.borderRadius || 6,
         fontSize: values.fontSize || 14,
-        compact: values.compact || false,
+        compact: false,
         layoutMode: 'mix', // 固定使用 MIX 布局模式
         theme: values.colorMode, // 保存当前颜色模式，用于 App.tsx 同步加载
       };
@@ -558,7 +548,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         colorPrimary: colorPrimaryValue,
         borderRadius: values.borderRadius ?? 6,
         fontSize: values.fontSize ?? 14,
-        compact: !!values.compact,
+        compact: false,
         siderBgColor: siderBgColorValue || '',
         headerBgColor: headerBgColorValue || '',
         tabsBgColor: tabsBgColorValue || '',
@@ -643,7 +633,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         colorPrimary: '#1890ff',
         borderRadius: 6,
         fontSize: 14,
-        compact: false,
         siderBgColor: '',
         headerBgColor: '',
         tabsBgColor: '',
@@ -651,7 +640,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
       // 2. 更新本地表单和状态
       setTabsPersistenceValue(true);
-      setCompactValue(false);
       setColorMode('light');
       setColorPrimaryValue('#1890ff');
       setSiderBgColorValue('');
@@ -775,7 +763,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               colorPrimary: '#1890ff',
               borderRadius: 6,
               fontSize: 14,
-              compact: false,
               colorMode: 'light',
               layoutMode: 'mix',
             }}
@@ -1443,22 +1430,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              <Form.Item
-                name="compact"
-                label="紧凑模式"
-                valuePropName="checked"
-              >
-                <div>
-                  <Switch checked={compactValue} onChange={(checked) => {
-                    setCompactValue(checked);
-                    form.setFieldsValue({ compact: checked });
-                  }} />
-                  <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                    启用后，界面元素间距更小，可显示更多内容
-                  </Text>
-                </div>
-              </Form.Item>
-
               <Form.Item
                 name="tabsPersistence"
                 label="标签栏持久化"

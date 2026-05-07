@@ -44,14 +44,11 @@ export class ThemeManager {
       colorPrimary = '#1890ff',
       borderRadius = 6,
       fontSize = 14,
-      compact = false,
       dark = false,
     } = options;
 
     const baseAlgorithm = dark ? theme.darkAlgorithm : theme.defaultAlgorithm;
-    const algorithm = compact
-      ? [baseAlgorithm, theme.compactAlgorithm]
-      : baseAlgorithm;
+    const algorithm = baseAlgorithm;
 
     return {
       algorithm,
@@ -81,13 +78,6 @@ export class ThemeManager {
         fontSize: 14,
         compact: false,
         dark: true,
-      },
-      compact: {
-        colorPrimary: '#1890ff',
-        borderRadius: 4,
-        fontSize: 13,
-        compact: true,
-        dark: false,
       },
       modern: {
         colorPrimary: '#722ed1',

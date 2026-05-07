@@ -4,7 +4,7 @@
  * 提供客户的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
@@ -21,6 +21,7 @@ import {
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
 import { extractProTableSort, mapSupplyChainSortField } from '../../../../../utils/tableQueryKey';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
@@ -52,24 +53,28 @@ const CustomersPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
-  const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>({});
+  const DICT_CODES = useMemo(
+    () => ['INDUSTRY_SECTOR', 'CUSTOMER_LEVEL', 'PARTNER_SOURCE_CHANNEL', 'CUSTOMER_CATEGORY', 'CONTACT_TITLE'],
+    [],
+  );
+  const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>(() => {
+    const seed: Record<string, Record<string, string>> = {};
+    DICT_CODES.forEach((c) => {
+      const m = getDictionaryLabelMapSync(c);
+      if (m) seed[c] = m;
+    });
+    return seed;
+  });
   const customerDetailReqRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const codes = [
-          'INDUSTRY_SECTOR',
-          'CUSTOMER_LEVEL',
-          'PARTNER_SOURCE_CHANNEL',
-          'CUSTOMER_CATEGORY',
-          'CONTACT_TITLE',
-        ];
-        const packs = await Promise.all(codes.map((c) => getDictionaryOptions(c)));
+        const packs = await Promise.all(DICT_CODES.map((c) => getDictionaryOptions(c)));
         if (cancelled) return;
         const maps: Record<string, Record<string, string>> = {};
-        codes.forEach((code, index) => {
+        DICT_CODES.forEach((code, index) => {
           maps[code] = Object.fromEntries(packs[index].map((o) => [o.value, o.label]));
         });
         setDictLabelMaps(maps);
@@ -80,11 +85,11 @@ const CustomersPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [DICT_CODES]);
 
   const dictLabel = (dictCode: string, value?: string) => {
     if (value == null || value === '') return '—';
-    return dictLabelMaps[dictCode]?.[value] ?? value;
+    return dictLabelMaps[dictCode]?.[value] ?? '—';
   };
 
   /**

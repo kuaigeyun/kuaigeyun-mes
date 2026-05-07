@@ -45,6 +45,7 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
           formRef={formRef}
           actionRef={actionRef}
           searchParamsRef={searchParamsRef}
+          showReset={false}
         />
       </Suspense>
     </ErrorBoundary>

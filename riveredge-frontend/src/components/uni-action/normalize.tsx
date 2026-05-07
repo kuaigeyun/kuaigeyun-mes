@@ -43,7 +43,7 @@ function rowActionToneMatchesProps(tone: ResolvedRowActionTone, props: Record<st
   return (
     props.type === tone.type &&
     !!props.danger === danger &&
-    props.size === 'small' &&
+    props.size == null &&
     props.style == null &&
     props.color === undefined &&
     props.variant === undefined
@@ -157,15 +157,16 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
       return node
     }
 
-    return React.cloneElement(
-      node as React.ReactElement<any>,
-      clonePropsForRowTone(tone, {
-        size: 'small',
-        className: targetClass,
-        icon: nextIcon,
-        children: normalizedText,
-      }) as any,
-    )
+    const toneProps = clonePropsForRowTone(tone, {
+      className: targetClass,
+      icon: nextIcon,
+      children: normalizedText,
+    }) as Record<string, unknown>
+    const merged = { ...(props as Record<string, unknown>), ...toneProps }
+    if (merged.size === 'small') {
+      delete merged.size
+    }
+    return React.cloneElement(node as React.ReactElement<any>, merged as any)
   }
 
   if (typeof node.type === 'string' && node.type.toLowerCase() === 'a') {
@@ -182,7 +183,6 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
         className={rowActionClassName(kind)}
         type={tone.type}
         danger={tone.mode === 'destructive' ? true : tone.danger}
-        size="small"
         icon={(props.icon as React.ReactNode) || defaultIcon}
         onClick={typeof props.onClick === 'function' ? (props.onClick as React.MouseEventHandler) : undefined}
         disabled={!!props.disabled}

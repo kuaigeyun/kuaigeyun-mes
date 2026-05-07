@@ -2,7 +2,7 @@
  * 偏好设置页面
  * 
  * 用于用户查看和编辑偏好设置。
- * 支持主题、主题配置（颜色/圆角/字体/紧凑/背景色/标签持久化）、语言、通知设置、界面设置等。
+ * 支持主题、主题配置（颜色/圆角/字体/背景色/标签持久化）、语言、通知设置、界面设置等。
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -27,6 +27,12 @@ function normalizeColor(value: string | Color | null | undefined, defaultVal: st
   return defaultVal;
 }
 
+/** 与 UniTable 一致：仅 large | middle | small，默认紧凑（small），兼容历史 default */
+function normalizeProTableDensity(v: unknown): 'large' | 'middle' | 'small' {
+  if (v === 'large' || v === 'middle' || v === 'small') return v;
+  return 'small';
+}
+
 /**
  * 偏好设置页面组件
  */
@@ -37,7 +43,6 @@ const defaultPreferenceValues: Record<string, any> = {
     colorPrimary: '#1890ff',
     borderRadius: 6,
     fontSize: 14,
-    compact: false,
     siderBgColor: '',
     headerBgColor: '',
     tabsBgColor: '',
@@ -50,7 +55,7 @@ const defaultPreferenceValues: Record<string, any> = {
     font_size: 'medium',
     sidebar_collapsed: false,
     default_page_size: 20,
-    default_table_density: 'default',
+    default_table_density: 'small',
     max_tabs: 20,
   },
 };
@@ -73,7 +78,12 @@ const UserPreferencesPage: React.FC = () => {
       ...defaultPreferenceValues,
       ...cached,
       theme_config: { ...defaultPreferenceValues.theme_config, ...(cached.theme_config || {}) },
-      ui: { ...defaultPreferenceValues.ui, ...(cached.ui || {}) },
+      ui: {
+        ...defaultPreferenceValues.ui,
+        ...(cached.ui || {}),
+        layout: 'default',
+        default_table_density: normalizeProTableDensity((cached.ui || {}).default_table_density),
+      },
       notifications: { ...defaultPreferenceValues.notifications, ...(cached.notifications || {}) },
     };
   });
@@ -122,6 +132,7 @@ const UserPreferencesPage: React.FC = () => {
         theme_config: {
           ...defaultPreferenceValues.theme_config,
           ...(preferences.theme_config || {}),
+          compact: false,
         },
         ui: {
           ...defaultPreferenceValues.ui,
@@ -143,7 +154,6 @@ const UserPreferencesPage: React.FC = () => {
         colorPrimary: getPreference<string>('theme_config.colorPrimary', '#1890ff'),
         borderRadius: getPreference<number>('theme_config.borderRadius', 6),
         fontSize: getPreference<number>('theme_config.fontSize', 14),
-        compact: getPreference<boolean>('theme_config.compact', false),
         siderBgColor: getPreference<string>('theme_config.siderBgColor', '') ?? '',
         headerBgColor: getPreference<string>('theme_config.headerBgColor', '') ?? '',
         tabsBgColor: getPreference<string>('theme_config.tabsBgColor', '') ?? '',
@@ -157,11 +167,13 @@ const UserPreferencesPage: React.FC = () => {
         push: getPreference<boolean>('notifications.push', false),
       },
       ui: {
-        layout: getPreference<string>('ui.layout', 'default'),
+        layout: 'default',
         font_size: getPreference<string>('ui.font_size', 'medium'),
         sidebar_collapsed: getPreference<boolean>('ui.sidebar_collapsed', false),
         default_page_size: getPreference<number>('ui.default_page_size', 20),
-        default_table_density: getPreference<string>('ui.default_table_density', 'default'),
+        default_table_density: normalizeProTableDensity(
+          getPreference<string | undefined>('ui.default_table_density', undefined) ?? 'small',
+        ),
         max_tabs: getPreference<number>('ui.max_tabs', 20),
       },
     };
@@ -184,13 +196,30 @@ const UserPreferencesPage: React.FC = () => {
             colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
             borderRadius: tc.borderRadius ?? 6,
             fontSize: tc.fontSize ?? 14,
-            compact: !!tc.compact,
+            compact: false,
             siderBgColor: normalizeColor(tc.siderBgColor, '') || '',
             headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
             tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
           },
         };
       }
+
+      const prevUi =
+        preferences && typeof preferences.ui === 'object' && preferences.ui !== null
+          ? preferences.ui
+          : {};
+      const submittedUi = (values.ui && typeof values.ui === 'object') ? values.ui : {};
+      values = {
+        ...values,
+        ui: {
+          ...prevUi,
+          ...submittedUi,
+          layout: 'default',
+          default_table_density: normalizeProTableDensity(
+            submittedUi.default_table_density ?? prevUi.default_table_density ?? 'small',
+          ),
+        },
+      };
 
       await updatePreferences(values);
 
@@ -306,14 +335,7 @@ const UserPreferencesPage: React.FC = () => {
                 {/* 辅助开关 */}
                 <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.miscOptions') || '界面辅助'}</Typography.Title>
                 <Row gutter={24}>
-                  <Col span={12}>
-                    <ProFormSwitch 
-                      name={['theme_config', 'compact']} 
-                      label={t('pages.personal.preferences.compactMode')} 
-                      fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} 
-                    />
-                  </Col>
-                  <Col span={12}>
+                  <Col span={24}>
                     <ProFormSwitch 
                       name="tabs_persistence" 
                       label={t('pages.personal.preferences.tabsPersistence')} 
@@ -367,20 +389,6 @@ const UserPreferencesPage: React.FC = () => {
                 {/* 界面 */}
                 <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.interface')}</Typography.Title>
                 <Row gutter={[16, 16]}>
-                  <Col span={12}>
-                    <SafeProFormSelect 
-                      name={['ui', 'layout']} 
-                      label={t('pages.personal.preferences.layout')} 
-                      valueEnum={{ default: t('pages.personal.preferences.layoutDefault'), compact: t('pages.personal.preferences.layoutCompact'), wide: t('pages.personal.preferences.layoutWide') }} 
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <SafeProFormSelect 
-                      name={['ui', 'default_table_density']} 
-                      label={t('pages.personal.preferences.tableDensity')} 
-                      valueEnum={{ default: t('pages.personal.preferences.densityDefault'), middle: t('pages.personal.preferences.densityMiddle'), small: t('pages.personal.preferences.densitySmall') }} 
-                    />
-                  </Col>
                   <Col span={12}>
                     <SafeProFormSelect 
                       name={['ui', 'default_page_size']} 
