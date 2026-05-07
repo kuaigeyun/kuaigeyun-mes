@@ -15,8 +15,6 @@ import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tool
 import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates';
 import {
   MODAL_CONFIG,
-  SYSTEM_VIEWPORT_OFFSETS,
-  getViewportHeightExpr,
 } from '../../../../components/layout-templates/constants';
 import { 
   EditOutlined, 
@@ -987,8 +985,8 @@ const FileListPage: React.FC = () => {
         fileType={previewFile?.file_type}
         fileExtension={previewFile?.file_extension}
         title={t('pages.system.files.previewModalTitle')}
-        width="90%"
-        height={getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.FILE_PREVIEW_MODAL_PX)}
+        width="calc(100vw - 32px)"
+        height="calc(100vh - 32px)"
       />
 
       {/* 重命名 Modal */}

@@ -74,6 +74,7 @@ import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import { UniPdfPreview } from '../../../../../components/uni-preview';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
@@ -3310,66 +3311,37 @@ const QuotationsPage: React.FC = () => {
         </Space>
       </Modal>
 
-      <Modal
+      <UniPdfPreview
         open={pdfPreviewVisible}
         title={pdfPreviewFileName}
-        width="90vw"
-        style={{ top: 20 }}
-        zIndex={quotationElevatedModalZIndex}
-        styles={{ body: { padding: 0, height: '80vh' } }}
-        footer={
-          <Space>
-            <Button
-              onClick={() => {
-                if (pdfPreviewBlobUrl) {
-                  const a = document.createElement('a');
-                  a.href = pdfPreviewBlobUrl;
-                  a.download = pdfPreviewFileName;
-                  a.rel = 'noopener';
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                }
-              }}
-            >
-              保存
-            </Button>
-            <Button
-              onClick={() => {
-                const iframe = document.getElementById('quotation-pdf-preview-frame') as HTMLIFrameElement | null;
-                try {
-                  iframe?.contentWindow?.focus();
-                  iframe?.contentWindow?.print();
-                } catch {
-                  window.print();
-                }
-              }}
-            >
-              打印
-            </Button>
-            <Button type="primary" onClick={() => setPdfPreviewVisible(false)}>
-              关闭
-            </Button>
-          </Space>
-        }
-        onCancel={() => setPdfPreviewVisible(false)}
-        afterClose={() => {
+        src={pdfPreviewBlobUrl || undefined}
+        inset={16}
+        onDownload={() => {
+          if (pdfPreviewBlobUrl) {
+            const a = document.createElement('a');
+            a.href = pdfPreviewBlobUrl;
+            a.download = pdfPreviewFileName;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        }}
+        onPrint={() => {
+          try {
+            window.print();
+          } catch {
+            // no-op
+          }
+        }}
+        onClose={() => {
+          setPdfPreviewVisible(false);
           if (pdfPreviewBlobUrl) {
             URL.revokeObjectURL(pdfPreviewBlobUrl);
             setPdfPreviewBlobUrl(null);
           }
         }}
-        destroyOnHidden
-      >
-        {pdfPreviewBlobUrl && (
-          <iframe
-            id="quotation-pdf-preview-frame"
-            src={pdfPreviewBlobUrl}
-            title="PDF 预览"
-            style={{ border: 0, width: '100%', height: '100%', background: '#525659' }}
-          />
-        )}
-      </Modal>
+      />
     </>
   );
 };

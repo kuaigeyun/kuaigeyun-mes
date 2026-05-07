@@ -192,6 +192,21 @@ function buildDefaultColumnsStateMap(columns: any[]): Record<string, any> {
   return map
 }
 
+function countTableRowsWithChildren(rows: any[]): number {
+  if (!Array.isArray(rows) || rows.length === 0) return 0
+  let total = 0
+  const walk = (items: any[]) => {
+    for (const item of items) {
+      total += 1
+      if (Array.isArray(item?.children) && item.children.length > 0) {
+        walk(item.children)
+      }
+    }
+  }
+  walk(rows)
+  return total
+}
+
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
   onResetResizable,
@@ -2012,11 +2027,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   Array.isArray(tableData) &&
                   tableData.some((row) => Array.isArray((row as { children?: unknown[] })?.children) && (row as { children?: unknown[] }).children!.length > 0)
                 const hasExpandable = !!otherProps.expandable || hasTreeRows
+                const effectiveRenderedRowCount = hasTreeRows
+                  ? countTableRowsWithChildren(tableData as any[])
+                  : tableData.length
                 const shouldDisableAutoScrollY =
                   !allowCustomScrollY &&
-                  !hasExpandable &&
-                  tableData.length > 0 &&
-                  tableData.length < currentPageSize
+                  effectiveRenderedRowCount > 0 &&
+                  effectiveRenderedRowCount < currentPageSize
                 if (!useVirtual && mergedScroll?.y === undefined && !shouldDisableAutoScrollY) {
                   mergedScroll = {
                     ...(mergedScroll || {}),

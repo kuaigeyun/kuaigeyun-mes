@@ -437,27 +437,6 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [materialGroups, messageApi, selectedGroupId, t])
 
-  const emitAgentDebugLog = useCallback(
-    (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-      // #region agent log
-      window.fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e3a76' },
-        body: JSON.stringify({
-          sessionId: '8e3a76',
-          runId,
-          hypothesisId,
-          location,
-          message,
-          data,
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
-    },
-    []
-  )
-
   /**
    * 递归收集所有节点的key
    */
@@ -1158,27 +1137,10 @@ const MaterialsManagementPage: React.FC = () => {
   const handleMaterialSubmit = async (values: any) => {
     try {
       setMaterialFormLoading(true)
-      emitAgentDebugLog('run-1', 'H3', 'management.tsx:handleMaterialSubmit:start', 'received values from MaterialForm', {
-        isEdit: materialIsEdit,
-        hasDefaults: !!values?.defaults,
-        defaultsKeys: Object.keys(values?.defaults || {}),
-        defaultTaxRate: values?.defaults?.defaultTaxRate,
-        defaultSalePrice: values?.defaults?.defaultSalePrice,
-      })
 
       if (materialIsEdit && currentMaterial) {
         const result = await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
-        emitAgentDebugLog('run-1', 'H4', 'management.tsx:handleMaterialSubmit:update-ok', 'update api resolved', {
-          materialUuid: currentMaterial.uuid,
-        })
         const refreshed = await materialApi.get(currentMaterial.uuid)
-        emitAgentDebugLog('run-1', 'H4', 'management.tsx:handleMaterialSubmit:readback', 'readback after update', {
-          materialUuid: currentMaterial.uuid,
-          hasDefaults: !!(refreshed as any)?.defaults,
-          defaultsKeys: Object.keys(((refreshed as any)?.defaults || {})),
-          defaultTaxRate: (refreshed as any)?.defaults?.defaultTaxRate,
-          defaultSalePrice: (refreshed as any)?.defaults?.defaultSalePrice,
-        })
         messageApi.success(t('common.updateSuccess'))
         
         setMaterialModalVisible(false)
@@ -1540,25 +1502,6 @@ const MaterialsManagementPage: React.FC = () => {
 
   return (
     <>
-      {/* #region agent log */}
-      <div
-        style={{
-          position: 'fixed',
-          right: 8,
-          bottom: 8,
-          zIndex: 2147483647,
-          fontSize: 10,
-          lineHeight: '14px',
-          padding: '2px 6px',
-          borderRadius: 4,
-          background: 'rgba(255,77,79,0.9)',
-          color: '#fff',
-          pointerEvents: 'none',
-        }}
-      >
-        MGDBG-4d2004
-      </div>
-      {/* #endregion */}
       <TwoColumnLayout
         leftPanel={{
           collapsed: leftPanelCollapsed,
