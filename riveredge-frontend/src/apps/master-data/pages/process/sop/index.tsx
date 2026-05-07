@@ -839,6 +839,7 @@ const SOPPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SOP>
+        columnPersistenceId="apps.master-data.pages.process.sop"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

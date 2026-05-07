@@ -546,6 +546,7 @@ const WorkCentersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<WorkCenter>
+          columnPersistenceId="apps.master-data.pages.factory.work-centers"
           actionRef={actionRef}
           columns={columns}
           viewTypes={['table', 'help']}

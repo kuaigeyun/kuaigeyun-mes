@@ -647,6 +647,7 @@ const IntegrationConfigListPage: React.FC = () => {
             {t('pages.system.integrationConfigs.subtitle')}
           </Paragraph>
           <UniTable<IntegrationConfig>
+          columnPersistenceId="pages.system.integration-configs.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

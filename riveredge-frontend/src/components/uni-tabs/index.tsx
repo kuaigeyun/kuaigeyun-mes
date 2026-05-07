@@ -910,12 +910,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [activeKey]);
 
   /** 是否为工作台/分析页/角色权限页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁；角色权限页自身有 padding，需去除 UniTabs 的重复 padding） */
-  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/workplace' || location.pathname === '/system/dashboard/analysis' || location.pathname === '/system/roles';
+  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/analysis' || location.pathname === '/system/roles';
 
   const isBusinessBoardAnalysisPage = location.pathname === '/system/dashboard/analysis';
 
-  /** 仅系统工作台首页：去掉标签栏下 16px 间距（其它含 dashboard 类名的页面如分析/角色权限保持原样） */
-  const isWorkplaceDashboardPage = location.pathname === '/system/dashboard/workplace';
+
 
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
@@ -1240,16 +1239,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-content.uni-tabs-content-dashboard {
           overflow: hidden !important;
         }
-        /* 仅 /system/dashboard/workplace：高度随内容；本页无 margin-top:16px，max-height 不再减 16px，避免底部多出一截空白 */
-        .uni-tabs-content.uni-tabs-content-workplace {
-          margin-top: 0 !important;
-          flex: 0 1 auto !important;
-          height: auto !important;
-          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px) !important;
-          min-height: 0 !important;
-          overflow-y: auto !important;
-          overflow-x: hidden !important;
-        }
+
         /* 运营看板（非全屏）：至少占满视口 − 顶栏 − 标签栏；border-box 内含上下各 16px padding */
         ${!isFullscreen
           ? `
@@ -1794,7 +1784,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           </div>
         </div>
         <div
-          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}${isWorkplaceDashboardPage ? ' uni-tabs-content-workplace' : ''}`}
+          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
           key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
@@ -1815,7 +1805,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                 /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
                 padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
                 width: '100%',
-                flex: isWorkplaceDashboardPage ? '0 0 auto' : 1,
+                flex: 1,
                 minHeight: 0,
                 boxSizing: 'border-box',
                 display: 'flex',
@@ -1824,7 +1814,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             >
               <div
                 style={{
-                  flex: isWorkplaceDashboardPage ? '0 0 auto' : 1,
+                  flex: 1,
                   minHeight: 0,
                   display: 'flex',
                   flexDirection: 'column',

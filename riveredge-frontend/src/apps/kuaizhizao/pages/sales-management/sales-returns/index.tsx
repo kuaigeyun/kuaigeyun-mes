@@ -642,6 +642,7 @@ const SalesReturnsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-returns"
           headerTitle="销售退货"
           actionRef={actionRef}
           rowKey="id"

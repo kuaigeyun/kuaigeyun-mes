@@ -278,6 +278,7 @@ export default function PackageManagementPage() {
     <>
       <ListPageTemplate>
         <UniTable<Package>
+          columnPersistenceId="pages.infra.packages"
           actionRef={actionRef}
           columns={columns}
           request={handleRequest}

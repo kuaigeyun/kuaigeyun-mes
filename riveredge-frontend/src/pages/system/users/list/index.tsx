@@ -671,6 +671,7 @@ const UserListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<User>
+        columnPersistenceId="pages.system.users.list"
         viewTypes={['table', 'help']}
         actionRef={actionRef}
         columns={columns}

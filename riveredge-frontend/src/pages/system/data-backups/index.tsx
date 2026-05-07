@@ -554,6 +554,7 @@ const DataBackupsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataBackup>
+          columnPersistenceId="pages.system.data-backups"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

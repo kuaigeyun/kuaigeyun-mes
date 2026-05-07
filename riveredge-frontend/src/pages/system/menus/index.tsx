@@ -579,6 +579,7 @@ const MenuListPage: React.FC = () => {
   return (
     <ListPageTemplate>
         <UniTable<Menu>
+            columnPersistenceId="pages.system.menus"
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"

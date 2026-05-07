@@ -827,6 +827,7 @@ const DataSourceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataSource>
+          columnPersistenceId="pages.system.data-sources.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

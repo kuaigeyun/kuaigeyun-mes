@@ -422,6 +422,7 @@ const EquipmentListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Equipment>
+          columnPersistenceId="pages.system.equipment.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {

@@ -444,6 +444,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         }
       >
         <UniTable<ApprovalInstance>
+          columnPersistenceId="pages.system.approval-processes.instances"
           headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}

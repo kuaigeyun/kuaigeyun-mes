@@ -501,6 +501,7 @@ const DataDictionaryListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<DataDictionary>
+        columnPersistenceId="pages.system.data-dictionaries.list"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

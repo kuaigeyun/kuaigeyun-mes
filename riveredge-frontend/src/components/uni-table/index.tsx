@@ -1,8 +1,22 @@
 /**
- * 统一 ProTable 组件
+ * UniTable：统一 ProTable 封装（列表页表格区）
  *
- * 封装了所有表格的通用配置和功能，确保所有表格使用统一的格式。
- * 后续完善时，只需修改此组件，所有表格都会同步更新。
+ * 分层约定（与 uni-* 抽象对齐，便于页面与文档一致描述）：
+ *
+ * 1. **uni-staticcard（若有）**：统计/指标卡片不在本组件内；由 `ListPageTemplate.statCards` 或页面放在表格上方。
+ * 2. **第一行工具区**（搜索行，`ProCard` 内 flex）：
+ *    - **2.1 左侧**：**uni-search** — `UniSearch`（模糊/高级搜索、重置等）。
+ *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
+ * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
+ *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
+ *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**（`UniImportToolbarButton` + `LazyUniImport` / `UniImport`）、**uni-export**（`UniExportMenuButton`）、**uni-sync**（`UniSyncButton`）；**表格设定**为 ProTable 原生 **`options`**（密度、列设置、reload 等，可含 `TableColumnResetButton`）。
+ *
+ * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
+ *
+ * 4. **表格**：右侧固定列顺序由 `normalizeFixedRightColumnOrder` 规范 — **uni-lifecycle**（`lifecycle`）、**uni-action**（`uni-action` 模块约定，固定列垫后）。
+ * 5. **详情 uni-detail**：列表侧由 `onDetail`、行内操作列等与页面级 **uni-detail**（如 `DetailDrawerTemplate`）配合；本文件不渲染详情壳。
+ *
+ * **组装清单（子模块）**：`UniSearch`、`UniView`、`UniBatchDeleteButton`（及通用 `UniBatchButton`）、`UniImportToolbarButton` + `UniImport`、`UniExportMenuButton`、`UniSyncButton`；列侧 `uni-action` / `uni-lifecycle` 在列定义中接入。
  */
 
 import React, { useRef, ReactNode, useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react'
@@ -17,34 +31,28 @@ import {
   ProTableProps,
 } from '@ant-design/pro-components'
 import type { ColumnsState } from '@ant-design/pro-table'
-import { Button, Space, Radio, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm, Grid, Descriptions, Card, Tag } from 'antd'
-import type { MenuProps } from 'antd'
+import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
   EyeOutlined,
-  DeleteOutlined,
-  TableOutlined,
   AppstoreOutlined,
   BarsOutlined,
   BarChartOutlined,
   TabletOutlined,
   QuestionCircleOutlined,
-  UnorderedListOutlined,
   ProjectOutlined,
-  ImportOutlined,
-  DownloadOutlined,
-  DownOutlined,
-  SyncOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
+import UniSearch from '../uni-search'
+import UniView from '../uni-view'
+import { UniBatchDeleteButton } from '../uni-batch'
+import { UniSyncButton } from '../uni-sync'
+import { UniImportToolbarButton } from '../uni-import'
+import { UniExportMenuButton } from '../uni-export'
 
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
-// 懒加载：QuerySearchButton 内含 @dnd-kit、savedSearch 等，首屏不阻塞
-const LazyQuerySearchButton = lazy(() =>
-  import('../uni-query').then(m => ({ default: m.QuerySearchButton }))
-)
 // 内联的 useProTableSearch hook（简化实现）
 const useProTableSearch = () => {
   const searchParamsRef = useRef<Record<string, any> | undefined>(undefined)
@@ -57,7 +65,6 @@ const useProTableSearch = () => {
     actionRef,
   }
 }
-import ErrorBoundary from '../error-boundary'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
 import { useAntdResizableHeader } from 'use-antd-resizable-header'
@@ -362,8 +369,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   headerTitle?: string
   /**
-   * 头部操作按钮（显示在原来标题的位置）
-   * 包括新建、修改、删除等按钮
+   * 完全自定义 **3.1 左侧功能按钮区**（若提供则不再走 `buildLeftActions` 默认拼装）。
+   * uni-pull / uni-push / uni-batch 等请与此区或 `toolBarActions` / `toolBarRender` 保持一致。
    */
   headerActions?: ReactNode
   /**
@@ -415,11 +422,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowEditDelete?: (key: React.Key, row: T) => Promise<void>
   /**
-   * 工具栏自定义按钮
+   * **3.1 左侧**追加的功能节点（与新建、`toolBarRender` 注入、批量删除、编辑等同一 `Space`）。
    */
   toolBarActions?: ReactNode[]
   /**
-   * 排在批量删除按钮之后的工具栏节点（如帮助说明、与选中行无关的操作）
+   * **3.1 左侧**，紧接在批量删除（uni-batch 删除预设）之后的节点（如下推后的说明、与删除无关的按钮）。
    */
   toolBarActionsAfterDelete?: ReactNode[]
   /**
@@ -726,8 +733,9 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     staleWhileRevalidate?: boolean
   }
   /**
-   * 列展示/列宽 localStorage 的 stable key（默认用 headerTitle）。
-   * 建议 ASCII；需强制重置用户列顺序时可改版本后缀（如 xxx-v2）。
+   * 列展示/列宽 localStorage 的稳定 key（默认用 headerTitle，易随文案变化而漂移）。
+   * **列表页应显式传入**：与源码路径一致的点分 id，如 `pages.system.users.list`、`apps.kuaizhizao.pages.sales-management.sales-orders`；
+   * 同文件多表用后缀 `:2`。请使用相对路径导入至 `src/components/uni-table`（勿使用在生产构建中不可靠的 `@/components`  barrel）。
    */
   columnPersistenceId?: string
   /**
@@ -736,9 +744,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   searchFormItems?: unknown
 }
 
-/**
- * 统一 ProTable 组件
- */
+/** @see 文件顶部 JSDoc 分层（uni-search / uni-view / uni-batch / uni-import 等） */
 export function UniTable<T extends Record<string, any> = Record<string, any>>({
   request,
   columns,
@@ -1261,6 +1267,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }, 300)
   }
 
+  /** 重置模糊关键词与表单筛选条件并刷新列表（与搜索条「重置」一致） */
+  const handleSearchReset = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+    setFuzzySearchKeyword('')
+    if (searchParamsRef.current) {
+      delete searchParamsRef.current.keyword
+    }
+    try {
+      formRef.current?.resetFields?.()
+    } catch {
+      /* ignore */
+    }
+    actionRef.current?.reload?.()
+  }, [])
+
   /**
    * 组件卸载时清除防抖定时器和 loading 延迟定时器
    */
@@ -1478,62 +1502,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }
 
-  /**
-   * 构建视图切换按钮
-   */
-  const buildViewTypeButtons = () => {
-    if (!viewTypes || viewTypes.length <= 1) {
-      return null
-    }
-
-    const builtinOptions = [
-      { value: 'table', label: t('components.uniTable.viewTable'), icon: TableOutlined },
-      { value: 'detailTable', label: t('components.uniTable.viewDetailTable'), icon: UnorderedListOutlined },
-      { value: 'card', label: t('components.uniTable.viewCard'), icon: AppstoreOutlined },
-      { value: 'kanban', label: t('components.uniTable.viewKanban'), icon: BarsOutlined },
-      { value: 'gantt', label: t('components.uniTable.viewGantt'), icon: ProjectOutlined },
-      { value: 'stats', label: t('components.uniTable.viewStats'), icon: BarChartOutlined },
-      { value: 'touch', label: t('components.uniTable.viewTouch'), icon: TabletOutlined },
-      { value: 'help', label: t('components.uniTable.viewHelp'), icon: QuestionCircleOutlined },
-    ]
-    const customOptions = (customViews ?? []).map(v => ({
-      value: v.key,
-      label: v.label,
-      icon: v.icon,
-    }))
-    const filtered = [...builtinOptions, ...customOptions].filter(option =>
-      viewTypes.includes(option.value as any)
-    )
-    // 按 viewTypes 顺序排列，确保帮助等可排在最后
-    const viewTypeOptions = [...filtered].sort(
-      (a, b) => viewTypes.indexOf(a.value as any) - viewTypes.indexOf(b.value as any)
-    )
-
-    return (
-      <Radio.Group
-        value={currentViewType}
-        onChange={e => handleViewTypeChange(e.target.value)}
-        buttonStyle="solid"
-        style={{ marginLeft: 8 }}
-      >
-        {viewTypeOptions.map(option => {
-          const IconComponent = option.icon
-          return (
-            <Radio.Button key={option.value} value={option.value} title={option.label}>
-              <IconComponent style={{ marginRight: 4, fontSize: '14px' }} />
-              {option.label}
-            </Radio.Button>
-          )
-        })}
-      </Radio.Group>
-    )
-  }
-
-  /**
-   * 构建头部操作按钮（显示在原来标题的位置）
-   */
-
-  // 构建左侧操作按钮（新建、修改、删除 + 自定义toolBarRender）
+  /** 3.1 左侧功能按钮区：`headerTitle` 内容（含 uni-batch、下推类按钮约定落此区）。 */
   const buildLeftActions = () => {
     const actions: ReactNode[] = []
 
@@ -1551,7 +1520,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    // 处理用户自定义的toolBarRender（新建等按钮，排在批量删除前）
+    // ProTable `toolBarRender`：在 UniTable 中仅用于向左侧注入节点（非右侧工具栏）
     if (restProps.toolBarRender) {
       const mockAction = { reload: actionRef.current?.reload } as any
       const mockSelectedRowKeys = selectedRowKeys as any
@@ -1571,38 +1540,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       actions.push(...toolBarActions)
     }
 
-    // 批量删除按钮（排在新建/自定义按钮后，使用 Popconfirm 二次确认，与仓库管理页模式对齐）
+    // 批量删除（uni-batch 删除预设）
     if (showDeleteButton && onDelete) {
-      const count = selectedRowKeys.length
-      const title =
-        typeof deleteConfirmTitle === 'function'
-          ? deleteConfirmTitle(count)
-          : (deleteConfirmTitle ?? t('common.confirmBatchDelete'))
-      const description =
-        typeof deleteConfirmDescription === 'function'
-          ? deleteConfirmDescription(count)
-          : (deleteConfirmDescription ?? t('common.confirmBatchDeleteContent', { count }))
       actions.push(
-        <Popconfirm
+        <UniBatchDeleteButton
           key="delete"
-          title={title}
-          description={description}
-          onConfirm={() => onDelete(selectedRowKeys)}
-          okText={t('common.confirm')}
-          cancelText={t('common.cancel')}
-          okButtonProps={{ danger: true }}
-          disabled={count === 0}
-        >
-          <Button
-            type="default"
-            danger
-            icon={<DeleteOutlined />}
-            size={toolBarButtonSize}
-            disabled={count === 0}
-          >
-            {deleteButtonText ?? t('components.uniTable.delete')}
-          </Button>
-        </Popconfirm>
+          selectedRowKeys={selectedRowKeys}
+          onConfirm={onDelete}
+          toolBarButtonSize={toolBarButtonSize}
+          buttonText={deleteButtonText}
+          confirmTitle={deleteConfirmTitle}
+          confirmDescription={deleteConfirmDescription}
+        />
       )
     }
 
@@ -1650,72 +1599,35 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  // 构建右侧工具栏按钮（导入、导出、同步）
+  /** 3.2 右侧：uni-import / uni-export / uni-sync（表格设定见 `memoizedOptions`） */
   const buildRightActions = () => {
     const rightButtons: ReactNode[] = []
 
-    // 导入按钮
     if (showImportButton && onImport) {
       rightButtons.push(
-        <Button
+        <UniImportToolbarButton
           key="import"
-          icon={<ImportOutlined />}
           size={toolBarButtonSize}
-          onClick={() => setImportModalVisible(true)}
-        >
-          {t('components.uniTable.import')}
-        </Button>
+          onOpen={() => setImportModalVisible(true)}
+        />
       )
     }
 
-    // 导出按钮（下拉：导出选中/导出本页/导出全部）
     if (showExportButton && onExport) {
-      const exportMenuItems: MenuProps['items'] = [
-        {
-          key: 'selected',
-          label: t('components.uniTable.exportSelected'),
-          disabled: selectedRowKeys.length === 0,
-          onClick: () => onExport('selected', selectedRowKeys, tableData),
-        },
-        {
-          key: 'currentPage',
-          label: t('components.uniTable.exportCurrentPage'),
-          onClick: () => onExport('currentPage', undefined, tableData),
-        },
-        {
-          key: 'all',
-          label: t('components.uniTable.exportAll'),
-          onClick: () => onExport('all'),
-        },
-      ]
       rightButtons.push(
-        <Dropdown
+        <UniExportMenuButton<T>
           key="export"
-          menu={{ items: exportMenuItems }}
-          placement="bottomRight"
-          trigger={['hover', 'click']}
-          mouseEnterDelay={0.05}
-          mouseLeaveDelay={0.2}
-        >
-          <Button icon={<DownloadOutlined />} size={toolBarButtonSize}>
-            {t('components.uniTable.export')}
-            <DownOutlined style={{ fontSize: 10, marginInlineStart: 2, opacity: 0.65 }} />
-          </Button>
-        </Dropdown>
+          size={toolBarButtonSize}
+          onExport={onExport}
+          selectedRowKeys={selectedRowKeys}
+          tableData={tableData}
+        />
       )
     }
 
-    // 同步按钮
     if (showSyncButton && onSync) {
       rightButtons.push(
-        <Button
-          key="sync"
-          icon={<SyncOutlined />}
-          size={toolBarButtonSize}
-          onClick={onSync}
-        >
-          {syncButtonText ?? t('components.uniTable.sync')}
-        </Button>
+        <UniSyncButton key="sync" size={toolBarButtonSize} onSync={onSync} buttonText={syncButtonText} />
       )
     }
 
@@ -1841,62 +1753,48 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               marginTop: isMobile ? 8 : 0,
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                flexWrap: 'wrap',
-                rowGap: 8,
-                minWidth: 0,
-                flex: '1 1 auto',
+            <UniSearch
+              beforeSearch={beforeSearchButtons}
+              betweenFuzzyAndAdvanced={
+                isMobile && showCreateButton && onCreate ? (
+                  <Button
+                    key="mobile-create"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={onCreate}
+                    size={toolBarButtonSize}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {createButtonText ?? t('components.uniTable.create')}
+                  </Button>
+                ) : null
+              }
+              showFuzzySearch={showFuzzySearch}
+              fuzzyValue={fuzzySearchKeyword}
+              onFuzzyChange={handleFuzzySearch}
+              onFuzzyPressEnter={(v) => handleFuzzySearch(v)}
+              onFuzzyFocus={warmupPinyinIfNeeded}
+              showAdvancedSearch={showAdvancedSearch}
+              advancedSearchTableProps={{
+                columns: processedColumns,
+                formRef: formRef as React.MutableRefObject<ProFormInstance>,
+                actionRef: actionRef as React.MutableRefObject<ActionType>,
+                searchParamsRef,
               }}
-            >
-              {beforeSearchButtons}
-              {showFuzzySearch && (
-                <Input
-                  className="uni-table-fuzzy-search"
-                  placeholder={t('components.uniTable.fuzzySearch')}
-                  allowClear
-                  value={fuzzySearchKeyword}
-                  onFocus={warmupPinyinIfNeeded}
-                  onChange={e => handleFuzzySearch(e.target.value)}
-                  onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
-                  style={{
-                    width: isMobile ? 'calc(100% - 100px)' : 160,
-                    height: '32px',
-                    flex: isMobile ? '1 1 auto' : '0 0 160px',
-                  }}
-                />
-              )}
-              {/* 手机端：将新建按钮提到此处显示 */}
-              {isMobile && showCreateButton && onCreate && (
-                <Button 
-                  key="mobile-create" 
-                  type="primary" 
-                  icon={<PlusOutlined />} 
-                  onClick={onCreate} 
-                  size={toolBarButtonSize}
-                  style={{ flexShrink: 0 }}
-                >
-                  {createButtonText ?? t('components.uniTable.create')}
-                </Button>
-              )}
-              {!isMobile && showAdvancedSearch && (
-                <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>{t('components.uniTable.searchError')}</span>}>
-                  <Suspense fallback={<span style={{ opacity: 0.6 }}>…</span>}>
-                    <LazyQuerySearchButton
-                      columns={processedColumns}
-                      formRef={formRef as React.MutableRefObject<ProFormInstance>}
-                      actionRef={actionRef as React.MutableRefObject<ActionType>}
-                      searchParamsRef={searchParamsRef}
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              )}
-              {afterSearchButtons}
-            </div>
-            {!isMobile && viewTypes && viewTypes.length > 1 && buildViewTypeButtons()}
+              afterSearch={afterSearchButtons}
+              showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}
+              onReset={handleSearchReset}
+              isMobile={isMobile}
+              toolBarButtonSize={toolBarButtonSize}
+            />
+            {!isMobile && viewTypes && viewTypes.length > 1 ? (
+              <UniView
+                viewTypes={viewTypes}
+                value={currentViewType}
+                onChange={handleViewTypeChange}
+                customViews={customViews}
+              />
+            ) : null}
           </div>
 
           <ConfigProvider getPopupContainer={() => document.body}>

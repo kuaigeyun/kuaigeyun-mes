@@ -532,6 +532,7 @@ const MessageConfigListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MessageConfig>
+        columnPersistenceId="pages.system.messages.config"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {

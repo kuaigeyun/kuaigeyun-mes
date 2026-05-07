@@ -726,6 +726,7 @@ const WarehousesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Warehouse>
+        columnPersistenceId="apps.master-data.pages.warehouse.warehouses"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

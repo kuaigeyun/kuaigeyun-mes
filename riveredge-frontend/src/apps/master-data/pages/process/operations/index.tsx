@@ -575,6 +575,7 @@ const OperationsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Operation>
+        columnPersistenceId="apps.master-data.pages.process.operations"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

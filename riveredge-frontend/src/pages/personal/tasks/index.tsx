@@ -427,6 +427,7 @@ const UserTasksPage: React.FC = () => {
         }
       >
         <UniTable<UserTask>
+          columnPersistenceId="pages.personal.tasks"
           headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}

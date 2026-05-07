@@ -342,6 +342,7 @@ const ReportTemplatesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="pages.system.report-templates"
         headerTitle={t('pages.system.reportTemplates.headerTitle')}
         actionRef={actionRef}
         rowKey="id"

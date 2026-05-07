@@ -988,6 +988,7 @@ const ShipmentNoticesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.shipment-notices"
           headerTitle="发货通知单"
           actionRef={actionRef}
           rowKey="id"

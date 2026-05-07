@@ -566,6 +566,7 @@ const WorkGroupsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<WorkGroup>
+          columnPersistenceId="apps.master-data.pages.factory.work-groups"
           actionRef={actionRef}
           columns={columns}
           viewTypes={['table', 'help']}

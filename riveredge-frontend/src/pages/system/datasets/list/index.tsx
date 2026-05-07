@@ -582,6 +582,7 @@ const DatasetListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Dataset>
+          columnPersistenceId="pages.system.datasets.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

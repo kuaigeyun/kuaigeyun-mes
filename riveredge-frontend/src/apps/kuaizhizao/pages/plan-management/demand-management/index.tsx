@@ -741,6 +741,7 @@ const DemandManagementPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management"
           headerTitle="需求管理"
           formRef={tableSearchFormRef}
           actionRef={actionRef}

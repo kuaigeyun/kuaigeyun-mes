@@ -777,6 +777,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<ApplicationConnection>
+          columnPersistenceId="pages.system.application-connections.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

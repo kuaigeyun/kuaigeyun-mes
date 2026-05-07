@@ -719,6 +719,7 @@ const ProductionLinesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ProductionLine>
+        columnPersistenceId="apps.master-data.pages.factory.production-lines"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

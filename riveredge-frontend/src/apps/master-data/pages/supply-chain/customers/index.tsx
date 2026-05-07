@@ -771,6 +771,7 @@ const CustomersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Customer>
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, __filter, searchFormValues) => {

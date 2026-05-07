@@ -205,6 +205,7 @@ const BatchesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialBatch>
+        columnPersistenceId="apps.master-data.pages.materials.batches"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"

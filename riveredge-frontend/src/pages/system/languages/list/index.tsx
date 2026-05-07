@@ -590,6 +590,7 @@ const LanguageListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Language>
+          columnPersistenceId="pages.system.languages.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

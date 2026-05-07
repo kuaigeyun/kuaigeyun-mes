@@ -2217,6 +2217,7 @@ const BOMPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaterialBOMRow>
+        columnPersistenceId="apps.master-data.pages.materials.bom"
         actionRef={actionRef}
         columns={groupColumns}
         viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}

@@ -90,6 +90,7 @@ const SalesBaseReport: React.FC<SalesBaseReportProps> = ({
     <ListPageTemplate statCards={statCards}>
       {children}
       <UniTable
+        columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.BaseReport"
         headerTitle={title}
         actionRef={actionRef}
         rowKey="id"

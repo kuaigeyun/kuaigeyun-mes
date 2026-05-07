@@ -4,6 +4,8 @@
  * 提供统一的列表页面布局，包括统计卡片（可选）和表格区域
  * 遵循 Ant Design 设计规范，减少硬编号
  *
+ * 主内容推荐 `UniTable`：自页面文件相对路径 `import { UniTable } from '…/components/uni-table'`（`…` 随目录深度变化），并显式传入稳定 `columnPersistenceId`（与 `src/...` 路径对应的点分 id，见 `components/uni-table` 的 props 说明）。
+ *
  * Author: Luigi Lu
  * Date: 2025-12-26
  */

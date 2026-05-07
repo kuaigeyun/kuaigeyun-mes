@@ -1586,6 +1586,7 @@ const MaterialsManagementPage: React.FC = () => {
           // header removed as per request to only show material list
           content: (
             <UniTable<Material>
+              columnPersistenceId="apps.master-data.pages.materials.management"
               size="small"
               defaultPageSize={20}
               actionRef={actionRef}

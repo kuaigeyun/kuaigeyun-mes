@@ -194,6 +194,7 @@ const PermissionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Permission>
+          columnPersistenceId="pages.system.permissions.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

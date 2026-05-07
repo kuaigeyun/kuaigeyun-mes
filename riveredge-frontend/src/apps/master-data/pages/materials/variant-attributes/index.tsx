@@ -339,6 +339,7 @@ const VariantAttributesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
+          columnPersistenceId="apps.master-data.pages.materials.variant-attributes"
           headerTitle="属性定义"
           actionRef={actionRef}
           columns={columns}

@@ -417,6 +417,7 @@ const ExceptionProcessPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ExceptionProcessRecord>
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

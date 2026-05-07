@@ -234,6 +234,7 @@ const OperationLogsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OperationLog>
+          columnPersistenceId="pages.system.operation-logs"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

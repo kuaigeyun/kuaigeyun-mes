@@ -1123,6 +1123,7 @@ const CustomFieldListPage: React.FC = () => {
                 {/* 字段列表 */}
                 <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
+                    columnPersistenceId="pages.system.custom-fields.list"
                     actionRef={actionRef}
                     params={{ table_name: selectedPage.tableName }}
                     columns={columns}

@@ -528,6 +528,7 @@ const ReworkOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders"
         headerTitle="返工单"
         actionRef={actionRef}
         columns={columns}

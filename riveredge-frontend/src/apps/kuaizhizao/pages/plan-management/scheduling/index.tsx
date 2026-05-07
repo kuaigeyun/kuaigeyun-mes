@@ -228,6 +228,7 @@ const SchedulingPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.scheduling"
         headerTitle="待排产工单"
         actionRef={actionRef}
         rowKey="id"

@@ -238,6 +238,7 @@ const MaterialShortageExceptionPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="apps.kuaizhizao.pages.exception-management.material-shortage"
         headerTitle="缺料异常管理"
         actionRef={actionRef}
         rowKey="id"

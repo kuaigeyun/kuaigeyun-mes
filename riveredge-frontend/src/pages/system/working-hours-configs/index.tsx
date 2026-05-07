@@ -280,6 +280,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="pages.system.working-hours-configs"
         headerTitle={t('pages.system.workingHoursConfigs.headerTitle')}
         actionRef={actionRef}
         rowKey="id"

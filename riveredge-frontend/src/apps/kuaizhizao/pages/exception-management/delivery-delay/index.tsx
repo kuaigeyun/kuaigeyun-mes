@@ -220,6 +220,7 @@ const DeliveryDelayExceptionPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="apps.kuaizhizao.pages.exception-management.delivery-delay"
         headerTitle="交期延期异常管理"
         actionRef={actionRef}
         rowKey="id"

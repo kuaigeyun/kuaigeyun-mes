@@ -607,6 +607,7 @@ const PlantsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Plant>
+          columnPersistenceId="apps.master-data.pages.factory.plants"
           actionRef={actionRef}
           columns={columns}
           viewTypes={['table', 'help']}

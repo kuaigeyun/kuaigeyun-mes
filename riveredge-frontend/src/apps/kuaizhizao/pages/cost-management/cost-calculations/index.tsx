@@ -435,6 +435,7 @@ const CostCalculationPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<CostCalculation>
+        columnPersistenceId="apps.kuaizhizao.pages.cost-management.cost-calculations"
         actionRef={actionRef}
         headerActions={costToolbarActions}
         request={async (params) => {

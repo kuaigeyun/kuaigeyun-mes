@@ -355,6 +355,7 @@ const ProductionReportPage: React.FC = () => {
       {/* 报表内容 */}
       {reportType === 'performance' && (
         <UniTable<ProductionReportItem>
+          columnPersistenceId="apps.kuaizhizao.pages.reports.production-report"
           headerTitle="工单绩效分析报表"
           actionRef={actionRef}
           rowKey="id"

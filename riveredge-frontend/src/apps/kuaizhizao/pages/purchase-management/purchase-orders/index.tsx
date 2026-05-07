@@ -1750,6 +1750,7 @@ const PurchaseOrdersPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseOrder>
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-orders"
           headerTitle="采购订单"
           formRef={tableSearchFormRef}
           actionRef={actionRef}

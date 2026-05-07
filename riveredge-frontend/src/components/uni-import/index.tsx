@@ -918,6 +918,9 @@ export const UniImport: React.FC<UniImportProps> = ({
   );
 };
 
+export { UniImportToolbarButton } from './UniImportToolbarButton';
+export type { UniImportToolbarButtonProps } from './UniImportToolbarButton';
+
 export default UniImport;
 
 

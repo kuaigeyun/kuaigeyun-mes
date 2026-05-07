@@ -250,6 +250,7 @@ const PluginManagerPage: React.FC = () => {
     <ListPageTemplate>
       <Card>
         <UniTable<PluginInfo>
+          columnPersistenceId="pages.system.plugin-manager"
           headerTitle={t('pages.system.pluginManager.title')}
           actionRef={actionRef}
           rowKey="code"

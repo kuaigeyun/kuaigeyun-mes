@@ -385,6 +385,7 @@ const ScriptListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Script>
+          columnPersistenceId="pages.infra.scripts.list"
           headerTitle={t('pages.infra.scripts.title')}
           actionRef={actionRef}
           columns={columns}

@@ -575,6 +575,7 @@ const ProductionPlansPage: React.FC = () => {
         <ProductionControlTower />
       </div>
       <UniTable
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.production-plans"
           headerTitle="生产计划管理"
           actionRef={actionRef}
           rowKey="id"

@@ -77,6 +77,7 @@ riveredge-app-mobile/
 riveredge-app-station/
 # 本地构建发布脚本（各人自选保留，不提交）
 build-web.sh
+Build.web.sh
 
 bin/
 deploy/

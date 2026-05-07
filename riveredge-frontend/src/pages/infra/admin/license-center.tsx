@@ -147,6 +147,7 @@ export default function LicenseCenterTab() {
   return (
     <>
       <UniTable<PlatformLicenseItem>
+        columnPersistenceId="pages.infra.admin.license-center"
         headerTitle={t('pages.infra.licenseCenter.headerTitle', { defaultValue: '许可证中心' })}
         actionRef={actionRef}
         columns={columns}

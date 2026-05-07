@@ -621,6 +621,7 @@ const SystemParameterListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<SystemParameter>
+          columnPersistenceId="pages.system.system-parameters.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

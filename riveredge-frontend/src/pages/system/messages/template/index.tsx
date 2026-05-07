@@ -402,6 +402,7 @@ const MessageTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MessageTemplate>
+        columnPersistenceId="pages.system.messages.template"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {

@@ -190,6 +190,7 @@ const BatchRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BatchRule>
+        columnPersistenceId="apps.master-data.pages.materials.batch-rules"
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"

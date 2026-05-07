@@ -351,6 +351,7 @@ const ApprovalProcessListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ApprovalProcess>
+        columnPersistenceId="pages.system.approval-processes.list"
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}

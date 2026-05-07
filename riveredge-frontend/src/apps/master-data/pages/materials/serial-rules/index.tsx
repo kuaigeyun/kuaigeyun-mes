@@ -189,6 +189,7 @@ const SerialRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SerialRule>
+        columnPersistenceId="apps.master-data.pages.materials.serial-rules"
         headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"

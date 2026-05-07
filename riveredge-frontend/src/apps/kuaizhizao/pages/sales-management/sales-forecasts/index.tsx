@@ -1051,6 +1051,7 @@ export default function SalesForecastsPage() {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<any>
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-forecasts"
           actionRef={actionRef}
           formRef={tableSearchFormRef}
           rowKey={viewTypeState === 'table' ? 'id' : '_rowKey'}

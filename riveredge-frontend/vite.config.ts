@@ -1,8 +1,7 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite'
+import { defineConfig, normalizePath } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
-import { existsSync } from 'fs'
 import { platform } from 'os'
 import type { ProxyOptions } from 'vite'
 
@@ -12,6 +11,8 @@ import type { ProxyOptions } from 'vite'
 
 // src 目录路径（src 目录）
 const srcPath = resolve(__dirname, 'src')
+/** Windows 上别名替换需统一为正斜杠，否则 `@/…` 经 alias 后混用 `\\` 与 `/` 可能导致 Rollup 无法解析 */
+const srcRootPosix = normalizePath(srcPath)
 
 
 export default defineConfig({
@@ -253,9 +254,13 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@': '.',
-    },
+    // 与 tsconfig `@/*` -> `./src/*` 一致。仅用 `{ '@': src }` 时 `@/foo` 在 Rollup 中可能无法解析。
+    alias: [
+      {
+        find: /^@\/(.*)$/,
+        replacement: `${srcRootPosix}/$1`,
+      },
+    ],
   },
   define: {
     // 统一使用 SaaS 模式

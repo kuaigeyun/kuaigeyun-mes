@@ -4489,6 +4489,7 @@ const WorkOrdersPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders"
           headerTitle="工单管理"
           formRef={tableSearchFormRef}
           actionRef={actionRef}

@@ -241,6 +241,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.delivery-delay-exceptions"
         headerTitle="延期异常"
         actionRef={actionRef}
         rowKey="id"

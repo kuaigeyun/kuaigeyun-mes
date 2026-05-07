@@ -1383,6 +1383,9 @@ export default {
 
   // UniTable component
   'components.uniTable.fuzzySearch': 'Fuzzy search',
+  'components.uniSearch.fuzzySearch': 'Fuzzy search',
+  'components.uniSearch.searchError': 'Search component error',
+  'components.uniSearch.reset': 'Reset',
   'components.uniTable.searchError': 'Search component error',
   'components.uniTable.viewTable': 'Table',
   'components.uniTable.viewDetailTable': 'Detail Table',

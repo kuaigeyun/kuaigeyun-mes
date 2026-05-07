@@ -4,8 +4,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProTable } from '@ant-design/pro-components';
-import { App, Button, Modal, Table, Card, Row, Col, Statistic, Divider, Tag, Space } from 'antd';
+import { ProColumns } from '@ant-design/pro-components';
+import { UniTable } from '../../../../../components/uni-table';
+import { App, Button, Modal, Table, Card, Row, Col, Statistic, Divider, Tag } from 'antd';
 import { DiffOutlined, DownloadOutlined } from '@ant-design/icons';
 import { MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
@@ -20,7 +21,6 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 
 const ComputationHistoryTab: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [compareResult, setCompareResult] = useState<ComputationCompareResult | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -242,35 +242,37 @@ const ComputationHistoryTab: React.FC = () => {
 
   return (
     <>
-      <ProTable<DemandComputation>
-        actionRef={actionRef}
+      <UniTable<DemandComputation>
         columns={columns}
-        request={handleRequest}
+        request={async (params) => handleRequest(params)}
         rowKey="id"
-        search={false}
-        rowSelection={{
-          type: 'checkbox',
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as React.Key[]),
-        }}
-        headerTitle={
-          <Space>
-            <Button
-              icon={<DiffOutlined />}
-              onClick={() => handleCompare(selectedRowKeys)}
-              disabled={selectedRowKeys.length !== 2}
-            >
-              对比选中记录
-            </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => handleExport(selectedRowKeys)}
-              disabled={selectedRowKeys.length === 0}
-            >
-              导出选中记录
-            </Button>
-          </Space>
-        }
+        columnPersistenceId="demand-computation-history"
+        viewTypes={['table']}
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
+        showImportButton={false}
+        showExportButton={false}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
+        toolBarRender={() => [
+          <Button
+            key="compare"
+            icon={<DiffOutlined />}
+            onClick={() => handleCompare(selectedRowKeys)}
+            disabled={selectedRowKeys.length !== 2}
+          >
+            对比选中记录
+          </Button>,
+          <Button
+            key="export"
+            icon={<DownloadOutlined />}
+            onClick={() => handleExport(selectedRowKeys)}
+            disabled={selectedRowKeys.length === 0}
+          >
+            导出选中记录
+          </Button>,
+        ]}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       />
 

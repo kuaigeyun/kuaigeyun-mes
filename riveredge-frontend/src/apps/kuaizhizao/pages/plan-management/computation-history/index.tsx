@@ -306,6 +306,7 @@ const ComputationHistoryPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<DemandComputation>
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.computation-history"
           actionRef={actionRef}
           columns={columns}
           request={handleRequest}

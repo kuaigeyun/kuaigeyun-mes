@@ -1086,6 +1086,7 @@ const SuperAdminTenantList: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Tenant>
+      columnPersistenceId="pages.infra.tenants.list"
       actionRef={actionRef}
       columns={columns}
       rowKey="id"

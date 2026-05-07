@@ -359,6 +359,7 @@ const CostRulePage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<CostRule>
+        columnPersistenceId="apps.kuaizhizao.pages.cost-management.cost-rules"
         headerTitle="成本核算规则管理"
         headerActions={
           <Button type="primary" onClick={handleCreate}>

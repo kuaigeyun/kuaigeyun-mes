@@ -631,6 +631,7 @@ const ProcessRoutesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ProcessRoute>
+        columnPersistenceId="apps.master-data.pages.process.routes"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

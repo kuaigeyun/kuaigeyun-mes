@@ -283,6 +283,7 @@ const PositionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Position>
+          columnPersistenceId="pages.system.positions.list"
           viewTypes={['table', 'help']}
           actionRef={actionRef}
           columns={columns}

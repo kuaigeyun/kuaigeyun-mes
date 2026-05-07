@@ -429,6 +429,7 @@ const EquipmentFaultListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<EquipmentFault>
+          columnPersistenceId="pages.system.equipment-faults.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {

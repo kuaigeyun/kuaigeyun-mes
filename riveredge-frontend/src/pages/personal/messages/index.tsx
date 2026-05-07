@@ -385,6 +385,7 @@ const UserMessagesPage: React.FC = () => {
         }
       >
         <UniTable<UserMessage>
+          columnPersistenceId="pages.personal.messages"
           headerTitle={t('pages.personal.messages.headerTitle')}
           actionRef={actionRef}
           columns={columns}

@@ -359,4 +359,7 @@ export const UniExport: React.FC<UniExportProps> = ({
   );
 };
 
+export { UniExportMenuButton } from './UniExportMenuButton';
+export type { UniExportMenuButtonProps, UniExportScope } from './UniExportMenuButton';
+
 export default UniExport;

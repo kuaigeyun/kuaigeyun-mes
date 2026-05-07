@@ -1367,6 +1367,7 @@ const ApplicationListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Application>
+          columnPersistenceId="pages.system.applications.list"
           key={`application-list-${appCategoryFilter}`}
           headerTitle={t('pages.system.applications.headerTitle')}
           actionRef={actionRef}

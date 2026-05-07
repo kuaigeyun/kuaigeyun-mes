@@ -1488,8 +1488,8 @@ export default function DashboardPage() {
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
-          /* 顶/左右留白；底边 0 贴内容区底，避免底部两卡下方大块留白 */
-          padding: `${DASHBOARD_LAYOUT_GUTTER}px ${PAGE_SPACING.PADDING}px 0 ${PAGE_SPACING.PADDING}px`,
+          /* 边距现在由 UniTabs 统一处理，不再在此单独定义，确保与系统其他页面行为一致 */
+          padding: 0,
         }}
       >
       {/* 左右两大组：左 19（顶行三卡 + KPI + 下区）；右 5（时钟 + 快捷 + 版本） */}

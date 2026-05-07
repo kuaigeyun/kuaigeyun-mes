@@ -733,6 +733,7 @@ const WorkshopsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Workshop>
+        columnPersistenceId="apps.master-data.pages.factory.workshops"
         actionRef={actionRef}
         columns={columns}
         viewTypes={['table', 'help']}

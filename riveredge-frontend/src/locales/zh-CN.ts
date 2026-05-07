@@ -1387,6 +1387,9 @@ export default {
 
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',
+  'components.uniSearch.fuzzySearch': '模糊搜索',
+  'components.uniSearch.searchError': '搜索组件错误',
+  'components.uniSearch.reset': '重置',
   'components.uniTable.searchError': '搜索组件错误',
   'components.uniTable.viewTable': '表格',
   'components.uniTable.viewDetailTable': '明细表格',

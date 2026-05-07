@@ -266,6 +266,7 @@ const LoginLogsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<LoginLog>
+          columnPersistenceId="pages.system.login-logs"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

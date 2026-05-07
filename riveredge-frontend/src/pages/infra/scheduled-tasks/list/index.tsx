@@ -445,6 +445,7 @@ const ScheduledTaskListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ScheduledTask>
+          columnPersistenceId="pages.infra.scheduled-tasks.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

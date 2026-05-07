@@ -392,6 +392,7 @@ const OnlineUsersPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OnlineUser>
+          columnPersistenceId="pages.system.online-users"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

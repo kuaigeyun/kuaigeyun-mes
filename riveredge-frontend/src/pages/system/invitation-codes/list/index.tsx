@@ -295,6 +295,7 @@ const InvitationCodeListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<InvitationCode>
+          columnPersistenceId="pages.system.invitation-codes.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

@@ -722,6 +722,7 @@ const PrintDeviceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintDevice>
+          columnPersistenceId="pages.system.print-devices.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

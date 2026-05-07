@@ -2378,6 +2378,7 @@ const SalesOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <SalesOrderIndicatorsProvider>
         <UniTable
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           formRef={tableSearchFormRef}

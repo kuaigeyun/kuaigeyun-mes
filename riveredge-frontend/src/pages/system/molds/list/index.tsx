@@ -393,6 +393,7 @@ const MoldListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Mold>
+          columnPersistenceId="pages.system.molds.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {

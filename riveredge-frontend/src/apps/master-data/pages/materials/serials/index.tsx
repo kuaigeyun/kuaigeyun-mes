@@ -189,6 +189,7 @@ const SerialsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialSerial>
+        columnPersistenceId="apps.master-data.pages.materials.serials"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"

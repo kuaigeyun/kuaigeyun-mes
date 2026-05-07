@@ -464,6 +464,7 @@ const DefectTypesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<DefectType>
+        columnPersistenceId="apps.master-data.pages.process.defect-types"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

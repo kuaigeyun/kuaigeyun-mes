@@ -607,6 +607,7 @@ const APIListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<API>
+          columnPersistenceId="pages.system.apis.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

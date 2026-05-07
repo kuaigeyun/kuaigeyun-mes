@@ -471,6 +471,7 @@ const DepartmentListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Department>
+        columnPersistenceId="pages.system.departments.list"
         viewTypes={['table', 'help']}
         actionRef={actionRef}
         headerTitle={t('field.department.listTitle')}

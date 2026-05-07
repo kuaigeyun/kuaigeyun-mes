@@ -1,7 +1,7 @@
 /**
  * 页面骨架屏（主内容区统一视觉）
  *
- * 后台各路由懒加载时共用同一套占位：顶栏摘要 + 多卡栅格 + 中下区块，
+ * 后台各路由懒加载时共用同一套占位：顶栏摘要 + 指标卡栅格 + 中下区块，
  * 与工作台/统计类页面结构对齐，减少「一种路由一种骨架」的割裂感。
  *
  * - content：默认，主内容区标准骨架（绝大多数路由 Suspense）
@@ -63,23 +63,7 @@ function UnifiedContentSkeleton({ token }: { token: GlobalToken }) {
         <Skeleton active title={false} paragraph={{ rows: 1, width: ['48%'] }} />
       </div>
 
-      {/* 上区：多卡横排 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: gridGap,
-          marginBottom: gap,
-        }}
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={shell}>
-            <Skeleton active title={{ width: '42%' }} paragraph={{ rows: 2, width: ['100%', '72%'] }} />
-          </div>
-        ))}
-      </div>
-
-      {/* 中区：指标卡栅格 */}
+      {/* 指标卡栅格（仅保留一行仿指标卡，避免双行拥挤） */}
       <div
         style={{
           display: 'grid',

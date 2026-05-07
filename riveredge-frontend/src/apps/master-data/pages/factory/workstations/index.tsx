@@ -723,6 +723,7 @@ const WorkstationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Workstation>
+        columnPersistenceId="apps.master-data.pages.factory.workstations"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

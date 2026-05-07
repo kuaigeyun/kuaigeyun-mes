@@ -382,6 +382,7 @@ const InventoryReportPage: React.FC = () => {
       {/* 报表内容 */}
       {reportType === 'summary' && (
         <UniTable<InventoryReportItem>
+          columnPersistenceId="apps.kuaizhizao.pages.reports.inventory-report"
           headerTitle="库存汇总报表"
           actionRef={actionRef}
           rowKey="id"

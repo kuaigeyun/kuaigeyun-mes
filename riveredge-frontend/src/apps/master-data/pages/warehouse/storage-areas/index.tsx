@@ -722,6 +722,7 @@ const StorageAreasPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageArea>
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-areas"
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {

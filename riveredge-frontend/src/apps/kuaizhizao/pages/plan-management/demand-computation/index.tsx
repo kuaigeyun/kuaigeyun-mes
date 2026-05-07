@@ -1486,6 +1486,7 @@ const DemandComputationPage: React.FC = () => {
   const listTabContent = (
       <>
       <UniTable<DemandComputation>
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation"
         actionRef={actionRef}
         columns={columns}
         showAdvancedSearch={true}

@@ -455,6 +455,7 @@ const MaintenancePlanListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
+          columnPersistenceId="pages.system.maintenance-plans.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {

@@ -7,13 +7,24 @@
 export { default as TenantSelector } from './tenant-selector';
 export { default as TenantSelectionModal } from './tenant-selection-modal';
 export { default as TermsModal } from './terms-modal';
-export { QuerySearchButton, QuerySearchModal } from './uni-query';
+/** 列表高级搜索请用 UniSearch / UniAdvancedSearch；勿直接引用 QuerySearchButton */
+export { default as UniSearch, UniAdvancedSearch, QuerySearchModal } from './uni-search';
+export type { UniSearchProps, UniAdvancedSearchProps } from './uni-search';
+export { default as UniView } from './uni-view';
+export type { UniViewProps, UniViewCustomItem } from './uni-view';
+export { UniBatchButton, UniBatchDeleteButton } from './uni-batch';
+export type {
+  UniBatchButtonProps,
+  UniBatchDeleteButtonProps,
+} from './uni-batch';
 export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';
 export type { UniTableProps } from './uni-table';
-export { default as UniImport } from './uni-import';
-export type { UniImportProps } from './uni-import';
-export { default as UniExport } from './uni-export';
-export type { UniExportProps } from './uni-export';
+export { default as UniImport, UniImportToolbarButton } from './uni-import';
+export type { UniImportProps, UniImportToolbarButtonProps } from './uni-import';
+export { default as UniExport, UniExportMenuButton } from './uni-export';
+export type { UniExportProps, UniExportMenuButtonProps, UniExportScope } from './uni-export';
+export { UniSyncButton } from './uni-sync';
+export type { UniSyncButtonProps } from './uni-sync';
 export { default as Print } from './print';
 export type { PrintProps } from './print';
 export { default as UniTabs } from './uni-tabs';

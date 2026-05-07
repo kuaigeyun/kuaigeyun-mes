@@ -683,6 +683,7 @@ const PrintTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintTemplate>
+          columnPersistenceId="pages.system.print-templates.list"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
