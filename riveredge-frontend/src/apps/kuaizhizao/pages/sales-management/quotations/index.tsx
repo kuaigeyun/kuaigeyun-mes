@@ -716,7 +716,7 @@ const QuotationsPage: React.FC = () => {
     {
       title: '客户',
       dataIndex: 'customer_name',
-      // 不设置 width 以便自适应响应式布局
+      width: 260,
       ellipsis: true,
       order: 20,
       fieldProps: { placeholder: '客户名称' },
@@ -776,7 +776,8 @@ const QuotationsPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 1,
+      minWidth: 80,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
@@ -798,7 +799,7 @@ const QuotationsPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 400,
+      minWidth: 120,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -2605,7 +2606,7 @@ const QuotationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           className="kuaizhizao-quotations-table"
-          columnPersistenceId="kuaizhizao-sales-quotations-v3"
+          columnPersistenceId="kuaizhizao-sales-quotations-v4"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"
@@ -2748,7 +2749,6 @@ const QuotationsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1632 }}
           expandable={{
             defaultExpandAllRows: true,
             indentSize: 16,

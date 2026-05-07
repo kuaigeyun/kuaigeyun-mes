@@ -12,7 +12,7 @@
 
 import React, { ReactNode } from 'react';
 import { Row, Col, Card, Statistic, theme as AntdTheme, Grid } from 'antd';
-import { STAT_CARD_CONFIG } from './constants';
+import { getListPageTableScrollOffsetPx, STAT_CARD_CONFIG } from './constants';
 
 
 /**
@@ -105,8 +105,14 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md && screens.xs;
 
+  const hasStatCardsRow = Boolean(statCards && statCards.length > 0 && !isMobile);
+  const tableScrollOffsetPx = getListPageTableScrollOffsetPx({
+    layout: 'list',
+    hasStatCardsRow,
+  });
+
   const statCardsRow =
-    statCards && statCards.length > 0 && !isMobile ? (
+    hasStatCardsRow ? (
       <div style={{ marginBottom: 16 }}>
         <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
           {statCards.map((card, index) => (
@@ -241,6 +247,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         className={className}
         style={{
           padding: 0,
+          ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
           ...style,
         }}
       >
@@ -258,6 +265,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
+        ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         ...style,
       }}
     >

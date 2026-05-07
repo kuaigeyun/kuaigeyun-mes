@@ -185,6 +185,75 @@ export const CANVAS_GRID_REACTFLOW = {
 } as const;
 
 /**
+ * 列表页（ListPageTemplate / MultiTabListPageTemplate）内 ProTable 表体 `scroll.y` 的视口扣减。
+ * 用于 `calc(100vh - Npx)`：区分是否有指标卡行（与 ListPageTemplate 展示条件一致）、是否多 Tab 模板（额外套一层 Card.Tab）。
+ * 数值为经验值，可按全局顶栏/页签高度微调 `BASE_OFFSET_PX`。
+ */
+export const LIST_PAGE_TABLE_SCROLL = {
+  /**
+   * 标准列表基础扣减（不含指标卡、不含多Tab）：
+   * - ProLayout 顶栏 56
+   * - UniTabs 标签栏 56
+   * - 内容区固定留白与 UniTable 头部/分页占位（其余固定项）
+   */
+  HEADER_HEIGHT_PX: 56,
+  TABS_HEIGHT_PX: 56,
+  /** 常规垂直间距单位（与页面/模板 gutter 一致） */
+  GAP_PX: 16,
+  /** 标准列表页（无指标卡）固定垂直间距数量（单位：GAP_PX） */
+  GAP_COUNT_BASE: 8,
+  /** UniTable 固定占位聚合（搜索行/标题行/分页行等，px） */
+  TABLE_CHROME_PX: 82,
+  /** 顶栏 + 标签 + 间距(7*16) + 表格固定位 */
+  BASE_OFFSET_PX: 56 + 56 + (9 * 16) + 82, // = 312
+  /** 桌面端展示 ListPageTemplate 指标卡行时追加（一行 Card + marginBottom 16） */
+  STAT_CARDS_ROW_EXTRA_PX: 120,
+  /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
+  MULTI_TAB_CARD_EXTRA_PX: 48,
+  /** UniTable 无模板变量时使用的默认回退（312 + 136） */
+  DEFAULT_FALLBACK_OFFSET_PX: 448,
+} as const;
+
+export type ListPageTableScrollLayout = 'list' | 'multiTab';
+
+export interface ListPageTableBodyScrollYOptions {
+  layout?: ListPageTableScrollLayout;
+  /** 是否与 ListPageTemplate 一致实际渲染了指标卡行（有 statCards 且非其移动端隐藏条件） */
+  hasStatCardsRow: boolean;
+}
+
+/** 计算列表页表体滚动 offset（px） */
+export function getListPageTableScrollOffsetPx(options: ListPageTableBodyScrollYOptions): number {
+  const layout = options.layout ?? 'list';
+  let sub = LIST_PAGE_TABLE_SCROLL.BASE_OFFSET_PX;
+  if (options.hasStatCardsRow) {
+    sub += LIST_PAGE_TABLE_SCROLL.STAT_CARDS_ROW_EXTRA_PX;
+  }
+  if (layout === 'multiTab') {
+    sub += LIST_PAGE_TABLE_SCROLL.MULTI_TAB_CARD_EXTRA_PX;
+  }
+  return sub;
+}
+
+/** 生成 antd Table `scroll.y` 可用的 CSS 长度表达式 */
+export function getListPageTableBodyScrollYExpr(options: ListPageTableBodyScrollYOptions): string {
+  return `calc(100vh - ${getListPageTableScrollOffsetPx(options)}px)`;
+}
+
+/**
+ * 与 `ListPageTemplate` 中 `statCardsRow` 是否渲染保持一致：
+ * `statCards?.length > 0 && !isMobile`，其中 `isMobile = !screens.md && screens.xs`。
+ */
+export function listPageShowsStatCardsRow(
+  statCards: readonly unknown[] | undefined,
+  screens: Partial<Record<'xs' | 'md', boolean>>,
+): boolean {
+  if (!statCards || statCards.length === 0) return false;
+  const isMobile = !screens.md && !!screens.xs;
+  return !isMobile;
+}
+
+/**
  * 表格配置
  */
 export const TABLE_CONFIG = {

@@ -1685,6 +1685,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         className="uni-tabs-wrapper"
         style={{
           '--header-height': isFullscreen ? '0px' : '56px',
+          // tabs header 40px + content margin-top 16px = 56px effective vertical occupancy
           '--tabs-height': '56px',
           '--content-margin': '16px',
         } as React.CSSProperties}

@@ -859,6 +859,25 @@ code {
   }
 }
 
+/* ProCard：统一 body 左右内边距 */
+.ant-pro-card .ant-pro-card-body {
+  padding-inline: 16px !important;
+}
+
+/* Table/ProTable：当启用 scroll.y（固定表头）时，默认实现可能强制显示竖滚动条。
+   统一改为 auto：未溢出不显示；同时用 scrollbar-gutter 保留占位避免列宽抖动。 */
+.ant-table .ant-table-body {
+  overflow-y: auto !important;
+}
+
+/* 固定列区域（left/right）同步同样策略，避免“未溢出仍显示竖条” */
+.ant-table .ant-table-fixed-left .ant-table-body-inner,
+.ant-table .ant-table-fixed-right .ant-table-body-inner,
+.ant-table .ant-table-fixed-left .ant-table-body-outer,
+.ant-table .ant-table-fixed-right .ant-table-body-outer {
+  overflow-y: auto !important;
+}
+
 /* 指定 Modal 不显示标题左侧竖条（如工序派工等） */
 .ant-modal.form-modal-no-title-accent .ant-modal-header .ant-modal-title {
   padding-left: 0;
@@ -1232,3 +1251,4 @@ code {
 }
 
 @import './styles/action-column.less';
+

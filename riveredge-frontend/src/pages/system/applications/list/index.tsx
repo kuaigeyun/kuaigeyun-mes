@@ -16,11 +16,13 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/
 import { UniTable } from '../../../../components/uni-table';
 import { UniWiki, WikiItem, WikiTreeData } from '../../../../components';
 import { theme } from 'antd';
+import type { GlobalToken } from 'antd/es/theme/interface';
+import { useThemeStore } from '../../../../stores/themeStore';
 import {
   EyeOutlined,
   DownloadOutlined,
   StopOutlined,
-  MoreOutlined,
+  DownOutlined,
   SettingOutlined,
   AppstoreOutlined,
   UserOutlined,
@@ -220,9 +222,60 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
   return iconMap[code] || React.createElement(ManufacturingIcons.appstore, { size });
 };
 
-/** 各应用卡片渐变背景（素雅略深、契合主题，避免蓝紫 AI 风） */
-const getCardGradient = (code: string, isActive: boolean): string => {
-  if (!isActive) return 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
+/**
+ * 深色模式卡片头：用主色少量混入填充层，保留应用辨识度且贴近 antd 暗色表面。
+ * 浅色模式仍使用下方 `gradients` 高明度渐变。
+ */
+const CARD_HEADER_TINT: Record<string, string> = {
+  kuaizhizao: '#38bdf8',
+  kuaicaiwu: '#fbbf24',
+  kuaireport: '#4ade80',
+  'master-data': '#a78bfa',
+  kuaiai: '#fb7185',
+  kuaiiot: '#2dd4bf',
+  kuaierp: '#fb923c',
+  kuaimes: '#38bdf8',
+  bi: '#4ade80',
+  kuaicrm: '#fb923c',
+  kuaiplm: '#a78bfa',
+  kuaisrm: '#2dd4bf',
+  kuaitms: '#60a5fa',
+  kuaiasms: '#fb923c',
+  kuailtms: '#a78bfa',
+  kuaiip: '#94a3b8',
+  kuaiems: '#22d3ee',
+  kuaimachinery: '#60a5fa',
+  kuaimolding: '#a78bfa',
+  kuaielectronics: '#22d3ee',
+  kuaiautoparts: '#fb923c',
+  kuaimedical: '#4ade80',
+  kuaifood: '#fbbf24',
+  kuaipackaging: '#94a3b8',
+  kuaihardware: '#60a5fa',
+  kuaidiecasting: '#94a3b8',
+  kuaiwiring: '#22d3ee',
+  kuaimotor: '#fb923c',
+  kuaibattery: '#4ade80',
+  kuainewequipment: '#a78bfa',
+  kuaisheetmetal: '#94a3b8',
+  kuaimold: '#2dd4bf',
+  kuaisemiconductor: '#818cf8',
+};
+
+const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, isDark: boolean): string => {
+  if (!isActive) {
+    if (isDark) {
+      return `linear-gradient(135deg, ${token.colorFillSecondary} 0%, ${token.colorFill} 100%)`;
+    }
+    return 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
+  }
+  if (isDark) {
+    const tint = CARD_HEADER_TINT[code];
+    if (tint) {
+      return `linear-gradient(135deg, color-mix(in srgb, ${tint} 28%, ${token.colorFillSecondary}) 0%, color-mix(in srgb, ${tint} 12%, ${token.colorFill}) 100%)`;
+    }
+    return `linear-gradient(135deg, ${token.colorFillTertiary} 0%, ${token.colorFill} 100%)`;
+  }
   const gradients: Record<string, string> = {
     // 采用更明快、高明度的渐变色，提升活力感
     kuaizhizao: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',  // 天蓝色
@@ -422,6 +475,7 @@ const ApplicationListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
+  const isDark = useThemeStore((s) => s.resolved.isDark);
   const queryClient = useQueryClient();
   /** 后端写入菜单或清单后失效侧边栏与工作台菜单缓存（与 increment + invalidate 双通道，避免漏刷新） */
   const refreshApplicationMenusAfterBackendMenuChange = useCallback(() => {
@@ -1101,7 +1155,14 @@ const ApplicationListPage: React.FC = () => {
       <Card
         key={application.uuid}
         hoverable
-        styles={{ body: { padding: '12px 16px' } }}
+        styles={{
+          body: { padding: '12px 16px', background: themeToken.colorBgContainer },
+          actions: {
+            background: themeToken.colorBgContainer,
+            borderTop: `1px solid ${themeToken.colorBorderSecondary}`,
+            margin: 0,
+          },
+        }}
         style={{
           height: '100%',
           display: 'flex',
@@ -1109,6 +1170,7 @@ const ApplicationListPage: React.FC = () => {
           borderRadius: themeToken.borderRadiusLG,
           border: `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
+          boxShadow: isDark ? themeToken.boxShadowSecondary : undefined,
         }}
         cover={
           <div
@@ -1118,7 +1180,12 @@ const ApplicationListPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-start',
-              background: getCardGradient(application.code, !!(application.is_active && application.is_installed)),
+              background: getCardGradient(
+                application.code,
+                !!(application.is_active && application.is_installed),
+                themeToken,
+                isDark,
+              ),
               padding: '16px 20px',
               borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
               borderTopLeftRadius: themeToken.borderRadiusLG,
@@ -1140,12 +1207,12 @@ const ApplicationListPage: React.FC = () => {
                         right: 0,
                         padding: '2px 12px',
                         borderBottomLeftRadius: themeToken.borderRadiusLG,
-                        background: isPro ? '#faad14' : '#52c41a',
-                        color: '#fff',
+                        background: isPro ? themeToken.colorWarning : themeToken.colorSuccess,
+                        color: themeToken.colorTextLightSolid,
                         fontSize: 11,
                         fontWeight: 600,
                         zIndex: 1,
-                        boxShadow: '-2px 2px 5px rgba(0,0,0,0.05)',
+                        boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.35)' : '-2px 2px 5px rgba(0,0,0,0.05)',
                       }}
                     >
                       {isPro ? 'PRO' : 'FREE'}
@@ -1160,8 +1227,13 @@ const ApplicationListPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: application.is_active && application.is_installed ? '#fff' : '#f5f5f5',
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+                      background:
+                        application.is_active && application.is_installed
+                          ? themeToken.colorBgContainer
+                          : themeToken.colorFillTertiary,
+                      boxShadow: isDark
+                        ? '0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.25)'
+                        : '0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
                       overflow: 'hidden',
                       flexShrink: 0,
                       marginRight: 16,
@@ -1177,7 +1249,10 @@ const ApplicationListPage: React.FC = () => {
                       return React.cloneElement(iconElement as React.ReactElement, {
                         style: {
                           fontSize: CARD_ICON_SIZE,
-                          color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
+                          color:
+                            application.is_active && application.is_installed
+                              ? themeToken.colorPrimary
+                              : themeToken.colorTextQuaternary,
                         },
                       });
                     })()}
@@ -1185,7 +1260,16 @@ const ApplicationListPage: React.FC = () => {
                   
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, overflow: 'hidden' }}>
-                      <span style={{ fontWeight: 600, fontSize: 16, color: '#262626', whiteSpace: 'nowrap', marginRight: 4, flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 16,
+                          color: themeToken.colorTextHeading,
+                          whiteSpace: 'nowrap',
+                          marginRight: 4,
+                          flexShrink: 0,
+                        }}
+                      >
                         {application.name}
                       </span>
                       
@@ -1204,24 +1288,100 @@ const ApplicationListPage: React.FC = () => {
                           flexShrink: 0,
                         };
 
-                        const renderBadge = (text: string, bg: string, color: string, icon?: React.ReactNode) => (
-                          <span style={{ ...badgeBaseStyle, backgroundColor: bg, color }}>
-                            {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
-                            {text}
-                          </span>
-                        );
+                        const renderBadge = (
+                          text: string,
+                          light: { bg: string; color: string },
+                          icon?: React.ReactNode,
+                          dark?: { bg: string; color: string },
+                        ) => {
+                          const col = isDark && dark ? dark : light;
+                          return (
+                            <span style={{ ...badgeBaseStyle, backgroundColor: col.bg, color: col.color }}>
+                              {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
+                              {text}
+                            </span>
+                          );
+                        };
 
                         return (
                           <div style={{ display: 'flex', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, overflow: 'hidden' }}>
-                              {application.code === 'master-data' && renderBadge('BASE', '#f0f5ff', '#2f54eb')}
-                              {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) && ['kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu', 'kuaireport', 'bi', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code) && renderBadge('APP', '#f9f0ff', '#722ed1')}
-                              {application.code === 'kuaiai' && renderBadge('AI', '#fff7e6', '#fa8c16')}
-                              {application.code === 'kuaiiot' && renderBadge('IOT', '#e6fffb', '#13c2c2')}
-                              {['kuaizhizao'].includes(application.code) && renderBadge('一体版', '#fff7e6', '#d46b08')}
-                              {['kuaierp', 'kuaimes'].includes(application.code) && renderBadge('拆分版', '#f0f9ff', '#1677ff')}
-                              {INDUSTRY_VALUE_PACK_CODES.includes(application.code) && renderBadge('增值包', '#fff7e6', '#ad6800')}
-                              {OTHER_PLACEHOLDER_CODES.includes(application.code) && renderBadge('其他类', '#f6ffed', '#389e0d')}
+                              {application.code === 'master-data' &&
+                                renderBadge(
+                                  'BASE',
+                                  { bg: '#f0f5ff', color: '#2f54eb' },
+                                  undefined,
+                                  { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
+                                )}
+                              {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
+                                [
+                                  'kuaizhizao',
+                                  'kuaierp',
+                                  'kuaimes',
+                                  'kuaicaiwu',
+                                  'kuaireport',
+                                  'bi',
+                                  'kuaicrm',
+                                  'kuaiplm',
+                                  'kuaisrm',
+                                  'kuaiasms',
+                                  ...OTHER_PLACEHOLDER_CODES,
+                                  ...INDUSTRY_VALUE_PACK_CODES,
+                                ].includes(application.code) &&
+                                renderBadge(
+                                  'APP',
+                                  { bg: '#f9f0ff', color: '#722ed1' },
+                                  undefined,
+                                  {
+                                    bg: `color-mix(in srgb, #722ed1 22%, ${themeToken.colorFillTertiary})`,
+                                    color: '#e9d5ff',
+                                  },
+                                )}
+                              {application.code === 'kuaiai' &&
+                                renderBadge(
+                                  'AI',
+                                  { bg: '#fff7e6', color: '#fa8c16' },
+                                  undefined,
+                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                                )}
+                              {application.code === 'kuaiiot' &&
+                                renderBadge(
+                                  'IOT',
+                                  { bg: '#e6fffb', color: '#13c2c2' },
+                                  undefined,
+                                  {
+                                    bg: `color-mix(in srgb, #13c2c2 20%, ${themeToken.colorFillTertiary})`,
+                                    color: '#5eead4',
+                                  },
+                                )}
+                              {['kuaizhizao'].includes(application.code) &&
+                                renderBadge(
+                                  '一体版',
+                                  { bg: '#fff7e6', color: '#d46b08' },
+                                  undefined,
+                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                                )}
+                              {['kuaierp', 'kuaimes'].includes(application.code) &&
+                                renderBadge(
+                                  '拆分版',
+                                  { bg: '#f0f9ff', color: '#1677ff' },
+                                  undefined,
+                                  { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
+                                )}
+                              {INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
+                                renderBadge(
+                                  '增值包',
+                                  { bg: '#fff7e6', color: '#ad6800' },
+                                  undefined,
+                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                                )}
+                              {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
+                                renderBadge(
+                                  '其他类',
+                                  { bg: '#f6ffed', color: '#389e0d' },
+                                  undefined,
+                                  { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
+                                )}
                               {(application.is_pro || ['kuaireport', 'bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
                                 <Tooltip title={t('pages.system.applications.proLockedTag')}>
                                   <span
@@ -1234,8 +1394,8 @@ const ApplicationListPage: React.FC = () => {
                                       justifyContent: 'center',
                                       marginLeft: 4,
                                       flexShrink: 0,
-                                      backgroundColor: '#f5f5f5',
-                                      color: '#595959',
+                                      backgroundColor: themeToken.colorFillTertiary,
+                                      color: themeToken.colorTextSecondary,
                                       cursor: 'help',
                                     }}
                                   >
@@ -1246,12 +1406,26 @@ const ApplicationListPage: React.FC = () => {
                             </div>
                             <div style={{ flex: 1, minWidth: 8 }} />
                             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                              {application.is_installed ? (
-                                renderBadge(t('pages.system.applications.installed'), '#f6ffed', '#52c41a')
-                              ) : (
-                                renderBadge(t('pages.system.applications.notInstalled'), '#fff1f0', '#f5222d')
-                              )}
-                              {application.is_system && renderBadge(t('pages.system.applications.systemTag'), '#fafafa', '#8c8c8c')}
+                              {application.is_installed
+                                ? renderBadge(
+                                    t('pages.system.applications.installed'),
+                                    { bg: '#f6ffed', color: '#52c41a' },
+                                    undefined,
+                                    { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
+                                  )
+                                : renderBadge(
+                                    t('pages.system.applications.notInstalled'),
+                                    { bg: '#fff1f0', color: '#f5222d' },
+                                    undefined,
+                                    { bg: themeToken.colorErrorBg, color: themeToken.colorErrorText },
+                                  )}
+                              {application.is_system &&
+                                renderBadge(
+                                  t('pages.system.applications.systemTag'),
+                                  { bg: '#fafafa', color: '#8c8c8c' },
+                                  undefined,
+                                  { bg: themeToken.colorFillTertiary, color: themeToken.colorTextTertiary },
+                                )}
                             </div>
                           </div>
                         );
@@ -1260,7 +1434,7 @@ const ApplicationListPage: React.FC = () => {
 
                     <div
                       style={{
-                        color: '#595959',
+                        color: themeToken.colorTextSecondary,
                         fontSize: 13,
                         lineHeight: '18px',
                         display: '-webkit-box',
@@ -1279,7 +1453,7 @@ const ApplicationListPage: React.FC = () => {
         }
         actions={[
           <div key="active" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#666' }}>{t('pages.system.applications.activeStatus')}</span>
+            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
             <Switch
               checked={application.is_active}
               onChange={(checked) => handleToggleActive(application, checked)}
@@ -1290,7 +1464,7 @@ const ApplicationListPage: React.FC = () => {
           </div>,
           <div key="more" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <Button type="text" icon={<MoreOutlined />} style={{ width: '100%' }}>
+              <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
                 {t('pages.system.applications.moreActions')}
               </Button>
             </Dropdown>
@@ -1303,7 +1477,7 @@ const ApplicationListPage: React.FC = () => {
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: 12,
-            color: '#8c8c8c',
+            color: themeToken.colorTextTertiary,
           }}
         >
           <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>

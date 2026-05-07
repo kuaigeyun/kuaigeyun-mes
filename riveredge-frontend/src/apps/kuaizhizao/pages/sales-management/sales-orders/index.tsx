@@ -2600,6 +2600,8 @@ const SalesOrdersPage: React.FC = () => {
               </span>
             </Space>,
           ]}
+          // 表头固定；scroll.y 由 UniTable 全局常量模板自动计算（统一行为）
+          sticky
           showImportButton={true}
           onImport={handleImport}
           showExportButton

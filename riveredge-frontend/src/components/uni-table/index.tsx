@@ -19,7 +19,16 @@
  * **组装清单（子模块）**：`UniSearch`、`UniView`、`UniBatchDeleteButton`（及通用 `UniBatchButton`）、`UniImportToolbarButton` + `UniImport`、`UniExportMenuButton`、`UniSyncButton`；列侧 `uni-action` / `uni-lifecycle` 在列定义中接入。
  */
 
-import React, { useRef, ReactNode, useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react'
+import React, {
+  useRef,
+  ReactNode,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  Suspense,
+  lazy,
+} from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -77,6 +86,7 @@ import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
+import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants'
 
 /**
  * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（key/dataIndex=lifecycle）→ 操作列。
@@ -716,6 +726,12 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   virtualTableBodyMaxHeight?: number
   /**
+   * 是否允许页面层自定义 `scroll.y`（默认 false）。
+   * 为 false 时，UniTable 会忽略调用方传入的 `scroll.y`，统一使用全局动态限高策略；
+   * 仅在极少数白名单页面需要特例时设为 true。
+   */
+  allowCustomScrollY?: boolean
+  /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
@@ -822,6 +838,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showLoading = false,
   virtualized = false,
   virtualTableBodyMaxHeight = 520,
+  allowCustomScrollY = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   tanstackQuery,
@@ -861,6 +878,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
+  // 当前分页大小（用于决定是否需要注入纵向 scroll.y）
+  const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
   const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch()
   // 模糊搜索关键词状态
@@ -1421,6 +1440,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
         const pageSize = params.pageSize ?? liveDefaultPageSize
         const current = params.current ?? 1
+        setCurrentPageSize((prev) => (prev === pageSize ? prev : pageSize))
         const staleTimeMs = tq.staleTime ?? 60_000
         const gcTimeMs = tq.gcTime ?? 300_000
         const paramsKey = stableJsonForQueryKey(params)
@@ -1498,6 +1518,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           })
         }
       } else {
+        const pageSize = params.pageSize ?? liveDefaultPageSize
+        setCurrentPageSize((prev) => (prev === pageSize ? prev : pageSize))
         result = await runRequest()
       }
 
@@ -1960,13 +1982,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                  * - 启用列拖拽且 hook 给出 tableWidth 时，仍以数值 x 覆盖（拖拽路径专用）。
                  */
                 const ourScrollX = effectiveTableWidth
+                const normalizedUserScroll =
+                  !allowCustomScrollY && userScroll
+                    ? ({ ...userScroll, y: undefined } as typeof userScroll)
+                    : userScroll
                 let mergedScroll =
                   ourScrollX != null
-                    ? { ...(userScroll || {}), x: ourScrollX }
-                    : userScroll?.x !== undefined
-                      ? userScroll
-                      : { ...(userScroll || {}), x: 'max-content' as const }
+                    ? { ...(normalizedUserScroll || {}), x: ourScrollX }
+                    : normalizedUserScroll?.x !== undefined
+                      ? normalizedUserScroll
+                      : { ...(normalizedUserScroll || {}), x: 'max-content' as const }
                 const useVirtual = virtualized || userVirtual === true
+                const shouldDisableAutoScrollY =
+                  !allowCustomScrollY && tableData.length > 0 && tableData.length < currentPageSize
+                if (!useVirtual && mergedScroll?.y === undefined && !shouldDisableAutoScrollY) {
+                  mergedScroll = {
+                    ...(mergedScroll || {}),
+                    y: `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px))`,
+                  }
+                }
                 if (useVirtual) {
                   mergedScroll = {
                     ...(mergedScroll || {}),
