@@ -16,7 +16,7 @@ import { StructuredCostDataView } from '../../../../../components/structured-cos
 import { qualityCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
-import { loadWorkOrderSelectOptions, type CostSelectOption } from '../costSelectData';
+import { loadWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 
 interface QualityCostResult {
   prevention_cost: number;
@@ -54,7 +54,7 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        setMaterials(normalizeCostListRows(result));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

@@ -8,7 +8,7 @@ import { listPurchaseOrders, getPurchaseOrder } from '../../../kuaizhizao/servic
 
 export type CostSelectOption = { label: string; value: number };
 
-function normalizeRows(res: unknown): any[] {
+export function normalizeCostListRows(res: unknown): any[] {
   if (Array.isArray(res)) return res;
   if (res && typeof res === 'object') {
     const o = res as Record<string, unknown>;
@@ -19,7 +19,7 @@ function normalizeRows(res: unknown): any[] {
 
 export async function loadWorkOrderSelectOptions(limit = 400): Promise<CostSelectOption[]> {
   const res = await workOrderApi.list({ limit, skip: 0 });
-  const rows = normalizeRows(res);
+  const rows = normalizeCostListRows(res);
   const opts: CostSelectOption[] = [];
   for (const wo of rows) {
     const id = wo?.id;
@@ -32,7 +32,7 @@ export async function loadWorkOrderSelectOptions(limit = 400): Promise<CostSelec
 
 export async function loadOutsourceWorkOrderSelectOptions(limit = 400): Promise<CostSelectOption[]> {
   const res = await outsourceWorkOrderApi.list({ limit, skip: 0 });
-  const rows = normalizeRows(res);
+  const rows = normalizeCostListRows(res);
   const opts: CostSelectOption[] = [];
   for (const row of rows) {
     const id = row?.id;

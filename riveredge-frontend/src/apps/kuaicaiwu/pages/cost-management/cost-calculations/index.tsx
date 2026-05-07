@@ -72,6 +72,7 @@ import {
   loadPurchaseOrderSelectOptions,
   loadPurchaseOrderItemSelectOptions,
   materialsToIdSelectOptions,
+  normalizeCostListRows,
   type CostSelectOption,
 } from '../costSelectData';
 import ProductionCostPage from '../production-cost';
@@ -294,7 +295,7 @@ const CostCalculationPage: React.FC = () => {
     (async () => {
       try {
         const list = await materialApi.list({ limit: 1000, isActive: true });
-        if (!cancelled) setMaterialCompareList(list);
+        if (!cancelled) setMaterialCompareList(normalizeCostListRows(list));
       } catch (e) {
         console.error('加载物料列表失败:', e);
       }

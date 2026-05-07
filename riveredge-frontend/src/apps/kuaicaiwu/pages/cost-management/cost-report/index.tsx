@@ -24,6 +24,7 @@ import { MultiTabListPageTemplate, DetailDrawerSection } from '../../../../../co
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { normalizeCostListRows } from '../costSelectData';
 
 type ReportSection = 'comprehensive' | 'trend' | 'structure';
 
@@ -114,7 +115,7 @@ const CostReportPage: React.FC = () => {
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        setMaterials(normalizeCostListRows(result));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

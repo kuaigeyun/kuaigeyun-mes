@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import {
   loadPurchaseOrderSelectOptions,
   loadPurchaseOrderItemSelectOptions,
+  normalizeCostListRows,
   type CostSelectOption,
 } from '../costSelectData';
 
@@ -65,7 +66,8 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result.filter(m => (m.sourceType || m.source_type) === 'Buy'));
+        const rows = normalizeCostListRows(result);
+        setMaterials(rows.filter(m => (m.sourceType || m.source_type) === 'Buy'));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

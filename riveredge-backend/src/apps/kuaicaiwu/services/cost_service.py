@@ -110,7 +110,7 @@ class CostRuleService(AppBaseService[CostRule]):
         cost_type: Optional[str] = None,
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
-    ) -> List[CostRuleListResponse]:
+    ) -> List[CostRuleResponse]:
         query = CostRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if rule_type:
             query = query.filter(rule_type=rule_type)
@@ -121,7 +121,7 @@ class CostRuleService(AppBaseService[CostRule]):
         if search:
             query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
         rules = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [CostRuleListResponse.model_validate(rule) for rule in rules]
+        return [CostRuleResponse.model_validate(rule) for rule in rules]
 
     async def update_cost_rule(
         self,

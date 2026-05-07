@@ -16,6 +16,7 @@ import { StructuredCostDataView } from '../../../../../components/structured-cos
 import { productionCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { normalizeCostListRows } from '../costSelectData';
 
 interface ProductionCostResult {
   material_id: number;
@@ -54,7 +55,7 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        setMaterials(normalizeCostListRows(result));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

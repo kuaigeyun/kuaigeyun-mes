@@ -10,6 +10,7 @@ import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-t
 import { costOptimizationApi } from '../../services/cost';
 import { materialApi } from '../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { normalizeCostListRows } from './costSelectData';
 
 export interface OptimizationSuggestion {
   suggestion_type: string;
@@ -52,7 +53,7 @@ const CostOptimizationPanel: React.FC = () => {
     const loadMaterials = async () => {
       try {
         const list = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(list);
+        setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

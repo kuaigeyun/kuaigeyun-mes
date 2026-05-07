@@ -16,7 +16,7 @@ import { StructuredCostDataView } from '../../../../../components/structured-cos
 import { outsourceCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
-import { loadOutsourceWorkOrderSelectOptions, type CostSelectOption } from '../costSelectData';
+import { loadOutsourceWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 
 interface OutsourceCostResult {
   material_id?: number;
@@ -60,7 +60,8 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result.filter(m => (m.sourceType || m.source_type) === 'Outsource'));
+        const rows = normalizeCostListRows(result);
+        setMaterials(rows.filter(m => (m.sourceType || m.source_type) === 'Outsource'));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

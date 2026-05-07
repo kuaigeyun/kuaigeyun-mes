@@ -20,6 +20,7 @@ import {
   loadOutsourceWorkOrderSelectOptions,
   loadPurchaseOrderSelectOptions,
   loadPurchaseOrderItemSelectOptions,
+  normalizeCostListRows,
   type CostSelectOption,
 } from '../costSelectData';
 
@@ -73,7 +74,7 @@ const CostComparisonPage: React.FC = () => {
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        setMaterials(normalizeCostListRows(result));
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       }

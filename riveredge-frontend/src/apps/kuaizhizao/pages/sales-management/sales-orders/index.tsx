@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -845,6 +845,43 @@ const SalesOrdersPage: React.FC = () => {
       },
     });
   };
+
+  const renderStableOrderCodeCell = useCallback((rawCode?: string | null) => {
+    const code = rawCode?.trim() || '-';
+    const canCopy = code !== '-';
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 6 }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{code}</span>
+        <Tooltip title={t('field.invitationCode.copy')}>
+          <Button
+            type="link"
+            size="small"
+            icon={<CopyOutlined />}
+            disabled={!canCopy}
+            style={{
+              padding: 0,
+              minWidth: 14,
+              width: 14,
+              height: 14,
+              lineHeight: '14px',
+              flex: '0 0 14px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!canCopy) return;
+              navigator.clipboard.writeText(code).then(
+                () => messageApi.success(t('common.copySuccess')),
+                () => messageApi.error(t('common.copyFailed')),
+              );
+            }}
+          />
+        </Tooltip>
+      </span>
+    );
+  }, [messageApi, t]);
 
   /**
    * 通用批量操作处理器
@@ -1777,11 +1814,7 @@ const SalesOrdersPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: false,
-      render: (_: unknown, record: SalesOrder) => (
-        <Typography.Text copyable={{ text: String(record.order_code ?? '') }} ellipsis>
-          {record.order_code ?? '-'}
-        </Typography.Text>
-      ),
+      render: (_: unknown, record: SalesOrder) => renderStableOrderCodeCell(record.order_code),
     },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true, hideInSearch: false },
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
@@ -2046,11 +2079,7 @@ const SalesOrdersPage: React.FC = () => {
       width: 140,
       fixed: 'left' as const,
       ellipsis: true,
-      render: (_, record) => (
-        <Typography.Text copyable={{ text: String(record.order_code ?? '') }} ellipsis>
-          {record.order_code ?? '-'}
-        </Typography.Text>
-      ),
+      render: (_, record) => renderStableOrderCodeCell(record.order_code),
     },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 130, ellipsis: true, hideInSearch: false },
     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 110, ellipsis: true },

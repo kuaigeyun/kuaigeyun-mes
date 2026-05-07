@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions } from 'antd';
+import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid } from 'antd';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 
@@ -41,6 +41,8 @@ const UserProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const screens = Grid.useBreakpoint();
+  const isDesktopTwoPane = !!screens.md;
   const formRef = React.useRef<ProFormInstance>();
   const passwordFormRef = React.useRef<ProFormInstance>();
   const [loading, setLoading] = useState(false);
@@ -416,12 +418,29 @@ const UserProfilePage: React.FC = () => {
         padding: '0 0 16px 0',
         margin: 0,
         boxSizing: 'border-box',
+        height: isDesktopTwoPane
+          ? 'calc(100vh - var(--header-height, 56px) - 16px)'
+          : undefined,
+        overflow: isDesktopTwoPane ? 'hidden' : undefined,
       }}
     >
-      <Row gutter={16}>
+      <Row
+        gutter={16}
+        style={{
+          height: isDesktopTwoPane ? '100%' : undefined,
+        }}
+      >
         {/* 左侧：显示用户信息 */}
-        <Col xs={24} md={8}>
-          <Card title={t('pages.personal.profile.userInfo')} loading={loading} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={8} style={{ height: isDesktopTwoPane ? '100%' : undefined }}>
+          <Card
+            title={t('pages.personal.profile.userInfo')}
+            loading={loading}
+            style={{
+              marginBottom: 16,
+              position: isDesktopTwoPane ? 'sticky' : undefined,
+              top: isDesktopTwoPane ? 0 : undefined,
+            }}
+          >
             <Space orientation="vertical" align="center" style={{ width: '100%' }}>
               <Avatar
                 size={120}
@@ -487,11 +506,40 @@ const UserProfilePage: React.FC = () => {
         </Col>
 
         {/* 右侧：编辑用户信息 */}
-        <Col xs={24} md={16}>
-          <Card title={t('pages.personal.profile.editProfile')} loading={loading}>
+        <Col
+          xs={24}
+          md={16}
+          style={{
+            height: isDesktopTwoPane ? '100%' : undefined,
+            minHeight: isDesktopTwoPane ? 0 : undefined,
+          }}
+        >
+          <Card
+            title={t('pages.personal.profile.editProfile')}
+            loading={loading}
+            style={{
+              height: isDesktopTwoPane ? '100%' : undefined,
+              display: isDesktopTwoPane ? 'flex' : undefined,
+              flexDirection: isDesktopTwoPane ? 'column' : undefined,
+            }}
+            styles={
+              isDesktopTwoPane
+                ? {
+                    body: {
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: 'auto',
+                    },
+                  }
+                : undefined
+            }
+          >
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
+              style={{
+                minHeight: isDesktopTwoPane ? '100%' : undefined,
+              }}
               items={[
                 {
                   key: 'basic',
