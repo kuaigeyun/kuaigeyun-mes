@@ -78,12 +78,9 @@ class ApplicationService:
     def _filter_dedicated_for_viewer(
         apps: List[Dict[str, Any]],
         *,
-        tenant_id: int,
-        viewer_is_infra_admin: bool,
         bound_codes: set,
     ) -> List[Dict[str, Any]]:
-        if viewer_is_infra_admin:
-            return apps
+        """专用应用仅出现在已绑定当前租户的应用清单中（与 viewer 角色无关，避免平台账号误入其它租户仍能看到）。"""
         out: List[Dict[str, Any]] = []
         for a in apps:
             if ApplicationService.effective_is_dedicated(a):
@@ -92,6 +89,21 @@ class ApplicationService:
             else:
                 out.append(a)
         return out
+
+    @staticmethod
+    async def reconcile_is_dedicated_with_manifest(tenant_id: int, applications: List[Dict[str, Any]]) -> None:
+        """manifest 标明专用而 DB 未同步时写入 is_dedicated，保证分类与绑定过滤一致。"""
+        for app_dict in applications:
+            code = app_dict.get("code")
+            if not code:
+                continue
+            manifest = ApplicationService._get_manifest_by_code(str(code))
+            if not manifest or not ApplicationService._manifest_is_dedicated(manifest):
+                continue
+            if bool(app_dict.get("is_dedicated")):
+                continue
+            await ApplicationService._persist_is_dedicated(tenant_id, str(code), True)
+            app_dict["is_dedicated"] = True
 
     @staticmethod
     async def ensure_application_registered_from_manifest(tenant_id: int, code: str) -> Optional[ApplicationDict]:
@@ -294,8 +306,6 @@ class ApplicationService:
         limit: int = 100,
         is_installed: Optional[bool] = None,
         is_active: Optional[bool] = None,
-        *,
-        viewer_is_infra_admin: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         获取应用列表
@@ -306,7 +316,6 @@ class ApplicationService:
             limit: 限制数量
             is_installed: 是否已安装（可选）
             is_active: 是否启用（可选）
-            viewer_is_infra_admin: 平台管理员可看到全部专用应用；租户侧仅能看到已绑定专用应用
 
         Returns:
             List[Dict[str, Any]]: 应用列表
@@ -357,18 +366,9 @@ class ApplicationService:
                         app_dict['menu_config'] = None
                 applications.append(app_dict)
 
-            bound = (
-                set()
-                if viewer_is_infra_admin
-                else await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
-            )
+            bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
             # 未绑定租户不会有 bound；已绑定但尚未在该租户注册 core_applications 行时，从 manifest 补齐（与应用中心默认未筛选一致）
-            if (
-                bound
-                and not viewer_is_infra_admin
-                and is_installed is None
-                and is_active is None
-            ):
+            if bound and is_installed is None and is_active is None:
                 present_codes = {str(a.get("code") or "") for a in applications}
                 for app_code in bound:
                     if app_code not in present_codes:
@@ -380,10 +380,10 @@ class ApplicationService:
                             present_codes.add(app_code)
                 applications.sort(key=lambda a: (a.get("sort_order") or 999, a.get("id") or 0))
 
+            await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, applications)
+
             return ApplicationService._filter_dedicated_for_viewer(
                 applications,
-                tenant_id=tenant_id,
-                viewer_is_infra_admin=viewer_is_infra_admin,
                 bound_codes=bound,
             )
 
@@ -760,8 +760,6 @@ class ApplicationService:
     async def get_installed_applications(
         tenant_id: int,
         is_active: Optional[bool] = None,
-        *,
-        viewer_is_infra_admin: bool = False,
     ) -> List[ApplicationDict]:
         """
         获取已安装的应用列表
@@ -771,7 +769,6 @@ class ApplicationService:
         Args:
             tenant_id: 组织ID
             is_active: 是否启用（可选）
-            viewer_is_infra_admin: 平台管理员可看到全部专用应用；租户侧仅能看到已绑定专用应用
 
         Returns:
             List[ApplicationDict]: 已安装的应用列表
@@ -829,15 +826,10 @@ class ApplicationService:
             for row in rows:
                 result.append(dict(row))
 
-            bound = (
-                set()
-                if viewer_is_infra_admin
-                else await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
-            )
+            bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+            await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, result)
             return ApplicationService._filter_dedicated_for_viewer(
                 result,
-                tenant_id=tenant_id,
-                viewer_is_infra_admin=viewer_is_infra_admin,
                 bound_codes=bound,
             )
         finally:
@@ -1010,6 +1002,7 @@ class ApplicationService:
             logger.warning(f"批量预取 core_applications 失败，降级为按需查询: {e}")
 
         registered_apps = []
+        bound_for_scan = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
 
         for manifest in plugins:
             logger.debug(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
@@ -1022,6 +1015,9 @@ class ApplicationService:
                     continue
                 if code in _PLACEHOLDER_APP_CODES:
                     logger.info(f"⏭️ 跳过占位应用注册: {code}")
+                    continue
+                if ApplicationService._manifest_is_dedicated(manifest) and str(code) not in bound_for_scan:
+                    logger.info(f"⏭️ 跳过未绑定当前租户的专用应用: {code} (tenant_id={tenant_id})")
                     continue
                 
                 # 优先用预取结果；预取失败时回退到单次查询

@@ -48,11 +48,10 @@ def _require_tenant_or_platform_admin(auth: AuthContext) -> None:
 async def _assert_application_visible_to_viewer(
     tenant_id: int,
     application: Dict[str, Any],
-    auth: AuthContext,
+    _auth: AuthContext,
 ) -> None:
+    """专用应用可见性仅取决于当前租户绑定（平台管理员在租户上下文中也不绕过）。"""
     if not ApplicationService.effective_is_dedicated(application):
-        return
-    if auth.is_infra_admin:
         return
     bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
     if str(application.get("code") or "") not in bound:
@@ -229,7 +228,6 @@ async def list_applications(
         limit=limit,
         is_installed=is_installed,
         is_active=is_active,
-        viewer_is_infra_admin=auth.is_infra_admin,
     )
 
     # 获取租户套餐是否允许 PRO 应用
@@ -305,7 +303,6 @@ async def list_installed_applications(
     applications = await ApplicationService.get_installed_applications(
         tenant_id=tenant_id,
         is_active=is_active,
-        viewer_is_infra_admin=auth.is_infra_admin,
     )
 
     # 获取租户套餐是否允许 PRO 应用
@@ -778,14 +775,13 @@ async def scan_and_register_plugins(
             tenant_id=tenant_id
         )
 
-        if not auth.is_infra_admin:
-            bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
-            applications = [
-                a
-                for a in applications
-                if not ApplicationService.effective_is_dedicated(a)
-                or str(a.get("code") or "") in bound
-            ]
+        bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+        applications = [
+            a
+            for a in applications
+            if not ApplicationService.effective_is_dedicated(a)
+            or str(a.get("code") or "") in bound
+        ]
 
         # 安全构造响应对象，避免传递多余字段
         result = []
