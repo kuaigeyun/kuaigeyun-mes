@@ -1,0 +1,27 @@
+"""
+好力GO — 主路由
+
+契约见本地 `riveredge-adapt/haoli-go/PLAN.md` §9（默认 gitignore）。设备/模具/巡查业务 **单独在本应用实现**，不复用 `kuaizhizao`；路由按 PLAN §5、§6 迭代挂载。
+"""
+
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+router = APIRouter(tags=["App · HaoliGO"])
+
+
+class HaoligoMeta(BaseModel):
+    """应用元信息（运维 / 移动端探测 base URL 与产品名）"""
+
+    app_key: str = Field(description="URL 路径使用的应用键", examples=["haoligo"])
+    display_name: str = Field(description="对用户展示的产品名称", examples=["好力GO"])
+    api_prefix: str = Field(description="当前挂载的 API 前缀", examples=["/api/v1/apps/haoligo"])
+
+
+@router.get("/meta", response_model=HaoligoMeta, summary="好力GO 元信息")
+async def get_haoligo_meta() -> HaoligoMeta:
+    return HaoligoMeta(
+        app_key="haoligo",
+        display_name="好力GO",
+        api_prefix="/api/v1/apps/haoligo",
+    )

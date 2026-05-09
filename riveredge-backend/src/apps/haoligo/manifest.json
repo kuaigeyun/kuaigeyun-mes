@@ -1,0 +1,22 @@
+{
+  "code": "haoligo",
+  "name": "好力GO",
+  "version": "0.1.0",
+  "description": "客户专用现场应用（设备、模具、巡查等）。API：/api/v1/apps/haoligo。",
+  "icon": "smartphone",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/haoligo/index.tsx",
+  "route_path": "/apps/haoligo",
+  "sort_order": 220,
+  "is_dedicated": true,
+  "market_category": "dedicated",
+  "permission_code": "haoligo:workspace:read",
+  "menu_config": {
+    "title": "好力GO",
+    "icon": "smartphone",
+    "path": "/apps/haoligo",
+    "permission": "haoligo:workspace:read",
+    "children": []
+  },
+  "permissions": ["haoligo:workspace:read"]
+}
