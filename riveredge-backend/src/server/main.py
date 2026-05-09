@@ -229,9 +229,15 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ 应用自动扫描失败（可稍后在应用中心手动扫描）: {e}")
 
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
-    await ApplicationRegistryService.reload_apps()
-    logger.info("✅ 应用注册服务已重新初始化")
-    
+    try:
+        await ApplicationRegistryService.reload_apps()
+        logger.info("✅ 应用注册服务已重新初始化")
+    except Exception as e:
+        logger.exception(
+            "❌ 应用注册服务 reload_apps 失败，进程仍以核心路由继续运行（请检查日志与插件路由）: {}",
+            e,
+        )
+
     # 在lifespan中加载插件路由（确保路由管理器已初始化）
     # 注意：路由已经在 ApplicationRegistryService.reload_apps() 中注册到 ApplicationRouteManager
     # 这里只需要确保路由已经注册到 FastAPI app

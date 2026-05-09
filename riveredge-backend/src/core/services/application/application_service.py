@@ -71,6 +71,13 @@ class ApplicationService:
                 tenant_id,
                 code,
             )
+        except Exception as e:  # noqa: BLE001 — 列未迁移时列表接口仍可返回
+            logger.warning(
+                "写入 core_applications.is_dedicated 失败 tenant_id={} code={}（迁移 214）: {}",
+                tenant_id,
+                code,
+                e,
+            )
         finally:
             await conn.close()
 

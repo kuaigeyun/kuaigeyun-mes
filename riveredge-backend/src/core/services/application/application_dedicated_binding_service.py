@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Set
 
+from loguru import logger
+
 from infra.exceptions.exceptions import ValidationError
 from infra.infrastructure.database.database import get_db_connection
 
@@ -15,6 +17,7 @@ from infra.infrastructure.database.database import get_db_connection
 class ApplicationDedicatedBindingService:
     @staticmethod
     async def fetch_bound_codes_for_tenant(tenant_id: int) -> Set[str]:
+        """读取失败时返回空集合，避免未跑迁移 214 时拖垮整个应用列表接口。"""
         conn = await get_db_connection()
         try:
             rows = await conn.fetch(
@@ -25,6 +28,13 @@ class ApplicationDedicatedBindingService:
                 tenant_id,
             )
             return {str(r["app_code"]) for r in rows if r.get("app_code")}
+        except Exception as e:  # noqa: BLE001 — 含表不存在、连接异常
+            logger.warning(
+                "读取专用应用绑定失败 tenant_id={}（请确认已执行迁移 214，存在表 core_application_dedicated_bindings）: {}",
+                tenant_id,
+                e,
+            )
+            return set()
         finally:
             await conn.close()
 
@@ -53,6 +63,13 @@ class ApplicationDedicatedBindingService:
                     """
                 )
             return [dict(r) for r in rows]
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "列出专用应用绑定失败 app_code={}（迁移 214 / 表 core_application_dedicated_bindings）: {}",
+                app_code,
+                e,
+            )
+            return []
         finally:
             await conn.close()
 

@@ -6,7 +6,8 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError as PydanticValidationError
+from loguru import logger
 
 from core.schemas.user_profile import UserProfileUpdate, UserProfileResponse
 from core.services.user.user_profile_service import UserProfileService
@@ -67,6 +68,12 @@ async def get_user_profile(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
+        )
+    except PydanticValidationError as e:
+        logger.error("个人资料响应校验失败（User 与 UserProfileResponse 不一致）: {}", e)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
         )
 
 
