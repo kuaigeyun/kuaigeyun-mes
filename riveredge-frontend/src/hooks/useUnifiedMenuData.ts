@@ -17,10 +17,55 @@ import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuTree, type MenuTree } from '../services/menu';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
+import { useConfigStore } from '../stores/configStore';
 import { hasAnyPermission } from '../utils/permission';
 
 /** 与 BasicLayout 保持一致，确保缓存共享 */
 const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
+
+/** 上线向导关闭时从侧栏/面包屑隐藏的菜单路径（与站点设置 enable_launch_wizard 联动） */
+const LAUNCH_WIZARD_MENU_PATHS = new Set(['/system/onboarding-wizard', '/system/launch-progress']);
+
+/** 系统级仪表盘（工作台 / 运营看板）路径前缀，与站点设置 enable_system_dashboard 联动 */
+const SYSTEM_DASHBOARD_PATH_PREFIX = '/system/dashboard';
+
+function filterOutLaunchWizardMenus(items: MenuDataItem[]): MenuDataItem[] {
+  const walk = (nodes: MenuDataItem[]): MenuDataItem[] =>
+    nodes
+      .map((node) => {
+        const p = node.path;
+        if (p && LAUNCH_WIZARD_MENU_PATHS.has(p)) return null;
+        const rawChildren = node.children as MenuDataItem[] | undefined;
+        const ch = rawChildren?.length ? walk(rawChildren) : undefined;
+        if (ch) {
+          if (ch.length === 0 && !p) return null;
+          return { ...node, children: ch };
+        }
+        return node;
+      })
+      .filter((m): m is MenuDataItem => m !== null);
+  return walk(items);
+}
+
+function filterOutSystemDashboardMenus(items: MenuDataItem[]): MenuDataItem[] {
+  const walk = (nodes: MenuDataItem[]): MenuDataItem[] =>
+    nodes
+      .map((node) => {
+        const p = node.path;
+        if (p === SYSTEM_DASHBOARD_PATH_PREFIX || p?.startsWith(`${SYSTEM_DASHBOARD_PATH_PREFIX}/`)) {
+          return null;
+        }
+        const rawChildren = node.children as MenuDataItem[] | undefined;
+        const ch = rawChildren?.length ? walk(rawChildren) : undefined;
+        if (ch) {
+          if (ch.length === 0 && !p) return null;
+          return { ...node, children: ch };
+        }
+        return node;
+      })
+      .filter((m): m is MenuDataItem => m !== null);
+  return walk(items);
+}
 
 function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDataItem[] {
   return items
@@ -82,6 +127,9 @@ export function useUnifiedMenuData(
     collapsed = false,
   } = options;
   const currentUser = useGlobalStore((s) => s.currentUser);
+  /** 未设置或非 false 时视为开启（兼容历史租户） */
+  const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
+  const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
   const queryClient = useQueryClient();
 
   const applicationMenuVersion = useGlobalStore((s) => s.applicationMenuVersion ?? 0);
@@ -172,9 +220,18 @@ export function useUnifiedMenuData(
         return true;
       });
     }
-    return filterMenuByPermission(items, currentUser);
+    let result = filterMenuByPermission(items, currentUser);
+    if (!launchWizardEnabled) {
+      result = filterOutLaunchWizardMenus(result);
+    }
+    if (!systemDashboardEnabled) {
+      result = filterOutSystemDashboardMenus(result);
+    }
+    return result;
   }, [
     currentUser,
+    launchWizardEnabled,
+    systemDashboardEnabled,
     systemMenuConfig,
     filteredApplicationMenus,
     convertMenuTreeToMenuDataItem,
@@ -209,9 +266,18 @@ export function useUnifiedMenuData(
       });
       items.splice(1, 0, ...appItems);
     }
-    return filterMenuByPermission(items, currentUser);
+    let result = filterMenuByPermission(items, currentUser);
+    if (!launchWizardEnabled) {
+      result = filterOutLaunchWizardMenus(result);
+    }
+    if (!systemDashboardEnabled) {
+      result = filterOutSystemDashboardMenus(result);
+    }
+    return result;
   }, [
     currentUser,
+    launchWizardEnabled,
+    systemDashboardEnabled,
     systemMenuConfig,
     filteredApplicationMenus,
     convertMenuTreeToMenuDataItem,

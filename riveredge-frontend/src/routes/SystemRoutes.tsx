@@ -13,11 +13,12 @@
 
 import React, { Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Modal } from 'antd';
+import { Modal, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
+import { useRedirectIfSystemDashboardOff } from '../hooks/useRedirectIfSystemDashboardOff';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
@@ -77,6 +78,20 @@ const withPermission = (
     return element;
   }
   return <RoutePermissionGuard permissionCodes={permissionCodes}>{element}</RoutePermissionGuard>;
+};
+
+/** 系统级仪表盘关闭时拦截工作台 / 运营看板路由 */
+const SystemDashboardRouteGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { initialized, enabled } = useRedirectIfSystemDashboardOff();
+  if (!initialized) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+  if (!enabled) return null;
+  return <>{children}</>;
 };
 
 const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: React.ReactNode }> = ({
@@ -180,8 +195,14 @@ const SystemRoutes: React.FC = () => (
     <Route path="/docs" element={<Suspense fallback={<PageSkeleton />}><DocsPage /></Suspense>} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
-    <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
-    <Route path="/system/dashboard/analysis" element={withDashboardSuspense(DashboardAnalysisPage)} />
+    <Route
+      path="/system/dashboard/workplace"
+      element={<SystemDashboardRouteGate>{withDashboardSuspense(DashboardPage)}</SystemDashboardRouteGate>}
+    />
+    <Route
+      path="/system/dashboard/analysis"
+      element={<SystemDashboardRouteGate>{withDashboardSuspense(DashboardAnalysisPage)}</SystemDashboardRouteGate>}
+    />
     <Route path="/system/roles" element={withPermission(withRolesPermissionsSuspense(RolesPermissionsPage), ['system:role:read', 'system:role:update'])} />
     <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system:permission:read', 'system:permission:update'])} />
     <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system:department:read', 'system:department:update'])} />

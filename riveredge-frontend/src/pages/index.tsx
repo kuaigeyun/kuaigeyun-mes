@@ -10,13 +10,14 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getToken } from '../utils/auth';
+import { getDefaultTenantHomePath } from '../stores/configStore';
 
 export default function IndexPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
     if (getToken()) {
-      navigate('/system/dashboard/workplace');
+      navigate(getDefaultTenantHomePath());
     } else {
       navigate('/login', { replace: true });
     }

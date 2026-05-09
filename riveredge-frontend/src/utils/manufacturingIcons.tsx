@@ -178,6 +178,7 @@ export const ManufacturingIcons = {
   shop: getLucideIcon('Store'),
   database: getLucideIcon('Database'),
   monitor: getLucideIcon('Monitor'),
+  smartphone: getLucideIcon('Smartphone'),
   global: getLucideIcon('Globe'),
   api: getLucideIcon('Network'),
   code: getLucideIcon('Code'),

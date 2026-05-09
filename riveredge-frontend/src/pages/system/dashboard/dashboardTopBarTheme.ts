@@ -1,8 +1,7 @@
-/** ① 问候卡：整面 `colorPrimary` */
+/** ① 问候卡：整面基于主题色 `colorPrimary`（浅色实心 / 深色略压暗的渐变，避免硬编码固定色相） */
 export function dashboardTopBarUserCardBackground(primary: string, isDark: boolean) {
   if (isDark) {
-    // 深色模式下使用稍微深一点且带有质感的渐变红
-    return `linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)`;
+    return `linear-gradient(135deg, color-mix(in srgb, ${primary} 88%, black) 0%, color-mix(in srgb, ${primary} 58%, black) 100%)`;
   }
   return primary;
 }

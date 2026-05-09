@@ -13,6 +13,7 @@ import InitWizard from '../../../components/init-wizard'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { getTenantId } from '../../../utils/auth'
+import { getDefaultTenantHomePath } from '../../../stores/configStore'
 
 /**
  * 初始化向导页面组件（Modal 形式）
@@ -23,11 +24,11 @@ const InitWizardPage: React.FC = () => {
   const tenantId = getTenantId()
 
   const handleComplete = () => {
-    navigate('/system/dashboard/workplace', { replace: true })
+    navigate(getDefaultTenantHomePath(), { replace: true })
   }
 
   const handleCancel = () => {
-    navigate('/system/dashboard/workplace', { replace: true })
+    navigate(getDefaultTenantHomePath(), { replace: true })
   }
 
   if (!tenantId) {

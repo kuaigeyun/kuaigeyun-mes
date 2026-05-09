@@ -71,6 +71,7 @@ class ApplicationResponse(ApplicationBase):
     uuid: str = Field(..., description="应用UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织ID")
     is_installed: bool = Field(..., description="是否已安装")
+    is_dedicated: bool = Field(default=False, description="是否专用应用（平台绑定组织后租户可见）")
     is_pro: bool = Field(default=False, description="是否 PRO 应用（需升级套餐使用）")
     can_access: bool = Field(default=True, description="当前租户是否有权访问（PRO 应用且套餐不允许时为 False）")
     created_at: datetime = Field(..., description="创建时间")

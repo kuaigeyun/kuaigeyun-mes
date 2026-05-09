@@ -10,11 +10,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Card, Tabs, Progress, Statistic, Table, Tag, Space, Button, Typography, Alert, List, Divider } from 'antd';
+import { Card, Tabs, Progress, Statistic, Table, Tag, Space, Button, Typography, Alert, List, Divider, Spin } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { getProgressTracking, generateProgressReport, ProgressTracking, ProgressReport } from '../../../services/launchProgress';
 import { getChecklist, checkItems, generateCheckReport, ChecklistItem, CheckReport } from '../../../services/launchChecklist';
+import { useRedirectIfLaunchWizardOff } from '../../../hooks/useRedirectIfLaunchWizardOff';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -25,6 +26,7 @@ const LaunchProgressPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const { initialized: cfgReady, enabled: launchWizardOn } = useRedirectIfLaunchWizardOff();
   const [loading, setLoading] = useState(false);
   const [progressTracking, setProgressTracking] = useState<ProgressTracking | null>(null);
   const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
@@ -246,6 +248,17 @@ const LaunchProgressPage: React.FC = () => {
       },
     },
   ];
+
+  if (!cfgReady) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+  if (!launchWizardOn) {
+    return null;
+  }
 
   return (
     <div style={{ padding: '24px' }}>

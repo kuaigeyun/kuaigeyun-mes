@@ -11,7 +11,7 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
-import { useConfigStore } from '../../stores/configStore';
+import { useConfigStore, getDefaultTenantHomePath } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
@@ -83,6 +83,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
+  /** 租户「首页」标签路径：与站点设置「系统级仪表盘是否显示」一致 */
+  const tenantHomePath = useConfigStore((s) =>
+    s.configs.enable_system_dashboard !== false ? '/system/dashboard/workplace' : '/system/applications',
+  );
+
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -117,9 +122,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               });
             }
           } else {
-            const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
+            const hasWorkplace = validTabs.some((tab) => tab.key === getDefaultTenantHomePath());
             if (!hasWorkplace) {
-              const wpPath = '/system/dashboard/workplace';
+              const wpPath = getDefaultTenantHomePath();
               const wpTitle = findMenuTitleWithTranslation(wpPath, menuConfig, t);
               validTabs.unshift({
                 key: wpPath,
@@ -211,7 +216,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           key: path,
           path,
           label: getTabTitle(path),
-          closable: path !== '/system/dashboard/workplace', // 工作台标签不可关闭
+          closable: path !== tenantHomePath, // 工作台标签不可关闭
           pinned: false, // 默认不固定
         };
 
@@ -219,9 +224,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
         // 排序逻辑：工作台 -> 固定标签 -> 其他标签
         // 如果添加的是工作台，确保它在第一个位置
-        if (path === '/system/dashboard/workplace') {
+        if (path === tenantHomePath) {
           // 检查是否已存在工作台标签
-          const workplaceTab = prevTabs.find((tab) => tab.key === '/system/dashboard/workplace');
+          const workplaceTab = prevTabs.find((tab) => tab.key === tenantHomePath);
           if (workplaceTab) {
             return prevTabs;
           }
@@ -229,9 +234,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           newTabs = [newTab, ...prevTabs];
         } else {
           // 其他标签：插入到工作台之后，固定标签之后
-          const workplaceTab = prevTabs.find((tab) => tab.key === '/system/dashboard/workplace');
-          const pinnedTabs = prevTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
-          const unpinnedTabs = prevTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+          const workplaceTab = prevTabs.find((tab) => tab.key === tenantHomePath);
+          const pinnedTabs = prevTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+          const unpinnedTabs = prevTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
 
           if (workplaceTab) {
             // 有工作台：工作台 -> 固定标签 -> 新标签 -> 其他标签
@@ -239,9 +244,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           } else {
             // 没有工作台：先添加工作台，再添加新标签
             const workplaceTab: TabItem = {
-              key: '/system/dashboard/workplace',
-              path: '/system/dashboard/workplace',
-              label: getTabTitle('/system/dashboard/workplace'),
+              key: tenantHomePath,
+              path: tenantHomePath,
+              label: getTabTitle(tenantHomePath),
               closable: false,
               pinned: false, // 工作台默认不固定（但始终在第一个位置）
             };
@@ -257,7 +262,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
       if (newTabs.length > maxTabs) {
           // 超过数量时保留新的、关闭旧的：在可关闭且非固定的标签中，排除当前新加的 path，移除最旧的一个
-          const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== '/system/dashboard/workplace');
+          const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== tenantHomePath);
           const closableExceptNew = closableTabs.filter((tab) => tab.key !== path);
           const oldestTab = closableExceptNew[0];
           if (oldestTab) {
@@ -268,7 +273,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         return newTabs;
       });
     },
-    [getTabTitle]
+    [getTabTitle, tenantHomePath]
   );
 
   /** 始终指向最新 addTab，供「路由同步标签」effect 使用，避免因 getTabTitle/menuConfig 变化导致 addTab 引用变、effect 在无导航时反复执行引发 #185 */
@@ -299,9 +304,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
       // 排序：固定标签在前，然后是按顺序排列的其他标签
       // 工作台始终在第一个位置（如果存在）
-      const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
-      const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
-      const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+      const workplaceTab = newTabs.find((tab) => tab.key === tenantHomePath);
+      const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+      const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
 
       const sortedTabs: TabItem[] = [];
       if (workplaceTab) {
@@ -312,7 +317,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
       return sortedTabs;
     });
-  }, []);
+  }, [tenantHomePath]);
 
   /**
    * 从本地存储加载并验证标签（供初始化和异步恢复使用）
@@ -331,7 +336,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       });
 
       if (validTabs.length === 0) return null;
-      const wpPath = isInfraPage ? '/infra/operation' : '/system/dashboard/workplace';
+      const wpPath = isInfraPage ? '/infra/operation' : tenantHomePath;
       const hasDefault = validTabs.some((tab) => tab.key === wpPath);
       if (!hasDefault) {
         const title = findMenuTitleWithTranslation(wpPath, menuConfig, t);
@@ -347,7 +352,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     } catch {
       return null;
     }
-  }, [location.pathname, menuConfig, t]);
+  }, [location.pathname, menuConfig, t, tenantHomePath]);
 
   /** 是否已从异步恢复中加载过标签（避免重复覆盖用户操作） */
   const didRestoreFromSyncRef = useRef(false);
@@ -402,7 +407,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (location.pathname) {
       const add = addTabRef.current;
       // 确保工作台标签始终存在（固定第一个）
-      add('/system/dashboard/workplace');
+      add(tenantHomePath);
       // 使用 pathname+search 作为 tabKey，切换回来时保留 query（如 designer?materialId=xxx）
       // 排除 _refresh 参数，避免右键刷新时因 URL 变化而新建标签
       const searchParams = new URLSearchParams(location.search || '');
@@ -412,7 +417,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       add(tabKey);
       setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
     }
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, tenantHomePath]);
 
   /**
    * 监听自定义事件更新标签标题
@@ -501,7 +506,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
       } else {
         // 如果没有标签了，跳转到工作台
-        navigate('/system/dashboard/workplace');
+        navigate(tenantHomePath);
       }
     }
 
@@ -519,13 +524,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const leftTabs = tabs.slice(0, targetIndex + 1);
     const rightTabs = tabs.slice(targetIndex + 1);
     // 保留右侧的固定标签
-    const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === '/system/dashboard/workplace');
+    const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === tenantHomePath);
     const newTabs = [...leftTabs, ...rightPinnedTabs];
 
     // 重新排序：工作台 -> 固定标签 -> 其他标签
-    const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
-    const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
-    const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+    const workplaceTab = newTabs.find((tab) => tab.key === tenantHomePath);
+    const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+    const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
     const sortedTabs: TabItem[] = [];
     if (workplaceTab) {
       sortedTabs.push(workplaceTab);
@@ -547,9 +552,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   const handleCloseOthers = (targetKey: string) => {
     // 保留目标标签、工作台标签和所有固定标签
-    const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
+    const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
     const targetTab = tabs.find((tab) => tab.key === targetKey);
-    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace' && tab.key !== targetKey);
+    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath && tab.key !== targetKey);
     const newTabs: TabItem[] = [];
 
     // 先添加工作台标签（如果存在且不是目标标签）
@@ -577,8 +582,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 使用 setTimeout 确保在当前事件循环结束后执行，避免竞态条件
     setTimeout(() => {
       // 保留工作台标签和所有固定标签
-      const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
-      const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
+      const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
+      const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
       const newTabs: TabItem[] = [];
 
       // 先添加工作台标签（如果存在）
@@ -597,11 +602,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         setTimeout(() => navigate(newTabs[0].key), 0);
       } else {
         setTabs([]);
-        setActiveKey('/system/dashboard/workplace');
-        setTimeout(() => navigate('/system/dashboard/workplace'), 0);
+        setActiveKey(tenantHomePath);
+        setTimeout(() => navigate(tenantHomePath), 0);
       }
     }, 0);
-  }, [tabs, navigate]);
+  }, [tabs, navigate, tenantHomePath]);
 
   /**
    * 处理标签刷新 - 局部刷新当前标签页
@@ -643,7 +648,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const handleFavoriteToQuickEntry = useCallback(async (tabKey: string) => {
     if (favoriteSavingRef.current) return;
     const menuPath = (tabKey || '').split('?')[0];
-    if (!menuPath || menuPath === '/system/dashboard/workplace') {
+    if (!menuPath || menuPath === tenantHomePath) {
       message.warning(t('ui.message.notSupportFavorite'));
       return;
     }
@@ -675,7 +680,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       favoriteSavingRef.current = false;
     }
     message.success(t('ui.message.favoriteSuccess'));
-  }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences]);
+  }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences, tenantHomePath, t]);
 
   /**
    * 获取标签右键菜单
@@ -683,7 +688,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const getTabContextMenu = (tabKey: string): MenuProps => {
     const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
     const targetTab = tabs.find((tab) => tab.key === tabKey);
-    const isWorkplace = tabKey === '/system/dashboard/workplace';
+    const isWorkplace = tabKey === tenantHomePath;
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
     const isPinned = targetTab?.pinned || false;
@@ -1734,7 +1739,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                         e.preventDefault();
                         e.stopPropagation();
                         // 仪表盘标签和固定标签不可双击关闭
-                        if (tab.key !== '/system/dashboard/workplace' && tab.closable && !tab.pinned) {
+                        if (tab.key !== tenantHomePath && tab.closable && !tab.pinned) {
                           handleTabClose(tab.key);
                         }
                       }}

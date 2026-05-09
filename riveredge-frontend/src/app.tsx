@@ -7,7 +7,7 @@
  * - Ant Design 6.1.0 + Pro Components 2.8.2 (UI组件)
  */
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
@@ -23,7 +23,7 @@ import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
-import { useConfigStore } from './stores/configStore';
+import { useConfigStore, getDefaultTenantHomePath } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
@@ -178,12 +178,15 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const tokenCheckIntervalSec = useConfigStore((s) => s.configs['security.token_check_interval']);
   const inactivityTimeoutSec = useConfigStore((s) => s.configs['security.inactivity_timeout']);
   const tenantId = getTenantId();
+  /** 记录上次已拉取站点配置的租户：切换租户时必须 fetchConfigs(true)，避免 initialized 短路沿用上一租户内存 */
+  const lastSiteSettingTenantRef = useRef<string | number | null>(null);
 
-  // 初始化系统配置（用户登录后拉取；租户切换时重新拉取，确保新租户显示平台级 LOGO/站点名）
   useEffect(() => {
-    if (currentUser && tenantId && !isPublicPath) {
-      fetchConfigs();
-    }
+    if (!currentUser || !tenantId || isPublicPath) return;
+    const prev = lastSiteSettingTenantRef.current;
+    const tenantChanged = prev !== tenantId;
+    lastSiteSettingTenantRef.current = tenantId;
+    fetchConfigs(tenantChanged);
   }, [currentUser, tenantId, isPublicPath, fetchConfigs]);
 
   // 监听用户活动；API 请求由 api.ts 在请求结束（含失败）时强制刷新活动时间
@@ -382,9 +385,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台
+      // 普通用户登录后，如果访问的是登录页，重定向到系统默认首页（可关闭系统级仪表盘）
       if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-        return '/system/dashboard/workplace';
+        return getDefaultTenantHomePath();
       }
     }
 

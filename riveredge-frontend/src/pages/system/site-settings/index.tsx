@@ -57,6 +57,8 @@ function getInitialValuesFromConfigStore(
     theme_compact: false,
     enable_invitation: configs.enable_invitation !== false,
     enable_register: configs.enable_register !== false,
+    enable_launch_wizard: configs.enable_launch_wizard !== false,
+    enable_system_dashboard: configs.enable_system_dashboard !== false,
     copyright: configs.copyright ?? '',
     description: configs.description ?? '',
     'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
@@ -78,6 +80,8 @@ const DEFAULT_FORM_INITIAL = {
   timezone: 'Asia/Shanghai',
   enable_invitation: true,
   enable_register: true,
+  enable_launch_wizard: true,
+  enable_system_dashboard: true,
 } as const;
 
 /** 同步用：仅支持字符串颜色，用于首帧从 localStorage 读出的 configs */
@@ -319,6 +323,8 @@ const SiteSettingsPage: React.FC = () => {
         theme_compact: false,
         enable_invitation: setting.settings?.enable_invitation !== false,
         enable_register: setting.settings?.enable_register !== false,
+        enable_launch_wizard: setting.settings?.enable_launch_wizard !== false,
+        enable_system_dashboard: setting.settings?.enable_system_dashboard !== false,
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
@@ -499,6 +505,8 @@ const SiteSettingsPage: React.FC = () => {
         timezone: values.timezone,
         enable_invitation: values.enable_invitation,
         enable_register: values.enable_register,
+        enable_launch_wizard: values.enable_launch_wizard,
+        enable_system_dashboard: values.enable_system_dashboard,
         description: values.description,
       };
 
@@ -745,6 +753,26 @@ const SiteSettingsPage: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={12} lg={12} xl={12}>
               <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
+              <Form.Item
+                name="enable_launch_wizard"
+                label={t('pages.system.siteSettings.enableLaunchWizard')}
+                valuePropName="checked"
+                tooltip={t('pages.system.siteSettings.enableLaunchWizardTooltip')}
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
+              <Form.Item
+                name="enable_system_dashboard"
+                label={t('pages.system.siteSettings.enableSystemDashboard')}
+                valuePropName="checked"
+                tooltip={t('pages.system.siteSettings.enableSystemDashboardTooltip')}
+              >
                 <Switch />
               </Form.Item>
             </Col>

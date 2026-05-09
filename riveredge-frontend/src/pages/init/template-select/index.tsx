@@ -14,6 +14,7 @@ import { FileTextOutlined, CheckCircleOutlined, EyeOutlined, ThunderboltOutlined
 import { useNavigate } from 'react-router-dom';
 import { getIndustryTemplateList, getIndustryTemplateById, applyIndustryTemplate, type IndustryTemplate } from '../../../services/industryTemplate';
 import { getTenantId } from '../../../utils/auth';
+import { getDefaultTenantHomePath } from '../../../stores/configStore';
 
 const { Text, Paragraph, Title } = Typography;
 const { useToken } = theme;
@@ -93,7 +94,7 @@ const TemplateSelectPage: React.FC = () => {
       messageApi.success(t('pages.init.templateSelect.applySuccess'));
       setApplyVisible(false);
       // 跳转到工作台
-      navigate('/system/dashboard/workplace', { replace: true });
+      navigate(getDefaultTenantHomePath(), { replace: true });
     } catch (error: any) {
       console.error('应用模板失败:', error);
       messageApi.error(error.message || t('pages.init.templateSelect.applyFailed'));

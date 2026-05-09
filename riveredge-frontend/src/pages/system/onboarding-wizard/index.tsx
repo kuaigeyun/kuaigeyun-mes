@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert, theme, ConfigProvider, Row, Col, Menu, Popover, Progress, Modal, Table } from 'antd';
+import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert, theme, ConfigProvider, Row, Col, Menu, Popover, Progress, Modal, Table, Spin } from 'antd';
 import { getTenantId } from '../../../utils/auth';
 import {
   AlertCircle,
@@ -72,6 +72,7 @@ import { getOperationLogs } from '../../../services/operationLog';
 import { getLoginLogs } from '../../../services/loginLog';
 import { getBackups } from '../../../services/dataBackup';
 import { getInstalledApplicationList } from '../../../services/application';
+import { useRedirectIfLaunchWizardOff } from '../../../hooks/useRedirectIfLaunchWizardOff';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -158,6 +159,7 @@ const OnboardingWizardPage: React.FC = () => {
   const runGuide = useGuideStore((s) => s.runGuide);
   const { token } = theme.useToken();
   const isDark = useThemeStore((s) => s.resolved.isDark);
+  const { initialized: cfgReady, enabled: launchWizardOn } = useRedirectIfLaunchWizardOff();
 
   // 注入局部样式以强制 Steps 标题撑开并实现右对齐
   const stepStyle = `
@@ -2301,6 +2303,17 @@ const OnboardingWizardPage: React.FC = () => {
       </div>
     );
   };
+
+  if (!cfgReady) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+  if (!launchWizardOn) {
+    return null;
+  }
 
   return (
     <div style={{ width: '100%', padding: 0, boxSizing: 'border-box' }}>

@@ -11,6 +11,7 @@ import { LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/ico
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../stores';
+import { getDefaultTenantHomePath } from '../../stores/configStore';
 import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
 import { login } from '../../services/auth';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
@@ -160,7 +161,7 @@ export default function LockScreenPage() {
           if (isInfraSuperAdmin) {
             navigate('/infra/operation', { replace: true });
           } else {
-            navigate('/system/dashboard/workplace', { replace: true });
+            navigate(getDefaultTenantHomePath(), { replace: true });
           }
         }
       } else {

@@ -44,6 +44,7 @@ from infra.api.license_center.license_center import router as license_center_rou
 from infra.api.platform_settings.public import router as platform_settings_public_router
 from infra.api.platform_settings.version import router as platform_version_router
 from infra.api.business_config.business_config import router as business_config_router
+from infra.api.application_dedicated.application_dedicated import router as application_dedicated_router
 
 # 导入所有系统级 API 路由（core）
 import sys
@@ -72,6 +73,9 @@ from core.api.site_settings.site_settings import router as site_settings_router
 from core.api.invitation_codes.invitation_codes import router as invitation_codes_router
 from core.api.languages.languages import router as languages_router
 from core.api.applications.applications import router as applications_router
+from core.api.application_dedicated_bindings.application_dedicated_bindings import (
+    router as application_dedicated_bindings_core_router,
+)
 from core.api.menus.menus import router as menus_router
 from core.api.ip_location import router as ip_location_router
 from core.api.integration_configs.integration_configs import router as integration_configs_router
@@ -706,6 +710,7 @@ app.include_router(industry_template_router, prefix="/api/v1/infra")
 app.include_router(platform_settings_router, prefix="/api/v1/infra")
 app.include_router(license_center_router, prefix="/api/v1/infra")
 app.include_router(business_config_router, prefix="/api/v1/infra")
+app.include_router(application_dedicated_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")
@@ -731,6 +736,7 @@ app.include_router(site_settings_router, prefix="/api/v1/core")
 app.include_router(invitation_codes_router, prefix="/api/v1/core")
 app.include_router(languages_router, prefix="/api/v1/core")
 app.include_router(applications_router, prefix="/api/v1/core")
+app.include_router(application_dedicated_bindings_core_router, prefix="/api/v1/core")
 app.include_router(menus_router, prefix="/api/v1/core")
 app.include_router(ip_location_router, prefix="/api/v1/core")
 app.include_router(integration_configs_router, prefix="/api/v1/core")
@@ -799,6 +805,12 @@ try:
     app.include_router(kuaizhizao_router, prefix="/api/v1/apps/kuaizhizao")
 except ImportError as e:
     logger.warning(f"⚠️ 无法加载 kuaizhizao 路由: {e}")
+# haoligo：好力GO（客户专用应用）— 与 master-data / kuaizhizao 同级静态挂载
+try:
+    from apps.haoligo.api.router import router as haoligo_router
+    app.include_router(haoligo_router, prefix="/api/v1/apps/haoligo")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法加载 haoligo 路由: {e}")
 
 if __name__ == "__main__":
     import uvicorn

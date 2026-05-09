@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { getSiteSetting, updateSiteSetting } from '../services/siteSetting';
+import { getTenantId } from '../utils/auth';
 
 /**
  * 系统配置状态接口
@@ -77,6 +78,28 @@ function flattenObject(obj: any, prefix = ''): Record<string, any> {
   return flattened;
 }
 
+/**
+ * 当前租户对应的站点配置持久化键（与 zustand persist 一致）
+ */
+export function getConfigPersistStorageKey(): string {
+  try {
+    const tid = getTenantId();
+    if (tid != null && String(tid).trim() !== '') {
+      return `system-config-storage-${tid}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'system-config-storage-no-tenant';
+}
+
+/** createJSONStorage 使用的 Storage 适配器：读写均落在当前租户键上（忽略 persist 传入的 name） */
+const tenantScopedLocalStorage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = {
+  getItem: (_key: string) => localStorage.getItem(getConfigPersistStorageKey()),
+  setItem: (_key: string, value: string) => localStorage.setItem(getConfigPersistStorageKey(), value),
+  removeItem: (_key: string) => localStorage.removeItem(getConfigPersistStorageKey()),
+};
+
 export const useConfigStore = create<ConfigState>()(
   persist(
     (set, get) => ({
@@ -93,13 +116,14 @@ export const useConfigStore = create<ConfigState>()(
         try {
           const response = await getSiteSetting();
           const backendConfigs = flattenObject(response.settings || {});
-          set((state) => ({
+          // 不设 ...state.configs：后端 JSON 为增量键时，避免上一租户（或旧缓存）的 enable_* 等残留造成串租户
+          set({
             configs: {
-              ...state.configs,
+              ...DEFAULT_CONFIGS,
               ...backendConfigs,
             },
             initialized: true,
-          }));
+          });
         } catch (error) {
           console.error('获取系统配置失败:', error);
           set({ initialized: true });
@@ -110,13 +134,13 @@ export const useConfigStore = create<ConfigState>()(
 
       hydrateFromSettings: (settings) => {
         const backendConfigs = flattenObject(settings || {});
-        set((state) => ({
+        set({
           configs: {
-            ...state.configs,
+            ...DEFAULT_CONFIGS,
             ...backendConfigs,
           },
           initialized: true,
-        }));
+        });
       },
       
       updateConfig: async (key, value) => {
@@ -165,12 +189,12 @@ export const useConfigStore = create<ConfigState>()(
     }),
     {
       name: 'system-config-storage',
+      /** 按当前租户隔离 localStorage，避免多组织切换或同浏览器多租户缓存串数据 */
+      storage: createJSONStorage(() => tenantScopedLocalStorage),
       partialize: (state) => ({ configs: state.configs, initialized: state.initialized }),
     }
   )
 );
-
-const PERSIST_KEY = 'system-config-storage';
 
 /**
  * 同步从 localStorage 读取已持久化的 configs（用于首帧渲染，避免 persist 异步注水前的空白）
@@ -178,7 +202,7 @@ const PERSIST_KEY = 'system-config-storage';
 export function getPersistedConfigs(): Record<string, any> | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(PERSIST_KEY);
+    const raw = localStorage.getItem(getConfigPersistStorageKey());
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { state?: { configs?: Record<string, any> }; configs?: Record<string, any> };
     const configs = parsed?.state?.configs ?? parsed?.configs ?? null;
@@ -186,4 +210,17 @@ export function getPersistedConfigs(): Record<string, any> | null {
   } catch {
     return null;
   }
+}
+
+const TENANT_HOME_WORKPLACE = '/system/dashboard/workplace';
+const TENANT_HOME_FALLBACK = '/system/applications';
+
+/** 根据配置对象解析租户默认首页（内存 / 持久化通用） */
+export function getTenantHomePathFromConfigs(configs: Record<string, any> | null | undefined): string {
+  return configs?.enable_system_dashboard !== false ? TENANT_HOME_WORKPLACE : TENANT_HOME_FALLBACK;
+}
+
+/** 登录后默认落地（持久化 configs；关闭「系统级仪表盘」时为应用中心） */
+export function getDefaultTenantHomePath(): string {
+  return getTenantHomePathFromConfigs(getPersistedConfigs() ?? {});
 }

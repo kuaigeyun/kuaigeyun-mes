@@ -130,7 +130,7 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
   }
 }
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore } from '../stores/configStore';
+import { useConfigStore, getDefaultTenantHomePath } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
@@ -381,9 +381,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台
+    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台（关闭系统级仪表盘时落地应用中心）
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <Navigate to="/system/dashboard/workplace" replace />;
+      return <Navigate to={getDefaultTenantHomePath()} replace />;
     }
   }
 
@@ -836,6 +836,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
   const siteLogoValue = (useConfigStore((s) => (s.getConfig('site_logo', '') as string)?.trim()) || '') || '';
+  const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
+  const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
+  const systemHomePath = systemDashboardEnabled ? '/system/dashboard/workplace' : '/system/applications';
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
@@ -1138,7 +1141,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             !child?.hideInMenu &&
             !!child?.path &&
             // 顶栏已有入口，不在系统配置浮层里重复展示
-            child.path !== '/system/onboarding-wizard'
+            child.path !== '/system/onboarding-wizard' &&
+            child.path !== '/system/launch-progress'
         );
         const itemCount = items.length;
         // 每个分组固定显示为两行：列数按数量自动计算
@@ -4386,7 +4390,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         headerTitleRender={isMobileOrTablet ? (logo) => (
           <div 
             style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => navigate('/system/dashboard/workplace')}
+            onClick={() => navigate(systemHomePath)}
           >
             {logo}
           </div>
@@ -4621,80 +4625,82 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </span>
           );
           }
-          
-          // 上线向导 - 与用户头像胶囊同一内边距；图标位 32×32（Lottie）
-          actions.push(
-            <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
-              <Space
-                className="riveredge-header-onboarding-space"
-                size={4}
-                onClick={() => navigate('/system/onboarding-wizard')}
-                style={{
-                  cursor: 'pointer',
-                  padding: '0 12px 0 0',
-                  height: 32,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '16px',
-                  background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
-                  setOnboardingHovered(true);
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
-                  setOnboardingHovered(false);
-                }}
-              >
-                <span
+
+          // 上线向导：与站点设置「上线向导是否开启」联动；关闭时不展示顶栏入口
+          if (launchWizardEnabled) {
+            actions.push(
+              <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
+                <Space
+                  className="riveredge-header-onboarding-space"
+                  size={4}
+                  onClick={() => navigate('/system/onboarding-wizard')}
                   style={{
-                    width: 32,
+                    cursor: 'pointer',
+                    padding: '0 12px 0 0',
                     height: 32,
-                    flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    lineHeight: 0,
+                    borderRadius: '16px',
+                    background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
+                    setOnboardingHovered(true);
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
+                    setOnboardingHovered(false);
                   }}
                 >
-                  <Lottie
-                    animationData={compassAnimation}
-                    loop={onboardingHovered}
-                    autoplay={onboardingHovered}
+                  <span
                     style={{
                       width: 32,
                       height: 32,
-                      display: 'block',
-                      ...(!isLightModeLightBg
-                        ? {
-                            filter: 'brightness(1.2) contrast(1.08)',
-                          }
-                        : {}),
-                    }}
-                  />
-                </span>
-                {!isMobileOrTablet && (
-                  <span
-                    style={{
-                      fontSize: token.fontSize,
-                      fontWeight: 500,
-                      color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-                      lineHeight: '32px',
-                      height: '32px',
+                      flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
-                      whiteSpace: 'nowrap',
+                      justifyContent: 'center',
+                      lineHeight: 0,
                     }}
                   >
-                    {t('menu.system.onboarding-wizard')}
+                    <Lottie
+                      animationData={compassAnimation}
+                      loop={onboardingHovered}
+                      autoplay={onboardingHovered}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        display: 'block',
+                        ...(!isLightModeLightBg
+                          ? {
+                              filter: 'brightness(1.2) contrast(1.08)',
+                            }
+                          : {}),
+                      }}
+                    />
                   </span>
-                )}
-              </Space>
-            </Tooltip>
-          );
+                  {!isMobileOrTablet && (
+                    <span
+                      style={{
+                        fontSize: token.fontSize,
+                        fontWeight: 500,
+                        color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+                        lineHeight: '32px',
+                        height: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t('menu.system.onboarding-wizard')}
+                    </span>
+                  )}
+                </Space>
+              </Tooltip>
+            );
+          }
 
           // 消息提醒（带数量徽标）- 平板/手机也显示
           actions.push(
@@ -5085,7 +5091,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             }
           },
         }}
-        onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
+        onMenuHeaderClick={() => navigate(systemHomePath)}
         subMenuItemRender={(item: any, defaultDom) => {
           // 父分组悬停：一次性预取其下全部子项 chunk，展开即可见、点击即渲染
           const collectLeafPaths = (node: any, acc: string[]): string[] => {

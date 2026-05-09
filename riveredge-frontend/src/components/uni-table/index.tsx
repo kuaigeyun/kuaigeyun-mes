@@ -656,6 +656,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
      * 布局：grid 网格 | waterfall 瀑布流
      */
     layout?: 'grid' | 'waterfall'
+    /**
+     * 卡片视图无数据时的占位（不传则使用全局默认空状态文案）
+     */
+    emptyCard?: ReactNode
   }
   /**
    * 看板视图配置（仅当 viewTypes 包含 'kanban' 时生效）
@@ -2128,11 +2132,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     )
                   })()
                 ) : (
-                  <Empty
-                    description={t('components.uniTable.emptyCard')}
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    style={{ marginTop: '60px' }}
-                  />
+                  cardViewConfig?.emptyCard ?? (
+                    <Empty
+                      description={t('components.uniTable.emptyCard')}
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      style={{ marginTop: '60px' }}
+                    />
+                  )
                 )
               ) : (
                 <div

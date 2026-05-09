@@ -58,6 +58,7 @@ class Application(BaseModel):
     permission_code = fields.CharField(max_length=100, null=True, description="权限代码")
     
     is_system = fields.BooleanField(default=False, description="是否系统应用")
+    is_dedicated = fields.BooleanField(default=False, description="是否专用应用（需平台绑定组织后租户可见）")
     is_active = fields.BooleanField(default=False, description="是否启用（默认停用）")
     is_installed = fields.BooleanField(default=False, description="是否已安装")
     

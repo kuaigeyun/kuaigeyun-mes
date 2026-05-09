@@ -14,6 +14,7 @@ from datetime import datetime
 import asyncpg
 
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
+from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import get_db_connection
@@ -32,6 +33,105 @@ class ApplicationService:
     
     提供应用的 CRUD 操作和安装/卸载功能。
     """
+
+    @staticmethod
+    def _manifest_is_dedicated(manifest: Dict[str, Any]) -> bool:
+        if manifest.get("is_dedicated") is True:
+            return True
+        cat = str(manifest.get("market_category") or "").strip().lower()
+        return cat == "dedicated"
+
+    @staticmethod
+    def effective_is_dedicated(app_row: Dict[str, Any]) -> bool:
+        """
+        是否与 manifest 约定一致地视为定制（专用）应用。
+        DB 列未同步时仍以 manifest 为准，避免前端分类与「全部」列表不一致。
+        """
+        if bool(app_row.get("is_dedicated")):
+            return True
+        code = app_row.get("code")
+        if not code:
+            return False
+        manifest = ApplicationService._get_manifest_by_code(str(code))
+        if not manifest:
+            return False
+        return ApplicationService._manifest_is_dedicated(manifest)
+
+    @staticmethod
+    async def _persist_is_dedicated(tenant_id: int, code: str, is_dedicated: bool) -> None:
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_applications
+                SET is_dedicated = $1, updated_at = NOW()
+                WHERE tenant_id = $2 AND code = $3 AND deleted_at IS NULL
+                """,
+                is_dedicated,
+                tenant_id,
+                code,
+            )
+        finally:
+            await conn.close()
+
+    @staticmethod
+    def _filter_dedicated_for_viewer(
+        apps: List[Dict[str, Any]],
+        *,
+        tenant_id: int,
+        viewer_is_infra_admin: bool,
+        bound_codes: set,
+    ) -> List[Dict[str, Any]]:
+        if viewer_is_infra_admin:
+            return apps
+        out: List[Dict[str, Any]] = []
+        for a in apps:
+            if ApplicationService.effective_is_dedicated(a):
+                if str(a.get("code") or "") in bound_codes:
+                    out.append(a)
+            else:
+                out.append(a)
+        return out
+
+    @staticmethod
+    async def ensure_application_registered_from_manifest(tenant_id: int, code: str) -> Optional[ApplicationDict]:
+        """
+        保证指定租户在 core_applications 中存在该 code 的记录（从磁盘 manifest 创建）。
+
+        专用应用仅写入绑定表时，租户侧尚无应用行会导致列表为空；绑定或拉列表时按需补齐。
+        """
+        code = (code or "").strip()
+        if not code or code in _PLACEHOLDER_APP_CODES:
+            return None
+        existing = await ApplicationService.get_application_by_code(tenant_id, code)
+        if existing:
+            return existing
+        manifest = ApplicationService._get_manifest_by_code(code)
+        if not manifest:
+            logger.warning(f"专用应用已绑定但找不到 manifest，跳过自动注册: code={code}, tenant_id={tenant_id}")
+            return None
+        app_data = ApplicationCreate(
+            name=manifest.get("name", code),
+            code=code,
+            description=manifest.get("description"),
+            icon=manifest.get("icon"),
+            version=manifest.get("version", "1.0.0"),
+            route_path=manifest.get("route_path"),
+            entry_point=manifest.get("entry_point"),
+            menu_config=manifest.get("menu_config"),
+            permission_code=manifest.get("permission_code") or f"app:{code}",
+            is_system=False,
+            is_active=False,
+            sort_order=int(manifest.get("sort_order") or 0),
+        )
+        try:
+            await ApplicationService.create_application(tenant_id=tenant_id, data=app_data)
+        except ValidationError:
+            # 并发下可能已被其它请求创建
+            return await ApplicationService.get_application_by_code(tenant_id, code)
+        ded = ApplicationService._manifest_is_dedicated(manifest)
+        await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
+        return await ApplicationService.get_application_by_code(tenant_id, code)
     
     @staticmethod
     async def create_application(
@@ -193,7 +293,9 @@ class ApplicationService:
         skip: int = 0,
         limit: int = 100,
         is_installed: Optional[bool] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        *,
+        viewer_is_infra_admin: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         获取应用列表
@@ -204,6 +306,7 @@ class ApplicationService:
             limit: 限制数量
             is_installed: 是否已安装（可选）
             is_active: 是否启用（可选）
+            viewer_is_infra_admin: 平台管理员可看到全部专用应用；租户侧仅能看到已绑定专用应用
 
         Returns:
             List[Dict[str, Any]]: 应用列表
@@ -254,7 +357,35 @@ class ApplicationService:
                         app_dict['menu_config'] = None
                 applications.append(app_dict)
 
-            return applications
+            bound = (
+                set()
+                if viewer_is_infra_admin
+                else await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+            )
+            # 未绑定租户不会有 bound；已绑定但尚未在该租户注册 core_applications 行时，从 manifest 补齐（与应用中心默认未筛选一致）
+            if (
+                bound
+                and not viewer_is_infra_admin
+                and is_installed is None
+                and is_active is None
+            ):
+                present_codes = {str(a.get("code") or "") for a in applications}
+                for app_code in bound:
+                    if app_code not in present_codes:
+                        ensured = await ApplicationService.ensure_application_registered_from_manifest(
+                            tenant_id, app_code
+                        )
+                        if ensured:
+                            applications.append(ensured)
+                            present_codes.add(app_code)
+                applications.sort(key=lambda a: (a.get("sort_order") or 999, a.get("id") or 0))
+
+            return ApplicationService._filter_dedicated_for_viewer(
+                applications,
+                tenant_id=tenant_id,
+                viewer_is_infra_admin=viewer_is_infra_admin,
+                bound_codes=bound,
+            )
 
         finally:
             await conn.close()
@@ -628,7 +759,9 @@ class ApplicationService:
     @staticmethod
     async def get_installed_applications(
         tenant_id: int,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        *,
+        viewer_is_infra_admin: bool = False,
     ) -> List[ApplicationDict]:
         """
         获取已安装的应用列表
@@ -638,6 +771,7 @@ class ApplicationService:
         Args:
             tenant_id: 组织ID
             is_active: 是否启用（可选）
+            viewer_is_infra_admin: 平台管理员可看到全部专用应用；租户侧仅能看到已绑定专用应用
 
         Returns:
             List[ApplicationDict]: 已安装的应用列表
@@ -695,7 +829,17 @@ class ApplicationService:
             for row in rows:
                 result.append(dict(row))
 
-            return result
+            bound = (
+                set()
+                if viewer_is_infra_admin
+                else await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+            )
+            return ApplicationService._filter_dedicated_for_viewer(
+                result,
+                tenant_id=tenant_id,
+                viewer_is_infra_admin=viewer_is_infra_admin,
+                bound_codes=bound,
+            )
         finally:
             await conn.close()
     
@@ -973,6 +1117,11 @@ class ApplicationService:
                         )
                         application['is_installed'] = True
                 
+                ded = ApplicationService._manifest_is_dedicated(manifest)
+                await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
+                if isinstance(application, dict):
+                    application["is_dedicated"] = ded
+
                 registered_apps.append(application)
                 
             except Exception as e:

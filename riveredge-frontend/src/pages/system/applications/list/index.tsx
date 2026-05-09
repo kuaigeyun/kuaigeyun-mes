@@ -9,7 +9,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Segmented } from 'antd';
+import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Segmented, Select, Table } from 'antd';
 const { Title, Paragraph, Text } = Typography;
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -58,6 +58,13 @@ import {
   scanApplications,
   Application,
 } from '../../../../services/application';
+import {
+  bindDedicatedAppToTenant,
+  listDedicatedBindingsForApp,
+  searchTenantsForDedicatedBinding,
+  unbindDedicatedAppFromTenant,
+  type DedicatedBindingRow,
+} from '../../../../services/applicationDedicatedBindings';
 import { syncAllMenus } from '../../../../services/menu';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
@@ -118,7 +125,7 @@ const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
 };
 
-type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other';
+type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';
 
 const PRO_KNOWN_CODES = [
   'kuaireport',
@@ -132,8 +139,12 @@ const PRO_KNOWN_CODES = [
   ...OTHER_PLACEHOLDER_CODES,
 ];
 
+/** 应用中心需一次性拉齐清单再前端分类，否则 sort_order 靠后的应用（如定制应用）会落在分页之外 */
+const APPLICATION_CENTER_LIST_LIMIT = 500;
+
 const matchAppCategory = (app: any, filter: AppCategoryFilter): boolean => {
   const code = String(app?.code || '');
+  const isDedicated = Boolean(app?.is_dedicated ?? app?.isDedicated);
   const isIndustry = INDUSTRY_VALUE_PACK_CODES.includes(code);
   const isOther = OTHER_PLACEHOLDER_CODES.includes(code);
   const isPro = Boolean(app?.is_pro) || PRO_KNOWN_CODES.includes(code);
@@ -144,20 +155,25 @@ const matchAppCategory = (app: any, filter: AppCategoryFilter): boolean => {
   switch (filter) {
     case 'all':
       return true;
+    case 'dedicated':
+      return isDedicated;
     case 'general':
-      return isGeneral;
+      return isGeneral && !isDedicated;
     case 'industry':
-      return isIndustry;
+      return isIndustry && !isDedicated;
     case 'basic':
-      return isBasic;
+      return isBasic && !isDedicated;
     case 'pro':
-      return isPro;
+      return isPro && !isDedicated;
     case 'other':
-      return isOther;
+      return isOther && !isDedicated;
     default:
       return true;
   }
 };
+
+const isDedicatedApplication = (app: Application | Record<string, unknown>): boolean =>
+  Boolean((app as Application).is_dedicated ?? (app as any).isDedicated);
 
 /** 卡片内图标尺寸（缩小以显得更紧凑） */
 const CARD_ICON_SIZE = 40;
@@ -218,6 +234,7 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
     scm: React.createElement(ManufacturingIcons.apartment, { size }),
     bi: React.createElement(ManufacturingIcons.chartBar, { size }),
     hr: React.createElement(ManufacturingIcons.users, { size }),
+    haoligo: React.createElement(ManufacturingIcons.smartphone, { size }),
   };
   return iconMap[code] || React.createElement(ManufacturingIcons.appstore, { size });
 };
@@ -516,7 +533,81 @@ const ApplicationListPage: React.FC = () => {
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetStage, setResetStage] = useState(1); // 1, 2, 3
+  const [dedicatedBindingModalOpen, setDedicatedBindingModalOpen] = useState(false);
+  const [dedicatedBindingApp, setDedicatedBindingApp] = useState<Application | null>(null);
+  const [dedicatedBindingRows, setDedicatedBindingRows] = useState<DedicatedBindingRow[]>([]);
+  const [dedicatedBindingLoading, setDedicatedBindingLoading] = useState(false);
+  const [tenantBindSearchLoading, setTenantBindSearchLoading] = useState(false);
+  const [tenantBindOptions, setTenantBindOptions] = useState<{ value: number; label: string }[]>([]);
+  const [tenantBindSelectValue, setTenantBindSelectValue] = useState<number | undefined>();
+  const tenantBindSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (tenantBindSearchTimerRef.current) clearTimeout(tenantBindSearchTimerRef.current);
+  }, []);
   const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('general');
+  /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
+  const infraCategoryDefaultAppliedRef = useRef(false);
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canManageAppLifecycle = Boolean(
+    currentUser?.is_tenant_admin || currentUser?.is_infra_admin,
+  );
+
+  /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */
+  const customAppsContactQrSrc = `${import.meta.env.BASE_URL}img/qr_code.png`;
+
+  /** 「定制应用」分类无数据时的占位（引导定制服务与商务联系） */
+  const renderCustomAppsCategoryEmpty = () => (
+    <div
+      style={{
+        marginTop: 48,
+        padding: '0 24px 48px',
+        textAlign: 'center',
+        maxWidth: 560,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+      }}
+    >
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
+            {t('pages.system.applications.customAppsEmptyTitle')}
+          </Text>
+          <Paragraph type="secondary" style={{ marginBottom: 0, lineHeight: 1.7 }}>
+            {t('pages.system.applications.customAppsEmptyDescription')}
+          </Paragraph>
+        </div>
+        <div>
+          <img
+            src={customAppsContactQrSrc}
+            alt={t('pages.system.applications.customAppsEmptyQrAlt')}
+            width={200}
+            height={200}
+            style={{
+              width: 200,
+              height: 'auto',
+              maxWidth: 'min(240px, 85vw)',
+              borderRadius: themeToken.borderRadiusLG,
+              border: `1px solid ${themeToken.colorBorderSecondary}`,
+              boxShadow: themeToken.boxShadowTertiary,
+              display: 'block',
+              margin: '0 auto',
+              objectFit: 'contain',
+            }}
+          />
+          <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 13 }}>
+            {t('pages.system.applications.customAppsEmptyQrHint')}
+          </Text>
+        </div>
+      </Space>
+    </div>
+  );
+
+  useEffect(() => {
+    if (infraCategoryDefaultAppliedRef.current || !currentUser?.is_infra_admin) return;
+    infraCategoryDefaultAppliedRef.current = true;
+    setAppCategoryFilter('all');
+  }, [currentUser?.is_infra_admin]);
+
   // 分类切换后再触发刷新，避免与 setState 同帧导致 request 读取旧值
   useEffect(() => {
     actionRef.current?.reload();
@@ -663,6 +754,10 @@ const ApplicationListPage: React.FC = () => {
    * 处理安装应用
    */
   const handleInstall = async (record: Application) => {
+    if (!canManageAppLifecycle) {
+      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      return;
+    }
     try {
       await installApplication(record.uuid);
       messageApi.success(t('pages.system.applications.installSuccess'));
@@ -678,6 +773,10 @@ const ApplicationListPage: React.FC = () => {
    * 处理卸载应用
    */
   const handleUninstall = async (record: Application) => {
+    if (!canManageAppLifecycle) {
+      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      return;
+    }
     try {
       await uninstallApplication(record.uuid);
       messageApi.success(t('pages.system.applications.uninstallSuccess'));
@@ -709,6 +808,10 @@ const ApplicationListPage: React.FC = () => {
    * 处理启用/禁用应用
    */
   const handleToggleActive = async (record: Application, checked: boolean) => {
+    if (!canManageAppLifecycle) {
+      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      return;
+    }
     try {
       if (checked) {
         const isProApp = record.is_pro || record.code === 'kuaireport' || record.code === 'bi' || record.code === 'kuaiiot';
@@ -782,6 +885,10 @@ const ApplicationListPage: React.FC = () => {
 
   const handleActivateProKey = async (values: { license_key: string }) => {
     if (!proKeyTargetApp) return;
+    if (!canManageAppLifecycle) {
+      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      return;
+    }
     try {
       setProKeySubmitting(true);
       await activateProApplication(proKeyTargetApp.uuid, values.license_key);
@@ -822,10 +929,96 @@ const ApplicationListPage: React.FC = () => {
     }
   };
 
+  const openDedicatedBindingModal = useCallback((app: Application) => {
+    setDedicatedBindingApp(app);
+    setTenantBindSelectValue(undefined);
+    setTenantBindOptions([]);
+    setDedicatedBindingModalOpen(true);
+  }, []);
 
+  const loadDedicatedBindings = useCallback(async () => {
+    const code = dedicatedBindingApp?.code;
+    if (!code) return;
+    setDedicatedBindingLoading(true);
+    try {
+      const rows = await listDedicatedBindingsForApp(code);
+      setDedicatedBindingRows(rows);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingLoadFailed'));
+    } finally {
+      setDedicatedBindingLoading(false);
+    }
+  }, [dedicatedBindingApp?.code, messageApi, t]);
 
+  useEffect(() => {
+    if (dedicatedBindingModalOpen && dedicatedBindingApp?.code) {
+      void loadDedicatedBindings();
+    }
+  }, [dedicatedBindingModalOpen, dedicatedBindingApp?.code, loadDedicatedBindings]);
 
+  const handleTenantBindSearch = useCallback((q: string) => {
+    if (tenantBindSearchTimerRef.current) clearTimeout(tenantBindSearchTimerRef.current);
+    tenantBindSearchTimerRef.current = setTimeout(async () => {
+      setTenantBindSearchLoading(true);
+      try {
+        const res = await searchTenantsForDedicatedBinding({
+          name: q.trim() || undefined,
+          page: 1,
+          page_size: 50,
+        });
+        setTenantBindOptions(
+          res.items.map((it) => ({ value: it.id, label: `${it.name} (#${it.id})` })),
+        );
+      } catch {
+        setTenantBindOptions([]);
+      } finally {
+        setTenantBindSearchLoading(false);
+      }
+    }, 350);
+  }, []);
 
+  const handleBindDedicatedTenant = async () => {
+    if (!dedicatedBindingApp?.code || tenantBindSelectValue == null) {
+      messageApi.warning(t('pages.system.applications.dedicatedBindingPickTenant'));
+      return;
+    }
+    try {
+      await bindDedicatedAppToTenant(dedicatedBindingApp.code, tenantBindSelectValue);
+      messageApi.success(t('pages.system.applications.dedicatedBindingBindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingBindFailed'));
+    }
+  };
+
+  const handleBindCurrentTenant = async () => {
+    const tid = currentUser?.tenant_id;
+    if (!dedicatedBindingApp?.code || tid == null) {
+      messageApi.warning(t('pages.system.applications.dedicatedBindingNoCurrentTenant'));
+      return;
+    }
+    try {
+      await bindDedicatedAppToTenant(dedicatedBindingApp.code, tid);
+      messageApi.success(t('pages.system.applications.dedicatedBindingBindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingBindFailed'));
+    }
+  };
+
+  const handleUnbindDedicatedTenant = async (tenantId: number) => {
+    if (!dedicatedBindingApp?.code) return;
+    try {
+      await unbindDedicatedAppFromTenant(dedicatedBindingApp.code, tenantId);
+      messageApi.success(t('pages.system.applications.dedicatedBindingUnbindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingUnbindFailed'));
+    }
+  };
 
   /**
    * 表格列定义
@@ -910,7 +1103,7 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.actions'),
       valueType: 'option',
-      width: 250,
+      width: 300,
       fixed: 'right',
       render: (_, record) => {
         const canSync = record.is_installed && record.is_active;
@@ -975,6 +1168,20 @@ const ApplicationListPage: React.FC = () => {
           );
         }
 
+        if (isDedicatedApplication(record) && currentUser?.is_infra_admin) {
+          actions.push(
+            <Button
+              key="dedicated-binding"
+              type="link"
+              size="small"
+              icon={<TeamOutlined />}
+              onClick={() => openDedicatedBindingModal(record)}
+            >
+              {t('pages.system.applications.dedicatedOrgBinding')}
+            </Button>,
+          );
+        }
+
         if (record.is_installed) {
           if (record.code === "kuaizhizao") {
             actions.push(
@@ -1001,13 +1208,13 @@ const ApplicationListPage: React.FC = () => {
               key="uninstall"
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(record)}
-              disabled={record.is_system}
+              disabled={record.is_system || !canManageAppLifecycle}
             >
               <Button
                 type="link"
                 danger
                 size="small"
-                disabled={record.is_system}
+                disabled={record.is_system || !canManageAppLifecycle}
                 icon={<StopOutlined />}
               >
                 {t('pages.system.applications.uninstall')}
@@ -1020,10 +1227,12 @@ const ApplicationListPage: React.FC = () => {
               key="install"
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(record)}
+              disabled={!canManageAppLifecycle}
             >
               <Button
                 type="link"
                 size="small"
+                disabled={!canManageAppLifecycle}
                 icon={<DownloadOutlined />}
               >
                 {t('pages.system.applications.install')}
@@ -1100,6 +1309,16 @@ const ApplicationListPage: React.FC = () => {
         ),
         icon: <AppstoreOutlined />,
       },
+      ...(isDedicatedApplication(application) && currentUser?.is_infra_admin
+        ? [
+            {
+              key: 'dedicated-binding',
+              label: t('pages.system.applications.dedicatedOrgBinding'),
+              icon: <TeamOutlined />,
+              onClick: () => openDedicatedBindingModal(application),
+            },
+          ]
+        : []),
 
       application.code === "kuaizhizao" ? {
         key: 'reset-data',
@@ -1123,6 +1342,7 @@ const ApplicationListPage: React.FC = () => {
             <Popconfirm
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(application)}
+              disabled={!canManageAppLifecycle}
             >
               <div 
                 style={{ margin: '-5px -12px', padding: '5px 12px' }} 
@@ -1133,6 +1353,7 @@ const ApplicationListPage: React.FC = () => {
             </Popconfirm>
           ),
           icon: <DownloadOutlined />,
+          disabled: !canManageAppLifecycle,
         }
         : {
           key: 'uninstall',
@@ -1140,7 +1361,7 @@ const ApplicationListPage: React.FC = () => {
             <Popconfirm
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(application)}
-              disabled={application.is_system}
+              disabled={application.is_system || !canManageAppLifecycle}
             >
               <div 
                 style={{ margin: '-5px -12px', padding: '5px 12px' }} 
@@ -1152,7 +1373,7 @@ const ApplicationListPage: React.FC = () => {
           ),
           icon: <StopOutlined />,
           danger: true,
-          disabled: application.is_system,
+          disabled: application.is_system || !canManageAppLifecycle,
         },
     ];
 
@@ -1380,6 +1601,13 @@ const ApplicationListPage: React.FC = () => {
                                   undefined,
                                   { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                                 )}
+                              {application.is_dedicated &&
+                                renderBadge(
+                                  t('pages.system.applications.dedicatedTag'),
+                                  { bg: '#f4f0ff', color: '#531dab' },
+                                  undefined,
+                                  { bg: themeToken.colorFillTertiary, color: '#d3adf7' },
+                                )}
                               {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
                                 renderBadge(
                                   '其他类',
@@ -1459,13 +1687,17 @@ const ApplicationListPage: React.FC = () => {
         actions={[
           <div key="active" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
-            <Switch
-              checked={application.is_active}
-              onChange={(checked) => handleToggleActive(application, checked)}
-              disabled={!application.is_installed}
-              checkedChildren={t('pages.system.applications.enabled')}
-              unCheckedChildren={t('pages.system.applications.disabled')}
-            />
+            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.tenantAdminOnlyLifecycle') : undefined}>
+              <span style={{ display: 'inline-flex' }}>
+                <Switch
+                  checked={application.is_active}
+                  onChange={(checked) => handleToggleActive(application, checked)}
+                  disabled={!application.is_installed || !canManageAppLifecycle}
+                  checkedChildren={t('pages.system.applications.enabled')}
+                  unCheckedChildren={t('pages.system.applications.disabled')}
+                />
+              </span>
+            </Tooltip>
           </div>,
           <div key="more" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>
@@ -1520,6 +1752,16 @@ const ApplicationListPage: React.FC = () => {
         ),
     },
     {
+      title: t('pages.system.applications.isDedicatedLabel'),
+      dataIndex: 'is_dedicated',
+      render: (dom: any) =>
+        dom ? (
+          <Tag color="geekblue">{t('field.customField.yes')}</Tag>
+        ) : (
+          <Tag>{t('field.customField.no')}</Tag>
+        ),
+    },
+    {
       title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
       render: (dom: any) => (
@@ -1552,12 +1794,15 @@ const ApplicationListPage: React.FC = () => {
           headerTitle={t('pages.system.applications.headerTitle')}
           actionRef={actionRef}
           columns={columns}
+          {...(appCategoryFilter === 'dedicated'
+            ? { locale: { emptyText: renderCustomAppsCategoryEmpty() } }
+            : {})}
           request={async (params, _sort, _filter, searchFormValues) => {
             try {
-              // 构建查询参数
+              // 拉全量再筛选分类；勿按表格分页请求后端，否则靠后的应用永远不会进入前端
               const apiParams: any = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 12),
-                limit: params.pageSize || 12,
+                skip: 0,
+                limit: APPLICATION_CENTER_LIST_LIMIT,
               };
 
               // 添加筛选条件
@@ -1948,6 +2193,7 @@ const ApplicationListPage: React.FC = () => {
                 { label: '通用', value: 'general' },
                 { label: '行业', value: 'industry' },
                 { label: '其他', value: 'other' },
+                { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
                 { label: '基础版', value: 'basic' },
                 { label: '专业版', value: 'pro' },
               ]}
@@ -2014,6 +2260,7 @@ const ApplicationListPage: React.FC = () => {
           cardViewConfig={{
             renderCard: renderApplicationCard,
             columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
+            emptyCard: appCategoryFilter === 'dedicated' ? renderCustomAppsCategoryEmpty() : undefined,
           }}
         />
       </ListPageTemplate>
@@ -2127,6 +2374,97 @@ const ApplicationListPage: React.FC = () => {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        title={t('pages.system.applications.dedicatedBindingModalTitle', {
+          name: dedicatedBindingApp?.name ?? dedicatedBindingApp?.code ?? '',
+        })}
+        open={dedicatedBindingModalOpen}
+        onCancel={() => {
+          setDedicatedBindingModalOpen(false);
+          setDedicatedBindingApp(null);
+        }}
+        footer={null}
+        width={720}
+        destroyOnHidden
+      >
+        <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t('pages.system.applications.dedicatedBindingHint')} />
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingBoundList')}</div>
+        <Table<DedicatedBindingRow>
+          size="small"
+          rowKey={(r) => `${r.app_code}-${r.tenant_id}`}
+          loading={dedicatedBindingLoading}
+          pagination={false}
+          dataSource={dedicatedBindingRows}
+          columns={[
+            {
+              title: t('pages.system.applications.dedicatedBindingTenantIdCol'),
+              dataIndex: 'tenant_id',
+              width: 100,
+            },
+            {
+              title: t('pages.system.applications.dedicatedBindingTenantCol'),
+              dataIndex: 'tenant_name',
+              ellipsis: true,
+              render: (name: string | null | undefined, row) => name || `— (#${row.tenant_id})`,
+            },
+            {
+              title: t('pages.system.applications.dedicatedBindingCreatedAt'),
+              dataIndex: 'created_at',
+              width: 200,
+              render: (v: string) => {
+                try {
+                  return new Date(v).toLocaleString();
+                } catch {
+                  return v;
+                }
+              },
+            },
+            {
+              title: t('pages.system.applications.actions'),
+              key: 'actions',
+              width: 100,
+              render: (_, row) => (
+                <Popconfirm
+                  title={t('pages.system.applications.dedicatedBindingUnbindConfirm')}
+                  onConfirm={() => handleUnbindDedicatedTenant(row.tenant_id)}
+                >
+                  <Button type="link" size="small" danger>
+                    {t('pages.system.applications.dedicatedBindingUnbind')}
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+        <Divider />
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingAddSection')}</div>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Select
+            showSearch
+            allowClear
+            filterOption={false}
+            placeholder={t('pages.system.applications.dedicatedBindingTenantPlaceholder')}
+            loading={tenantBindSearchLoading}
+            options={tenantBindOptions}
+            value={tenantBindSelectValue}
+            onChange={(v) => setTenantBindSelectValue(v ?? undefined)}
+            onSearch={handleTenantBindSearch}
+            onDropdownVisibleChange={(open) => {
+              if (open && tenantBindOptions.length === 0) handleTenantBindSearch('');
+            }}
+            style={{ width: '100%' }}
+          />
+          <Space wrap>
+            <Button type="primary" onClick={() => void handleBindDedicatedTenant()}>
+              {t('pages.system.applications.dedicatedBindingBind')}
+            </Button>
+            <Button onClick={() => void handleBindCurrentTenant()} disabled={currentUser?.tenant_id == null}>
+              {t('pages.system.applications.dedicatedBindingBindCurrent')}
+            </Button>
+          </Space>
+        </Space>
       </Modal>
 
       {/* 查看详情 Drawer */}

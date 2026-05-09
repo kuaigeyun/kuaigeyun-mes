@@ -34,6 +34,7 @@ import {
   type LoginResponse,
 } from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
+import { getDefaultTenantHomePath } from '../../stores/configStore';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
@@ -665,7 +666,7 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success(t('pages.login.success'));
-        navigate('/system/dashboard/workplace', { replace: true });
+        navigate(getDefaultTenantHomePath(), { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
@@ -851,7 +852,7 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success(t('pages.login.success'));
-        navigate('/system/dashboard/workplace');
+        navigate(getDefaultTenantHomePath());
       }, 0);
       return;
     }
@@ -899,7 +900,7 @@ export default function LoginPage() {
       // 触发用户登录事件，通知布局组件清除菜单缓存
       const urlParams = new URL(window.location.href).searchParams;
       const redirect = urlParams.get('redirect');
-      const targetPath = redirect || '/system/dashboard/workplace';
+      const targetPath = redirect || getDefaultTenantHomePath();
 
       // 先立即跳转，避免等待 getInitSteps 导致卡顿
       message.success(t('pages.login.success'));
@@ -1319,7 +1320,7 @@ export default function LoginPage() {
           const urlParams = new URL(window.location.href).searchParams;
           setTimeout(() => {
             message.success(t('pages.login.guestSuccess'));
-            navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
+            navigate(urlParams.get('redirect') || getDefaultTenantHomePath());
           }, 0);
         } else {
           message.error(t('pages.login.guestFailedNoTenant'));
@@ -1408,7 +1409,7 @@ export default function LoginPage() {
 
         const urlParams = new URL(window.location.href).searchParams;
         const redirect = urlParams.get('redirect');
-        const targetPath = redirect || '/system/dashboard/workplace';
+        const targetPath = redirect || getDefaultTenantHomePath();
 
         // 先立即跳转，避免等待 getInitSteps 导致卡顿
         message.success(t('pages.login.tenantSelected'));

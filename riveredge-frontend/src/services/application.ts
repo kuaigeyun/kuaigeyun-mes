@@ -22,6 +22,8 @@ export interface Application {
   menu_config?: Record<string, any>;
   permission_code?: string;
   is_system: boolean;
+  /** 专用应用：仅平台绑定本组织后可在租户侧列出；平台管理员可见全部 */
+  is_dedicated?: boolean;
   is_active: boolean;
   is_installed: boolean;
   is_pro?: boolean;

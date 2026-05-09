@@ -23,6 +23,8 @@ from core.services.application.application_route_manager import get_route_manage
 import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import AuthContext, get_auth_context
+from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from core.services.system.system_parameter_service import SystemParameterService
 from infra.services.license_center_service import LicenseCenterService
@@ -33,6 +35,28 @@ from loguru import logger
 
 router = APIRouter(prefix="/applications", tags=["Core · Applications"])
 PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
+
+
+def _require_tenant_or_platform_admin(auth: AuthContext) -> None:
+    if not (auth.is_tenant_admin or auth.is_infra_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅组织管理员或平台管理员可安装、卸载、启停应用或激活专业版授权。",
+        )
+
+
+async def _assert_application_visible_to_viewer(
+    tenant_id: int,
+    application: Dict[str, Any],
+    auth: AuthContext,
+) -> None:
+    if not ApplicationService.effective_is_dedicated(application):
+        return
+    if auth.is_infra_admin:
+        return
+    bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+    if str(application.get("code") or "") not in bound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用不存在")
 
 
 async def _load_pro_activation_registry(tenant_id: int) -> Dict[str, Any]:
@@ -135,6 +159,13 @@ def _enrich_app_with_pro_info(app: dict, activated_codes: Set[str]) -> dict:
     return {'is_pro': is_pro, 'can_access': can_access}
 
 
+def _application_response_dict(application: Dict[str, Any], pro_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """合并 PRO 字段，并以 manifest 校准 is_dedicated（与列表接口一致）。"""
+    payload = {**application, **(pro_info or {})}
+    payload["is_dedicated"] = ApplicationService.effective_is_dedicated(application)
+    return payload
+
+
 @router.post("", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 async def create_application(
     data: ApplicationCreate,
@@ -160,7 +191,7 @@ async def create_application(
             tenant_id=tenant_id,
             data=data
         )
-        return ApplicationResponse.model_validate(application)
+        return ApplicationResponse.model_validate(_application_response_dict(application))
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -175,6 +206,7 @@ async def list_applications(
     is_installed: Optional[bool] = Query(None, description="是否已安装（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     获取应用列表
@@ -196,7 +228,8 @@ async def list_applications(
         skip=skip,
         limit=limit,
         is_installed=is_installed,
-        is_active=is_active
+        is_active=is_active,
+        viewer_is_infra_admin=auth.is_infra_admin,
     )
 
     # 获取租户套餐是否允许 PRO 应用
@@ -233,6 +266,7 @@ async def list_applications(
                 'menu_config': app.get('menu_config'),
                 'permission_code': app.get('permission_code'),
                 'is_system': app.get('is_system', False),
+                'is_dedicated': ApplicationService.effective_is_dedicated(app),
                 'is_active': app.get('is_active', True),
                 'is_installed': app.get('is_installed', False),
                 'is_custom_name': app.get('is_custom_name', False),
@@ -259,6 +293,7 @@ async def list_applications(
 async def list_installed_applications(
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     获取已安装的应用列表
@@ -269,7 +304,8 @@ async def list_installed_applications(
     """
     applications = await ApplicationService.get_installed_applications(
         tenant_id=tenant_id,
-        is_active=is_active
+        is_active=is_active,
+        viewer_is_infra_admin=auth.is_infra_admin,
     )
 
     # 获取租户套餐是否允许 PRO 应用
@@ -306,6 +342,7 @@ async def list_installed_applications(
                 'menu_config': app.get('menu_config'),
                 'permission_code': app.get('permission_code'),
                 'is_system': app.get('is_system', False),
+                'is_dedicated': ApplicationService.effective_is_dedicated(app),
                 'is_active': app.get('is_active', True),
                 'is_installed': app.get('is_installed', False),
                 'is_custom_name': app.get('is_custom_name', False),
@@ -332,6 +369,7 @@ async def list_installed_applications(
 async def get_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     获取应用详情
@@ -353,11 +391,12 @@ async def get_application(
             tenant_id=tenant_id,
             uuid=uuid
         )
+        await _assert_application_visible_to_viewer(tenant_id, application, auth)
         tenant = await Tenant.get_or_none(id=tenant_id)
         allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(application, activated_codes)
-        return ApplicationResponse.model_validate({**application, **pro_info})
+        return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -370,6 +409,7 @@ async def update_application(
     uuid: str,
     data: ApplicationUpdate,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     更新应用
@@ -388,12 +428,14 @@ async def update_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.update_application(
             tenant_id=tenant_id,
             uuid=uuid,
             data=data
         )
-        return ApplicationResponse.model_validate(application)
+        return ApplicationResponse.model_validate(_application_response_dict(application))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -405,6 +447,7 @@ async def update_application(
 async def delete_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     删除应用
@@ -419,6 +462,8 @@ async def delete_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         await ApplicationService.delete_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -434,6 +479,7 @@ async def delete_application(
 async def install_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     安装应用
@@ -452,6 +498,9 @@ async def install_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        _require_tenant_or_platform_admin(auth)
+        existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.install_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -460,7 +509,7 @@ async def install_application(
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(application, activated_codes)
         
-        return ApplicationResponse.model_validate({**application, **pro_info})
+        return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -482,6 +531,7 @@ async def install_application(
 async def uninstall_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     卸载应用
@@ -499,6 +549,9 @@ async def uninstall_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        _require_tenant_or_platform_admin(auth)
+        existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.uninstall_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -507,7 +560,7 @@ async def uninstall_application(
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(application, activated_codes)
         
-        return ApplicationResponse.model_validate({**application, **pro_info})
+        return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -529,6 +582,7 @@ async def uninstall_application(
 async def enable_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     启用应用
@@ -546,10 +600,12 @@ async def enable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        _require_tenant_or_platform_admin(auth)
         app_detail = await ApplicationService.get_application_by_uuid(
             tenant_id=tenant_id,
             uuid=uuid,
         )
+        await _assert_application_visible_to_viewer(tenant_id, app_detail, auth)
         tenant = await Tenant.get_or_none(id=tenant_id)
         allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
         activated_codes = await _get_activated_pro_codes(tenant_id)
@@ -576,7 +632,7 @@ async def enable_application(
             import logging
             logging.warning(f"应用路由注册失败（不影响应用启用）: {route_error}")
         
-        return ApplicationResponse.model_validate({**application, **pro_info})
+        return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -599,8 +655,10 @@ async def activate_pro_application(
     uuid: str,
     payload: ProActivationRequest,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """激活 PRO 应用访问权限（仅存许可证摘要，不保存明文）。"""
+    _require_tenant_or_platform_admin(auth)
     key = (payload.license_key or "").strip()
     if len(key) < 8:
         raise HTTPException(
@@ -608,6 +666,7 @@ async def activate_pro_application(
             detail="License Key 格式不合法，请检查后重试。",
         )
     app = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+    await _assert_application_visible_to_viewer(tenant_id, app, auth)
     app_code = app.get("code")
     manifest = ApplicationService._get_manifest_by_code(app_code) if app_code else None
     is_pro = bool(manifest.get("is_pro", False)) if manifest else False
@@ -641,13 +700,14 @@ async def activate_pro_application(
     allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
     activated_codes = await _get_activated_pro_codes(tenant_id)
     pro_info = _enrich_app_with_pro_info(app, activated_codes)
-    return ApplicationResponse.model_validate({**app, **pro_info})
+    return ApplicationResponse.model_validate(_application_response_dict(app, pro_info))
 
 
 @router.post("/{uuid}/disable", response_model=ApplicationResponse)
 async def disable_application(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     禁用应用
@@ -665,6 +725,9 @@ async def disable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        _require_tenant_or_platform_admin(auth)
+        existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.disable_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -681,7 +744,7 @@ async def disable_application(
             import logging
             logging.warning(f"应用路由移除失败（不影响应用禁用）: {route_error}")
         
-        return ApplicationResponse.model_validate(application)
+        return ApplicationResponse.model_validate(_application_response_dict(application))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -697,6 +760,7 @@ async def disable_application(
 @router.post("/scan", response_model=List[ApplicationResponse])
 async def scan_and_register_plugins(
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     扫描并注册插件应用
@@ -713,6 +777,15 @@ async def scan_and_register_plugins(
         applications = await ApplicationService.scan_and_register_plugins(
             tenant_id=tenant_id
         )
+
+        if not auth.is_infra_admin:
+            bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+            applications = [
+                a
+                for a in applications
+                if not ApplicationService.effective_is_dedicated(a)
+                or str(a.get("code") or "") in bound
+            ]
 
         # 安全构造响应对象，避免传递多余字段
         result = []
@@ -742,6 +815,7 @@ async def scan_and_register_plugins(
                     'menu_config': app.get('menu_config'),
                     'permission_code': app.get('permission_code'),
                     'is_system': app.get('is_system', False),
+                    'is_dedicated': ApplicationService.effective_is_dedicated(app),
                     'is_active': app.get('is_active', True),
                     'is_installed': app.get('is_installed', False),
                     'is_custom_name': app.get('is_custom_name', False),
@@ -780,6 +854,7 @@ async def test_sync_endpoint():
 async def sync_application_manifest(
     app_code: str,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     同步应用清单配置
@@ -821,6 +896,7 @@ async def sync_application_manifest(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"应用不存在: {app_code}"
             )
+        await _assert_application_visible_to_viewer(tenant_id, app, auth)
 
         # 更新应用配置
         menu_config = manifest.get('menu_config')
