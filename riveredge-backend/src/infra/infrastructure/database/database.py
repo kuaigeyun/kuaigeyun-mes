@@ -342,6 +342,10 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.state_transition",  # 状态流转规则模型
                 "apps.kuaizhizao.models.stocktaking",  # 库存盘点模型
                 "apps.kuaizhizao.models.tool",  # 工装器具模型
+                # 好力 GO（客户专用，表前缀 haoligo_，与快制造设备/模具逻辑隔离）
+                "apps.haoligo.models.equipment",
+                "apps.haoligo.models.mold",
+                "apps.haoligo.models.patrol",
             ],
             "default_connection": "default",
         },

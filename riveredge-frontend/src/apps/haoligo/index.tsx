@@ -1,21 +1,33 @@
 /**
- * 好力GO（haoligo）应用入口 — 专用应用占位页
+ * 好力 GO（haoligo）应用入口
  *
- * 业务页面按 riveredge-adapt/haoli-go/PLAN.md 迭代；后端 API 前缀 /api/v1/apps/haoligo
+ * 设备 / 模具 / 巡查 独立实现，API：`/api/v1/apps/haoligo`。规划见 `riveredge-adapt/haoli-go/PLAN.md`。
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import PageSkeleton from '../../components/page-skeleton';
+import HaoligoAppLayout from './layouts/AppLayout';
+
+const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton />}>
+    <LazyComponent />
+  </Suspense>
+);
+
+const EquipmentPage = lazy(() => import('./pages/equipment'));
+const MoldsPage = lazy(() => import('./pages/molds'));
+const PatrolPage = lazy(() => import('./pages/patrol'));
 
 const HaoligoApp: React.FC = () => (
-  <div style={{ padding: '48px 24px', maxWidth: 640, margin: '0 auto' }}>
-    <h2 style={{ marginBottom: 12 }}>好力GO</h2>
-    <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-      本应用为<strong>定制应用</strong>：仅在平台将本应用授权绑定到当前组织后，组织内用户可在应用中心看到并安装启用。
-    </p>
-    <p style={{ color: 'var(--color-text-tertiary)', marginTop: 16, fontSize: 14 }}>
-      Web 端页面与菜单将在此目录（<code>src/apps/haoligo</code>）逐步接入。
-    </p>
-  </div>
+  <Routes>
+    <Route element={<HaoligoAppLayout />}>
+      <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
+      <Route path="molds" element={withPageSuspense(MoldsPage)} />
+      <Route path="patrol" element={withPageSuspense(PatrolPage)} />
+      <Route index element={<Navigate to="equipment" replace />} />
+    </Route>
+  </Routes>
 );
 
 export default HaoligoApp;

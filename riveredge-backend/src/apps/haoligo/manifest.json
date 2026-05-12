@@ -16,7 +16,26 @@
     "icon": "smartphone",
     "path": "/apps/haoligo",
     "permission": "haoligo:workspace:read",
-    "children": []
+    "children": [
+      {
+        "title": "设备",
+        "path": "/apps/haoligo/equipment",
+        "permission": "haoligo:workspace:read",
+        "sort_order": 1
+      },
+      {
+        "title": "模具",
+        "path": "/apps/haoligo/molds",
+        "permission": "haoligo:workspace:read",
+        "sort_order": 2
+      },
+      {
+        "title": "巡查",
+        "path": "/apps/haoligo/patrol",
+        "permission": "haoligo:workspace:read",
+        "sort_order": 3
+      }
+    ]
   },
   "permissions": ["haoligo:workspace:read"]
 }

@@ -7,6 +7,10 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from apps.haoligo.api.routes_equipment import router as equipment_router
+from apps.haoligo.api.routes_mold import router as mold_router
+from apps.haoligo.api.routes_patrol import router as patrol_router
+
 router = APIRouter(tags=["App · HaoliGO"])
 
 
@@ -25,3 +29,8 @@ async def get_haoligo_meta() -> HaoligoMeta:
         display_name="好力GO",
         api_prefix="/api/v1/apps/haoligo",
     )
+
+
+router.include_router(equipment_router)
+router.include_router(mold_router)
+router.include_router(patrol_router)
