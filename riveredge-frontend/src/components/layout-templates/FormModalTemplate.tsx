@@ -5,7 +5,7 @@
  * 行为与厂区管理等使用本模板的弹窗一致，无内层嵌套滚动条。
  */
 
-import React, { ReactNode, useRef } from 'react';
+import React, { ReactNode, useCallback, useRef } from 'react';
 import { Modal, Button, App, Space, Grid } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
@@ -92,7 +92,22 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
 
-  useSubmitShortcut(() => formRef.current?.submit(), open);
+  /**
+   * Modal 底栏与 body 同帧渲染时，ProForm 可能尚未把实例挂到 formRef；直接 submit 会静默无效。
+   * 延后到下一帧再调 submit，并在仍无实例时给出提示。
+   */
+  const triggerFormSubmit = useCallback(() => {
+    requestAnimationFrame(() => {
+      const inst = formRef.current as ProFormInstance | undefined
+      if (!inst || typeof inst.submit !== 'function') {
+        messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'))
+        return
+      }
+      inst.submit()
+    })
+  }, [formRef, messageApi, t])
+
+  useSubmitShortcut(() => triggerFormSubmit(), open);
 
   return (
     <Modal
@@ -108,7 +123,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       footer={
         <Space wrap>
           <Button onClick={handleClose}>{t('common.cancel')}</Button>
-          <Button type="primary" loading={loading} onClick={() => formRef.current?.submit()}>
+          <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
             {(isEdit
               ? t('components.layoutTemplates.formModal.submitUpdate')
               : t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}

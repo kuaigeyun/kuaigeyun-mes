@@ -11,11 +11,31 @@ from tortoise.exceptions import OperationalError
 from loguru import logger
 import asyncio
 import os
+import sys
 
 from infra.config.infra_config import infra_settings as settings
 
-# aerich 迁移时仅用 1 个连接，避免连接数超限（需设置 AERICH_MIGRATE=1）
-_is_aerich = os.environ.get("AERICH_MIGRATE") == "1"
+
+def _is_aerich_migration_process() -> bool:
+    """
+    aerich CLI 连接数据库时使用较小连接池，降低「too many clients」概率。
+    优先读 AERICH_MIGRATE=1（面板/CI 可显式设置）；否则根据进程参数推断（避免面板忘记导出变量）。
+    """
+    if os.environ.get("AERICH_MIGRATE") == "1":
+        return True
+    try:
+        argv = " ".join(sys.argv).lower()
+    except Exception:
+        return False
+    if not argv.strip():
+        return False
+    # 正常运行 API 时不要误判
+    if "uvicorn" in argv or "gunicorn" in argv:
+        return False
+    return "aerich" in argv
+
+
+_is_aerich = _is_aerich_migration_process()
 
 
 def _int_env(name: str, default: int) -> int:

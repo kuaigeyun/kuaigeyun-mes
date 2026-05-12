@@ -119,6 +119,7 @@ markers = [
     "mts: MTS模式测试",
 ]
 
+# aerich 会从 TORTOISE_ORM 读连接池；database.py 会在检测到 aerich CLI（或 AERICH_MIGRATE=1）时使用小池子，减轻 PostgreSQL max_connections 占满。
 [tool.aerich]
 tortoise_orm = "infra.infrastructure.database.database.TORTOISE_ORM"
 location = "./migrations"

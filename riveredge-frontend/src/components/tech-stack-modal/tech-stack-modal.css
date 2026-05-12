@@ -1,0 +1,28 @@
+/* 版权声明 Modal：固定内容区高度，切换 Tab 仅内部滚动，外形尺寸不变 */
+.tech-stack-modal-tabs.tech-stack-modal-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tech-stack-modal-tabs .ant-tabs-nav {
+  flex-shrink: 0;
+}
+
+.tech-stack-modal-tabs .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tech-stack-modal-tabs .ant-tabs-content,
+.tech-stack-modal-tabs .ant-tabs-content-top {
+  height: 100%;
+}
+
+.tech-stack-modal-tabs .ant-tabs-tabpane {
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}

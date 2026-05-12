@@ -14,12 +14,13 @@ import type { TabsProps } from 'antd';
 import { ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import {
   MODAL_CONFIG,
-  PAGE_SPACING,
   SYSTEM_VIEWPORT_OFFSETS,
   getViewportHeightExpr,
 } from '../layout-templates/constants';
 import { COPYRIGHT_COMPANY_NAME, COPYRIGHT_TRADEMARK } from '../../constants/copyrightContent';
 import { verifyCopyright } from '../../utils/copyrightIntegrity';
+
+import './tech-stack-modal.css';
 
 const { Title, Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -665,9 +666,11 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     if (open) verifyCopyright();
   }, [open]);
 
+  /** 各 Tab 内边距：上下略大于左右，避免贴底；高度由 tabpane 滚动区承载 */
   const tabContentStyle: React.CSSProperties = {
-    padding: `${PAGE_SPACING.PADDING}px 0`,
-    minHeight: 480,
+    padding: `${token.paddingMD}px ${token.paddingSM}px ${token.paddingLG}px`,
+    boxSizing: 'border-box',
+    minHeight: '100%',
   };
   const warningBoxStyle: React.CSSProperties = {
     marginTop: 16,
@@ -1014,6 +1017,8 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
   ];
 
+  const modalBodyHeight = getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.TECH_STACK_MODAL_PX);
+
   return (
     <Modal
       title={t('components.techStackModal.title')}
@@ -1024,16 +1029,22 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       style={{ top: 24 }}
       styles={{
         body: {
-          maxHeight: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.TECH_STACK_MODAL_PX),
-          overflowY: 'auto',
-          padding: token.paddingLG,
+          height: modalBodyHeight,
+          maxHeight: modalBodyHeight,
+          overflow: 'hidden',
+          padding: `${token.paddingMD}px ${token.paddingLG}px ${token.paddingLG}px`,
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
         },
       }}
     >
       <Tabs
+        className="tech-stack-modal-tabs"
         defaultActiveKey="overview"
         items={tabItems}
         size="middle"
+        tabBarStyle={{ marginBottom: token.marginMD, flexShrink: 0 }}
       />
     </Modal>
   );

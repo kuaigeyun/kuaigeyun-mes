@@ -922,10 +922,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonContainerRef = useRef<HTMLDivElement>(null)
 
-  // 使用外部传入的 ref 或内部创建的 ref（优先使用外部传入的）
-  const actionRef = (externalActionRef ||
-    hookActionRef ||
-    internalActionRef) as React.MutableRefObject<ActionType | undefined>
+  /**
+   * ProTable 实际挂载的 action ref。
+   * 若页面传入 `actionRef`（external），则 ProTable 只挂在本 ref，再通过 layout effect
+   * 把「带 TanStack 清缓存的 reload」组合进外部 ref；**绝不**改写 ProTable 内部 userAction
+   * 上的方法（其每帧会换新对象，原地劫持会与 useImperativeHandle 打架，曾导致工具栏异常）。
+   */
+  const nativeTableActionRef = useRef<ActionType>()
+  const actionRefForProTable = (
+    externalActionRef ? nativeTableActionRef : externalActionRef || hookActionRef || internalActionRef
+  ) as React.MutableRefObject<ActionType | undefined>
   const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<
     ProFormInstance | undefined
   >
@@ -960,6 +966,26 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const tanstackQueryRef = useRef(resolvedTanstackQuery)
   tanstackQueryRef.current = resolvedTanstackQuery
+
+  const dropUniTableTanstackCache = useCallback(() => {
+    const liveTq = tanstackQueryRef.current
+    if (liveTq?.queryKeyPrefix && liveTq.queryKeyPrefix.length > 0) {
+      queryClient.removeQueries({
+        queryKey: ['uniTable', ...liveTq.queryKeyPrefix],
+        exact: false,
+      })
+    }
+  }, [queryClient])
+
+  const reloadWithTanstackCacheBust = useCallback((...args: any[]) => {
+    dropUniTableTanstackCache()
+    return (actionRefForProTable.current?.reload as any)?.(...args)
+  }, [dropUniTableTanstackCache])
+
+  const reloadAndRestWithTanstackCacheBust = useCallback((...args: any[]) => {
+    dropUniTableTanstackCache()
+    return (actionRefForProTable.current?.reloadAndRest as any)?.(...args)
+  }, [dropUniTableTanstackCache])
 
   /**
    * 请求序号：用户翻页/改筛选时，旧请求若仍在飞行（含 SWR 后台 revalidate），
@@ -1338,10 +1364,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    * 如果 tableData 为空且 actionRef 可用，主动触发数据加载
    */
   useEffect(() => {
-    if (currentViewType !== 'table' && currentViewType !== 'detailTable' && tableData.length === 0 && actionRef?.current) {
+    if (currentViewType !== 'table' && currentViewType !== 'detailTable' && tableData.length === 0 && actionRefForProTable?.current) {
       // 延迟执行，确保组件完全初始化
       setTimeout(() => {
-        actionRef.current?.reload()
+        actionRefForProTable.current?.reload()
       }, 100)
     }
   }, [currentViewType, tableData.length])
@@ -1374,8 +1400,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
 
       // 触发表格重新加载
-      if (actionRef?.current) {
-        actionRef.current.reload()
+      if (actionRefForProTable?.current) {
+        actionRefForProTable.current.reload()
       }
     }, 300)
   }
@@ -1395,7 +1421,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     } catch {
       /* ignore */
     }
-    actionRef.current?.reload?.()
+    actionRefForProTable.current?.reload?.()
   }, [])
 
   /**
@@ -1414,6 +1440,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
     }
   }, [])
+
+  /**
+   * 页面传入 `actionRef` 时：每帧把 ProTable 原生句柄同步到外部 ref，并对 reload / reloadAndRest
+   * 包一层 TanStack 清缓存（不修改 ProTable 内部对象，避免与 useImperativeHandle 冲突导致工具栏失效）。
+   */
+  React.useLayoutEffect(() => {
+    if (!externalActionRef) return
+    const inner = actionRefForProTable.current
+    const ext = externalActionRef as React.MutableRefObject<ActionType | undefined>
+    if (!inner) {
+      ext.current = undefined as any
+      return
+    }
+    ext.current = {
+      ...inner,
+      reload: (...args: any[]) => reloadWithTanstackCacheBust(...args),
+      reloadAndRest: (...args: any[]) => reloadAndRestWithTanstackCacheBust(...args),
+    }
+  }, [externalActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust])
 
   /**
    * 表格数据请求（核心性能路径）
@@ -1509,11 +1554,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           if (cached != null && cacheStale) {
             // 后台 revalidate；TanStack `structuralSharing` 会在内容相同时复用旧引用，
             // 因此严格用 `===` 判断「真的变化了」再触发 reload，避免无谓渲染。
+            // 这里必须走 ProTable 原生 reload（不经 TanStack removeQueries），否则会抹掉刚写入的缓存并重复请求。
             void queryClient
               .fetchQuery(fetchOpts)
               .then((fresh) => {
                 if (fresh !== cached && requestSeqRef.current === seq) {
-                  actionRef.current?.reload?.()
+                  actionRefForProTable.current?.reload?.()
                 }
               })
               .catch(() => {
@@ -1649,7 +1695,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     // ProTable `toolBarRender`：在 UniTable 中仅用于向左侧注入节点（非右侧工具栏）
     if (restProps.toolBarRender) {
-      const mockAction = { reload: actionRef.current?.reload } as any
+      const mockAction = {
+        reload: reloadWithTanstackCacheBust,
+        reloadAndRest: reloadAndRestWithTanstackCacheBust,
+      } as any
       const mockSelectedRowKeys = selectedRowKeys as any
       const userResult = restProps.toolBarRender(mockAction, {
         selectedRowKeys: mockSelectedRowKeys,
@@ -1785,17 +1834,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     fullScreen: false,
     ...mergedToolbarOptions,
     reload: () => {
-      const tq = tanstackQueryRef.current
-      if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
-        void queryClient.invalidateQueries({
-          queryKey: ['uniTable', ...tq.queryKeyPrefix],
-          exact: false,
-        })
-      }
       mergedToolbarOptions.reload?.()
-      actionRef.current?.reload()
+      void reloadWithTanstackCacheBust()
     },
-  }), [mergedToolbarOptions, queryClient, handleColumnReset])
+  }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust])
 
   const memoizedRightActions = !isMobile ? buildRightActions() : undefined
 
@@ -1917,7 +1959,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               advancedSearchTableProps={{
                 columns: processedColumns,
                 formRef: formRef as React.MutableRefObject<ProFormInstance>,
-                actionRef: actionRef as React.MutableRefObject<ActionType>,
+                actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
                 searchParamsRef,
               }}
               afterSearch={afterSearchButtons}
@@ -1951,7 +1993,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               <ProTable<T>
               key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}-${columnsStatePatchEpoch}`}
               headerTitle={buildHeaderActions() || headerTitle || undefined}
-              actionRef={actionRef}
+              actionRef={actionRefForProTable}
               formRef={formRef}
               columns={effectiveTableColumns}
               request={handleRequest}
@@ -2511,7 +2553,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             onConfirm={(data) => {
               onImport(data)
               setImportModalVisible(false)
-              actionRef?.current?.reload?.()
+              void reloadWithTanstackCacheBust()
             }}
             headers={effectiveImportConfig.headers}
             exampleRow={effectiveImportConfig.exampleRow}

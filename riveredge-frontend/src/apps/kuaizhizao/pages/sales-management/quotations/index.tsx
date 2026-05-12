@@ -1655,7 +1655,7 @@ const QuotationsPage: React.FC = () => {
     material_spec: '',
     material_unit: '件',
     quote_quantity: 1,
-    unit_price: 0,
+    unit_price: undefined,
     tax_rate: 0,
     delivery_date: undefined,
     notes: '',
@@ -1716,10 +1716,13 @@ const QuotationsPage: React.FC = () => {
   };
 
   const submitCreate = async (values: any) => {
-    const validItems = (values.items || []).filter((it: any) => it.material_id && it.quote_quantity > 0);
+    const validItems = (values.items || []).filter(
+      (it: any) =>
+        it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
+    );
     if (!validItems.length) {
-      messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
-      throw new Error('请至少添加一条有效明细');
+      messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
+      throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
     let quotationCode = values.quotation_code;
     const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-quotation');
@@ -1775,10 +1778,13 @@ const QuotationsPage: React.FC = () => {
 
   const submitEdit = async (values: any) => {
     if (!editingId) return;
-    const validItems = (values.items || []).filter((it: any) => it.material_id && it.quote_quantity > 0);
+    const validItems = (values.items || []).filter(
+      (it: any) =>
+        it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
+    );
     if (!validItems.length) {
-      messageApi.error('请至少添加一条有效明细');
-      throw new Error('请至少添加一条有效明细');
+      messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
+      throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
@@ -2303,7 +2309,25 @@ const QuotationsPage: React.FC = () => {
                         width: 100,
                         align: 'right' as const,
                         render: (_: unknown, __: unknown, index: number) => (
-                          <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                          <Form.Item
+                            name={[index, 'unit_price']}
+                            style={{ margin: 0 }}
+                            rules={[
+                              { required: true, message: t('app.kuaizhizao.salesOrder.unitPriceRequired') },
+                              {
+                                validator: (_: unknown, value: unknown) => {
+                                  const n = Number(value);
+                                  if (value == null || value === '') {
+                                    return Promise.resolve();
+                                  }
+                                  if (Number.isNaN(n) || n <= 0) {
+                                    return Promise.reject(new Error(t('app.kuaizhizao.salesOrder.unitPricePositive')));
+                                  }
+                                  return Promise.resolve();
+                                },
+                              },
+                            ]}
+                          >
                             <InputNumber
                               placeholder={
                                 priceType === 'tax_inclusive'
@@ -2559,7 +2583,7 @@ const QuotationsPage: React.FC = () => {
                                       material_spec: '',
                                       material_unit: '',
                                       quote_quantity: 1,
-                                      unit_price: 0,
+                                      unit_price: undefined,
                                       tax_rate: 0,
                                       delivery_date: undefined,
                                       notes: '',
