@@ -15,6 +15,7 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
   </Suspense>
 );
 
+const WorkspacePage = lazy(() => import('./pages/workspace'));
 const EquipmentPage = lazy(() => import('./pages/equipment'));
 const MoldsPage = lazy(() => import('./pages/molds'));
 const PatrolPage = lazy(() => import('./pages/patrol'));
@@ -22,10 +23,11 @@ const PatrolPage = lazy(() => import('./pages/patrol'));
 const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>
+      <Route path="workspace" element={withPageSuspense(WorkspacePage)} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={withPageSuspense(MoldsPage)} />
       <Route path="patrol" element={withPageSuspense(PatrolPage)} />
-      <Route index element={<Navigate to="equipment" replace />} />
+      <Route index element={<Navigate to="workspace" replace />} />
     </Route>
   </Routes>
 );

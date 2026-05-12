@@ -16,6 +16,7 @@ from core.schemas.menu import (
     MenuResponse,
     MenuTreeResponse,
     MenuListResponse,
+    TenantBackendHomeResponse,
 )
 from core.services.system.menu_service import MenuService
 from core.api.deps.deps import get_current_tenant
@@ -118,6 +119,48 @@ async def get_menu_tree(
         is_active=is_active,
         use_cache=use_cache,
     )
+
+
+@router.get("/backend-home", response_model=TenantBackendHomeResponse, summary="当前租户后台首页")
+async def get_backend_home(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """登录用户可读；未配置或指向已删除/禁用菜单时返回全 null，前端回落系统默认工作台。"""
+    return await MenuService.get_tenant_backend_home_response(tenant_id=tenant_id)
+
+
+@router.delete("/backend-home", status_code=status.HTTP_204_NO_CONTENT, summary="清除后台首页配置")
+async def clear_backend_home(
+    _auth: object = Depends(require_access("system.menu", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """清除后使用系统默认（仪表盘工作台或应用中心）。"""
+    await MenuService.clear_tenant_backend_home(tenant_id=tenant_id)
+
+
+@router.post(
+    "/{uuid}/set-as-backend-home",
+    response_model=MenuResponse,
+    summary="将指定菜单设为后台首页（租户内唯一）",
+)
+async def set_menu_as_backend_home(
+    uuid: str,
+    _auth: object = Depends(require_access("system.menu", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    同一租户仅允许一条配置：设置新首页后自动取消其他菜单的首页身份。
+    仅允许已启用、非外部链接且已配置 path 的菜单。
+    """
+    try:
+        return await MenuService.set_tenant_backend_home(tenant_id=tenant_id, menu_uuid=uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{uuid}", response_model=MenuResponse)

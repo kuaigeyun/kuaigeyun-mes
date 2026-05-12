@@ -82,7 +82,7 @@ import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
-import { MenuTree } from '../services/menu';
+import { MenuTree, getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
@@ -493,6 +493,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
       '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 智能建议
+      '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台
+      '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
+      '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
+      '/apps/haoligo/patrol': ManufacturingIcons.clipboardCheck, // 好力 GO 现场巡查（点检/记录）
     };
 
     // 精确路径匹配
@@ -839,6 +843,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
   const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
   const systemHomePath = systemDashboardEnabled ? '/system/dashboard/workplace' : '/system/applications';
+
+  const tenantIdStrForHome = getTenantId()?.toString() ?? null;
+  const { data: tenantBackendHome } = useQuery({
+    queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getTenantBackendHome,
+    enabled: !!(getToken() && tenantIdStrForHome && currentUser),
+    staleTime: 60 * 1000,
+  });
+
+  const effectiveSystemHomePath = useMemo(() => {
+    const custom = tenantBackendHome?.path?.trim();
+    if (custom) return custom;
+    return systemHomePath;
+  }, [tenantBackendHome?.path, systemHomePath]);
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
@@ -4390,7 +4408,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         headerTitleRender={isMobileOrTablet ? (logo) => (
           <div 
             style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => navigate(systemHomePath)}
+            onClick={() => navigate(effectiveSystemHomePath)}
           >
             {logo}
           </div>
@@ -5091,7 +5109,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             }
           },
         }}
-        onMenuHeaderClick={() => navigate(systemHomePath)}
+        onMenuHeaderClick={() => navigate(effectiveSystemHomePath)}
         subMenuItemRender={(item: any, defaultDom) => {
           // 父分组悬停：一次性预取其下全部子项 chunk，展开即可见、点击即渲染
           const collectLeafPaths = (node: any, acc: string[]): string[] => {
@@ -5228,10 +5246,39 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             if (item.path.startsWith('/apps/') && item.name) {
               // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
               const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
-              // ⚠️ 关键修复：直接强制使用翻译后的名称，不再依赖 dom 参数的内容
-              // 因为 ProLayout 内部可能缓存了旧的 dom 结构
+              // 仅用纯文本替换 dom 会丢掉标题里的图标。不要再用 class ant-menu-item-icon：
+              // BasicLayout 全局样式会给 .ant-menu-item-icon 加 ::before 圆角底 + margin-right，叠在自定义 dom 里会只坑叶子项且间距加倍。
               if (translatedName) {
-                finalDom = <span>{translatedName}</span>;
+                finalDom = (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      columnGap: 0,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                    }}
+                  >
+                    {item.icon ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          width: 16,
+                          height: 16,
+                          marginInlineEnd: 12,
+                        }}
+                      >
+                        {item.icon}
+                      </span>
+                    ) : null}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                      {translatedName}
+                    </span>
+                  </span>
+                );
               }
             }
 

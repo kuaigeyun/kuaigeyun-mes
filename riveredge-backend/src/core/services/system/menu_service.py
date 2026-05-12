@@ -4,6 +4,8 @@
 提供菜单的 CRUD 操作和树形结构管理。
 """
 
+from __future__ import annotations
+
 from typing import List, Optional, Dict, Any
 from tortoise.exceptions import IntegrityError
 import json
@@ -11,7 +13,7 @@ import json
 from core.models.menu import Menu
 from core.models.permission import Permission
 from core.timezone_utils import now_utc
-from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse
+from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
 from core.services.application.application_service import ApplicationService
 from core.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -42,6 +44,27 @@ class MenuService:
             return f"{tenant_id}:{key_type}:{key_value}"
         return f"{tenant_id}:{key_type}"
     
+    @staticmethod
+    def _sort_menu_tree_children_inplace(nodes: List[MenuTreeResponse]) -> None:
+        """
+        递归按 sort_order、创建时间、uuid 稳定排序每级 children。
+
+        构建树时子节点是按「全表 order_by(sort_order, created_at)」扫描顺序 append 到父节点上的，
+        同级兄弟的实际顺序不一定与各自的 sort_order 一致；须在此处统一为「同级按 sort_order」。
+        """
+        for node in nodes:
+            ch = node.children
+            if not ch:
+                continue
+            ch.sort(
+                key=lambda c: (
+                    int(c.sort_order) if c.sort_order is not None else 0,
+                    c.created_at.timestamp() if c.created_at is not None else 0.0,
+                    str(c.uuid),
+                )
+            )
+            MenuService._sort_menu_tree_children_inplace(ch)
+
     @staticmethod
     async def _clear_menu_cache(tenant_id: int) -> None:
         """
@@ -258,7 +281,8 @@ class MenuService:
             List[MenuTreeResponse]: 菜单树列表
         """
         # 生成缓存键（基于查询参数）
-        cache_key_value = f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}_i{is_active if is_active is not None else 'all'}"
+        # v3：树返回前对每级 children 做 sort_order 稳定排序；改版本号使旧缓存失效，避免长期读到乱序 JSON
+        cache_key_value = f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}_i{is_active if is_active is not None else 'all'}_v3"
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
         
         # 尝试从缓存获取
@@ -296,6 +320,7 @@ class MenuService:
                         cached_tree = filter_orphan(cached_tree)
                     except Exception:
                         pass
+                    MenuService._sort_menu_tree_children_inplace(cached_tree)
                     return cached_tree
             except Exception:
                 # 缓存失败不影响主流程
@@ -383,7 +408,9 @@ class MenuService:
                 elif str(menu.uuid) == parent_uuid:
                     # 指定的父菜单，只返回该菜单及其子菜单
                     root_menus.append(menu_response)
-        
+
+        MenuService._sort_menu_tree_children_inplace(root_menus)
+
         # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
         # 使用 ApplicationService（raw SQL）避免 Tortoise 模型列与数据库不一致
         applications = await ApplicationService.get_applications_uuid_sort_order(tenant_id)
@@ -565,11 +592,92 @@ class MenuService:
         
         # 软删除
         await menu.delete()
-        
+
+        from core.models.tenant_backend_home import TenantBackendHome
+
+        await TenantBackendHome.filter(tenant_id=tenant_id, menu_uuid=str(menu.uuid)).delete()
+
         # 清除菜单缓存
         await MenuService._clear_menu_cache(tenant_id)
         
         return True
+
+    @staticmethod
+    async def get_tenant_backend_home_response(tenant_id: int) -> TenantBackendHomeResponse:
+        """解析当前租户的后台首页；无效指针返回全空。"""
+        from core.models.tenant_backend_home import TenantBackendHome
+
+        row = await TenantBackendHome.filter(tenant_id=tenant_id).first()
+        if not row:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        menu = await Menu.filter(
+            tenant_id=tenant_id,
+            uuid=row.menu_uuid,
+            deleted_at__isnull=True,
+        ).first()
+        if not menu or not menu.is_active or menu.is_external:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        path = (menu.path or "").strip()
+        if not path:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        return TenantBackendHomeResponse(
+            menu_uuid=str(menu.uuid),
+            path=path,
+            name=menu.name,
+        )
+        if not row:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        menu = await Menu.filter(
+            tenant_id=tenant_id,
+            uuid=row.menu_uuid,
+            deleted_at__isnull=True,
+        ).first()
+        if not menu or not menu.is_active or menu.is_external:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        path = (menu.path or "").strip()
+        if not path:
+            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
+        return TenantBackendHomeResponse(
+            menu_uuid=str(menu.uuid),
+            path=path,
+            name=menu.name,
+        )
+
+    @staticmethod
+    async def set_tenant_backend_home(tenant_id: int, menu_uuid: str) -> MenuResponse:
+        """
+        将某菜单设为当前租户后台首页（排他：先删后插，仅一条）。
+
+        Raises:
+            ValidationError: 外部链接、无 path、未启用
+        """
+        from core.models.tenant_backend_home import TenantBackendHome
+        from tortoise.transactions import in_transaction
+
+        menu = await MenuService.get_menu_by_uuid(tenant_id, menu_uuid)
+        if menu.is_external:
+            raise ValidationError("外部链接菜单不能设为后台首页")
+        if not menu.path or not str(menu.path).strip():
+            raise ValidationError("请先为该菜单配置路由 path")
+        if not menu.is_active:
+            raise ValidationError("仅可将已启用的菜单设为后台首页")
+
+        async with in_transaction() as conn:
+            await TenantBackendHome.filter(tenant_id=tenant_id).using_db(conn).delete()
+            await TenantBackendHome.create(
+                tenant_id=tenant_id,
+                menu_uuid=str(menu.uuid),
+                using_db=conn,
+            )
+        await MenuService._clear_menu_cache(tenant_id)
+        return MenuResponse.model_validate(menu)
+
+    @staticmethod
+    async def clear_tenant_backend_home(tenant_id: int) -> None:
+        from core.models.tenant_backend_home import TenantBackendHome
+
+        await TenantBackendHome.filter(tenant_id=tenant_id).delete()
+        await MenuService._clear_menu_cache(tenant_id)
     
     @staticmethod
     async def update_menu_order(

@@ -194,6 +194,7 @@ TORTOISE_ORM = {
                 "core.models.language",
                 "core.models.application",
                 "core.models.menu",
+                "core.models.tenant_backend_home",
                 "core.models.integration_config",
                 "core.models.file",
                 "core.models.api",

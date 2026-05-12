@@ -136,6 +136,14 @@ class MenuListResponse(BaseModel):
     page_size: int = Field(..., description="每页数量")
 
 
+class TenantBackendHomeResponse(BaseModel):
+    """当前租户配置的后台首页（未配置时各字段为 null，前端使用系统默认工作台）"""
+
+    menu_uuid: Optional[str] = Field(None, description="菜单 UUID")
+    path: Optional[str] = Field(None, description="菜单路由 path")
+    name: Optional[str] = Field(None, description="菜单名称")
+
+
 # 更新前向引用
 MenuTreeResponse.model_rebuild()
 

@@ -76,6 +76,7 @@ class DynamicDatabaseConfigService:
             # 核心系统模型
             "core.models.application",
             "core.models.menu",
+            "core.models.tenant_backend_home",
             "core.models.role",
             "core.models.permission",
             "core.models.permission_alias",

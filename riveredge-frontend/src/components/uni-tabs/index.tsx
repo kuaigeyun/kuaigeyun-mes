@@ -6,6 +6,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message } from 'antd';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
@@ -15,8 +16,16 @@ import { useConfigStore, getDefaultTenantHomePath } from '../../stores/configSto
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
-import { getUserInfo, getTenantId } from '../../utils/auth';
+import { getUserInfo, getTenantId, getToken } from '../../utils/auth';
+import { getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../../services/menu';
 import { RouteTransition } from '../route-transition';
+
+/** 站点级默认「首页」路径（与 configStore 一致）；自定义租户后台首页出现时需从标签栏移除这些占位 */
+const TENANT_DEFAULT_HOME_PATHS = ['/system/dashboard/workplace', '/system/applications'] as const;
+
+function isTenantDefaultHomePath(p: string): boolean {
+  return (TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
+}
 
 /**
  * 标签项接口
@@ -83,10 +92,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
-  /** 租户「首页」标签路径：与站点设置「系统级仪表盘是否显示」一致 */
-  const tenantHomePath = useConfigStore((s) =>
+  /** 站点默认租户首页（工作台 / 应用中心） */
+  const configDefaultTenantHomePath = useConfigStore((s) =>
     s.configs.enable_system_dashboard !== false ? '/system/dashboard/workplace' : '/system/applications',
   );
+  const tenantIdStrForHome = getTenantId()?.toString() ?? null;
+  const { data: tenantBackendHome } = useQuery({
+    queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getTenantBackendHome,
+    enabled: !!(getToken() && tenantIdStrForHome),
+    staleTime: 60 * 1000,
+  });
+
+  /** 固定标签栏首位「首页」：租户在菜单里配置的自定义后台首页优先，否则与站点默认一致（与 BasicLayout Logo 一致） */
+  const tenantHomePath = useMemo(() => {
+    const custom = tenantBackendHome?.path?.trim();
+    if (custom) return custom;
+    return configDefaultTenantHomePath;
+  }, [tenantBackendHome?.path, configDefaultTenantHomePath]);
 
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
@@ -230,8 +253,16 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           if (workplaceTab) {
             return prevTabs;
           }
-          // 工作台始终在第一个位置
-          newTabs = [newTab, ...prevTabs];
+          let rest = prevTabs;
+          if (isTenantDefaultHomePath(tenantHomePath)) {
+            rest = prevTabs.filter(
+              (tab) => !isTenantDefaultHomePath(tab.key) || tab.key === tenantHomePath,
+            );
+          } else {
+            rest = prevTabs.filter((tab) => !isTenantDefaultHomePath(tab.key));
+          }
+          rest = rest.filter((tab) => tab.key !== tenantHomePath);
+          newTabs = [newTab, ...rest];
         } else {
           // 其他标签：插入到工作台之后，固定标签之后
           const workplaceTab = prevTabs.find((tab) => tab.key === tenantHomePath);
@@ -279,6 +310,54 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 始终指向最新 addTab，供「路由同步标签」effect 使用，避免因 getTabTitle/menuConfig 变化导致 addTab 引用变、effect 在无导航时反复执行引发 #185 */
   const addTabRef = useRef(addTab);
   addTabRef.current = addTab;
+
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  /**
+   * 租户后台首页路径变化时：移除旧首页标签、去掉与当前模式冲突的默认路径标签，并把新首页固定到第一位且不可关闭。
+   * 与 BasicLayout 中 effectiveSystemHomePath 数据源一致（React Query 同 key 缓存共享）。
+   */
+  const prevTenantHomePathRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevTenantHomePathRef.current;
+    if (prev === null) {
+      prevTenantHomePathRef.current = tenantHomePath;
+      return;
+    }
+    if (prev === tenantHomePath) return;
+    prevTenantHomePathRef.current = tenantHomePath;
+
+    setTabs((prevTabs) => {
+      let next = prevTabs.filter((t) => t.key !== prev);
+      if (!isTenantDefaultHomePath(tenantHomePath)) {
+        next = next.filter((t) => !isTenantDefaultHomePath(t.key));
+      } else {
+        next = next.filter((t) => !isTenantDefaultHomePath(t.key) || t.key === tenantHomePath);
+      }
+      const existingHome = next.find((t) => t.key === tenantHomePath);
+      const homeTab: TabItem =
+        existingHome != null
+          ? { ...existingHome, closable: false, pinned: false }
+          : {
+              key: tenantHomePath,
+              path: tenantHomePath,
+              label: getTabTitle(tenantHomePath),
+              closable: false,
+              pinned: false,
+            };
+      const rest = next.filter((t) => t.key !== tenantHomePath);
+      return [homeTab, ...rest];
+    });
+
+    setActiveKey((ak) => {
+      if (ak === prev) {
+        navigateRef.current(tenantHomePath, { replace: true });
+        return tenantHomePath;
+      }
+      return ak;
+    });
+  }, [tenantHomePath, getTabTitle]);
 
   /**
    * 移除标签

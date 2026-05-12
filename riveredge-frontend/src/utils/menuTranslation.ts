@@ -39,6 +39,52 @@ function findFirstMenuPathDeep(items?: { path?: string; children?: any[] }[]): s
   return null;
 }
 
+/**
+ * 好力 GO：去掉历史「模块·」前缀，并把说明性/口号式旧菜单名规范为侧栏常用名词（与 locale 中 app.haoligo.menu.* 对齐）。
+ */
+function sanitizeHaoligoMenuDisplayTitle(
+  name: string,
+  path: string | undefined,
+  children?: { path?: string; children?: any[] }[]
+): string {
+  if (!name || name.includes('.')) return name;
+  const effectivePath = path || findFirstMenuPathDeep(children || []);
+  if (!effectivePath?.includes('/apps/haoligo/')) return name;
+
+  let out = name.trim();
+  if (effectivePath.includes('/apps/haoligo/equipment')) {
+    out = out.replace(/^设备\s*[·・]\s*/u, '').trim();
+    const map: Record<string, string> = {
+      记录与现场一致: '点检与巡检',
+      记录与现场: '点检与巡检',
+      报表与大屏: '看板与统计',
+      设置与集成: '集成设置',
+    };
+    return map[out] ?? out;
+  }
+  if (effectivePath.includes('/apps/haoligo/molds')) {
+    out = out.replace(/^模具\s*[·・]\s*/u, '').trim();
+    const map: Record<string, string> = {
+      工作台与审批: '审批待办',
+      报表: '统计报表',
+    };
+    return map[out] ?? out;
+  }
+  if (effectivePath.includes('/apps/haoligo/patrol')) {
+    out = out.replace(/^巡查\s*[·・]\s*/u, '').trim();
+    const map: Record<string, string> = {
+      业务操作: '日常巡查',
+      业务办理: '日常巡查',
+      现场办理: '日常巡查',
+      管理视图与图表: '分析看板',
+      与设备对齐: '设备报表',
+      '与设备 §6.3 对齐': '设备报表',
+    };
+    return map[out] ?? out;
+  }
+  return out;
+}
+
 function isAppNameKeyMisassignedToNonRootPath(
   name: string,
   path: string | undefined,
@@ -218,7 +264,14 @@ export function translateAppMenuItemName(
     }
 
     const lastSegment = relativePath.split('/').pop() || '';
-    if (lastSegment) {
+    // 应用菜单分组：由子路径反推时 relativePath 可能仅为目录名（如 equipment/reports/xxx → reports），
+    // 若再命中全局 path.reports 等，会误显为「报表分析」等与当前应用无关的文案。
+    const isSingleSegment = !relativePath.includes('/');
+    const skipGlobalPathFallback =
+      !!appCode &&
+      isSingleSegment &&
+      ['reports', 'charts', 'settings', 'dashboard', 'documents', 'management', 'daily'].includes(relativePath);
+    if (lastSegment && !skipGlobalPathFallback) {
       const segmentKey = `path.${lastSegment}`;
       const segmentTranslated = t(segmentKey, { defaultValue: '' });
       if (segmentTranslated && segmentTranslated !== segmentKey && segmentTranslated.trim() !== '') {
@@ -230,8 +283,9 @@ export function translateAppMenuItemName(
     // 原逻辑用 firstSegment(groupKey) 导致 "收款记录" 显示成 "财务管理"
   }
 
-  // 回退到通用翻译
-  return translateMenuName(name, t, path);
+  // 回退到通用翻译（兼容库中仍存的「模块·子菜单」及口号式旧分组名）
+  const displayName = sanitizeHaoligoMenuDisplayTitle(name, path, children);
+  return translateMenuName(displayName, t, path);
 }
 
 /**

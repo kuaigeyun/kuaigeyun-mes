@@ -147,3 +147,31 @@ export async function syncAllMenus(): Promise<{ success: boolean; message: strin
   });
 }
 
+/** React Query 缓存键：当前租户后台首页 */
+export const TENANT_BACKEND_HOME_QUERY_KEY = ['tenantBackendHome'] as const;
+
+export interface TenantBackendHome {
+  menu_uuid: string | null;
+  path: string | null;
+  name: string | null;
+}
+
+/** 当前租户配置的后台首页（未配置时 path/menu_uuid 为 null） */
+export async function getTenantBackendHome(): Promise<TenantBackendHome> {
+  return apiRequest<TenantBackendHome>('/core/menus/backend-home');
+}
+
+/** 将菜单设为后台首页（租户内唯一，自动取消原配置） */
+export async function setMenuAsBackendHome(menuUuid: string): Promise<Menu> {
+  return apiRequest<Menu>(`/core/menus/${menuUuid}/set-as-backend-home`, {
+    method: 'POST',
+  });
+}
+
+/** 清除自定义后台首页，恢复系统默认（工作台/应用中心） */
+export async function clearTenantBackendHome(): Promise<void> {
+  return apiRequest<void>('/core/menus/backend-home', {
+    method: 'DELETE',
+  });
+}
+

@@ -8,7 +8,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined, HomeOutlined } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
@@ -22,10 +22,14 @@ import {
   deleteMenu,
   Menu,
   MenuTree,
+  getTenantBackendHome,
+  setMenuAsBackendHome,
+  clearTenantBackendHome,
+  TENANT_BACKEND_HOME_QUERY_KEY,
 } from '../../../services/menu';
 import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { translateAppMenuItemName } from '../../../utils/menuTranslation';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
@@ -57,6 +61,12 @@ const MenuListPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { data: backendHome } = useQuery({
+    queryKey: TENANT_BACKEND_HOME_QUERY_KEY,
+    queryFn: getTenantBackendHome,
+    enabled: !!currentUser,
+    staleTime: 30 * 1000,
+  });
   const actionRef = useRef<any>();
   const menuDetailReqRef = useRef(0);
 
@@ -154,7 +164,31 @@ const MenuListPage: React.FC = () => {
   const refreshLayoutMenus = useCallback(() => {
     useGlobalStore.getState().incrementApplicationMenuVersion();
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
   }, [queryClient]);
+
+  const handleSetBackendHome = useCallback(
+    async (record: Menu) => {
+      try {
+        await setMenuAsBackendHome(record.uuid);
+        messageApi.success(t('pages.system.menus.setBackendHomeSuccess'));
+        await queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
+      } catch (e: unknown) {
+        messageApi.error((e as Error)?.message || t('pages.system.menus.setBackendHomeFailed'));
+      }
+    },
+    [messageApi, queryClient, t],
+  );
+
+  const handleClearBackendHome = useCallback(async () => {
+    try {
+      await clearTenantBackendHome();
+      messageApi.success(t('pages.system.menus.clearBackendHomeSuccess'));
+      await queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || t('pages.system.menus.clearBackendHomeFailed'));
+    }
+  }, [messageApi, queryClient, t]);
 
   /**
    * 加载应用列表（用于新建/编辑表单的关联应用下拉）
@@ -454,6 +488,18 @@ const MenuListPage: React.FC = () => {
         ellipsis: true,
     },
     {
+        title: t('pages.system.menus.backendHome'),
+        dataIndex: 'backend_home',
+        width: 110,
+        hideInSearch: true,
+        render: (_: unknown, record: Menu) =>
+          backendHome?.menu_uuid === record.uuid ? (
+            <Tag color="gold">{t('pages.system.menus.backendHomeCurrent')}</Tag>
+          ) : (
+            <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
+          ),
+    },
+    {
         title: t('pages.system.menus.icon'),
         dataIndex: 'icon',
         width: 100,
@@ -523,6 +569,8 @@ const MenuListPage: React.FC = () => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
             const canDelete = !isAppMenu && deleteCheck.can;
+            const canSetHome =
+              record.is_active && !record.is_external && !!(record.path && String(record.path).trim());
             const actions: React.ReactNode[] = [
               <Button key="detail" type="default" size="small" onClick={() => handleView(record)}>
                 {t('common.detail')}
@@ -530,6 +578,22 @@ const MenuListPage: React.FC = () => {
               <Button key="edit" type="primary" size="small" onClick={() => handleEdit(record)}>
                 {t('pages.system.menus.edit')}
               </Button>,
+              <Tooltip
+                key="setHome"
+                title={canSetHome ? undefined : t('pages.system.menus.setBackendHomeDisabled')}
+              >
+                <span>
+                  <Button
+                    type="default"
+                    size="small"
+                    icon={<HomeOutlined />}
+                    disabled={!canSetHome}
+                    onClick={() => void handleSetBackendHome(record)}
+                  >
+                    {t('pages.system.menus.setAsBackendHome')}
+                  </Button>
+                </span>
+              </Tooltip>,
               <Popconfirm
                 key="delete"
                 title={t('pages.system.menus.deleteConfirm')}
@@ -569,10 +633,10 @@ const MenuListPage: React.FC = () => {
                 </span>
               </Tooltip>,
             ];
-            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`, 4);
+            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`, 5);
         }
     }
-  ], [checkCanDelete, handleCreate, handleDelete, handleEdit, handleView, t]);
+  ], [backendHome?.menu_uuid, checkCanDelete, handleCreate, handleDelete, handleEdit, handleSetBackendHome, handleView, t]);
 
   if (!currentUser) return null;
 
@@ -626,6 +690,17 @@ const MenuListPage: React.FC = () => {
               messageApi.success(t('pages.system.menus.exportedCount', { count: items.length }));
             }}
             toolBarRender={() => [
+              ...(backendHome?.menu_uuid
+                ? [
+                    <Popconfirm
+                      key="clearBackendHome"
+                      title={t('pages.system.menus.clearBackendHomeConfirm')}
+                      onConfirm={() => void handleClearBackendHome()}
+                    >
+                      <Button icon={<HomeOutlined />}>{t('pages.system.menus.restoreDefaultBackendHome')}</Button>
+                    </Popconfirm>,
+                  ]
+                : []),
                  <Button
                     key="toggleExpand"
                     onClick={() => {

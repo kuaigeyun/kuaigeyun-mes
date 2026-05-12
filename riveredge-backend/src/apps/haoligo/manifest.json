@@ -1,9 +1,9 @@
 {
   "code": "haoligo",
-  "name": "好力GO",
+  "name": "好力 GO",
   "version": "0.1.0",
   "description": "客户专用现场应用（设备、模具、巡查等）。API：/api/v1/apps/haoligo。",
-  "icon": "smartphone",
+  "icon": "Smartphone",
   "author": "RiverEdge Team",
   "entry_point": "../apps/haoligo/index.tsx",
   "route_path": "/apps/haoligo",
@@ -12,28 +12,433 @@
   "market_category": "dedicated",
   "permission_code": "haoligo:workspace:read",
   "menu_config": {
-    "title": "好力GO",
-    "icon": "smartphone",
+    "title": "app.haoligo.name",
+    "icon": "Box",
     "path": "/apps/haoligo",
     "permission": "haoligo:workspace:read",
     "children": [
       {
-        "title": "设备",
-        "path": "/apps/haoligo/equipment",
+        "title": "app.haoligo.menu.workspace",
+        "path": "/apps/haoligo/workspace",
+        "icon": "LayoutDashboard",
         "permission": "haoligo:workspace:read",
-        "sort_order": 1
+        "sort_order": 0
       },
       {
-        "title": "模具",
+        "title": "app.haoligo.menu.molds",
         "path": "/apps/haoligo/molds",
+        "icon": "Package",
         "permission": "haoligo:workspace:read",
-        "sort_order": 2
+        "sort_order": 10,
+        "children": [
+          {
+            "title": "app.haoligo.menu.molds.group.masterData",
+            "icon": "Package2",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 10,
+            "children": [
+              {
+                "title": "app.haoligo.menu.molds.ledger",
+                "path": "/apps/haoligo/molds/ledger",
+                "icon": "BookMarked",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 11
+              },
+              {
+                "title": "app.haoligo.menu.molds.outsource-vendors",
+                "path": "/apps/haoligo/molds/outsource-vendors",
+                "icon": "Handshake",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 12
+              },
+              {
+                "title": "app.haoligo.menu.molds.settings.clear-yield",
+                "path": "/apps/haoligo/molds/settings/clear-yield",
+                "icon": "Eraser",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 13
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.molds.group.documents",
+            "icon": "FileStack",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 20,
+            "children": [
+              {
+                "title": "app.haoligo.menu.molds.documents.trial",
+                "path": "/apps/haoligo/molds/documents/trial",
+                "icon": "FlaskConical",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 21
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.borrow-out",
+                "path": "/apps/haoligo/molds/documents/borrow-out",
+                "icon": "PackageMinus",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 22
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.return-in",
+                "path": "/apps/haoligo/molds/documents/return-in",
+                "icon": "PackagePlus",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 23
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.maintenance",
+                "path": "/apps/haoligo/molds/documents/maintenance",
+                "icon": "Wrench",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 24
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.outsource-maintenance",
+                "path": "/apps/haoligo/molds/documents/outsource-maintenance",
+                "icon": "Truck",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 25
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.maintenance-complete",
+                "path": "/apps/haoligo/molds/documents/maintenance-complete",
+                "icon": "CircleCheckBig",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 26
+              },
+              {
+                "title": "app.haoligo.menu.molds.documents.outsource-complete",
+                "path": "/apps/haoligo/molds/documents/outsource-complete",
+                "icon": "ShieldCheck",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 27
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.molds.group.approval",
+            "icon": "Briefcase",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 30,
+            "children": [
+              {
+                "title": "app.haoligo.menu.molds.workbench.pending",
+                "path": "/apps/haoligo/molds/workbench/pending",
+                "icon": "Inbox",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 31
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.molds.group.reports",
+            "icon": "ChartNoAxesCombined",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 40,
+            "children": [
+              {
+                "title": "app.haoligo.menu.molds.reports.maintenance-alert",
+                "path": "/apps/haoligo/molds/reports/maintenance-alert",
+                "icon": "BellElectric",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 41
+              },
+              {
+                "title": "app.haoligo.menu.molds.reports.maintenance-log",
+                "path": "/apps/haoligo/molds/reports/maintenance-log",
+                "icon": "NotebookText",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 42
+              },
+              {
+                "title": "app.haoligo.menu.molds.reports.status-overview",
+                "path": "/apps/haoligo/molds/reports/status-overview",
+                "icon": "ScanEye",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 43
+              },
+              {
+                "title": "app.haoligo.menu.molds.reports.outsource-maintenance-log",
+                "path": "/apps/haoligo/molds/reports/outsource-maintenance-log",
+                "icon": "HardDriveUpload",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 44
+              }
+            ]
+          }
+        ]
       },
       {
-        "title": "巡查",
-        "path": "/apps/haoligo/patrol",
+        "title": "app.haoligo.menu.equipment",
+        "path": "/apps/haoligo/equipment",
+        "icon": "Wrench",
         "permission": "haoligo:workspace:read",
-        "sort_order": 3
+        "sort_order": 20,
+        "children": [
+          {
+            "title": "app.haoligo.menu.equipment.group.masterData",
+            "icon": "Database",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 10,
+            "children": [
+              {
+                "title": "app.haoligo.menu.equipment.workshops",
+                "path": "/apps/haoligo/equipment/workshops",
+                "icon": "Building2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 11
+              },
+              {
+                "title": "app.haoligo.menu.equipment.categories",
+                "path": "/apps/haoligo/equipment/categories",
+                "icon": "Tags",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 12
+              },
+              {
+                "title": "app.haoligo.menu.equipment.manufacturers",
+                "path": "/apps/haoligo/equipment/manufacturers",
+                "icon": "Factory",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 13
+              },
+              {
+                "title": "app.haoligo.menu.equipment.inspection-params",
+                "path": "/apps/haoligo/equipment/inspection-params",
+                "icon": "SlidersHorizontal",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 14
+              },
+              {
+                "title": "app.haoligo.menu.equipment.inspection-param-sets",
+                "path": "/apps/haoligo/equipment/inspection-param-sets",
+                "icon": "Layers2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 15
+              },
+              {
+                "title": "app.haoligo.menu.equipment.ledger",
+                "path": "/apps/haoligo/equipment/ledger",
+                "icon": "HardDrive",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 16
+              },
+              {
+                "title": "app.haoligo.menu.equipment.patrol-routes",
+                "path": "/apps/haoligo/equipment/patrol-routes",
+                "icon": "Waypoints",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 17
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.equipment.group.records",
+            "icon": "BookCopy",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 20,
+            "children": [
+              {
+                "title": "app.haoligo.menu.equipment.reports.point-inspection",
+                "path": "/apps/haoligo/equipment/reports/point-inspection",
+                "icon": "FileCheck",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 21
+              },
+              {
+                "title": "app.haoligo.menu.equipment.reports.patrol-records",
+                "path": "/apps/haoligo/equipment/reports/patrol-records",
+                "icon": "ScrollText",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 22
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.equipment.group.analyticsBoard",
+            "icon": "BarChart3",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 30,
+            "children": [
+              {
+                "title": "app.haoligo.menu.equipment.dashboard.status",
+                "path": "/apps/haoligo/equipment/dashboard/status",
+                "icon": "Tv",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 31
+              },
+              {
+                "title": "app.haoligo.menu.equipment.reports.capacity",
+                "path": "/apps/haoligo/equipment/reports/capacity",
+                "icon": "Activity",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 32
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.equipment.group.integration",
+            "icon": "Cable",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 40,
+            "children": [
+              {
+                "title": "app.haoligo.menu.equipment.settings.integration",
+                "path": "/apps/haoligo/equipment/settings/integration",
+                "icon": "Link2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 41
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.haoligo.menu.patrol",
+        "path": "/apps/haoligo/patrol",
+        "icon": "ClipboardCheck",
+        "permission": "haoligo:workspace:read",
+        "sort_order": 30,
+        "children": [
+          {
+            "title": "app.haoligo.menu.patrol.group.operations",
+            "icon": "ClipboardPenLine",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 10,
+            "children": [
+              {
+                "title": "app.haoligo.menu.patrol.daily.form",
+                "path": "/apps/haoligo/patrol/daily/form",
+                "icon": "FilePenLine",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 11
+              },
+              {
+                "title": "app.haoligo.menu.patrol.daily.dashboard",
+                "path": "/apps/haoligo/patrol/daily/dashboard",
+                "icon": "PanelTop",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 12
+              },
+              {
+                "title": "app.haoligo.menu.patrol.hazards",
+                "path": "/apps/haoligo/patrol/hazards",
+                "icon": "AlertOctagon",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 13
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.patrol.group.analytics",
+            "icon": "Presentation",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 20,
+            "children": [
+              {
+                "title": "app.haoligo.menu.patrol.management.overview",
+                "path": "/apps/haoligo/patrol/management/overview",
+                "icon": "Kanban",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 21
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.fault-by-workshop",
+                "path": "/apps/haoligo/patrol/charts/fault-by-workshop",
+                "icon": "ChartPie",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 22
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.time-trend",
+                "path": "/apps/haoligo/patrol/charts/time-trend",
+                "icon": "ChartColumn",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 23
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.keyword-cloud",
+                "path": "/apps/haoligo/patrol/charts/keyword-cloud",
+                "icon": "Sparkles",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 24
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.area-feedback",
+                "path": "/apps/haoligo/patrol/charts/area-feedback",
+                "icon": "Map",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 25
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.status-distribution",
+                "path": "/apps/haoligo/patrol/charts/status-distribution",
+                "icon": "Donut",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 26
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.feedback-time-trend",
+                "path": "/apps/haoligo/patrol/charts/feedback-time-trend",
+                "icon": "ClockArrowUp",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 27
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.top-reporters",
+                "path": "/apps/haoligo/patrol/charts/top-reporters",
+                "icon": "Medal",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 28
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.area-counts",
+                "path": "/apps/haoligo/patrol/charts/area-counts",
+                "icon": "ChartColumnIncreasing",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 29
+              },
+              {
+                "title": "app.haoligo.menu.patrol.charts.time-vs-headcount",
+                "path": "/apps/haoligo/patrol/charts/time-vs-headcount",
+                "icon": "Users2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 30
+              },
+              {
+                "title": "app.haoligo.menu.patrol.settings.chart-bindings",
+                "path": "/apps/haoligo/patrol/settings/chart-bindings",
+                "icon": "Settings2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 31
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.patrol.group.equipmentBridge",
+            "icon": "GitBranch",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 30,
+            "children": [
+              {
+                "title": "app.haoligo.menu.patrol.reports.point-inspection",
+                "path": "/apps/haoligo/patrol/reports/point-inspection",
+                "icon": "FileSearch",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 31
+              },
+              {
+                "title": "app.haoligo.menu.patrol.reports.patrol-records",
+                "path": "/apps/haoligo/patrol/reports/patrol-records",
+                "icon": "FileDiff",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 32
+              }
+            ]
+          }
+        ]
       }
     ]
   },

@@ -23,6 +23,16 @@ import { hasAnyPermission } from '../utils/permission';
 /** 与 BasicLayout 保持一致，确保缓存共享 */
 const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
 
+/** 递归按 sort_order 排序应用菜单树（与后端 manifest / 库表一致，避免历史 children 顺序错乱） */
+function sortMenuTreeBySortOrder(nodes: MenuTree[]): MenuTree[] {
+  return [...nodes]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((n) => ({
+      ...n,
+      children: n.children?.length ? sortMenuTreeBySortOrder(n.children) : [],
+    }));
+}
+
 /** 上线向导关闭时从侧栏/面包屑隐藏的菜单路径（与站点设置 enable_launch_wizard 联动） */
 const LAUNCH_WIZARD_MENU_PATHS = new Set(['/system/onboarding-wizard', '/system/launch-progress']);
 
@@ -148,7 +158,12 @@ export function useUnifiedMenuData(
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
-    return tree.filter((m) => m.application_uuid);
+    return tree
+      .filter((m) => m.application_uuid)
+      .map((app) => ({
+        ...app,
+        children: app.children?.length ? sortMenuTreeBySortOrder(app.children) : [],
+      }));
   }, [fullMenuTree]);
 
   // 蓝图下线后不再做业务配置过滤；菜单可见性完全由 is_active + 权限控制。

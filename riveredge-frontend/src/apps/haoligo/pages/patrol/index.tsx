@@ -48,7 +48,7 @@ const PatrolPage: React.FC = () => {
   ];
 
   return (
-    <Card loading={loading} title="现场巡查 · 检查隐患单">
+    <Card loading={loading} title="隐患管理">
       <Paragraph type="secondary">
         表单字段与统计看板按 PLAN 场景 C 扩展；当前对接 <Typography.Text code>/patrol/hazard-reports</Typography.Text>。
       </Paragraph>

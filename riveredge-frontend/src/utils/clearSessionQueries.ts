@@ -9,6 +9,7 @@ const SESSION_MENU_QUERY_KEYS: readonly (readonly string[])[] = [
   ['applicationMenus'],
   ['dashboard-menu-tree'],
   ['businessConfig'],
+  ['tenantBackendHome'],
 ];
 
 export function clearSessionScopedQueries(queryClient: QueryClient): void {
