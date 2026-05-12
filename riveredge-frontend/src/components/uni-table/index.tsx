@@ -9,7 +9,7 @@
  *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
  * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
  *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
- *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**（`UniImportToolbarButton` + `LazyUniImport` / `UniImport`）、**uni-export**（`UniExportMenuButton`）、**uni-sync**（`UniSyncButton`）；**表格设定**为 ProTable 原生 **`options`**（密度、列设置、reload 等，可含 `TableColumnResetButton`）。
+ *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**（`UniImportToolbarButton` + `LazyUniImport` / `UniImport`）、**uni-export**（`UniExportMenuButton`）、**uni-sync**（`UniSyncButton`）、**打印**（按选中行）；**表格设定**为 ProTable 原生 **`options`**（密度、列设置、reload 等，可含 `TableColumnResetButton`）。
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
@@ -45,6 +45,7 @@ import {
   PlusOutlined,
   EditOutlined,
   EyeOutlined,
+  PrinterOutlined,
   AppstoreOutlined,
   BarsOutlined,
   BarChartOutlined,
@@ -62,6 +63,34 @@ import { UniExportMenuButton } from '../uni-export'
 
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
+
+/** 行点击切换勾选：命中可操作子元素时不切换，避免误选（成本仅一次 DOM closest） */
+function shouldIgnoreRowClickForSelection(target: Element): boolean {
+  return !!target.closest(
+    [
+      'a',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'label',
+      '[contenteditable="true"]',
+      '[role="button"]',
+      '[role="menuitemcheckbox"]',
+      '[role="switch"]',
+      '.ant-checkbox',
+      '.ant-radio',
+      '.ant-select',
+      '.ant-picker',
+      '.ant-btn',
+      '.ant-switch',
+      '.ant-table-selection-column',
+      '.ant-table-row-expand-icon',
+      '.ant-slider',
+      '.ant-rate',
+    ].join(','),
+  )
+}
 // 内联的 useProTableSearch hook（简化实现）
 const useProTableSearch = () => {
   const searchParamsRef = useRef<Record<string, any> | undefined>(undefined)
@@ -458,6 +487,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowEditDelete?: (key: React.Key, row: T) => Promise<void>
   /**
+   * **3.1 左侧**，紧接在新建（含 uni-pull 入口）之后的节点（典型：uni-push）。
+   */
+  toolBarActionsAfterCreate?: ReactNode[]
+  /**
    * **3.1 左侧**追加的功能节点（与新建、`toolBarRender` 注入、批量删除、编辑等同一 `Space`）。
    */
   toolBarActions?: ReactNode[]
@@ -465,6 +498,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * **3.1 左侧**，紧接在批量删除（uni-batch 删除预设）之后的节点（如下推后的说明、与删除无关的按钮）。
    */
   toolBarActionsAfterDelete?: ReactNode[]
+  /**
+   * **3.1 左侧**，批量功能区（uni-batch）后的通用业务动作。
+   */
+  toolBarActionsAfterBatch?: ReactNode[]
   /**
    * 是否显示导入按钮（默认：true）
    */
@@ -533,6 +570,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 同步按钮文案（默认：'同步'）
    */
   syncButtonText?: string
+  /**
+   * 是否显示打印按钮（默认：false，位于右侧：导入/导出/同步/打印/表格设置）。
+   */
+  showPrintButton?: boolean
+  /**
+   * 打印按钮点击回调（默认按选中行触发；未选中或多选时按钮禁用）。
+   */
+  onPrint?: (selectedRowKeys: React.Key[], currentPageData?: T[]) => void
+  /**
+   * 打印按钮文案（默认：'打印'）
+   */
+  printButtonText?: string
   /**
    * 是否显示新建按钮（默认：false）
    */
@@ -822,8 +871,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   enableRowEdit = false,
   onRowEditSave,
   onRowEditDelete,
+  toolBarActionsAfterCreate = [],
   toolBarActions = [],
   toolBarActionsAfterDelete = [],
+  toolBarActionsAfterBatch = [],
   showImportButton = true,
   onImport,
   importHeaders,
@@ -836,6 +887,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showSyncButton = false,
   onSync,
   syncButtonText,
+  showPrintButton = false,
+  onPrint,
+  printButtonText,
   showCreateButton = false,
   onCreate,
   createButtonText,
@@ -921,6 +975,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const internalFormRef = useRef<ProFormInstance>()
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonContainerRef = useRef<HTMLDivElement>(null)
+  const tableBodyPaneRef = useRef<HTMLDivElement>(null)
 
   /**
    * ProTable 实际挂载的 action ref。
@@ -1002,6 +1057,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 延迟 loading：仅在 loadingDelay 毫秒后才显示，避免快速请求时的闪烁
   const [showDelayedLoading, setShowDelayedLoading] = useState(false)
+  const [selectionAlertLayout, setSelectionAlertLayout] = useState<{ top: number; height: number } | null>(null)
   const loadingDelayTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isLoadingRef = useRef(false)
   const columnsSyncDebounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -1413,9 +1469,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       debounceTimerRef.current = null
     }
     setFuzzySearchKeyword('')
-    if (searchParamsRef.current) {
-      delete searchParamsRef.current.keyword
-    }
+    // 清空高级搜索 / 钉住条件写入的 searchParamsRef，否则仅删 keyword 时阶段筛选仍会生效
+    searchParamsRef.current = undefined
     try {
       formRef.current?.resetFields?.()
     } catch {
@@ -1693,6 +1748,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
+    if (toolBarActionsAfterCreate.length > 0) {
+      actions.push(...toolBarActionsAfterCreate)
+    }
+
     // ProTable `toolBarRender`：在 UniTable 中仅用于向左侧注入节点（非右侧工具栏）
     if (restProps.toolBarRender) {
       const mockAction = {
@@ -1733,6 +1792,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     if (toolBarActionsAfterDelete.length > 0) {
       actions.push(...toolBarActionsAfterDelete)
+    }
+
+    if (toolBarActionsAfterBatch.length > 0) {
+      actions.push(...toolBarActionsAfterBatch)
     }
 
     // 修改按钮（需要选中一行）
@@ -1807,6 +1870,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
+    if (showPrintButton && onPrint) {
+      rightButtons.push(
+        <Button
+          key="print"
+          size={toolBarButtonSize}
+          icon={<PrinterOutlined />}
+          disabled={selectedRowKeys.length !== 1}
+          onClick={() => onPrint(selectedRowKeys, tableData)}
+        >
+          {printButtonText ?? t('common.print', { defaultValue: '打印' })}
+        </Button>
+      )
+    }
+
     return rightButtons.length > 0 ? <Space size="small">{rightButtons}</Space> : undefined
   }
 
@@ -1815,14 +1892,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }
 
   /**
-   * 处理行选择变化
+   * 处理行选择变化（与 ProTable `rowSelection.selectedRowKeys` 受控联动，保证点行勾选与勾选列一致）
    */
-  const handleRowSelectionChange = (keys: React.Key[]) => {
-    setInternalSelectedRowKeys(keys)
-    if (onRowSelectionChange) {
-      onRowSelectionChange(keys)
-    }
-  }
+  const handleRowSelectionChange = useCallback(
+    (keys: React.Key[]) => {
+      setInternalSelectedRowKeys(keys)
+      onRowSelectionChange?.(keys)
+    },
+    [onRowSelectionChange],
+  )
 
   const memoizedOptions = React.useMemo(() => ({
     density: true,
@@ -1852,17 +1930,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ],
   }), [memoizedRightActions, restProps.toolbar?.actions])
 
-  const memoizedRowSelection = React.useMemo(() => (
-    enableRowSelection
-      ? {
-          type: 'checkbox' as const,
-          onChange: handleRowSelectionChange,
-          ...(rowSelectionGetCheckboxProps
-            ? { getCheckboxProps: rowSelectionGetCheckboxProps }
-            : {}),
-        }
-      : undefined
-  ), [enableRowSelection, rowSelectionGetCheckboxProps])
+  const memoizedRowSelection = React.useMemo(
+    () =>
+      enableRowSelection
+        ? {
+            type: 'checkbox' as const,
+            selectedRowKeys,
+            onChange: handleRowSelectionChange,
+            ...(rowSelectionGetCheckboxProps
+              ? { getCheckboxProps: rowSelectionGetCheckboxProps }
+              : {}),
+          }
+        : undefined,
+    [enableRowSelection, selectedRowKeys, handleRowSelectionChange, rowSelectionGetCheckboxProps],
+  )
 
   const memoizedEditable = React.useMemo(() => (
     enableRowEdit
@@ -1874,13 +1955,55 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       : undefined
   ), [enableRowEdit, onRowEditSave, onRowEditDelete])
 
+  const handleClearSelection = useCallback(() => {
+    setInternalSelectedRowKeys([])
+    onRowSelectionChange?.([])
+  }, [onRowSelectionChange])
+
   const memoizedPagination = React.useMemo(() => ({
     defaultPageSize,
     showSizeChanger: true,
     showQuickJumper: true,
     pageSizeOptions: ['10', '20', '50', '100'],
-    showTotal: (total: number, range: [number, number]) => t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
+    showTotal: (total: number, range: [number, number]) =>
+      t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
   }), [defaultPageSize, t])
+  const effectiveTableAlertRender = (restProps as any).tableAlertRender ?? false
+
+  React.useLayoutEffect(() => {
+    if (!enableRowSelection || selectedRowKeys.length === 0) return
+    const host = tableBodyPaneRef.current
+    if (!host) return
+
+    const syncLayout = () => {
+      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
+      if (!pager) return
+      const hostRect = host.getBoundingClientRect()
+      const pagerRect = pager.getBoundingClientRect()
+      const next = {
+        top: Math.max(0, pagerRect.top - hostRect.top),
+        height: Math.max(1, pagerRect.height),
+      }
+      setSelectionAlertLayout((prev) => {
+        if (!prev) return next
+        if (Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.height - next.height) < 0.5) return prev
+        return next
+      })
+    }
+
+    syncLayout()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncLayout()) : null
+    if (ro) {
+      ro.observe(host)
+      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
+      if (pager) ro.observe(pager)
+    }
+    window.addEventListener('resize', syncLayout)
+    return () => {
+      window.removeEventListener('resize', syncLayout)
+      ro?.disconnect()
+    }
+  }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
 
   return (
     <>
@@ -1980,6 +2103,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
+              ref={tableBodyPaneRef}
               style={{
                 display:
                   (currentViewType === 'table' ||
@@ -1988,6 +2112,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     ? 'block'
                     : 'none',
                 width: '100%',
+                position: 'relative',
               }}
             >
               <ProTable<T>
@@ -2015,6 +2140,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               rowSelection={memoizedRowSelection}
               editable={memoizedEditable}
               pagination={memoizedPagination}
+              tableAlertRender={effectiveTableAlertRender}
               toolBarRender={(_action, { selectedRowKeys: toolBarSelectedRowKeys }) => {
                 // 同步工具栏的选中行键到 state
                 if (toolBarSelectedRowKeys) {
@@ -2039,7 +2165,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   scroll: userScroll,
                   components: userComponents,
                   virtual: userVirtual,
+                  tableAlertRender: _omitTableAlertRender,
                   debounceTime: _omitDebounce,
+                  onRow: userOnRow,
                   ...otherProps
                 } = restProps
                 const mergedComponents =
@@ -2092,8 +2220,46 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     y: mergedScroll?.y ?? virtualTableBodyMaxHeight,
                   }
                 }
+
+                const mergedOnRow =
+                  enableRowSelection && memoizedRowSelection
+                    ? (record: T, index: number) => {
+                        const base =
+                          typeof userOnRow === 'function' ? userOnRow(record, index) ?? {} : {}
+                        return {
+                          ...base,
+                          onClick: (e: React.MouseEvent<HTMLElement>) => {
+                            ;(base as { onClick?: (ev: React.MouseEvent<HTMLElement>) => void }).onClick?.(e)
+                            if (e.defaultPrevented) return
+                            const el = e.target
+                            if (!(el instanceof Element)) return
+                            if (shouldIgnoreRowClickForSelection(el)) return
+
+                            const recordKey =
+                              typeof rowKey === 'function'
+                                ? (rowKey as (r: T, i?: number) => React.Key)(record, index)
+                                : (record as Record<string, unknown>)[rowKey as string] as React.Key
+                            if (recordKey === undefined || recordKey === null) return
+
+                            if (rowSelectionGetCheckboxProps) {
+                              const p = rowSelectionGetCheckboxProps(record)
+                              if (p?.disabled) return
+                            }
+
+                            const key = recordKey as React.Key
+                            const has = selectedRowKeys.includes(key)
+                            const next = has
+                              ? selectedRowKeys.filter((k) => k !== key)
+                              : [...selectedRowKeys, key]
+                            handleRowSelectionChange(next)
+                          },
+                        }
+                      }
+                    : userOnRow
+
                 return {
                   ...otherProps,
+                  ...(mergedOnRow ? { onRow: mergedOnRow } : {}),
                   ...(useVirtual ? { virtual: true } : userVirtual !== undefined ? { virtual: userVirtual } : {}),
                   components: mergedComponents,
                   ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
@@ -2101,6 +2267,43 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               })()}
               revalidateOnFocus={false}
               />
+              {enableRowSelection && selectedRowKeys.length > 0 ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 16,
+                    top: selectionAlertLayout?.top ?? 0,
+                    zIndex: 2,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    height: selectionAlertLayout?.height ?? 32,
+                    color: 'var(--ant-color-text-secondary)',
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      height: selectionAlertLayout?.height ?? 32,
+                      lineHeight: `${selectionAlertLayout?.height ?? 32}px`,
+                    }}
+                  >
+                    {t('components.uniTable.selectedCountFooter', { count: selectedRowKeys.length })}
+                  </span>
+                  <a
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      height: selectionAlertLayout?.height ?? 32,
+                      lineHeight: `${selectionAlertLayout?.height ?? 32}px`,
+                    }}
+                    onClick={handleClearSelection}
+                  >
+                    {t('components.uniTable.clearSelectionFooter')}
+                  </a>
+                </div>
+              ) : null}
             </div>
           </ConfigProvider>
 

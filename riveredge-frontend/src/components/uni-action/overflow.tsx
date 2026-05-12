@@ -20,13 +20,17 @@ import {
 } from './actionText'
 import { normalizeActionTree } from './normalize'
 
-export const ROW_ACTIONS_DIRECT_MAX = 4
+/**
+ * 行内默认仅直出基础动作（详情/编辑/删除等），其余动作统一折叠到「更多」，
+ * 以收窄操作列宽度并提升右侧固定列稳定性。
+ */
+export const ROW_ACTIONS_DIRECT_MAX = 3
 
 /**
  * 有溢出菜单时，主行至少展示的可点击操作数（会从「更多」中顺延补足）。
  * 与 ROW_ACTIONS_DIRECT_MAX 兼容：`max(directMax - 1, 该常量)`。
  */
-export const ROW_ACTIONS_MIN_PRIMARY_VISIBLE = 4
+export const ROW_ACTIONS_MIN_PRIMARY_VISIBLE = 3
 
 /** 列表操作列内联按钮横向间距（Ant Design Space） */
 export const ROW_ACTIONS_INLINE_GAP = 4
@@ -230,7 +234,12 @@ export function renderRowActionsOverflow(
 
   if (enabled.length <= primarySlotsBeforeMore) {
     return (
-      <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+      <Space
+        align="center"
+        size={ROW_ACTIONS_INLINE_GAP}
+        wrap={false}
+        style={{ whiteSpace: 'nowrap' }}
+      >
         {enabled}
       </Space>
     )
@@ -241,14 +250,24 @@ export function renderRowActionsOverflow(
   // 若溢出区仅 1 个动作，直接平铺展示，避免把单个按钮折叠进“更多”。
   if (overflow.length <= 1) {
     return (
-      <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+      <Space
+        align="center"
+        size={ROW_ACTIONS_INLINE_GAP}
+        wrap={false}
+        style={{ whiteSpace: 'nowrap' }}
+      >
         {enabled}
       </Space>
     )
   }
 
   return (
-    <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+    <Space
+      align="center"
+      size={ROW_ACTIONS_INLINE_GAP}
+      wrap={false}
+      style={{ whiteSpace: 'nowrap' }}
+    >
       {inline}
       <Dropdown
         menu={{
@@ -256,14 +275,8 @@ export function renderRowActionsOverflow(
         }}
         trigger={['click']}
       >
-        <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
-          {overflow.length > 0 ? (
-            <Space size={4}>
-              <span>更多</span>
-            </Space>
-          ) : (
-            ''
-          )}
+        <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
+          更多
         </Button>
       </Dropdown>
     </Space>

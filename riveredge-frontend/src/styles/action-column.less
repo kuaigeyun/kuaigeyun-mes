@@ -4,20 +4,32 @@
  * 趋势：去极致黑白、高触感悬浮、毛玻璃质感、呼吸感动画
  */
 
+/* 与裸 Button 并列时，保证 Dropdown 触发器与 Space 子项同一交叉轴对齐 */
+.uni-table-operation-cell .ant-space {
+  align-items: center;
+}
+
 /* 操作按钮基础样式：2026 柔和态 */
-.ant-btn-row-action {
+.ant-btn-row-action.ant-btn {
   color: var(--ant-colorText, #1e293b) !important;
 
-  padding: 4px 8px !important;
+  /* 覆盖 Ant Design 默认固定 height（~32px），否则长文案会像「横扁条」、与「更多」药丸比例不一致 */
+  height: auto !important;
+  min-height: 0 !important;
+
+  /* 与「更多」一致：对称 padding，由内容撑高，避免上下视觉窄、左右宽 */
+  padding-block: 6px !important;
+  padding-inline: 6px !important;
   gap: 6px !important;
   border-radius: var(--ant-border-radius, 8px) !important;
+  box-shadow: none !important;
   transition:
     color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  line-height: 1.25 !important;
   font-weight: 500 !important;
   border: none !important;
   background: transparent !important;
@@ -39,18 +51,20 @@
     &:hover:not(:disabled) {
       background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.08)) !important;
       color: var(--ant-color-primary-hover, #4096ff) !important;
+      box-shadow: none !important;
     }
   }
 
   &:hover:not(:disabled) {
     background: var(--ant-colorFillTertiary, rgba(30, 41, 59, 0.08)) !important;
     color: var(--ant-colorTextHeading, #020617) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: none !important;
   }
 
   &:active:not(:disabled) {
     background: var(--ant-colorFillSecondary, rgba(15, 23, 42, 0.1)) !important;
     transform: translateZ(0) !important;
+    box-shadow: none !important;
   }
 
   &.ant-btn-dangerous {
@@ -58,6 +72,7 @@
     &:hover:not(:disabled) {
       background: var(--ant-colorErrorBg, rgba(239, 68, 68, 0.08)) !important;
       color: var(--ant-colorErrorHover, #dc2626) !important;
+      box-shadow: none !important;
     }
   }
 
@@ -69,7 +84,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ant-btn-row-action {
+  .ant-btn-row-action.ant-btn {
     transition: none !important;
     &:active:not(:disabled) {
       transform: translateZ(0) !important;
@@ -77,17 +92,18 @@
   }
 }
 
-html[data-theme='dark'] body .ant-btn-row-action {
+html[data-theme='dark'] body .ant-btn-row-action.ant-btn {
   color: var(--ant-colorText) !important;
 
   &:hover:not(:disabled) {
     background: var(--ant-colorFillTertiary) !important;
     color: var(--ant-colorTextHeading) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    box-shadow: none !important;
   }
 
   &:active:not(:disabled) {
     background: var(--ant-colorFillSecondary) !important;
+    box-shadow: none !important;
   }
 
   &:disabled {
@@ -99,6 +115,7 @@ html[data-theme='dark'] body .ant-btn-row-action {
     &:hover:not(:disabled) {
       background: var(--ant-colorErrorBg) !important;
       color: var(--ant-colorErrorHover) !important;
+      box-shadow: none !important;
     }
   }
 }

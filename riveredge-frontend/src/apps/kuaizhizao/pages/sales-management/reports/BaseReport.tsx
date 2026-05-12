@@ -1,7 +1,6 @@
 import React from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { App } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { exportReport } from '../../../services/reports';
@@ -97,17 +96,10 @@ const SalesBaseReport: React.FC<SalesBaseReportProps> = ({
         columns={columns}
         showAdvancedSearch={true}
         request={wrappedRequest}
-        toolBarRender={() => [
-          <Button 
-              key="export" 
-              type="primary" 
-              icon={<DownloadOutlined />} 
-              onClick={handleExport}
-              loading={loading}
-          >
-            导出报表
-          </Button>,
-        ]}
+        showExportButton
+        onExport={async () => {
+          await handleExport();
+        }}
         scroll={{ x: 1200 }}
         bordered
       />

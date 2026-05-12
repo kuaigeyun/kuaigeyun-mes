@@ -8,7 +8,7 @@
  * @date 2026-01-27
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
@@ -1804,6 +1804,97 @@ const SalesOrdersPage: React.FC = () => {
     [messageApi, t]
   );
 
+  const resolveOrderIdByRowKey = useCallback((rowKey: React.Key): number | null => {
+    const mapped = rowKeyToOrderIdRef.current.get(String(rowKey));
+    if (mapped != null) return mapped;
+    const numeric = Number(rowKey);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+  }, []);
+
+  const selectedOrderForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const orderId = resolveOrderIdByRowKey(selectedRowKeys[0]);
+    if (!orderId) return null;
+    const rows = lastOrdersCacheRef.current?.orders || [];
+    return rows.find((row) => row.id === orderId) ?? null;
+  }, [selectedRowKeys, resolveOrderIdByRowKey]);
+
+  const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
+    const pushEnabledBase = isApprovedRecord(record);
+    const canPushComputation =
+      pushEnabledBase && canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation);
+    const canPushWorkOrder =
+      pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
+    const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+    const canPushDelivery = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+    const canPushAutoRoute = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+    const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
+    const canPushSalesReturn = pushEnabledBase;
+    const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
+
+    return buildUniPushMenuItems([
+      {
+        key: 'computation',
+        label: t('app.kuaizhizao.salesOrder.demandComputation'),
+        disabled: !canPushComputation,
+        onClick: () => canPushComputation && handlePushToComputation(record.id!, record),
+      },
+      {
+        key: 'workorder',
+        label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+        disabled: !canPushWorkOrder,
+        onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
+      },
+      { type: 'divider' as const },
+      {
+        key: 'shipment',
+        label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
+        disabled: !canPushShipment,
+        onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
+      },
+      {
+        key: 'delivery',
+        label: '下推销售出库单',
+        disabled: !canPushDelivery,
+        onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
+      },
+      {
+        key: 'auto-route',
+        label: '自动路由下推',
+        disabled: !canPushAutoRoute,
+        onClick: () => canPushAutoRoute && handlePushAutoRoute(record.id!),
+      },
+      {
+        key: 'invoice',
+        label: t('app.kuaizhizao.salesOrder.salesInvoice'),
+        disabled: !canPushInvoice,
+        onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
+      },
+      {
+        key: 'sales-return',
+        label: '下推销售退货单',
+        disabled: !canPushSalesReturn,
+        onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
+      },
+      ...(record.pushed_to_computation
+        ? [
+            { type: 'divider' as const },
+            {
+              key: 'withdraw',
+              label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
+              disabled: !canWithdrawComputation,
+              onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
+            },
+          ]
+        : []),
+    ]);
+  }, [handlePushAutoRoute, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
+  const toolbarPushMenuItems = useMemo(
+    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
+    [buildToolbarPushMenuItems, selectedOrderForToolbar]
+  );
+  const canUseToolbarPush = toolbarPushMenuItems.some((it: any) => it.type !== 'divider' && !it.disabled);
+
   // 订单视图列（一行一单，可展开明细）
   const orderColumns: ProColumns<SalesOrder>[] = [
     {
@@ -1984,83 +2075,6 @@ const SalesOrdersPage: React.FC = () => {
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
         );
-        {
-          const pushEnabledBase = isApprovedRecord(record);
-          const canPushComputation =
-            pushEnabledBase && canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation);
-          const canPushWorkOrder =
-            pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
-          const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-          const canPushDelivery = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-          const canPushAutoRoute = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-          const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
-          const canPushSalesReturn = pushEnabledBase;
-          const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
-          const pushMenuItems = buildUniPushMenuItems([
-            {
-              key: 'computation',
-              label: t('app.kuaizhizao.salesOrder.demandComputation'),
-              disabled: !canPushComputation,
-              onClick: () => canPushComputation && handlePushToComputation(record.id!, record),
-            },
-            {
-              key: 'workorder',
-              label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
-              disabled: !canPushWorkOrder,
-              onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
-            },
-            { type: 'divider' as const },
-            {
-              key: 'shipment',
-              label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
-              disabled: !canPushShipment,
-              onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
-            },
-            {
-              key: 'delivery',
-              label: '下推销售出库单',
-              disabled: !canPushDelivery,
-              onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
-            },
-            {
-              key: 'auto-route',
-              label: '自动路由下推',
-              disabled: !canPushAutoRoute,
-              onClick: () => canPushAutoRoute && handlePushAutoRoute(record.id!),
-            },
-            {
-              key: 'invoice',
-              label: t('app.kuaizhizao.salesOrder.salesInvoice'),
-              disabled: !canPushInvoice,
-              onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
-            },
-            {
-              key: 'sales-return',
-              label: '下推销售退货单',
-              disabled: !canPushSalesReturn,
-              onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
-            },
-            ...(record.pushed_to_computation
-              ? [
-                  { type: 'divider' as const },
-                  {
-                    key: 'withdraw',
-                    label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
-                    disabled: !canWithdrawComputation,
-                    onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
-                  },
-                ]
-              : []),
-          ]);
-          const canUsePush = pushMenuItems.some((it: any) => it.type !== 'divider' && !it.disabled);
-          parts.push(
-            <Dropdown menu={{ items: pushMenuItems }}>
-              <Button type="link" size="small" disabled={!canUsePush}>
-                {t('app.kuaizhizao.salesOrder.push')}
-              </Button>
-            </Dropdown>
-          );
-        }
         parts.push(
           <Button type="link" size="small" onClick={() => openFollowUpFromSalesOrder(record)}>
             {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
@@ -2565,6 +2579,22 @@ const SalesOrdersPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
+          toolBarActionsAfterCreate={[
+            <Dropdown
+              key={`push-toolbar-${selectedOrderForToolbar?.id ?? 'none'}`}
+              trigger={['click']}
+              menu={{
+                items: toolbarPushMenuItems,
+              }}
+            >
+              <Button
+                icon={<ArrowDownOutlined />}
+                disabled={!selectedOrderForToolbar || !canUseToolbarPush}
+              >
+                {t('app.kuaizhizao.salesOrder.push')}
+              </Button>
+            </Dropdown>,
+          ]}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-sales-order-with-pull"

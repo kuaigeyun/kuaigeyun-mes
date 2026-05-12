@@ -1932,7 +1932,7 @@ const BOMPage: React.FC = () => {
             </Button>
           ),
           <Dropdown key="more" menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
-            <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
+            <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
               {t('app.master-data.bom.more')}
             </Button>
           </Dropdown>,

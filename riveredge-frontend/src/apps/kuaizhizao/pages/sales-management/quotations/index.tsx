@@ -918,27 +918,6 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
-        parts.push(
-          <Tooltip
-            key="pr"
-            title={
-              canPrintFormalQuotation(record, quotationAuditRequired)
-                ? t('app.kuaizhizao.quotation.formalPrint')
-                : t('app.kuaizhizao.quotation.formalPrintDenied')
-            }
-          >
-            <Button
-              type="link"
-              size="small"
-              disabled={!canPrintFormalQuotation(record, quotationAuditRequired)}
-              onClick={() =>
-                canPrintFormalQuotation(record, quotationAuditRequired) && handlePrint(record)
-              }
-            >
-              {t('app.kuaizhizao.quotation.formalPrint')}
-            </Button>
-          </Tooltip>
-        );
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
           parts.push(
             <Button key="fu" type="link" size="small" onClick={() => openFollowUpFromQuotation(record)}>
@@ -1587,6 +1566,28 @@ const QuotationsPage: React.FC = () => {
     setPrintingRecord(record);
     setPrintModalVisible(true);
   };
+
+  const handleToolbarPrint = useCallback(
+    async (keys: React.Key[]) => {
+      if (!keys || keys.length !== 1) return;
+      const numericId = Number(keys[0]);
+      if (!Number.isFinite(numericId) || numericId <= 0) {
+        messageApi.warning('请选择一条有效记录');
+        return;
+      }
+      try {
+        const latest = await getQuotation(numericId);
+        if (!canPrintFormalQuotation(latest, quotationAuditRequired)) {
+          messageApi.warning(t('app.kuaizhizao.quotation.formalPrintDenied'));
+          return;
+        }
+        await handlePrint(latest);
+      } catch (error: any) {
+        messageApi.error(error?.message || '加载报价单失败');
+      }
+    },
+    [handlePrint, messageApi, quotationAuditRequired, t]
+  );
 
   const handleConfirmPrint = async () => {
     const record = printingRecord;
@@ -2740,6 +2741,11 @@ const QuotationsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
+          showPrintButton
+          printButtonText={t('app.kuaizhizao.quotation.formalPrint')}
+          onPrint={(keys) => {
+            void handleToolbarPrint(keys);
+          }}
           request={async (params, _sort, _filter, searchFormValues) => {
             try {
               const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;

@@ -424,6 +424,90 @@ interface QuerySearchModalProps {
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
 }
 
+const BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX = '__builtin__:lifecycle-stage:';
+
+const getColumnFieldName = (column: ProColumns<any>): string | null => {
+  const dataIndex = column.dataIndex;
+  if (typeof dataIndex === 'string') {
+    return dataIndex;
+  }
+  if (Array.isArray(dataIndex) && dataIndex.length > 0) {
+    return String(dataIndex[0]);
+  }
+  return null;
+};
+
+const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
+  const searchableColumns = columns.filter((column) => {
+    if (column.hideInSearch) return false;
+    if (column.valueType === 'option') return false;
+    if (!column.valueEnum || typeof column.valueEnum !== 'object' || Array.isArray(column.valueEnum)) return false;
+    return true;
+  });
+
+  let best: { field: string; valueEnum: Record<string, any>; score: number } | null = null;
+  for (const column of searchableColumns) {
+    const field = getColumnFieldName(column);
+    if (!field) continue;
+
+    const valueEnum = column.valueEnum as Record<string, any>;
+    const values = Object.keys(valueEnum).filter((key) => key !== '');
+    if (values.length === 0) continue;
+
+    const title = String(column.title ?? '');
+    let score = 0;
+    if (/^status$/i.test(field)) score += 120;
+    if (/lifecycle|status|stage|state/i.test(field)) score += 80;
+    if (/生命周期/.test(title)) score += 90;
+    if (/阶段/.test(title)) score += 70;
+    if (/状态/.test(title)) score += 50;
+
+    if (score > 0 && (!best || score > best.score)) {
+      best = { field, valueEnum, score };
+    }
+  }
+
+  return best;
+};
+
+const createBuiltinLifecycleStageSearches = (
+  columns: ProColumns<any>[],
+  pagePath: string,
+  userId: number | undefined,
+  stageNameTemplate: (stage: string) => string,
+): SavedSearch[] => {
+  const lifecycle = getLifecycleStageCandidate(columns);
+  if (!lifecycle) return [];
+
+  const now = new Date().toISOString();
+  const stageValues = Object.keys(lifecycle.valueEnum).filter((key) => key !== '');
+
+  return stageValues.map((stageValue, index) => {
+    const enumItem = lifecycle.valueEnum[stageValue];
+    const stageLabel =
+      typeof enumItem === 'object' && enumItem !== null && 'text' in enumItem
+        ? String((enumItem as any).text)
+        : String(enumItem ?? stageValue);
+    return {
+      id: -(index + 1),
+      uuid: `${BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX}${pagePath}:${encodeURIComponent(stageValue)}`,
+      user_id: userId ?? 0,
+      page_path: pagePath,
+      name: stageNameTemplate(stageLabel),
+      is_shared: true,
+      is_pinned: true,
+      search_params: {
+        [lifecycle.field]: stageValue,
+      },
+      created_at: now,
+      updated_at: now,
+    };
+  });
+};
+
+const isBuiltinSavedSearch = (search: SavedSearch): boolean =>
+  search.uuid.startsWith(BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX);
+
 /**
  * 查询搜索弹窗组件
  */
@@ -449,6 +533,9 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   
   // 判断是否是自己的搜索条件
   const isOwnSearch = (search: SavedSearch) => {
+    if (isBuiltinSavedSearch(search)) {
+      return false;
+    }
     return currentUser && search.user_id === currentUser.id;
   };
   
@@ -490,7 +577,24 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     throwOnError: false,
   });
   
-  const savedSearches = savedSearchesData?.items || [];
+  const builtinLifecycleStageSearches = useMemo(
+    () =>
+      createBuiltinLifecycleStageSearches(
+        columns,
+        pagePath,
+        currentUser?.id,
+        (stage) => stage,
+      ),
+    [columns, pagePath, currentUser?.id],
+  );
+
+  const savedSearches = useMemo(() => {
+    const remoteItems = (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item));
+    if (builtinLifecycleStageSearches.length === 0) {
+      return remoteItems;
+    }
+    return [...builtinLifecycleStageSearches, ...remoteItems];
+  }, [savedSearchesData?.items, builtinLifecycleStageSearches]);
   
   // 拖拽排序状态（用于实时更新UI）
   const [personalOrder, setPersonalOrder] = useState<number[]>([]);
@@ -1191,6 +1295,9 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
    * 切换钉住状态
    */
   const handleTogglePin = (e: React.MouseEvent, search: SavedSearch) => {
+    if (isBuiltinSavedSearch(search)) {
+      return;
+    }
     e.stopPropagation(); // 阻止事件冒泡
     updateSavedSearchMutation.mutate({
       uuid: search.uuid,
@@ -1545,12 +1652,13 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                       onClick={(e) => handleTogglePin(e, item)}
                       title={item.is_pinned ? t('components.uniQuery.unpin') : t('components.uniQuery.pin')}
                       style={{ marginRight: 0 }}
+                      disabled={isBuiltinSavedSearch(item)}
                     />,
                     <Dropdown
                       key="more"
                       menu={{
                         items: [
-                          {
+                          ...(isBuiltinSavedSearch(item) ? [] : [{
                             key: 'edit',
                             label: t('components.uniQuery.edit'),
                             icon: <EditOutlined />,
@@ -1558,7 +1666,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                               e.domEvent.stopPropagation();
                               handleEditSavedSearch(e.domEvent, item);
                             },
-                          },
+                          }]),
                           // 如果是自己的公共条件，显示"转为个人"选项
                           ...(item.is_shared && isOwnSearch(item) ? [{
                             key: 'convert-to-personal',
@@ -1737,12 +1845,13 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                       onClick={(e) => handleTogglePin(e, item)}
                       title={item.is_pinned ? t('components.uniQuery.unpin') : t('components.uniQuery.pin')}
                       style={{ marginRight: 0 }}
+                      disabled={isBuiltinSavedSearch(item)}
                     />,
                     <Dropdown
                       key="more"
                       menu={{
                         items: [
-                          {
+                          ...(isBuiltinSavedSearch(item) ? [] : [{
                             key: 'edit',
                             label: t('components.uniQuery.edit'),
                             icon: <EditOutlined />,
@@ -1750,7 +1859,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                               e.domEvent.stopPropagation();
                               handleEditSavedSearch(e.domEvent, item);
                             },
-                          },
+                          }]),
                           // 如果是个人条件，显示"设为公共"选项
                           ...(!item.is_shared && isOwnSearch(item) ? [{
                             key: 'set-to-shared',
@@ -2482,8 +2591,21 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   });
   
   // ⭐ 获取钉住的条件，并按照拖拽后的排序显示（完全在 useMemo 中处理，避免状态更新循环）
+  const builtinLifecycleStageSearches = useMemo(
+    () =>
+      createBuiltinLifecycleStageSearches(
+        columns,
+        pagePath,
+        undefined,
+        (stage) => stage,
+      ),
+    [columns, pagePath],
+  );
+
   const pinnedSearches = useMemo(() => {
-    const allPinned = (savedSearchesData?.items || []).filter((item) => item.is_pinned);
+    const remoteItems = (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item));
+    const mergedItems = [...builtinLifecycleStageSearches, ...remoteItems];
+    const allPinned = mergedItems.filter((item) => item.is_pinned);
 
     if (allPinned.length === 0) {
       return [];
@@ -2530,7 +2652,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     
     // 合并排序后的钉住条件（共享在前，个人在后）
     return [...orderedShared, ...orderedPersonal];
-  }, [savedSearchesData?.items, pagePath, orderUpdateTrigger]);
+  }, [savedSearchesData?.items, pagePath, orderUpdateTrigger, builtinLifecycleStageSearches]);
   
   // ⭐ 限制显示的钉住条件数量，避免影响后面的视图组件
   const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
