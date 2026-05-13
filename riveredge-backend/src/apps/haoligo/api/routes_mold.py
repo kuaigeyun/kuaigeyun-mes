@@ -21,6 +21,16 @@ class MoldOut(BaseModel):
     uuid: str
     mold_code: str
     name: str
+    unit: str = ""
+    mold_capacity: Decimal = Decimal("0")
+    processing_time_min: Optional[int] = None
+    service_life_years: Optional[int] = None
+    usable_times: Optional[int] = None
+    usable_yield: Optional[Decimal] = None
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = None
+    allow_repeated_borrow: bool = True
+    purchase_vendor_name: Optional[str] = None
     status: str
     total_manufacture_qty: Decimal
     outsource_vendor_code: Optional[str] = None
@@ -32,6 +42,16 @@ class MoldOut(BaseModel):
 class MoldCreate(BaseModel):
     mold_code: str = Field(max_length=64)
     name: str = Field(max_length=200)
+    unit: str = Field(default="", max_length=32)
+    mold_capacity: Decimal = Field(default=Decimal("0"))
+    processing_time_min: Optional[int] = Field(None, ge=0)
+    service_life_years: Optional[int] = Field(None, ge=0)
+    usable_times: Optional[int] = Field(None, ge=0)
+    usable_yield: Optional[Decimal] = None
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
+    allow_repeated_borrow: bool = True
+    purchase_vendor_name: Optional[str] = Field(None, max_length=200)
     status: str = Field(default="待用", max_length=32)
     total_manufacture_qty: Decimal = Field(default=Decimal("0"))
     outsource_vendor_code: Optional[str] = Field(None, max_length=64)
@@ -42,6 +62,16 @@ class MoldCreate(BaseModel):
 
 class MoldUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
+    unit: Optional[str] = Field(None, max_length=32)
+    mold_capacity: Optional[Decimal] = None
+    processing_time_min: Optional[int] = Field(None, ge=0)
+    service_life_years: Optional[int] = Field(None, ge=0)
+    usable_times: Optional[int] = Field(None, ge=0)
+    usable_yield: Optional[Decimal] = None
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
+    allow_repeated_borrow: Optional[bool] = None
+    purchase_vendor_name: Optional[str] = Field(None, max_length=200)
     status: Optional[str] = Field(None, max_length=32)
     total_manufacture_qty: Optional[Decimal] = None
     outsource_vendor_code: Optional[str] = Field(None, max_length=64)
@@ -85,6 +115,16 @@ async def create_mold(
         tenant_id=tenant_id,
         mold_code=body.mold_code.strip(),
         name=body.name.strip(),
+        unit=(body.unit or "").strip(),
+        mold_capacity=body.mold_capacity,
+        processing_time_min=body.processing_time_min,
+        service_life_years=body.service_life_years,
+        usable_times=body.usable_times,
+        usable_yield=body.usable_yield,
+        maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
+        maintenance_cycle_by_days=body.maintenance_cycle_by_days,
+        allow_repeated_borrow=body.allow_repeated_borrow,
+        purchase_vendor_name=((body.purchase_vendor_name or "").strip() or None),
         status=body.status,
         total_manufacture_qty=body.total_manufacture_qty,
         outsource_vendor_code=body.outsource_vendor_code,

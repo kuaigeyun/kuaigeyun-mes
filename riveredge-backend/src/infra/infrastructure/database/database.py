@@ -346,6 +346,13 @@ TORTOISE_ORM = {
                 # 好力 GO（客户专用，表前缀 haoligo_，与快制造设备/模具逻辑隔离）
                 "apps.haoligo.models.equipment",
                 "apps.haoligo.models.mold",
+                "apps.haoligo.models.mold_borrow_sheet",
+                "apps.haoligo.models.mold_return_sheet",
+                "apps.haoligo.models.mold_trial_sheet",
+                "apps.haoligo.models.mold_maintenance_complete_sheet",
+                "apps.haoligo.models.mold_maintenance_sheet",
+                "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",
+                "apps.haoligo.models.mold_outsource_maintenance_sheet",
                 "apps.haoligo.models.patrol",
             ],
             "default_connection": "default",

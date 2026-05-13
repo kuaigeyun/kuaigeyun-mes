@@ -8,7 +8,7 @@ from apps.haoligo.models.base import HaoligoTenantModel
 
 
 class HaoligoMold(HaoligoTenantModel):
-    """模具资料：编码、名称、状态、总制造数量等。"""
+    """模具资料：编码、名称、状态、总制造数量及台账扩展字段。"""
 
     class Meta:
         table = "haoligo_mold"
@@ -18,10 +18,27 @@ class HaoligoMold(HaoligoTenantModel):
 
     mold_code = fields.CharField(max_length=64, description="模具编码（组织内唯一）")
     name = fields.CharField(max_length=200, description="模具名称")
+    unit = fields.CharField(max_length=32, default="", description="单位")
+    mold_capacity = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        default=Decimal("0"),
+        description="模具产能",
+    )
+    processing_time_min = fields.IntField(null=True, description="加工时间（分钟）")
+    service_life_years = fields.IntField(null=True, description="可用年限（年）")
+    usable_times = fields.IntField(null=True, description="可用次数")
+    usable_yield = fields.DecimalField(max_digits=18, decimal_places=4, null=True, description="可用产量")
+    maintenance_cycle_by_yield = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="维修周期（依产量）"
+    )
+    maintenance_cycle_by_days = fields.IntField(null=True, description="维修周期（依天数）")
+    allow_repeated_borrow = fields.BooleanField(default=True, description="允许重复领用")
+    purchase_vendor_name = fields.CharField(max_length=200, null=True, description="购买厂商")
     status = fields.CharField(
         max_length=32,
         default="待用",
-        description="状态：在用/在修/停用/待用/报废",
+        description="状态：在用/在修/停用/待用/报废/待启用",
     )
     total_manufacture_qty = fields.DecimalField(
         max_digits=18,

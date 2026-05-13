@@ -1,0 +1,677 @@
+/**
+ * 好力 GO — 外协维保完修单（基础信息 + 模具行含费用与行附件；对齐移动端稿）
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActionType,
+  ProColumns,
+  ProForm,
+  ProFormDigit,
+  ProFormGroup,
+  ProFormInstance,
+  ProFormList,
+  ProFormRadio,
+  ProFormSelect,
+  ProFormText,
+  ProFormUploadButton,
+} from '@ant-design/pro-components';
+import type { UploadFile } from 'antd/es/upload/interface';
+import type { UploadProps } from 'antd';
+import { App, Button, Col, Divider, Modal, Row, Space, Typography, Upload } from 'antd';
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../../../../components/uni-table';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
+import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
+import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
+import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
+import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
+import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
+import {
+  createMoldOutsourceMaintenanceCompleteSheet,
+  deleteMoldOutsourceMaintenanceCompleteSheet,
+  getMoldOutsourceMaintenanceCompleteSheet,
+  listMoldOutsourceMaintenanceCompleteSheets,
+  listMoldOutsourceMaintenanceSheets,
+  updateMoldOutsourceMaintenanceCompleteSheet,
+  type MoldOutsourceMaintenanceCompleteSheetCreatePayload,
+  type MoldOutsourceMaintenanceCompleteSheetRow,
+  type MoldOutsourceMaintenanceSheetRow,
+} from '../../../../services/haoligo';
+
+type SupplierOpt = { key: string; value: string; label: string; code: string };
+
+function normUploadUuids(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  const out: string[] = [];
+  for (const item of val) {
+    const anyItem = item as { response?: { uuid?: string }; uid?: string };
+    const u =
+      anyItem?.response?.uuid ??
+      (typeof anyItem?.uid === 'string' && /^[0-9a-f-]{36}$/i.test(anyItem.uid) ? anyItem.uid : null);
+    if (u) out.push(u);
+  }
+  return out;
+}
+
+function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
+  if (!uuids?.length) return [];
+  return uuids.map((uuid) => ({
+    uid: uuid,
+    name: '附件',
+    status: 'done',
+    url: getFileDownloadUrl(uuid),
+    response: { uuid },
+  }));
+}
+
+const defaultMoldLine = () => ({
+  mold_code: '',
+  mold_name: '',
+  repair_reason: '',
+  repair_cost: undefined as number | undefined,
+  item_attachments: [] as UploadFile[],
+});
+
+const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>(null);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const [outsourceRows, setOutsourceRows] = useState<MoldOutsourceMaintenanceSheetRow[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOpt[]>([]);
+  const [outsourcedUnitFallback, setOutsourcedUnitFallback] = useState<{ label: string; value: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await supplierApi.list({ limit: 1000, isActive: true });
+        const list = unwrapSupplyPagedList<Supplier>(res);
+        if (cancelled) return;
+        setSupplierOptions(
+          list.map((s) => ({
+            key: s.uuid,
+            value: s.name,
+            label: s.code ? `${s.code} · ${s.name}` : s.name,
+            code: s.code ?? '',
+          })),
+        );
+      } catch {
+        if (!cancelled) setSupplierOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const outsourcedSelectOptions = useMemo(() => {
+    const base = supplierOptions.map((o) => ({ label: o.label, value: o.value }));
+    if (outsourcedUnitFallback && !base.some((b) => b.value === outsourcedUnitFallback.value)) {
+      return [outsourcedUnitFallback, ...base];
+    }
+    return base;
+  }, [supplierOptions, outsourcedUnitFallback]);
+
+  const outsourceSelectOptions = useMemo(
+    () =>
+      outsourceRows.map((r) => ({
+        label:
+          (r.source_order_no && String(r.source_order_no).trim()) ||
+          `外协维保单#${r.id}${r.primary_mold_code ? ` · ${r.primary_mold_code}` : ''}`,
+        value: r.id,
+      })),
+    [outsourceRows],
+  );
+
+  const loadOutsourceSheetsForSource = useCallback(async () => {
+    try {
+      const res = await listMoldOutsourceMaintenanceSheets({ skip: 0, limit: 200 });
+      setOutsourceRows(res.items);
+    } catch {
+      setOutsourceRows([]);
+    }
+  }, []);
+
+  const makeUploadProps = useCallback(
+    (category: string): UploadProps => ({
+      listType: 'picture-card',
+      accept: '.jpg,.jpeg,.png,.gif,.webp',
+      beforeUpload: (file) => {
+        const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
+        if (!isLt30M) {
+          messageApi.error('单个文件需小于 30MB');
+          return Upload.LIST_IGNORE;
+        }
+        return true;
+      },
+      customRequest: async (options) => {
+        try {
+          const file = options.file as Parameters<typeof uploadFile>[0];
+          const res = await uploadFile(file, { category });
+          options.onSuccess?.(res, options.file);
+        } catch (err) {
+          options.onError?.(err instanceof Error ? err : new Error(String(err)));
+        }
+      },
+    }),
+    [messageApi],
+  );
+
+  const headerUploadProps = useMemo(
+    () => makeUploadProps('haoligo_mold_outsource_maint_complete'),
+    [makeUploadProps],
+  );
+  const lineUploadProps = useMemo(
+    () => makeUploadProps('haoligo_mold_outsource_maint_complete_line'),
+    [makeUploadProps],
+  );
+
+  const syncOutsourceUnitFromRow = useCallback((r: MoldOutsourceMaintenanceSheetRow | undefined) => {
+    if (!r) return;
+    const name = (r.outsourced_unit_name && String(r.outsourced_unit_name).trim()) || '';
+    if (name && !supplierOptions.some((o) => o.value === name)) {
+      setOutsourcedUnitFallback({ label: name, value: name });
+    } else {
+      setOutsourcedUnitFallback(null);
+    }
+    formRef.current?.setFieldsValue({
+      outsourced_unit_name: name || undefined,
+      outsourced_unit_code: r.outsourced_unit_code ?? undefined,
+    });
+  }, [supplierOptions]);
+
+  const handleCreate = async () => {
+    setIsEdit(false);
+    setEditId(null);
+    setOutsourcedUnitFallback(null);
+    await loadOutsourceSheetsForSource();
+    setFormInitialValues({
+      service_type: '维修',
+      clear_total_production: false,
+      source_outsource_maintenance_sheet_id: undefined,
+      source_order_no: '',
+      outsourced_unit_name: undefined,
+      outsourced_unit_code: undefined,
+      header_attachments: [],
+      line_items: [defaultMoldLine()],
+    });
+    setModalVisible(true);
+  };
+
+  useNewShortcut(handleCreate);
+
+  const handleEdit = async (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
+    try {
+      const d = await getMoldOutsourceMaintenanceCompleteSheet(record.id);
+      await loadOutsourceSheetsForSource();
+      setIsEdit(true);
+      setEditId(d.id);
+      const unitName = d.outsourced_unit_name;
+      setOutsourcedUnitFallback(
+        unitName && !supplierOptions.some((o) => o.value === unitName)
+          ? { label: unitName, value: unitName }
+          : null,
+      );
+      setFormInitialValues({
+        source_outsource_maintenance_sheet_id: d.source_outsource_maintenance_sheet_id ?? undefined,
+        source_order_no: d.source_order_no,
+        outsourced_unit_name: d.outsourced_unit_name,
+        outsourced_unit_code: d.outsourced_unit_code ?? undefined,
+        service_type: d.service_type,
+        clear_total_production: d.clear_total_production,
+        header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
+        line_items: (d.line_items || []).map((it) => ({
+          mold_code: it.mold_code,
+          mold_name: it.mold_name ?? '',
+          repair_reason: it.repair_reason ?? '',
+          repair_cost:
+            it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
+          item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
+        })),
+      });
+      setModalVisible(true);
+    } catch (e) {
+      messageApi.error((e as Error).message || '加载外协维保完修单失败');
+    }
+  };
+
+  const handleDeleteOne = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定删除外协维保完修单「${record.source_order_no}」吗？`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteMoldOutsourceMaintenanceCompleteSheet(record.id);
+          messageApi.success('已删除');
+          actionRef.current?.reload();
+        } catch (e) {
+          messageApi.error((e as Error).message || '删除失败');
+        }
+      },
+    });
+  };
+
+  const triggerSubmit = useCallback(() => {
+    globalThis.setTimeout(() => {
+      const inst = formRef.current;
+      if (!inst || typeof inst.submit !== 'function') {
+        messageApi.warning('表单未就绪');
+        return;
+      }
+      inst.submit();
+    }, 0);
+  }, [messageApi]);
+
+  useSubmitShortcut(triggerSubmit, modalVisible);
+
+  const buildPayload = (
+    values: Record<string, unknown>,
+  ): MoldOutsourceMaintenanceCompleteSheetCreatePayload => {
+    const rawLines = values.line_items;
+    const lines = Array.isArray(rawLines) ? rawLines : [];
+    const line_items = lines.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        mold_code: String(r.mold_code ?? '').trim(),
+        mold_name: String(r.mold_name ?? '').trim() || null,
+        repair_reason: String(r.repair_reason ?? '').trim() || null,
+        repair_cost:
+          r.repair_cost === undefined || r.repair_cost === null || r.repair_cost === ''
+            ? null
+            : Number(r.repair_cost),
+        attachment_file_uuids: normUploadUuids(r.item_attachments),
+      };
+    });
+    const sid = values.source_outsource_maintenance_sheet_id;
+    let source_outsource_maintenance_sheet_id: number | null = null;
+    if (sid !== undefined && sid !== null && sid !== '') {
+      const n = Number(sid);
+      if (Number.isFinite(n)) source_outsource_maintenance_sheet_id = n;
+    }
+    const unitName = String(values.outsourced_unit_name ?? '').trim();
+    const unitCodeRaw = values.outsourced_unit_code;
+    const outsourced_unit_code =
+      unitCodeRaw === undefined || unitCodeRaw === null || unitCodeRaw === ''
+        ? null
+        : String(unitCodeRaw).trim() || null;
+    return {
+      source_outsource_maintenance_sheet_id,
+      source_order_no: String(values.source_order_no ?? '').trim(),
+      outsourced_unit_name: unitName,
+      outsourced_unit_code,
+      service_type: values.service_type === '保养' ? '保养' : '维修',
+      clear_total_production: Boolean(values.clear_total_production),
+      header_attachment_file_uuids: normUploadUuids(values.header_attachments),
+      line_items,
+    };
+  };
+
+  const handleSubmit = async (values: Record<string, unknown>) => {
+    if (outsourceSelectOptions.length > 0) {
+      const sid = values.source_outsource_maintenance_sheet_id;
+      if (sid === undefined || sid === null || sid === '') {
+        messageApi.error('请选择来源单号');
+        return Promise.reject(new Error('validation'));
+      }
+    }
+    const src = String(values.source_order_no ?? '').trim();
+    if (!src) {
+      messageApi.error('请输入或选择来源单号');
+      return Promise.reject(new Error('validation'));
+    }
+    const unit = String(values.outsourced_unit_name ?? '').trim();
+    if (!unit) {
+      messageApi.error('请选择外协单位');
+      return Promise.reject(new Error('validation'));
+    }
+    const payload = buildPayload(values);
+    if (!payload.line_items.length) {
+      messageApi.error('至少保留一条模具信息');
+      return Promise.reject(new Error('validation'));
+    }
+    for (let i = 0; i < payload.line_items.length; i++) {
+      if (!payload.line_items[i].mold_code) {
+        messageApi.error(`模具信息第 ${i + 1} 条：请填写模具代号`);
+        return Promise.reject(new Error('validation'));
+      }
+    }
+    setFormLoading(true);
+    try {
+      if (isEdit && editId != null) {
+        await updateMoldOutsourceMaintenanceCompleteSheet(editId, payload);
+        messageApi.success('已保存');
+      } else {
+        await createMoldOutsourceMaintenanceCompleteSheet(payload);
+        messageApi.success('已提交');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (e) {
+      if ((e as Error).message !== 'validation') {
+        messageApi.error((e as Error).message || '保存失败');
+      }
+      return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const onResetForm = () => {
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({
+      service_type: '维修',
+      clear_total_production: false,
+      source_outsource_maintenance_sheet_id: undefined,
+      source_order_no: '',
+      outsourced_unit_name: undefined,
+      outsourced_unit_code: undefined,
+      header_attachments: [],
+      line_items: [defaultMoldLine()],
+    });
+    setOutsourcedUnitFallback(null);
+    messageApi.success('已重置');
+  };
+
+  const columns: ProColumns<MoldOutsourceMaintenanceCompleteSheetRow>[] = [
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      fieldProps: { placeholder: '来源单号/外协单位/维修保养' },
+    },
+    { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
+    { title: '外协单位', dataIndex: 'outsourced_unit_name', width: 160, ellipsis: true },
+    { title: '维修/保养', dataIndex: 'service_type', width: 100 },
+    {
+      title: '清空总产量',
+      dataIndex: 'clear_total_production',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => (r.clear_total_production ? '是' : '否'),
+    },
+    { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '模具条数',
+      key: 'line_count',
+      width: 88,
+      hideInSearch: true,
+      render: (_, r) => r.line_items?.length ?? 0,
+    },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 140,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+            编辑
+          </Button>
+          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
+          headerTitle="外协维保完修单"
+          columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-complete"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch
+          showCreateButton
+          createButtonText="新增"
+          onCreate={handleCreate}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const current = params.current ?? 1;
+            const pageSize = params.pageSize ?? 20;
+            const skip = (current - 1) * pageSize;
+            try {
+              const res = await listMoldOutsourceMaintenanceCompleteSheets({
+                skip,
+                limit: pageSize,
+                keyword:
+                  typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
+                    ? searchFormValues.keyword.trim()
+                    : undefined,
+              });
+              return { data: res.items, success: true, total: res.total };
+            } catch (e) {
+              messageApi.error((e as Error).message || '加载失败');
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          scroll={{ x: 1040 }}
+        />
+      </ListPageTemplate>
+
+      <Modal
+        title={isEdit ? '编辑外协维保完修单' : '外协维保完修单'}
+        open={modalVisible}
+        onCancel={() => {
+          setModalVisible(false);
+          setEditId(null);
+        }}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        destroyOnHidden
+        styles={{ body: { background: '#f0f2f5', paddingTop: 12 } }}
+        footer={
+          <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+            <Button htmlType="button" style={{ flex: 1 }} onClick={onResetForm}>
+              重置
+            </Button>
+            <Button htmlType="button" type="primary" style={{ flex: 1 }} loading={formLoading} onClick={triggerSubmit}>
+              提交{SUBMIT_SHORTCUT_HINT}
+            </Button>
+          </div>
+        }
+      >
+        <div
+          className="form-modal-content-inner"
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: '4px 8px 12px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          }}
+        >
+          <ProForm
+            key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
+            formRef={formRef}
+            loading={formLoading}
+            onFinish={handleSubmit}
+            onFinishFailed={({ errorFields }) => {
+              const first = errorFields?.[0];
+              const text = first?.errors?.filter(Boolean)[0];
+              messageApi.error(text || '请检查表单');
+            }}
+            initialValues={formInitialValues}
+            submitter={false}
+            layout="vertical"
+            scrollToFirstError
+          >
+            <Divider titlePlacement="left" plain style={{ margin: '8px 0 16px', fontWeight: 600 }}>
+              基础信息
+            </Divider>
+            <Row gutter={[16, 4]}>
+              <Col span={12}>
+                {outsourceSelectOptions.length > 0 ? (
+                  <ProFormSelect
+                    name="source_outsource_maintenance_sheet_id"
+                    label="来源单号"
+                    placeholder="请选择来源单号"
+                    rules={[{ required: true, message: '请选择来源单号' }]}
+                    options={outsourceSelectOptions}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      allowClear: false,
+                      onChange: (id: number | string) => {
+                        const n = typeof id === 'string' ? Number(id) : id;
+                        const r = outsourceRows.find((x) => x.id === n);
+                        formRef.current?.setFieldsValue({
+                          source_order_no:
+                            (r?.source_order_no && String(r.source_order_no).trim()) || `外协维保单#${n}`,
+                        });
+                        syncOutsourceUnitFromRow(r);
+                      },
+                    }}
+                  />
+                ) : (
+                  <ProFormText
+                    name="source_order_no"
+                    label="来源单号"
+                    placeholder="请选择来源单号（暂无外协维保单时请手输）"
+                    rules={[{ required: true, message: '请输入来源单号' }]}
+                  />
+                )}
+              </Col>
+              {outsourceSelectOptions.length > 0 ? (
+                <ProFormText name="source_order_no" hidden />
+              ) : null}
+              <Col span={12}>
+                <ProFormSelect
+                  name="outsourced_unit_name"
+                  label="外协单位"
+                  placeholder="请选择外协单位"
+                  rules={[{ required: true, message: '请选择外协单位' }]}
+                  options={outsourcedSelectOptions}
+                  showSearch
+                  fieldProps={{
+                    optionFilterProp: 'label',
+                    onChange: (name: string) => {
+                      const o = supplierOptions.find((x) => x.value === name);
+                      formRef.current?.setFieldsValue({
+                        outsourced_unit_code: o?.code || undefined,
+                      });
+                    },
+                  }}
+                />
+              </Col>
+              <ProFormText name="outsourced_unit_code" hidden />
+              <Col span={12}>
+                <ProFormSelect
+                  name="service_type"
+                  label="维修/保养"
+                  placeholder="请选择维修/保养"
+                  rules={[{ required: true, message: '请选择维修/保养' }]}
+                  options={[
+                    { label: '维修', value: '维修' },
+                    { label: '保养', value: '保养' },
+                  ]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormRadio.Group
+                  name="clear_total_production"
+                  label="是否清空总产量"
+                  rules={[{ required: true, message: '请选择是否清空总产量' }]}
+                  options={[
+                    { label: '否', value: false },
+                    { label: '是', value: true },
+                  ]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormUploadButton
+                  name="header_attachments"
+                  label="附件照片"
+                  max={10}
+                  fieldProps={headerUploadProps}
+                />
+              </Col>
+            </Row>
+
+            <Divider titlePlacement="left" plain style={{ margin: '20px 0 12px', fontWeight: 600 }}>
+              模具信息
+            </Divider>
+            <ProFormList
+              name="line_items"
+              min={1}
+              copyIconProps={false}
+              creatorButtonProps={{
+                position: 'top',
+                creatorButtonText: '+ 添加模具',
+                type: 'default',
+                style: {
+                  color: '#1677ff',
+                  borderColor: '#91caff',
+                  fontWeight: 500,
+                  marginBottom: 12,
+                },
+              }}
+            >
+              {(meta, index) => (
+                <ProFormGroup
+                  key={meta.key}
+                  title={`模具 ${index + 1}`}
+                  style={{
+                    marginBottom: 16,
+                    paddingBottom: 8,
+                    borderBottom: '1px solid #f0f0f0',
+                  }}
+                >
+                  <Row gutter={[16, 4]}>
+                    <Col span={12}>
+                      <ProFormText
+                        name="mold_code"
+                        label="模具代号"
+                        placeholder="请输入模具代号"
+                        rules={[{ required: true, message: '请填写模具代号' }]}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <ProFormText name="mold_name" label="模具名称" placeholder="请输入模具名称" />
+                    </Col>
+                    <Col span={24}>
+                      <ProFormText name="repair_reason" label="维修原因" placeholder="请输入维修原因" />
+                    </Col>
+                    <Col span={12}>
+                      <ProFormDigit
+                        name="repair_cost"
+                        label="维修费用（元）"
+                        placeholder="请输入维修费用（元）"
+                        min={0}
+                        fieldProps={{ precision: 2, style: { width: '100%' } }}
+                      />
+                    </Col>
+                    <Col span={24}>
+                      <ProFormUploadButton
+                        name="item_attachments"
+                        label="维修模具图片附件"
+                        max={8}
+                        fieldProps={lineUploadProps}
+                        extra={
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            无维修模具图片附件时无需上传
+                          </Typography.Text>
+                        }
+                      />
+                    </Col>
+                  </Row>
+                </ProFormGroup>
+              )}
+            </ProFormList>
+          </ProForm>
+        </div>
+      </Modal>
+    </>
+  );
+};
+
+export default MoldOutsourceMaintenanceCompletePage;

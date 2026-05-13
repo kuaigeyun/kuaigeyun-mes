@@ -5,7 +5,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import HaoligoAppLayout from './layouts/AppLayout';
 
@@ -17,7 +17,14 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 
 const WorkspacePage = lazy(() => import('./pages/workspace'));
 const EquipmentPage = lazy(() => import('./pages/equipment'));
-const MoldsPage = lazy(() => import('./pages/molds'));
+const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
+const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
+const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
+const MoldTrialSheetsPage = lazy(() => import('./pages/molds/documents/trial'));
+const MoldMaintenancePage = lazy(() => import('./pages/molds/documents/maintenance'));
+const MoldMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/maintenance-complete'));
+const MoldOutsourceMaintenancePage = lazy(() => import('./pages/molds/documents/outsource-maintenance'));
+const MoldOutsourceMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/outsource-complete'));
 const PatrolPage = lazy(() => import('./pages/patrol'));
 
 const HaoligoApp: React.FC = () => (
@@ -25,7 +32,17 @@ const HaoligoApp: React.FC = () => (
     <Route element={<HaoligoAppLayout />}>
       <Route path="workspace" element={withPageSuspense(WorkspacePage)} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
-      <Route path="molds" element={withPageSuspense(MoldsPage)} />
+      <Route path="molds" element={<Outlet />}>
+        <Route index element={<Navigate to="ledger" replace />} />
+        <Route path="ledger" element={withPageSuspense(MoldLedgerPage)} />
+        <Route path="documents/trial" element={withPageSuspense(MoldTrialSheetsPage)} />
+        <Route path="documents/borrow-out" element={withPageSuspense(MoldBorrowOutPage)} />
+        <Route path="documents/return-in" element={withPageSuspense(MoldReturnInPage)} />
+        <Route path="documents/maintenance" element={withPageSuspense(MoldMaintenancePage)} />
+        <Route path="documents/maintenance-complete" element={withPageSuspense(MoldMaintenanceCompletePage)} />
+        <Route path="documents/outsource-maintenance" element={withPageSuspense(MoldOutsourceMaintenancePage)} />
+        <Route path="documents/outsource-complete" element={withPageSuspense(MoldOutsourceMaintenanceCompletePage)} />
+      </Route>
       <Route path="patrol" element={withPageSuspense(PatrolPage)} />
       <Route index element={<Navigate to="workspace" replace />} />
     </Route>

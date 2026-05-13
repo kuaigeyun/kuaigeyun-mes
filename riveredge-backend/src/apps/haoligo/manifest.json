@@ -32,33 +32,11 @@
         "sort_order": 10,
         "children": [
           {
-            "title": "app.haoligo.menu.molds.group.masterData",
-            "icon": "Package2",
+            "title": "app.haoligo.menu.molds.ledger",
+            "path": "/apps/haoligo/molds/ledger",
+            "icon": "BookMarked",
             "permission": "haoligo:workspace:read",
-            "sort_order": 10,
-            "children": [
-              {
-                "title": "app.haoligo.menu.molds.ledger",
-                "path": "/apps/haoligo/molds/ledger",
-                "icon": "BookMarked",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 11
-              },
-              {
-                "title": "app.haoligo.menu.molds.outsource-vendors",
-                "path": "/apps/haoligo/molds/outsource-vendors",
-                "icon": "Handshake",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 12
-              },
-              {
-                "title": "app.haoligo.menu.molds.settings.clear-yield",
-                "path": "/apps/haoligo/molds/settings/clear-yield",
-                "icon": "Eraser",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 13
-              }
-            ]
+            "sort_order": 10
           },
           {
             "title": "app.haoligo.menu.molds.group.documents",

@@ -12,6 +12,15 @@ from apps.haoligo.models.equipment import (
     HaoligoWorkshop,
 )
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
+from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
+from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
+from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
+from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
+from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
+    HaoligoMoldOutsourceMaintenanceCompleteSheet,
+)
+from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
 from apps.haoligo.models.patrol import HaoligoHazardReport
 
 __all__ = [
@@ -25,5 +34,12 @@ __all__ = [
     "HaoligoPatrolRouteStep",
     "HaoligoWorkshop",
     "HaoligoMold",
+    "HaoligoMoldBorrowSheet",
+    "HaoligoMoldReturnSheet",
+    "HaoligoMoldTrialSheet",
+    "HaoligoMoldMaintenanceCompleteSheet",
+    "HaoligoMoldMaintenanceSheet",
+    "HaoligoMoldOutsourceMaintenanceCompleteSheet",
+    "HaoligoMoldOutsourceMaintenanceSheet",
     "HaoligoHazardReport",
 ]
