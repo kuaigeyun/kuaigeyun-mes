@@ -18,6 +18,8 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 const WorkspacePage = lazy(() => import('./pages/workspace'));
 const EquipmentPage = lazy(() => import('./pages/equipment'));
 const EquipmentManufacturersPage = lazy(() => import('./pages/equipment/manufacturers'));
+const EquipmentInspectionParamsPage = lazy(() => import('./pages/equipment/inspection-params'));
+const EquipmentInspectionParamSetsPage = lazy(() => import('./pages/equipment/inspection-param-sets'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
 const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
 const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
@@ -36,6 +38,8 @@ const HaoligoApp: React.FC = () => (
       <Route path="equipment/workshops" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment/categories" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment/manufacturers" element={withPageSuspense(EquipmentManufacturersPage)} />
+      <Route path="equipment/inspection-params" element={withPageSuspense(EquipmentInspectionParamsPage)} />
+      <Route path="equipment/inspection-param-sets" element={withPageSuspense(EquipmentInspectionParamSetsPage)} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={<Outlet />}>
         <Route index element={<Navigate to="ledger" replace />} />

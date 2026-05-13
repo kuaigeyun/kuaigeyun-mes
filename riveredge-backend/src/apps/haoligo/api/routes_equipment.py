@@ -8,6 +8,7 @@ from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from tortoise import timezone
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
@@ -82,6 +83,12 @@ class InspectionParamCreate(BaseModel):
     value_type: str = Field(default="numeric", max_length=32)
 
 
+class InspectionParamUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=200)
+    unit: Optional[str] = Field(None, max_length=32)
+    value_type: Optional[str] = Field(None, max_length=32)
+
+
 class InspectionParamSetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -95,10 +102,19 @@ class InspectionParamSetCreate(BaseModel):
     name: str = Field(max_length=200)
 
 
+class InspectionParamSetUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=200)
+
+
 class SetItemCreate(BaseModel):
     param_id: int
     sort_order: int = 0
     is_required: bool = True
+
+
+class SetItemUpdate(BaseModel):
+    sort_order: Optional[int] = None
+    is_required: Optional[bool] = None
 
 
 class SetItemOut(BaseModel):
@@ -334,6 +350,47 @@ async def create_inspection_param(
     return InspectionParamOut.model_validate(row)
 
 
+@router.patch("/inspection-params/{row_id}", response_model=InspectionParamOut, summary="更新点检参数")
+async def update_inspection_param(
+    row_id: int,
+    body: InspectionParamUpdate,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    patch = body.model_dump(exclude_unset=True)
+    if "name" in patch:
+        row.name = str(patch["name"] or "").strip()
+    if "unit" in patch:
+        u = patch["unit"]
+        row.unit = None if u is None else (str(u).strip() or None)
+    if "value_type" in patch and patch["value_type"] is not None:
+        row.value_type = str(patch["value_type"]).strip()
+    await row.save()
+    return InspectionParamOut.model_validate(row)
+
+
+@router.delete("/inspection-params/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数")
+async def delete_inspection_param(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    used = await tenant_alive(HaoligoInspectionParamSetItem, tenant_id).filter(param_id=row_id).exists()
+    if used:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该点检项已被点检方案引用，请先从方案中移除后再删除",
+        )
+    row.deleted_at = timezone.now()
+    await row.save()
+
+
 # --- inspection param sets ---
 
 
@@ -356,6 +413,48 @@ async def create_inspection_param_set(
         tenant_id=tenant_id, code=body.code.strip(), name=body.name.strip()
     )
     return InspectionParamSetOut.model_validate(row)
+
+
+@router.patch("/inspection-param-sets/{row_id}", response_model=InspectionParamSetOut, summary="更新点检参数集")
+async def update_inspection_param_set(
+    row_id: int,
+    body: InspectionParamSetUpdate,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    if body.name is not None:
+        row.name = body.name.strip()
+    await row.save()
+    return InspectionParamSetOut.model_validate(row)
+
+
+@router.delete("/inspection-param-sets/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数集")
+async def delete_inspection_param_set(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    if await tenant_alive(HaoligoEquipment, tenant_id).filter(inspection_param_set_id=row_id).exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该点检方案已被设备台账引用，无法删除",
+        )
+    if await tenant_alive(HaoligoEquipmentCategory, tenant_id).filter(default_inspection_param_set_id=row_id).exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该点检方案已被设备类别作为默认方案引用，无法删除",
+        )
+    await tenant_alive(HaoligoInspectionParamSetItem, tenant_id).filter(set_id=row_id, deleted_at__isnull=True).update(
+        deleted_at=timezone.now()
+    )
+    row.deleted_at = timezone.now()
+    await row.save()
 
 
 @router.get(
@@ -405,13 +504,43 @@ async def add_set_item(
     param = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(id=body.param_id).first()
     if not param:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="点检参数不存在")
-    row = await HaoligoInspectionParamSetItem.create(
-        tenant_id=tenant_id,
-        set_id=set_id,
-        param_id=body.param_id,
-        sort_order=body.sort_order,
-        is_required=body.is_required,
+    try:
+        row = await HaoligoInspectionParamSetItem.create(
+            tenant_id=tenant_id,
+            set_id=set_id,
+            param_id=body.param_id,
+            sort_order=body.sort_order,
+            is_required=body.is_required,
+        )
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该点检项已在本方案中存在，请勿重复添加",
+        ) from None
+    return SetItemOut(
+        id=row.id, param_id=row.param_id, set_id=row.set_id, sort_order=row.sort_order, is_required=row.is_required
     )
+
+
+@router.patch(
+    "/inspection-param-set-items/{item_id}",
+    response_model=SetItemOut,
+    summary="更新参数集明细（排序、是否必检）",
+)
+async def update_set_item(
+    item_id: int,
+    body: SetItemUpdate,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoInspectionParamSetItem, tenant_id).filter(id=item_id).first()
+    if not row:
+        await _not_found()
+    if body.sort_order is not None:
+        row.sort_order = body.sort_order
+    if body.is_required is not None:
+        row.is_required = body.is_required
+    await row.save()
     return SetItemOut(
         id=row.id, param_id=row.param_id, set_id=row.set_id, sort_order=row.sort_order, is_required=row.is_required
     )

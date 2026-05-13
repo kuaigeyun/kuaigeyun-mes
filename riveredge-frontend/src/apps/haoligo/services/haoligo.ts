@@ -84,6 +84,99 @@ export function deleteManufacturer(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/manufacturers/${rowId}`, { method: 'DELETE' });
 }
 
+/** 点检项（与后端 InspectionParamOut 对齐） */
+export interface InspectionParamRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+  unit?: string | null;
+  value_type: string;
+}
+
+export type InspectionParamCreatePayload = {
+  code: string;
+  name: string;
+  unit?: string | null;
+  value_type?: string;
+};
+
+export type InspectionParamUpdatePayload = {
+  name?: string;
+  unit?: string | null;
+  value_type?: string;
+};
+
+export function listInspectionParams(): Promise<InspectionParamRow[]> {
+  return apiRequest(`${PREFIX}/equipment/inspection-params`);
+}
+
+export function createInspectionParam(body: InspectionParamCreatePayload): Promise<InspectionParamRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-params`, { method: 'POST', data: body });
+}
+
+export function updateInspectionParam(rowId: number, body: InspectionParamUpdatePayload): Promise<InspectionParamRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-params/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteInspectionParam(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/inspection-params/${rowId}`, { method: 'DELETE' });
+}
+
+/** 点检方案 / 参数集 */
+export interface InspectionParamSetRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export type InspectionParamSetCreatePayload = { code: string; name: string };
+export type InspectionParamSetUpdatePayload = { name?: string };
+
+export function listInspectionParamSets(): Promise<InspectionParamSetRow[]> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets`);
+}
+
+export function createInspectionParamSet(body: InspectionParamSetCreatePayload): Promise<InspectionParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets`, { method: 'POST', data: body });
+}
+
+export function updateInspectionParamSet(rowId: number, body: InspectionParamSetUpdatePayload): Promise<InspectionParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteInspectionParamSet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${rowId}`, { method: 'DELETE' });
+}
+
+export interface InspectionParamSetItemRow {
+  id: number;
+  param_id: number;
+  set_id: number;
+  sort_order: number;
+  is_required: boolean;
+}
+
+export type SetItemCreatePayload = { param_id: number; sort_order?: number; is_required?: boolean };
+export type SetItemUpdatePayload = { sort_order?: number; is_required?: boolean };
+
+export function listInspectionParamSetItems(setId: number): Promise<InspectionParamSetItemRow[]> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${setId}/items`);
+}
+
+export function addInspectionParamSetItem(setId: number, body: SetItemCreatePayload): Promise<InspectionParamSetItemRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${setId}/items`, { method: 'POST', data: body });
+}
+
+export function updateInspectionParamSetItem(itemId: number, body: SetItemUpdatePayload): Promise<InspectionParamSetItemRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-set-items/${itemId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteInspectionParamSetItem(itemId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-set-items/${itemId}`, { method: 'DELETE' });
+}
+
 /** 模具台账（与后端 MoldOut 对齐） */
 export interface MoldRow {
   id: number;
