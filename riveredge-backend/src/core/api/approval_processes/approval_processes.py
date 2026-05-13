@@ -16,6 +16,7 @@ from core.schemas.approval_process import (
 )
 from core.services.approval.approval_process_service import ApprovalProcessService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -121,7 +122,8 @@ async def list_approval_processes(
             tenant_id=tenant_id,
             skip=skip,
             limit=limit,
-            is_active=is_active
+            is_active=is_active,
+            installed_app_codes=await get_installed_application_codes(tenant_id),
         )
     except Exception as e:
         logger.exception(

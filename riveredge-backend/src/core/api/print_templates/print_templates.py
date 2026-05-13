@@ -20,6 +20,7 @@ from core.schemas.print_template import (
 )
 from core.services.print.print_template_service import PrintTemplateService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -91,7 +92,8 @@ async def list_print_templates(
         limit=limit,
         type=type,
         is_active=is_active,
-        document_type=document_type
+        document_type=document_type,
+        installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return [PrintTemplateResponse.model_validate(pt) for pt in print_templates]
 

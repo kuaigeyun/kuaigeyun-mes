@@ -22,6 +22,7 @@ from core.schemas.dictionary_item import (
 )
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/data-dictionaries", tags=["Core · Data Dictionaries"])
@@ -120,6 +121,7 @@ async def list_dictionaries(
         is_active=is_active,
         name=name,
         code=code,
+        installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return DataDictionaryListResponse(
         items=[DataDictionaryResponse.model_validate(d) for d in dictionaries],

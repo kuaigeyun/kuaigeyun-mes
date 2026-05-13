@@ -4,12 +4,13 @@
 提供审批流程的 CRUD 操作与异步工作流（Taskiq）注册能力。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from uuid import UUID
 from datetime import datetime
 
 from loguru import logger
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from core.models.approval_process import ApprovalProcess
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
@@ -218,7 +219,8 @@ class ApprovalProcessService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        installed_app_codes: Optional[Set[str]] = None,
     ) -> List[ApprovalProcess]:
         """
         获取审批流程列表
@@ -228,6 +230,7 @@ class ApprovalProcessService:
             skip: 跳过数量
             limit: 限制数量
             is_active: 是否启用筛选
+            installed_app_codes: 已安装应用代码；未含快制造时隐藏其域内预设流程代码
             
         Returns:
             List[ApprovalProcess]: 审批流程列表
@@ -239,6 +242,13 @@ class ApprovalProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if installed_app_codes is not None and "kuaizhizao" not in installed_app_codes:
+            from core.services.system.installed_feature_scope import (
+                KUAIZHIZAO_APPROVAL_PROCESS_CODES,
+            )
+
+            query = query.filter(~Q(code__in=list(KUAIZHIZAO_APPROVAL_PROCESS_CODES)))
         
         return await query.order_by("-created_at").offset(skip).limit(limit).all()
     

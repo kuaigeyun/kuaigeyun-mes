@@ -4,7 +4,7 @@
 提供数据字典的 CRUD 操作和字典项管理。
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Set
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import json
@@ -212,6 +212,7 @@ class DataDictionaryService:
         is_active: Optional[bool] = None,
         name: Optional[str] = None,
         code: Optional[str] = None,
+        installed_app_codes: Optional[Set[str]] = None,
     ) -> tuple[List[DataDictionary], int]:
         """
         获取字典列表
@@ -223,16 +224,22 @@ class DataDictionaryService:
             is_active: 是否启用（可选）
             name: 字典名称（模糊搜索，可选）
             code: 字典代码（模糊搜索，可选）
+            installed_app_codes: 已安装应用；传入时按字典归属应用过滤系统字典列表
             
         Returns:
             tuple[List[DataDictionary], int]: (字典列表, 总数)
         """
-        from tortoise.expressions import Q
+        from core.services.system.installed_feature_scope import (
+            data_dictionary_list_visibility_q,
+        )
         
         query = DataDictionary.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
+
+        if installed_app_codes is not None:
+            query = query.filter(data_dictionary_list_visibility_q(installed_app_codes))
         
         # 启用状态筛选
         if is_active is not None:

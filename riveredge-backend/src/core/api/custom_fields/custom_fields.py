@@ -19,6 +19,10 @@ from core.schemas.custom_field import (
 )
 from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import (
+    get_installed_application_codes,
+    is_page_path_in_installed_apps,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
@@ -81,12 +85,14 @@ async def list_fields(
         CustomFieldListResponse: 自定义字段列表响应（包含分页信息）
     """
     skip = (page - 1) * page_size
+    installed = await get_installed_application_codes(tenant_id)
     fields, total = await CustomFieldService.list_fields(
         tenant_id=tenant_id,
         table_name=table_name,
         skip=skip,
         limit=page_size,
-        is_active=is_active
+        is_active=is_active,
+        installed_app_codes=installed,
     )
     return CustomFieldListResponse(
         items=[CustomFieldResponse.model_validate(f) for f in fields],
@@ -121,19 +127,27 @@ async def get_associated_options(
 
 
 @router.get("/pages", response_model=List[CustomFieldPageConfigResponse])
-async def list_custom_field_pages():
+async def list_custom_field_pages(
+    tenant_id: int = Depends(get_current_tenant),
+):
     """
     获取自定义字段功能页面配置列表
     
     返回系统中所有支持自定义字段的功能页面配置，用于在自定义字段页面展示和配置。
     以 core.config.custom_field_pages 中的配置为唯一数据源，保证列表完整。
+    仅返回路由归属应用已在当前租户安装并启用的页面。
     
     Returns:
         List[CustomFieldPageConfigResponse]: 功能页面配置列表
     """
     from core.config.custom_field_pages import CUSTOM_FIELD_PAGES
 
-    return [CustomFieldPageConfigResponse(**p) for p in CUSTOM_FIELD_PAGES]
+    installed = await get_installed_application_codes(tenant_id)
+    return [
+        CustomFieldPageConfigResponse(**p)
+        for p in CUSTOM_FIELD_PAGES
+        if is_page_path_in_installed_apps(p.get("page_path"), installed)
+    ]
 
 
 @router.get("/by-table/{table_name}", response_model=List[CustomFieldResponse])

@@ -4,7 +4,7 @@
 提供自定义字段的 CRUD 操作和字段值管理。
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Set
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 
@@ -14,6 +14,7 @@ from core.models.data_dictionary import DataDictionary
 from core.models.dictionary_item import DictionaryItem
 from core.schemas.custom_field import CustomFieldCreate, CustomFieldUpdate
 from core.services.data.data_dictionary_service import DataDictionaryService
+from core.services.system.installed_feature_scope import custom_field_table_visibility_q
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -122,7 +123,8 @@ class CustomFieldService:
         table_name: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        installed_app_codes: Optional[Set[str]] = None,
     ) -> Tuple[List[CustomField], int]:
         """
         获取字段列表
@@ -133,6 +135,7 @@ class CustomFieldService:
             skip: 跳过数量
             limit: 限制数量
             is_active: 是否启用（可选）
+            installed_app_codes: 已安装应用代码；传入时排除未启用应用的表
             
         Returns:
             Tuple[List[CustomField], int]: (字段列表, 总记录数)
@@ -141,6 +144,9 @@ class CustomFieldService:
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
+
+        if installed_app_codes is not None:
+            query = query.filter(custom_field_table_visibility_q(installed_app_codes))
         
         if table_name:
             query = query.filter(table_name=table_name)

@@ -4,9 +4,10 @@
 提供编码规则的 CRUD 操作。
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from core.models.code_rule import CodeRule
 from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
@@ -141,7 +142,8 @@ class CodeRuleService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        disallowed_rule_codes: Optional[Set[str]] = None,
     ) -> List[CodeRule]:
         """
         获取规则列表
@@ -151,6 +153,7 @@ class CodeRuleService:
             skip: 跳过数量
             limit: 限制数量
             is_active: 是否启用（可选）
+            disallowed_rule_codes: 因应用未启用而不可见的规则代码（与 code_rule_pages 对齐）
             
         Returns:
             List[CodeRule]: 规则列表
@@ -162,6 +165,9 @@ class CodeRuleService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if disallowed_rule_codes:
+            query = query.filter(~Q(code__in=list(disallowed_rule_codes)))
         
         return await query.offset(skip).limit(limit).order_by("-created_at")
     

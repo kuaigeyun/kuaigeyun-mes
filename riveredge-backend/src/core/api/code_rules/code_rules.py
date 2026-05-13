@@ -23,6 +23,11 @@ from core.config.code_rule_pages import (
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import (
+    code_rule_disallowed_rule_codes,
+    get_installed_application_codes,
+    is_page_path_in_installed_apps,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/code-rules", tags=["Core · Code Rules"])
@@ -82,31 +87,39 @@ async def list_rules(
     Returns:
         List[CodeRuleResponse]: 编码规则列表
     """
+    installed = await get_installed_application_codes(tenant_id)
     rules = await CodeRuleService.list_rules(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
-        is_active=is_active
+        is_active=is_active,
+        disallowed_rule_codes=code_rule_disallowed_rule_codes(installed),
     )
     return [CodeRuleResponse.model_validate(r) for r in rules]
 
 
 @router.get("/pages", response_model=List[CodeRulePageConfigResponse])
-async def list_code_rule_pages():
+async def list_code_rule_pages(
+    tenant_id: int = Depends(get_current_tenant),
+):
     """
     获取编码规则功能页面配置列表
     
     返回系统中所有有编码字段的功能页面配置，用于在编码规则页面展示和配置。
     以 core.config.code_rule_pages.CODE_RULE_PAGES 为唯一数据源，保证列表完整
     （各应用 manifest 中若未配置 code_rule_pages 会导致发现结果不全，故不再优先使用发现）。
+    仅返回路由归属应用已在当前租户安装并启用的页面。
     
     Returns:
         List[CodeRulePageConfigResponse]: 功能页面配置列表
     """
+    installed = await get_installed_application_codes(tenant_id)
     # 使用后端完整配置作为唯一数据源，确保编码规则页面列表完整
     # 为每个页面附加 fixed_text_preset（拼音缩写），前端无需维护重复配置
     result = []
     for page in CODE_RULE_PAGES:
+        if not is_page_path_in_installed_apps(page.get("page_path"), installed):
+            continue
         p = dict(page)
         p["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(p.get("page_code", ""))
         result.append(CodeRulePageConfigResponse(**p))
@@ -145,6 +158,12 @@ async def get_page_config(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"页面配置不存在: {page_code}"
+        )
+    installed = await get_installed_application_codes(tenant_id)
+    if not is_page_path_in_installed_apps(page_config.get("page_path"), installed):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"页面配置不可用（应用未启用）: {page_code}",
         )
     page_config["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(page_code)
     
