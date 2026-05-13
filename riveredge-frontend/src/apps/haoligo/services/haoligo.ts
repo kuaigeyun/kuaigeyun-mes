@@ -51,6 +51,39 @@ export function listEquipments(params?: { workshop_id?: number; skip?: number; l
   return apiRequest(`${PREFIX}/equipment/equipments`, { params });
 }
 
+/** 设备制造厂商（与后端 ManufacturerOut 对齐） */
+export interface ManufacturerRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export type ManufacturerCreatePayload = {
+  code: string;
+  name: string;
+};
+
+export type ManufacturerUpdatePayload = {
+  name?: string;
+};
+
+export function listManufacturers(): Promise<ManufacturerRow[]> {
+  return apiRequest(`${PREFIX}/equipment/manufacturers`);
+}
+
+export function createManufacturer(body: ManufacturerCreatePayload): Promise<ManufacturerRow> {
+  return apiRequest(`${PREFIX}/equipment/manufacturers`, { method: 'POST', data: body });
+}
+
+export function updateManufacturer(rowId: number, body: ManufacturerUpdatePayload): Promise<ManufacturerRow> {
+  return apiRequest(`${PREFIX}/equipment/manufacturers/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteManufacturer(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/manufacturers/${rowId}`, { method: 'DELETE' });
+}
+
 /** 模具台账（与后端 MoldOut 对齐） */
 export interface MoldRow {
   id: number;

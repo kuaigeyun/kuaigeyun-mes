@@ -17,6 +17,7 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 
 const WorkspacePage = lazy(() => import('./pages/workspace'));
 const EquipmentPage = lazy(() => import('./pages/equipment'));
+const EquipmentManufacturersPage = lazy(() => import('./pages/equipment/manufacturers'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
 const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
 const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
@@ -34,6 +35,7 @@ const HaoligoApp: React.FC = () => (
       {/* 历史菜单路径：已并入设备总览，旧书签重定向 */}
       <Route path="equipment/workshops" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment/categories" element={<Navigate to="/apps/haoligo/equipment" replace />} />
+      <Route path="equipment/manufacturers" element={withPageSuspense(EquipmentManufacturersPage)} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={<Outlet />}>
         <Route index element={<Navigate to="ledger" replace />} />
