@@ -31,6 +31,9 @@ const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>
       <Route path="workspace" element={withPageSuspense(WorkspacePage)} />
+      {/* 历史菜单路径：已并入设备总览，旧书签重定向 */}
+      <Route path="equipment/workshops" element={<Navigate to="/apps/haoligo/equipment" replace />} />
+      <Route path="equipment/categories" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={<Outlet />}>
         <Route index element={<Navigate to="ledger" replace />} />

@@ -1802,8 +1802,6 @@ export default {
   'app.haoligo.menu.workspace': '工作台',
   'app.haoligo.menu.equipment': '设备管理',
   'app.haoligo.menu.equipment.group.masterData': '基础数据',
-  'app.haoligo.menu.equipment.workshops': '车间档案',
-  'app.haoligo.menu.equipment.categories': '设备分类',
   'app.haoligo.menu.equipment.manufacturers': '制造厂商',
   'app.haoligo.menu.equipment.inspection-params': '点检项',
   'app.haoligo.menu.equipment.inspection-param-sets': '点检方案',

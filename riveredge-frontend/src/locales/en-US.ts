@@ -1798,8 +1798,6 @@ export default {
   'app.haoligo.menu.workspace': 'Workspace',
   'app.haoligo.menu.equipment': 'Equipment',
   'app.haoligo.menu.equipment.group.masterData': 'Basic Data',
-  'app.haoligo.menu.equipment.workshops': 'Workshops',
-  'app.haoligo.menu.equipment.categories': 'Equipment Categories',
   'app.haoligo.menu.equipment.manufacturers': 'Manufacturers',
   'app.haoligo.menu.equipment.inspection-params': 'Inspection Parameters',
   'app.haoligo.menu.equipment.inspection-param-sets': 'Inspection Templates',
