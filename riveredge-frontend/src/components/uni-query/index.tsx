@@ -2549,7 +2549,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   searchParamsRef,
   showReset = true,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const { token } = theme.useToken();
   
@@ -2653,11 +2653,91 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     // 合并排序后的钉住条件（共享在前，个人在后）
     return [...orderedShared, ...orderedPersonal];
   }, [savedSearchesData?.items, pagePath, orderUpdateTrigger, builtinLifecycleStageSearches]);
-  
-  // ⭐ 限制显示的钉住条件数量，避免影响后面的视图组件
-  const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
-  const visiblePinnedSearches = pinnedSearches.slice(0, MAX_VISIBLE_PINNED);
-  const morePinnedSearches = pinnedSearches.slice(MAX_VISIBLE_PINNED);
+
+  /** 钉住条件条可用宽度内能完整展示的数量（超出部分进「更多」），由测量层 + ResizeObserver 更新 */
+  const [visiblePinCount, setVisiblePinCount] = useState(Number.MAX_SAFE_INTEGER);
+  /** 工具栏内预留给钉住条件的宽度（与红框内实际内容宽度解耦，避免 max-content 自洽变窄） */
+  const pinnedSlotRef = useRef<HTMLDivElement>(null);
+  const pinnedBoxRef = useRef<HTMLDivElement>(null);
+  const measureLayerRef = useRef<HTMLDivElement>(null);
+  const pinnedListKey = useMemo(() => pinnedSearches.map((s) => s.id).join('|'), [pinnedSearches]);
+
+  const visiblePinnedSearches = useMemo(
+    () => pinnedSearches.slice(0, Math.min(visiblePinCount, pinnedSearches.length)),
+    [pinnedSearches, visiblePinCount],
+  );
+  const morePinnedSearches = useMemo(
+    () => pinnedSearches.slice(visiblePinnedSearches.length),
+    [pinnedSearches, visiblePinnedSearches.length],
+  );
+
+  const remeasurePinnedSplit = useCallback(() => {
+    if (pinnedSearches.length === 0) {
+      return;
+    }
+    const slot = pinnedSlotRef.current;
+    const measure = measureLayerRef.current;
+    if (!slot || !measure) {
+      return;
+    }
+    const avail = slot.clientWidth;
+    if (avail <= 0) {
+      return;
+    }
+    const chipEls = measure.querySelectorAll<HTMLElement>('[data-pin-chip-measure]');
+    const moreEl = measure.querySelector<HTMLElement>('[data-pin-more-measure]');
+    if (chipEls.length !== pinnedSearches.length || !moreEl) {
+      return;
+    }
+    const widths = Array.from(chipEls).map((el) => el.offsetWidth);
+    const moreW = moreEl.offsetWidth;
+    let acc = 0;
+    let best = 0;
+    for (let i = 0; i < widths.length; i++) {
+      const needMore = i < widths.length - 1;
+      const rowWidth = acc + widths[i] + (needMore ? moreW : 0);
+      if (rowWidth <= avail) {
+        acc += widths[i];
+        best = i + 1;
+      } else {
+        break;
+      }
+    }
+    if (best === 0) {
+      best = 1;
+    }
+    if (best > pinnedSearches.length) {
+      best = pinnedSearches.length;
+    }
+    setVisiblePinCount(best);
+  }, [pinnedSearches]);
+
+  useLayoutEffect(() => {
+    remeasurePinnedSplit();
+  }, [remeasurePinnedSplit, pinnedListKey, i18n.language]);
+
+  useEffect(() => {
+    const slot = pinnedSlotRef.current;
+    if (!slot || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (raf) {
+        cancelAnimationFrame(raf);
+      }
+      raf = requestAnimationFrame(() => {
+        remeasurePinnedSplit();
+      });
+    });
+    ro.observe(slot);
+    return () => {
+      ro.disconnect();
+      if (raf) {
+        cancelAnimationFrame(raf);
+      }
+    };
+  }, [remeasurePinnedSplit, pinnedListKey]);
   /**
    * 修复：创建稳定的激活状态计算函数，避免无限循环
    */
@@ -2885,6 +2965,20 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     }
   }, [visible, modalStyle, calculateModalPosition]);
 
+  /** 钉住标签 / 「更多」：去掉上下 padding 与过大行高，避免中文在 32px 高度内视觉上偏上 */
+  const pinnedTabTextBtnLayout = useMemo(
+    () => ({
+      height: 32,
+      padding: '0 15px',
+      lineHeight: 1,
+      display: 'inline-flex' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      boxSizing: 'border-box' as const,
+    }),
+    [],
+  );
+
   return (
     <>
       <div
@@ -2895,6 +2989,8 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           minHeight: '32px',
           flexWrap: 'wrap',
           rowGap: 8,
+          flex: 1,
+          minWidth: 0,
         }}
       >
       <Button
@@ -2916,107 +3012,185 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
             {t('components.uniQuery.reset')}
           </Button>
         )}
-        {/* 显示钉住的搜索条件 - 使用 TAB 样式，与模糊搜索相同的阴影效果 */}
+        {/* 钉住条件：按容器宽度动态拆分，宽度不足时收入「更多」下拉 */}
         {pinnedSearches.length > 0 && (
-          <div 
-            className="uni-query-pinned-conditions"
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 0, 
+          <div
+            ref={pinnedSlotRef}
+            style={{
+              flex: 1,
+              minWidth: 0,
               margin: '0 8px',
-              borderRadius: token.borderRadius,
-              border: `1px solid ${token.colorBorder}`,
-              overflow: 'hidden',
-              backgroundColor: token.colorBgContainer,
-              height: '32px', // 与高级搜索按钮高度一致
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
             }}
           >
-            {/* 显示前 N 个钉住的条件 - 使用 Button TAB 样式 */}
-            {visiblePinnedSearches.map((search, index) => {
-              const isActive = pinnedSearchActiveStates[index];
-              return (
-                <Button
-                  key={search.id}
-                  onClick={() => handleLoadPinnedSearch(search)}
-                  type="text"
-                  style={{ 
-                    borderRadius: 0,
-                    border: 'none',
-                    borderRight: index < visiblePinnedSearches.length - 1 || morePinnedSearches.length > 0 ? `1px solid ${token.colorBorder}` : 'none',
-                    height: '32px',
-                    padding: '4px 15px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '150px',
-                    backgroundColor: isActive ? token.colorPrimaryBg : token.colorBgContainer,
-                    color: isActive ? token.colorPrimary : token.colorText,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-                      e.currentTarget.style.color = token.colorPrimary;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = token.colorBgContainer;
-                      e.currentTarget.style.color = token.colorText;
-                    } else {
-                      e.currentTarget.style.backgroundColor = token.colorPrimaryBg;
-                      e.currentTarget.style.color = token.colorPrimary;
-                    }
-                  }}
-                  title={search.name}
-                >
-                  {search.name}
-                </Button>
-              );
-            })}
-            {/* 如果还有更多钉住的条件，显示"更多条件"下拉菜单 - 使用 Button TAB 样式 */}
-            {morePinnedSearches.length > 0 && (
-              <Dropdown
-                menu={{
-                  items: morePinnedSearches.map((search) => ({
-                    key: search.id,
-                    label: search.name,
-                    onClick: () => handleLoadPinnedSearch(search),
-                  })),
+            <div
+              ref={pinnedBoxRef}
+              className="uni-query-pinned-conditions"
+              style={{
+                position: 'relative',
+                width: 'max-content',
+                maxWidth: '100%',
+                minWidth: 0,
+                alignSelf: 'flex-start',
+                borderRadius: token.borderRadius,
+                border: `1px solid ${token.colorBorder}`,
+                overflow: 'hidden',
+                backgroundColor: token.colorBgContainer,
+                height: '32px',
+                boxShadow:
+                  '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+              }}
+            >
+              {/* 离屏测量：与可见按钮同样式，用于计算可容纳条数 */}
+              <div
+                ref={measureLayerRef}
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  left: -99999,
+                  top: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  visibility: 'hidden',
+                  pointerEvents: 'none',
+                  height: '32px',
                 }}
-                trigger={['click']}
               >
+                {pinnedSearches.map((search, index) => (
+                  <Button
+                    key={`measure-${search.id}`}
+                    type="text"
+                    data-pin-chip-measure
+                    tabIndex={-1}
+                    style={{
+                      ...pinnedTabTextBtnLayout,
+                      borderRadius: 0,
+                      border: 'none',
+                      borderRight:
+                        index < pinnedSearches.length - 1 || pinnedSearches.length > 0
+                          ? `1px solid ${token.colorBorder}`
+                          : 'none',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '150px',
+                      backgroundColor: token.colorBgContainer,
+                      color: token.colorText,
+                    }}
+                  >
+                    {search.name}
+                  </Button>
+                ))}
                 <Button
                   type="text"
                   icon={<DownOutlined />}
-                  style={{ 
+                  data-pin-more-measure
+                  tabIndex={-1}
+                  style={{
+                    ...pinnedTabTextBtnLayout,
+                    gap: 4,
                     borderRadius: 0,
                     border: 'none',
-                    height: '32px',
-                    padding: '4px 15px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     backgroundColor: token.colorBgContainer,
                     color: token.colorText,
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-                    e.currentTarget.style.color = token.colorPrimary;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = token.colorBgContainer;
-                    e.currentTarget.style.color = token.colorText;
-                  }}
                 >
-                  {t('components.uniQuery.more')} ({morePinnedSearches.length})
+                  {t('components.uniQuery.more')} ({Math.max(1, pinnedSearches.length - 1)})
                 </Button>
-              </Dropdown>
-            )}
+              </div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  alignItems: 'center',
+                  height: '32px',
+                }}
+              >
+                {visiblePinnedSearches.map((search, index) => {
+                  const isActive = pinnedSearchActiveStates[index];
+                  return (
+                    <Button
+                      key={search.id}
+                      onClick={() => handleLoadPinnedSearch(search)}
+                      type="text"
+                      style={{
+                        ...pinnedTabTextBtnLayout,
+                        borderRadius: 0,
+                        border: 'none',
+                        flexShrink: 0,
+                        borderRight:
+                          index < visiblePinnedSearches.length - 1 || morePinnedSearches.length > 0
+                            ? `1px solid ${token.colorBorder}`
+                            : 'none',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: '150px',
+                        backgroundColor: isActive ? token.colorPrimaryBg : token.colorBgContainer,
+                        color: isActive ? token.colorPrimary : token.colorText,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+                          e.currentTarget.style.color = token.colorPrimary;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                          e.currentTarget.style.color = token.colorText;
+                        } else {
+                          e.currentTarget.style.backgroundColor = token.colorPrimaryBg;
+                          e.currentTarget.style.color = token.colorPrimary;
+                        }
+                      }}
+                      title={search.name}
+                    >
+                      {search.name}
+                    </Button>
+                  );
+                })}
+                {morePinnedSearches.length > 0 && (
+                  <Dropdown
+                    menu={{
+                      items: morePinnedSearches.map((search) => ({
+                        key: search.id,
+                        label: search.name,
+                        onClick: () => handleLoadPinnedSearch(search),
+                      })),
+                    }}
+                    trigger={['click']}
+                  >
+                    <Button
+                      type="text"
+                      icon={<DownOutlined />}
+                      style={{
+                        ...pinnedTabTextBtnLayout,
+                        gap: 4,
+                        borderRadius: 0,
+                        border: 'none',
+                        flexShrink: 0,
+                        backgroundColor: token.colorBgContainer,
+                        color: token.colorText,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+                        e.currentTarget.style.color = token.colorPrimary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                        e.currentTarget.style.color = token.colorText;
+                      }}
+                    >
+                      {t('components.uniQuery.more')} ({morePinnedSearches.length})
+                    </Button>
+                  </Dropdown>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

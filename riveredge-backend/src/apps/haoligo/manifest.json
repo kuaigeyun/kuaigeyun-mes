@@ -162,20 +162,6 @@
             "sort_order": 10,
             "children": [
               {
-                "title": "app.haoligo.menu.equipment.workshops",
-                "path": "/apps/haoligo/equipment/workshops",
-                "icon": "Building2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 11
-              },
-              {
-                "title": "app.haoligo.menu.equipment.categories",
-                "path": "/apps/haoligo/equipment/categories",
-                "icon": "Tags",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 12
-              },
-              {
                 "title": "app.haoligo.menu.equipment.manufacturers",
                 "path": "/apps/haoligo/equipment/manufacturers",
                 "icon": "Factory",

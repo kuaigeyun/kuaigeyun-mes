@@ -155,7 +155,9 @@ const UniSearch: React.FC<UniSearchProps> = ({
         />
       )}
       {betweenFuzzyAndAdvanced}
-      {!isMobile && showAdvancedSearch && resolvedAdvanced}
+      {!isMobile && showAdvancedSearch && resolvedAdvanced ? (
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>{resolvedAdvanced}</div>
+      ) : null}
       {afterSearch}
       {!isMobile && canReset && (
         <Button

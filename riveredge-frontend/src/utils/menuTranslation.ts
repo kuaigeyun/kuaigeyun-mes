@@ -55,9 +55,12 @@ function sanitizeHaoligoMenuDisplayTitle(
   if (effectivePath.includes('/apps/haoligo/equipment')) {
     out = out.replace(/^设备\s*[·・]\s*/u, '').trim();
     const map: Record<string, string> = {
-      记录与现场一致: '点检与巡检',
-      记录与现场: '点检与巡检',
-      报表与大屏: '看板与统计',
+      主数据: '基础数据',
+      记录与现场一致: '点检巡检',
+      记录与现场: '点检巡检',
+      点检与巡检: '点检巡检',
+      报表与大屏: '看板统计',
+      看板与统计: '看板统计',
       设置与集成: '集成设置',
     };
     return map[out] ?? out;
