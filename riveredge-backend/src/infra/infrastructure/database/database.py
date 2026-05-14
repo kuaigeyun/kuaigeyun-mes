@@ -349,6 +349,8 @@ TORTOISE_ORM = {
                 "apps.haoligo.models.mold_borrow_sheet",
                 "apps.haoligo.models.mold_return_sheet",
                 "apps.haoligo.models.mold_trial_sheet",
+                "apps.haoligo.models.mold_trial_dataset_binding",
+                "apps.haoligo.models.mold_ledger_dataset_binding",
                 "apps.haoligo.models.mold_maintenance_complete_sheet",
                 "apps.haoligo.models.mold_maintenance_sheet",
                 "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",

@@ -1,5 +1,6 @@
 /**
- * 好力 GO — 领用单（列表 + 两栏 Modal，底栏：重置 / 切换扫描·选择 / 提交）
+ * 好力 GO — 领用单（列表 + 两栏 Modal，底栏：重置 / 提交）
+ * 电脑端：来源单号手输；模具代号可手输或「选择」台账。扫码制令单等能力预留到移动端再接。
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -12,8 +13,8 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Input, Modal, Row, Space, Table, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined, ScanOutlined } from '@ant-design/icons';
+import { App, Button, Col, Input, Modal, Row, Space, Table } from 'antd';
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -58,7 +59,6 @@ const MoldBorrowOutPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
-  const [scanMode, setScanMode] = useState(true);
   const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
@@ -105,7 +105,6 @@ const MoldBorrowOutPage: React.FC = () => {
   const handleCreate = async () => {
     setIsEdit(false);
     setEditId(null);
-    setScanMode(true);
     setFormInitialValues({
       source_order_no: undefined,
       department_uuid: undefined,
@@ -126,7 +125,6 @@ const MoldBorrowOutPage: React.FC = () => {
       const d = await getMoldBorrowSheet(record.id);
       setIsEdit(true);
       setEditId(d.id);
-      setScanMode(true);
       setFormInitialValues({
         source_order_no: d.source_order_no ?? undefined,
         department_uuid: d.department_uuid ?? undefined,
@@ -228,18 +226,7 @@ const MoldBorrowOutPage: React.FC = () => {
 
   const onResetForm = () => {
     formRef.current?.resetFields();
-    setScanMode(true);
     messageApi.success('已重置');
-  };
-
-  const onToggleScanSelect = () => {
-    const next = !scanMode;
-    setScanMode(next);
-    messageApi.info(next ? '已切换为「扫描制令单」优先' : '已切换为「选择模具」优先，可点模具代号旁「选择」');
-  };
-
-  const onScanSourceClick = () => {
-    messageApi.info(scanMode ? '请使用扫码设备扫描制令单条码（来源单号将填入上方）' : '当前为选择模式，点「切换扫描/选择」后可扫描制令单');
   };
 
   const columns: ProColumns<MoldBorrowSheetRow>[] = [
@@ -324,14 +311,9 @@ const MoldBorrowOutPage: React.FC = () => {
             <Button htmlType="button" onClick={onResetForm}>
               重置
             </Button>
-            <Space>
-              <Button htmlType="button" type="primary" onClick={onToggleScanSelect}>
-                切换扫描/选择
-              </Button>
-              <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
-                提交{SUBMIT_SHORTCUT_HINT}
-              </Button>
-            </Space>
+            <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
+              提交{SUBMIT_SHORTCUT_HINT}
+            </Button>
           </div>
         }
       >
@@ -353,18 +335,8 @@ const MoldBorrowOutPage: React.FC = () => {
           >
             <Row gutter={16}>
               <Col span={12}>
-                <ProForm.Item
-                  name="source_order_no"
-                  label="来源单号"
-                  tooltip={scanMode ? '请扫描制令单' : '可手输或切换为扫描模式'}
-                >
-                  <Input
-                    placeholder={scanMode ? '请扫描制令单' : '请输入或选择制令单号'}
-                    allowClear
-                    suffix={
-                      <Button type="text" size="small" icon={<ScanOutlined />} onClick={onScanSourceClick} aria-label="扫描" />
-                    }
-                  />
+                <ProForm.Item name="source_order_no" label="来源单号" tooltip="制令单号等，请在本机手输（移动端将支持扫码填入）">
+                  <Input placeholder="请输入制令单号（来源单号）" allowClear />
                 </ProForm.Item>
               </Col>
               <Col span={12}>
@@ -385,7 +357,7 @@ const MoldBorrowOutPage: React.FC = () => {
                   placeholder="请输入内容"
                   rules={[{ required: true, message: '请输入模具代号' }]}
                   fieldProps={{
-                    addonAfter: !scanMode ? (
+                    addonAfter: (
                       <Button
                         type="link"
                         size="small"
@@ -397,7 +369,7 @@ const MoldBorrowOutPage: React.FC = () => {
                       >
                         选择
                       </Button>
-                    ) : undefined,
+                    ),
                   }}
                 />
               </Col>
@@ -418,11 +390,6 @@ const MoldBorrowOutPage: React.FC = () => {
                   min={0}
                   fieldProps={{ precision: 4, style: { width: '100%' } }}
                 />
-              </Col>
-              <Col span={12}>
-                <Tag color={scanMode ? 'blue' : 'geekblue'} style={{ marginTop: 30 }}>
-                  {scanMode ? '当前：扫描优先' : '当前：选择模具'}
-                </Tag>
               </Col>
             </Row>
           </ProForm>

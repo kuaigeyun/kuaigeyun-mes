@@ -116,7 +116,11 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
         try {
           const result = await testConnection(created.uuid);
           if (result.success) {
-            messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
+            if (result.verification_level === 'config_only') {
+              messageApi.warning(result.message || t('pages.system.integrationConfigs.testSuccess'));
+            } else {
+              messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
+            }
           } else {
             messageApi.warning(result.message || t('pages.system.integrationConfigs.testNotPassed'));
           }

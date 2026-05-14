@@ -59,7 +59,7 @@ export const CONNECTOR_DEFINITIONS: ConnectorDefinition[] = [
     name: 'SQL Server',
     type: 'sqlserver',
     category: 'database',
-    description: 'Microsoft SQL Server',
+    description: 'Microsoft SQL Server（连接测试将真实执行 SELECT 1；主机请按 Navicat 填写「地址,端口」；表单内可选加密与 TDS 版本）',
     icon: <DatabaseOutlined />,
     defaultConfig: { host: 'localhost', port: 1433, database: '', username: '', password: '' },
   },

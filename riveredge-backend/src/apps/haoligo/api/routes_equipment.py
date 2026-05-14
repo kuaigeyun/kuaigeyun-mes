@@ -640,12 +640,18 @@ async def list_equipments(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     workshop_id: Optional[int] = Query(None),
+    asset_code: Optional[str] = Query(None, description="设备代号模糊匹配"),
+    name: Optional[str] = Query(None, description="设备名称模糊匹配"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
     qs = tenant_alive(HaoligoEquipment, tenant_id)
     if workshop_id is not None:
         qs = qs.filter(workshop_id=workshop_id)
+    if asset_code:
+        qs = qs.filter(asset_code__icontains=asset_code.strip())
+    if name:
+        qs = qs.filter(name__icontains=name.strip())
     total = await qs.count()
     rows = await qs.order_by("asset_code").offset(skip).limit(limit)
     return {
@@ -787,14 +793,36 @@ async def update_patrol_route(
     row = await tenant_alive(HaoligoPatrolRoute, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    if body.name is not None:
-        row.name = body.name.strip()
-    if body.workshop_id is not None:
-        if not await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=body.workshop_id).exists():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
-        row.workshop_id = body.workshop_id
+    patch = body.model_dump(exclude_unset=True)
+    if "name" in patch and patch["name"] is not None:
+        row.name = patch["name"].strip()
+    if "workshop_id" in patch:
+        wid = patch["workshop_id"]
+        if wid is not None:
+            if not await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=wid).exists():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
+            row.workshop_id = wid
+        else:
+            row.workshop_id = None
     await row.save()
     return PatrolRouteOut.model_validate(row)
+
+
+@router.delete("/patrol-routes/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除巡检路线")
+async def delete_patrol_route(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoPatrolRoute, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    now = timezone.now()
+    row.deleted_at = now
+    await row.save()
+    await HaoligoPatrolRouteStep.filter(
+        route_id=row_id, tenant_id=tenant_id, deleted_at__isnull=True
+    ).update(deleted_at=now)
 
 
 @router.get(

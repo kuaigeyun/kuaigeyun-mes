@@ -72,6 +72,8 @@ export interface ExecuteQueryRequest {
   parameters?: Record<string, any>;
   limit?: number;
   offset?: number;
+  /** 与已保存 query_config 浅合并，仅本次执行（不落库）；设计器未点保存时传入当前编辑内容 */
+  query_config?: Record<string, any>;
 }
 
 export interface ExecuteQueryResponse {

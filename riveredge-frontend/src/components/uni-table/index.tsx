@@ -8,8 +8,8 @@
  *    - **2.1 左侧**：**uni-search** — `UniSearch`（模糊/高级搜索、重置等）。
  *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
  * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
- *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
- *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**（`UniImportToolbarButton` + `LazyUniImport` / `UniImport`）、**uni-export**（`UniExportMenuButton`）、**uni-sync**（`UniSyncButton`）、**打印**（按选中行）；**表格设定**为 ProTable 原生 **`options`**（密度、列设置、reload 等，可含 `TableColumnResetButton`）。
+ *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
+ *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**、**uni-export**、**关联数据集配置**（可选，位于同步按钮前）、**uni-sync**、**打印**；**表格设定**为 ProTable 原生 **`options`**。
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
@@ -46,6 +46,7 @@ import {
   EditOutlined,
   EyeOutlined,
   PrinterOutlined,
+  TableOutlined,
   AppstoreOutlined,
   BarsOutlined,
   BarChartOutlined,
@@ -447,6 +448,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   showFuzzySearch?: boolean
   /**
+   * 为 true 时不在前端对「全字母关键词」做拼音首字母二次过滤（适用于已在 request 内把 `keyword` 交给后端全表搜索的列表）。
+   * 默认 false：保留拼音首字母与当前页数据组合的旧行为。
+   */
+  skipFuzzyPinyinClientFilter?: boolean
+  /**
    * 是否显示高级搜索按钮（默认：true）
    */
   showAdvancedSearch?: boolean
@@ -486,6 +492,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 行编辑删除回调
    */
   onRowEditDelete?: (key: React.Key, row: T) => Promise<void>
+  /**
+   * **3.1 左侧**，在新建按钮之前的节点（典型：从外部单据创建入口）。
+   */
+  toolBarActionsBeforeCreate?: ReactNode[]
   /**
    * **3.1 左侧**，紧接在新建（含 uni-pull 入口）之后的节点（典型：uni-push）。
    */
@@ -570,6 +580,15 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 同步按钮文案（默认：'同步'）
    */
   syncButtonText?: string
+  /**
+   * 是否显示「关联数据集配置」按钮（默认：false）
+   * 右侧顺序：导入 → 导出 → **本按钮** → 同步 → 打印（与「同步」同一工具区，占同步前一位）。
+   */
+  showDatasetConfigButton?: boolean
+  /** 「关联数据集配置」点击回调（如跳转 `/system/datasets`） */
+  onDatasetConfig?: () => void
+  /** 按钮文案（不传则用 i18n `components.uniTable.datasetConfig`） */
+  datasetConfigButtonText?: string
   /**
    * 是否显示打印按钮（默认：false，位于右侧：导入/导出/同步/打印/表格设置）。
    */
@@ -861,6 +880,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   headerActions,
   rowKey = 'id',
   showFuzzySearch = true, // 默认显示模糊搜索
+  skipFuzzyPinyinClientFilter = false,
   showAdvancedSearch = true, // 默认显示高级搜索
   beforeSearchButtons,
   afterSearchButtons,
@@ -871,6 +891,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   enableRowEdit = false,
   onRowEditSave,
   onRowEditDelete,
+  toolBarActionsBeforeCreate = [],
   toolBarActionsAfterCreate = [],
   toolBarActions = [],
   toolBarActionsAfterDelete = [],
@@ -887,6 +908,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showSyncButton = false,
   onSync,
   syncButtonText,
+  showDatasetConfigButton = false,
+  onDatasetConfig,
+  datasetConfigButtonText,
   showPrintButton = false,
   onPrint,
   printButtonText,
@@ -968,6 +992,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch()
   // 模糊搜索关键词状态
   const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('')
+  /** 递增以使 QuerySearchButton 重算钉住条件激活态（searchParamsRef 变更不触发渲染） */
+  const [pinnedSearchUiEpoch, setPinnedSearchUiEpoch] = useState(0)
   // 防抖定时器引用
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -1094,6 +1120,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     defaultPageSize,
     columnsForPinyinSearch,
     resolvedTanstackQuery,
+    skipFuzzyPinyinClientFilter,
   })
   requestRuntimeRef.current = {
     showLoading,
@@ -1101,6 +1128,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     defaultPageSize,
     columnsForPinyinSearch,
     resolvedTanstackQuery,
+    skipFuzzyPinyinClientFilter,
   }
 
   // 预加载 UniImport（UniverSheet ~2MB）：直接在挂载时触发 import，让浏览器与页面其它资源并行下载。
@@ -1471,6 +1499,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     setFuzzySearchKeyword('')
     // 清空高级搜索 / 钉住条件写入的 searchParamsRef，否则仅删 keyword 时阶段筛选仍会生效
     searchParamsRef.current = undefined
+    setPinnedSearchUiEpoch((e) => e + 1)
     try {
       formRef.current?.resetFields?.()
     } catch {
@@ -1543,6 +1572,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       defaultPageSize: liveDefaultPageSize,
       columnsForPinyinSearch: livePinyinCols,
       resolvedTanstackQuery: tq,
+      skipFuzzyPinyinClientFilter: liveSkipFuzzyPinyinClientFilter,
     } = requestRuntimeRef.current
 
     if (liveShowLoading && liveLoadingDelay > 0) {
@@ -1567,7 +1597,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       searchParamsRef.current !== undefined ? searchParamsRef.current : formValues
 
     const keywordForPrefetch = searchFormValues?.keyword
-    const skipPrefetchForPinyin = !!(keywordForPrefetch && isPinyinKeyword(keywordForPrefetch))
+    const skipPrefetchForPinyin = !!(
+      keywordForPrefetch &&
+      isPinyinKeyword(keywordForPrefetch) &&
+      !liveSkipFuzzyPinyinClientFilter
+    )
 
     try {
       const runRequest = () => requestRef.current(params, sort, filter, searchFormValues)
@@ -1662,7 +1696,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
       // 拼音搜索：关键词为拼音首字母时在前端对返回数据二次过滤
       const keyword = searchFormValues?.keyword
-      if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
+      if (
+        !liveSkipFuzzyPinyinClientFilter &&
+        keyword &&
+        isPinyinKeyword(keyword) &&
+        result.data &&
+        Array.isArray(result.data)
+      ) {
         // 避免改写 TanStack 缓存中的对象引用
         const keywordLower = keyword.toLowerCase()
         const keywordUpper = keyword.toUpperCase()
@@ -1739,7 +1779,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return headerActions
     }
 
-    // 新建按钮（第一位），带 Alt+N 快捷键提示
+    if (toolBarActionsBeforeCreate.length > 0) {
+      actions.push(...toolBarActionsBeforeCreate)
+    }
+
+    // 新建按钮，带 Alt+N 快捷键提示
     if (showCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
@@ -1838,7 +1882,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  /** 3.2 右侧：uni-import / uni-export / uni-sync（表格设定见 `memoizedOptions`） */
+  /** 3.2 右侧：uni-import / uni-export / 关联数据集配置（可选）/ uni-sync（表格设定见 `memoizedOptions`） */
   const buildRightActions = () => {
     const rightButtons: ReactNode[] = []
 
@@ -1861,6 +1905,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           selectedRowKeys={selectedRowKeys}
           tableData={tableData}
         />
+      )
+    }
+
+    if (showDatasetConfigButton && onDatasetConfig) {
+      rightButtons.push(
+        <Button
+          key="dataset-config"
+          type="default"
+          size={toolBarButtonSize}
+          icon={<TableOutlined />}
+          onClick={() => onDatasetConfig()}
+        >
+          {datasetConfigButtonText ?? t('components.uniTable.datasetConfig')}
+        </Button>
       )
     }
 
@@ -2084,6 +2142,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 formRef: formRef as React.MutableRefObject<ProFormInstance>,
                 actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
                 searchParamsRef,
+                pinnedSearchUiEpoch,
               }}
               afterSearch={afterSearchButtons}
               showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}

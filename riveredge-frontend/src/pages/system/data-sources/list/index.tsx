@@ -323,7 +323,11 @@ const DataSourceListPage: React.FC = () => {
       setTestingConnection(true);
       const result = await testDataSourceConfig({ type, config });
       if (result.success) {
-        messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
+        if (result.verification_level === 'config_only') {
+          messageApi.warning(result.message || t('pages.system.dataSources.testSuccess'));
+        } else {
+          messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
+        }
       } else {
         messageApi.error(result.message || t('pages.system.dataSources.testFailed'));
       }
@@ -346,7 +350,11 @@ const DataSourceListPage: React.FC = () => {
       // setTestingUuid(record.uuid);
       const result = await testDataSourceConnection(record.uuid);
       if (result.success) {
-        messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
+        if (result.verification_level === 'config_only') {
+          messageApi.warning(result.message || t('pages.system.dataSources.testSuccess'));
+        } else {
+          messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
+        }
       } else {
         messageApi.error(result.message || t('pages.system.dataSources.testFailed'));
       }
@@ -370,7 +378,15 @@ const DataSourceListPage: React.FC = () => {
       if (config.username !== undefined && ['postgresql', 'mysql', 'oracle', 'sqlserver', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'elasticsearch', 'Database'].includes(type)) {
         config.user = config.username;
       }
-      
+      if (type === 'sqlserver') {
+        if (config.encryption === '' || config.encryption === undefined || config.encryption === null) {
+          delete config.encryption;
+        }
+        if (config.tds_version === '' || config.tds_version === undefined || config.tds_version === null) {
+          delete config.tds_version;
+        }
+      }
+
       if (isEdit && currentDataSourceUuid) {
         await updateDataSource(currentDataSourceUuid, {
           name,
@@ -1004,21 +1020,14 @@ const DataSourceListPage: React.FC = () => {
         formRef={formRef}
         grid
         extraFooter={
-          <ProFormDependency name={['type']}>
-            {({ type }) => {
-              if (!type || !['postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver', 'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'elasticsearch', 'api', 'Database'].includes(type)) return null;
-              return (
-                <Button
-                  type="default"
-                  icon={<ThunderboltOutlined />}
-                  loading={testingConnection}
-                  onClick={handleTestConnectionInForm}
-                >
-                  {t('pages.system.dataSources.testConnection')}
-                </Button>
-              );
-            }}
-          </ProFormDependency>
+          <Button
+            type="default"
+            icon={<ThunderboltOutlined />}
+            loading={testingConnection}
+            onClick={handleTestConnectionInForm}
+          >
+            {t('pages.system.dataSources.testConnection')}
+          </Button>
         }
       >
         <ProFormText
@@ -1067,7 +1076,81 @@ const DataSourceListPage: React.FC = () => {
             {({ type }) => {
               if (!type) return null;
 
-              if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'Database'].includes(type)) {
+              if (type === 'sqlserver') {
+                return (
+                  <>
+                    <ProFormText
+                      name="host"
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.sqlserverHostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormSelect
+                      name="encryption"
+                      label={t('pages.system.dataSources.labelSqlServerEncryption')}
+                      tooltip={t('pages.system.dataSources.sqlserverEncryptionTooltip')}
+                      allowClear
+                      options={[
+                        { label: t('pages.system.dataSources.sqlserverEncryptionDefault'), value: '' },
+                        { label: t('pages.system.dataSources.sqlserverEncryptionOff'), value: 'off' },
+                        { label: t('pages.system.dataSources.sqlserverEncryptionRequest'), value: 'request' },
+                        { label: t('pages.system.dataSources.sqlserverEncryptionRequire'), value: 'require' },
+                        { label: t('pages.system.dataSources.sqlserverEncryptionDriverDefault'), value: 'default' },
+                      ]}
+                      fieldProps={{ optionFilterProp: 'label' }}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormDigit name="port" hidden initialValue={1433} />
+                    <ProFormText
+                      name="database"
+                      label={t('pages.system.dataSources.labelDatabase')}
+                      placeholder={t('pages.system.dataSources.databasePlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.databaseRequired') }]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText
+                      name="username"
+                      label={t('pages.system.dataSources.labelUsername')}
+                      placeholder={t('pages.system.dataSources.usernamePlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.usernameRequired') }]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText.Password
+                      name="password"
+                      label={t('pages.system.dataSources.labelPassword')}
+                      placeholder={t('pages.system.dataSources.passwordPlaceholder')}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormSelect
+                      name="tds_version"
+                      label={t('pages.system.dataSources.labelSqlServerTdsVersion')}
+                      tooltip={t('pages.system.dataSources.sqlserverTdsVersionTooltip')}
+                      allowClear
+                      options={[
+                        { label: t('pages.system.dataSources.sqlserverTdsDefault'), value: '' },
+                        { label: '7.0', value: '7.0' },
+                        { label: '7.1', value: '7.1' },
+                        { label: '7.2', value: '7.2' },
+                        { label: '7.3', value: '7.3' },
+                        { label: '7.4', value: '7.4' },
+                        { label: '8.0', value: '8.0' },
+                      ]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormDigit
+                      name="login_timeout"
+                      label={t('pages.system.dataSources.labelSqlServerLoginTimeout')}
+                      tooltip={t('pages.system.dataSources.sqlserverLoginTimeoutTooltip')}
+                      initialValue={15}
+                      fieldProps={{ min: 1, max: 120, precision: 0, style: { width: '100%' } }}
+                      colProps={{ span: 12 }}
+                    />
+                  </>
+                );
+              }
+
+              if (['postgresql', 'mysql', 'oracle', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'Database'].includes(type)) {
                 return (
                   <>
                     <ProFormText
@@ -1084,7 +1167,6 @@ const DataSourceListPage: React.FC = () => {
                         type === 'mysql' ? '3306' : 
                         type === 'postgresql' ? '5432' :
                         type === 'oracle' ? '1521' :
-                        type === 'sqlserver' ? '1433' :
                         type === 'clickhouse' ? '8123' :
                         type === 'doris' || type === 'starrocks' ? '9030' :
                         type === 'influxdb' ? '8086' : '5432'

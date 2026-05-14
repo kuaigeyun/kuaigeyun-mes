@@ -6,6 +6,13 @@ import { apiRequest } from '../../../services/api';
 
 const PREFIX = '/apps/haoligo';
 
+export interface PageResult<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 export interface HaoligoMeta {
   app_key: string;
   display_name: string;
@@ -40,15 +47,118 @@ export interface EquipmentRow {
   remark?: string | null;
 }
 
-export interface PageResult<T> {
-  items: T[];
-  total: number;
-  skip: number;
-  limit: number;
+export interface CategoryRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+  default_inspection_param_set_id?: number | null;
 }
 
-export function listEquipments(params?: { workshop_id?: number; skip?: number; limit?: number }): Promise<PageResult<EquipmentRow>> {
+export function listCategories(): Promise<CategoryRow[]> {
+  return apiRequest(`${PREFIX}/equipment/categories`);
+}
+
+export type EquipmentCreatePayload = {
+  asset_code: string;
+  name: string;
+  category_id: number;
+  workshop_id: number;
+  manufacturer_id?: number | null;
+  manufacture_date?: string | null;
+  inspection_param_set_id?: number | null;
+  remark?: string | null;
+};
+
+export type EquipmentUpdatePayload = {
+  name?: string;
+  category_id?: number;
+  workshop_id?: number;
+  manufacturer_id?: number | null;
+  manufacture_date?: string | null;
+  inspection_param_set_id?: number | null;
+  remark?: string | null;
+};
+
+export function listEquipments(params?: {
+  workshop_id?: number;
+  asset_code?: string;
+  name?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<PageResult<EquipmentRow>> {
   return apiRequest(`${PREFIX}/equipment/equipments`, { params });
+}
+
+export function getEquipment(rowId: number): Promise<EquipmentRow> {
+  return apiRequest(`${PREFIX}/equipment/equipments/${rowId}`);
+}
+
+export function createEquipment(body: EquipmentCreatePayload): Promise<EquipmentRow> {
+  return apiRequest(`${PREFIX}/equipment/equipments`, { method: 'POST', data: body });
+}
+
+export function updateEquipment(rowId: number, body: EquipmentUpdatePayload): Promise<EquipmentRow> {
+  return apiRequest(`${PREFIX}/equipment/equipments/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipment(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/equipments/${rowId}`, { method: 'DELETE' });
+}
+
+/** 巡检路线（PatrolRouteOut） */
+export interface PatrolRouteRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+  workshop_id?: number | null;
+}
+
+export interface PatrolStepRow {
+  id: number;
+  equipment_id: number;
+  sequence: number;
+}
+
+export type PatrolRouteCreatePayload = {
+  code: string;
+  name: string;
+  workshop_id?: number | null;
+};
+
+export type PatrolRouteUpdatePayload = {
+  name?: string;
+  workshop_id?: number | null;
+};
+
+export type PatrolStepInPayload = {
+  equipment_id: number;
+  sequence: number;
+};
+
+export function listPatrolRoutes(): Promise<PatrolRouteRow[]> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes`);
+}
+
+export function createPatrolRoute(body: PatrolRouteCreatePayload): Promise<PatrolRouteRow> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes`, { method: 'POST', data: body });
+}
+
+export function updatePatrolRoute(rowId: number, body: PatrolRouteUpdatePayload): Promise<PatrolRouteRow> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deletePatrolRoute(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes/${rowId}`, { method: 'DELETE' });
+}
+
+export function listPatrolSteps(routeId: number): Promise<PatrolStepRow[]> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes/${routeId}/steps`);
+}
+
+export function replacePatrolSteps(routeId: number, steps: PatrolStepInPayload[]): Promise<PatrolStepRow[]> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes/${routeId}/steps`, { method: 'PUT', data: steps });
 }
 
 /** 设备制造厂商（与后端 ManufacturerOut 对齐） */
@@ -224,7 +334,13 @@ export type MoldCreatePayload = {
 
 export type MoldUpdatePayload = Partial<Omit<MoldCreatePayload, 'mold_code'>>;
 
-export function listMolds(params?: { skip?: number; limit?: number; status?: string }): Promise<PageResult<MoldRow>> {
+export function listMolds(params?: {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  /** 模糊：代号/名称/单位/厂商与物料编码/备注（后端 icontains OR） */
+  keyword?: string;
+}): Promise<PageResult<MoldRow>> {
   return apiRequest(`${PREFIX}/molds`, { params });
 }
 
@@ -240,8 +356,56 @@ export function updateMold(rowId: number, body: MoldUpdatePayload): Promise<Mold
   return apiRequest(`${PREFIX}/molds/${rowId}`, { method: 'PATCH', data: body });
 }
 
+/** 批量更新寿命/维修周期等（与列表筛选一致） */
+export type MoldBatchLifecycleScope = 'selected' | 'all_filtered';
+
+export interface MoldBatchLifecyclePayload {
+  scope: MoldBatchLifecycleScope;
+  mold_ids?: number[];
+  filter_status?: string;
+  filter_keyword?: string;
+  service_life_years?: number;
+  usable_times?: number;
+  usable_yield?: string | number;
+  maintenance_cycle_by_yield?: string | number;
+  maintenance_cycle_by_days?: number;
+}
+
+export function batchMoldsLifecycle(body: MoldBatchLifecyclePayload): Promise<{ updated: number }> {
+  return apiRequest(`${PREFIX}/molds/batch-lifecycle`, { method: 'POST', data: body });
+}
+
 export function deleteMold(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/molds/${rowId}`, { method: 'DELETE' });
+}
+
+/** 模具台账 ↔ 数据集关联（同步代号/名称/单位；可选映射模具产能） */
+export interface MoldLedgerDatasetBindingPayload {
+  dataset_uuid?: string | null;
+  mold_code_column?: string | null;
+  mold_name_column?: string | null;
+  unit_column?: string | null;
+  mold_capacity_column?: string | null;
+}
+
+export function getMoldLedgerDatasetBinding(): Promise<MoldLedgerDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/ledger/dataset-binding`);
+}
+
+export function putMoldLedgerDatasetBinding(
+  body: MoldLedgerDatasetBindingPayload,
+): Promise<MoldLedgerDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/ledger/dataset-binding`, { method: 'PUT', data: body });
+}
+
+export interface MoldLedgerSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export function syncMoldLedgerFromDataset(): Promise<MoldLedgerSyncResult> {
+  return apiRequest(`${PREFIX}/molds/ledger/sync-from-dataset`, { method: 'POST' });
 }
 
 /** 试模单（与后端 MoldTrialSheetOut 对齐） */
@@ -277,6 +441,7 @@ export function listMoldTrialSheets(params?: {
   skip?: number;
   limit?: number;
   sheet_status?: string;
+  trial_result?: string;
   keyword?: string;
 }): Promise<PageResult<MoldTrialSheetRow>> {
   return apiRequest(`${PREFIX}/molds/trial-sheets`, { params });
@@ -296,6 +461,28 @@ export function updateMoldTrialSheet(rowId: number, body: MoldTrialSheetUpdatePa
 
 export function deleteMoldTrialSheet(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}`, { method: 'DELETE' });
+}
+
+/** 试模单 ↔ 数据集关联（按采购订单号执行查询并映射列） */
+export interface MoldTrialDatasetBindingPayload {
+  dataset_uuid?: string | null;
+  /** 与 SQL 中 :参数名 一致，不填则不在「采购订单号」失焦时自动查询 */
+  order_param_key?: string | null;
+  supplier_column?: string | null;
+  mold_code_column?: string | null;
+  mold_name_column?: string | null;
+  /** 查询结果里采购订单号列的别名，用于列表选单与带出 */
+  purchase_order_column?: string | null;
+}
+
+export function getMoldTrialDatasetBinding(): Promise<MoldTrialDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/dataset-binding`);
+}
+
+export function putMoldTrialDatasetBinding(
+  body: MoldTrialDatasetBindingPayload,
+): Promise<MoldTrialDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/dataset-binding`, { method: 'PUT', data: body });
 }
 
 /** 外协维保单 — 明细行 */

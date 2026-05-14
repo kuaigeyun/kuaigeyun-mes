@@ -9,7 +9,7 @@ import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import HaoligoAppLayout from './layouts/AppLayout';
 
-const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<PageSkeleton />}>
     <LazyComponent />
   </Suspense>
@@ -18,8 +18,12 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 const WorkspacePage = lazy(() => import('./pages/workspace'));
 const EquipmentPage = lazy(() => import('./pages/equipment'));
 const EquipmentManufacturersPage = lazy(() => import('./pages/equipment/manufacturers'));
+const EquipmentLedgerPage = lazy(() => import('./pages/equipment/ledger'));
 const EquipmentInspectionParamsPage = lazy(() => import('./pages/equipment/inspection-params'));
 const EquipmentInspectionParamSetsPage = lazy(() => import('./pages/equipment/inspection-param-sets'));
+const EquipmentPatrolRoutesPage = lazy(() => import('./pages/equipment/patrol-routes'));
+const EquipmentReportsPointInspectionPage = lazy(() => import('./pages/equipment/reports/point-inspection'));
+const EquipmentReportsPatrolRecordsPage = lazy(() => import('./pages/equipment/reports/patrol-records'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
 const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
 const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
@@ -38,8 +42,12 @@ const HaoligoApp: React.FC = () => (
       <Route path="equipment/workshops" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment/categories" element={<Navigate to="/apps/haoligo/equipment" replace />} />
       <Route path="equipment/manufacturers" element={withPageSuspense(EquipmentManufacturersPage)} />
+      <Route path="equipment/ledger" element={withPageSuspense(EquipmentLedgerPage)} />
       <Route path="equipment/inspection-params" element={withPageSuspense(EquipmentInspectionParamsPage)} />
       <Route path="equipment/inspection-param-sets" element={withPageSuspense(EquipmentInspectionParamSetsPage)} />
+      <Route path="equipment/reports/point-inspection" element={withPageSuspense(EquipmentReportsPointInspectionPage)} />
+      <Route path="equipment/reports/patrol-records" element={withPageSuspense(EquipmentReportsPatrolRecordsPage)} />
+      <Route path="equipment/patrol-routes" element={withPageSuspense(EquipmentPatrolRoutesPage)} />
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={<Outlet />}>
         <Route index element={<Navigate to="ledger" replace />} />
@@ -52,7 +60,17 @@ const HaoligoApp: React.FC = () => (
         <Route path="documents/outsource-maintenance" element={withPageSuspense(MoldOutsourceMaintenancePage)} />
         <Route path="documents/outsource-complete" element={withPageSuspense(MoldOutsourceMaintenanceCompletePage)} />
       </Route>
-      <Route path="patrol" element={withPageSuspense(PatrolPage)} />
+      <Route path="patrol" element={<Outlet />}>
+        <Route index element={withPageSuspense(PatrolPage)} />
+        <Route
+          path="reports/point-inspection"
+          element={<Navigate to="/apps/haoligo/equipment/reports/point-inspection" replace />}
+        />
+        <Route
+          path="reports/patrol-records"
+          element={<Navigate to="/apps/haoligo/equipment/reports/patrol-records" replace />}
+        />
+      </Route>
       <Route index element={<Navigate to="workspace" replace />} />
     </Route>
   </Routes>

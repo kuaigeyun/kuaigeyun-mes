@@ -21,6 +21,12 @@ export interface UniAdvancedSearchProps {
   formRef: React.MutableRefObject<ProFormInstance | undefined>;
   actionRef: React.MutableRefObject<ActionType | undefined>;
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
+  /** 与 UniTable 一致的全量重置（模糊词 + 表单 + 刷新）；传入后「重置」紧挨高级搜索按钮 */
+  onReset?: () => void;
+  /**
+   * 由 UniTable 在每次「重置」时递增，用于强制刷新钉住条件与当前 searchParamsRef 的激活态（ref 变更本身不触发渲染）。
+   */
+  pinnedSearchUiEpoch?: number;
 }
 
 export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
@@ -28,6 +34,8 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
   formRef,
   actionRef,
   searchParamsRef,
+  onReset,
+  pinnedSearchUiEpoch = 0,
 }) => {
   const { t } = useTranslation();
 
@@ -45,7 +53,9 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
           formRef={formRef}
           actionRef={actionRef}
           searchParamsRef={searchParamsRef}
-          showReset={false}
+          showReset={Boolean(onReset)}
+          onReset={onReset}
+          pinnedSearchUiEpoch={pinnedSearchUiEpoch}
         />
       </Suspense>
     </ErrorBoundary>
@@ -114,11 +124,21 @@ const UniSearch: React.FC<UniSearchProps> = ({
   const resetLabel = resetText ?? t('components.uniSearch.reset');
 
   const canReset = Boolean(showReset && onReset);
+  /** 默认高级搜索条内已带「重置」，不再在整条最右侧重复渲染 */
+  const passInlineReset =
+    canReset &&
+    !isMobile &&
+    showAdvancedSearch &&
+    Boolean(advancedSearchTableProps) &&
+    !advancedSearch;
 
   const resolvedAdvanced =
     advancedSearch ??
     (!isMobile && showAdvancedSearch && advancedSearchTableProps ? (
-      <UniAdvancedSearch {...advancedSearchTableProps} />
+      <UniAdvancedSearch
+        {...advancedSearchTableProps}
+        onReset={passInlineReset ? onReset : undefined}
+      />
     ) : null);
 
   return (
@@ -159,7 +179,7 @@ const UniSearch: React.FC<UniSearchProps> = ({
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>{resolvedAdvanced}</div>
       ) : null}
       {afterSearch}
-      {!isMobile && canReset && (
+      {!isMobile && canReset && !passInlineReset && (
         <Button
           type="default"
           icon={<ReloadOutlined />}

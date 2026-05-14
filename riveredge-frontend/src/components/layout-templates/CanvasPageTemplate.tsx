@@ -50,6 +50,12 @@ export interface CanvasPageTemplateProps {
   className?: string;
   /** 固定功能标题（用于 Tabs 和面包屑） */
   functionalTitle?: string;
+  /**
+   * 画布区域包裹方式：
+   * - framed（默认）：外层 Card + 内层描边容器，适合流程图等画布
+   * - plain：仅占满 flex 区域，无额外 Card/边框，适合表单+表格类分栏设计器
+   */
+  canvasSurface?: 'framed' | 'plain';
 }
 
 /**
@@ -67,6 +73,7 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
   style,
   className,
   functionalTitle = '设计器',
+  canvasSurface = 'framed',
 }) => {
   const location = useLocation();
 
@@ -140,37 +147,51 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
           </Card>
         )}
         {/* 画板 */}
-        <Card
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-          styles={{
-            body: {
-              padding: 0,
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-            },
-          }}
-        >
+        {canvasSurface === 'plain' ? (
           <div
             style={{
-              width: '100%',
-              height: '100%',
               flex: 1,
-              position: 'relative',
-              border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-              borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+              minHeight: 0,
               overflow: 'hidden',
-              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             {canvas}
           </div>
-        </Card>
+        ) : (
+          <Card
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            styles={{
+              body: {
+                padding: 0,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+              },
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                flex: 1,
+                position: 'relative',
+                border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+                borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+              }}
+            >
+              {canvas}
+            </div>
+          </Card>
+        )}
 
         {/* 右侧面板（可选） */}
         {rightPanel && (

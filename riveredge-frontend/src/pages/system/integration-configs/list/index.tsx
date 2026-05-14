@@ -244,7 +244,11 @@ const IntegrationConfigListPage: React.FC = () => {
       setTestingUuid(record.uuid);
       const result = await testConnection(record.uuid);
       if (result.success) {
-        messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
+        if (result.verification_level === 'config_only') {
+          messageApi.warning(result.message || t('pages.system.integrationConfigs.testSuccess'));
+        } else {
+          messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
+        }
       } else {
         messageApi.error(result.message || t('pages.system.integrationConfigs.testFailed'));
       }

@@ -15,6 +15,8 @@ from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
+from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
+from apps.haoligo.models.mold_ledger_dataset_binding import HaoligoMoldLedgerDatasetBinding
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
@@ -37,6 +39,8 @@ __all__ = [
     "HaoligoMoldBorrowSheet",
     "HaoligoMoldReturnSheet",
     "HaoligoMoldTrialSheet",
+    "HaoligoMoldTrialDatasetBinding",
+    "HaoligoMoldLedgerDatasetBinding",
     "HaoligoMoldMaintenanceCompleteSheet",
     "HaoligoMoldMaintenanceSheet",
     "HaoligoMoldOutsourceMaintenanceCompleteSheet",

@@ -19,7 +19,7 @@ import {
   DataSourceListResponse,
   TestConnectionResponse,
 } from '../../../services/dataSource';
-import { handleError, handleSuccess } from '../../../utils/errorHandler';
+import { handleError, handleSuccess, handleWarning } from '../../../utils/errorHandler';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -110,7 +110,11 @@ const CardView: React.FC = () => {
       setTestResult(result);
       
       if (result.success) {
-        handleSuccess(result.message || t('pages.system.dataSources.testSuccess'));
+        if (result.verification_level === 'config_only') {
+          handleWarning(result.message || t('pages.system.dataSources.testConfigOnlyTitle'));
+        } else {
+          handleSuccess(result.message || t('pages.system.dataSources.testSuccess'));
+        }
         loadDataSources();
       } else {
         handleError(new Error(result.message || t('pages.system.dataSources.testFailed')), t('pages.system.dataSources.testFailed'));
@@ -191,6 +195,45 @@ const CardView: React.FC = () => {
       acc[ds.type] = (acc[ds.type] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
+  };
+
+  const renderTestConnectionResult = (tr: TestConnectionResponse) => {
+    const ok = tr.success;
+    const configOnly = ok && tr.verification_level === 'config_only';
+    const alertType = !ok ? 'error' : configOnly ? 'warning' : 'success';
+    const title = !ok
+      ? t('pages.system.dataSources.testFailed')
+      : configOnly
+        ? t('pages.system.dataSources.testConfigOnlyTitle')
+        : t('pages.system.dataSources.testSuccess');
+    const tagColor = !ok ? 'error' : configOnly ? 'warning' : 'success';
+    const tagLabel = !ok
+      ? t('pages.system.dataSources.cardView.resultFailure')
+      : configOnly
+        ? t('pages.system.dataSources.cardView.resultConfigOnly')
+        : t('pages.system.dataSources.cardView.resultSuccess');
+    return (
+      <div>
+        <Alert
+          message={title}
+          description={tr.message}
+          type={alertType}
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Descriptions column={1} bordered>
+          <Descriptions.Item label={t('pages.system.dataSources.cardView.testResultLabel')}>
+            <Tag color={tagColor}>{tagLabel}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.dataSources.cardView.responseTimeLabel')}>
+            {tr.elapsed_time}ms
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.dataSources.cardView.messageLabel')}>
+            {tr.message}
+          </Descriptions.Item>
+        </Descriptions>
+      </div>
+    );
   };
 
   return (
@@ -483,30 +526,7 @@ const CardView: React.FC = () => {
           </div>
         )}
         
-        {testResult && (
-          <div>
-            <Alert
-              message={testResult.success ? t('pages.system.dataSources.testSuccess') : t('pages.system.dataSources.testFailed')}
-              description={testResult.message}
-              type={testResult.success ? 'success' : 'error'}
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-            <Descriptions column={1} bordered>
-              <Descriptions.Item label={t('pages.system.dataSources.cardView.testResultLabel')}>
-                <Tag color={testResult.success ? 'success' : 'error'}>
-                  {testResult.success ? t('pages.system.dataSources.cardView.resultSuccess') : t('pages.system.dataSources.cardView.resultFailure')}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('pages.system.dataSources.cardView.responseTimeLabel')}>
-                {testResult.elapsed_time}ms
-              </Descriptions.Item>
-              <Descriptions.Item label={t('pages.system.dataSources.cardView.messageLabel')}>
-                {testResult.message}
-              </Descriptions.Item>
-            </Descriptions>
-          </div>
-        )}
+        {testResult && renderTestConnectionResult(testResult)}
       </Modal>
     </>
   );

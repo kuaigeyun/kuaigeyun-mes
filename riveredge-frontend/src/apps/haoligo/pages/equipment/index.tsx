@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { App, Card, Space, Table, Typography } from 'antd';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import { fetchHaoligoMeta, listEquipments, listWorkshops, type EquipmentRow, type HaoligoMeta, type WorkshopRow } from '../../services/haoligo';
 
@@ -7,6 +9,7 @@ const { Text, Paragraph } = Typography;
 
 const EquipmentPage: React.FC = () => {
   const { message } = App.useApp();
+  const { t } = useTranslation();
   const [meta, setMeta] = useState<HaoligoMeta | null>(null);
   const [workshops, setWorkshops] = useState<WorkshopRow[]>([]);
   const [equipments, setEquipments] = useState<EquipmentRow[]>([]);
@@ -76,6 +79,18 @@ const EquipmentPage: React.FC = () => {
           dataSource={equipments}
           pagination={false}
         />
+        <Paragraph type="secondary" style={{ marginTop: 16 }}>
+          <Text strong>{t('app.haoligo.menu.equipment.group.equipmentReports')}</Text>：{' '}
+          <Link to="/apps/haoligo/equipment/reports/point-inspection">
+            {t('app.haoligo.menu.equipment.reports.point-inspection')}
+          </Link>
+          {' · '}
+          <Link to="/apps/haoligo/equipment/reports/patrol-records">
+            {t('app.haoligo.menu.equipment.reports.patrol-records')}
+          </Link>
+          {' · '}
+          <Link to="/apps/haoligo/equipment/patrol-routes">{t('app.haoligo.menu.equipment.patrol-routes')}</Link>
+        </Paragraph>
       </Card>
     </Space>
   );

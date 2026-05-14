@@ -169,23 +169,23 @@
                 "sort_order": 13
               },
               {
+                "title": "app.haoligo.menu.equipment.ledger",
+                "path": "/apps/haoligo/equipment/ledger",
+                "icon": "HardDrive",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 14
+              },
+              {
                 "title": "app.haoligo.menu.equipment.inspection-params",
                 "path": "/apps/haoligo/equipment/inspection-params",
                 "icon": "SlidersHorizontal",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 14
+                "sort_order": 15
               },
               {
                 "title": "app.haoligo.menu.equipment.inspection-param-sets",
                 "path": "/apps/haoligo/equipment/inspection-param-sets",
                 "icon": "Layers2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 15
-              },
-              {
-                "title": "app.haoligo.menu.equipment.ledger",
-                "path": "/apps/haoligo/equipment/ledger",
-                "icon": "HardDrive",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 16
               },
@@ -199,10 +199,10 @@
             ]
           },
           {
-            "title": "app.haoligo.menu.equipment.group.records",
-            "icon": "BookCopy",
+            "title": "app.haoligo.menu.equipment.group.equipmentReports",
+            "icon": "FileBarChart",
             "permission": "haoligo:workspace:read",
-            "sort_order": 20,
+            "sort_order": 25,
             "children": [
               {
                 "title": "app.haoligo.menu.equipment.reports.point-inspection",
@@ -377,28 +377,6 @@
                 "icon": "Settings2",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 31
-              }
-            ]
-          },
-          {
-            "title": "app.haoligo.menu.patrol.group.equipmentBridge",
-            "icon": "GitBranch",
-            "permission": "haoligo:workspace:read",
-            "sort_order": 30,
-            "children": [
-              {
-                "title": "app.haoligo.menu.patrol.reports.point-inspection",
-                "path": "/apps/haoligo/patrol/reports/point-inspection",
-                "icon": "FileSearch",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 31
-              },
-              {
-                "title": "app.haoligo.menu.patrol.reports.patrol-records",
-                "path": "/apps/haoligo/patrol/reports/patrol-records",
-                "icon": "FileDiff",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 32
               }
             ]
           }

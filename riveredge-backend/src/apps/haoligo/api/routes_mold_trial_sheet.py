@@ -8,6 +8,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
@@ -76,6 +77,26 @@ class MoldTrialSheetUpdate(BaseModel):
     sheet_status: Optional[SheetStatusLiteral] = None
 
 
+class MoldTrialDatasetBindingOut(BaseModel):
+    """试模单关联 ERP 数据集：一个数据集 + 结果列对应关系；订单号参数选填（用于输入框失焦带出）。"""
+
+    dataset_uuid: Optional[str] = None
+    order_param_key: Optional[str] = None
+    supplier_column: Optional[str] = None
+    mold_code_column: Optional[str] = None
+    mold_name_column: Optional[str] = None
+    purchase_order_column: Optional[str] = None
+
+
+class MoldTrialDatasetBindingUpsert(BaseModel):
+    dataset_uuid: Optional[str] = None
+    order_param_key: Optional[str] = None
+    supplier_column: Optional[str] = None
+    mold_code_column: Optional[str] = None
+    mold_name_column: Optional[str] = None
+    purchase_order_column: Optional[str] = None
+
+
 async def _not_found():
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
 
@@ -96,18 +117,79 @@ def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
     )
 
 
+def _serialize_binding(row: Optional[HaoligoMoldTrialDatasetBinding]) -> MoldTrialDatasetBindingOut:
+    if not row:
+        return MoldTrialDatasetBindingOut()
+    return MoldTrialDatasetBindingOut(
+        dataset_uuid=row.dataset_uuid,
+        order_param_key=row.order_param_key,
+        supplier_column=row.supplier_column,
+        mold_code_column=row.mold_code_column,
+        mold_name_column=row.mold_name_column,
+        purchase_order_column=row.purchase_order_column,
+    )
+
+
+@router.get("/dataset-binding", response_model=MoldTrialDatasetBindingOut, summary="试模单关联数据集配置")
+async def get_trial_dataset_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialDatasetBinding, tenant_id).first()
+    return _serialize_binding(row)
+
+
+@router.put("/dataset-binding", response_model=MoldTrialDatasetBindingOut, summary="保存试模单关联数据集配置")
+async def put_trial_dataset_binding(
+    body: MoldTrialDatasetBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    ds = (body.dataset_uuid or "").strip()
+    if not ds:
+        await HaoligoMoldTrialDatasetBinding.filter(tenant_id=tenant_id).delete()
+        return MoldTrialDatasetBindingOut()
+
+    opk = (body.order_param_key or "").strip() or None
+    sc = (body.supplier_column or "").strip()
+    mc = (body.mold_code_column or "").strip()
+    mn = (body.mold_name_column or "").strip()
+    po_col = (body.purchase_order_column or "").strip()
+    if not all([sc, mc, mn, po_col]):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="已选择数据集时，请填写采购订单号、供应商、模具代号、模具名称对应的结果列名（与 SQL 查询结果列别名一致）",
+        )
+
+    await HaoligoMoldTrialDatasetBinding.filter(tenant_id=tenant_id).delete()
+    row = await HaoligoMoldTrialDatasetBinding.create(
+        tenant_id=tenant_id,
+        dataset_uuid=ds,
+        order_param_key=opk,
+        supplier_column=sc,
+        mold_code_column=mc,
+        mold_name_column=mn,
+        list_dataset_uuid=None,
+        purchase_order_column=po_col,
+    )
+    return _serialize_binding(row)
+
+
 @router.get("", summary="试模单分页列表")
 async def list_trial_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    sheet_status: Optional[str] = Query(None, description="按单据状态筛选"),
+    sheet_status: Optional[str] = Query(None, description="按单据状态筛选（兼容旧参数）"),
+    trial_result: Optional[str] = Query(None, description="按试模结果筛选：合格/不合格"),
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
 ):
     qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id)
     if sheet_status:
         qs = qs.filter(sheet_status=sheet_status)
+    if trial_result and trial_result.strip():
+        qs = qs.filter(trial_result=trial_result.strip())
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(

@@ -16,6 +16,7 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
+import type { UploadProps } from 'antd';
 import { App, Button, Col, Divider, Input, Modal, Row, Space, Table, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, ScanOutlined, SwapOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -147,10 +148,10 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   }, [moldRows, moldKw]);
 
   const uploadFieldProps = useMemo(
-    () => ({
-      listType: 'picture-card' as const,
+    (): Partial<UploadProps> => ({
+      listType: 'picture-card',
       accept: '.jpg,.jpeg,.png,.gif,.webp',
-      beforeUpload: (file: { size?: number }) => {
+      beforeUpload: (file) => {
         const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
         if (!isLt30M) {
           messageApi.error('单个文件需小于 30MB');
@@ -158,11 +159,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         }
         return true;
       },
-      customRequest: async (options: {
-        file?: unknown;
-        onSuccess?: (body: unknown, file?: unknown) => void;
-        onError?: (e: Error) => void;
-      }) => {
+      customRequest: async (options, _info) => {
         try {
           const file = options.file as Parameters<typeof uploadFile>[0];
           const res = await uploadFile(file, { category: 'haoligo_mold_outsource_maint' });
@@ -466,7 +463,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             layout="vertical"
             scrollToFirstError
           >
-            <Divider orientation="left" plain style={{ margin: '8px 0 16px', fontWeight: 600 }}>
+            <Divider titlePlacement="left" plain style={{ margin: '8px 0 16px', fontWeight: 600 }}>
               基础信息
             </Divider>
             <Row gutter={[16, 4]}>
@@ -520,7 +517,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               </Col>
             </Row>
 
-            <Divider orientation="left" plain style={{ margin: '20px 0 12px', fontWeight: 600 }}>
+            <Divider titlePlacement="left" plain style={{ margin: '20px 0 12px', fontWeight: 600 }}>
               模具信息
             </Divider>
             <ProFormList

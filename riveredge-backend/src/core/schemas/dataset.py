@@ -80,6 +80,10 @@ class ExecuteQueryRequest(BaseModel):
     parameters: Optional[Dict[str, Any]] = Field(None, description="查询参数（覆盖数据集定义）")
     limit: Optional[int] = Field(100, ge=1, le=10000, description="限制返回行数")
     offset: Optional[int] = Field(0, ge=0, description="偏移量")
+    query_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="可选：与数据集已保存的 query_config 浅合并，仅用于本次执行（不落库），便于设计器未保存时预览",
+    )
 
 
 class ExecuteQueryResponse(BaseModel):

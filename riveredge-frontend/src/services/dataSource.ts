@@ -67,6 +67,8 @@ export interface TestConnectionResponse {
   success: boolean;
   message: string;
   elapsed_time: number;
+  /** 后端 data.verification_level：config_only 表示未真实建连，仅配置检查通过 */
+  verification_level?: 'config_only' | 'live';
 }
 
 /**
@@ -145,6 +147,7 @@ export async function testDataSourceConnection(dataSourceUuid: string): Promise<
     success: result.success,
     message: result.message,
     elapsed_time: result.data?.elapsed_time || 0,
+    verification_level: result.data?.verification_level,
   };
 }
 
@@ -158,10 +161,16 @@ export interface TestConfigRequest {
  * 用于新建/编辑数据源时，在保存前验证连接配置是否有效。
  */
 export async function testDataSourceConfig(data: TestConfigRequest): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>('/core/integration-configs/test-config', {
+  const result = await apiRequest<any>('/core/integration-configs/test-config', {
     method: 'POST',
     data,
   });
+  return {
+    success: result.success,
+    message: result.message,
+    elapsed_time: result.data?.elapsed_time || 0,
+    verification_level: result.data?.verification_level,
+  };
 }
 
 export interface SchemaTable {

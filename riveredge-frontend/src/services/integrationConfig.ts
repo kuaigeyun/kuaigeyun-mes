@@ -54,6 +54,8 @@ export interface TestConnectionResponse {
   message: string;
   data?: Record<string, any>;
   error?: string;
+  /** 来自 data.verification_level：config_only 表示未真实建连 */
+  verification_level?: 'config_only' | 'live';
 }
 
 export interface IntegrationConfigListResponse {
@@ -184,9 +186,16 @@ export async function deleteIntegrationConfig(integrationUuid: string): Promise<
  * @returns 连接测试结果
  */
 export async function testConnection(integrationUuid: string): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>(`/core/integration-configs/${integrationUuid}/test`, {
+  const result = await apiRequest<any>(`/core/integration-configs/${integrationUuid}/test`, {
     method: 'POST',
   });
+  return {
+    success: result.success,
+    message: result.message,
+    data: result.data,
+    error: result.error,
+    verification_level: result.data?.verification_level,
+  };
 }
 
 export interface TestConfigRequest {
@@ -203,10 +212,17 @@ export interface TestConfigRequest {
  * @returns 连接测试结果
  */
 export async function testConfig(data: TestConfigRequest): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>('/core/integration-configs/test-config', {
+  const result = await apiRequest<any>('/core/integration-configs/test-config', {
     method: 'POST',
     data,
   });
+  return {
+    success: result.success,
+    message: result.message,
+    data: result.data,
+    error: result.error,
+    verification_level: result.data?.verification_level,
+  };
 }
 
 /** 类型分组：数据库、API、协作、ERP、PLM、CRM */
@@ -232,7 +248,8 @@ export interface DataConnectionsForDatasetResult {
  * 按类型分组：数据库、API、协作、ERP、PLM、CRM
  */
 export async function getDataConnectionsForDataset(): Promise<DataConnectionsForDatasetResult> {
-  const { items } = await getIntegrationConfigList({ page: 1, page_size: 2000 });
+  // 须遵守后端 page_size le=1000；多页拼接以覆盖超过 1000 条连接的场景
+  const items = await getIntegrationConfigListAllMatching();
   const byCategory: Record<string, { label: string; value: string }[]> = {};
   for (const [cat, types] of Object.entries(TYPE_CATEGORIES)) {
     byCategory[cat] = [];

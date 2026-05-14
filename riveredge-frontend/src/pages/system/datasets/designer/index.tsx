@@ -7,7 +7,7 @@
  * 查询框和查询结果预览同屏显示
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Tabs, Input, Table, Badge, Space, Spin, Form } from 'antd';
@@ -41,6 +41,25 @@ const DatasetDesignerPage: React.FC = () => {
   const [parametersList, setParametersList] = useState<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
   const [queryConfigForVisual, setQueryConfigForVisual] = useState<Record<string, any>>({});
   const [executeResult, setExecuteResult] = useState<ExecuteQueryResponse | null>(null);
+  const resultTableWrapRef = useRef<HTMLDivElement>(null);
+  const [resultTableBodyScrollY, setResultTableBodyScrollY] = useState(360);
+
+  useLayoutEffect(() => {
+    const isMetric =
+      dataset?.output_type === 'metric' || dataset?.output_type === 'multi_metric';
+    if (!executeResult?.success || !executeResult.data?.length || isMetric) return;
+    const el = resultTableWrapRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const h = el.getBoundingClientRect().height;
+      // 表头 + 分页条 + 边框余量（scroll.y 仅作用在表体滚动区）
+      setResultTableBodyScrollY(Math.max(160, Math.floor(h - 100)));
+    };
+    measure();
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [executeResult, dataset?.output_type]);
 
   useEffect(() => {
     if (!uuid) {
@@ -103,10 +122,16 @@ const DatasetDesignerPage: React.FC = () => {
 
   const handleExecute = async () => {
     if (!uuid) return;
+    const draftQueryConfig =
+      editorTab === 'visual' ? { ...queryConfigForVisual } : buildQueryConfigFromForm();
     try {
       setExecuting(true);
       setExecuteResult(null);
-      const result = await executeDatasetQuery(uuid, { limit: 100, offset: 0 });
+      const result = await executeDatasetQuery(uuid, {
+        limit: 100,
+        offset: 0,
+        query_config: draftQueryConfig,
+      });
       setExecuteResult(result);
       if (result.success) {
         messageApi.success(t('pages.system.datasets.executeSuccess'));
@@ -165,34 +190,45 @@ const DatasetDesignerPage: React.FC = () => {
   const queryConfigPanel = (
     <Tabs
       activeKey={editorTab}
+      size="small"
       onChange={(k) => {
         setEditorTab(k as 'sql' | 'visual');
         if (k === 'visual') {
           // 图形化只生成 SQL，不覆盖当前 JSON
         }
       }}
+      tabBarStyle={{ marginBottom: 0 }}
       items={[
         {
           key: 'sql',
           label: t('pages.system.datasets.sqlConfig'),
           children: (
-            <div style={{ padding: '8px 0' }}>
-              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#e6f7ff', borderRadius: 4, fontSize: 12, color: '#0050b3' }}>
+            <div style={{ paddingTop: 8 }}>
+              <div
+                style={{
+                  marginBottom: 8,
+                  padding: '6px 10px',
+                  background: 'var(--ant-color-info-bg)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: 'var(--ant-color-info)',
+                }}
+              >
                 {t('pages.system.datasets.tenantIsolationTip')}
               </div>
-              <Form layout="vertical" size="small">
-                <Form.Item label={t('pages.system.datasets.sqlLabel')} style={{ marginBottom: 12 }}>
+              <Form layout="vertical" size="small" style={{ marginBottom: 0 }}>
+                <Form.Item label={t('pages.system.datasets.sqlLabel')} style={{ marginBottom: 8 }}>
                   <TextArea
                     value={sqlText}
                     onChange={(e) => setSqlText(e.target.value)}
-                    rows={10}
+                    rows={12}
                     placeholder={t('pages.system.datasets.sqlPlaceholder')}
                     style={{ fontFamily: CODE_FONT_FAMILY, width: '100%', resize: 'vertical' }}
                   />
                 </Form.Item>
-                <Form.Item label={t('pages.system.datasets.paramsLabel')} style={{ marginBottom: 8 }}>
+                <Form.Item label={t('pages.system.datasets.paramsLabel')} style={{ marginBottom: 0 }}>
                   {parametersList.map((item, idx) => (
-                    <Space key={idx} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                    <Space key={idx} style={{ display: 'flex', marginBottom: 6 }} align="baseline">
                       <Input
                         placeholder={t('pages.system.datasets.paramNamePlaceholder')}
                         value={item.key}
@@ -224,7 +260,7 @@ const DatasetDesignerPage: React.FC = () => {
                     type="dashed"
                     icon={<PlusOutlined />}
                     onClick={() => setParametersList([...parametersList, { key: '', value: '' }])}
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', marginTop: 4 }}
                   >
                     {t('pages.system.datasets.addParam')}
                   </Button>
@@ -237,7 +273,7 @@ const DatasetDesignerPage: React.FC = () => {
           key: 'visual',
           label: t('pages.system.datasets.visualQuery'),
           children: (
-            <div style={{ padding: '8px 0' }}>
+            <div style={{ paddingTop: 8 }}>
               <DatasetQueryBuilder
                 dataSourceUuid={dataset.data_source_uuid}
                 value={queryConfigForVisual}
@@ -250,16 +286,46 @@ const DatasetDesignerPage: React.FC = () => {
     />
   );
 
+  const panelShellStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    border: '1px solid var(--ant-color-border-secondary)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    background: 'var(--ant-color-bg-container)',
+  };
+
+  const panelHeaderStyle: React.CSSProperties = {
+    flexShrink: 0,
+    padding: '8px 12px',
+    borderBottom: '1px solid var(--ant-color-border-secondary)',
+    fontWeight: 600,
+    fontSize: 14,
+  };
+
+  const panelBodyStyle: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto',
+    padding: '8px 12px',
+  };
+
   const resultPanel = (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {executeResult && (
           <>
             <Badge status={executeResult.success ? 'success' : 'error'} />
             <span>{executeResult.success ? t('pages.system.datasets.executeSuccessShort') : t('pages.system.datasets.executeFailedShort')}</span>
-            <span style={{ color: '#999' }}>{t('pages.system.datasets.elapsedTime')}: {executeResult.elapsed_time}s</span>
+            <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+              {t('pages.system.datasets.elapsedTime')}: {executeResult.elapsed_time}s
+            </span>
             {executeResult.total !== undefined && (
-              <span style={{ color: '#999' }}>{t('pages.system.datasets.totalRows')}: {executeResult.total}</span>
+              <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+                {t('pages.system.datasets.totalRows')}: {executeResult.total}
+              </span>
             )}
           </>
         )}
@@ -267,32 +333,35 @@ const DatasetDesignerPage: React.FC = () => {
       {executeResult?.error && (
         <div
           style={{
-            marginBottom: 12,
-            padding: 12,
-            backgroundColor: '#fff2f0',
-            borderRadius: 4,
-            color: '#cf1322',
+            marginBottom: 8,
+            padding: '8px 10px',
+            backgroundColor: 'var(--ant-color-error-bg)',
+            borderRadius: 6,
+            color: 'var(--ant-color-error)',
+            fontSize: 13,
           }}
         >
           {executeResult.error}
         </div>
       )}
-      <div style={{ flex: 1, overflow: 'auto', minHeight: 200 }}>
+      <div ref={resultTableWrapRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {!executeResult ? (
           <div
             style={{
               height: '100%',
+              minHeight: 120,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#999',
+              color: 'var(--ant-color-text-secondary)',
+              fontSize: 13,
             }}
           >
             {t('pages.system.datasets.clickExecuteTip')}
           </div>
         ) : executeResult.success && executeResult.data && executeResult.data.length > 0 ? (
           (dataset?.output_type === 'metric' || dataset?.output_type === 'multi_metric') ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {(dataset.output_type === 'metric'
                 ? [{ key: 'value', label: '值', value: (executeResult.data[0] as any)?.value }]
                 : Object.entries(executeResult.data[0] || {}).map(([k, v]) => ({ key: k, label: k, value: v }))
@@ -315,12 +384,14 @@ const DatasetDesignerPage: React.FC = () => {
                 })) || []
               }
               pagination={{ pageSize: 20, showSizeChanger: true }}
-              scroll={{ x: 'max-content' }}
+              scroll={{ x: 'max-content', y: resultTableBodyScrollY }}
               size="small"
             />
           )
         ) : executeResult.success && (!executeResult.data || executeResult.data.length === 0) ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>{t('pages.system.datasets.emptyResult')}</div>
+          <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--ant-color-text-secondary)' }}>
+            {t('pages.system.datasets.emptyResult')}
+          </div>
         ) : null}
       </div>
     </div>
@@ -330,26 +401,20 @@ const DatasetDesignerPage: React.FC = () => {
     <div
       style={{
         display: 'flex',
-        gap: 16,
+        gap: 12,
         height: '100%',
-        minHeight: 500,
+        minHeight: 0,
         overflow: 'hidden',
       }}
     >
-      <Card
-        title={t('pages.system.datasets.queryConfigTitle')}
-        style={{ flex: '0 0 50%', minWidth: 320, overflow: 'auto' }}
-        styles={{ body: { padding: 16 } }}
-      >
-        {queryConfigPanel}
-      </Card>
-      <Card
-        title={t('pages.system.datasets.resultPreviewTitle')}
-        style={{ flex: 1, minWidth: 320, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-        styles={{ body: { flex: 1, overflow: 'hidden', padding: 16 } }}
-      >
-        {resultPanel}
-      </Card>
+      <section style={{ ...panelShellStyle, flex: '1 1 0', minWidth: 280 }}>
+        <header style={panelHeaderStyle}>{t('pages.system.datasets.queryConfigTitle')}</header>
+        <div style={panelBodyStyle}>{queryConfigPanel}</div>
+      </section>
+      <section style={{ ...panelShellStyle, flex: '1 1 0', minWidth: 280 }}>
+        <header style={panelHeaderStyle}>{t('pages.system.datasets.resultPreviewTitle')}</header>
+        <div style={panelBodyStyle}>{resultPanel}</div>
+      </section>
     </div>
   );
 
@@ -357,6 +422,7 @@ const DatasetDesignerPage: React.FC = () => {
     <CanvasPageTemplate
       toolbar={toolbar}
       canvas={canvas}
+      canvasSurface="plain"
       functionalTitle={`${t('pages.system.datasets.designTitle')} - ${dataset.name}`}
     />
   );

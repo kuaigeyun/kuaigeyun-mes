@@ -2654,6 +2654,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           justify-content: space-between;
           align-items: center;
         }
+        /* 列表搜索条「重置」：hover / 键盘聚焦时强调为 warning，避免与主色蓝混淆 */
+        .uni-search-reset-btn.ant-btn:hover,
+        .uni-search-reset-btn.ant-btn:focus-visible {
+          color: var(--ant-color-warning, #faad14) !important;
+          border-color: var(--ant-color-warning, #faad14) !important;
+        }
+        .uni-search-reset-btn.ant-btn:hover .anticon,
+        .uni-search-reset-btn.ant-btn:focus-visible .anticon {
+          color: var(--ant-color-warning, #faad14) !important;
+        }
         /* 全局滚动条样式 - 只对主要内容区域隐藏滚动条，保持菜单滚动条可见 */
         /* ==================== 菜单分组标题样式 ==================== */
         /* 参考：https://ant-design.antgroup.com/components/menu-cn

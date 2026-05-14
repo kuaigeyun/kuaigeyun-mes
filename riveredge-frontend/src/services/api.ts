@@ -516,9 +516,29 @@ export async function apiRequest<T = any>(
         return responseObj.data;
       }
 
-      // 如果是错误响应 { success: false, error: ... }
+      // 数据集查询 ExecuteQueryResponse：HTTP 200、success=false 时 error 为字符串（非 { message } 对象）
+      // 须整包返回，否则下方会把 error 当对象读 .message 变成泛化的「请求失败」
+      if (
+        responseObj.success === false &&
+        Array.isArray(responseObj.data) &&
+        'elapsed_time' in responseObj &&
+        (responseObj.error === null ||
+          responseObj.error === undefined ||
+          typeof responseObj.error === 'string')
+      ) {
+        return responseObj as T;
+      }
+
+      // 如果是错误响应 { success: false, error: string | object }
       if (responseObj.success === false && 'error' in responseObj) {
-        throw new Error(responseObj.error.message || '请求失败');
+        const err = responseObj.error;
+        const msg =
+          typeof err === 'string'
+            ? err
+            : err && typeof err === 'object'
+              ? err.message || err.details || '请求失败'
+              : '请求失败';
+        throw new Error(msg);
       }
 
       // 如果是旧格式 { code: 200, message: ..., data: ... }

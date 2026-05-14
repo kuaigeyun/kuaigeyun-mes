@@ -2537,6 +2537,14 @@ interface QuerySearchButtonProps {
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
   /** 是否显示内置重置按钮（默认 true；被 UniSearch 包装时通常设为 false） */
   showReset?: boolean;
+  /**
+   * 若传入则「重置」走此回调（如 UniSearch 需同时清模糊词），否则走内置 handleReset
+   */
+  onReset?: () => void;
+  /**
+   * 由 UniTable 在每次全量重置时递增，用于刷新钉住条件激活态（searchParamsRef 为 ref，变更不触发子组件渲染）。
+   */
+  pinnedSearchUiEpoch?: number;
 }
 
 /**
@@ -2548,6 +2556,8 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   actionRef,
   searchParamsRef,
   showReset = true,
+  onReset: onResetProp,
+  pinnedSearchUiEpoch = 0,
 }) => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -2778,7 +2788,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   // ⚠️ 修复：使用稳定的函数计算激活状态
   const pinnedSearchActiveStates = useMemo(() => {
     return visiblePinnedSearches.map(search => getSearchActiveState(search));
-  }, [visiblePinnedSearches, getSearchActiveState]);
+  }, [visiblePinnedSearches, getSearchActiveState, pinnedSearchUiEpoch]);
   
   // 获取所有可搜索的列
   const getSearchableColumns = () => {
@@ -3004,7 +3014,8 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
       </Button>
         {showReset && (
           <Button
-            onClick={handleReset}
+            className="uni-search-reset-btn"
+            onClick={() => (onResetProp ? onResetProp() : handleReset())}
             icon={<ReloadOutlined />}
             type="default"
             style={{ height: '32px' }}

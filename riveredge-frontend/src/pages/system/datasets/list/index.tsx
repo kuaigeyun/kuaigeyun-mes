@@ -83,10 +83,13 @@ const DatasetListPage: React.FC = () => {
         setDataConnectionsFlat(items);
       } catch (error: any) {
         console.error('加载数据连接列表失败:', error);
+        messageApi.error(
+          error?.message || t('pages.system.datasets.loadDataConnectionsFailed'),
+        );
       }
     };
     loadDataConnections();
-  }, []);
+  }, [messageApi, t]);
 
   /**
    * 处理新建数据集（仅创建记录，不配置查询，创建后跳转设计器）
@@ -387,6 +390,7 @@ const DatasetListPage: React.FC = () => {
       if (isEdit && currentDatasetUuid) {
         const updateData: UpdateDatasetData = {
           name: values.name,
+          code: String(values.code ?? '').trim(),
           description: values.description,
           is_active: values.is_active,
         };
@@ -720,8 +724,17 @@ const DatasetListPage: React.FC = () => {
             } else if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else {
-              const res = await getDatasetList({ page: 1, page_size: 1000 });
-              items = res.items;
+              const pageSize = 100;
+              const collected: Dataset[] = [];
+              let page = 1;
+              const maxPages = 100;
+              while (page <= maxPages) {
+                const res = await getDatasetList({ page, page_size: pageSize });
+                collected.push(...res.items);
+                if (res.items.length < pageSize || collected.length >= res.total) break;
+                page += 1;
+              }
+              items = collected;
             }
             if (items.length === 0) {
               messageApi.warning(t('pages.system.datasets.noDataToExport'));
@@ -761,7 +774,6 @@ const DatasetListPage: React.FC = () => {
             { pattern: /^[a-z0-9_]+$/, message: t('pages.system.datasets.codePattern') },
           ]}
           placeholder={t('pages.system.datasets.codePlaceholder')}
-          disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormText

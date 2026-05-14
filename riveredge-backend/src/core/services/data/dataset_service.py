@@ -4,6 +4,7 @@
 提供数据集的 CRUD 操作和查询执行功能。
 """
 
+import asyncio
 import re
 import time
 import httpx  # 仅用于异常类型
@@ -288,29 +289,39 @@ class DatasetService:
         # 记录变更前的状态
         old_is_active = dataset.is_active
         old_query_config = dataset.query_config
-        
+        old_code = dataset.code
+
         # 更新数据集
         update_data = dataset_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(dataset, key, value)
-        
+
         await dataset.save()
-        
+
+        code_changed = old_code != dataset.code
+
         # 如果数据集状态或配置变更，异步通知业务模块
-        if (dataset_data.is_active is not None and old_is_active != dataset.is_active) or \
-           (dataset_data.query_config and old_query_config != dataset.query_config):
+        if (
+            (dataset_data.is_active is not None and old_is_active != dataset.is_active)
+            or (dataset_data.query_config and old_query_config != dataset.query_config)
+            or code_changed
+        ):
             import asyncio
+
             asyncio.create_task(
                 DatasetService._notify_business_modules(
                     tenant_id=tenant_id,
                     dataset_code=dataset.code,
                     is_active=dataset.is_active,
-                    config_changed=(dataset_data.query_config and old_query_config != dataset.query_config)
+                    config_changed=(
+                        bool(dataset_data.query_config and old_query_config != dataset.query_config)
+                        or code_changed
+                    ),
                 )
             )
-        
+
         return dataset
-    
+
     async def delete_dataset(
         self,
         tenant_id: int,
@@ -388,12 +399,16 @@ class DatasetService:
         
         start_time = time.time()
         
+        stored_qc = dataset.query_config or {}
+        override_qc = execute_request.query_config or {}
+        effective_qc = {**stored_qc, **override_qc}
+
         try:
             # 应用连接器类型：使用 REST 拉取（query_config 含 endpoint、method）
             if integration_config.type in APPLICATION_CONNECTOR_TYPES:
                 result = await self._execute_app_connector_query(
                     integration_config=integration_config,
-                    query_config=dataset.query_config,
+                    query_config=effective_qc,
                     parameters=execute_request.parameters,
                     limit=execute_request.limit,
                     offset=execute_request.offset,
@@ -405,7 +420,7 @@ class DatasetService:
                     result = await self._execute_sql_query(
                         tenant_id=tenant_id,
                         integration_config=integration_config,
-                        query_config=dataset.query_config,
+                        query_config=effective_qc,
                         parameters=execute_request.parameters,
                         limit=execute_request.limit,
                         offset=execute_request.offset,
@@ -414,7 +429,7 @@ class DatasetService:
                     result = await self._execute_api_query(
                         tenant_id=tenant_id,
                         integration_config=integration_config,
-                        query_config=dataset.query_config,
+                        query_config=effective_qc,
                         parameters=execute_request.parameters,
                         limit=execute_request.limit,
                         offset=execute_request.offset,
@@ -516,11 +531,138 @@ class DatasetService:
         return sql, args
 
     @staticmethod
+    def _convert_named_params_to_pymssql(sql: str, params: Dict[str, Any]) -> Tuple[str, List[Any]]:
+        """将 :param 转为 pymssql 的 %s，按在 SQL 中出现的顺序绑定参数（排除 :: 类型转换）。"""
+        if not params:
+            return sql, []
+        parts: List[str] = []
+        args: List[Any] = []
+        last = 0
+        for m in re.finditer(r"(?<!:):(\w+)\b", sql):
+            parts.append(sql[last : m.start()])
+            name = m.group(1)
+            if name not in params:
+                raise KeyError(f"缺少查询参数: :{name}")
+            parts.append("%s")
+            args.append(params[name])
+            last = m.end()
+        parts.append(sql[last:])
+        return "".join(parts), args
+
+    @staticmethod
+    def _sqlserver_should_wrap_paging(sql: str) -> bool:
+        """若语句已含 TOP / OFFSET-FETCH，则不再外包分页。"""
+        u = sql.upper()
+        if "OFFSET" in u and "ROWS" in u:
+            return False
+        if "FETCH" in u and "NEXT" in u:
+            return False
+        if re.search(r"\bSELECT\s+TOP\s+[\d(]", u):
+            return False
+        return True
+
+    @staticmethod
+    def _wrap_sqlserver_paged_sql(sql: str, limit: int, offset: int) -> str:
+        """T-SQL 分页：offset=0 用 TOP；否则 ROW_NUMBER（兼容 SQL Server 2008 R2，无 OFFSET/FETCH 时）。"""
+        s = sql.strip().rstrip(";")
+        lim = max(1, min(int(limit), 10000))
+        off = max(0, int(offset))
+        inner = f"({s}) AS __inner"
+        if off == 0:
+            return f"SELECT TOP ({lim}) * FROM {inner}"
+        hi = off + lim
+        return (
+            "SELECT * FROM ("
+            "SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS __rn, * "
+            f"FROM {inner}"
+            f") AS __paged WHERE __rn > {off} AND __rn <= {hi}"
+        )
+
+    @staticmethod
+    def _execute_sqlserver_query_sync(config: Dict[str, Any], sql: str, args: List[Any]) -> Dict[str, Any]:
+        """在线程中连接 SQL Server 并执行只读查询：先 pymssql，失败后 ODBC/pyodbc（与测试连接一致）。"""
+        import pymssql
+
+        from core.services.integration.integration_config_service import IntegrationConfigService
+
+        attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
+        last_exc: Optional[BaseException] = None
+        tup = tuple(args) if args else tuple()
+        for kw in attempts:
+            try:
+                conn = pymssql.connect(**kw)
+                try:
+                    cur = conn.cursor(as_dict=True)
+                    if tup:
+                        cur.execute(sql, tup)
+                    else:
+                        cur.execute(sql)
+                    rows = cur.fetchall()
+                    if not rows:
+                        return {"success": True, "data": [], "columns": [], "total": 0}
+                    columns = list(rows[0].keys())
+                    data = [dict(r) for r in rows]
+                    return {"success": True, "data": data, "columns": columns, "total": len(data)}
+                finally:
+                    conn.close()
+            except Exception as e:
+                last_exc = e
+
+        pymssql_err = str(last_exc) if last_exc else "SQL Server pymssql 连接或查询失败"
+        odbc_res = IntegrationConfigService._sqlserver_pyodbc_execute_query_sync(config, sql, tup)
+        if odbc_res.get("success"):
+            return {
+                "success": True,
+                "data": odbc_res.get("data", []),
+                "columns": odbc_res.get("columns", []),
+                "total": odbc_res.get("total", 0),
+            }
+        if odbc_res.get("skipped"):
+            hint = (odbc_res.get("hint") or "").strip()
+            sep = " " if hint else ""
+            return {
+                "success": False,
+                "data": [],
+                "columns": None,
+                "total": None,
+                "error": pymssql_err + sep + hint,
+            }
+        odbc_err = (odbc_res.get("error") or "").strip()
+        return {
+            "success": False,
+            "data": [],
+            "columns": None,
+            "total": None,
+            "error": pymssql_err + " ODBC 回退仍失败：" + odbc_err,
+        }
+
+    @staticmethod
+    def _should_apply_sql_tenant_isolation(
+        integration_config: IntegrationConfig,
+        query_config: Dict[str, Any],
+    ) -> bool:
+        """
+        是否对本次 SQL 注入 tenant_id 条件并绑定参数。
+
+        - query_config 显式含 tenant_isolation 时以布尔值为准（第三方库可设 false，多租户共享库可设 true）。
+        - 未配置时：仅系统默认（本地应用）数据源默认开启；第三方 ERP/SQL Server 等不注入，避免无 tenant_id 列报错。
+        """
+        from core.services.integration.integration_config_service import SYSTEM_DEFAULT_CODE
+
+        if "tenant_isolation" in query_config:
+            return bool(query_config.get("tenant_isolation"))
+        cfg = integration_config.get_config() or {}
+        if cfg.get("_system_default"):
+            return True
+        return integration_config.code == SYSTEM_DEFAULT_CODE
+
+    @staticmethod
     def _inject_tenant_filter_sql(sql: str) -> str:
         """
         共享库租户隔离：自动在 SQL 中注入 tenant_id = :tenant_id 条件。
         tenant_id 由系统自动注入，用户无需在 SQL 中指定，也不允许被覆盖。
         注意：多表 JOIN 时若多表均有 tenant_id 列，可能产生列歧义，可设置 tenant_isolation=false 后手动添加带表别名的条件。
+        默认仅对系统默认数据源启用隔离，见 DatasetService._should_apply_sql_tenant_isolation。
         """
         sql = sql.strip()
         sql_upper = sql.upper()
@@ -556,8 +698,9 @@ class DatasetService:
         """
         执行 SQL 查询
 
-        数据隔离：自动注入 tenant_id 到查询参数，确保 SQL 中可使用 :tenant_id 过滤当前租户数据。
-        若业务表含 tenant_id 列，请在 WHERE 子句中使用 tenant_id = :tenant_id 以实现租户隔离。
+        数据隔离：仅对系统默认（本地应用）数据源默认注入 tenant_id；第三方连接不注入，除非在 query_config 中设置 tenant_isolation: true。
+        若业务表含 tenant_id 列且需隔离，请在 WHERE 中使用 tenant_id = :tenant_id，并开启 tenant_isolation。
+        支持 PostgreSQL（asyncpg）与 SQL Server（pymssql，失败时 ODBC/pyodbc 回退，与数据源「测试连接」策略一致）。
 
         Args:
             tenant_id: 当前租户ID（用于数据隔离）
@@ -571,84 +714,110 @@ class DatasetService:
             Dict[str, Any]: 查询结果
         """
         try:
-            # 仅支持 PostgreSQL（使用 Tortoise ORM）
-            if integration_config.type != 'postgresql':
+            db_type = integration_config.type
+            if db_type not in ("postgresql", "sqlserver"):
                 return {
-                    'success': False,
-                    'data': [],
-                    'total': None,
-                    'columns': None,
-                    'error': f'SQL 查询暂仅支持 PostgreSQL，当前类型: {integration_config.type}',
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": f"SQL 查询暂不支持该数据连接类型: {db_type}（支持: postgresql、sqlserver）",
                 }
 
             # 获取 SQL 语句
-            sql = query_config.get('sql', '')
+            sql = query_config.get("sql", "")
             if not sql:
                 return {
-                    'success': False,
-                    'data': [],
-                    'total': None,
-                    'columns': None,
-                    'error': 'SQL 语句不能为空',
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": "SQL 语句不能为空",
                 }
 
             # 验证 SQL 语句（仅允许 SELECT）
             sql_upper = sql.strip().upper()
-            if not sql_upper.startswith('SELECT'):
+            if not sql_upper.startswith("SELECT"):
                 return {
-                    'success': False,
-                    'data': [],
-                    'total': None,
-                    'columns': None,
-                    'error': '仅支持 SELECT 查询，禁止执行 DDL、DML 语句',
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": "仅支持 SELECT 查询，禁止执行 DDL、DML 语句",
                 }
 
-            # 共享库租户隔离：默认自动注入 tenant_id 过滤，仅查当前租户。可通过 query_config.tenant_isolation=false 关闭（如每租户独立库）
-            if query_config.get("tenant_isolation", True):
+            apply_tenant_isolation = self._should_apply_sql_tenant_isolation(
+                integration_config, query_config
+            )
+            if apply_tenant_isolation:
                 sql = self._inject_tenant_filter_sql(sql)
 
-            # 合并查询参数；共享库模式下强制注入 tenant_id（不允许被覆盖）
-            query_params = dict(query_config.get('parameters', {}))
+            # 合并查询参数；仅在开启隔离时强制注入 tenant_id（不允许被覆盖）
+            query_params = dict(query_config.get("parameters", {}))
             if parameters:
                 query_params.update(parameters)
-            if query_config.get("tenant_isolation", True):
-                query_params['tenant_id'] = tenant_id  # 强制注入当前租户ID
+            if apply_tenant_isolation:
+                query_params["tenant_id"] = tenant_id  # 强制注入当前租户ID
 
-            # 添加 LIMIT 和 OFFSET
-            if 'LIMIT' not in sql_upper:
-                sql = f"{sql} LIMIT {limit} OFFSET {offset}"
+            if db_type == "postgresql":
+                # 添加 LIMIT 和 OFFSET
+                sql_upper2 = sql.upper()
+                if "LIMIT" not in sql_upper2:
+                    sql = f"{sql} LIMIT {limit} OFFSET {offset}"
 
-            # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
-            sql, args = self._convert_named_params_to_positional(sql, query_params)
+                # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
+                sql, args = self._convert_named_params_to_positional(sql, query_params)
 
-            # 使用 asyncpg 直接连接执行（系统默认数据源密码从 ENV 读取）
-            import asyncpg
-            from core.services.integration.integration_config_service import (
-                _get_system_default_pg_config,
+                # 使用 asyncpg 直接连接执行（系统默认数据源密码从 ENV 读取）
+                import asyncpg
+                from core.services.integration.integration_config_service import (
+                    _get_system_default_pg_config,
+                )
+
+                config = integration_config.get_config()
+                if config.get("_system_default"):
+                    config = _get_system_default_pg_config()
+                conn = await asyncpg.connect(
+                    host=config.get("host", "localhost"),
+                    port=int(config.get("port", 5432)),
+                    user=config.get("user") or config.get("username", ""),
+                    password=config.get("password", ""),
+                    database=config.get("database", ""),
+                )
+                try:
+                    rows = await conn.fetch(sql, *args) if args else await conn.fetch(sql)
+                    columns = list(rows[0].keys()) if rows else []
+                    data = [dict(row) for row in rows]
+                finally:
+                    await conn.close()
+
+                return {
+                    "success": True,
+                    "data": data,
+                    "total": len(data),  # 简化实现，实际应该执行 COUNT 查询
+                    "columns": columns,
+                }
+
+            # sqlserver：pymssql 在线程中执行；分页用 TOP / ROW_NUMBER（不使用 LIMIT）
+            sql_upper2 = sql.upper()
+            if "LIMIT" in sql_upper2:
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": "SQL Server 不支持 LIMIT 语法，请从 SQL 中移除 LIMIT；预览行数由系统自动施加 TOP 或行号分页。",
+                }
+            if self._sqlserver_should_wrap_paging(sql):
+                sql = self._wrap_sqlserver_paged_sql(sql, limit, offset)
+            sql, args = self._convert_named_params_to_pymssql(sql, query_params)
+            cfg = integration_config.get_config()
+            return await asyncio.to_thread(
+                DatasetService._execute_sqlserver_query_sync,
+                cfg,
+                sql,
+                args,
             )
-            config = integration_config.get_config()
-            if config.get('_system_default'):
-                config = _get_system_default_pg_config()
-            conn = await asyncpg.connect(
-                host=config.get('host', 'localhost'),
-                port=int(config.get('port', 5432)),
-                user=config.get('user') or config.get('username', ''),
-                password=config.get('password', ''),
-                database=config.get('database', ''),
-            )
-            try:
-                rows = await conn.fetch(sql, *args) if args else await conn.fetch(sql)
-                columns = list(rows[0].keys()) if rows else []
-                data = [dict(row) for row in rows]
-            finally:
-                await conn.close()
-            
-            return {
-                'success': True,
-                'data': data,
-                'total': len(data),  # 简化实现，实际应该执行 COUNT 查询
-                'columns': columns,
-            }
         except Exception as e:
             return {
                 'success': False,

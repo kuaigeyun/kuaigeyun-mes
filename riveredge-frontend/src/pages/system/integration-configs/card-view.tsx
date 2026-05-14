@@ -18,7 +18,7 @@ import {
   IntegrationConfig,
   TestConnectionResponse,
 } from '../../../services/integrationConfig';
-import { handleError, handleSuccess } from '../../../utils/errorHandler';
+import { handleError, handleSuccess, handleWarning } from '../../../utils/errorHandler';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -107,7 +107,11 @@ const CardView: React.FC = () => {
       setTestResult(result);
       
       if (result.success) {
-        handleSuccess(result.message || t('pages.system.integrationConfigs.testSuccess'));
+        if (result.verification_level === 'config_only') {
+          handleWarning(result.message || t('pages.system.integrationConfigs.testConfigOnlyTitle'));
+        } else {
+          handleSuccess(result.message || t('pages.system.integrationConfigs.testSuccess'));
+        }
         // 刷新列表以更新连接状态
         loadIntegrationConfigs();
       } else {
@@ -212,6 +216,68 @@ const CardView: React.FC = () => {
    * 类型顺序（用于排序）
    */
   const typeOrder = ['OAuth', 'API', 'Webhook', 'Database'];
+
+  const renderTestConnectionResult = (tr: TestConnectionResponse) => {
+    const ok = tr.success;
+    const configOnly = ok && tr.verification_level === 'config_only';
+    const alertType = !ok ? 'error' : configOnly ? 'warning' : 'success';
+    const title = !ok
+      ? t('pages.system.integrationConfigs.testFailed')
+      : configOnly
+        ? t('pages.system.integrationConfigs.testConfigOnlyTitle')
+        : t('pages.system.integrationConfigs.testSuccess');
+    const tagColor = !ok ? 'error' : configOnly ? 'warning' : 'success';
+    const tagLabel = !ok
+      ? t('pages.system.integrationConfigs.fail')
+      : configOnly
+        ? t('pages.system.integrationConfigs.resultConfigOnly')
+        : t('pages.system.integrationConfigs.success');
+    return (
+      <div>
+        <Alert
+          message={title}
+          description={tr.message}
+          type={alertType}
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Descriptions column={1} bordered>
+          <Descriptions.Item label={t('pages.system.integrationConfigs.testResult')}>
+            <Tag color={tagColor}>{tagLabel}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.integrationConfigs.message')}>
+            {tr.message}
+          </Descriptions.Item>
+          {tr.data && (
+            <Descriptions.Item label={t('pages.system.integrationConfigs.responseData')}>
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '200px',
+                fontSize: 12,
+              }}
+              >
+                {JSON.stringify(tr.data, null, 2)}
+              </pre>
+            </Descriptions.Item>
+          )}
+          {tr.error && (
+            <Descriptions.Item label={t('pages.system.integrationConfigs.errorInfo')}>
+              <Alert
+                message={tr.error}
+                type="error"
+                showIcon
+                style={{ fontSize: 12 }}
+              />
+            </Descriptions.Item>
+          )}
+        </Descriptions>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -540,52 +606,7 @@ const CardView: React.FC = () => {
           </div>
         )}
         
-        {testResult && (
-          <div>
-            <Alert
-              message={testResult.success ? t('pages.system.integrationConfigs.testSuccess') : t('pages.system.integrationConfigs.testFailed')}
-              description={testResult.message}
-              type={testResult.success ? 'success' : 'error'}
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-            <Descriptions column={1} bordered>
-              <Descriptions.Item label={t('pages.system.integrationConfigs.testResult')}>
-                <Tag color={testResult.success ? 'success' : 'error'}>
-                  {testResult.success ? t('pages.system.integrationConfigs.success') : t('pages.system.integrationConfigs.fail')}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('pages.system.integrationConfigs.message')}>
-                {testResult.message}
-              </Descriptions.Item>
-              {testResult.data && (
-                <Descriptions.Item label={t('pages.system.integrationConfigs.responseData')}>
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(testResult.data, null, 2)}
-                  </pre>
-                </Descriptions.Item>
-              )}
-              {testResult.error && (
-                <Descriptions.Item label={t('pages.system.integrationConfigs.errorInfo')}>
-                  <Alert
-                    message={testResult.error}
-                    type="error"
-                    showIcon
-                    style={{ fontSize: 12 }}
-                  />
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-          </div>
-        )}
+        {testResult && renderTestConnectionResult(testResult)}
       </Modal>
     </>
   );

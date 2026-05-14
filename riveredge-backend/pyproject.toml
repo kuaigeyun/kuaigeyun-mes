@@ -34,6 +34,8 @@ dependencies = [
     "taskiq>=0.12.0",
     "taskiq-postgres[asyncpg]>=0.7.0",
     "webauthn>=2.7.1",
+    "pymssql>=2.2.11,<3",
+    "pyodbc>=5.0.0,<6",
 ]
 
 # Playwright：仅 HTML→PDF。生产默认可不装（见 Launch.prod.sh 使用默认 uv sync / 不加 --extra pdf）；需要时再：

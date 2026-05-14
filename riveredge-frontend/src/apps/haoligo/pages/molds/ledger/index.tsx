@@ -5,7 +5,7 @@
  * 表单字段对齐产品「新增」模具台账弹窗。
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -17,20 +17,28 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, AutoComplete, Button, Col, Modal, Row, Space, Tag } from 'antd';
+import { App, Alert, AutoComplete, Button, Col, Form, InputNumber, Modal, Radio, Row, Select, Space, Tag } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
+  batchMoldsLifecycle,
   createMold,
   deleteMold,
   getMold,
+  getMoldLedgerDatasetBinding,
   listMolds,
+  putMoldLedgerDatasetBinding,
+  syncMoldLedgerFromDataset,
   updateMold,
+  type MoldBatchLifecycleScope,
   type MoldCreatePayload,
+  type MoldLedgerDatasetBindingPayload,
   type MoldRow,
+  type MoldUpdatePayload,
 } from '../../../services/haoligo';
+import { executeDatasetQuery, getDatasetList } from '../../../../../services/dataset';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -77,6 +85,22 @@ function parseBoolCell(v: unknown): boolean | undefined {
   return undefined;
 }
 
+/** 批量修改弹窗：仅把已填写的项加入 PATCH（留空表示不改动该字段）。 */
+function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldUpdatePayload | null {
+  const patch: MoldUpdatePayload = {};
+  const y = numOrUndef(values.service_life_years);
+  if (y !== undefined) patch.service_life_years = y;
+  const t = numOrUndef(values.usable_times);
+  if (t !== undefined) patch.usable_times = t;
+  const uy = decStrOrUndef(values.usable_yield);
+  if (uy !== undefined) patch.usable_yield = uy;
+  const my = decStrOrUndef(values.maintenance_cycle_by_yield);
+  if (my !== undefined) patch.maintenance_cycle_by_yield = my;
+  const md = numOrUndef(values.maintenance_cycle_by_days);
+  if (md !== undefined) patch.maintenance_cycle_by_days = md;
+  return Object.keys(patch).length > 0 ? patch : null;
+}
+
 const MoldLedgerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -88,6 +112,170 @@ const MoldLedgerPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string; label: string }[]>([]);
+  const [datasetBinding, setDatasetBinding] = useState<MoldLedgerDatasetBindingPayload | null>(null);
+  const [bindingModalOpen, setBindingModalOpen] = useState(false);
+  const [bindingCfgForm] = Form.useForm<MoldLedgerDatasetBindingPayload>();
+  const bindingDatasetUuidWatched = Form.useWatch('dataset_uuid', bindingCfgForm);
+  const [datasetSelectOptions, setDatasetSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [bindingModalBusy, setBindingModalBusy] = useState(false);
+  const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
+  const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchModalBusy, setBatchModalBusy] = useState(false);
+  const [batchForm] = Form.useForm();
+  const [syncIntroModalOpen, setSyncIntroModalOpen] = useState(false);
+  const [batchScope, setBatchScope] = useState<MoldBatchLifecycleScope>('selected');
+  const [listMatchTotal, setListMatchTotal] = useState(0);
+  const listSnapshotRef = useRef<{ total: number; keyword?: string; status?: string }>({ total: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await getMoldLedgerDatasetBinding();
+        if (cancelled) return;
+        setDatasetBinding(b.dataset_uuid ? b : null);
+      } catch {
+        if (!cancelled) setDatasetBinding(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadBindingDatasetColumns = useCallback(
+    async (datasetUuid: string | undefined, opts?: { silent?: boolean }) => {
+      const uuid = (datasetUuid ?? '').trim();
+      if (!uuid) {
+        setBindingColumnOptions([]);
+        return;
+      }
+      setBindingColumnsLoading(true);
+      try {
+        const res = await executeDatasetQuery(uuid, { parameters: {}, limit: 5, offset: 0 });
+        if (!res.success) {
+          if (!opts?.silent) {
+            messageApi.warning(res.error || '无法加载列名：请确认该 SQL 支持无参数执行');
+          }
+          setBindingColumnOptions([]);
+          return;
+        }
+        const raw = res.columns?.length
+          ? res.columns
+          : res.data?.[0]
+            ? Object.keys(res.data[0] as object)
+            : [];
+        const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
+        setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
+        if (!opts?.silent && unique.length) {
+          messageApi.success(`已加载 ${unique.length} 个列，可从下拉选择映射`);
+        }
+      } catch (e) {
+        if (!opts?.silent) messageApi.error((e as Error).message || '加载列名失败');
+        setBindingColumnOptions([]);
+      } finally {
+        setBindingColumnsLoading(false);
+      }
+    },
+    [messageApi],
+  );
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const options: { label: string; value: string }[] = [];
+        let page = 1;
+        const pageSize = 100;
+        for (;;) {
+          const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+          const items = res.items ?? [];
+          for (const d of items) {
+            options.push({ label: `${d.name} (${d.code})`, value: d.uuid });
+          }
+          if (items.length < pageSize) break;
+          page += 1;
+        }
+        if (!cancelled) setDatasetSelectOptions(options);
+      } catch (e) {
+        if (!cancelled) {
+          setDatasetSelectOptions([]);
+          messageApi.error((e as Error).message || '加载数据集列表失败');
+        }
+      }
+    })();
+    bindingCfgForm.resetFields();
+    const d = datasetBinding;
+    bindingCfgForm.setFieldsValue({
+      dataset_uuid: d?.dataset_uuid ?? undefined,
+      mold_code_column: d?.mold_code_column ?? undefined,
+      mold_name_column: d?.mold_name_column ?? undefined,
+      unit_column: d?.unit_column ?? undefined,
+      mold_capacity_column: d?.mold_capacity_column ?? undefined,
+    });
+    setBindingColumnOptions([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, datasetBinding, bindingCfgForm, messageApi]);
+
+  const handleDatasetConfig = useCallback(() => {
+    setBindingModalOpen(true);
+  }, []);
+
+  const handleBindingSave = async () => {
+    const ds = String(bindingCfgForm.getFieldValue('dataset_uuid') ?? '').trim();
+    if (!ds) {
+      setBindingModalBusy(true);
+      try {
+        const saved = await putMoldLedgerDatasetBinding({ dataset_uuid: '' });
+        setDatasetBinding(saved.dataset_uuid ? saved : null);
+        messageApi.success('已清除关联');
+        setBindingModalOpen(false);
+      } catch (e) {
+        messageApi.error((e as Error).message || '保存失败');
+      } finally {
+        setBindingModalBusy(false);
+      }
+      return;
+    }
+    let v: Record<string, unknown>;
+    try {
+      v = await bindingCfgForm.validateFields();
+    } catch {
+      return;
+    }
+    setBindingModalBusy(true);
+    try {
+      const saved = await putMoldLedgerDatasetBinding({
+        dataset_uuid: ds,
+        mold_code_column: String(v.mold_code_column ?? '').trim(),
+        mold_name_column: String(v.mold_name_column ?? '').trim(),
+        unit_column: String(v.unit_column ?? '').trim(),
+        mold_capacity_column: String(v.mold_capacity_column ?? '').trim() || undefined,
+      });
+      setDatasetBinding(saved);
+      messageApi.success('已保存');
+      setBindingModalOpen(false);
+    } catch (e) {
+      messageApi.error((e as Error).message || '保存失败');
+    } finally {
+      setBindingModalBusy(false);
+    }
+  };
+
+  const canSyncFromDataset = useMemo(() => {
+    const b = datasetBinding;
+    return Boolean(
+      b?.dataset_uuid?.trim() &&
+        b.mold_code_column?.trim() &&
+        b.mold_name_column?.trim() &&
+        b.unit_column?.trim(),
+    );
+  }, [datasetBinding]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +299,100 @@ const MoldLedgerPage: React.FC = () => {
       cancelled = true;
     };
   }, []);
+
+  const handleOpenBatchModal = useCallback(() => {
+    batchForm.resetFields();
+    setBatchScope('selected');
+    setBatchModalOpen(true);
+  }, [batchForm]);
+
+  /** 关闭说明弹窗后在浏览器内继续等待单次同步请求；非服务端队列任务。 */
+  const handleStartDatasetSync = useCallback(() => {
+    setSyncIntroModalOpen(false);
+    const hideLoading = messageApi.loading(
+      '正在从数据集同步… 数据量大时可能需数分钟，请勿关闭或刷新本页直至完成。',
+      0,
+    );
+    void syncMoldLedgerFromDataset()
+      .then((r) => {
+        hideLoading();
+        messageApi.success(
+          `同步完成：新增 ${r.created} 条，更新 ${r.updated} 条，跳过 ${r.skipped} 行（无代号）`,
+        );
+        actionRef.current?.reload();
+      })
+      .catch((e) => {
+        hideLoading();
+        messageApi.error((e as Error).message || '同步失败');
+      });
+  }, [messageApi]);
+
+  const handleBatchSubmit = async () => {
+    const values = batchForm.getFieldsValue();
+    const patch = buildMoldLifecycleBatchPatch(values);
+    if (!patch) {
+      messageApi.warning('请至少填写一项要修改的字段');
+      return;
+    }
+    if (batchScope === 'selected') {
+      const ids = selectedRowKeys.map((k) => Number(k)).filter((n) => Number.isFinite(n));
+      if (ids.length === 0) {
+        messageApi.warning('选择「仅已勾选」时请先在表格中勾选至少一行');
+        return;
+      }
+    } else if (listMatchTotal <= 0) {
+      messageApi.warning('当前列表无数据，请调整筛选或改用「仅已勾选」');
+      return;
+    }
+
+    const run = async () => {
+      setBatchModalOpen(false);
+      setBatchModalBusy(true);
+      try {
+        const snap = listSnapshotRef.current;
+        const body = {
+          scope: batchScope,
+          ...(batchScope === 'selected'
+            ? {
+                mold_ids: selectedRowKeys.map((k) => Number(k)).filter((n) => Number.isFinite(n)),
+              }
+            : {
+                filter_status: snap.status,
+                filter_keyword: snap.keyword,
+              }),
+          ...patch,
+        };
+        const r = await batchMoldsLifecycle(body);
+        messageApi.success(`已更新 ${r.updated} 条`);
+        if (batchScope === 'selected' && r.updated > 0) {
+          setSelectedRowKeys([]);
+        }
+        actionRef.current?.reload();
+      } catch (e) {
+        messageApi.error((e as Error).message || '批量更新失败');
+      } finally {
+        setBatchModalBusy(false);
+      }
+    };
+
+    if (batchScope === 'all_filtered' && listMatchTotal > 50) {
+      await new Promise<void>((resolve) => {
+        Modal.confirm({
+          title: '确认批量更新',
+          content: `将更新当前筛选条件下的全部 ${listMatchTotal} 条模具（与列表底部「共 ${listMatchTotal} 条」汇总一致）。是否继续？`,
+          okText: '确认更新',
+          cancelText: '取消',
+          onOk: async () => {
+            await run();
+            resolve();
+          },
+          onCancel: () => resolve(),
+        });
+      });
+      return;
+    }
+    await run();
+  };
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -213,7 +495,7 @@ const MoldLedgerPage: React.FC = () => {
   const columns: ProColumns<MoldRow>[] = [
     { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true, fixed: 'left' },
     { title: '模具名称', dataIndex: 'name', width: 180, ellipsis: true },
-    { title: '单位', dataIndex: 'unit', width: 72, hideInSearch: true },
+    { title: '单位', dataIndex: 'unit', width: 72, hideInSearch: true, render: (_, r) => r.unit || '—' },
     { title: '模具产能', dataIndex: 'mold_capacity', width: 100, hideInSearch: true },
     {
       title: '状态',
@@ -256,9 +538,22 @@ const MoldLedgerPage: React.FC = () => {
         <UniTable<MoldRow>
           headerTitle="模具台账"
           columnPersistenceId="apps.haoligo.pages.molds.ledger"
+          skipFuzzyPinyinClientFilter
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          toolBarActionsAfterCreate={[
+            <Button
+              key="mold-batch-lifecycle"
+              disabled={selectedRowKeys.length === 0 && listMatchTotal <= 0}
+              onClick={handleOpenBatchModal}
+            >
+              批量修改
+            </Button>,
+          ]}
           showAdvancedSearch
           showCreateButton
           createButtonText="新增"
@@ -367,20 +662,36 @@ const MoldLedgerPage: React.FC = () => {
             }
           }}
           showSyncButton
+          showDatasetConfigButton
+          onDatasetConfig={handleDatasetConfig}
           onSync={() => {
-            messageApi.info('与 ERP / 数据集的主数据同步能力接入后将在此执行；已刷新当前列表。');
-            actionRef.current?.reload();
+            if (!canSyncFromDataset) {
+              messageApi.warning('请先在「关联数据集配置」中选择数据集，并填齐模具代号、模具名称、单位三列映射后保存');
+              return;
+            }
+            setSyncIntroModalOpen(true);
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
+            const rawKw = searchFormValues?.keyword;
+            const keyword =
+              typeof rawKw === 'string' && rawKw.trim() ? rawKw.trim() : undefined;
             try {
               const res = await listMolds({
                 skip,
                 limit: pageSize,
                 status: typeof searchFormValues?.status === 'string' ? searchFormValues.status : undefined,
+                keyword,
               });
+              listSnapshotRef.current = {
+                total: res.total,
+                keyword,
+                status:
+                  typeof searchFormValues?.status === 'string' ? searchFormValues.status : undefined,
+              };
+              setListMatchTotal(res.total);
               return {
                 data: res.items,
                 success: true,
@@ -528,6 +839,229 @@ const MoldLedgerPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <Modal
+        title="批量修改（可用年限 / 次数 / 产量 / 维修周期）"
+        open={batchModalOpen}
+        onCancel={() => setBatchModalOpen(false)}
+        width={560}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setBatchModalOpen(false)}>
+            取消
+          </Button>,
+          <Button key="ok" type="primary" loading={batchModalBusy} onClick={() => void handleBatchSubmit()}>
+            {batchScope === 'selected'
+              ? `应用到已选 ${selectedRowKeys.length} 条`
+              : `应用到当前筛选全部（${listMatchTotal} 条）`}
+          </Button>,
+        ]}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="仅更新下方已填写的字段；留空则保持各条模具原值。"
+        />
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>作用范围</div>
+          <Radio.Group value={batchScope} onChange={(e) => setBatchScope(e.target.value as MoldBatchLifecycleScope)}>
+            <Radio value="selected">仅已勾选（{selectedRowKeys.length} 条）</Radio>
+            <Radio value="all_filtered">当前筛选全部（列表共 {listMatchTotal} 条）</Radio>
+          </Radio.Group>
+        </div>
+        {batchScope === 'all_filtered' ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="「当前筛选全部」与表格底部总条数一致，包含所有分页；不限于本页勾选。"
+          />
+        ) : null}
+        <Form form={batchForm} layout="vertical">
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="service_life_years" label="可用年限">
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="usable_times" label="可用次数">
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="usable_yield" label="可用产量">
+                <InputNumber min={0} precision={4} style={{ width: '100%' }} placeholder="留空不修改" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="maintenance_cycle_by_yield" label="维修周期(依产量)">
+                <InputNumber min={0} precision={4} style={{ width: '100%' }} placeholder="留空不修改" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="maintenance_cycle_by_days" label="维修周期(依天数)">
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="从数据集同步模具台账"
+        open={syncIntroModalOpen}
+        onCancel={() => setSyncIntroModalOpen(false)}
+        width={560}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
+            取消
+          </Button>,
+          <Button key="sync" type="primary" onClick={handleStartDatasetSync}>
+            开始同步
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div>
+            将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「模具产能列」则同时更新产能）；不存在则新增（默认状态「待用」；未配置产能列时新增产能为 0）。
+          </div>
+          <Alert
+            type="warning"
+            showIcon
+            message="耗时提示"
+            description="同步耗时与数据集行数、数据库与网络状况有关，可能从数十秒到数分钟不等。开始同步后本说明窗口可关闭，同步仍在当前页签后台进行；请勿关闭或刷新整个浏览器页签，否则请求会中断。"
+          />
+          <Alert
+            type="info"
+            showIcon
+            message="关于「服务端异步」"
+            description="当前实现为一次 HTTP 请求内完成同步，网关或浏览器可能对超长请求超时。若未来数据量达到数万级或需关闭页签仍继续跑，可再改为服务端异步任务（队列）+ 进度/结果通知。"
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="模具台账 · ERP 数据集"
+        open={bindingModalOpen}
+        onCancel={() => setBindingModalOpen(false)}
+        width={640}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+            取消
+          </Button>,
+          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+            保存
+          </Button>,
+        ]}
+      >
+        <Form<MoldLedgerDatasetBindingPayload> form={bindingCfgForm} layout="vertical">
+          <Form.Item name="dataset_uuid" label="数据集">
+            <Select
+              allowClear
+              showSearch
+              placeholder="选择用于同步模具主数据的数据集（需支持无参查询）"
+              optionFilterProp="label"
+              options={datasetSelectOptions}
+              onChange={() => {
+                bindingCfgForm.setFieldsValue({
+                  mold_code_column: undefined,
+                  mold_name_column: undefined,
+                  unit_column: undefined,
+                  mold_capacity_column: undefined,
+                });
+                setBindingColumnOptions([]);
+              }}
+            />
+          </Form.Item>
+          <div style={{ marginBottom: 16 }}>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              loading={bindingColumnsLoading}
+              disabled={!bindingDatasetUuidWatched}
+              onClick={() => {
+                const u = bindingDatasetUuidWatched as string | undefined;
+                void loadBindingDatasetColumns(typeof u === 'string' ? u : undefined, { silent: false });
+              }}
+            >
+              加载列名（执行一次无参查询）
+            </Button>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="mold_code_column"
+                label="模具代号列"
+                rules={[{ required: true, message: '请填写' }]}
+                extra="与 SQL 结果列别名一致"
+              >
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder="下拉选择或输入"
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="mold_name_column" label="模具名称列" rules={[{ required: true, message: '请填写' }]}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder="下拉选择或输入"
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="unit_column" label="单位列" rules={[{ required: true, message: '请填写' }]}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder="下拉选择或输入"
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="mold_capacity_column" label="模具产能列">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder="下拉选择或输入（可选）"
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Alert
+            type="info"
+            showIcon
+            message="同步时按「模具代号」匹配本系统台账：已存在则更新名称与单位；若配置了产能列则同时更新产能。不存在则新增（默认状态「待用」；未配置产能列时产能为 0）。请在数据集 SQL 中支持无参全量或分页拉取。"
+          />
+        </Form>
+      </Modal>
     </>
   );
 };

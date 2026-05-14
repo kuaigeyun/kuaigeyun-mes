@@ -65,13 +65,22 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
   const loadDatasets = async () => {
     setLoadingDatasets(true);
     try {
-      const res = await getDatasetList({ page: 1, page_size: 200, is_active: true });
-      setDatasetOptions(
-        res.items.map((d) => ({
-          label: `${d.name} (${d.code})`,
-          value: d.uuid,
-        }))
-      );
+      const pageSize = 100;
+      const opts: { label: string; value: string }[] = [];
+      let page = 1;
+      const maxPages = 50;
+      while (page <= maxPages) {
+        const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+        opts.push(
+          ...res.items.map((d) => ({
+            label: `${d.name} (${d.code})`,
+            value: d.uuid,
+          })),
+        );
+        if (res.items.length < pageSize || opts.length >= res.total) break;
+        page += 1;
+      }
+      setDatasetOptions(opts);
     } catch (e: any) {
       messageApi.error(e?.message || t('components.syncFromDataset.loadListFailed'));
     } finally {
