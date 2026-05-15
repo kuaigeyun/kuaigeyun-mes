@@ -1,5 +1,6 @@
 """好力 GO — 试模单 API。"""
 
+from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,10 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_TRIAL_SHEET_NO
 from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/molds/trial-sheets", tags=["App · HaoliGO · 试模单"])
@@ -34,6 +38,7 @@ class MoldTrialSheetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    sheet_no: Optional[str] = None
     purchase_order_no: str
     supplier_name: Optional[str] = None
     mold_code: Optional[str] = None
@@ -43,6 +48,7 @@ class MoldTrialSheetOut(BaseModel):
     inspection_attachment_file_uuids: List[str] = Field(default_factory=list)
     trial_result: str
     sheet_status: str
+    created_at: datetime
 
 
 class MoldTrialSheetCreate(BaseModel):
@@ -105,6 +111,7 @@ def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
     return MoldTrialSheetOut(
         id=row.id,
         uuid=row.uuid,
+        sheet_no=row.sheet_no,
         purchase_order_no=row.purchase_order_no,
         supplier_name=row.supplier_name,
         mold_code=row.mold_code,
@@ -114,6 +121,7 @@ def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         inspection_attachment_file_uuids=list(row.inspection_attachment_file_uuids or []),
         trial_result=row.trial_result,
         sheet_status=row.sheet_status,
+        created_at=row.created_at,
     )
 
 
@@ -184,6 +192,8 @@ async def list_trial_sheets(
     sheet_status: Optional[str] = Query(None, description="按单据状态筛选（兼容旧参数）"),
     trial_result: Optional[str] = Query(None, description="按试模结果筛选：合格/不合格"),
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
+    created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
+    created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
 ):
     qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id)
     if sheet_status:
@@ -194,10 +204,15 @@ async def list_trial_sheets(
         k = keyword.strip()
         qs = qs.filter(
             Q(purchase_order_no__icontains=k)
+            | Q(sheet_no__icontains=k)
             | Q(mold_code__icontains=k)
             | Q(mold_name__icontains=k)
             | Q(supplier_name__icontains=k)
         )
+    if created_from is not None:
+        qs = qs.filter(created_at__gte=created_from)
+    if created_to is not None:
+        qs = qs.filter(created_at__lte=created_to)
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
@@ -214,8 +229,13 @@ async def create_trial_sheet(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
+    try:
+        sheet_no = await generate_mold_sheet_no(tenant_id, HAOLIGO_MOLD_TRIAL_SHEET_NO)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     row = await HaoligoMoldTrialSheet.create(
         tenant_id=tenant_id,
+        sheet_no=sheet_no,
         purchase_order_no=body.purchase_order_no.strip(),
         supplier_name=(body.supplier_name or "").strip() or None,
         mold_code=(body.mold_code or "").strip() or None,

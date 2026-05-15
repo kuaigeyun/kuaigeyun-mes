@@ -12,6 +12,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.master_data.models.factory import Workshop as MasterWorkshop
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
     HaoligoEquipmentCategory,
@@ -220,15 +221,67 @@ async def _not_found():
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
 
 
+async def _list_workshops_synced_from_master(tenant_id: int) -> list[HaoligoWorkshop]:
+    """
+    车间与主数据 APP 联动：以主数据「启用且未删除」的车间为准，按 tenant_id + code
+    对齐到 haoligo_workshop（新建或更新名称、必要时恢复软删），供好力侧 FK 使用。
+    主数据中无同编码的历史好力车间仍保留在列表末尾，避免设备/路线等旧引用断裂。
+    """
+    masters = (
+        await MasterWorkshop.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        .order_by("code")
+        .all()
+    )
+    synced: list[HaoligoWorkshop] = []
+    master_codes: set[str] = set()
+    for m in masters:
+        code = (m.code or "").strip()
+        name = (m.name or "").strip()
+        if not code or not name:
+            continue
+        master_codes.add(code)
+        existing = await HaoligoWorkshop.filter(tenant_id=tenant_id, code=code).first()
+        if existing:
+            dirty = False
+            if existing.deleted_at is not None:
+                existing.deleted_at = None
+                dirty = True
+            if existing.name != name:
+                existing.name = name
+                dirty = True
+            if dirty:
+                await existing.save()
+            synced.append(existing)
+        else:
+            synced.append(
+                await HaoligoWorkshop.create(tenant_id=tenant_id, code=code, name=name),
+            )
+
+    if master_codes:
+        orphans = (
+            await tenant_alive(HaoligoWorkshop, tenant_id)
+            .exclude(code__in=list(master_codes))
+            .order_by("code")
+            .all()
+        )
+    else:
+        orphans = await tenant_alive(HaoligoWorkshop, tenant_id).order_by("code").all()
+    return synced + list(orphans)
+
+
 # --- workshops ---
 
 
-@router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表")
+@router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表（与主数据联动）")
 async def list_workshops(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    rows = await tenant_alive(HaoligoWorkshop, tenant_id).order_by("code")
+    rows = await _list_workshops_synced_from_master(tenant_id)
     return [WorkshopOut.model_validate(r) for r in rows]
 
 

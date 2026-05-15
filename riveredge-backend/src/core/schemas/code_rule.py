@@ -23,7 +23,7 @@ class CodeRuleBase(BaseModel):
     - 如果提供了rule_components，系统会自动生成expression；如果只提供了expression，系统会尝试解析为组件格式
     """
     name: str = Field(..., min_length=1, max_length=100, description="规则名称")
-    code: str = Field(..., min_length=1, max_length=50, description="规则代码（唯一，用于程序识别）")
+    code: str = Field(..., min_length=1, max_length=80, description="规则代码（唯一，用于程序识别）")
     expression: Optional[str] = Field(None, min_length=1, max_length=500, description="规则表达式（旧格式，向后兼容）")
     rule_components: Optional[List[Dict[str, Any]]] = Field(None, description="规则组件列表（新格式，完全可配置）")
     description: Optional[str] = Field(None, description="规则描述")

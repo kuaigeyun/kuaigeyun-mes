@@ -1,7 +1,8 @@
 """好力 GO — 厂内维保单 API（模具明细 JSON 与外协维保单行结构一致）。"""
 
+from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Any, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional, Set
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -14,10 +15,18 @@ from apps.haoligo.api._mold_maintenance_mold_status import (
     refresh_mold_status_if_no_open_maintenance_sheet,
     unique_mold_codes_from_stored_line_items,
 )
+from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_sheet_rule_codes import (
+    HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO,
+    HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO,
+)
+from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.department import Department
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(
@@ -100,6 +109,41 @@ async def _validate_leaf_department(tenant_id: int, department_uuid: str) -> tup
     return uu, name
 
 
+async def assert_maintenance_line_molds_are_standby(
+    tenant_id: int,
+    stored_line_items: list,
+    *,
+    allow_mold_codes: Optional[Set[str]] = None,
+) -> None:
+    """明细模具须存在；新建或新加入行的代号须为「待用」。更新时原单已含代号可放行（本单占用后状态可能已不是待用）。"""
+    allowed = {str(c).strip() for c in (allow_mold_codes or set()) if c and str(c).strip()}
+    seen: set[str] = set()
+    for raw in stored_line_items or []:
+        if not isinstance(raw, dict):
+            continue
+        code = str(raw.get("mold_code") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        if code in allowed:
+            continue
+        mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=code).first()
+        if not mold:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"模具「{code}」不存在",
+            )
+        st = (mold.status or "").strip()
+        if st != "待用":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"模具「{code}」当前状态为「{st}」，仅「待用」可加入维保明细；"
+                    "若模具正在生产领用（「在用」等），请先办理还入单，将状态变为「待用」后再选择。"
+                ),
+            )
+
+
 class MoldMaintLineIn(BaseModel):
     mold_code: str = Field(max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
@@ -178,6 +222,7 @@ class MoldMaintenanceSheetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    sheet_no: Optional[str] = None
     applicant_user_id: Optional[int] = None
     applicant_name: Optional[str] = None
     department_uuid: Optional[str] = None
@@ -187,6 +232,7 @@ class MoldMaintenanceSheetOut(BaseModel):
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[MoldMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
+    created_at: datetime
 
 
 class MoldMaintenanceSheetCreate(BaseModel):
@@ -239,6 +285,7 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
     return MoldMaintenanceSheetOut(
         id=row.id,
         uuid=row.uuid,
+        sheet_no=row.sheet_no,
         applicant_user_id=row.applicant_user_id,
         applicant_name=row.applicant_name,
         department_uuid=row.department_uuid,
@@ -248,6 +295,7 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
+        created_at=row.created_at,
     )
 
 
@@ -258,13 +306,27 @@ async def list_maintenance_sheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    open_for_complete: bool = Query(
+        False,
+        description="为 true 时仅返回尚未关联未删除维保完修单的维保单（用于完修单选源）",
+    ),
 ):
     qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id)
+    if open_for_complete:
+        linked_ids = (
+            await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
+            .filter(deleted_at__isnull=True, source_maintenance_sheet_id__not_isnull=True)
+            .values_list("source_maintenance_sheet_id", flat=True)
+        )
+        lid = [int(x) for x in linked_ids if x is not None]
+        if lid:
+            qs = qs.filter(~Q(id__in=lid))
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(
             Q(department_name__icontains=k)
             | Q(applicant_name__icontains=k)
+            | Q(sheet_no__icontains=k)
             | Q(source_order_no__icontains=k)
             | Q(service_type__icontains=k)
         )
@@ -285,11 +347,22 @@ async def create_maintenance_sheet(
     _: Annotated[User, Depends(get_current_user)],
 ):
     stored = [_line_to_store(x) for x in body.line_items]
+    await assert_maintenance_line_molds_are_standby(tenant_id, stored)
     app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
     dept_uuid, dept_name = await _validate_leaf_department(tenant_id, body.department_uuid)
     async with in_transaction():
+        try:
+            rule_code = (
+                HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO
+                if body.service_type == "维修"
+                else HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO
+            )
+            sheet_no = await generate_mold_sheet_no(tenant_id, rule_code)
+        except ValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
         row = await HaoligoMoldMaintenanceSheet.create(
             tenant_id=tenant_id,
+            sheet_no=sheet_no,
             applicant_user_id=app_uid,
             applicant_name=app_name,
             department_uuid=dept_uuid,
@@ -352,7 +425,10 @@ async def update_maintenance_sheet(
         lines = [MoldMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少保留一条模具明细")
-        data["line_items"] = [_line_to_store(x) for x in lines]
+        stored = [_line_to_store(x) for x in lines]
+        prev_codes = set(unique_mold_codes_from_stored_line_items(row.line_items or []))
+        await assert_maintenance_line_molds_are_standby(tenant_id, stored, allow_mold_codes=prev_codes)
+        data["line_items"] = stored
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()

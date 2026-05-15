@@ -265,25 +265,29 @@ class DefaultValuesService:
         })
         order += 1
 
-        # 2. 如果是业务单据且未配置 skip_date，添加日期组件
-        # 设备/模具/工装使用 skip_date=True，格式为：EQ+4位、MOLD+4位、TOOL+4位
-        use_date = DefaultValuesService._is_business_document(page_code) and not (page_config or {}).get("skip_date", False)
+        pc = page_config or {}
+        skip_date = pc.get("skip_date", False)
+        # 2. 日期：快格等业务单据、或页面显式 include_date_in_code（如好力 GO 模具单据：简称+YYMMDD+流水）
+        use_date = (
+            DefaultValuesService._is_business_document(page_code) and not skip_date
+        ) or (bool(pc.get("include_date_in_code")) and not skip_date)
         if use_date:
+            preset_format = pc.get("code_date_preset_format", "YYYYMMDD")
             components.append({
                 "type": "date",
                 "order": order,
                 "format_type": "preset",
-                "preset_format": "YYYYMMDD",
+                "preset_format": preset_format,
             })
             order += 1
 
-        # 3. 自动计数组件（必选）
-        # 规则：基础数据类流水不重置；快格轻制造带日期字段的流水每日重置；设备/模具/工装（skip_date）不重置
+        # 3. 自动计数（位数、重置周期可配置；默认 4 位、有日期则按日重置）
+        digits = int(pc.get("code_counter_digits", 4))
         reset_cycle = "daily" if use_date else "never"
         components.append({
             "type": "auto_counter",
             "order": order,
-            "digits": 4,
+            "digits": digits,
             "fixed_width": True,
             "reset_cycle": reset_cycle,
             "initial_value": 1,
@@ -330,9 +334,11 @@ class DefaultValuesService:
             skip_date = page_config.get("skip_date", False)
             is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
 
-            # 构建规则名称和描述（物料、BOM 使用自定义描述）
+            # 构建规则名称和描述（物料、BOM 使用自定义描述；页面可覆盖 code_rule_description）
             rule_name = f"{page_name}编码规则"
-            if page_code == "master-data-material":
+            if page_config.get("code_rule_description"):
+                description = page_config["code_rule_description"]
+            elif page_code == "master-data-material":
                 description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
             elif page_code == "master-data-engineering-bom":
                 description = "BOM编码规则，格式：BOM-物料编码-版本号"
@@ -390,7 +396,9 @@ class DefaultValuesService:
         skip_date = page_config.get("skip_date", False)
         is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
         rule_name = f"{page_name}编码规则"
-        if page_code == "master-data-material":
+        if page_config.get("code_rule_description"):
+            description = page_config["code_rule_description"]
+        elif page_code == "master-data-material":
             description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
         elif page_code == "master-data-engineering-bom":
             description = "BOM编码规则，格式：BOM-物料编码-版本号"
@@ -449,8 +457,10 @@ class DefaultValuesService:
         skip_date = page_config.get("skip_date", False)
         is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
         rule_name = f"{page_name}编码规则"
-        # 物料、BOM 使用自定义描述
-        if page_code == "master-data-material":
+        # 物料、BOM 使用自定义描述；页面可覆盖 code_rule_description
+        if page_config.get("code_rule_description"):
+            description = page_config["code_rule_description"]
+        elif page_code == "master-data-material":
             description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
         elif page_code == "master-data-engineering-bom":
             description = "BOM编码规则，格式：BOM-物料编码-版本号"

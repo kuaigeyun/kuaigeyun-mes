@@ -16,7 +16,7 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import { App, Alert, AutoComplete, Button, Col, Form, Input, Modal, Radio, Row, Select, Space, Table, Tag, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
@@ -34,6 +34,7 @@ import {
   type MoldTrialSheetCreatePayload,
   type MoldTrialSheetRow,
 } from '../../../../services/haoligo';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetList } from '../../../../../../services/dataset';
 
 const trialResultEnum: Record<string, { text: string }> = {
@@ -93,6 +94,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   const bindingDatasetUuidWatched = Form.useWatch('dataset_uuid', bindingCfgForm);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -246,6 +248,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       return v == null ? undefined : String(v);
     };
     setPoPickerOpen(false);
+    setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({
@@ -377,9 +380,10 @@ const MoldTrialSheetsPage: React.FC = () => {
     };
   }, []);
 
-  const handleEdit = async (record: MoldTrialSheetRow) => {
+  const openSheetForm = async (record: MoldTrialSheetRow, detailOnly: boolean) => {
     try {
       const detail = await getMoldTrialSheet(record.id);
+      setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(detail.id);
       editSheetStatusRef.current = detail.sheet_status;
@@ -398,6 +402,9 @@ const MoldTrialSheetsPage: React.FC = () => {
       messageApi.error((e as Error).message || '加载试模单失败');
     }
   };
+
+  const handleEdit = (record: MoldTrialSheetRow) => void openSheetForm(record, false);
+  const handleDetail = (record: MoldTrialSheetRow) => void openSheetForm(record, true);
 
   const handleDeleteOne = (record: MoldTrialSheetRow) => {
     Modal.confirm({
@@ -696,17 +703,63 @@ const MoldTrialSheetsPage: React.FC = () => {
     {
       title: '关键词',
       dataIndex: 'keyword',
+      key: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '订单号/模具代号/名称' },
+      fieldProps: { placeholder: '单号/订单号/模具代号/名称' },
     },
-    { title: '采购订单号', dataIndex: 'purchase_order_no', width: 160, ellipsis: true, copyable: true, fixed: 'left' },
-    { title: '供应商', dataIndex: 'supplier_name', width: 160, ellipsis: true, hideInSearch: true },
-    { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true },
-    { title: '模具名称', dataIndex: 'mold_name', width: 160, ellipsis: true },
-    { title: '试模次数', dataIndex: 'trial_times', width: 96, hideInSearch: true },
+    {
+      title: '试模单单号',
+      dataIndex: 'sheet_no',
+      key: 'sheet_no',
+      width: 150,
+      ellipsis: true,
+      copyable: true,
+      hideInSearch: true,
+    },
+    {
+      title: '采购订单号',
+      dataIndex: 'purchase_order_no',
+      key: 'purchase_order_no',
+      width: 160,
+      ellipsis: true,
+      copyable: true,
+      hideInSearch: true,
+    },
+    {
+      title: '供应商',
+      dataIndex: 'supplier_name',
+      key: 'supplier_name',
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: '模具代号',
+      dataIndex: 'mold_code',
+      key: 'mold_code',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: '模具名称',
+      dataIndex: 'mold_name',
+      key: 'mold_name',
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: '试模次数',
+      dataIndex: 'trial_times',
+      key: 'trial_times',
+      width: 96,
+      hideInSearch: true,
+    },
     {
       title: '试模结果',
       dataIndex: 'trial_result',
+      key: 'trial_result',
       width: 100,
       valueType: 'select',
       valueEnum: trialResultEnum,
@@ -715,13 +768,18 @@ const MoldTrialSheetsPage: React.FC = () => {
         <Tag color={r.trial_result === '合格' ? 'success' : 'error'}>{r.trial_result}</Tag>
       ),
     },
+    moldDocumentCreatedAtColumn<MoldTrialSheetRow>(),
     {
       title: '操作',
+      key: 'option',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -738,7 +796,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldTrialSheetRow>
           headerTitle="试模单"
-          columnPersistenceId="apps.haoligo.pages.molds.documents.trial"
+          columnPersistenceId="apps.haoligo.pages.molds.documents.trial.v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -771,16 +829,17 @@ const MoldTrialSheetsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1100 }}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑试模单' : '新增试模单'}
+        title={isDetailView ? '试模单详情' : isEdit ? '编辑试模单' : '新增试模单'}
         open={modalVisible}
+        readOnly={isDetailView}
         onClose={() => {
           setModalVisible(false);
           setEditId(null);
+          setIsDetailView(false);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}

@@ -1555,12 +1555,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 延迟检测，确保 DOM 已完全渲染
     const timer = setTimeout(checkBreadcrumbWrap, 100);
 
-    // 监听窗口大小变化
-    window.addEventListener('resize', checkBreadcrumbWrap);
+    let resizeThrottle: ReturnType<typeof setTimeout> | undefined;
+    const onResize = () => {
+      if (resizeThrottle) return;
+      resizeThrottle = setTimeout(() => {
+        resizeThrottle = undefined;
+        checkBreadcrumbWrap();
+      }, 120);
+    };
+    window.addEventListener('resize', onResize, { passive: true });
 
-    // 使用 MutationObserver 监听 DOM 变化
+    let moRaf = 0;
     const observer = new MutationObserver(() => {
-      setTimeout(checkBreadcrumbWrap, 50);
+      if (moRaf) return;
+      moRaf = window.requestAnimationFrame(() => {
+        moRaf = 0;
+        checkBreadcrumbWrap();
+      });
     });
     if (breadcrumbRef.current) {
       observer.observe(breadcrumbRef.current, {
@@ -1573,7 +1584,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', checkBreadcrumbWrap);
+      if (resizeThrottle) clearTimeout(resizeThrottle);
+      window.removeEventListener('resize', onResize);
+      if (moRaf) cancelAnimationFrame(moRaf);
       observer.disconnect();
     };
   }, [location.pathname]);
@@ -1597,9 +1610,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 初始添加
     addGroupTitleClassName();
 
-    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className（合并到 rAF，避免菜单动画/重排时连发同步回调）
+    let groupMoRaf = 0;
     const observer = new MutationObserver(() => {
-      addGroupTitleClassName();
+      if (groupMoRaf) return;
+      groupMoRaf = window.requestAnimationFrame(() => {
+        groupMoRaf = 0;
+        addGroupTitleClassName();
+      });
     });
 
     // 观察菜单容器
@@ -1612,9 +1630,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return () => {
+      if (groupMoRaf) cancelAnimationFrame(groupMoRaf);
       observer.disconnect();
     };
-  }, [currentUser]); // 当用户或菜单数据变化时重新添加 className
+  }, [currentUser?.id, currentUser?.tenant_id]); // 用户/租户切换时重建；避免无关字段刷新导致反复挂载 Observer
 
   /**
    * 动态设置 LOGO 后标题文字颜色（H1元素）- 确保在浅色模式深色背景时与深色模式文字颜色一致
@@ -1649,9 +1668,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 初始设置
     updateLogoTitleColor();
 
-    // 使用 MutationObserver 监听 DOM 变化，确保新增的元素也能应用颜色
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的元素也能应用颜色（rAF 合并，避免顶栏频繁 attribute 变动时同步重查 DOM）
+    let logoMoRaf = 0;
     const observer = new MutationObserver(() => {
-      updateLogoTitleColor();
+      if (logoMoRaf) return;
+      logoMoRaf = window.requestAnimationFrame(() => {
+        logoMoRaf = 0;
+        updateLogoTitleColor();
+      });
     });
 
     // 观察顶栏容器
@@ -1666,6 +1690,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return () => {
+      if (logoMoRaf) cancelAnimationFrame(logoMoRaf);
       observer.disconnect();
     };
   }, [isDarkMode, isLightModeLightBg]); // 当主题或背景色变化时重新设置
@@ -1692,63 +1717,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       document.title = `${currentSiteName} - ${t('common.docTitleSuffix')}`;
     }
   }, [location.pathname, breadcrumbMenuData, t, siteName, currentUser]);
-
-  /**
-   * 检测面包屑是否换行，如果换行则隐藏
-   */
-  useEffect(() => {
-    const checkBreadcrumbWrap = () => {
-      if (!breadcrumbRef.current) {
-        setBreadcrumbVisible(true);
-        return;
-      }
-
-      const breadcrumbElement = breadcrumbRef.current;
-      const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
-      if (!olElement) {
-        setBreadcrumbVisible(true);
-        return;
-      }
-
-      // 检测第一个和最后一个元素是否在同一行
-      const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
-      const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
-      if (firstItem && lastItem) {
-        const firstRect = firstItem.getBoundingClientRect();
-        const lastRect = lastItem.getBoundingClientRect();
-        // 如果最后一个元素在第一个元素下方（允许5px误差），说明换行了
-        const isWrapped = lastRect.top > firstRect.top + 5;
-        setBreadcrumbVisible(!isWrapped);
-      } else {
-        setBreadcrumbVisible(true);
-      }
-    };
-
-    // 延迟检测，确保 DOM 已完全渲染
-    const timer = setTimeout(checkBreadcrumbWrap, 100);
-
-    // 监听窗口大小变化
-    window.addEventListener('resize', checkBreadcrumbWrap);
-
-    // 使用 MutationObserver 监听 DOM 变化
-    const observer = new MutationObserver(() => {
-      setTimeout(checkBreadcrumbWrap, 50);
-    });
-    if (breadcrumbRef.current) {
-      observer.observe(breadcrumbRef.current, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class'],
-      });
-    }
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', checkBreadcrumbWrap);
-      observer.disconnect();
-    };
-  }, [location.pathname]);
 
   /**
    * 根据用户权限过滤菜单
@@ -2290,17 +2258,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           transition: none !important;
         }
-        /* 禁用主题切换时的过渡动画，让切换更干脆 */
-        * {
-          transition: background-color 0s !important;
-          transition: color 0s !important;
-          transition: border-color 0s !important;
-        }
-        /* 确保 Ant Design 组件也立即切换，无过渡 */
+        /* 主题切换：仅掐断布局壳常见层的过渡。避免使用全文档星号通配选择器及 ant-layout 下全后代通配，否则样式引擎需遍历巨量节点，易严重掉帧 */
         .ant-pro-layout,
-        .ant-pro-layout *,
         .ant-layout,
-        .ant-layout * {
+        .ant-layout-header,
+        .ant-layout-content,
+        .ant-layout-footer,
+        .ant-pro-sider,
+        .ant-pro-sider-menu,
+        .ant-pro-global-header,
+        .ant-pro-global-header-logo,
+        .ant-menu,
+        .ant-menu-submenu,
+        .ant-menu-item {
           transition: background-color 0s !important;
           transition: color 0s !important;
           transition: border-color 0s !important;

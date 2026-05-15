@@ -13,7 +13,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Input, Modal, Row, Space, Table } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -34,6 +34,7 @@ import {
   type MoldReturnSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
 function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
@@ -64,6 +65,7 @@ const MoldReturnInPage: React.FC = () => {
   const formRef = useRef<ProFormInstance>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -113,6 +115,7 @@ const MoldReturnInPage: React.FC = () => {
   }, [moldRows, moldKw]);
 
   const handleCreate = async () => {
+    setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({
@@ -132,9 +135,10 @@ const MoldReturnInPage: React.FC = () => {
 
   useNewShortcut(handleCreate);
 
-  const handleEdit = async (record: MoldReturnSheetRow) => {
+  const openSheetForm = async (record: MoldReturnSheetRow, detailOnly: boolean) => {
     try {
       const d = await getMoldReturnSheet(record.id);
+      setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(d.id);
       setFormInitialValues({
@@ -154,6 +158,9 @@ const MoldReturnInPage: React.FC = () => {
       messageApi.error((e as Error).message || '加载还入单失败');
     }
   };
+
+  const handleEdit = (record: MoldReturnSheetRow) => void openSheetForm(record, false);
+  const handleDetail = (record: MoldReturnSheetRow) => void openSheetForm(record, true);
 
   const handleDeleteOne = (record: MoldReturnSheetRow) => {
     Modal.confirm({
@@ -312,17 +319,25 @@ const MoldReturnInPage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '制令单号/模具/部门/成品' },
+      fieldProps: { placeholder: '单号/制令单号/模具/部门/成品' },
+    },
+    {
+      title: '还入单单号',
+      dataIndex: 'sheet_no',
+      width: 150,
+      ellipsis: true,
+      copyable: true,
+      fixed: 'left',
+      hideInSearch: true,
     },
     { title: '制令单号', dataIndex: 'production_order_no', width: 130, ellipsis: true, copyable: true },
     {
       title: '领用单',
       dataIndex: 'borrow_sheet_no',
-      width: 120,
+      width: 150,
       ellipsis: true,
       copyable: true,
-      hideInTable: true,
-      hideInSetting: true,
+      hideInSearch: true,
     },
     { title: '领出部门', dataIndex: 'issue_department_name', width: 150, ellipsis: true },
     { title: '模具代号', dataIndex: 'mold_code', width: 110, ellipsis: true },
@@ -331,13 +346,17 @@ const MoldReturnInPage: React.FC = () => {
     { title: '成品名称', dataIndex: 'finished_product_name', width: 130, ellipsis: true, hideInSearch: true },
     { title: '计划数量', dataIndex: 'planned_qty', width: 100, hideInSearch: true },
     { title: '制造数量', dataIndex: 'manufacture_qty', width: 100, hideInSearch: true },
+    moldDocumentCreatedAtColumn<MoldReturnSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -386,33 +405,38 @@ const MoldReturnInPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isEdit ? '编辑还入单' : '还入单'}
+        title={isDetailView ? '还入单详情' : isEdit ? '编辑还入单' : '还入单'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
           setEditId(null);
+          setIsDetailView(false);
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 8,
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Button htmlType="button" onClick={onResetForm}>
-              重置
-            </Button>
-            <Space>
-              <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
-                提交{SUBMIT_SHORTCUT_HINT}
+          isDetailView ? (
+            <Button onClick={() => setModalVisible(false)}>关闭</Button>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Button htmlType="button" onClick={onResetForm}>
+                重置
               </Button>
-            </Space>
-          </div>
+              <Space>
+                <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
+                  提交{SUBMIT_SHORTCUT_HINT}
+                </Button>
+              </Space>
+            </div>
+          )
         }
       >
         <div className="form-modal-content-inner">
@@ -420,6 +444,7 @@ const MoldReturnInPage: React.FC = () => {
             key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
             formRef={formRef}
             loading={formLoading}
+            readonly={isDetailView}
             onFinish={handleSubmit}
             onFinishFailed={({ errorFields }) => {
               const first = errorFields?.[0];

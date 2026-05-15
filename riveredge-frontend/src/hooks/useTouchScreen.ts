@@ -82,14 +82,23 @@ export function useTouchScreen(): UseTouchScreenReturn {
     updateTouchDeviceState();
     updateTouchScreenModeState();
 
-    // 监听窗口大小变化
-    const handleResize = () => {
+    // resize 在拖拽窗口时会高频触发；合并到短节流，避免 BasicLayout 等整树频繁 setState 丢帧
+    let resizeTick: ReturnType<typeof setTimeout> | undefined;
+    const scheduleResizeSync = () => {
+      if (resizeTick) return;
+      resizeTick = setTimeout(() => {
+        resizeTick = undefined;
+        updateTouchDeviceState();
+        updateTouchScreenModeState();
+      }, 120);
+    };
+
+    window.addEventListener('resize', scheduleResizeSync, { passive: true });
+    const onOrientation = () => {
       updateTouchDeviceState();
       updateTouchScreenModeState();
     };
-
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
+    window.addEventListener('orientationchange', onOrientation);
 
     // 监听全屏状态变化
     const unsubscribe = onFullscreenChange((isFullscreen) => {
@@ -97,8 +106,9 @@ export function useTouchScreen(): UseTouchScreenReturn {
     });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      if (resizeTick) clearTimeout(resizeTick);
+      window.removeEventListener('resize', scheduleResizeSync);
+      window.removeEventListener('orientationchange', onOrientation);
       unsubscribe();
     };
   }, [updateTouchDeviceState, updateTouchScreenModeState]);

@@ -50,7 +50,7 @@ class HaoligoMold(HaoligoTenantModel):
     status = fields.CharField(
         max_length=32,
         default="待用",
-        description="状态：在用/在修/停用/待用/报废/待启用；维保占用时可细分：维修、保养、外协维修、外协保养",
+        description="状态：待启用/待用/在用/维修/保养/外协维修/报废/停用（与 apps.haoligo.constants.mold_status 一致）",
     )
     total_manufacture_qty = fields.DecimalField(
         max_digits=18,

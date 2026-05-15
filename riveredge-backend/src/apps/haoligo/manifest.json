@@ -117,6 +117,13 @@
             "sort_order": 40,
             "children": [
               {
+                "title": "app.haoligo.menu.molds.reports.trial-record",
+                "path": "/apps/haoligo/molds/reports/trial-record",
+                "icon": "ClipboardList",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 40
+              },
+              {
                 "title": "app.haoligo.menu.molds.reports.maintenance-alert",
                 "path": "/apps/haoligo/molds/reports/maintenance-alert",
                 "icon": "BellElectric",
@@ -131,18 +138,11 @@
                 "sort_order": 42
               },
               {
-                "title": "app.haoligo.menu.molds.reports.status-overview",
-                "path": "/apps/haoligo/molds/reports/status-overview",
-                "icon": "ScanEye",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 43
-              },
-              {
                 "title": "app.haoligo.menu.molds.reports.outsource-maintenance-log",
                 "path": "/apps/haoligo/molds/reports/outsource-maintenance-log",
                 "icon": "HardDriveUpload",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 44
+                "sort_order": 43
               }
             ]
           }
@@ -278,13 +278,6 @@
                 "icon": "FilePenLine",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 11
-              },
-              {
-                "title": "app.haoligo.menu.patrol.daily.dashboard",
-                "path": "/apps/haoligo/patrol/daily/dashboard",
-                "icon": "PanelTop",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 12
               },
               {
                 "title": "app.haoligo.menu.patrol.hazards",

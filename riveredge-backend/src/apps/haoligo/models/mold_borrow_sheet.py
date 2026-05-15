@@ -15,7 +15,7 @@ class HaoligoMoldBorrowSheet(HaoligoTenantModel):
         table_description = "好力GO - 模具领用单"
         indexes = [("tenant_id",), ("mold_code",), ("source_order_no",)]
 
-    source_order_no = fields.CharField(max_length=128, null=True, description="制令单号")
+    sheet_no = fields.CharField(max_length=64, null=True, description="领用单单号（系统编码规则生成）")
     department_uuid = fields.CharField(max_length=36, null=True, description="领用部门 UUID")
     department_name = fields.CharField(max_length=200, description="领用部门名称")
     mold_code = fields.CharField(max_length=64, description="模具代号")

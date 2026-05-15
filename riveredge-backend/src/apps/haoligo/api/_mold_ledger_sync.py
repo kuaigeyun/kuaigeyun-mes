@@ -3,11 +3,9 @@
 from typing import Optional
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_status import MAINTENANCE_OCCUPY_STATUSES
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
-
-# 与维保单创建的细分状态 + 历史「在修」一致，领用单等需统一拦截
-MAINTENANCE_OCCUPY_STATUSES = frozenset({"在修", "维修", "保养", "外协维修", "外协保养"})
 
 
 async def count_active_borrow_sheets(

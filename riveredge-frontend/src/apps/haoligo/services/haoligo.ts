@@ -367,6 +367,8 @@ export interface MoldOperationRecordRow {
   uuid: string;
   title: string;
   detail: string;
+  /** 标准业务单号；历史数据可能为空 */
+  sheet_no?: string | null;
 }
 
 export function listMoldOperationRecords(rowId: number): Promise<{ items: MoldOperationRecordRow[] }> {
@@ -437,6 +439,7 @@ export function syncMoldLedgerFromDataset(): Promise<MoldLedgerSyncResult> {
 export interface MoldTrialSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   purchase_order_no: string;
   supplier_name?: string | null;
   mold_code?: string | null;
@@ -446,6 +449,7 @@ export interface MoldTrialSheetRow {
   inspection_attachment_file_uuids: string[];
   trial_result: string;
   sheet_status: string;
+  created_at?: string | null;
 }
 
 export type MoldTrialSheetCreatePayload = {
@@ -468,6 +472,9 @@ export function listMoldTrialSheets(params?: {
   sheet_status?: string;
   trial_result?: string;
   keyword?: string;
+  /** ISO8601，含边界由前端按日起止传入 */
+  created_from?: string;
+  created_to?: string;
 }): Promise<PageResult<MoldTrialSheetRow>> {
   return apiRequest(`${PREFIX}/molds/trial-sheets`, { params });
 }
@@ -523,6 +530,7 @@ export interface OutsourceMaintLineRow {
 export interface MoldOutsourceMaintenanceSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   applicant_user_id?: number | null;
   applicant_name?: string | null;
   department_uuid?: string | null;
@@ -534,6 +542,7 @@ export interface MoldOutsourceMaintenanceSheetRow {
   header_attachment_file_uuids: string[];
   line_items: OutsourceMaintLineRow[];
   primary_mold_code?: string | null;
+  created_at?: string | null;
 }
 
 export type OutsourceMaintLinePayload = {
@@ -561,6 +570,8 @@ export function listMoldOutsourceMaintenanceSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  /** 仅返回尚未关联未删除外协维保完修单的外协维保单（完修单选源） */
+  open_for_complete?: boolean;
 }): Promise<PageResult<MoldOutsourceMaintenanceSheetRow>> {
   return apiRequest(`${PREFIX}/molds/outsource-maintenance-sheets`, { params });
 }
@@ -598,6 +609,7 @@ export interface MoldMaintLineRow {
 export interface MoldMaintenanceSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   applicant_user_id?: number | null;
   applicant_name?: string | null;
   department_uuid?: string | null;
@@ -607,6 +619,7 @@ export interface MoldMaintenanceSheetRow {
   header_attachment_file_uuids: string[];
   line_items: MoldMaintLineRow[];
   primary_mold_code?: string | null;
+  created_at?: string | null;
 }
 
 export type MoldMaintLinePayload = {
@@ -633,6 +646,8 @@ export function listMoldMaintenanceSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  /** 仅返回尚未关联未删除维保完修单的维保单（完修单选源） */
+  open_for_complete?: boolean;
 }): Promise<PageResult<MoldMaintenanceSheetRow>> {
   return apiRequest(`${PREFIX}/molds/maintenance-sheets`, { params });
 }
@@ -661,41 +676,85 @@ export interface MoldCompleteLineRow {
   mold_code: string;
   mold_name?: string | null;
   repair_reason?: string | null;
+  /** 保养完修：该模具是否重置总产量（维修单恒为 false） */
+  clear_total_production?: boolean;
+  upkeep_content?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
+  /** 完修单上传：模具图片（保养后 / 维修后） */
+  attachment_file_uuids?: string[];
+  /** 来源维保单该行模具图（保养前 / 维修前，接口只读，用于对比） */
+  source_attachment_file_uuids?: string[];
 }
+
+/** 维保完修单·维修结果选项（须与后端 `MOLD_MAINTENANCE_COMPLETE_REPAIR_RESULTS` 一致） */
+export const HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS = [
+  '维修完成',
+  '待观察',
+  '需返修',
+  '报废',
+  '转外协',
+  '无法修复',
+] as const;
 
 export interface MoldMaintenanceCompleteSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   source_maintenance_sheet_id?: number | null;
   source_order_no: string;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
+  department_uuid?: string | null;
+  department_name?: string | null;
   service_type: string;
   clear_total_production: boolean;
   header_attachment_file_uuids: string[];
+  /** 来源维保单表头附件（保养前 / 维修前，只读，用于对比） */
+  source_header_attachment_file_uuids?: string[];
   line_items: MoldCompleteLineRow[];
   primary_mold_code?: string | null;
+  created_at?: string | null;
 }
 
 export type MoldCompleteLinePayload = {
   mold_code: string;
   mold_name?: string | null;
   repair_reason?: string | null;
+  clear_total_production?: boolean;
+  upkeep_content?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
+  attachment_file_uuids?: string[];
 };
 
+/** 新建维保完修单：须指定维保单；`line_items` 与维保单模具一致且含每模完修项 */
 export type MoldMaintenanceCompleteSheetCreatePayload = {
-  source_maintenance_sheet_id?: number | null;
-  source_order_no: string;
-  service_type: '维修' | '保养';
-  clear_total_production: boolean;
-  header_attachment_file_uuids?: string[];
+  source_maintenance_sheet_id: number;
+  /** 缺省由后端从来源维保单带出 */
+  applicant_user_id?: number;
+  department_uuid?: string;
   line_items: MoldCompleteLinePayload[];
+  header_attachment_file_uuids?: string[];
 };
 
-export type MoldMaintenanceCompleteSheetUpdatePayload = Partial<MoldMaintenanceCompleteSheetCreatePayload>;
+export type MoldMaintenanceCompleteSheetUpdatePayload = {
+  source_maintenance_sheet_id?: number | null;
+  source_order_no?: string;
+  applicant_user_id?: number;
+  department_uuid?: string;
+  service_type?: '维修' | '保养';
+  header_attachment_file_uuids?: string[];
+  line_items?: MoldCompleteLinePayload[];
+};
 
 export function listMoldMaintenanceCompleteSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  service_type?: string;
+  created_from?: string;
+  created_to?: string;
 }): Promise<PageResult<MoldMaintenanceCompleteSheetRow>> {
   return apiRequest(`${PREFIX}/molds/maintenance-complete-sheets`, { params });
 }
@@ -726,50 +785,75 @@ export interface MoldOutsourceCompleteLineRow {
   mold_code: string;
   mold_name?: string | null;
   repair_reason?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
   repair_cost?: string | number | null;
   attachment_file_uuids: string[];
+  /** 来源外协维保单该行附件（维修前，只读对比） */
+  source_attachment_file_uuids?: string[];
 }
 
 export interface MoldOutsourceMaintenanceCompleteSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   source_outsource_maintenance_sheet_id?: number | null;
   source_order_no: string;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
+  department_uuid?: string | null;
+  department_name?: string | null;
   outsourced_unit_code?: string | null;
   outsourced_unit_name: string;
   service_type: string;
   clear_total_production: boolean;
   header_attachment_file_uuids: string[];
+  source_header_attachment_file_uuids?: string[];
   line_items: MoldOutsourceCompleteLineRow[];
   primary_mold_code?: string | null;
+  sheet_status?: string;
+  audited_at?: string | null;
+  audited_by_user_id?: number | null;
+  created_at?: string | null;
 }
 
 export type MoldOutsourceCompleteLinePayload = {
   mold_code: string;
   mold_name?: string | null;
   repair_reason?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
   repair_cost?: string | number | null;
   attachment_file_uuids?: string[];
 };
 
+/** 新建外协维保完修单：须指定外协维保单；`line_items` 与维保单模具一致 */
 export type MoldOutsourceMaintenanceCompleteSheetCreatePayload = {
-  source_outsource_maintenance_sheet_id?: number | null;
-  source_order_no: string;
-  outsourced_unit_code?: string | null;
-  outsourced_unit_name: string;
-  service_type: '维修' | '保养';
-  clear_total_production: boolean;
+  source_outsource_maintenance_sheet_id: number;
+  applicant_user_id?: number;
+  department_uuid?: string;
   header_attachment_file_uuids?: string[];
   line_items: MoldOutsourceCompleteLinePayload[];
 };
 
-export type MoldOutsourceMaintenanceCompleteSheetUpdatePayload =
-  Partial<MoldOutsourceMaintenanceCompleteSheetCreatePayload>;
+export type MoldOutsourceMaintenanceCompleteSheetUpdatePayload = {
+  source_outsource_maintenance_sheet_id?: number | null;
+  source_order_no?: string;
+  applicant_user_id?: number;
+  department_uuid?: string;
+  outsourced_unit_code?: string | null;
+  outsourced_unit_name?: string;
+  header_attachment_file_uuids?: string[];
+  line_items?: MoldOutsourceCompleteLinePayload[];
+};
 
 export function listMoldOutsourceMaintenanceCompleteSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  sheet_status?: string;
+  created_from?: string;
+  created_to?: string;
 }): Promise<PageResult<MoldOutsourceMaintenanceCompleteSheetRow>> {
   return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets`, { params });
 }
@@ -800,10 +884,49 @@ export function deleteMoldOutsourceMaintenanceCompleteSheet(rowId: number): Prom
   return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/${rowId}`, { method: 'DELETE' });
 }
 
+export function listPendingMoldOutsourceMaintenanceCompleteSheetsMine(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+}): Promise<PageResult<MoldOutsourceMaintenanceCompleteSheetRow>> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/pending-mine`, { params });
+}
+
+/** 委外审核：当前用户为申请人的全部外协维保完修单（含待审核/已通过/已驳回） */
+export function listAuditMoldOutsourceMaintenanceCompleteSheetsMine(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sheet_status?: string;
+}): Promise<PageResult<MoldOutsourceMaintenanceCompleteSheetRow>> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/audit-mine`, { params });
+}
+
+export function approveMoldOutsourceMaintenanceCompleteSheet(
+  rowId: number,
+): Promise<MoldOutsourceMaintenanceCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/${rowId}/approve`, { method: 'POST' });
+}
+
+export function rejectMoldOutsourceMaintenanceCompleteSheet(
+  rowId: number,
+): Promise<MoldOutsourceMaintenanceCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/${rowId}/reject`, { method: 'POST' });
+}
+
+export function revokeApprovalMoldOutsourceMaintenanceCompleteSheet(
+  rowId: number,
+): Promise<MoldOutsourceMaintenanceCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-complete-sheets/${rowId}/revoke-approval`, {
+    method: 'POST',
+  });
+}
+
 /** 领用单（与后端 MoldBorrowSheetOut 对齐） */
 export interface MoldBorrowSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   source_order_no?: string | null;
   department_uuid?: string | null;
   department_name: string;
@@ -812,6 +935,7 @@ export interface MoldBorrowSheetRow {
   finished_product_code?: string | null;
   finished_product_name?: string | null;
   planned_qty?: string | null;
+  created_at?: string | null;
 }
 
 export type MoldBorrowSheetCreatePayload = {
@@ -907,6 +1031,7 @@ export function prefillMoldBorrowSheetFromDataset(
 export interface MoldReturnSheetRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   production_order_no?: string | null;
   borrow_sheet_no?: string | null;
   issue_department_uuid?: string | null;
@@ -917,6 +1042,7 @@ export interface MoldReturnSheetRow {
   finished_product_name?: string | null;
   planned_qty?: string | null;
   manufacture_qty: string;
+  created_at?: string | null;
 }
 
 export type MoldReturnSheetCreatePayload = {
@@ -982,16 +1108,63 @@ export interface HazardRow {
   id: number;
   uuid: string;
   workshop_id?: number | null;
+  workshop_name?: string | null;
   workshop_area?: string | null;
   reported_at?: string | null;
   issue_type_code?: string | null;
   problem_summary?: string | null;
   solution_note?: string | null;
   status: string;
+  before_image_file_ids?: string[] | null;
+  after_image_file_ids?: string[] | null;
   handler_name?: string | null;
   handled_at?: string | null;
+  registrant_user_id?: number | null;
+  registrant_name?: string | null;
+  responsible_user_id?: number | null;
+  responsible_name?: string | null;
 }
 
-export function listHazardReports(params?: { skip?: number; limit?: number; status?: string }): Promise<PageResult<HazardRow>> {
+export function listHazardReports(params?: {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  /** 为 true 时仅待治理（检查中/维修中）；与 status 同时传时以后端为准（通常只传 status） */
+  for_remediation?: boolean;
+}): Promise<PageResult<HazardRow>> {
   return apiRequest(`${PREFIX}/patrol/hazard-reports`, { params });
+}
+
+export type HazardCreatePayload = {
+  workshop_id?: number | null;
+  workshop_area?: string | null;
+  reported_at?: string | null;
+  issue_type_code?: string | null;
+  problem_summary?: string | null;
+  solution_note?: string | null;
+  status?: string;
+  before_image_file_ids?: string[] | null;
+  after_image_file_ids?: string[] | null;
+  handler_name?: string | null;
+  handled_at?: string | null;
+  registrant_user_id?: number | null;
+  responsible_user_id?: number | null;
+};
+
+export function createHazardReport(body: HazardCreatePayload): Promise<HazardRow> {
+  return apiRequest(`${PREFIX}/patrol/hazard-reports`, { method: 'POST', data: body });
+}
+
+export type HazardUpdatePayload = Partial<HazardCreatePayload>;
+
+export function getHazardReport(rowId: number): Promise<HazardRow> {
+  return apiRequest(`${PREFIX}/patrol/hazard-reports/${rowId}`);
+}
+
+export function updateHazardReport(rowId: number, body: HazardUpdatePayload): Promise<HazardRow> {
+  return apiRequest(`${PREFIX}/patrol/hazard-reports/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteHazardReport(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/patrol/hazard-reports/${rowId}`, { method: 'DELETE' });
 }

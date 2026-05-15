@@ -1,5 +1,6 @@
 """好力 GO — 模具领用单 API。"""
 
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any, Dict, Optional
 from uuid import UUID
@@ -16,14 +17,17 @@ from apps.haoligo.api._mold_ledger_sync import (
     count_active_borrow_sheets as _count_active_borrow_sheets,
     sync_mold_ledger_status_for_mold_code as _sync_mold_ledger_status_for_mold_code,
 )
+from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
+from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_BORROW_SHEET_NO
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.department import Department
 from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/molds/borrow-sheets", tags=["App · HaoliGO · 领用单"])
@@ -276,6 +280,7 @@ class MoldBorrowSheetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    sheet_no: Optional[str] = None
     source_order_no: Optional[str] = None
     department_uuid: Optional[str] = None
     department_name: str
@@ -284,6 +289,7 @@ class MoldBorrowSheetOut(BaseModel):
     finished_product_code: Optional[str] = None
     finished_product_name: Optional[str] = None
     planned_qty: Optional[Decimal] = None
+    created_at: datetime
 
 
 class MoldBorrowSheetCreate(BaseModel):
@@ -350,6 +356,7 @@ def _serialize(row: HaoligoMoldBorrowSheet) -> MoldBorrowSheetOut:
     return MoldBorrowSheetOut(
         id=row.id,
         uuid=row.uuid,
+        sheet_no=row.sheet_no,
         source_order_no=row.source_order_no,
         department_uuid=row.department_uuid,
         department_name=row.department_name,
@@ -358,6 +365,7 @@ def _serialize(row: HaoligoMoldBorrowSheet) -> MoldBorrowSheetOut:
         finished_product_code=row.finished_product_code,
         finished_product_name=row.finished_product_name,
         planned_qty=row.planned_qty,
+        created_at=row.created_at,
     )
 
 
@@ -374,6 +382,7 @@ async def list_borrow_sheets(
         k = keyword.strip()
         qs = qs.filter(
             Q(source_order_no__icontains=k)
+            | Q(sheet_no__icontains=k)
             | Q(mold_code__icontains=k)
             | Q(mold_name__icontains=k)
             | Q(department_name__icontains=k)
@@ -432,8 +441,13 @@ async def create_borrow_sheet(
     mcode = body.mold_code.strip()
     async with in_transaction():
         await _assert_mold_ledger_allows_borrow(tenant_id, mcode, exclude_sheet_id=None)
+        try:
+            sheet_no = await generate_mold_sheet_no(tenant_id, HAOLIGO_MOLD_BORROW_SHEET_NO)
+        except ValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
         row = await HaoligoMoldBorrowSheet.create(
             tenant_id=tenant_id,
+            sheet_no=sheet_no,
             source_order_no=(body.source_order_no or "").strip() or None,
             department_uuid=(body.department_uuid or "").strip() or None,
             department_name=body.department_name.strip(),

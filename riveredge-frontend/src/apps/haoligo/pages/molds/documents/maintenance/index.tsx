@@ -7,6 +7,7 @@ import {
   ActionType,
   ProColumns,
   ProForm,
+  ProFormDependency,
   ProFormInstance,
   ProFormList,
   ProFormSelect,
@@ -15,8 +16,8 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -39,6 +40,7 @@ import {
   type MoldMaintenanceSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
 /** 首屏只拉少量用户，其余靠下拉内搜索（keyword）加载，减轻 JSON 解析与 Select 首帧压力 */
 const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
@@ -131,6 +133,7 @@ const MoldMaintenancePage: React.FC = () => {
   const tenantFormOptionsValidUntilRef = useRef(0);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   /** 下拉选项与部门树就绪后再挂载 ProForm；申请人首屏仅拉部分用户，其余下拉内搜索 */
   const [formOptionsReady, setFormOptionsReady] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -311,7 +314,7 @@ const MoldMaintenancePage: React.FC = () => {
   const loadMoldsForPicker = useCallback(async () => {
     setMoldLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0 });
+      const res = await listMolds({ limit: 200, skip: 0, status: '待用' });
       setMoldRows(res.items);
     } catch {
       setMoldRows([]);
@@ -356,6 +359,7 @@ const MoldMaintenancePage: React.FC = () => {
   );
 
   const handleCreate = useCallback(() => {
+    setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
     setFormOptionsReady(false);
@@ -388,10 +392,19 @@ const MoldMaintenancePage: React.FC = () => {
     })();
   }, [messageApi, preloadTenantFormOptions]);
 
+  const handleMainModalCancel = useCallback(() => {
+    setModalVisible(false);
+    setEditId(null);
+    setMoldPickRow(null);
+    setFormOptionsReady(false);
+    setIsDetailView(false);
+  }, []);
+
   useNewShortcut(handleCreate);
 
-  const handleEdit = useCallback(
-    async (record: MoldMaintenanceSheetRow) => {
+  const openSheetForm = useCallback(
+    async (record: MoldMaintenanceSheetRow, detailOnly: boolean) => {
+      setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(record.id);
       setFormOptionsReady(false);
@@ -433,9 +446,20 @@ const MoldMaintenancePage: React.FC = () => {
         messageApi.error((e as Error).message || '加载维保单失败');
         setModalVisible(false);
         setFormOptionsReady(false);
+        setIsDetailView(false);
       }
     },
     [messageApi, preloadTenantFormOptions],
+  );
+
+  const handleEdit = useCallback(
+    (record: MoldMaintenanceSheetRow) => void openSheetForm(record, false),
+    [openSheetForm],
+  );
+
+  const handleDetail = useCallback(
+    (record: MoldMaintenanceSheetRow) => void openSheetForm(record, true),
+    [openSheetForm],
   );
 
   const handleDeleteOne = (record: MoldMaintenanceSheetRow) => {
@@ -456,6 +480,7 @@ const MoldMaintenancePage: React.FC = () => {
   };
 
   const triggerSubmit = useCallback(() => {
+    if (isDetailView) return;
     if (!formOptionsReady) {
       messageApi.warning('表单加载中，请稍候');
       return;
@@ -468,9 +493,9 @@ const MoldMaintenancePage: React.FC = () => {
       }
       inst.submit();
     }, 0);
-  }, [formOptionsReady, messageApi]);
+  }, [formOptionsReady, isDetailView, messageApi]);
 
-  useSubmitShortcut(triggerSubmit, modalVisible);
+  useSubmitShortcut(triggerSubmit, modalVisible && !isDetailView);
 
   const buildPayload = (
     values: Record<string, unknown>,
@@ -524,6 +549,7 @@ const MoldMaintenancePage: React.FC = () => {
       messageApi.error('至少保留一条模具明细');
       return Promise.reject(new Error('validation'));
     }
+    const reasonLabel = values.service_type === '保养' ? '保养原因' : '维修原因';
     for (let i = 0; i < payload.line_items.length; i++) {
       const li = payload.line_items[i];
       if (!li.mold_code) {
@@ -531,7 +557,7 @@ const MoldMaintenancePage: React.FC = () => {
         return Promise.reject(new Error('validation'));
       }
       if (!li.repair_reason) {
-        messageApi.error(`模具明细第 ${i + 1} 行：请选择维修原因`);
+        messageApi.error(`模具明细第 ${i + 1} 行：请选择${reasonLabel}`);
         return Promise.reject(new Error('validation'));
       }
     }
@@ -594,7 +620,15 @@ const MoldMaintenancePage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '部门/申请人/来源单号/类型' },
+      fieldProps: { placeholder: '单号(维修WX/保养BY)/部门/申请人/来源单号/类型' },
+    },
+    {
+      title: '维保单单号',
+      dataIndex: 'sheet_no',
+      width: 150,
+      ellipsis: true,
+      copyable: true,
+      hideInSearch: true,
     },
     { title: '申请部门', dataIndex: 'department_name', width: 180, ellipsis: true },
     { title: '申请人', dataIndex: 'applicant_name', width: 120, ellipsis: true, hideInSearch: true },
@@ -608,13 +642,17 @@ const MoldMaintenancePage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => r.line_items?.length ?? 0,
     },
+    moldDocumentCreatedAtColumn<MoldMaintenanceSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -658,44 +696,47 @@ const MoldMaintenancePage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 980 }}
+          scroll={{ x: 1150 }}
         />
       </ListPageTemplate>
 
       <Modal
-        title={isEdit ? '编辑维保单' : '维保单'}
+        title={isDetailView ? '维保单详情' : isEdit ? '编辑维保单' : '维保单'}
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditId(null);
-          setMoldPickRow(null);
-          setFormOptionsReady(false);
-        }}
+        onCancel={handleMainModalCancel}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 8,
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Button htmlType="button" disabled={!formOptionsReady} onClick={onResetForm}>
-              重置
-            </Button>
-            <Button
-              htmlType="button"
-              type="primary"
-              disabled={!formOptionsReady}
-              loading={formLoading}
-              onClick={triggerSubmit}
+          isDetailView ? (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button htmlType="button" onClick={handleMainModalCancel}>
+                关闭
+              </Button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
             >
-              提交{SUBMIT_SHORTCUT_HINT}
-            </Button>
-          </div>
+              <Button htmlType="button" disabled={!formOptionsReady} onClick={onResetForm}>
+                重置
+              </Button>
+              <Button
+                htmlType="button"
+                type="primary"
+                disabled={!formOptionsReady}
+                loading={formLoading}
+                onClick={triggerSubmit}
+              >
+                提交{SUBMIT_SHORTCUT_HINT}
+              </Button>
+            </div>
+          )
         }
       >
         <div className="form-modal-content-inner">
@@ -713,9 +754,10 @@ const MoldMaintenancePage: React.FC = () => {
             </div>
           ) : (
             <ProForm
-              key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
+              key={modalVisible ? `${isEdit}-${editId ?? 'n'}-${isDetailView}` : 'closed'}
               formRef={formRef}
               loading={formLoading}
+              readonly={isDetailView}
               onFinish={handleSubmit}
               onFinishFailed={({ errorFields }) => {
                 const first = errorFields?.[0];
@@ -779,12 +821,16 @@ const MoldMaintenancePage: React.FC = () => {
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
               <Col span={12}>
-                <ProFormUploadButton
-                  name="header_attachments"
-                  label="附件照片"
-                  max={10}
-                  fieldProps={uploadFieldProps}
-                />
+                <ProFormDependency name={['service_type']}>
+                  {({ service_type }) => (
+                    <ProFormUploadButton
+                      name="header_attachments"
+                      label={service_type === '保养' ? '附件照片（保养前）' : '附件照片（维修前）'}
+                      max={10}
+                      fieldProps={uploadFieldProps}
+                    />
+                  )}
+                </ProFormDependency>
               </Col>
             </Row>
 
@@ -872,25 +918,47 @@ const MoldMaintenancePage: React.FC = () => {
                       />
                     </Col>
                     <Col xs={24} sm={8}>
-                      <DictionarySelect
-                        dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
-                        name="repair_reason"
-                        setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
-                        label="维修原因"
-                        placeholder="请选择维修原因"
-                        rules={[{ required: true, message: '请选择维修原因' }]}
-                        formRef={formRef}
-                        simpleQuickCreate
-                        colProps={{ span: 24 }}
-                      />
+                      <ProFormDependency name={['service_type']} ignoreFormListField>
+                        {({ service_type }) => {
+                          const isUpkeep = service_type === '保养';
+                          const reasonLabel = isUpkeep ? '保养原因' : '维修原因';
+                          const dictCode = isUpkeep
+                            ? 'HAOLIGO_MOLD_MAINTENANCE_REASON'
+                            : 'HAOLIGO_MOLD_REPAIR_REASON';
+                          return (
+                            <DictionarySelect
+                              key={dictCode}
+                              dictionaryCode={dictCode}
+                              name="repair_reason"
+                              setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
+                              label={reasonLabel}
+                              placeholder={`请选择${reasonLabel}`}
+                              rules={[{ required: true, message: `请选择${reasonLabel}` }]}
+                              formRef={formRef}
+                              simpleQuickCreate
+                              colProps={{ span: 24 }}
+                            />
+                          );
+                        }}
+                      </ProFormDependency>
                     </Col>
                     <Col span={24}>
-                      <ProFormUploadButton
-                        name="item_attachments"
-                        label="维修模具图片附件"
-                        max={8}
-                        fieldProps={uploadFieldProps}
-                      />
+                      <ProFormDependency name={['service_type']} ignoreFormListField>
+                        {({ service_type }) => {
+                          const isUpkeep = service_type === '保养';
+                          const moldImgLabel = isUpkeep
+                            ? '保养模具图片附件（保养前）'
+                            : '维修模具图片附件（维修前）';
+                          return (
+                            <ProFormUploadButton
+                              name="item_attachments"
+                              label={moldImgLabel}
+                              max={8}
+                              fieldProps={uploadFieldProps}
+                            />
+                          );
+                        }}
+                      </ProFormDependency>
                     </Col>
                   </Row>
                 </div>
@@ -913,6 +981,12 @@ const MoldMaintenancePage: React.FC = () => {
         destroyOnHidden
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Alert
+            type="info"
+            showIcon
+            message="仅列出状态为「待用」的模具"
+            description="若模具为「在用」等领用状态，请先办理还入单，待状态变为「待用」后再加入维保明细。"
+          />
           <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
           <Table<MoldRow>
             size="small"
@@ -924,6 +998,7 @@ const MoldMaintenancePage: React.FC = () => {
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true },
+              { title: '状态', dataIndex: 'status', width: 88 },
               {
                 title: '操作',
                 key: 'op',

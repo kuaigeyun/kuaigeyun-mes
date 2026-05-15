@@ -3,15 +3,16 @@
 import asyncio
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tortoise import timezone
 from tortoise.expressions import Q
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_ledger_dataset_binding import HaoligoMoldLedgerDatasetBinding
@@ -26,6 +27,8 @@ from core.services.data.dataset_service import DatasetService
 from infra.models.user import User
 
 router = APIRouter(prefix="/molds", tags=["App · HaoliGO · 模具"])
+
+_ALLOWED_MOLD_STATUS_STR = "、".join(MOLD_LEDGER_STATUS_VALUES)
 
 
 class MoldOut(BaseModel):
@@ -73,6 +76,14 @@ class MoldCreate(BaseModel):
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
 
+    @field_validator("status")
+    @classmethod
+    def mold_status_allowed(cls, v: str) -> str:
+        s = (v or "").strip()
+        if s not in MOLD_LEDGER_STATUS_SET:
+            raise ValueError(f"模具状态无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
+        return s
+
 
 class MoldUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
@@ -91,6 +102,16 @@ class MoldUpdate(BaseModel):
     outsource_vendor_name: Optional[str] = Field(None, max_length=200)
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def mold_status_allowed_opt(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        s = v.strip()
+        if s not in MOLD_LEDGER_STATUS_SET:
+            raise ValueError(f"模具状态无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
+        return s
 
 
 _LIFECYCLE_BATCH_FIELDS = frozenset(
@@ -124,6 +145,9 @@ class MoldBatchLifecycleBody(BaseModel):
                 raise ValueError("按选中更新时请传入 mold_ids")
             if len(self.mold_ids) > 5000:
                 raise ValueError("单次勾选更新不超过 5000 条")
+        fs = (self.filter_status or "").strip() or None
+        if fs is not None and fs not in MOLD_LEDGER_STATUS_SET:
+            raise ValueError(f"filter_status 无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
         return self
 
 
@@ -403,7 +427,13 @@ async def list_molds(
         description="模糊匹配：模具代号、名称、单位、购买/外协厂商与代号、ERP 物料编码、备注；纯数字时额外精确匹配模具产能与总制造数量",
     ),
 ):
-    qs = _molds_filtered_queryset(tenant_id, status_filter, keyword)
+    stf = (status_filter or "").strip() or None
+    if stf is not None and stf not in MOLD_LEDGER_STATUS_SET:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"status 无效，须为：{_ALLOWED_MOLD_STATUS_STR}",
+        )
+    qs = _molds_filtered_queryset(tenant_id, stf, keyword)
     total = await qs.count()
     rows = await qs.order_by("mold_code").offset(skip).limit(limit)
     return {
@@ -437,6 +467,7 @@ class MoldOperationRecordOut(BaseModel):
     uuid: str
     title: str
     detail: str = ""
+    sheet_no: Optional[str] = Field(None, description="业务单号（标准编码）；历史数据可能为空")
 
 
 class MoldOperationRecordsResponse(BaseModel):
@@ -455,6 +486,37 @@ def _line_items_contain_mold(raw, mold_code: str) -> bool:
         if str(item.get("mold_code") or "").strip() == m:
             return True
     return False
+
+
+def _complete_line_for_mold(raw_items: Any, mold_code: str) -> Optional[dict]:
+    m = (mold_code or "").strip()
+    if not m or not isinstance(raw_items, list):
+        return None
+    for item in raw_items:
+        if isinstance(item, dict) and str(item.get("mold_code") or "").strip() == m:
+            return item
+    return None
+
+
+def _inhouse_complete_line_clears_total_for_mold(sheet: HaoligoMoldMaintenanceCompleteSheet, mold_code: str) -> bool:
+    """该完修单对本模具是否计为「清空总产量」（保养且行级或历史表头为真）。"""
+    m = (mold_code or "").strip()
+    if not m or str(sheet.service_type or "").strip() != "保养":
+        return False
+    raw = sheet.line_items
+    fb = bool(sheet.clear_total_production)
+    if not isinstance(raw, list):
+        return fb
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("mold_code") or "").strip() != m:
+            continue
+        v = item.get("clear_total_production")
+        if v is None:
+            return fb
+        return bool(v)
+    return fb
 
 
 async def _scan_sheets_with_mold_in_lines(model, tenant_id: int, mold_code: str):
@@ -513,6 +575,7 @@ async def list_mold_operation_records(
                 occurred_at=b.created_at,
                 record_id=b.id,
                 uuid=b.uuid,
+                sheet_no=(b.sheet_no or "").strip() or None,
                 title="领出（领用单）",
                 detail="；".join(parts),
             )
@@ -535,6 +598,7 @@ async def list_mold_operation_records(
                 occurred_at=r.created_at,
                 record_id=r.id,
                 uuid=r.uuid,
+                sheet_no=(r.sheet_no or "").strip() or None,
                 title="还入（还入单）",
                 detail="；".join(parts),
             )
@@ -555,6 +619,7 @@ async def list_mold_operation_records(
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
+                sheet_no=(m.sheet_no or "").strip() or None,
                 title="厂内维保（申请）",
                 detail="；".join(parts),
             )
@@ -562,14 +627,26 @@ async def list_mold_operation_records(
 
     for m in completes:
         parts = [f"来源单号：{m.source_order_no}", f"类型：{m.service_type}"]
-        if m.clear_total_production:
+        if _inhouse_complete_line_clears_total_for_mold(m, mcode):
             parts.append("已清空总产量")
+        ld = _complete_line_for_mold(m.line_items, mcode)
+        stc = str(m.service_type or "").strip()
+        if ld and stc == "保养":
+            uc = str(ld.get("upkeep_content") or "").strip()
+            if uc:
+                tail = "…" if len(uc) > 120 else ""
+                parts.append(f"保养：{uc[:120]}{tail}")
+        if ld and stc == "维修":
+            rr = str(ld.get("repair_result") or "").strip()
+            if rr:
+                parts.append(f"维修结果：{rr}")
         events.append(
             MoldOperationRecordOut(
                 kind="maintenance_complete",
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
+                sheet_no=(m.sheet_no or "").strip() or None,
                 title="维保完修",
                 detail="；".join(parts),
             )
@@ -589,6 +666,7 @@ async def list_mold_operation_records(
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
+                sheet_no=(m.sheet_no or "").strip() or None,
                 title="外协维保（申请）",
                 detail="；".join(parts),
             )
@@ -608,6 +686,7 @@ async def list_mold_operation_records(
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
+                sheet_no=(m.sheet_no or "").strip() or None,
                 title="外协维保完修",
                 detail="；".join(parts),
             )

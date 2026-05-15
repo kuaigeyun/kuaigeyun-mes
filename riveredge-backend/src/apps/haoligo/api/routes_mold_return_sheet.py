@@ -1,5 +1,6 @@
 """好力 GO — 模具还入单 API。"""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Optional
 
@@ -11,11 +12,14 @@ from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._mold_processing_time import recompute_mold_processing_time_minutes
 from apps.haoligo.api._mold_ledger_sync import sync_mold_ledger_status_for_mold_code
+from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_RETURN_SHEET_NO
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/molds/return-sheets", tags=["App · HaoliGO · 还入单"])
@@ -32,6 +36,7 @@ class MoldReturnSheetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    sheet_no: Optional[str] = None
     production_order_no: Optional[str] = None
     borrow_sheet_no: Optional[str] = None
     issue_department_uuid: Optional[str] = None
@@ -42,6 +47,7 @@ class MoldReturnSheetOut(BaseModel):
     finished_product_name: Optional[str] = None
     planned_qty: Optional[Decimal] = None
     manufacture_qty: Decimal
+    created_at: datetime
 
 
 class MoldReturnSheetCreate(BaseModel):
@@ -183,6 +189,7 @@ def _serialize(row: HaoligoMoldReturnSheet) -> MoldReturnSheetOut:
     return MoldReturnSheetOut(
         id=row.id,
         uuid=row.uuid,
+        sheet_no=row.sheet_no,
         production_order_no=row.production_order_no,
         borrow_sheet_no=row.borrow_sheet_no,
         issue_department_uuid=row.issue_department_uuid,
@@ -193,6 +200,7 @@ def _serialize(row: HaoligoMoldReturnSheet) -> MoldReturnSheetOut:
         finished_product_name=row.finished_product_name,
         planned_qty=row.planned_qty,
         manufacture_qty=row.manufacture_qty,
+        created_at=row.created_at,
     )
 
 
@@ -210,6 +218,7 @@ async def list_return_sheets(
         qs = qs.filter(
             Q(production_order_no__icontains=k)
             | Q(borrow_sheet_no__icontains=k)
+            | Q(sheet_no__icontains=k)
             | Q(mold_code__icontains=k)
             | Q(mold_name__icontains=k)
             | Q(issue_department_name__icontains=k)
@@ -272,7 +281,7 @@ async def borrow_lookup_for_return_sheet(
         )
     return MoldReturnBorrowLookupOut(
         borrow_sheet_id=row.id,
-        borrow_sheet_no=f"领用单#{row.id}",
+        borrow_sheet_no=(row.sheet_no or "").strip() or f"领用单#{row.id}",
         production_order_no=row.source_order_no,
         issue_department_uuid=_strip_opt(row.department_uuid),
         issue_department_name=_strip_opt(row.department_name),
@@ -291,8 +300,13 @@ async def create_return_sheet(
     _: Annotated[User, Depends(get_current_user)],
 ):
     async with in_transaction():
+        try:
+            sheet_no = await generate_mold_sheet_no(tenant_id, HAOLIGO_MOLD_RETURN_SHEET_NO)
+        except ValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
         row = await HaoligoMoldReturnSheet.create(
             tenant_id=tenant_id,
+            sheet_no=sheet_no,
             production_order_no=_strip_opt(body.production_order_no),
             borrow_sheet_no=_strip_opt(body.borrow_sheet_no),
             issue_department_uuid=_strip_opt(body.issue_department_uuid),

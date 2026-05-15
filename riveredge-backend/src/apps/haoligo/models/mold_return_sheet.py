@@ -15,6 +15,7 @@ class HaoligoMoldReturnSheet(HaoligoTenantModel):
         table_description = "好力GO - 模具还入单"
         indexes = [("tenant_id",), ("mold_code",), ("production_order_no",)]
 
+    sheet_no = fields.CharField(max_length=64, null=True, description="还入单单号（系统编码规则生成）")
     production_order_no = fields.CharField(max_length=128, null=True, description="制令单号")
     borrow_sheet_no = fields.CharField(max_length=128, null=True, description="领用单（号/引用）")
     issue_department_uuid = fields.CharField(max_length=36, null=True, description="领出部门 UUID")

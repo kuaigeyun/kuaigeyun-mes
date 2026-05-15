@@ -32,7 +32,14 @@ const MoldMaintenancePage = lazy(() => import('./pages/molds/documents/maintenan
 const MoldMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/maintenance-complete'));
 const MoldOutsourceMaintenancePage = lazy(() => import('./pages/molds/documents/outsource-maintenance'));
 const MoldOutsourceMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/outsource-complete'));
-const PatrolPage = lazy(() => import('./pages/patrol'));
+const MoldOutsourcePendingReviewPage = lazy(() => import('./pages/molds/workbench/pending'));
+const MoldReportTrialRecordPage = lazy(() => import('./pages/molds/reports/trial-record'));
+const MoldReportMaintenanceAlertPage = lazy(() => import('./pages/molds/reports/maintenance-alert'));
+const MoldReportMaintenanceLogPage = lazy(() => import('./pages/molds/reports/maintenance-log'));
+const MoldReportOutsourceMaintenanceLogPage = lazy(() => import('./pages/molds/reports/outsource-maintenance-log'));
+const PatrolIndexPage = lazy(() => import('./pages/patrol'));
+const PatrolDailyFormPage = lazy(() => import('./pages/patrol/daily/form'));
+const PatrolHazardsPage = lazy(() => import('./pages/patrol/hazards'));
 
 const HaoligoApp: React.FC = () => (
   <Routes>
@@ -59,9 +66,18 @@ const HaoligoApp: React.FC = () => (
         <Route path="documents/maintenance-complete" element={withPageSuspense(MoldMaintenanceCompletePage)} />
         <Route path="documents/outsource-maintenance" element={withPageSuspense(MoldOutsourceMaintenancePage)} />
         <Route path="documents/outsource-complete" element={withPageSuspense(MoldOutsourceMaintenanceCompletePage)} />
+        <Route path="workbench/pending" element={withPageSuspense(MoldOutsourcePendingReviewPage)} />
+        <Route path="reports/trial-record" element={withPageSuspense(MoldReportTrialRecordPage)} />
+        <Route path="reports/maintenance-alert" element={withPageSuspense(MoldReportMaintenanceAlertPage)} />
+        <Route path="reports/maintenance-log" element={withPageSuspense(MoldReportMaintenanceLogPage)} />
+        <Route path="reports/outsource-maintenance-log" element={withPageSuspense(MoldReportOutsourceMaintenanceLogPage)} />
+        <Route path="reports/status-overview" element={<Navigate to="/apps/haoligo/molds/ledger" replace />} />
       </Route>
       <Route path="patrol" element={<Outlet />}>
-        <Route index element={withPageSuspense(PatrolPage)} />
+        <Route index element={withPageSuspense(PatrolIndexPage)} />
+        <Route path="daily/form" element={withPageSuspense(PatrolDailyFormPage)} />
+        <Route path="daily/dashboard" element={<Navigate to="/apps/haoligo/patrol/daily/form" replace />} />
+        <Route path="hazards" element={withPageSuspense(PatrolHazardsPage)} />
         <Route
           path="reports/point-inspection"
           element={<Navigate to="/apps/haoligo/equipment/reports/point-inspection" replace />}

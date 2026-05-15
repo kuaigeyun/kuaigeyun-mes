@@ -37,6 +37,7 @@ export interface FormModalTemplateProps {
   className?: string;
   modalRender?: (modal: React.ReactNode) => React.ReactNode;
   extraFooter?: ReactNode;
+  readOnly?: boolean;
   /** Modal 打开/关闭动画结束后的回调（open 为当前是否打开） */
   afterOpenChange?: (open: boolean) => void;
   /** 与详情抽屉、左侧全链路等同屏时需高于 theme.zIndexPopupBase + 嵌套偏移时使用 */
@@ -76,6 +77,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   extraFooter,
   afterOpenChange,
   zIndex,
+  readOnly = false,
   STANDARD_WIDTH: _sw,
   LARGE_WIDTH: _lw,
   EXTRA_LARGE_WIDTH: _xlw,
@@ -121,15 +123,19 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       className={[className, 'form-modal-template'].filter(Boolean).join(' ')}
       modalRender={modalRender}
       footer={
-        <Space wrap>
-          <Button onClick={handleClose}>{t('common.cancel')}</Button>
-          <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
-            {(isEdit
-              ? t('components.layoutTemplates.formModal.submitUpdate')
-              : t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
-          </Button>
-          {extraFooter}
-        </Space>
+        readOnly ? (
+          <Button onClick={handleClose}>关闭</Button>
+        ) : (
+          <Space wrap>
+            <Button onClick={handleClose}>{t('common.cancel')}</Button>
+            <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
+              {(isEdit
+                ? t('components.layoutTemplates.formModal.submitUpdate')
+                : t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
+            </Button>
+            {extraFooter}
+          </Space>
+        )
       }
     >
       <div className="form-modal-content-inner">
@@ -137,6 +143,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           formRef={formRef}
           form={form}
           loading={loading}
+          readonly={readOnly}
           onFinish={onFinish}
           onFinishFailed={({ errorFields }) => {
             const first = errorFields?.[0];

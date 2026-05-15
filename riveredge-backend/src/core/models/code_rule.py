@@ -42,7 +42,7 @@ class CodeRule(BaseModel):
     # tenant_id 字段由 BaseModel 提供，无需重复定义
     
     name = fields.CharField(max_length=100, description="规则名称")
-    code = fields.CharField(max_length=50, description="规则代码（唯一，用于程序识别）")
+    code = fields.CharField(max_length=80, description="规则代码（唯一，用于程序识别）")
     expression = fields.CharField(max_length=500, null=True, description="规则表达式（旧格式，向后兼容）")
     rule_components = fields.JSONField(null=True, description="规则组件列表（新格式，完全可配置，JSON格式）")
     description = fields.TextField(null=True, description="规则描述")

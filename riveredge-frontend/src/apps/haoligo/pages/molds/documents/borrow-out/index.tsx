@@ -14,7 +14,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Alert, AutoComplete, Button, Col, Form, Input, Modal, Row, Select, Space, Spin, Table } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -38,6 +38,7 @@ import {
   type MoldBorrowSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 
 /** 从 SQL 中粗略提取命名参数（优先以数据集 designer 中的 parameters 为准） */
@@ -90,6 +91,7 @@ const MoldBorrowOutPage: React.FC = () => {
   const formRef = useRef<ProFormInstance>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -432,6 +434,7 @@ const MoldBorrowOutPage: React.FC = () => {
   }, [moldRows, moldKw]);
 
   const handleCreate = async () => {
+    setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({
@@ -449,9 +452,10 @@ const MoldBorrowOutPage: React.FC = () => {
 
   useNewShortcut(handleCreate);
 
-  const handleEdit = async (record: MoldBorrowSheetRow) => {
+  const openSheetForm = async (record: MoldBorrowSheetRow, detailOnly: boolean) => {
     try {
       const d = await getMoldBorrowSheet(record.id);
+      setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(d.id);
       setFormInitialValues({
@@ -469,6 +473,9 @@ const MoldBorrowOutPage: React.FC = () => {
       messageApi.error((e as Error).message || '加载领用单失败');
     }
   };
+
+  const handleEdit = (record: MoldBorrowSheetRow) => void openSheetForm(record, false);
+  const handleDetail = (record: MoldBorrowSheetRow) => void openSheetForm(record, true);
 
   const handleDeleteOne = (record: MoldBorrowSheetRow) => {
     Modal.confirm({
@@ -563,7 +570,16 @@ const MoldBorrowOutPage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '制令单号/模具/部门/成品' },
+      fieldProps: { placeholder: '单号/制令单号/模具/部门/成品' },
+    },
+    {
+      title: '领用单单号',
+      dataIndex: 'sheet_no',
+      width: 150,
+      ellipsis: true,
+      copyable: true,
+      fixed: 'left',
+      hideInSearch: true,
     },
     { title: '制令单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
     { title: '领用部门', dataIndex: 'department_name', width: 160, ellipsis: true },
@@ -572,13 +588,17 @@ const MoldBorrowOutPage: React.FC = () => {
     { title: '成品代号', dataIndex: 'finished_product_code', width: 120, ellipsis: true, hideInSearch: true },
     { title: '成品名称', dataIndex: 'finished_product_name', width: 140, ellipsis: true, hideInSearch: true },
     { title: '计划数量', dataIndex: 'planned_qty', width: 100, hideInSearch: true },
+    moldDocumentCreatedAtColumn<MoldBorrowSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -629,16 +649,20 @@ const MoldBorrowOutPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isEdit ? '编辑领用单' : '领用单'}
+        title={isDetailView ? '领用单详情' : isEdit ? '编辑领用单' : '领用单'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
           setEditId(null);
+          setIsDetailView(false);
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          isDetailView ? (
+            <Button onClick={() => setModalVisible(false)}>关闭</Button>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <Button htmlType="button" onClick={onResetForm}>
               重置
             </Button>
@@ -646,6 +670,7 @@ const MoldBorrowOutPage: React.FC = () => {
               提交{SUBMIT_SHORTCUT_HINT}
             </Button>
           </div>
+          )
         }
       >
         <div className="form-modal-content-inner">
@@ -653,6 +678,7 @@ const MoldBorrowOutPage: React.FC = () => {
             key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
             formRef={formRef}
             loading={formLoading}
+            readonly={isDetailView}
             onFinish={handleSubmit}
             onFinishFailed={({ errorFields }) => {
               const first = errorFields?.[0];

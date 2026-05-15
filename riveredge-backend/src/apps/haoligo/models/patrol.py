@@ -34,3 +34,7 @@ class HaoligoHazardReport(HaoligoTenantModel):
     after_image_file_ids = fields.JSONField(null=True, description="处理后附件")
     handler_name = fields.CharField(max_length=100, null=True, description="处理人")
     handled_at = fields.DatetimeField(null=True, description="处理完成时间")
+    registrant_user_id = fields.IntField(null=True, description="登记人用户 ID")
+    registrant_name = fields.CharField(max_length=100, null=True, description="登记人显示名")
+    responsible_user_id = fields.IntField(null=True, description="责任人用户 ID")
+    responsible_name = fields.CharField(max_length=100, null=True, description="责任人显示名")

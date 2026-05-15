@@ -31,6 +31,20 @@ def parse_borrow_sheet_id_from_ref(ref: Optional[str]) -> Optional[int]:
     return None
 
 
+async def resolve_borrow_sheet_id_from_ref(tenant_id: int, ref: Optional[str]) -> Optional[int]:
+    """优先解析「领用单#id」；否则按领用单单号（sheet_no）匹配。"""
+    bid = parse_borrow_sheet_id_from_ref(ref)
+    if bid is not None:
+        return bid
+    s = (ref or "").strip()
+    if not s:
+        return None
+    row = await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(sheet_no=s).first()
+    if row:
+        return row.id
+    return None
+
+
 def _to_utc(dt: datetime) -> datetime:
     """转为 UTC  aware，避免 naive/aware 混用导致比较或相减报错。"""
     if dt.tzinfo is None:
@@ -67,7 +81,7 @@ async def recompute_mold_processing_time_minutes(tenant_id: int, mold_code: str)
     for ret in returns:
         ret_ts = _to_utc(ret.created_at)
         borrow = None
-        bid = parse_borrow_sheet_id_from_ref(ret.borrow_sheet_no)
+        bid = await resolve_borrow_sheet_id_from_ref(tenant_id, ret.borrow_sheet_no)
         if bid is not None and bid in borrow_by_id:
             b = borrow_by_id[bid]
             if b.id not in matched_borrow_ids:

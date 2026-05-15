@@ -77,37 +77,21 @@ import { executeDatasetQuery, getDatasetList } from '../../../../../services/dat
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  MOLD_LEDGER_STATUSES,
+  MOLD_LEDGER_STATUS_SET,
+  getMoldLedgerStatusTagColor,
+} from '../../../constants/moldStatus';
 
-const MOLD_STATUS = [
-  '在用',
-  '在修',
-  '维修',
-  '保养',
-  '外协维修',
-  '外协保养',
-  '停用',
-  '待用',
-  '报废',
-  '待启用',
-] as const;
-
-const statusValueEnum = MOLD_STATUS.reduce<Record<string, { text: string }>>((acc, s) => {
+const statusValueEnum = MOLD_LEDGER_STATUSES.reduce<Record<string, { text: string }>>((acc, s) => {
   acc[s] = { text: s };
   return acc;
 }, {});
 
-const statusColors: Record<string, string> = {
-  在用: 'green',
-  在修: 'orange',
-  维修: 'volcano',
-  保养: 'gold',
-  外协维修: 'purple',
-  外协保养: 'magenta',
-  停用: 'default',
-  待用: 'blue',
-  报废: 'red',
-  待启用: 'geekblue',
-};
+function renderMoldLedgerStatusCell(status: string) {
+  const color = getMoldLedgerStatusTagColor(status);
+  return color !== undefined ? <Tag color={color}>{status}</Tag> : <Tag>{status}</Tag>;
+}
 
 const moldOperationKindColors: Record<MoldOperationRecordRow['kind'], string> = {
   borrow: 'blue',
@@ -792,7 +776,7 @@ const MoldLedgerPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
+      render: (_, r) => renderMoldLedgerStatusCell(r.status),
     },
     { title: '备注', dataIndex: 'remark', span: 2, render: (_, r) => r.remark || '—' },
   ];
@@ -800,6 +784,11 @@ const MoldLedgerPage: React.FC = () => {
   const buildPayload = (values: Record<string, unknown>): MoldCreatePayload => {
     void values.used_times;
     void values.used_yield;
+    const statusRaw = String(values.status ?? '').trim();
+    const status = statusRaw || '待用';
+    if (!MOLD_LEDGER_STATUS_SET.has(status)) {
+      throw new Error(`状态无效：${statusRaw || '(空)'}，须为：${MOLD_LEDGER_STATUSES.join('、')}`);
+    }
     return {
     mold_code: String(values.mold_code ?? '').trim(),
     name: String(values.name ?? '').trim(),
@@ -812,7 +801,7 @@ const MoldLedgerPage: React.FC = () => {
     maintenance_cycle_by_days: numOrUndef(values.maintenance_cycle_by_days),
     allow_repeated_borrow: Boolean(values.allow_repeated_borrow),
     purchase_vendor_name: String(values.purchase_vendor_name ?? '').trim() || null,
-    status: String(values.status ?? '待用'),
+    status,
     total_manufacture_qty: 0,
     remark: String(values.remark ?? '').trim() || null,
     };
@@ -850,7 +839,7 @@ const MoldLedgerPage: React.FC = () => {
       width: 88,
       valueType: 'select',
       valueEnum: statusValueEnum,
-      render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
+      render: (_, r) => renderMoldLedgerStatusCell(r.status),
     },
     {
       title: '允许重复领用',
@@ -1004,6 +993,14 @@ const MoldLedgerPage: React.FC = () => {
                 capRaw !== null && capRaw !== undefined && capRaw !== '' ? Number(capRaw) : Number.NaN;
               if (!mold_code || !name || !unit || !Number.isFinite(mold_capacity)) continue;
               const allowCell = borrowIdx >= 0 ? parseBoolCell(row[borrowIdx]) : undefined;
+              const rawSt = statusIdx >= 0 ? String(row[statusIdx] ?? '').trim() : '';
+              const rowStatus = rawSt || '待用';
+              if (!MOLD_LEDGER_STATUS_SET.has(rowStatus)) {
+                messageApi.error(
+                  `第 ${i + 1} 行：状态「${rawSt || '(空，默认待用)'}」无效，须为：${MOLD_LEDGER_STATUSES.join('、')}`,
+                );
+                return;
+              }
               items.push({
                 mold_code,
                 name,
@@ -1017,10 +1014,7 @@ const MoldLedgerPage: React.FC = () => {
                 allow_repeated_borrow: allowCell ?? true,
                 purchase_vendor_name:
                   vendorIdx >= 0 ? String(row[vendorIdx] ?? '').trim() || null : null,
-                status:
-                  statusIdx >= 0 && String(row[statusIdx] ?? '').trim()
-                    ? String(row[statusIdx]).trim()
-                    : '待用',
+                status: rowStatus,
                 total_manufacture_qty: 0,
                 remark: remarkIdx >= 0 ? String(row[remarkIdx] ?? '').trim() || null : null,
               });
@@ -1122,7 +1116,9 @@ const MoldLedgerPage: React.FC = () => {
                               {dayjs(e.occurred_at).format('YYYY-MM-DD HH:mm')}
                             </Typography.Text>
                             <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
-                              单号 #{e.record_id}
+                              {e.sheet_no?.trim()
+                                ? `单号 ${e.sheet_no.trim()}`
+                                : `单号 #${e.record_id}`}
                             </Typography.Text>
                           </div>
                           <Typography.Text strong>{e.title}</Typography.Text>
@@ -1259,7 +1255,7 @@ const MoldLedgerPage: React.FC = () => {
               label="状态"
               placeholder="请选择状态"
               rules={[{ required: true, message: '请选择状态' }]}
-              options={MOLD_STATUS.map((s) => ({ label: s, value: s }))}
+              options={MOLD_LEDGER_STATUSES.map((s) => ({ label: s, value: s }))}
             />
           </Col>
           <Col span={12}>

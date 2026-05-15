@@ -2,38 +2,48 @@
  * 好力 GO — 维保完修单（基础信息 + 模具信息；对齐移动端稿）
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
   ProForm,
-  ProFormGroup,
+  ProFormDependency,
   ProFormInstance,
   ProFormList,
   ProFormRadio,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Divider, Modal, Row, Space, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
+import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tabs, Tooltip, Upload } from 'antd';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
+import type { DepartmentTreeItem } from '../../../../../../services/department';
+import { getDepartmentTree } from '../../../../../../services/department';
+import { getUserList } from '../../../../../../services/user';
+import { useGlobalStore } from '../../../../../../stores';
 import {
   createMoldMaintenanceCompleteSheet,
   deleteMoldMaintenanceCompleteSheet,
   getMoldMaintenanceCompleteSheet,
+  getMoldMaintenanceSheet,
+  HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
   listMoldMaintenanceCompleteSheets,
   listMoldMaintenanceSheets,
   updateMoldMaintenanceCompleteSheet,
   type MoldMaintenanceCompleteSheetCreatePayload,
   type MoldMaintenanceCompleteSheetRow,
+  type MoldMaintenanceCompleteSheetUpdatePayload,
   type MoldMaintenanceSheetRow,
 } from '../../../../services/haoligo';
 
@@ -61,38 +71,447 @@ function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
   }));
 }
 
+/** 首屏只拉少量用户，其余靠下拉内搜索（keyword）加载 */
+const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
+
+function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = [];
+  for (const n of items) {
+    if (n.children?.length) {
+      out.push(...collectLeafDepartmentOptions(n.children));
+    } else {
+      out.push({ label: n.name, value: n.uuid });
+    }
+  }
+  return out;
+}
+
+function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
+  for (const n of items) {
+    if (n.uuid === uuid) return n;
+    if (n.children?.length) {
+      const f = findDeptNodeByUuid(n.children, uuid);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
+function firstLeafUuidUnder(node: DepartmentTreeItem): string {
+  if (!node.children?.length) return node.uuid;
+  for (const c of node.children) {
+    return firstLeafUuidUnder(c);
+  }
+  return node.uuid;
+}
+
+function resolveDefaultLeafDeptUuid(
+  tree: DepartmentTreeItem[],
+  userDeptUuid: string | undefined,
+): string | undefined {
+  const u = (userDeptUuid || '').trim();
+  if (!u || !tree.length) return undefined;
+  const node = findDeptNodeByUuid(tree, u);
+  if (!node) return undefined;
+  return firstLeafUuidUnder(node);
+}
+
+/** 维保单「保养前 / 维修前」附件预览 */
+type BeforeAttachmentPreview = {
+  header: string[];
+  byMold: Record<string, string[]>;
+};
+
+function ReadonlyAttachmentStrip({ uuids }: { uuids: string[] | undefined }) {
+  const fl = uuidsToUploadFileList(uuids);
+  if (!fl.length) return <span style={{ color: '#999' }}>无</span>;
+  return <Upload listType="picture-card" disabled fileList={fl} />;
+}
+
+function formatMaintRowLabel(r: MoldMaintenanceSheetRow): string {
+  return [
+    r.sheet_no && String(r.sheet_no).trim(),
+    (r.source_order_no && String(r.source_order_no).trim()) || `维保单#${r.id}`,
+    r.primary_mold_code ? `· ${r.primary_mold_code}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** 选择来源弹窗：与「首件模具」一致，取 primary 或首条有代号的明细 */
+function pickerDisplayMold(r: MoldMaintenanceSheetRow): { code: string; name: string } {
+  const lines = r.line_items || [];
+  const primary = (r.primary_mold_code && String(r.primary_mold_code).trim()) || '';
+  if (primary) {
+    const hit = lines.find((it) => String(it.mold_code ?? '').trim() === primary);
+    const nm = hit?.mold_name != null ? String(hit.mold_name).trim() : '';
+    return { code: primary, name: nm || '—' };
+  }
+  const first = lines.find((it) => String(it.mold_code ?? '').trim());
+  if (!first) return { code: '—', name: '—' };
+  const code = String(first.mold_code ?? '').trim();
+  const nm = first.mold_name != null ? String(first.mold_name).trim() : '';
+  return { code, name: nm || '—' };
+}
+
+function SourceMaintSheetPickerTrigger({
+  value,
+  onOpen,
+  onClear,
+  maintRows,
+  disabled,
+}: {
+  value?: number | string | null;
+  onOpen: () => void;
+  onClear: () => void;
+  maintRows: MoldMaintenanceSheetRow[];
+  disabled?: boolean;
+}) {
+  const n =
+    value === '' || value === undefined || value === null
+      ? NaN
+      : typeof value === 'string'
+        ? Number(value)
+        : Number(value);
+  const r = Number.isFinite(n) ? maintRows.find((x) => x.id === n) : undefined;
+  const text = r ? formatMaintRowLabel(r) : '';
+  return (
+    <Space.Compact style={{ width: '100%' }}>
+      <Input
+        readOnly
+        value={text}
+        placeholder="请选择来源维保单"
+        style={{ flex: 1, minWidth: 0, cursor: disabled ? 'default' : 'pointer' }}
+        onClick={() => {
+          if (!disabled) onOpen();
+        }}
+      />
+      <Button type="primary" disabled={disabled} onClick={() => onOpen()}>
+        选择
+      </Button>
+      {!disabled ? (
+        <Button htmlType="button" onClick={onClear}>
+          清除
+        </Button>
+      ) : null}
+    </Space.Compact>
+  );
+}
+
 const defaultMoldLine = () => ({
   mold_code: '',
   mold_name: '',
   repair_reason: '',
+  clear_total_production: true,
+  upkeep_content: '',
+  repair_content: '',
+  repair_result: undefined as string | undefined,
+  item_attachments: [] as UploadFile[],
 });
 
 const MoldMaintenanceCompletePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
+  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
+  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
+  const applicantSearchSeqRef = useRef(0);
+  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
+  const tenantFormOptionsValidUntilRef = useRef(0);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [formOptionsReady, setFormOptionsReady] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [maintRows, setMaintRows] = useState<MoldMaintenanceSheetRow[]>([]);
+  const [beforeAttachmentPreview, setBeforeAttachmentPreview] = useState<BeforeAttachmentPreview | null>(null);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [sourcePickerTab, setSourcePickerTab] = useState<'维修' | '保养'>('维修');
+  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
+  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
 
-  const maintSelectOptions = useMemo(
-    () =>
-      maintRows.map((r) => ({
-        label:
-          (r.source_order_no && String(r.source_order_no).trim()) ||
-          `维保单#${r.id}${r.primary_mold_code ? ` · ${r.primary_mold_code}` : ''}`,
-        value: r.id,
-      })),
+  useEffect(() => {
+    if (modalVisible) return;
+    if (applicantSearchTimerRef.current) {
+      clearTimeout(applicantSearchTimerRef.current);
+      applicantSearchTimerRef.current = null;
+    }
+    applicantSearchSeqRef.current += 1;
+  }, [modalVisible]);
+
+  const loadLeafDepartments = useCallback(async () => {
+    try {
+      const tree = await getDepartmentTree({ is_active: true });
+      const items = tree.items || [];
+      departmentTreeRef.current = items;
+      setLeafDeptOptions(collectLeafDepartmentOptions(items));
+    } catch {
+      departmentTreeRef.current = [];
+      setLeafDeptOptions([]);
+    }
+  }, []);
+
+  const bootstrapApplicantOptions = useCallback(
+    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
+      const emptyDept = new Map<number, string>();
+      const emptyLabel = new Map<number, string>();
+      try {
+        const res = await getUserList({
+          page: 1,
+          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
+          is_active: true,
+        });
+        const deptMap = new Map<number, string>();
+        const labelMap = new Map<number, string>();
+        const opts: { label: string; value: number }[] = [];
+        for (const u of res.items || []) {
+          const person = (u.full_name || '').trim() || u.username;
+          deptMap.set(u.id, (u.department?.uuid || '').trim());
+          labelMap.set(u.id, person);
+          opts.push({ value: u.id, label: person });
+        }
+        const cu = useGlobalStore.getState().currentUser;
+        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
+          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
+          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
+          labelMap.set(cu.id, person);
+          opts.unshift({ value: cu.id, label: person });
+        }
+        for (const ex of extras || []) {
+          if (!deptMap.has(ex.id)) {
+            deptMap.set(ex.id, (ex.deptUuid || '').trim());
+            labelMap.set(ex.id, ex.name);
+            opts.push({ value: ex.id, label: ex.name });
+          }
+        }
+        applicantDeptUuidByUserIdRef.current = deptMap;
+        applicantLabelByIdRef.current = labelMap;
+        applicantBootstrapOptionsRef.current = opts.slice();
+        setApplicantOptions(opts);
+      } catch {
+        applicantDeptUuidByUserIdRef.current = emptyDept;
+        applicantLabelByIdRef.current = emptyLabel;
+        applicantBootstrapOptionsRef.current = [];
+        setApplicantOptions([]);
+      }
+    },
+    [],
+  );
+
+  const flushApplicantSearch = useCallback(async (keyword: string) => {
+    const seq = ++applicantSearchSeqRef.current;
+    const kw = keyword.trim();
+    if (!kw) {
+      if (seq !== applicantSearchSeqRef.current) return;
+      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
+      return;
+    }
+    try {
+      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
+      if (seq !== applicantSearchSeqRef.current) return;
+      const deptMap = applicantDeptUuidByUserIdRef.current;
+      const labelMap = applicantLabelByIdRef.current;
+      const next: { label: string; value: number }[] = [];
+      for (const u of res.items || []) {
+        const person = (u.full_name || '').trim() || u.username;
+        deptMap.set(u.id, (u.department?.uuid || '').trim());
+        labelMap.set(u.id, person);
+        next.push({ value: u.id, label: person });
+      }
+      const inst = formRef.current;
+      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
+      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
+        const g = useGlobalStore.getState();
+        const cu = g.currentUser;
+        const lab =
+          labelMap.get(selId) ||
+          (cu?.id === selId
+            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
+            : `用户#${selId}`);
+        const du =
+          (deptMap.get(selId) || '').trim() ||
+          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
+        deptMap.set(selId, du);
+        labelMap.set(selId, lab);
+        next.unshift({ value: selId, label: lab });
+      }
+      setApplicantOptions(next);
+    } catch {
+      if (seq !== applicantSearchSeqRef.current) return;
+      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
+    }
+  }, []);
+
+  const scheduleApplicantSearch = useCallback(
+    (raw: string) => {
+      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
+      applicantSearchTimerRef.current = setTimeout(() => {
+        applicantSearchTimerRef.current = null;
+        void flushApplicantSearch(raw);
+      }, 280);
+    },
+    [flushApplicantSearch],
+  );
+
+  const preloadTenantFormOptions = useCallback(
+    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
+      const ttlMs = 90_000;
+      const now = Date.now();
+      const warm =
+        !extras &&
+        now < tenantFormOptionsValidUntilRef.current &&
+        applicantDeptUuidByUserIdRef.current.size > 0 &&
+        departmentTreeRef.current.length > 0;
+      if (warm) return;
+      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments()]);
+      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
+    },
+    [bootstrapApplicantOptions, loadLeafDepartments],
+  );
+
+  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
+    const inst = formRef.current;
+    if (!inst) return;
+    if (userId == null || !Number.isFinite(userId)) {
+      inst.setFieldsValue({ department_uuid: undefined });
+      return;
+    }
+    const tree = departmentTreeRef.current;
+    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
+    if (!userDeptUuid) {
+      const cu = useGlobalStore.getState().currentUser;
+      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
+    }
+    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
+    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
+    else inst.setFieldsValue({ department_uuid: undefined });
+  }, []);
+
+  const resetApplicantDepartmentToCurrentUserDefaults = useCallback(() => {
+    const inst = formRef.current;
+    if (!inst) return;
+    const tree = departmentTreeRef.current;
+    const cu = useGlobalStore.getState().currentUser;
+    const uid = cu?.id;
+    let deptUuid: string | undefined;
+    if (uid != null) {
+      const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
+      deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
+    }
+    inst.setFieldsValue({
+      applicant_user_id: uid,
+      department_uuid: deptUuid,
+    });
+  }, []);
+
+  const maintRowsRepair = useMemo(
+    () => maintRows.filter((r) => String(r.service_type ?? '').trim() === '维修'),
+    [maintRows],
+  );
+  const maintRowsUpkeep = useMemo(
+    () => maintRows.filter((r) => String(r.service_type ?? '').trim() === '保养'),
     [maintRows],
   );
 
-  const loadMaintenanceSheetsForSource = useCallback(async () => {
+  const maintPickerColumns: ColumnsType<MoldMaintenanceSheetRow> = useMemo(
+    () => [
+      { title: '单号', dataIndex: 'sheet_no', ellipsis: true, width: 120 },
+      {
+        title: '模具代号',
+        key: 'mold_code',
+        ellipsis: true,
+        width: 120,
+        render: (_: unknown, r) => pickerDisplayMold(r).code,
+      },
+      {
+        title: '模具名称',
+        key: 'mold_name',
+        ellipsis: true,
+        width: 160,
+        render: (_: unknown, r) => pickerDisplayMold(r).name,
+      },
+      { title: '申请人', dataIndex: 'applicant_name', width: 90, ellipsis: true },
+      { title: '申请部门', dataIndex: 'department_name', width: 100, ellipsis: true },
+    ],
+    [],
+  );
+
+  const applySelectedMaintSheetRow = useCallback(
+    async (row: MoldMaintenanceSheetRow) => {
+      const n = row.id;
+      const srcNo =
+        (row.source_order_no && String(row.source_order_no).trim()) ||
+        (row.sheet_no && String(row.sheet_no).trim()) ||
+        `维保单#${n}`;
+      const byMold: Record<string, string[]> = {};
+      for (const it of row.line_items || []) {
+        const mc = String(it.mold_code ?? '').trim();
+        if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
+      }
+      if (row.applicant_user_id != null) {
+        await bootstrapApplicantOptions([
+          {
+            id: row.applicant_user_id,
+            name: (row.applicant_name || '').trim() || `用户#${row.applicant_user_id}`,
+            deptUuid: (row.department_uuid || '').trim(),
+          },
+        ]);
+      }
+      setBeforeAttachmentPreview({
+        header: [...(row.header_attachment_file_uuids || [])],
+        byMold,
+      });
+      formRef.current?.setFieldsValue({
+        source_maintenance_sheet_id: n,
+        source_order_no: srcNo,
+        service_type: row.service_type === '保养' ? '保养' : '维修',
+        applicant_user_id: row.applicant_user_id ?? undefined,
+        department_uuid: (row.department_uuid || '').trim() || undefined,
+        line_items: (row.line_items || []).map((it) => ({
+          mold_code: String(it.mold_code ?? '').trim(),
+          mold_name: it.mold_name != null ? String(it.mold_name) : '',
+          repair_reason: it.repair_reason != null ? String(it.repair_reason) : '',
+          clear_total_production: true,
+          upkeep_content: '',
+          repair_content: '',
+          repair_result: undefined,
+          item_attachments: [],
+        })),
+      });
+    },
+    [bootstrapApplicantOptions],
+  );
+
+  const clearSelectedMaintSheet = useCallback(() => {
+    setBeforeAttachmentPreview(null);
+    formRef.current?.setFieldsValue({
+      source_maintenance_sheet_id: undefined,
+      source_order_no: '',
+      service_type: '维修',
+      header_attachments: [],
+      line_items: [defaultMoldLine()],
+    });
+    resetApplicantDepartmentToCurrentUserDefaults();
+  }, [resetApplicantDepartmentToCurrentUserDefaults]);
+
+  const openSourceMaintPicker = useCallback(() => {
+    const st = formRef.current?.getFieldValue('service_type');
+    setSourcePickerTab(st === '保养' ? '保养' : '维修');
+    setSourcePickerOpen(true);
+  }, []);
+
+  const loadMaintenanceSheetsForSource = useCallback(async (openForComplete: boolean) => {
     try {
-      const res = await listMoldMaintenanceSheets({ skip: 0, limit: 200 });
+      const res = await listMoldMaintenanceSheets({
+        skip: 0,
+        limit: 200,
+        ...(openForComplete ? { open_for_complete: true } : {}),
+      });
       setMaintRows(res.items);
     } catch {
       setMaintRows([]);
@@ -124,46 +543,134 @@ const MoldMaintenanceCompletePage: React.FC = () => {
     [messageApi],
   );
 
+  const closeSheetModal = useCallback(() => {
+    setModalVisible(false);
+    setEditId(null);
+    setIsDetailView(false);
+    setFormOptionsReady(false);
+    setBeforeAttachmentPreview(null);
+  }, []);
+
   const handleCreate = async () => {
+    setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
-    await loadMaintenanceSheetsForSource();
-    setFormInitialValues({
-      service_type: '维修',
-      clear_total_production: false,
-      source_maintenance_sheet_id: undefined,
-      source_order_no: '',
-      header_attachments: [],
-      line_items: [defaultMoldLine()],
-    });
+    setFormOptionsReady(false);
     setModalVisible(true);
+    try {
+      await loadMaintenanceSheetsForSource(true);
+      await preloadTenantFormOptions(undefined);
+      const tree = departmentTreeRef.current;
+      const cu = useGlobalStore.getState().currentUser;
+      const uid = cu?.id;
+      let deptUuid: string | undefined;
+      if (uid != null) {
+        const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
+        deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
+      }
+      setFormInitialValues({
+        service_type: '维修',
+        applicant_user_id: uid,
+        department_uuid: deptUuid,
+        source_maintenance_sheet_id: undefined,
+        source_order_no: '',
+        header_attachments: [],
+        line_items: [defaultMoldLine()],
+      });
+      setBeforeAttachmentPreview(null);
+      startTransition(() => setFormOptionsReady(true));
+    } catch {
+      messageApi.error('加载选项失败');
+      setModalVisible(false);
+      setFormOptionsReady(false);
+    }
   };
 
   useNewShortcut(handleCreate);
 
-  const handleEdit = async (record: MoldMaintenanceCompleteSheetRow) => {
+  const openSheetForm = async (record: MoldMaintenanceCompleteSheetRow, detailOnly: boolean) => {
+    setFormOptionsReady(false);
+    setModalVisible(true);
+    setIsDetailView(detailOnly);
+    setIsEdit(true);
+    setEditId(record.id);
     try {
       const d = await getMoldMaintenanceCompleteSheet(record.id);
-      await loadMaintenanceSheetsForSource();
-      setIsEdit(true);
+      let rows: MoldMaintenanceSheetRow[] = [];
+      try {
+        const res = await listMoldMaintenanceSheets({ skip: 0, limit: 200 });
+        rows = res.items;
+      } catch {
+        rows = [];
+      }
+      const sid = d.source_maintenance_sheet_id;
+      if (sid != null && !rows.some((x) => x.id === sid)) {
+        try {
+          const one = await getMoldMaintenanceSheet(sid);
+          rows = [one, ...rows];
+        } catch {
+          /* 保留列表 */
+        }
+      }
+      setMaintRows(rows);
       setEditId(d.id);
+      const extras =
+        d.applicant_user_id != null
+          ? [
+              {
+                id: d.applicant_user_id,
+                name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
+                deptUuid: (d.department_uuid || '').trim(),
+              },
+            ]
+          : undefined;
+      await preloadTenantFormOptions(extras);
+      let initDept = (d.department_uuid || '').trim();
+      if (!initDept && d.applicant_user_id != null) {
+        const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
+        initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
+      }
       setFormInitialValues({
         source_maintenance_sheet_id: d.source_maintenance_sheet_id ?? undefined,
         source_order_no: d.source_order_no,
         service_type: d.service_type,
-        clear_total_production: d.clear_total_production,
+        applicant_user_id: d.applicant_user_id ?? undefined,
+        department_uuid: initDept || undefined,
         header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
         line_items: (d.line_items || []).map((it) => ({
           mold_code: it.mold_code,
           mold_name: it.mold_name ?? '',
           repair_reason: it.repair_reason ?? '',
+          clear_total_production:
+            d.service_type === '保养' ? (it.clear_total_production !== false ? true : false) : false,
+          upkeep_content: it.upkeep_content ?? '',
+          repair_content: it.repair_content ?? '',
+          repair_result: it.repair_result ?? undefined,
+          item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
         })),
       });
-      setModalVisible(true);
+      if (d.source_maintenance_sheet_id != null) {
+        const byMold: Record<string, string[]> = {};
+        for (const it of d.line_items || []) {
+          const mc = String(it.mold_code ?? '').trim();
+          if (mc) byMold[mc] = [...(it.source_attachment_file_uuids ?? [])];
+        }
+        setBeforeAttachmentPreview({
+          header: [...(d.source_header_attachment_file_uuids ?? [])],
+          byMold,
+        });
+      } else {
+        setBeforeAttachmentPreview(null);
+      }
+      startTransition(() => setFormOptionsReady(true));
     } catch (e) {
       messageApi.error((e as Error).message || '加载维保完修单失败');
+      closeSheetModal();
     }
   };
+
+  const handleEdit = (record: MoldMaintenanceCompleteSheetRow) => void openSheetForm(record, false);
+  const handleDetail = (record: MoldMaintenanceCompleteSheetRow) => void openSheetForm(record, true);
 
   const handleDeleteOne = (record: MoldMaintenanceCompleteSheetRow) => {
     Modal.confirm({
@@ -183,6 +690,10 @@ const MoldMaintenanceCompletePage: React.FC = () => {
   };
 
   const triggerSubmit = useCallback(() => {
+    if (!formOptionsReady) {
+      messageApi.warning('表单加载中，请稍候');
+      return;
+    }
     globalThis.setTimeout(() => {
       const inst = formRef.current;
       if (!inst || typeof inst.submit !== 'function') {
@@ -191,71 +702,233 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       }
       inst.submit();
     }, 0);
-  }, [messageApi]);
+  }, [formOptionsReady, messageApi]);
 
-  useSubmitShortcut(triggerSubmit, modalVisible);
+  useSubmitShortcut(triggerSubmit, modalVisible && !isDetailView);
 
-  const buildPayload = (values: Record<string, unknown>): MoldMaintenanceCompleteSheetCreatePayload => {
+  const buildUpdatePayload = (values: Record<string, unknown>): MoldMaintenanceCompleteSheetUpdatePayload => {
     const rawLines = values.line_items;
     const lines = Array.isArray(rawLines) ? rawLines : [];
+    const st = values.service_type === '保养' ? '保养' : '维修';
     const line_items = lines.map((row) => {
       const r = row as Record<string, unknown>;
-      return {
+      const base = {
         mold_code: String(r.mold_code ?? '').trim(),
         mold_name: String(r.mold_name ?? '').trim() || null,
         repair_reason: String(r.repair_reason ?? '').trim() || null,
       };
+      if (st === '保养') {
+        return {
+          ...base,
+          clear_total_production: r.clear_total_production !== false && r.clear_total_production !== 0,
+          upkeep_content: String(r.upkeep_content ?? '').trim() || null,
+          attachment_file_uuids: normUploadUuids(r.item_attachments),
+        };
+      }
+      return {
+        ...base,
+        clear_total_production: false,
+        repair_content: String(r.repair_content ?? '').trim() || null,
+        repair_result: (() => {
+          const x = r.repair_result;
+          if (x === undefined || x === null || x === '') return null;
+          return String(x).trim();
+        })(),
+        attachment_file_uuids: normUploadUuids(r.item_attachments),
+      };
     });
     const sid = values.source_maintenance_sheet_id;
-    let source_maintenance_sheet_id: number | null = null;
+    let source_maintenance_sheet_id: number | null | undefined;
     if (sid !== undefined && sid !== null && sid !== '') {
       const n = Number(sid);
       if (Number.isFinite(n)) source_maintenance_sheet_id = n;
     }
-    return {
+    const patch: MoldMaintenanceCompleteSheetUpdatePayload = {
       source_maintenance_sheet_id,
       source_order_no: String(values.source_order_no ?? '').trim(),
-      service_type: values.service_type === '保养' ? '保养' : '维修',
-      clear_total_production: Boolean(values.clear_total_production),
+      service_type: st,
       header_attachment_file_uuids: normUploadUuids(values.header_attachments),
       line_items,
+    };
+    const aidRaw = values.applicant_user_id;
+    if (aidRaw != null && aidRaw !== '' && Number.isFinite(Number(aidRaw))) {
+      patch.applicant_user_id = Number(aidRaw);
+    }
+    const deptU = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
+    if (deptU) patch.department_uuid = deptU;
+    return patch;
+  };
+
+  const buildCreatePayload = (values: Record<string, unknown>): MoldMaintenanceCompleteSheetCreatePayload => {
+    const sid = values.source_maintenance_sheet_id;
+    const n = typeof sid === 'string' ? Number(sid) : Number(sid);
+    const st = values.service_type === '保养' ? '保养' : '维修';
+    const rawLines = values.line_items;
+    const lines = Array.isArray(rawLines) ? rawLines : [];
+    const line_items = lines.map((row) => {
+      const r = row as Record<string, unknown>;
+      const base = {
+        mold_code: String(r.mold_code ?? '').trim(),
+        mold_name: String(r.mold_name ?? '').trim() || null,
+        repair_reason: String(r.repair_reason ?? '').trim() || null,
+      };
+      if (st === '保养') {
+        return {
+          ...base,
+          clear_total_production: r.clear_total_production !== false && r.clear_total_production !== 0,
+          upkeep_content: String(r.upkeep_content ?? '').trim() || null,
+          attachment_file_uuids: normUploadUuids(r.item_attachments),
+        };
+      }
+      return {
+        ...base,
+        clear_total_production: false,
+        repair_content: String(r.repair_content ?? '').trim() || null,
+        repair_result: (() => {
+          const x = r.repair_result;
+          if (x === undefined || x === null || x === '') return null;
+          return String(x).trim();
+        })(),
+        attachment_file_uuids: normUploadUuids(r.item_attachments),
+      };
+    });
+    const aid = values.applicant_user_id;
+    const applicant_user_id =
+      aid != null && aid !== '' && Number.isFinite(Number(aid)) ? Number(aid) : undefined;
+    const department_uuid =
+      typeof values.department_uuid === 'string' ? values.department_uuid.trim() : undefined;
+    return {
+      source_maintenance_sheet_id: n,
+      applicant_user_id,
+      department_uuid,
+      line_items,
+      header_attachment_file_uuids: normUploadUuids(values.header_attachments),
     };
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    if (!isEdit) {
+      if (maintRows.length === 0) {
+        messageApi.error('暂无可确认完修的厂内维保单');
+        return Promise.reject(new Error('validation'));
+      }
+      const sid = values.source_maintenance_sheet_id;
+      if (sid === undefined || sid === null || sid === '') {
+        messageApi.error('请选择来源维保单');
+        return Promise.reject(new Error('validation'));
+      }
+      const appAid = values.applicant_user_id;
+      if (appAid == null || appAid === '' || !Number.isFinite(Number(appAid))) {
+        messageApi.error('请选择申请人');
+        return Promise.reject(new Error('validation'));
+      }
+      const deptU = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
+      if (!deptU) {
+        messageApi.error('请选择申请部门');
+        return Promise.reject(new Error('validation'));
+      }
+      const payload = buildCreatePayload(values);
+      if (!payload.line_items?.length) {
+        messageApi.error('请至少填写一条模具明细');
+        return Promise.reject(new Error('validation'));
+      }
+      const st = values.service_type === '保养' ? '保养' : '维修';
+      for (let i = 0; i < payload.line_items.length; i++) {
+        const li = payload.line_items[i];
+        if (!li.mold_code) {
+          messageApi.error(`模具明细第 ${i + 1} 条：请填写模具代号`);
+          return Promise.reject(new Error('validation'));
+        }
+        if (st === '保养') {
+          if (!li.upkeep_content?.trim()) {
+            messageApi.error(`模具明细第 ${i + 1} 条：请填写保养内容`);
+            return Promise.reject(new Error('validation'));
+          }
+        } else {
+          if (!li.repair_content?.trim()) {
+            messageApi.error(`模具明细第 ${i + 1} 条：请填写维修内容`);
+            return Promise.reject(new Error('validation'));
+          }
+          if (!li.repair_result?.trim()) {
+            messageApi.error(`模具明细第 ${i + 1} 条：请选择维修结果`);
+            return Promise.reject(new Error('validation'));
+          }
+        }
+      }
+      setFormLoading(true);
+      try {
+        await createMoldMaintenanceCompleteSheet(payload);
+        messageApi.success('已提交');
+        closeSheetModal();
+        actionRef.current?.reload();
+      } catch (e) {
+        if ((e as Error).message !== 'validation') {
+          messageApi.error((e as Error).message || '保存失败');
+        }
+        return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        setFormLoading(false);
+      }
+      return;
+    }
+
     if (maintRows.length > 0) {
       const sid = values.source_maintenance_sheet_id;
       if (sid === undefined || sid === null || sid === '') {
-        messageApi.error('请选择来源单号');
+        messageApi.error('请选择来源维保单');
         return Promise.reject(new Error('validation'));
       }
+    }
+    const appAid = values.applicant_user_id;
+    if (appAid == null || appAid === '' || !Number.isFinite(Number(appAid))) {
+      messageApi.error('请选择申请人');
+      return Promise.reject(new Error('validation'));
+    }
+    const deptUEdit = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
+    if (!deptUEdit) {
+      messageApi.error('请选择申请部门');
+      return Promise.reject(new Error('validation'));
     }
     const src = String(values.source_order_no ?? '').trim();
     if (!src) {
       messageApi.error('请输入或选择来源单号');
       return Promise.reject(new Error('validation'));
     }
-    const payload = buildPayload(values);
-    if (!payload.line_items.length) {
+    const payload = buildUpdatePayload(values);
+    if (!payload.line_items?.length) {
       messageApi.error('至少保留一条模具信息');
       return Promise.reject(new Error('validation'));
     }
-    for (let i = 0; i < payload.line_items.length; i++) {
-      if (!payload.line_items[i].mold_code) {
+    const st = payload.service_type === '保养' ? '保养' : '维修';
+    for (let i = 0; i < (payload.line_items?.length ?? 0); i++) {
+      const li = payload.line_items![i];
+      if (!li.mold_code) {
         messageApi.error(`模具信息第 ${i + 1} 条：请填写模具代号`);
         return Promise.reject(new Error('validation'));
+      }
+      if (st === '保养') {
+        if (!li.upkeep_content?.trim()) {
+          messageApi.error(`模具信息第 ${i + 1} 条：请填写保养内容`);
+          return Promise.reject(new Error('validation'));
+        }
+      } else {
+        if (!li.repair_content?.trim()) {
+          messageApi.error(`模具信息第 ${i + 1} 条：请填写维修内容`);
+          return Promise.reject(new Error('validation'));
+        }
+        if (!li.repair_result?.trim()) {
+          messageApi.error(`模具信息第 ${i + 1} 条：请选择维修结果`);
+          return Promise.reject(new Error('validation'));
+        }
       }
     }
     setFormLoading(true);
     try {
-      if (isEdit && editId != null) {
+      if (editId != null) {
         await updateMoldMaintenanceCompleteSheet(editId, payload);
         messageApi.success('已保存');
-      } else {
-        await createMoldMaintenanceCompleteSheet(payload);
-        messageApi.success('已提交');
       }
-      setModalVisible(false);
+      closeSheetModal();
       actionRef.current?.reload();
     } catch (e) {
       if ((e as Error).message !== 'validation') {
@@ -268,15 +941,20 @@ const MoldMaintenanceCompletePage: React.FC = () => {
   };
 
   const onResetForm = () => {
+    if (!formOptionsReady) {
+      messageApi.warning('表单加载中，请稍候');
+      return;
+    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       service_type: '维修',
-      clear_total_production: false,
       source_maintenance_sheet_id: undefined,
       source_order_no: '',
       header_attachments: [],
       line_items: [defaultMoldLine()],
     });
+    resetApplicantDepartmentToCurrentUserDefaults();
+    setBeforeAttachmentPreview(null);
     messageApi.success('已重置');
   };
 
@@ -285,16 +963,57 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '来源单号/维修保养' },
+      fieldProps: { placeholder: '单号/来源单号/维修保养/申请人/申请部门' },
+    },
+    {
+      title: '完修单单号',
+      dataIndex: 'sheet_no',
+      width: 150,
+      ellipsis: true,
+      copyable: true,
+      hideInSearch: true,
     },
     { title: '来源单号', dataIndex: 'source_order_no', width: 160, ellipsis: true, copyable: true },
+    { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
+    { title: '申请部门', dataIndex: 'department_name', width: 120, ellipsis: true, hideInSearch: true },
     { title: '维修/保养', dataIndex: 'service_type', width: 100 },
+    {
+      title: '保养内容 / 维修摘要',
+      key: 'completion_summary',
+      width: 200,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => {
+        const items = r.line_items || [];
+        if (r.service_type === '保养') {
+          const parts = items
+            .map((it) => (it.upkeep_content && String(it.upkeep_content).trim()) || '')
+            .filter(Boolean);
+          return parts.length ? parts.join('；') : '—';
+        }
+        const parts: string[] = [];
+        for (const it of items) {
+          const rr = (it.repair_result && String(it.repair_result).trim()) || '';
+          const rc = (it.repair_content && String(it.repair_content).trim()) || '';
+          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' · '));
+        }
+        return parts.length ? parts.join('；') : '—';
+      },
+    },
     {
       title: '清空总产量',
       dataIndex: 'clear_total_production',
       width: 110,
       hideInSearch: true,
-      render: (_, r) => (r.clear_total_production ? '是' : '否'),
+      render: (_, r) => {
+        if (r.service_type !== '保养') return '—';
+        const items = r.line_items || [];
+        if (!items.length) return r.clear_total_production ? '是' : '否';
+        const flags = items.map((i) => Boolean(i.clear_total_production));
+        if (flags.every(Boolean)) return '是';
+        if (!flags.some(Boolean)) return '否';
+        return '部分';
+      },
     },
     { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
     {
@@ -304,13 +1023,17 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => r.line_items?.length ?? 0,
     },
+    moldDocumentCreatedAtColumn<MoldMaintenanceCompleteSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -354,44 +1077,64 @@ const MoldMaintenanceCompletePage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 960 }}
+          scroll={{ x: 1548 }}
         />
       </ListPageTemplate>
 
       <Modal
-        title={isEdit ? '编辑维保完修单' : '维保完修单'}
+        title={isDetailView ? '维保完修单详情' : isEdit ? '编辑维保完修单' : '维保完修单'}
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditId(null);
-        }}
+        onCancel={closeSheetModal}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
-        styles={{ body: { background: '#f0f2f5', paddingTop: 12 } }}
         footer={
-          <div style={{ display: 'flex', gap: 12, width: '100%' }}>
-            <Button htmlType="button" style={{ flex: 1 }} onClick={onResetForm}>
-              重置
-            </Button>
-            <Button htmlType="button" type="primary" style={{ flex: 1 }} loading={formLoading} onClick={triggerSubmit}>
-              提交{SUBMIT_SHORTCUT_HINT}
-            </Button>
-          </div>
+          isDetailView ? (
+            <Button onClick={closeSheetModal}>关闭</Button>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Button htmlType="button" disabled={!formOptionsReady} onClick={onResetForm}>
+                重置
+              </Button>
+              <Button
+                htmlType="button"
+                type="primary"
+                disabled={!formOptionsReady}
+                loading={formLoading}
+                onClick={triggerSubmit}
+              >
+                提交{SUBMIT_SHORTCUT_HINT}
+              </Button>
+            </div>
+          )
         }
       >
-        <div
-          className="form-modal-content-inner"
-          style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: '4px 8px 12px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-          }}
-        >
-          <ProForm
+        <div className="form-modal-content-inner">
+          {!formOptionsReady ? (
+            <div
+              style={{
+                display: 'flex',
+                minHeight: 280,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 24,
+              }}
+            >
+              <Spin tip="加载选项中…" />
+            </div>
+          ) : (
+            <ProForm
             key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
             formRef={formRef}
             loading={formLoading}
+            readonly={isDetailView}
             onFinish={handleSubmit}
             onFinishFailed={({ errorFields }) => {
               const first = errorFields?.[0];
@@ -403,127 +1146,386 @@ const MoldMaintenanceCompletePage: React.FC = () => {
             layout="vertical"
             scrollToFirstError
           >
-            <Divider titlePlacement="left" plain style={{ margin: '8px 0 16px', fontWeight: 600 }}>
-              基础信息
-            </Divider>
-            <Row gutter={[16, 4]}>
+            {!isEdit && maintRows.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="暂无可确认完修的厂内维保单"
+                description="请先创建维保单且尚未确认完修后，再在此新增维保完修单。"
+              />
+            ) : null}
+            <Row gutter={16}>
               <Col span={12}>
-                {maintSelectOptions.length > 0 ? (
-                  <ProFormSelect
+                {maintRows.length > 0 ? (
+                  <ProForm.Item
                     name="source_maintenance_sheet_id"
-                    label="来源单号"
-                    placeholder="请选择来源单号"
-                    rules={[{ required: true, message: '请选择来源单号' }]}
-                    options={maintSelectOptions}
-                    showSearch
-                    fieldProps={{
-                      optionFilterProp: 'label',
-                      allowClear: false,
-                      onChange: (id: number | string) => {
-                        const n = typeof id === 'string' ? Number(id) : id;
-                        const r = maintRows.find((x) => x.id === n);
-                        formRef.current?.setFieldsValue({
-                          source_order_no:
-                            (r?.source_order_no && String(r.source_order_no).trim()) || `维保单#${n}`,
-                        });
-                      },
-                    }}
-                  />
-                ) : (
+                    label="来源维保单"
+                    rules={[{ required: true, message: '请选择来源维保单' }]}
+                  >
+                    <SourceMaintSheetPickerTrigger
+                      maintRows={maintRows}
+                      disabled={isEdit}
+                      onOpen={openSourceMaintPicker}
+                      onClear={clearSelectedMaintSheet}
+                    />
+                  </ProForm.Item>
+                ) : isEdit ? (
                   <ProFormText
                     name="source_order_no"
                     label="来源单号"
-                    placeholder="请选择来源单号（暂无维保单时下拉为空，请手输）"
+                    placeholder="请输入来源单号"
                     rules={[{ required: true, message: '请输入来源单号' }]}
                   />
-                )}
+                ) : null}
               </Col>
-              {maintSelectOptions.length > 0 ? (
-                <ProFormText name="source_order_no" hidden />
-              ) : null}
+              {maintRows.length > 0 ? <ProFormText name="source_order_no" hidden /> : null}
               <Col span={12}>
                 <ProFormSelect
                   name="service_type"
                   label="维修/保养"
                   placeholder="请选择维修/保养"
                   rules={[{ required: true, message: '请选择维修/保养' }]}
+                  disabled={!isEdit || isDetailView}
                   options={[
                     { label: '维修', value: '维修' },
                     { label: '保养', value: '保养' },
                   ]}
                 />
               </Col>
+            </Row>
+
+            <Row gutter={16}>
               <Col span={12}>
-                <ProFormRadio.Group
-                  name="clear_total_production"
-                  label="是否清空总产量"
-                  rules={[{ required: true, message: '请选择是否清空总产量' }]}
-                  options={[
-                    { label: '否', value: false },
-                    { label: '是', value: true },
-                  ]}
+                <ProFormSelect
+                  name="applicant_user_id"
+                  label="申请人"
+                  placeholder="可选中后搜索更多用户"
+                  rules={[{ required: true, message: '请选择申请人' }]}
+                  options={applicantOptions}
+                  showSearch
+                  fieldProps={{
+                    virtual: true,
+                    listHeight: 256,
+                    optionFilterProp: 'label',
+                    filterOption: false,
+                    onSearch: scheduleApplicantSearch,
+                    onChange: (v: number) => {
+                      syncDefaultDepartmentForApplicant(v);
+                    },
+                  }}
                 />
               </Col>
               <Col span={12}>
-                <ProFormUploadButton
-                  name="header_attachments"
-                  label="附件照片"
-                  max={10}
-                  fieldProps={uploadFieldProps}
+                <ProFormSelect
+                  name="department_uuid"
+                  label="申请部门"
+                  placeholder="请选择末级申请部门"
+                  rules={[{ required: true, message: '请选择申请部门' }]}
+                  options={leafDeptOptions}
+                  showSearch
+                  fieldProps={{
+                    virtual: true,
+                    listHeight: 256,
+                    optionFilterProp: 'label',
+                  }}
                 />
               </Col>
             </Row>
 
-            <Divider titlePlacement="left" plain style={{ margin: '20px 0 12px', fontWeight: 600 }}>
-              模具信息
-            </Divider>
+            <Row gutter={16} style={{ marginBottom: 8 }}>
+              <Col span={24}>
+                <ProFormDependency name={['service_type']}>
+                  {({ service_type }) => {
+                    const isUpkeep = service_type === '保养';
+                    const phaseBefore = isUpkeep ? '保养前' : '维修前';
+                    const phaseAfter = isUpkeep ? '保养后' : '维修后';
+                    return (
+                      <div
+                        style={{
+                          padding: 12,
+                          background: '#fafafa',
+                          border: '1px solid #f0f0f0',
+                          borderRadius: 8,
+                        }}
+                      >
+                        {beforeAttachmentPreview != null ? (
+                          <>
+                            <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
+                              附件照片（{phaseBefore}）
+                            </div>
+                            <ReadonlyAttachmentStrip uuids={beforeAttachmentPreview.header} />
+                            <Divider dashed style={{ margin: '14px 0' }} />
+                          </>
+                        ) : null}
+                        <ProFormUploadButton
+                          name="header_attachments"
+                          label={`附件照片（${phaseAfter}）`}
+                          max={10}
+                          fieldProps={uploadFieldProps}
+                        />
+                      </div>
+                    );
+                  }}
+                </ProFormDependency>
+              </Col>
+            </Row>
+
+            <Divider titlePlacement="left">模具明细</Divider>
             <ProFormList
               name="line_items"
               min={1}
               copyIconProps={false}
-              creatorButtonProps={{
-                position: 'top',
-                creatorButtonText: '+ 添加模具',
-                type: 'default',
-                style: {
-                  color: '#1677ff',
-                  borderColor: '#91caff',
-                  fontWeight: 500,
-                  marginBottom: 12,
-                },
+              creatorRecord={() => defaultMoldLine()}
+              creatorButtonProps={isEdit && !isDetailView ? { creatorButtonText: '添加模具' } : false}
+              itemRender={({ listDom, action }) => (
+                <div style={{ position: 'relative', marginBottom: 16 }}>
+                  {listDom}
+                  {action ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 2,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {action}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              actionRender={(field, action, _defaultActionDom, count) => {
+                if (!isEdit || isDetailView || count <= 1) return [];
+                return [
+                  <Tooltip key="remove" title="删除">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={() => action.remove(field.name)}
+                    />
+                  </Tooltip>,
+                ];
               }}
             >
-              {(meta, index) => (
-                <ProFormGroup
+              {(meta) => (
+                <div
                   key={meta.key}
-                  title={`模具 ${index + 1}`}
                   style={{
-                    marginBottom: 16,
-                    paddingBottom: 8,
-                    borderBottom: '1px solid #f0f0f0',
+                    position: 'relative',
+                    marginBottom: 12,
+                    padding: '10px 40px 4px 12px',
+                    background: '#fafafa',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: 6,
                   }}
                 >
-                  <Row gutter={[16, 4]}>
-                    <Col span={12}>
+                  <Row gutter={16}>
+                    <Col xs={24} sm={8}>
                       <ProFormText
                         name="mold_code"
                         label="模具代号"
                         placeholder="请输入模具代号"
                         rules={[{ required: true, message: '请填写模具代号' }]}
+                        fieldProps={{ readOnly: !isEdit || isDetailView }}
                       />
                     </Col>
-                    <Col span={12}>
-                      <ProFormText name="mold_name" label="模具名称" placeholder="请输入模具名称" />
+                    <Col xs={24} sm={8}>
+                      <ProFormText
+                        name="mold_name"
+                        label="模具名称"
+                        placeholder="请输入模具名称"
+                        fieldProps={{ readOnly: !isEdit || isDetailView }}
+                      />
                     </Col>
-                    <Col span={24}>
-                      <ProFormText name="repair_reason" label="维修原因" placeholder="请输入维修原因" />
+                    <Col xs={24} sm={8}>
+                      <ProFormDependency name={['service_type']} ignoreFormListField>
+                        {({ service_type }) => {
+                          const isUpkeep = service_type === '保养';
+                          return (
+                            <ProFormText
+                              name="repair_reason"
+                              label={isUpkeep ? '保养原因' : '维修原因'}
+                              placeholder={isUpkeep ? '保养原因' : '维修原因'}
+                              fieldProps={{ readOnly: !isEdit || isDetailView }}
+                            />
+                          );
+                        }}
+                      </ProFormDependency>
                     </Col>
                   </Row>
-                </ProFormGroup>
+                  <ProFormDependency name={['service_type']} ignoreFormListField>
+                    {({ service_type }) =>
+                      service_type === '保养' ? (
+                        <>
+                          <Row gutter={16} style={{ marginTop: 4 }}>
+                            <Col span={24}>
+                              <ProFormTextArea
+                                name="upkeep_content"
+                                label="保养内容"
+                                placeholder="请填写该模具本次保养内容"
+                                rules={[{ required: true, message: '请填写保养内容' }]}
+                                fieldProps={{ rows: 3, maxLength: 4000, showCount: true }}
+                              />
+                            </Col>
+                          </Row>
+                          <Row gutter={16} style={{ marginTop: 4 }}>
+                            <Col span={24}>
+                              <ProFormRadio.Group
+                                name="clear_total_production"
+                                label="是否重置总产量"
+                                rules={[{ required: true, message: '请选择是否重置总产量' }]}
+                                options={[
+                                  { label: '是', value: true },
+                                  { label: '否', value: false },
+                                ]}
+                              />
+                            </Col>
+                          </Row>
+                        </>
+                      ) : (
+                        <>
+                          <Row gutter={16} style={{ marginTop: 4 }}>
+                            <Col span={24}>
+                              <ProFormTextArea
+                                name="repair_content"
+                                label="维修内容"
+                                placeholder="请填写该模具本次维修内容"
+                                rules={[{ required: true, message: '请填写维修内容' }]}
+                                fieldProps={{ rows: 3, maxLength: 4000, showCount: true }}
+                              />
+                            </Col>
+                          </Row>
+                          <Row gutter={16} style={{ marginTop: 4 }}>
+                            <Col xs={24} md={12}>
+                              <ProFormSelect
+                                name="repair_result"
+                                label="维修结果"
+                                placeholder="请选择维修结果"
+                                rules={[{ required: true, message: '请选择维修结果' }]}
+                                options={HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS.map((v) => ({ label: v, value: v }))}
+                              />
+                            </Col>
+                          </Row>
+                        </>
+                      )
+                    }
+                  </ProFormDependency>
+                  <ProFormDependency name={['mold_code']}>
+                    {({ mold_code }) => (
+                      <ProFormDependency name={['service_type']} ignoreFormListField>
+                        {({ service_type }) => {
+                          const isUpkeep = service_type === '保养';
+                          const phaseBefore = isUpkeep ? '保养前' : '维修前';
+                          const phaseAfter = isUpkeep ? '保养后' : '维修后';
+                          const mc = String(mold_code ?? '').trim();
+                          const prevUuids =
+                            beforeAttachmentPreview && mc ? beforeAttachmentPreview.byMold[mc] ?? [] : [];
+                          return (
+                            <Row gutter={16} style={{ marginTop: 4 }}>
+                              <Col span={24}>
+                                <div
+                                  style={{
+                                    padding: 10,
+                                    background: '#fff',
+                                    border: '1px solid #f0f0f0',
+                                    borderRadius: 8,
+                                  }}
+                                >
+                                  {beforeAttachmentPreview != null ? (
+                                    <>
+                                      <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
+                                        {mc
+                                          ? `模具「${mc}」模具图片附件（${phaseBefore}）`
+                                          : `模具图片附件（${phaseBefore}）`}
+                                      </div>
+                                      <ReadonlyAttachmentStrip uuids={prevUuids} />
+                                      <Divider dashed style={{ margin: '12px 0' }} />
+                                    </>
+                                  ) : null}
+                                  <ProFormUploadButton
+                                    name="item_attachments"
+                                    label={`模具图片附件（${phaseAfter}）`}
+                                    max={8}
+                                    fieldProps={uploadFieldProps}
+                                  />
+                                </div>
+                              </Col>
+                            </Row>
+                          );
+                        }}
+                      </ProFormDependency>
+                    )}
+                  </ProFormDependency>
+                </div>
               )}
             </ProFormList>
           </ProForm>
+          )}
         </div>
+      </Modal>
+
+      <Modal
+        title="选择来源维保单"
+        open={sourcePickerOpen}
+        onCancel={() => setSourcePickerOpen(false)}
+        width={820}
+        destroyOnClose
+        footer={null}
+      >
+        <Tabs
+          activeKey={sourcePickerTab}
+          onChange={(k) => setSourcePickerTab(k as '维修' | '保养')}
+          items={[
+            {
+              key: '维修',
+              label: `维修（${maintRowsRepair.length}）`,
+              children: (
+                <Table<MoldMaintenanceSheetRow>
+                  size="small"
+                  rowKey="id"
+                  columns={maintPickerColumns}
+                  dataSource={maintRowsRepair}
+                  pagination={false}
+                  scroll={{ y: 380 }}
+                  locale={{ emptyText: '暂无待确认完修的维修维保单' }}
+                  onRow={(record) => ({
+                    onClick: () => {
+                      void applySelectedMaintSheetRow(record);
+                      setSourcePickerOpen(false);
+                    },
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              ),
+            },
+            {
+              key: '保养',
+              label: `保养（${maintRowsUpkeep.length}）`,
+              children: (
+                <Table<MoldMaintenanceSheetRow>
+                  size="small"
+                  rowKey="id"
+                  columns={maintPickerColumns}
+                  dataSource={maintRowsUpkeep}
+                  pagination={false}
+                  scroll={{ y: 380 }}
+                  locale={{ emptyText: '暂无待确认完修的保养维保单' }}
+                  onRow={(record) => ({
+                    onClick: () => {
+                      void applySelectedMaintSheetRow(record);
+                      setSourcePickerOpen(false);
+                    },
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              ),
+            },
+          ]}
+        />
       </Modal>
     </>
   );

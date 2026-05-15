@@ -18,6 +18,7 @@ class HaoligoMoldOutsourceMaintenanceSheet(HaoligoTenantModel):
             ("department_uuid",),
         ]
 
+    sheet_no = fields.CharField(max_length=64, null=True, description="外协维保单单号（系统编码规则生成）")
     applicant_user_id = fields.IntField(null=True, description="申请人用户 ID（core_users）")
     applicant_name = fields.CharField(max_length=100, null=True, description="申请人显示名（冗余）")
     department_uuid = fields.CharField(max_length=36, null=True, description="申请部门 UUID（末级）")
