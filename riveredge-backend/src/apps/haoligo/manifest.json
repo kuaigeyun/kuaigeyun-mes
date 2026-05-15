@@ -73,16 +73,16 @@
                 "sort_order": 24
               },
               {
-                "title": "app.haoligo.menu.molds.documents.outsource-maintenance",
-                "path": "/apps/haoligo/molds/documents/outsource-maintenance",
-                "icon": "Truck",
+                "title": "app.haoligo.menu.molds.documents.maintenance-complete",
+                "path": "/apps/haoligo/molds/documents/maintenance-complete",
+                "icon": "CircleCheckBig",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 25
               },
               {
-                "title": "app.haoligo.menu.molds.documents.maintenance-complete",
-                "path": "/apps/haoligo/molds/documents/maintenance-complete",
-                "icon": "CircleCheckBig",
+                "title": "app.haoligo.menu.molds.documents.outsource-maintenance",
+                "path": "/apps/haoligo/molds/documents/outsource-maintenance",
+                "icon": "Truck",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 26
               },

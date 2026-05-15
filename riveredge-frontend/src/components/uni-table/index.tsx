@@ -9,7 +9,7 @@
  *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
  * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
  *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
- *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**、**uni-export**、**关联数据集配置**（可选，位于同步按钮前）、**uni-sync**、**打印**；**表格设定**为 ProTable 原生 **`options`**。
+ *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**、**uni-export**、**uni-sync**、**数据集**（可选，位于同步后）、**打印**；**表格设定**为 ProTable 原生 **`options`**。
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
@@ -160,12 +160,6 @@ function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T
 const UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR = 1
 const UNI_TABLE_LIFECYCLE_MIN_WIDTH = 80
 const UNI_TABLE_OPERATION_MIN_WIDTH = 120
-
-/** 表格密度仅 ProTable 的 large | middle | small；系统默认紧凑（small），兼容历史偏好值 default */
-function normalizeProTableDensityPreference(v: unknown): 'large' | 'middle' | 'small' {
-  if (v === 'large' || v === 'middle' || v === 'small') return v
-  return 'small'
-}
 
 /** 与 ProTable genColumnKey / 列设置持久化 key 一致（无 key 且无 dataIndex 时用列下标） */
 function getProColumnStateKey(col: any, columnIndex: number): string {
@@ -581,11 +575,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   syncButtonText?: string
   /**
-   * 是否显示「关联数据集配置」按钮（默认：false）
+   * 是否显示「数据集」配置入口按钮（默认：false；位于同步按钮之后）
    * 右侧顺序：导入 → 导出 → **本按钮** → 同步 → 打印（与「同步」同一工具区，占同步前一位）。
    */
   showDatasetConfigButton?: boolean
-  /** 「关联数据集配置」点击回调（如跳转 `/system/datasets`） */
+  /** 「数据集」配置入口点击回调（如打开绑定数据集弹窗） */
   onDatasetConfig?: () => void
   /** 按钮文案（不传则用 i18n `components.uniTable.datasetConfig`） */
   datasetConfigButtonText?: string
@@ -960,7 +954,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
-  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const syncTablePreference = useUserPreferenceStore((s) => s.syncTablePreference);
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md && screens.xs // 手机端判定：小于 768px 且有 xs
@@ -972,11 +965,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)
   const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
   
-  // 表格密度：用户偏好 / 站点配置 > 默认紧凑（small）
-  const defaultSize = normalizeProTableDensityPreference(
-    getPreference('ui.default_table_density', 'small'),
-  )
-
   const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 0)
 
   /** 已 patch @ant-design/pro-table：`debounceTime != null ? debounceTime : 30`，0 为同步触发 */
@@ -1882,7 +1870,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  /** 3.2 右侧：uni-import / uni-export / 关联数据集配置（可选）/ uni-sync（表格设定见 `memoizedOptions`） */
+  /** 3.2 右侧：uni-import / uni-export / uni-sync / 数据集（可选）/ 打印（表格设定见 `memoizedOptions`） */
   const buildRightActions = () => {
     const rightButtons: ReactNode[] = []
 
@@ -1908,6 +1896,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
+    if (showSyncButton && onSync) {
+      rightButtons.push(
+        <UniSyncButton key="sync" size={toolBarButtonSize} onSync={onSync} buttonText={syncButtonText} />
+      )
+    }
+
     if (showDatasetConfigButton && onDatasetConfig) {
       rightButtons.push(
         <Button
@@ -1919,12 +1913,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         >
           {datasetConfigButtonText ?? t('components.uniTable.datasetConfig')}
         </Button>
-      )
-    }
-
-    if (showSyncButton && onSync) {
-      rightButtons.push(
-        <UniSyncButton key="sync" size={toolBarButtonSize} onSync={onSync} buttonText={syncButtonText} />
       )
     }
 
@@ -1961,7 +1949,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   const memoizedOptions = React.useMemo(() => ({
-    density: true,
     setting: {
       listsHeight: 360,
       checkedReset: false,
@@ -1969,6 +1956,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     },
     fullScreen: false,
     ...mergedToolbarOptions,
+    /** 密度固定为紧凑（small），不展示工具栏密度切换；置后以免被传入 options 覆盖 */
+    density: false,
     reload: () => {
       mergedToolbarOptions.reload?.()
       void reloadWithTanstackCacheBust()
@@ -2189,12 +2178,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               bordered={false}
               cardBordered={true}
               {...(!showLoading ? { loading: false } : loadingDelay > 0 ? { loading: showDelayedLoading } : {})}
-              size={defaultSize}
-              onSizeChange={(size) => {
-                updatePreferences({ 'ui.default_table_density': size })
-              }}
               columnsState={mergedColumnsStateProp}
-              options={memoizedOptions}
               toolbar={memoizedToolbar}
               rowSelection={memoizedRowSelection}
               editable={memoizedEditable}
@@ -2227,6 +2211,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   tableAlertRender: _omitTableAlertRender,
                   debounceTime: _omitDebounce,
                   onRow: userOnRow,
+                  size: _omitTableSize,
+                  options: _omitTableOptions,
+                  onSizeChange: _omitOnSizeChange,
                   ...otherProps
                 } = restProps
                 const mergedComponents =
@@ -2324,6 +2311,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
                 }
               })()}
+              size="small"
+              options={memoizedOptions}
               revalidateOnFocus={false}
               />
               {enableRowSelection && selectedRowKeys.length > 0 ? (

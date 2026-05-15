@@ -74,6 +74,11 @@ export interface ExecuteQueryRequest {
   offset?: number;
   /** 与已保存 query_config 浅合并，仅本次执行（不落库）；设计器未点保存时传入当前编辑内容 */
   query_config?: Record<string, any>;
+  /**
+   * 为 SQL 中已声明但本次未传入的命名参数补 NULL（仅服务端 SQL 执行）。
+   * 用于列名探测等场景；常规业务查询勿开。
+   */
+  fill_missing_sql_parameters?: boolean;
 }
 
 export interface ExecuteQueryResponse {

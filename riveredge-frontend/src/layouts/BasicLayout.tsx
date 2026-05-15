@@ -943,7 +943,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         alt=""
         width="auto"
         height={22}
-        fetchPriority="high"
+        fetchpriority="high"
         decoding="async"
         onError={() => {
           setSiteLogoUrl((prev) => nextSiteLogoUrlAfterImageError(prev));

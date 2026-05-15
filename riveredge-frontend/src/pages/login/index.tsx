@@ -1553,7 +1553,7 @@ export default function LoginPage() {
             width={48}
             height={48}
             loading="eager"
-            fetchPriority="high"
+            fetchpriority="high"
             decoding="async"
             style={{
               opacity: 1,
@@ -1596,7 +1596,7 @@ export default function LoginPage() {
               width={48}
               height={48}
               loading="eager"
-              fetchPriority="high"
+              fetchpriority="high"
               decoding="async"
               style={{
                 opacity: 1,

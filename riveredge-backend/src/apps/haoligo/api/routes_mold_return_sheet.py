@@ -7,8 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_processing_time import recompute_mold_processing_time_minutes
+from apps.haoligo.api._mold_ledger_sync import sync_mold_ledger_status_for_mold_code
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
@@ -35,6 +40,7 @@ class MoldReturnSheetOut(BaseModel):
     mold_name: str
     finished_product_code: Optional[str] = None
     finished_product_name: Optional[str] = None
+    planned_qty: Optional[Decimal] = None
     manufacture_qty: Decimal
 
 
@@ -47,6 +53,7 @@ class MoldReturnSheetCreate(BaseModel):
     mold_name: str = Field(max_length=200)
     finished_product_code: Optional[str] = Field(None, max_length=128)
     finished_product_name: Optional[str] = Field(None, max_length=200)
+    planned_qty: Optional[Decimal] = None
     manufacture_qty: Decimal = Field(description="制造数量（必填）")
 
     @field_validator("mold_code", "mold_name", mode="before")
@@ -72,6 +79,19 @@ class MoldReturnSheetCreate(BaseModel):
             raise ValueError("制造数量不能为负")
         return d
 
+    @field_validator("planned_qty", mode="before")
+    @classmethod
+    def coerce_planned_qty(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            d = Decimal(str(v))
+        except Exception as e:  # noqa: BLE001
+            raise ValueError("计划数量格式无效") from e
+        if d < 0:
+            raise ValueError("计划数量不能为负")
+        return d
+
 
 class MoldReturnSheetUpdate(BaseModel):
     production_order_no: Optional[str] = Field(None, max_length=128)
@@ -82,11 +102,81 @@ class MoldReturnSheetUpdate(BaseModel):
     mold_name: Optional[str] = Field(None, max_length=200)
     finished_product_code: Optional[str] = Field(None, max_length=128)
     finished_product_name: Optional[str] = Field(None, max_length=200)
+    planned_qty: Optional[Decimal] = None
     manufacture_qty: Optional[Decimal] = None
+
+    @field_validator("manufacture_qty", mode="before")
+    @classmethod
+    def coerce_manufacture_qty_upd(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            d = Decimal(str(v))
+        except Exception as e:  # noqa: BLE001
+            raise ValueError("制造数量格式无效") from e
+        if d < 0:
+            raise ValueError("制造数量不能为负")
+        return d
+
+    @field_validator("planned_qty", mode="before")
+    @classmethod
+    def coerce_planned_qty_upd(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            d = Decimal(str(v))
+        except Exception as e:  # noqa: BLE001
+            raise ValueError("计划数量格式无效") from e
+        if d < 0:
+            raise ValueError("计划数量不能为负")
+        return d
 
 
 async def _not_found():
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+
+
+async def _apply_mold_ledger_after_return_delta(
+    tenant_id: int,
+    mold_code: str,
+    *,
+    times_delta: int,
+    yield_delta: Decimal,
+) -> None:
+    """还入单变更后：已使用次数/已使用产量累加或回滚；额定次数/产量不变。非报废模具状态置为「待用」。
+    撤销还入（times_delta<0）时再按领用单 sync，以便在仍有领用单时恢复「在用」。"""
+    mcode = (mold_code or "").strip()
+    if not mcode:
+        return
+    if times_delta == 0 and yield_delta == 0:
+        # 仅还入单资料变更：不调整已使用次数/产量；模具已还入，台账应为「待用」。
+        # 不可再调 sync_mold_ledger_status_for_mold_code：其在仍有领用单记录时会强制「在用」，与还入语义冲突。
+        mold0 = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mcode).first()
+        if mold0 and mold0.status != "报废":
+            mold0.status = "待用"
+            await mold0.save(update_fields=["status"])
+        return
+    mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mcode).first()
+    if not mold:
+        await sync_mold_ledger_status_for_mold_code(tenant_id, mcode)
+        return
+    cur_t = int(mold.used_times or 0)
+    cur_y = mold.used_yield if mold.used_yield is not None else Decimal("0")
+    if not isinstance(cur_y, Decimal):
+        cur_y = Decimal(str(cur_y))
+    mold.used_times = max(0, cur_t + int(times_delta))
+    ny = cur_y + yield_delta
+    if ny < 0:
+        ny = Decimal("0")
+    mold.used_yield = ny
+    if mold.status != "报废":
+        mold.status = "待用"
+    await mold.save(update_fields=["used_times", "used_yield", "status"])
+    # 还入增加/调整产量后模具在库，应为「待用」。sync 仅按「是否存在领用单」推在用，会覆盖上述结果。
+    # 仅在撤销还入（times_delta < 0）时再 sync，以便在仍有领用单时恢复「在用」。
+    if times_delta < 0:
+        await sync_mold_ledger_status_for_mold_code(tenant_id, mcode)
+    await recompute_mold_processing_time_minutes(tenant_id, mcode)
 
 
 def _serialize(row: HaoligoMoldReturnSheet) -> MoldReturnSheetOut:
@@ -101,6 +191,7 @@ def _serialize(row: HaoligoMoldReturnSheet) -> MoldReturnSheetOut:
         mold_name=row.mold_name,
         finished_product_code=row.finished_product_code,
         finished_product_name=row.finished_product_name,
+        planned_qty=row.planned_qty,
         manufacture_qty=row.manufacture_qty,
     )
 
@@ -135,24 +226,90 @@ async def list_return_sheets(
     }
 
 
+class MoldReturnBorrowLookupOut(BaseModel):
+    """从领用单带入还入单（制造数量仍手填；含计划数量）。"""
+
+    borrow_sheet_id: int
+    borrow_sheet_no: str
+    production_order_no: Optional[str] = None
+    issue_department_uuid: Optional[str] = None
+    issue_department_name: Optional[str] = None
+    mold_code: str
+    mold_name: str
+    finished_product_code: Optional[str] = None
+    finished_product_name: Optional[str] = None
+    planned_qty: Optional[Decimal] = None
+
+
+@router.get(
+    "/borrow-lookup",
+    response_model=MoldReturnBorrowLookupOut,
+    summary="按制令单号或模具代号匹配领用单（用于还入单带出）",
+)
+async def borrow_lookup_for_return_sheet(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    production_order_no: Optional[str] = Query(None, max_length=128),
+    mold_code: Optional[str] = Query(None, max_length=64),
+):
+    p = (production_order_no or "").strip()
+    m = (mold_code or "").strip()
+    if not p and not m:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="请提供制令单号或模具代号至少一项",
+        )
+    qs = tenant_alive(HaoligoMoldBorrowSheet, tenant_id)
+    row = None
+    if p:
+        row = await qs.filter(source_order_no=p).order_by("-id").first()
+    if row is None and m:
+        row = await qs.filter(mold_code=m).order_by("-id").first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到与制令单号或模具代号匹配的领用单",
+        )
+    return MoldReturnBorrowLookupOut(
+        borrow_sheet_id=row.id,
+        borrow_sheet_no=f"领用单#{row.id}",
+        production_order_no=row.source_order_no,
+        issue_department_uuid=_strip_opt(row.department_uuid),
+        issue_department_name=_strip_opt(row.department_name),
+        mold_code=row.mold_code,
+        mold_name=row.mold_name,
+        finished_product_code=_strip_opt(row.finished_product_code),
+        finished_product_name=_strip_opt(row.finished_product_name),
+        planned_qty=row.planned_qty,
+    )
+
+
 @router.post("", response_model=MoldReturnSheetOut, summary="创建还入单")
 async def create_return_sheet(
     body: MoldReturnSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    row = await HaoligoMoldReturnSheet.create(
-        tenant_id=tenant_id,
-        production_order_no=_strip_opt(body.production_order_no),
-        borrow_sheet_no=_strip_opt(body.borrow_sheet_no),
-        issue_department_uuid=_strip_opt(body.issue_department_uuid),
-        issue_department_name=_strip_opt(body.issue_department_name),
-        mold_code=body.mold_code.strip(),
-        mold_name=body.mold_name.strip(),
-        finished_product_code=_strip_opt(body.finished_product_code),
-        finished_product_name=_strip_opt(body.finished_product_name),
-        manufacture_qty=body.manufacture_qty,
-    )
+    async with in_transaction():
+        row = await HaoligoMoldReturnSheet.create(
+            tenant_id=tenant_id,
+            production_order_no=_strip_opt(body.production_order_no),
+            borrow_sheet_no=_strip_opt(body.borrow_sheet_no),
+            issue_department_uuid=_strip_opt(body.issue_department_uuid),
+            issue_department_name=_strip_opt(body.issue_department_name),
+            mold_code=body.mold_code.strip(),
+            mold_name=body.mold_name.strip(),
+            finished_product_code=_strip_opt(body.finished_product_code),
+            finished_product_name=_strip_opt(body.finished_product_name),
+            planned_qty=body.planned_qty,
+            manufacture_qty=body.manufacture_qty,
+        )
+        await _apply_mold_ledger_after_return_delta(
+            tenant_id,
+            body.mold_code.strip(),
+            times_delta=1,
+            yield_delta=body.manufacture_qty,
+        )
     return _serialize(row)
 
 
@@ -179,6 +336,8 @@ async def update_return_sheet(
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
+    old_mold = row.mold_code.strip()
+    old_qty = row.manufacture_qty
     for k in ("mold_code", "mold_name"):
         if k in data and data[k] is not None:
             data[k] = str(data[k]).strip()
@@ -194,13 +353,24 @@ async def update_return_sheet(
     ):
         if k in data and data[k] is not None:
             data[k] = _strip_opt(str(data[k]))
-    if "manufacture_qty" in data and data["manufacture_qty"] is not None:
-        mq = data["manufacture_qty"]
-        if mq < 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="制造数量不能为负")
+    if "planned_qty" in data and data["planned_qty"] is not None and data["planned_qty"] < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划数量不能为负")
     for k, v in data.items():
         setattr(row, k, v)
-    await row.save()
+    new_mold = row.mold_code.strip()
+    new_qty = row.manufacture_qty
+    async with in_transaction():
+        if old_mold != new_mold:
+            await _apply_mold_ledger_after_return_delta(tenant_id, old_mold, times_delta=-1, yield_delta=-old_qty)
+            await _apply_mold_ledger_after_return_delta(tenant_id, new_mold, times_delta=1, yield_delta=new_qty)
+        else:
+            await _apply_mold_ledger_after_return_delta(
+                tenant_id,
+                new_mold,
+                times_delta=0,
+                yield_delta=new_qty - old_qty,
+            )
+        await row.save()
     return _serialize(row)
 
 
@@ -213,5 +383,9 @@ async def delete_return_sheet(
     row = await tenant_alive(HaoligoMoldReturnSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    row.deleted_at = timezone.now()
-    await row.save()
+    mcode = row.mold_code.strip()
+    qty = row.manufacture_qty
+    async with in_transaction():
+        await _apply_mold_ledger_after_return_delta(tenant_id, mcode, times_delta=-1, yield_delta=-qty)
+        row.deleted_at = timezone.now()
+        await row.save(update_fields=["deleted_at"])

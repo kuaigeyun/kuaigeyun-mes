@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_maintenance_mold_status import (
+    refresh_mold_status_after_maintenance_completed,
+    unique_mold_codes_from_stored_line_items,
+)
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -188,15 +193,18 @@ async def create_maintenance_complete_sheet(
     _: Annotated[User, Depends(get_current_user)],
 ):
     stored = [_line_to_store(x) for x in body.line_items]
-    row = await HaoligoMoldMaintenanceCompleteSheet.create(
-        tenant_id=tenant_id,
-        source_maintenance_sheet_id=body.source_maintenance_sheet_id,
-        source_order_no=body.source_order_no.strip(),
-        service_type=body.service_type,
-        clear_total_production=body.clear_total_production,
-        header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
-        line_items=stored,
-    )
+    async with in_transaction():
+        row = await HaoligoMoldMaintenanceCompleteSheet.create(
+            tenant_id=tenant_id,
+            source_maintenance_sheet_id=body.source_maintenance_sheet_id,
+            source_order_no=body.source_order_no.strip(),
+            service_type=body.service_type,
+            clear_total_production=body.clear_total_production,
+            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            line_items=stored,
+        )
+        for mc in unique_mold_codes_from_stored_line_items(stored):
+            await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
     return _serialize(row)
 
 

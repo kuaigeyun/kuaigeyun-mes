@@ -424,6 +424,7 @@ class DatasetService:
                         parameters=execute_request.parameters,
                         limit=execute_request.limit,
                         offset=execute_request.offset,
+                        fill_missing_sql_parameters=execute_request.fill_missing_sql_parameters,
                     )
                 elif qt == 'api':
                     result = await self._execute_api_query(
@@ -518,23 +519,28 @@ class DatasetService:
         return data
 
     @staticmethod
-    def _convert_named_params_to_positional(sql: str, params: Dict[str, Any]) -> Tuple[str, list]:
+    def _convert_named_params_to_positional(
+        sql: str, params: Dict[str, Any], fill_missing: bool = False
+    ) -> Tuple[str, list]:
         """将 :param 占位符转为 asyncpg 的 $1,$2 格式，按 SQL 中首次出现顺序，返回 (sql, args)。
         使用 (?<!:) 排除 PostgreSQL 类型转换 ::type（如 ::int、::numeric）被误识别为参数。"""
-        if not params:
-            return sql, []
         # 仅匹配 :param，不匹配 ::type（PostgreSQL 类型转换）
         param_names = list(dict.fromkeys(re.findall(r"(?<!:):(\w+)\b", sql)))
-        args = [params[n] for n in param_names]
+        if not param_names:
+            return sql, []
+        if fill_missing:
+            args = [params.get(n) for n in param_names]
+        else:
+            args = [params[n] for n in param_names]
         for i, name in enumerate(param_names, 1):
             sql = re.sub(rf"(?<!:):{re.escape(name)}\b", f"${i}", sql)
         return sql, args
 
     @staticmethod
-    def _convert_named_params_to_pymssql(sql: str, params: Dict[str, Any]) -> Tuple[str, List[Any]]:
+    def _convert_named_params_to_pymssql(
+        sql: str, params: Dict[str, Any], fill_missing: bool = False
+    ) -> Tuple[str, List[Any]]:
         """将 :param 转为 pymssql 的 %s，按在 SQL 中出现的顺序绑定参数（排除 :: 类型转换）。"""
-        if not params:
-            return sql, []
         parts: List[str] = []
         args: List[Any] = []
         last = 0
@@ -542,9 +548,13 @@ class DatasetService:
             parts.append(sql[last : m.start()])
             name = m.group(1)
             if name not in params:
-                raise KeyError(f"缺少查询参数: :{name}")
-            parts.append("%s")
-            args.append(params[name])
+                if not fill_missing:
+                    raise KeyError(f"缺少查询参数: :{name}")
+                parts.append("%s")
+                args.append(None)
+            else:
+                parts.append("%s")
+                args.append(params[name])
             last = m.end()
         parts.append(sql[last:])
         return "".join(parts), args
@@ -599,7 +609,9 @@ class DatasetService:
                         cur.execute(sql)
                     rows = cur.fetchall()
                     if not rows:
-                        return {"success": True, "data": [], "columns": [], "total": 0}
+                        desc = cur.description
+                        cols = [d[0] for d in desc] if desc else []
+                        return {"success": True, "data": [], "columns": cols, "total": 0}
                     columns = list(rows[0].keys())
                     data = [dict(r) for r in rows]
                     return {"success": True, "data": data, "columns": columns, "total": len(data)}
@@ -694,6 +706,7 @@ class DatasetService:
         parameters: Optional[Dict[str, Any]] = None,
         limit: int = 100,
         offset: int = 0,
+        fill_missing_sql_parameters: bool = False,
     ) -> Dict[str, Any]:
         """
         执行 SQL 查询
@@ -766,7 +779,9 @@ class DatasetService:
                     sql = f"{sql} LIMIT {limit} OFFSET {offset}"
 
                 # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
-                sql, args = self._convert_named_params_to_positional(sql, query_params)
+                sql, args = self._convert_named_params_to_positional(
+                    sql, query_params, fill_missing=fill_missing_sql_parameters
+                )
 
                 # 使用 asyncpg 直接连接执行（系统默认数据源密码从 ENV 读取）
                 import asyncpg
@@ -785,9 +800,28 @@ class DatasetService:
                     database=config.get("database", ""),
                 )
                 try:
-                    rows = await conn.fetch(sql, *args) if args else await conn.fetch(sql)
-                    columns = list(rows[0].keys()) if rows else []
-                    data = [dict(row) for row in rows]
+                    stmt = await conn.prepare(sql)
+                    cols_meta = [
+                        a.name
+                        for a in stmt.get_attributes()
+                        if getattr(a, "name", None) not in (None, "")
+                    ]
+                    try:
+                        rows = await stmt.fetch(*args) if args else await stmt.fetch()
+                    except Exception as fetch_exc:
+                        return {
+                            "success": False,
+                            "data": [],
+                            "total": None,
+                            "columns": cols_meta or None,
+                            "error": f"SQL 查询执行失败: {fetch_exc}",
+                        }
+                    if rows:
+                        columns = list(rows[0].keys())
+                        data = [dict(row) for row in rows]
+                    else:
+                        columns = cols_meta
+                        data = []
                 finally:
                     await conn.close()
 
@@ -810,7 +844,9 @@ class DatasetService:
                 }
             if self._sqlserver_should_wrap_paging(sql):
                 sql = self._wrap_sqlserver_paged_sql(sql, limit, offset)
-            sql, args = self._convert_named_params_to_pymssql(sql, query_params)
+            sql, args = self._convert_named_params_to_pymssql(
+                sql, query_params, fill_missing=fill_missing_sql_parameters
+            )
             cfg = integration_config.get_config()
             return await asyncio.to_thread(
                 DatasetService._execute_sqlserver_query_sync,

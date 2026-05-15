@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
@@ -698,3 +699,140 @@ class DepartmentService:
                 created += 1
         return created
 
+    @staticmethod
+    async def sync_departments_from_dataset(
+        tenant_id: int,
+        current_user_id: int,
+    ) -> Dict[str, int]:
+        """
+        按租户保存的数据集绑定，无参执行数据集查询后同步部门。
+        匹配规则：若配置了部门代码列且行内代码非空，则按代码匹配；否则按部门名称匹配。
+        父部门在第二轮按「上级引用」列解析（与批量导入一致：按名称或代码匹配已有部门）。
+        """
+        from core.models.department_dataset_binding import DepartmentDatasetBinding
+        from core.schemas.dataset import ExecuteQueryRequest
+        from core.services.data.dataset_service import DatasetService
+
+        binding = await DepartmentDatasetBinding.filter(tenant_id=tenant_id).first()
+        if not binding or not (binding.dataset_uuid or "").strip():
+            raise ValidationError("请先在「关联数据集配置」中选择数据集并保存列映射")
+
+        ds_uuid = binding.dataset_uuid.strip()
+        name_c = (binding.department_name_column or "").strip()
+        if not name_c:
+            raise ValidationError("已关联数据集时，必须填写部门名称对应的结果列名")
+
+        code_c = (binding.department_code_column or "").strip() or None
+        parent_c = (binding.parent_ref_column or "").strip() or None
+        desc_c = (binding.description_column or "").strip() or None
+
+        svc = DatasetService()
+        all_rows: List[dict] = []
+        offset = 0
+        page_size = 2000
+        while True:
+            res = await svc.execute_query(
+                tenant_id,
+                UUID(ds_uuid),
+                ExecuteQueryRequest(parameters={}, limit=page_size, offset=offset),
+            )
+            if not res.success:
+                raise ValidationError(res.error or "数据集查询失败")
+
+            chunk = list(res.data or [])
+            if not chunk:
+                break
+            all_rows.extend(chunk)
+            if len(chunk) < page_size:
+                break
+            offset += len(chunk)
+
+        def cell_str(raw: dict, key: Optional[str]) -> str:
+            if not key:
+                return ""
+            v = raw.get(key)
+            if v is None:
+                return ""
+            return str(v).strip()
+
+        skipped = 0
+        normalized: List[Dict[str, Any]] = []
+        for raw in all_rows:
+            r = raw if isinstance(raw, dict) else {}
+            name = cell_str(r, name_c)
+            if not name:
+                skipped += 1
+                continue
+            code_val = cell_str(r, code_c) if code_c else ""
+            normalized.append(
+                {
+                    "name": name[:100],
+                    "code": code_val[:50] if code_val else None,
+                    "parent_ref": cell_str(r, parent_c) if parent_c else "",
+                    "description": cell_str(r, desc_c)[:2000] if desc_c and cell_str(r, desc_c) else None,
+                }
+            )
+
+        async def find_dept(code_val: Optional[str], name: str) -> Optional[Department]:
+            if code_val:
+                d = await Department.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    code=code_val,
+                ).first()
+                if d:
+                    return d
+            return await Department.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                name=name,
+            ).first()
+
+        created = 0
+        updated = 0
+
+        for item in normalized:
+            name = item["name"]
+            code_val = item["code"]
+            dept = await find_dept(code_val, name)
+            desc = item["description"]
+
+            if dept:
+                dept.name = name
+                if code_c is not None:
+                    dept.code = code_val if code_val else None
+                if desc_c is not None:
+                    dept.description = desc
+                await dept.save()
+                updated += 1
+            else:
+                await Department.create(
+                    tenant_id=tenant_id,
+                    name=name,
+                    code=code_val if code_val else None,
+                    description=desc if desc_c is not None else None,
+                    parent_id=None,
+                    manager_id=None,
+                    sort_order=0,
+                    is_active=True,
+                )
+                created += 1
+
+        if parent_c:
+            for item in normalized:
+                pref = (item.get("parent_ref") or "").strip()
+                if not pref:
+                    continue
+                dept = await find_dept(item["code"], item["name"])
+                if not dept:
+                    continue
+                parent = await Department.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).filter(Q(name=pref) | Q(code=pref)).first()
+                if not parent or parent.id == dept.id:
+                    continue
+                dept.parent_id = parent.id
+                await dept.save()
+
+        return {"created": created, "updated": updated, "skipped": skipped}

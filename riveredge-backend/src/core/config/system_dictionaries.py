@@ -252,6 +252,20 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "HAOLIGO_MOLD_REPAIR_REASON",
+        "name": "模具维修原因",
+        "description": "好力 GO 厂内/外协维保单明细中的维修原因（可在数据字典中维护并支持快速新建项）",
+        "items": [
+            {"label": "磨损", "value": "磨损", "description": "磨损", "sort_order": 1},
+            {"label": "裂纹", "value": "裂纹", "description": "裂纹", "sort_order": 2},
+            {"label": "变形", "value": "变形", "description": "变形", "sort_order": 3},
+            {"label": "尺寸超差", "value": "尺寸超差", "description": "尺寸超差", "sort_order": 4},
+            {"label": "配合不良", "value": "配合不良", "description": "配合不良", "sort_order": 5},
+            {"label": "锈蚀", "value": "锈蚀", "description": "锈蚀", "sort_order": 6},
+            {"label": "其他", "value": "其他", "description": "其他", "sort_order": 7},
+        ],
+    },
+    {
         "code": "TOOL_STATUS",
         "name": "工装状态",
         "description": "工装台账中的工装状态",

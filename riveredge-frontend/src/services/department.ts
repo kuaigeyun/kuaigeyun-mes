@@ -208,3 +208,37 @@ export async function loadPresetDepartments(
   });
 }
 
+/** 部门管理 — 数据集关联（与后端 DepartmentDatasetBinding 一致） */
+export interface DepartmentDatasetBindingPayload {
+  dataset_uuid?: string;
+  department_name_column?: string;
+  department_code_column?: string;
+  parent_ref_column?: string;
+  description_column?: string;
+}
+
+export interface DepartmentDatasetSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export async function getDepartmentDatasetBinding(): Promise<DepartmentDatasetBindingPayload> {
+  return apiRequest<DepartmentDatasetBindingPayload>('/core/departments/dataset-binding');
+}
+
+export async function putDepartmentDatasetBinding(
+  body: DepartmentDatasetBindingPayload,
+): Promise<DepartmentDatasetBindingPayload> {
+  return apiRequest<DepartmentDatasetBindingPayload>('/core/departments/dataset-binding', {
+    method: 'PUT',
+    data: body,
+  });
+}
+
+export async function syncDepartmentsFromDataset(): Promise<DepartmentDatasetSyncResult> {
+  return apiRequest<DepartmentDatasetSyncResult>('/core/departments/sync-from-dataset', {
+    method: 'POST',
+  });
+}
+

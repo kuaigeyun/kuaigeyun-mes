@@ -1,9 +1,9 @@
 /**
  * 好力 GO — 领用单（列表 + 两栏 Modal，底栏：重置 / 提交）
- * 电脑端：来源单号手输；模具代号可手输或「选择」台账。扫码制令单等能力预留到移动端再接。
+ * 电脑端：制令单号手输；模具代号可手输或「选择」台账。扫码制令单等能力预留到移动端再接。
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -13,7 +13,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Input, Modal, Row, Space, Table } from 'antd';
+import { App, Alert, AutoComplete, Button, Col, Form, Input, Modal, Row, Select, Space, Spin, Table } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -25,32 +25,67 @@ import { getDepartmentTree } from '../../../../../../services/department';
 import {
   createMoldBorrowSheet,
   deleteMoldBorrowSheet,
+  getMoldBorrowDatasetBinding,
   getMoldBorrowSheet,
+  getMoldBorrowSourceOrderUsage,
   listMoldBorrowSheets,
   listMolds,
+  prefillMoldBorrowSheetFromDataset,
+  putMoldBorrowDatasetBinding,
   updateMoldBorrowSheet,
+  type MoldBorrowDatasetBindingPayload,
   type MoldBorrowSheetCreatePayload,
   type MoldBorrowSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 
-function flattenDepartmentOptions(
-  items: DepartmentTreeItem[],
-  prefix = '',
-): { label: string; value: string }[] {
+/** 从 SQL 中粗略提取命名参数（优先以数据集 designer 中的 parameters 为准） */
+function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'number' || typeof v === 'boolean') {
+      out[key] = v;
+    } else {
+      const s = String(v).trim();
+      if (s !== '') out[key] = s;
+    }
+  }
+  return out;
+}
+
+function extractSqlNamedParams(sql: string): string[] {
+  const masked = sql.replace(/::/g, '__PG_CAST__');
+  const set = new Set<string>();
+  let m: RegExpExecArray | null;
+  const reColon = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  while ((m = reColon.exec(masked)) !== null) {
+    const name = m[1];
+    if (name && !name.startsWith('__PG')) set.add(name);
+  }
+  const reAt = /(?<!@)@([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  while ((m = reAt.exec(sql)) !== null) {
+    set.add(m[1]);
+  }
+  return [...set];
+}
+
+function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
   for (const n of items) {
-    const label = prefix ? `${prefix} / ${n.name}` : n.name;
-    out.push({ label, value: n.uuid });
+    out.push({ label: n.name, value: n.uuid });
     if (n.children?.length) {
-      out.push(...flattenDepartmentOptions(n.children, label));
+      out.push(...flattenDepartmentOptions(n.children));
     }
   }
   return out;
 }
 
 const MoldBorrowOutPage: React.FC = () => {
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
@@ -64,6 +99,300 @@ const MoldBorrowOutPage: React.FC = () => {
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
+
+  const [datasetBinding, setDatasetBinding] = useState<MoldBorrowDatasetBindingPayload | null>(null);
+  const [bindingModalOpen, setBindingModalOpen] = useState(false);
+  const [bindingCfgForm] = Form.useForm<MoldBorrowDatasetBindingPayload>();
+  const bindingDatasetUuidWatched = Form.useWatch('dataset_uuid', bindingCfgForm);
+  const [datasetSelectOptions, setDatasetSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
+  const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
+  const [bindingModalBusy, setBindingModalBusy] = useState(false);
+  const [prefillBusy, setPrefillBusy] = useState(false);
+  const [datasetParamKeyOptions, setDatasetParamKeyOptions] = useState<{ value: string; label: string }[]>([]);
+  const [datasetParamKeysLoading, setDatasetParamKeysLoading] = useState(false);
+
+  const canPrefillFromDataset = useMemo(() => {
+    const b = datasetBinding;
+    return Boolean(
+      b?.dataset_uuid?.trim() && b.work_order_param_key?.trim() && b.department_name_column?.trim(),
+    );
+  }, [datasetBinding]);
+
+  const loadBindingDatasetColumns = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const uuid = String(bindingDatasetUuidWatched ?? '').trim();
+      if (!uuid) {
+        setBindingColumnOptions([]);
+        return;
+      }
+      setBindingColumnsLoading(true);
+      try {
+        const ds = await getDatasetByUuid(uuid);
+        const cfg = (ds.query_config || {}) as { parameters?: Record<string, unknown> };
+        const defaultsRaw =
+          cfg.parameters && typeof cfg.parameters === 'object' && !Array.isArray(cfg.parameters)
+            ? (cfg.parameters as Record<string, unknown>)
+            : {};
+        const merged = normalizeDatasetParameterMap(defaultsRaw);
+
+        const res = await executeDatasetQuery(uuid, {
+          parameters: merged,
+          fill_missing_sql_parameters: true,
+          limit: 5,
+          offset: 0,
+        });
+        const raw = res.columns?.length
+          ? res.columns
+          : res.data?.[0]
+            ? Object.keys(res.data[0] as object)
+            : [];
+        if (!raw.length) {
+          if (!opts?.silent) {
+            messageApi.warning(
+              res.error ||
+                (res.success ? '未能解析出列名' : '无法加载列名（请检查数据集 SQL 与数据源连接）'),
+            );
+          }
+          setBindingColumnOptions([]);
+          return;
+        }
+        const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
+        setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
+        if (!opts?.silent && unique.length) {
+          messageApi.success(`已加载 ${unique.length} 个列`);
+        }
+      } catch (e) {
+        if (!opts?.silent) messageApi.error((e as Error).message || '加载列名失败');
+        setBindingColumnOptions([]);
+      } finally {
+        setBindingColumnsLoading(false);
+      }
+    },
+    [bindingDatasetUuidWatched, messageApi],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await getMoldBorrowDatasetBinding();
+        if (cancelled) return;
+        setDatasetBinding(b.dataset_uuid ? b : null);
+      } catch {
+        if (!cancelled) setDatasetBinding(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const options: { label: string; value: string }[] = [];
+        let page = 1;
+        const pageSize = 100;
+        for (;;) {
+          const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+          const items = res.items ?? [];
+          for (const d of items) {
+            options.push({ label: `${d.name} (${d.code})`, value: d.uuid });
+          }
+          if (items.length < pageSize) break;
+          page += 1;
+        }
+        if (!cancelled) setDatasetSelectOptions(options);
+      } catch (e) {
+        if (!cancelled) {
+          setDatasetSelectOptions([]);
+          messageApi.error((e as Error).message || '加载数据集列表失败');
+        }
+      }
+    })();
+    bindingCfgForm.resetFields();
+    const d = datasetBinding;
+    bindingCfgForm.setFieldsValue({
+      dataset_uuid: d?.dataset_uuid ?? undefined,
+      work_order_param_key: d?.work_order_param_key ?? undefined,
+      department_name_column: d?.department_name_column ?? undefined,
+      mold_code_column: d?.mold_code_column ?? undefined,
+      mold_name_column: d?.mold_name_column ?? undefined,
+      finished_product_code_column: d?.finished_product_code_column ?? undefined,
+      finished_product_name_column: d?.finished_product_name_column ?? undefined,
+      planned_qty_column: d?.planned_qty_column ?? undefined,
+    });
+    setBindingColumnOptions([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, datasetBinding, bindingCfgForm, messageApi]);
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    const uuid = String(bindingDatasetUuidWatched ?? '').trim();
+    if (!uuid) {
+      setDatasetParamKeyOptions([]);
+      setDatasetParamKeysLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDatasetParamKeysLoading(true);
+    void (async () => {
+      try {
+        const ds = await getDatasetByUuid(uuid);
+        if (cancelled) return;
+        const cfg = (ds.query_config || {}) as { sql?: string; parameters?: Record<string, unknown> };
+        let keys: string[] = [];
+        if (cfg.parameters && typeof cfg.parameters === 'object' && !Array.isArray(cfg.parameters)) {
+          keys = Object.keys(cfg.parameters)
+            .map((k) => k.trim())
+            .filter(Boolean);
+        }
+        if (keys.length === 0 && typeof cfg.sql === 'string') {
+          keys = extractSqlNamedParams(cfg.sql);
+        }
+        const opts = keys.map((k) => ({ value: k, label: k }));
+        const saved = datasetBinding;
+        const savedKey =
+          saved?.dataset_uuid && String(saved.dataset_uuid).trim() === uuid
+            ? String(saved.work_order_param_key ?? '').trim()
+            : '';
+        if (savedKey && !opts.some((o) => o.value === savedKey)) {
+          opts.unshift({ value: savedKey, label: `${savedKey}（已保存）` });
+        }
+        if (!cancelled) setDatasetParamKeyOptions(opts);
+      } catch {
+        if (!cancelled) setDatasetParamKeyOptions([]);
+      } finally {
+        if (!cancelled) setDatasetParamKeysLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, bindingDatasetUuidWatched, datasetBinding]);
+
+  const handleDatasetConfig = useCallback(() => {
+    setBindingModalOpen(true);
+  }, []);
+
+  const handleBindingSave = async () => {
+    const ds = String(bindingCfgForm.getFieldValue('dataset_uuid') ?? '').trim();
+    if (!ds) {
+      setBindingModalBusy(true);
+      try {
+        const saved = await putMoldBorrowDatasetBinding({ dataset_uuid: '' });
+        setDatasetBinding(saved.dataset_uuid ? saved : null);
+        messageApi.success('已清除关联');
+        setBindingModalOpen(false);
+      } catch (e) {
+        messageApi.error((e as Error).message || '保存失败');
+      } finally {
+        setBindingModalBusy(false);
+      }
+      return;
+    }
+    let v: MoldBorrowDatasetBindingPayload;
+    try {
+      v = await bindingCfgForm.validateFields();
+    } catch {
+      return;
+    }
+    setBindingModalBusy(true);
+    const prev = datasetBinding;
+    const deptUuidCol =
+      prev?.dataset_uuid?.trim() === ds && prev?.department_uuid_column?.trim()
+        ? prev.department_uuid_column.trim()
+        : undefined;
+    try {
+      const saved = await putMoldBorrowDatasetBinding({
+        dataset_uuid: ds,
+        work_order_param_key: String(v.work_order_param_key ?? '').trim(),
+        department_uuid_column: deptUuidCol || undefined,
+        department_name_column: String(v.department_name_column ?? '').trim(),
+        mold_code_column: String(v.mold_code_column ?? '').trim() || undefined,
+        mold_name_column: String(v.mold_name_column ?? '').trim() || undefined,
+        finished_product_code_column: String(v.finished_product_code_column ?? '').trim() || undefined,
+        finished_product_name_column: String(v.finished_product_name_column ?? '').trim() || undefined,
+        planned_qty_column: String(v.planned_qty_column ?? '').trim() || undefined,
+      });
+      setDatasetBinding(saved);
+      messageApi.success('已保存');
+      setBindingModalOpen(false);
+    } catch (e) {
+      messageApi.error((e as Error).message || '保存失败');
+    } finally {
+      setBindingModalBusy(false);
+    }
+  };
+
+  const handlePrefillFromDataset = useCallback(async () => {
+    if (!canPrefillFromDataset) {
+      messageApi.warning('请先在「数据集」中保存数据集、查询参数名及领用部门名称列映射（模具列可不填）');
+      return;
+    }
+    const wo = formRef.current?.getFieldValue('source_order_no');
+    const s = String(wo ?? '').trim();
+    if (!s) {
+      messageApi.warning('请先输入制令单号');
+      return;
+    }
+    try {
+      const usage = await getMoldBorrowSourceOrderUsage({
+        source_order_no: s,
+        exclude_sheet_id: isEdit && editId != null ? editId : undefined,
+      });
+      if (usage.exists) {
+        const go = await new Promise<boolean>((resolve) => {
+          modal.confirm({
+            title: '提示',
+            content: `该制令单号已存在 ${usage.count} 条领用单，是否仍要从数据集带出并覆盖当前表单？`,
+            okText: '仍要带出',
+            cancelText: '取消',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+        if (!go) return;
+      }
+    } catch (e) {
+      messageApi.error((e as Error).message || '检查领用单重复失败');
+      return;
+    }
+    setPrefillBusy(true);
+    try {
+      const res = await prefillMoldBorrowSheetFromDataset({ source_order_no: s });
+      const hasMold = Boolean(String(res.mold_code ?? '').trim()) || Boolean(String(res.mold_name ?? '').trim());
+      formRef.current?.setFieldsValue({
+        source_order_no: res.source_order_no,
+        department_uuid: res.department_uuid ?? undefined,
+        mold_code: res.mold_code != null && String(res.mold_code).trim() !== '' ? res.mold_code : undefined,
+        mold_name: res.mold_name != null && String(res.mold_name).trim() !== '' ? res.mold_name : undefined,
+        finished_product_code: res.finished_product_code ?? undefined,
+        finished_product_name: res.finished_product_name ?? undefined,
+        planned_qty:
+          res.planned_qty !== undefined && res.planned_qty !== null && res.planned_qty !== ''
+            ? Number(res.planned_qty)
+            : undefined,
+      });
+      const hints: string[] = [];
+      if (!res.department_uuid) hints.push('请从「领用部门」下拉选择本系统部门');
+      if (!hasMold) hints.push('模具请通过「选择」或手填补充');
+      if (hints.length) {
+        messageApi.success(`已带出（${hints.join('；')}）`);
+      } else {
+        messageApi.success('已带出');
+      }
+    } catch (e) {
+      messageApi.error((e as Error).message || '带出失败');
+    } finally {
+      setPrefillBusy(false);
+    }
+  }, [canPrefillFromDataset, editId, isEdit, messageApi, modal]);
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
@@ -234,9 +563,9 @@ const MoldBorrowOutPage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '来源单号/模具/部门/成品' },
+      fieldProps: { placeholder: '制令单号/模具/部门/成品' },
     },
-    { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
+    { title: '制令单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
     { title: '领用部门', dataIndex: 'department_name', width: 160, ellipsis: true },
     { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true },
     { title: '模具名称', dataIndex: 'mold_name', width: 160, ellipsis: true },
@@ -294,6 +623,8 @@ const MoldBorrowOutPage: React.FC = () => {
             }
           }}
           scroll={{ x: 1100 }}
+          showDatasetConfigButton
+          onDatasetConfig={handleDatasetConfig}
         />
       </ListPageTemplate>
 
@@ -335,9 +666,27 @@ const MoldBorrowOutPage: React.FC = () => {
           >
             <Row gutter={16}>
               <Col span={12}>
-                <ProForm.Item name="source_order_no" label="来源单号" tooltip="制令单号等，请在本机手输（移动端将支持扫码填入）">
-                  <Input placeholder="请输入制令单号（来源单号）" allowClear />
-                </ProForm.Item>
+                <ProFormText
+                  name="source_order_no"
+                  label="制令单号"
+                  tooltip="作为数据集查询参数传入；填写后点右侧「带出」可拉取其余字段"
+                  placeholder="请输入制令单号"
+                  fieldProps={{
+                    allowClear: true,
+                    addonAfter: (
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: '0 8px' }}
+                        loading={prefillBusy}
+                        disabled={!canPrefillFromDataset}
+                        onClick={() => void handlePrefillFromDataset()}
+                      >
+                        带出
+                      </Button>
+                    ),
+                  }}
+                />
               </Col>
               <Col span={12}>
                 <ProFormSelect
@@ -361,7 +710,7 @@ const MoldBorrowOutPage: React.FC = () => {
                       <Button
                         type="link"
                         size="small"
-                        style={{ padding: 0 }}
+                        style={{ padding: '0 8px' }}
                         onClick={() => {
                           setMoldPickerOpen(true);
                           void loadMoldsForPicker();
@@ -377,23 +726,206 @@ const MoldBorrowOutPage: React.FC = () => {
                 <ProFormText name="mold_name" label="模具名称" placeholder="请输入内容" rules={[{ required: true, message: '请输入模具名称' }]} />
               </Col>
               <Col span={12}>
-                <ProFormText name="finished_product_code" label="成品代号" placeholder="请输入内容" />
+                <ProFormText
+                  name="finished_product_code"
+                  label="成品代号"
+                  placeholder="由「带出」填入"
+                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
+                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                />
               </Col>
               <Col span={12}>
-                <ProFormText name="finished_product_name" label="成品名称" placeholder="请输入内容" />
+                <ProFormText
+                  name="finished_product_name"
+                  label="成品名称"
+                  placeholder="由「带出」填入"
+                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
+                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                />
               </Col>
               <Col span={12}>
                 <ProFormDigit
                   name="planned_qty"
                   label="计划数量"
-                  placeholder="请输入内容"
+                  placeholder="由「带出」填入"
+                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
                   min={0}
-                  fieldProps={{ precision: 4, style: { width: '100%' } }}
+                  fieldProps={{
+                    readOnly: true,
+                    precision: 4,
+                    style: { width: '100%', backgroundColor: '#fafafa' },
+                  }}
                 />
               </Col>
             </Row>
           </ProForm>
         </div>
+      </Modal>
+
+      <Modal
+        title="领用单 · 数据集关联"
+        open={bindingModalOpen}
+        onCancel={() => setBindingModalOpen(false)}
+        width={720}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+            取消
+          </Button>,
+          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+            保存
+          </Button>,
+        ]}
+      >
+        <Form<MoldBorrowDatasetBindingPayload> form={bindingCfgForm} layout="vertical">
+          <Form.Item name="dataset_uuid" label="数据集">
+            <Select
+              allowClear
+              showSearch
+              placeholder="选择数据集（SQL 需包含制令单号对应查询参数）"
+              optionFilterProp="label"
+              options={datasetSelectOptions}
+              onChange={() => {
+                bindingCfgForm.setFieldsValue({
+                  work_order_param_key: undefined,
+                  department_name_column: undefined,
+                  mold_code_column: undefined,
+                  mold_name_column: undefined,
+                  finished_product_code_column: undefined,
+                  finished_product_name_column: undefined,
+                  planned_qty_column: undefined,
+                });
+                setBindingColumnOptions([]);
+                setDatasetParamKeyOptions([]);
+              }}
+            />
+          </Form.Item>
+          <Spin spinning={datasetParamKeysLoading}>
+            <Form.Item
+              name="work_order_param_key"
+              label="查询参数名"
+              rules={[{ required: true, message: '请选择或填写与 SQL 占位符一致的参数名' }]}
+            >
+              <AutoComplete
+                allowClear
+                style={{ width: '100%' }}
+                options={datasetParamKeyOptions}
+                placeholder={
+                  datasetParamKeyOptions.length
+                    ? '下拉选择参数名，或直接输入'
+                    : '选择数据集后将列出参数；也可手输与 SQL 一致的名称'
+                }
+                filterOption={(input, option) =>
+                  String(option?.value ?? '')
+                    .toLowerCase()
+                    .includes(String(input).trim().toLowerCase())
+                }
+              />
+            </Form.Item>
+          </Spin>
+          <div style={{ marginBottom: 12 }}>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              loading={bindingColumnsLoading}
+              disabled={!bindingDatasetUuidWatched}
+              onClick={() => void loadBindingDatasetColumns({ silent: false })}
+            >
+              加载列名（自动解析，无需探测单号）
+            </Button>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="department_name_column"
+                label="领用部门名称列"
+                rules={[{ required: true, message: '请填写' }]}
+              >
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="mold_code_column" label="模具代号列（可选）">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="mold_name_column" label="模具名称列（可选）">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="finished_product_code_column" label="成品代号列（可选）">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="finished_product_name_column" label="成品名称列（可选）">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="planned_qty_column" label="计划数量列（可选）">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Alert
+            type="info"
+            showIcon
+            message="说明"
+            description="保存后，在领用单弹窗输入制令单号并点「带出」，将把该单号作为查询参数执行数据集，并把部门、模具、成品、计划数量等列映射写入表单（部门按名称匹配本系统部门）。加载列名时选择数据集后点击上方链接即可自动解析列。"
+          />
+        </Form>
       </Modal>
 
       <Modal

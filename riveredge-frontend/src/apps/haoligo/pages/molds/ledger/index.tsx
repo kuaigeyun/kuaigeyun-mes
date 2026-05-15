@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProForm,
   ProFormDigit,
   ProFormInstance,
@@ -17,10 +18,41 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Alert, AutoComplete, Button, Col, Form, InputNumber, Modal, Radio, Row, Select, Space, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import {
+  App,
+  Alert,
+  AutoComplete,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Form,
+  InputNumber,
+  Modal,
+  Progress,
+  Radio,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Timeline,
+  Tooltip,
+  Typography,
+  theme,
+} from 'antd';
+import dayjs from 'dayjs';
+import { DeleteOutlined, EditOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  flushDrawerOpen,
+  FormModalTemplate,
+  ListPageTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   batchMoldsLifecycle,
@@ -28,13 +60,16 @@ import {
   deleteMold,
   getMold,
   getMoldLedgerDatasetBinding,
+  listMoldOperationRecords,
   listMolds,
   putMoldLedgerDatasetBinding,
   syncMoldLedgerFromDataset,
   updateMold,
+  type MoldBatchLifecyclePayload,
   type MoldBatchLifecycleScope,
   type MoldCreatePayload,
   type MoldLedgerDatasetBindingPayload,
+  type MoldOperationRecordRow,
   type MoldRow,
   type MoldUpdatePayload,
 } from '../../../services/haoligo';
@@ -43,7 +78,18 @@ import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/serv
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
 
-const MOLD_STATUS = ['在用', '在修', '停用', '待用', '报废', '待启用'] as const;
+const MOLD_STATUS = [
+  '在用',
+  '在修',
+  '维修',
+  '保养',
+  '外协维修',
+  '外协保养',
+  '停用',
+  '待用',
+  '报废',
+  '待启用',
+] as const;
 
 const statusValueEnum = MOLD_STATUS.reduce<Record<string, { text: string }>>((acc, s) => {
   acc[s] = { text: s };
@@ -53,10 +99,23 @@ const statusValueEnum = MOLD_STATUS.reduce<Record<string, { text: string }>>((ac
 const statusColors: Record<string, string> = {
   在用: 'green',
   在修: 'orange',
+  维修: 'volcano',
+  保养: 'gold',
+  外协维修: 'purple',
+  外协保养: 'magenta',
   停用: 'default',
   待用: 'blue',
   报废: 'red',
   待启用: 'geekblue',
+};
+
+const moldOperationKindColors: Record<MoldOperationRecordRow['kind'], string> = {
+  borrow: 'blue',
+  return: 'green',
+  maintenance: 'orange',
+  maintenance_complete: 'cyan',
+  outsource_maintenance: 'purple',
+  outsource_maintenance_complete: 'magenta',
 };
 
 function numOrUndef(v: unknown): number | undefined {
@@ -83,6 +142,204 @@ function parseBoolCell(v: unknown): boolean | undefined {
   if (['是', 'true', '1', 'yes', 'y'].includes(s)) return true;
   if (['否', 'false', '0', 'no', 'n'].includes(s)) return false;
   return undefined;
+}
+
+function parseMoldDecimal(v: string | null | undefined): number {
+  if (v == null || v === '') return Number.NaN;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : Number.NaN;
+}
+
+function formatMoldMetricNumber(n: number, fractionDigits = 4): string {
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString(undefined, { maximumFractionDigits: fractionDigits });
+}
+
+function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boolean }) {
+  const { token } = theme.useToken();
+
+  if (loading) {
+    return (
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={12}>
+          <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+            <div style={{ minHeight: 132, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+            <div style={{ minHeight: 132, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin />
+            </div>
+          </Card>
+        </Col>
+      </Row>
+    );
+  }
+
+  const ratedTimes = row.usable_times;
+  const usedTimes = row.used_times ?? 0;
+  const pctTimesRemaining =
+    ratedTimes != null && ratedTimes > 0
+      ? Math.round((Math.max(0, ratedTimes - usedTimes) / ratedTimes) * 1000) / 10
+      : undefined;
+
+  const ratedYield = parseMoldDecimal(row.usable_yield);
+  const usedYield = parseMoldDecimal(row.used_yield ?? '');
+  const pctYieldRemaining =
+    !Number.isNaN(ratedYield) && ratedYield > 0 && !Number.isNaN(usedYield)
+      ? Math.round((Math.max(0, ratedYield - usedYield) / ratedYield) * 1000) / 10
+      : undefined;
+
+  const ringPlaceholder = (
+    <div
+      style={{
+        width: 88,
+        height: 88,
+        borderRadius: '50%',
+        border: `1px dashed ${token.colorBorder}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: token.colorTextQuaternary,
+        fontSize: 13,
+        flexShrink: 0,
+      }}
+    >
+      —
+    </div>
+  );
+
+  const cardBodyTimes = (
+    title: string,
+    helpText: string,
+    rated: string,
+    used: string,
+    pct: number | undefined,
+  ) => (
+    <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 10,
+            }}
+          >
+            <Typography.Text strong>{title}</Typography.Text>
+            <Tooltip title={helpText} placement="topLeft" overlayStyle={{ maxWidth: 380 }}>
+              <QuestionCircleOutlined
+                aria-label="指标说明"
+                style={{ color: token.colorTextTertiary, cursor: 'help', fontSize: 14 }}
+              />
+            </Tooltip>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div>
+              <Typography.Text type="secondary">额定可用次数</Typography.Text>
+              <Typography.Text style={{ marginLeft: 8 }}>{rated}</Typography.Text>
+            </div>
+            <div>
+              <Typography.Text type="secondary">已使用次数</Typography.Text>
+              <Typography.Text style={{ marginLeft: 8 }}>{used}</Typography.Text>
+            </div>
+          </div>
+        </div>
+        {pct != null ? (
+          <Progress
+            type="circle"
+            percent={Math.min(100, Math.max(0, pct))}
+            width={88}
+            format={(p) => `${p}%`}
+            strokeColor={token.colorPrimary}
+          />
+        ) : (
+          ringPlaceholder
+        )}
+      </div>
+    </Card>
+  );
+
+  const cardBodyYield = (
+    title: string,
+    helpText: string,
+    rated: string,
+    used: string,
+    pct: number | undefined,
+  ) => (
+    <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 10,
+            }}
+          >
+            <Typography.Text strong>{title}</Typography.Text>
+            <Tooltip title={helpText} placement="topLeft" overlayStyle={{ maxWidth: 380 }}>
+              <QuestionCircleOutlined
+                aria-label="指标说明"
+                style={{ color: token.colorTextTertiary, cursor: 'help', fontSize: 14 }}
+              />
+            </Tooltip>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div>
+              <Typography.Text type="secondary">额定可用产量</Typography.Text>
+              <Typography.Text style={{ marginLeft: 8 }}>{rated}</Typography.Text>
+            </div>
+            <div>
+              <Typography.Text type="secondary">已使用产量</Typography.Text>
+              <Typography.Text style={{ marginLeft: 8 }}>{used}</Typography.Text>
+            </div>
+          </div>
+        </div>
+        {pct != null ? (
+          <Progress
+            type="circle"
+            percent={Math.min(100, Math.max(0, pct))}
+            width={88}
+            format={(p) => `${p}%`}
+            strokeColor={token.colorSuccess}
+          />
+        ) : (
+          ringPlaceholder
+        )}
+      </div>
+    </Card>
+  );
+
+  return (
+    <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      <Col xs={24} md={12}>
+        {cardBodyTimes(
+          '额定可用次数 / 已使用次数',
+          '环形图：剩余次数占比 =（额定可用次数 − 已使用次数）÷ 额定可用次数；还入单不再扣减额定值',
+          ratedTimes != null ? formatMoldMetricNumber(ratedTimes, 0) : '—',
+          formatMoldMetricNumber(usedTimes, 0),
+          pctTimesRemaining,
+        )}
+      </Col>
+      <Col xs={24} md={12}>
+        {cardBodyYield(
+          '额定可用产量 / 已使用产量',
+          '环形图：剩余产量占比 =（额定可用产量 − 已使用产量）÷ 额定可用产量',
+          !Number.isNaN(ratedYield) ? formatMoldMetricNumber(ratedYield) : '—',
+          !Number.isNaN(usedYield) ? formatMoldMetricNumber(usedYield) : '—',
+          pctYieldRemaining,
+        )}
+      </Col>
+    </Row>
+  );
 }
 
 /** 批量修改弹窗：仅把已填写的项加入 PATCH（留空表示不改动该字段）。 */
@@ -128,6 +385,11 @@ const MoldLedgerPage: React.FC = () => {
   const [batchScope, setBatchScope] = useState<MoldBatchLifecycleScope>('selected');
   const [listMatchTotal, setListMatchTotal] = useState(0);
   const listSnapshotRef = useRef<{ total: number; keyword?: string; status?: string }>({ total: 0 });
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [moldDetail, setMoldDetail] = useState<MoldRow | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [moldOperationRecords, setMoldOperationRecords] = useState<MoldOperationRecordRow[]>([]);
+  const moldDetailReqRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,19 +416,24 @@ const MoldLedgerPage: React.FC = () => {
       }
       setBindingColumnsLoading(true);
       try {
-        const res = await executeDatasetQuery(uuid, { parameters: {}, limit: 5, offset: 0 });
-        if (!res.success) {
+        const res = await executeDatasetQuery(uuid, {
+          parameters: {},
+          fill_missing_sql_parameters: true,
+          limit: 5,
+          offset: 0,
+        });
+        const raw = res.columns?.length
+          ? res.columns
+          : res.data?.[0]
+            ? Object.keys(res.data[0] as object)
+            : [];
+        if (!raw.length) {
           if (!opts?.silent) {
             messageApi.warning(res.error || '无法加载列名：请确认该 SQL 支持无参数执行');
           }
           setBindingColumnOptions([]);
           return;
         }
-        const raw = res.columns?.length
-          ? res.columns
-          : res.data?.[0]
-            ? Object.keys(res.data[0] as object)
-            : [];
         const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
         setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
         if (!opts?.silent && unique.length) {
@@ -242,7 +509,7 @@ const MoldLedgerPage: React.FC = () => {
       }
       return;
     }
-    let v: Record<string, unknown>;
+    let v: MoldLedgerDatasetBindingPayload;
     try {
       v = await bindingCfgForm.validateFields();
     } catch {
@@ -350,7 +617,7 @@ const MoldLedgerPage: React.FC = () => {
       setBatchModalBusy(true);
       try {
         const snap = listSnapshotRef.current;
-        const body = {
+        const r = await batchMoldsLifecycle({
           scope: batchScope,
           ...(batchScope === 'selected'
             ? {
@@ -361,8 +628,7 @@ const MoldLedgerPage: React.FC = () => {
                 filter_keyword: snap.keyword,
               }),
           ...patch,
-        };
-        const r = await batchMoldsLifecycle(body);
+        } as MoldBatchLifecyclePayload);
         messageApi.success(`已更新 ${r.updated} 条`);
         if (batchScope === 'selected' && r.updated > 0) {
           setSelectedRowKeys([]);
@@ -418,7 +684,6 @@ const MoldLedgerPage: React.FC = () => {
         name: detail.name,
         unit: detail.unit || '',
         mold_capacity: detail.mold_capacity != null ? Number(detail.mold_capacity) : undefined,
-        processing_time_min: detail.processing_time_min ?? undefined,
         service_life_years: detail.service_life_years ?? undefined,
         usable_times: detail.usable_times ?? undefined,
         usable_yield: detail.usable_yield != null ? Number(detail.usable_yield) : undefined,
@@ -429,6 +694,8 @@ const MoldLedgerPage: React.FC = () => {
         purchase_vendor_name: detail.purchase_vendor_name ?? undefined,
         status: detail.status,
         remark: detail.remark ?? undefined,
+        used_times: detail.used_times ?? 0,
+        used_yield: detail.used_yield != null ? Number(detail.used_yield) : 0,
       });
       setModalVisible(true);
     } catch (e) {
@@ -453,12 +720,91 @@ const MoldLedgerPage: React.FC = () => {
     });
   };
 
-  const buildPayload = (values: Record<string, unknown>): MoldCreatePayload => ({
+  const handleOpenMoldDetail = async (record: MoldRow) => {
+    const req = ++moldDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setMoldDetail(record);
+      setMoldOperationRecords([]);
+      setDetailDrawerVisible(true);
+      setDetailLoading(true);
+    });
+    try {
+      const [detailRes, opsRes] = await Promise.allSettled([
+        getMold(record.id),
+        listMoldOperationRecords(record.id),
+      ]);
+      if (moldDetailReqRef.current !== req) return;
+      if (detailRes.status === 'fulfilled') {
+        setMoldDetail(detailRes.value);
+      } else {
+        messageApi.error((detailRes.reason as Error)?.message || '加载详情失败');
+      }
+      if (opsRes.status === 'fulfilled') {
+        setMoldOperationRecords(opsRes.value.items ?? []);
+      } else {
+        setMoldOperationRecords([]);
+        messageApi.warning((opsRes.reason as Error)?.message || '操作记录加载失败');
+      }
+    } finally {
+      if (moldDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
+    }
+  };
+
+  const handleCloseMoldDetail = () => {
+    setDetailDrawerVisible(false);
+    setMoldDetail(null);
+    setMoldOperationRecords([]);
+  };
+
+  const moldDetailColumnsBasic: ProDescriptionsItemProps<MoldRow>[] = [
+    { title: '模具代号', dataIndex: 'mold_code', copyable: true },
+    { title: '模具名称', dataIndex: 'name' },
+    { title: '单位', dataIndex: 'unit', render: (_, r) => r.unit || '—' },
+    { title: '模具产能', dataIndex: 'mold_capacity' },
+    {
+      title: '允许重复领用',
+      dataIndex: 'allow_repeated_borrow',
+      render: (_, r) => <Tag color={r.allow_repeated_borrow ? 'blue' : 'default'}>{r.allow_repeated_borrow ? '是' : '否'}</Tag>,
+    },
+    { title: '购买厂商', dataIndex: 'purchase_vendor_name', render: (_, r) => r.purchase_vendor_name || '—' },
+    {
+      title: '加工时间(分钟)',
+      dataIndex: 'processing_time_min',
+      render: (_, r) => (
+        <span title="领用单与对应还入单的创建时间之差的累计（分钟）；保存领用单或还入单后自动重算">
+          {r.processing_time_min ?? '—'}
+        </span>
+      ),
+    },
+    { title: '可用年限', dataIndex: 'service_life_years', render: (_, r) => r.service_life_years ?? '—' },
+    { title: '额定可用次数', dataIndex: 'usable_times', render: (_, r) => r.usable_times ?? '—' },
+    { title: '已使用次数', dataIndex: 'used_times', render: (_, r) => r.used_times ?? 0 },
+    { title: '额定可用产量', dataIndex: 'usable_yield', render: (_, r) => r.usable_yield ?? '—' },
+    { title: '已使用产量', dataIndex: 'used_yield', render: (_, r) => r.used_yield ?? '—' },
+    {
+      title: '维修周期(依产量)',
+      dataIndex: 'maintenance_cycle_by_yield',
+      render: (_, r) => r.maintenance_cycle_by_yield ?? '—',
+    },
+    { title: '维修周期(依天数)', dataIndex: 'maintenance_cycle_by_days', render: (_, r) => r.maintenance_cycle_by_days ?? '—' },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
+    },
+    { title: '备注', dataIndex: 'remark', span: 2, render: (_, r) => r.remark || '—' },
+  ];
+
+  const buildPayload = (values: Record<string, unknown>): MoldCreatePayload => {
+    void values.used_times;
+    void values.used_yield;
+    return {
     mold_code: String(values.mold_code ?? '').trim(),
     name: String(values.name ?? '').trim(),
     unit: String(values.unit ?? '').trim(),
     mold_capacity: values.mold_capacity != null && values.mold_capacity !== '' ? Number(values.mold_capacity) : 0,
-    processing_time_min: numOrUndef(values.processing_time_min),
     service_life_years: numOrUndef(values.service_life_years),
     usable_times: numOrUndef(values.usable_times),
     usable_yield: decStrOrUndef(values.usable_yield),
@@ -469,7 +815,8 @@ const MoldLedgerPage: React.FC = () => {
     status: String(values.status ?? '待用'),
     total_manufacture_qty: 0,
     remark: String(values.remark ?? '').trim() || null,
-  });
+    };
+  };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     setFormLoading(true);
@@ -512,15 +859,53 @@ const MoldLedgerPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => <Tag color={r.allow_repeated_borrow ? 'blue' : 'default'}>{r.allow_repeated_borrow ? '是' : '否'}</Tag>,
     },
-    { title: '总制造数量', dataIndex: 'total_manufacture_qty', width: 108, hideInSearch: true },
-    { title: '购买厂商', dataIndex: 'purchase_vendor_name', width: 140, ellipsis: true, hideInSearch: true },
+    {
+      title: '额定可用次数',
+      dataIndex: 'usable_times',
+      width: 108,
+      hideInSearch: true,
+      render: (_, r) => (r.usable_times != null ? r.usable_times : '—'),
+    },
+    { title: '已使用次数', dataIndex: 'used_times', width: 96, hideInSearch: true, render: (_, r) => r.used_times ?? 0 },
+    {
+      title: '额定可用产量',
+      dataIndex: 'usable_yield',
+      width: 112,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => r.usable_yield ?? '—',
+    },
+    {
+      title: '已使用产量',
+      dataIndex: 'used_yield',
+      width: 108,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => r.used_yield ?? '—',
+    },
+    {
+      title: '加工(分)',
+      dataIndex: 'processing_time_min',
+      width: 88,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => (
+        <span title="领用单与对应还入单创建时间之差的累计（分钟），自动重算">
+          {r.processing_time_min ?? '—'}
+        </span>
+      ),
+    },
+    { title: '购买厂商', dataIndex: 'purchase_vendor_name', width: 120, ellipsis: true, hideInSearch: true },
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" onClick={() => void handleOpenMoldDetail(record)}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
@@ -566,10 +951,9 @@ const MoldLedgerPage: React.FC = () => {
             '*模具产能',
             '状态',
             '允许重复领用',
-            '加工时间(分钟)',
             '可用年限',
-            '可用次数',
-            '可用产量',
+            '额定可用次数',
+            '额定可用产量',
             '维修周期(依产量)',
             '维修周期(依天数)',
             '购买厂商',
@@ -600,10 +984,9 @@ const MoldLedgerPage: React.FC = () => {
             }
             const statusIdx = getIdx('状态', 'status');
             const borrowIdx = getIdx('允许重复领用', '重复领用');
-            const procIdx = getIdx('加工时间', 'processing');
             const yearsIdx = getIdx('可用年限', '年限');
-            const timesIdx = getIdx('可用次数', '次数');
-            const yieldIdx = getIdx('可用产量', '产量');
+            const timesIdx = getIdx('额定可用次数', '可用次数', '次数');
+            const yieldIdx = getIdx('额定可用产量', '可用产量', '产量');
             const maintYIdx = getIdx('维修周期(依产量)', '依产量', 'maintenance_cycle_by_yield');
             const maintDIdx = getIdx('维修周期(依天数)', '依天数', 'maintenance_cycle_by_days');
             const vendorIdx = getIdx('购买厂商', '厂商');
@@ -626,7 +1009,6 @@ const MoldLedgerPage: React.FC = () => {
                 name,
                 unit,
                 mold_capacity,
-                processing_time_min: procIdx >= 0 ? numOrUndef(row[procIdx]) : undefined,
                 service_life_years: yearsIdx >= 0 ? numOrUndef(row[yearsIdx]) : undefined,
                 usable_times: timesIdx >= 0 ? numOrUndef(row[timesIdx]) : undefined,
                 usable_yield: yieldIdx >= 0 ? decStrOrUndef(row[yieldIdx]) : undefined,
@@ -666,7 +1048,7 @@ const MoldLedgerPage: React.FC = () => {
           onDatasetConfig={handleDatasetConfig}
           onSync={() => {
             if (!canSyncFromDataset) {
-              messageApi.warning('请先在「关联数据集配置」中选择数据集，并填齐模具代号、模具名称、单位三列映射后保存');
+              messageApi.warning('请先在「数据集」中选择数据集，并填齐模具代号、模具名称、单位三列映射后保存');
               return;
             }
             setSyncIntroModalOpen(true);
@@ -702,9 +1084,63 @@ const MoldLedgerPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1580 }}
         />
       </ListPageTemplate>
+
+      <UniDetail
+        title={moldDetail ? `模具详情 · ${moldDetail.mold_code}` : '模具详情'}
+        open={detailDrawerVisible}
+        onClose={handleCloseMoldDetail}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        plainBody={
+          moldDetail ? (
+            <>
+              <MoldLifecycleMetricCards row={moldDetail} loading={detailLoading} />
+              <DetailDrawerSection title="基本信息" marginBottom={16}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(moldDetailColumnsBasic, moldDetail)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录" marginBottom={0}>
+                {detailLoading ? (
+                  <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
+                    <Spin />
+                  </div>
+                ) : moldOperationRecords.length === 0 ? (
+                  <Typography.Text type="secondary">暂无关联操作记录</Typography.Text>
+                ) : (
+                  <Timeline
+                    items={moldOperationRecords.map((e) => ({
+                      color: moldOperationKindColors[e.kind] ?? 'gray',
+                      children: (
+                        <div style={{ paddingBottom: 4 }}>
+                          <div style={{ marginBottom: 4 }}>
+                            <Typography.Text type="secondary">
+                              {dayjs(e.occurred_at).format('YYYY-MM-DD HH:mm')}
+                            </Typography.Text>
+                            <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                              单号 #{e.record_id}
+                            </Typography.Text>
+                          </div>
+                          <Typography.Text strong>{e.title}</Typography.Text>
+                          {e.detail ? (
+                            <div style={{ marginTop: 4, fontSize: 13 }}>
+                              <Typography.Text type="secondary">{e.detail}</Typography.Text>
+                            </div>
+                          ) : null}
+                        </div>
+                      ),
+                    }))}
+                  />
+                )}
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
+      />
 
       <FormModalTemplate
         title={isEdit ? '编辑' : '新增'}
@@ -754,15 +1190,6 @@ const MoldLedgerPage: React.FC = () => {
           </Col>
           <Col span={12}>
             <ProFormDigit
-              name="processing_time_min"
-              label="加工时间(分钟)"
-              placeholder="请输入加工时间(分钟)"
-              min={0}
-              fieldProps={{ precision: 0, style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit
               name="service_life_years"
               label="可用年限"
               placeholder="请输入可用年限"
@@ -773,8 +1200,8 @@ const MoldLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="usable_times"
-              label="可用次数"
-              placeholder="请输入可用次数"
+              label="额定可用次数"
+              placeholder="请输入额定可用次数"
               min={0}
               fieldProps={{ precision: 0, style: { width: '100%' } }}
             />
@@ -782,12 +1209,32 @@ const MoldLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="usable_yield"
-              label="可用产量"
-              placeholder="请输入可用产量"
+              label="额定可用产量"
+              placeholder="请输入额定可用产量"
               min={0}
               fieldProps={{ precision: 4, style: { width: '100%' } }}
             />
           </Col>
+          {isEdit ? (
+            <>
+              <Col span={12}>
+                <ProFormDigit
+                  name="used_times"
+                  label="已使用次数"
+                  disabled
+                  fieldProps={{ precision: 0, style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDigit
+                  name="used_yield"
+                  label="已使用产量"
+                  disabled
+                  fieldProps={{ precision: 4, style: { width: '100%' } }}
+                />
+              </Col>
+            </>
+          ) : null}
           <Col span={12}>
             <ProFormDigit
               name="maintenance_cycle_by_yield"
@@ -841,7 +1288,7 @@ const MoldLedgerPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="批量修改（可用年限 / 次数 / 产量 / 维修周期）"
+        title="批量修改（可用年限 / 额定可用次数 / 额定可用产量 / 维修周期）"
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
@@ -886,12 +1333,12 @@ const MoldLedgerPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="usable_times" label="可用次数">
+              <Form.Item name="usable_times" label="额定可用次数">
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="usable_yield" label="可用产量">
+              <Form.Item name="usable_yield" label="额定可用产量">
                 <InputNumber min={0} precision={4} style={{ width: '100%' }} placeholder="留空不修改" />
               </Form.Item>
             </Col>

@@ -11,8 +11,17 @@ class HaoligoMoldOutsourceMaintenanceSheet(HaoligoTenantModel):
     class Meta:
         table = "haoligo_mold_outsource_maintenance_sheet"
         table_description = "好力GO - 外协维保单"
-        indexes = [("tenant_id",), ("outsourced_unit_name",), ("service_type",)]
+        indexes = [
+            ("tenant_id",),
+            ("outsourced_unit_name",),
+            ("service_type",),
+            ("department_uuid",),
+        ]
 
+    applicant_user_id = fields.IntField(null=True, description="申请人用户 ID（core_users）")
+    applicant_name = fields.CharField(max_length=100, null=True, description="申请人显示名（冗余）")
+    department_uuid = fields.CharField(max_length=36, null=True, description="申请部门 UUID（末级）")
+    department_name = fields.CharField(max_length=200, null=True, description="申请部门名称")
     outsourced_unit_code = fields.CharField(max_length=64, null=True, description="外协单位代号")
     outsourced_unit_name = fields.CharField(max_length=200, description="外协单位名称")
     service_type = fields.CharField(max_length=16, description="维修/保养")

@@ -6,10 +6,27 @@
  * Schema 驱动 + 国际化
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, List, Popconfirm, Tooltip, Modal, Table, Descriptions } from 'antd';
+import {
+  App,
+  Alert,
+  AutoComplete,
+  Button,
+  Col,
+  Descriptions,
+  Form,
+  List,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+} from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -22,10 +39,15 @@ import {
   importDepartments,
   loadPresetDepartments,
   getDepartmentPresetPreview,
+  getDepartmentDatasetBinding,
+  putDepartmentDatasetBinding,
+  syncDepartmentsFromDataset,
+  type DepartmentDatasetBindingPayload,
   type PresetDepartmentItem,
   Department,
   DepartmentTreeItem,
 } from '../../../../services/department';
+import { executeDatasetQuery, getDatasetList } from '../../../../services/dataset';
 import { downloadFile } from '../../../../utils';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
@@ -81,6 +103,16 @@ const DepartmentListPage: React.FC = () => {
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
+  const [datasetBinding, setDatasetBinding] = useState<DepartmentDatasetBindingPayload | null>(null);
+  const [bindingModalOpen, setBindingModalOpen] = useState(false);
+  const [bindingCfgForm] = Form.useForm<DepartmentDatasetBindingPayload>();
+  const bindingDatasetUuidWatched = Form.useWatch('dataset_uuid', bindingCfgForm);
+  const [datasetSelectOptions, setDatasetSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [bindingModalBusy, setBindingModalBusy] = useState(false);
+  const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
+  const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
+  const [syncIntroModalOpen, setSyncIntroModalOpen] = useState(false);
+
   const getAllKeys = (data: DepartmentTreeItem[]): string[] => {
     let keys: string[] = [];
     data.forEach((item) => {
@@ -91,6 +123,171 @@ const DepartmentListPage: React.FC = () => {
     });
     return keys;
   };
+
+  const loadBindingDatasetColumns = useCallback(
+    async (datasetUuid: string | undefined, opts?: { silent?: boolean }) => {
+      const uuid = (datasetUuid ?? '').trim();
+      if (!uuid) {
+        setBindingColumnOptions([]);
+        return;
+      }
+      setBindingColumnsLoading(true);
+      try {
+        const res = await executeDatasetQuery(uuid, {
+          parameters: {},
+          fill_missing_sql_parameters: true,
+          limit: 5,
+          offset: 0,
+        });
+        const raw = res.columns?.length
+          ? res.columns
+          : res.data?.[0]
+            ? Object.keys(res.data[0] as object)
+            : [];
+        if (!raw.length) {
+          if (!opts?.silent) {
+            messageApi.warning(res.error || t('common.loadFailed'));
+          }
+          setBindingColumnOptions([]);
+          return;
+        }
+        const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
+        setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
+        if (!opts?.silent && unique.length) {
+          messageApi.success(t('field.department.bindingColumnsLoaded', { count: unique.length }));
+        }
+      } catch (e) {
+        if (!opts?.silent) messageApi.error((e as Error).message || t('common.operationFailed'));
+        setBindingColumnOptions([]);
+      } finally {
+        setBindingColumnsLoading(false);
+      }
+    },
+    [messageApi, t],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await getDepartmentDatasetBinding();
+        if (cancelled) return;
+        setDatasetBinding(b.dataset_uuid ? b : null);
+      } catch {
+        if (!cancelled) setDatasetBinding(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const options: { label: string; value: string }[] = [];
+        let page = 1;
+        const pageSize = 100;
+        for (;;) {
+          const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+          const items = res.items ?? [];
+          for (const d of items) {
+            options.push({ label: `${d.name} (${d.code})`, value: d.uuid });
+          }
+          if (items.length < pageSize) break;
+          page += 1;
+        }
+        if (!cancelled) setDatasetSelectOptions(options);
+      } catch (e) {
+        if (!cancelled) {
+          setDatasetSelectOptions([]);
+          messageApi.error((e as Error).message || t('common.operationFailed'));
+        }
+      }
+    })();
+    bindingCfgForm.resetFields();
+    const d = datasetBinding;
+    bindingCfgForm.setFieldsValue({
+      dataset_uuid: d?.dataset_uuid ?? undefined,
+      department_name_column: d?.department_name_column ?? undefined,
+      department_code_column: d?.department_code_column ?? undefined,
+      parent_ref_column: d?.parent_ref_column ?? undefined,
+      description_column: d?.description_column ?? undefined,
+    });
+    setBindingColumnOptions([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, datasetBinding, bindingCfgForm, messageApi, t]);
+
+  const handleDatasetConfig = useCallback(() => {
+    setBindingModalOpen(true);
+  }, []);
+
+  const canSyncFromDataset = useMemo(() => {
+    const b = datasetBinding;
+    return Boolean(b?.dataset_uuid?.trim() && b.department_name_column?.trim());
+  }, [datasetBinding]);
+
+  const handleBindingSave = async () => {
+    const ds = String(bindingCfgForm.getFieldValue('dataset_uuid') ?? '').trim();
+    if (!ds) {
+      setBindingModalBusy(true);
+      try {
+        const saved = await putDepartmentDatasetBinding({ dataset_uuid: '' });
+        setDatasetBinding(saved.dataset_uuid ? saved : null);
+        messageApi.success(t('common.operationSuccess'));
+        setBindingModalOpen(false);
+      } catch (e) {
+        messageApi.error((e as Error).message || t('common.operationFailed'));
+      } finally {
+        setBindingModalBusy(false);
+      }
+      return;
+    }
+    let v: Record<string, unknown>;
+    try {
+      v = await bindingCfgForm.validateFields();
+    } catch {
+      return;
+    }
+    setBindingModalBusy(true);
+    try {
+      const saved = await putDepartmentDatasetBinding({
+        dataset_uuid: ds,
+        department_name_column: String(v.department_name_column ?? '').trim(),
+        department_code_column: String(v.department_code_column ?? '').trim() || undefined,
+        parent_ref_column: String(v.parent_ref_column ?? '').trim() || undefined,
+        description_column: String(v.description_column ?? '').trim() || undefined,
+      });
+      setDatasetBinding(saved);
+      messageApi.success(t('common.operationSuccess'));
+      setBindingModalOpen(false);
+    } catch (e) {
+      messageApi.error((e as Error).message || t('common.operationFailed'));
+    } finally {
+      setBindingModalBusy(false);
+    }
+  };
+
+  const handleStartDatasetSync = useCallback(() => {
+    setSyncIntroModalOpen(false);
+    const hideLoading = messageApi.loading(t('field.department.syncIntroWarning'), 0);
+    void syncDepartmentsFromDataset()
+      .then((r) => {
+        hideLoading();
+        messageApi.success(
+          t('field.department.syncComplete', { created: r.created, updated: r.updated, skipped: r.skipped }),
+        );
+        actionRef.current?.reload();
+      })
+      .catch((e) => {
+        hideLoading();
+        messageApi.error((e as Error).message || t('common.operationFailed'));
+      });
+  }, [messageApi, t]);
 
   const flattenTree = (nodes: DepartmentTreeItem[]): Department[] => {
     const result: Department[] = [];
@@ -536,6 +733,16 @@ const DepartmentListPage: React.FC = () => {
         rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) }}
         search={{ labelWidth: 'auto' }}
         showQuickJumper={false}
+        showDatasetConfigButton
+        onDatasetConfig={handleDatasetConfig}
+        showSyncButton
+        onSync={() => {
+          if (!canSyncFromDataset) {
+            messageApi.warning(t('field.department.syncNeedBinding'));
+            return;
+          }
+          setSyncIntroModalOpen(true);
+        }}
       />
 
       <Modal
@@ -620,6 +827,141 @@ const DepartmentListPage: React.FC = () => {
           ) : null
         }
       />
+
+      <Modal
+        title={t('field.department.syncIntroTitle')}
+        open={syncIntroModalOpen}
+        onCancel={() => setSyncIntroModalOpen(false)}
+        width={560}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button key="sync" type="primary" onClick={handleStartDatasetSync}>
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div>{t('field.department.syncIntroBody')}</div>
+          <Alert type="warning" showIcon message={t('field.department.syncIntroWarning')} />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('field.department.datasetBindingModalTitle')}
+        open={bindingModalOpen}
+        onCancel={() => setBindingModalOpen(false)}
+        width={640}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+            {t('common.save')}
+          </Button>,
+        ]}
+      >
+        <Form<DepartmentDatasetBindingPayload> form={bindingCfgForm} layout="vertical">
+          <Form.Item name="dataset_uuid" label={t('field.department.datasetBindingDataset')}>
+            <Select
+              allowClear
+              showSearch
+              placeholder={t('field.department.datasetBindingDatasetPlaceholder')}
+              optionFilterProp="label"
+              options={datasetSelectOptions}
+              onChange={() => {
+                bindingCfgForm.setFieldsValue({
+                  department_name_column: undefined,
+                  department_code_column: undefined,
+                  parent_ref_column: undefined,
+                  description_column: undefined,
+                });
+                setBindingColumnOptions([]);
+              }}
+            />
+          </Form.Item>
+          <div style={{ marginBottom: 16 }}>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              loading={bindingColumnsLoading}
+              disabled={!bindingDatasetUuidWatched}
+              onClick={() => {
+                const u = bindingDatasetUuidWatched as string | undefined;
+                void loadBindingDatasetColumns(typeof u === 'string' ? u : undefined, { silent: false });
+              }}
+            >
+              {t('field.department.datasetBindingLoadColumns')}
+            </Button>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="department_name_column"
+                label={t('field.department.colDepartmentName')}
+                rules={[{ required: true, message: t('field.department.nameRequired') }]}
+              >
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder={t('field.department.namePlaceholder')}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="department_code_column" label={t('field.department.colDepartmentCode')}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder={t('field.department.codePlaceholder')}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="parent_ref_column" label={t('field.department.colParentRef')}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="description_column" label={t('field.department.colDescription')}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Alert type="info" showIcon message={t('field.department.datasetBindingInfo')} />
+        </Form>
+      </Modal>
+
     </ListPageTemplate>
   );
 };

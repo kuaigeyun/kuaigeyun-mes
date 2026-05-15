@@ -127,6 +127,7 @@ class DynamicDatabaseConfigService:
             "core.models.print_template",
             "core.models.print_device",
             "core.models.department",
+            "core.models.department_dataset_binding",
             "core.models.position",
 
             # 平台模型

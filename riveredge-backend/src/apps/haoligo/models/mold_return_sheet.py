@@ -23,6 +23,12 @@ class HaoligoMoldReturnSheet(HaoligoTenantModel):
     mold_name = fields.CharField(max_length=200, description="模具名称")
     finished_product_code = fields.CharField(max_length=128, null=True, description="成品代号")
     finished_product_name = fields.CharField(max_length=200, null=True, description="成品名称")
+    planned_qty = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        description="计划数量（从领用单带入）",
+    )
     manufacture_qty = fields.DecimalField(
         max_digits=18,
         decimal_places=4,

@@ -309,6 +309,10 @@ export interface MoldRow {
   outsource_vendor_name?: string | null;
   erp_material_code?: string | null;
   remark?: string | null;
+  /** 已使用次数（每笔还入单 +1，存于台账） */
+  used_times?: number;
+  /** 已使用产量（还入制造数量累计） */
+  used_yield?: string;
 }
 
 export type MoldCreatePayload = {
@@ -316,7 +320,6 @@ export type MoldCreatePayload = {
   name: string;
   unit: string;
   mold_capacity: string | number;
-  processing_time_min?: number | null;
   service_life_years?: number | null;
   usable_times?: number | null;
   usable_yield?: string | number | null;
@@ -346,6 +349,28 @@ export function listMolds(params?: {
 
 export function getMold(rowId: number): Promise<MoldRow> {
   return apiRequest(`${PREFIX}/molds/${rowId}`);
+}
+
+/** 模具台账详情 — 操作记录（与后端 MoldOperationRecordOut 对齐） */
+export type MoldOperationRecordKind =
+  | 'borrow'
+  | 'return'
+  | 'maintenance'
+  | 'maintenance_complete'
+  | 'outsource_maintenance'
+  | 'outsource_maintenance_complete';
+
+export interface MoldOperationRecordRow {
+  kind: MoldOperationRecordKind;
+  occurred_at: string;
+  record_id: number;
+  uuid: string;
+  title: string;
+  detail: string;
+}
+
+export function listMoldOperationRecords(rowId: number): Promise<{ items: MoldOperationRecordRow[] }> {
+  return apiRequest(`${PREFIX}/molds/${rowId}/operation-records`);
 }
 
 export function createMold(body: MoldCreatePayload): Promise<MoldRow> {
@@ -498,6 +523,10 @@ export interface OutsourceMaintLineRow {
 export interface MoldOutsourceMaintenanceSheetRow {
   id: number;
   uuid: string;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
+  department_uuid?: string | null;
+  department_name?: string | null;
   outsourced_unit_code?: string | null;
   outsourced_unit_name: string;
   service_type: string;
@@ -518,6 +547,8 @@ export type OutsourceMaintLinePayload = {
 export type MoldOutsourceMaintenanceSheetCreatePayload = {
   outsourced_unit_code?: string | null;
   outsourced_unit_name: string;
+  applicant_user_id: number;
+  department_uuid: string;
   service_type: '维修' | '保养';
   source_order_no?: string | null;
   header_attachment_file_uuids?: string[];
@@ -567,6 +598,8 @@ export interface MoldMaintLineRow {
 export interface MoldMaintenanceSheetRow {
   id: number;
   uuid: string;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
   department_uuid?: string | null;
   department_name?: string | null;
   service_type: string;
@@ -585,8 +618,9 @@ export type MoldMaintLinePayload = {
 };
 
 export type MoldMaintenanceSheetCreatePayload = {
-  department_uuid?: string | null;
-  department_name: string;
+  applicant_user_id: number;
+  /** 须为末级部门 UUID，与表单下拉一致 */
+  department_uuid: string;
   service_type: '维修' | '保养';
   source_order_no?: string | null;
   header_attachment_file_uuids?: string[];
@@ -801,6 +835,14 @@ export function listMoldBorrowSheets(params?: {
   return apiRequest(`${PREFIX}/molds/borrow-sheets`, { params });
 }
 
+/** 按制令单号判断是否已有未删除的领用单；编辑时可传 exclude_sheet_id 排除当前行 */
+export function getMoldBorrowSourceOrderUsage(params: {
+  source_order_no: string;
+  exclude_sheet_id?: number;
+}): Promise<{ exists: boolean; count: number }> {
+  return apiRequest(`${PREFIX}/molds/borrow-sheets/source-order-usage`, { params });
+}
+
 export function getMoldBorrowSheet(rowId: number): Promise<MoldBorrowSheetRow> {
   return apiRequest(`${PREFIX}/molds/borrow-sheets/${rowId}`);
 }
@@ -817,6 +859,50 @@ export function deleteMoldBorrowSheet(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/molds/borrow-sheets/${rowId}`, { method: 'DELETE' });
 }
 
+/** 领用单 — 数据集绑定（制令单号为查询参数） */
+export interface MoldBorrowDatasetBindingPayload {
+  dataset_uuid?: string;
+  work_order_param_key?: string;
+  department_uuid_column?: string;
+  department_name_column?: string;
+  mold_code_column?: string;
+  mold_name_column?: string;
+  finished_product_code_column?: string;
+  finished_product_name_column?: string;
+  planned_qty_column?: string;
+}
+
+export interface MoldBorrowPrefillFromDatasetPayload {
+  source_order_no: string;
+}
+
+export type MoldBorrowPrefillFromDatasetResult = {
+  source_order_no: string;
+  department_uuid?: string | null;
+  department_name: string;
+  mold_code?: string | null;
+  mold_name?: string | null;
+  finished_product_code?: string | null;
+  finished_product_name?: string | null;
+  planned_qty?: string | number | null;
+};
+
+export function getMoldBorrowDatasetBinding(): Promise<MoldBorrowDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/borrow-sheets/dataset-binding`);
+}
+
+export function putMoldBorrowDatasetBinding(
+  body: MoldBorrowDatasetBindingPayload,
+): Promise<MoldBorrowDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/molds/borrow-sheets/dataset-binding`, { method: 'PUT', data: body });
+}
+
+export function prefillMoldBorrowSheetFromDataset(
+  body: MoldBorrowPrefillFromDatasetPayload,
+): Promise<MoldBorrowPrefillFromDatasetResult> {
+  return apiRequest(`${PREFIX}/molds/borrow-sheets/prefill-from-dataset`, { method: 'POST', data: body });
+}
+
 /** 还入单（移动端：制令单、领用单、领出部门、模具/成品、制造数量） */
 export interface MoldReturnSheetRow {
   id: number;
@@ -829,6 +915,7 @@ export interface MoldReturnSheetRow {
   mold_name: string;
   finished_product_code?: string | null;
   finished_product_name?: string | null;
+  planned_qty?: string | null;
   manufacture_qty: string;
 }
 
@@ -841,6 +928,7 @@ export type MoldReturnSheetCreatePayload = {
   mold_name: string;
   finished_product_code?: string | null;
   finished_product_name?: string | null;
+  planned_qty?: string | number | null;
   manufacture_qty: string | number;
 };
 
@@ -852,6 +940,26 @@ export function listMoldReturnSheets(params?: {
   keyword?: string;
 }): Promise<PageResult<MoldReturnSheetRow>> {
   return apiRequest(`${PREFIX}/molds/return-sheets`, { params });
+}
+
+export type MoldReturnBorrowLookupResult = {
+  borrow_sheet_id: number;
+  borrow_sheet_no: string;
+  production_order_no?: string | null;
+  issue_department_uuid?: string | null;
+  issue_department_name?: string | null;
+  mold_code: string;
+  mold_name: string;
+  finished_product_code?: string | null;
+  finished_product_name?: string | null;
+  planned_qty?: string | number | null;
+};
+
+export function getMoldReturnBorrowLookup(params: {
+  production_order_no?: string;
+  mold_code?: string;
+}): Promise<MoldReturnBorrowLookupResult> {
+  return apiRequest(`${PREFIX}/molds/return-sheets/borrow-lookup`, { params });
 }
 
 export function getMoldReturnSheet(rowId: number): Promise<MoldReturnSheetRow> {

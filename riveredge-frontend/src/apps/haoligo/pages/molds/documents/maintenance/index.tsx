@@ -1,14 +1,12 @@
 /**
- * 好力 GO — 厂内维保单（申请部门 + 维修/保养 + 多条模具明细；与外协维保单明细结构一致）
+ * 好力 GO — 厂内维保单（申请人 + 末级申请部门下拉 + 维修/保养 + 多条模具明细；与外协维保单明细结构一致）
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
   ProForm,
-  ProFormDigit,
-  ProFormGroup,
   ProFormInstance,
   ProFormList,
   ProFormSelect,
@@ -17,9 +15,10 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Divider, Input, Modal, Row, Space, Table, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, ScanOutlined } from '@ant-design/icons';
+import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
@@ -27,6 +26,8 @@ import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortc
 import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
 import type { DepartmentTreeItem } from '../../../../../../services/department';
 import { getDepartmentTree } from '../../../../../../services/department';
+import { getUserList } from '../../../../../../services/user';
+import { useGlobalStore } from '../../../../../../stores';
 import {
   createMoldMaintenanceSheet,
   deleteMoldMaintenanceSheet,
@@ -39,22 +40,51 @@ import {
   type MoldRow,
 } from '../../../../services/haoligo';
 
-function flattenDepartmentOptions(
-  items: DepartmentTreeItem[],
-  prefix = '',
-): { label: string; value: string }[] {
+/** 首屏只拉少量用户，其余靠下拉内搜索（keyword）加载，减轻 JSON 解析与 Select 首帧压力 */
+const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
+
+function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
   for (const n of items) {
-    const label = prefix ? `${prefix} / ${n.name}` : n.name;
-    out.push({ label, value: n.uuid });
     if (n.children?.length) {
-      out.push(...flattenDepartmentOptions(n.children, label));
+      out.push(...collectLeafDepartmentOptions(n.children));
+    } else {
+      out.push({ label: n.name, value: n.uuid });
     }
   }
   return out;
 }
 
-const REPAIR_REASONS = ['磨损', '裂纹', '变形', '尺寸超差', '配合不良', '锈蚀', '其他'];
+function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
+  for (const n of items) {
+    if (n.uuid === uuid) return n;
+    if (n.children?.length) {
+      const f = findDeptNodeByUuid(n.children, uuid);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
+/** 取该节点下第一个末级部门（深度优先，先序） */
+function firstLeafUuidUnder(node: DepartmentTreeItem): string {
+  if (!node.children?.length) return node.uuid;
+  for (const c of node.children) {
+    return firstLeafUuidUnder(c);
+  }
+  return node.uuid;
+}
+
+function resolveDefaultLeafDeptUuid(
+  tree: DepartmentTreeItem[],
+  userDeptUuid: string | undefined,
+): string | undefined {
+  const u = (userDeptUuid || '').trim();
+  if (!u || !tree.length) return undefined;
+  const node = findDeptNodeByUuid(tree, u);
+  if (!node) return undefined;
+  return firstLeafUuidUnder(node);
+}
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -84,7 +114,6 @@ const defaultLineItem = () => ({
   mold_code: '',
   mold_name: '',
   repair_reason: undefined as string | undefined,
-  repair_cost: undefined as number | undefined,
   item_attachments: [] as UploadFile[],
 });
 
@@ -92,32 +121,191 @@ const MoldMaintenancePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
+  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
+  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
+  const applicantSearchSeqRef = useRef(0);
+  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
+  /** 新建时复用下拉数据，减少重复请求（编辑带 extras 会跳过缓存） */
+  const tenantFormOptionsValidUntilRef = useRef(0);
 
   const [modalVisible, setModalVisible] = useState(false);
+  /** 下拉选项与部门树就绪后再挂载 ProForm；申请人首屏仅拉部分用户，其余下拉内搜索 */
+  const [formOptionsReady, setFormOptionsReady] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
-  const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
+  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
+  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
   const [moldPickRow, setMoldPickRow] = useState<number | null>(null);
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
 
+  useEffect(() => {
+    if (modalVisible) return;
+    if (applicantSearchTimerRef.current) {
+      clearTimeout(applicantSearchTimerRef.current);
+      applicantSearchTimerRef.current = null;
+    }
+    applicantSearchSeqRef.current += 1;
+  }, [modalVisible]);
+
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
-    for (const o of deptOptions) m.set(o.value, o.label);
+    for (const o of leafDeptOptions) m.set(o.value, o.label);
     return m;
-  }, [deptOptions]);
+  }, [leafDeptOptions]);
 
-  const loadDepartments = useCallback(async () => {
+  const loadLeafDepartments = useCallback(async () => {
     try {
       const tree = await getDepartmentTree({ is_active: true });
-      setDeptOptions(flattenDepartmentOptions(tree.items || []));
+      const items = tree.items || [];
+      departmentTreeRef.current = items;
+      setLeafDeptOptions(collectLeafDepartmentOptions(items));
     } catch {
-      setDeptOptions([]);
+      departmentTreeRef.current = [];
+      setLeafDeptOptions([]);
     }
+  }, []);
+
+  const bootstrapApplicantOptions = useCallback(
+    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
+      const emptyDept = new Map<number, string>();
+      const emptyLabel = new Map<number, string>();
+      try {
+        const res = await getUserList({
+          page: 1,
+          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
+          is_active: true,
+        });
+        const deptMap = new Map<number, string>();
+        const labelMap = new Map<number, string>();
+        const opts: { label: string; value: number }[] = [];
+        for (const u of res.items || []) {
+          const person = (u.full_name || '').trim() || u.username;
+          deptMap.set(u.id, (u.department?.uuid || '').trim());
+          labelMap.set(u.id, person);
+          opts.push({ value: u.id, label: person });
+        }
+        const cu = useGlobalStore.getState().currentUser;
+        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
+          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
+          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
+          labelMap.set(cu.id, person);
+          opts.unshift({ value: cu.id, label: person });
+        }
+        for (const ex of extras || []) {
+          if (!deptMap.has(ex.id)) {
+            deptMap.set(ex.id, (ex.deptUuid || '').trim());
+            labelMap.set(ex.id, ex.name);
+            opts.push({ value: ex.id, label: ex.name });
+          }
+        }
+        applicantDeptUuidByUserIdRef.current = deptMap;
+        applicantLabelByIdRef.current = labelMap;
+        applicantBootstrapOptionsRef.current = opts.slice();
+        setApplicantOptions(opts);
+      } catch {
+        applicantDeptUuidByUserIdRef.current = emptyDept;
+        applicantLabelByIdRef.current = emptyLabel;
+        applicantBootstrapOptionsRef.current = [];
+        setApplicantOptions([]);
+      }
+    },
+    [],
+  );
+
+  const flushApplicantSearch = useCallback(async (keyword: string) => {
+    const seq = ++applicantSearchSeqRef.current;
+    const kw = keyword.trim();
+    if (!kw) {
+      if (seq !== applicantSearchSeqRef.current) return;
+      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
+      return;
+    }
+    try {
+      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
+      if (seq !== applicantSearchSeqRef.current) return;
+      const deptMap = applicantDeptUuidByUserIdRef.current;
+      const labelMap = applicantLabelByIdRef.current;
+      const next: { label: string; value: number }[] = [];
+      for (const u of res.items || []) {
+        const person = (u.full_name || '').trim() || u.username;
+        deptMap.set(u.id, (u.department?.uuid || '').trim());
+        labelMap.set(u.id, person);
+        next.push({ value: u.id, label: person });
+      }
+      const inst = formRef.current;
+      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
+      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
+        const g = useGlobalStore.getState();
+        const cu = g.currentUser;
+        const lab =
+          labelMap.get(selId) ||
+          (cu?.id === selId
+            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
+            : `用户#${selId}`);
+        const du =
+          (deptMap.get(selId) || '').trim() ||
+          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
+        deptMap.set(selId, du);
+        labelMap.set(selId, lab);
+        next.unshift({ value: selId, label: lab });
+      }
+      setApplicantOptions(next);
+    } catch {
+      if (seq !== applicantSearchSeqRef.current) return;
+      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
+    }
+  }, []);
+
+  const scheduleApplicantSearch = useCallback(
+    (raw: string) => {
+      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
+      applicantSearchTimerRef.current = setTimeout(() => {
+        applicantSearchTimerRef.current = null;
+        void flushApplicantSearch(raw);
+      }, 280);
+    },
+    [flushApplicantSearch],
+  );
+
+  const preloadTenantFormOptions = useCallback(
+    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
+      const ttlMs = 90_000;
+      const now = Date.now();
+      const warm =
+        !extras &&
+        now < tenantFormOptionsValidUntilRef.current &&
+        applicantDeptUuidByUserIdRef.current.size > 0 &&
+        departmentTreeRef.current.length > 0;
+      if (warm) return;
+      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments()]);
+      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
+    },
+    [bootstrapApplicantOptions, loadLeafDepartments],
+  );
+
+  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
+    const inst = formRef.current;
+    if (!inst) return;
+    if (userId == null || !Number.isFinite(userId)) {
+      inst.setFieldsValue({ department_uuid: undefined });
+      return;
+    }
+    const tree = departmentTreeRef.current;
+    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
+    if (!userDeptUuid) {
+      const cu = useGlobalStore.getState().currentUser;
+      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
+    }
+    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
+    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
+    else inst.setFieldsValue({ department_uuid: undefined });
   }, []);
 
   const loadMoldsForPicker = useCallback(async () => {
@@ -167,46 +355,88 @@ const MoldMaintenancePage: React.FC = () => {
     [messageApi],
   );
 
-  const handleCreate = async () => {
+  const handleCreate = useCallback(() => {
     setIsEdit(false);
     setEditId(null);
-    await loadDepartments();
-    setFormInitialValues({
-      service_type: '维修',
-      department_uuid: undefined,
-      source_order_no: undefined,
-      header_attachments: [],
-      line_items: [defaultLineItem()],
-    });
+    setFormOptionsReady(false);
     setModalVisible(true);
-  };
+    void (async () => {
+      try {
+        await preloadTenantFormOptions(undefined);
+        const tree = departmentTreeRef.current;
+        const cu = useGlobalStore.getState().currentUser;
+        const uid = cu?.id;
+        let deptUuid: string | undefined;
+        if (uid != null) {
+          const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
+          deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
+        }
+        setFormInitialValues({
+          service_type: '维修',
+          applicant_user_id: uid,
+          department_uuid: deptUuid,
+          source_order_no: undefined,
+          header_attachments: [],
+          line_items: [defaultLineItem()],
+        });
+        startTransition(() => setFormOptionsReady(true));
+      } catch {
+        messageApi.error('加载下拉选项失败');
+        setModalVisible(false);
+        setFormOptionsReady(false);
+      }
+    })();
+  }, [messageApi, preloadTenantFormOptions]);
 
   useNewShortcut(handleCreate);
 
-  const handleEdit = async (record: MoldMaintenanceSheetRow) => {
-    try {
-      const d = await getMoldMaintenanceSheet(record.id);
+  const handleEdit = useCallback(
+    async (record: MoldMaintenanceSheetRow) => {
       setIsEdit(true);
-      setEditId(d.id);
-      await loadDepartments();
-      setFormInitialValues({
-        service_type: d.service_type,
-        department_uuid: d.department_uuid ?? undefined,
-        source_order_no: d.source_order_no ?? undefined,
-        header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
-        line_items: (d.line_items || []).map((it) => ({
-          mold_code: it.mold_code,
-          mold_name: it.mold_name ?? '',
-          repair_reason: it.repair_reason,
-          repair_cost: it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
-          item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
-        })),
-      });
+      setEditId(record.id);
+      setFormOptionsReady(false);
       setModalVisible(true);
-    } catch (e) {
-      messageApi.error((e as Error).message || '加载维保单失败');
-    }
-  };
+      try {
+        const d = await getMoldMaintenanceSheet(record.id);
+        setEditId(d.id);
+        const extras =
+          d.applicant_user_id != null
+            ? [
+                {
+                  id: d.applicant_user_id,
+                  name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
+                  deptUuid: (d.department_uuid || '').trim(),
+                },
+              ]
+            : undefined;
+        await preloadTenantFormOptions(extras);
+        let initDept = (d.department_uuid || '').trim();
+        if (!initDept && d.applicant_user_id != null) {
+          const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
+          initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
+        }
+        setFormInitialValues({
+          service_type: d.service_type,
+          applicant_user_id: d.applicant_user_id ?? undefined,
+          department_uuid: initDept || undefined,
+          source_order_no: d.source_order_no ?? undefined,
+          header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
+          line_items: (d.line_items || []).map((it) => ({
+            mold_code: it.mold_code,
+            mold_name: it.mold_name ?? '',
+            repair_reason: it.repair_reason,
+            item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
+          })),
+        });
+        startTransition(() => setFormOptionsReady(true));
+      } catch (e) {
+        messageApi.error((e as Error).message || '加载维保单失败');
+        setModalVisible(false);
+        setFormOptionsReady(false);
+      }
+    },
+    [messageApi, preloadTenantFormOptions],
+  );
 
   const handleDeleteOne = (record: MoldMaintenanceSheetRow) => {
     Modal.confirm({
@@ -226,6 +456,10 @@ const MoldMaintenancePage: React.FC = () => {
   };
 
   const triggerSubmit = useCallback(() => {
+    if (!formOptionsReady) {
+      messageApi.warning('表单加载中，请稍候');
+      return;
+    }
     globalThis.setTimeout(() => {
       const inst = formRef.current;
       if (!inst || typeof inst.submit !== 'function') {
@@ -234,34 +468,29 @@ const MoldMaintenancePage: React.FC = () => {
       }
       inst.submit();
     }, 0);
-  }, [messageApi]);
+  }, [formOptionsReady, messageApi]);
 
   useSubmitShortcut(triggerSubmit, modalVisible);
 
-  const buildPayload = (values: Record<string, unknown>): MoldMaintenanceSheetCreatePayload => {
-    const deptUuid = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
-    const deptName = deptLabelByUuid.get(deptUuid) || String(values.department_name ?? '').trim();
+  const buildPayload = (
+    values: Record<string, unknown>,
+    applicantUserId: number,
+  ): MoldMaintenanceSheetCreatePayload => {
     const rawLines = values.line_items;
     const lines = Array.isArray(rawLines) ? rawLines : [];
     const line_items = lines.map((row) => {
       const r = row as Record<string, unknown>;
-      const costRaw = r.repair_cost;
-      let repair_cost: string | number | null = null;
-      if (costRaw !== undefined && costRaw !== null && costRaw !== '') {
-        const n = Number(costRaw);
-        repair_cost = Number.isFinite(n) ? n : null;
-      }
       return {
         mold_code: String(r.mold_code ?? '').trim(),
         mold_name: String(r.mold_name ?? '').trim() || null,
         repair_reason: String(r.repair_reason ?? '').trim(),
-        repair_cost,
+        repair_cost: null,
         attachment_file_uuids: normUploadUuids(r.item_attachments),
       };
     });
     return {
-      department_uuid: deptUuid || null,
-      department_name: deptName,
+      applicant_user_id: applicantUserId,
+      department_uuid: typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '',
       service_type: values.service_type === '保养' ? '保养' : '维修',
       source_order_no: String(values.source_order_no ?? '').trim() || null,
       header_attachment_file_uuids: normUploadUuids(values.header_attachments),
@@ -270,17 +499,27 @@ const MoldMaintenancePage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const applicantRaw = values.applicant_user_id;
+    const applicantId =
+      typeof applicantRaw === 'number'
+        ? applicantRaw
+        : typeof applicantRaw === 'string'
+          ? Number(applicantRaw)
+          : NaN;
+    if (!Number.isFinite(applicantId)) {
+      messageApi.error('请选择申请人');
+      return Promise.reject(new Error('validation'));
+    }
     const deptUuid = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
     if (!deptUuid) {
       messageApi.error('请选择申请部门');
       return Promise.reject(new Error('validation'));
     }
-    const deptName = deptLabelByUuid.get(deptUuid);
-    if (!deptName) {
-      messageApi.error('申请部门无效，请重新选择');
+    if (!deptLabelByUuid.has(deptUuid)) {
+      messageApi.error('申请部门无效，请从末级部门中选择');
       return Promise.reject(new Error('validation'));
     }
-    const payload = buildPayload({ ...values, department_name: deptName });
+    const payload = buildPayload(values, applicantId);
     if (!payload.line_items.length) {
       messageApi.error('至少保留一条模具明细');
       return Promise.reject(new Error('validation'));
@@ -318,9 +557,20 @@ const MoldMaintenancePage: React.FC = () => {
   };
 
   const onResetForm = () => {
+    if (!formOptionsReady) return;
+    const tree = departmentTreeRef.current;
+    const cu = useGlobalStore.getState().currentUser;
+    const uid = cu?.id;
+    let deptUuid: string | undefined;
+    if (uid != null) {
+      const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
+      deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
+    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       service_type: '维修',
+      applicant_user_id: uid,
+      department_uuid: deptUuid,
       header_attachments: [],
       line_items: [defaultLineItem()],
     });
@@ -344,9 +594,10 @@ const MoldMaintenancePage: React.FC = () => {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '部门/来源单号/类型' },
+      fieldProps: { placeholder: '部门/申请人/来源单号/类型' },
     },
     { title: '申请部门', dataIndex: 'department_name', width: 180, ellipsis: true },
+    { title: '申请人', dataIndex: 'applicant_name', width: 120, ellipsis: true, hideInSearch: true },
     { title: '维修/保养', dataIndex: 'service_type', width: 100 },
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
     { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
@@ -418,6 +669,7 @@ const MoldMaintenancePage: React.FC = () => {
           setModalVisible(false);
           setEditId(null);
           setMoldPickRow(null);
+          setFormOptionsReady(false);
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
@@ -431,44 +683,86 @@ const MoldMaintenancePage: React.FC = () => {
               justifyContent: 'space-between',
             }}
           >
-            <Button htmlType="button" onClick={onResetForm}>
+            <Button htmlType="button" disabled={!formOptionsReady} onClick={onResetForm}>
               重置
             </Button>
-            <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
+            <Button
+              htmlType="button"
+              type="primary"
+              disabled={!formOptionsReady}
+              loading={formLoading}
+              onClick={triggerSubmit}
+            >
               提交{SUBMIT_SHORTCUT_HINT}
             </Button>
           </div>
         }
       >
         <div className="form-modal-content-inner">
-          <ProForm
-            key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
-            formRef={formRef}
-            loading={formLoading}
-            onFinish={handleSubmit}
-            onFinishFailed={({ errorFields }) => {
-              const first = errorFields?.[0];
-              const text = first?.errors?.filter(Boolean)[0];
-              messageApi.error(text || '请检查表单');
-            }}
-            initialValues={formInitialValues}
-            submitter={false}
-            layout="vertical"
-            scrollToFirstError
-          >
-            <Divider titlePlacement="left">基础信息</Divider>
-            <Row gutter={16}>
-              <Col span={12}>
-                <ProFormSelect
-                  name="department_uuid"
-                  label="申请部门"
-                  placeholder="请选择申请部门"
-                  rules={[{ required: true, message: '请选择申请部门' }]}
-                  options={deptOptions}
-                  showSearch
-                  fieldProps={{ optionFilterProp: 'label' }}
-                />
-              </Col>
+          {!formOptionsReady ? (
+            <div
+              style={{
+                display: 'flex',
+                minHeight: 280,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 24,
+              }}
+            >
+              <Spin tip="加载选项中…" />
+            </div>
+          ) : (
+            <ProForm
+              key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
+              formRef={formRef}
+              loading={formLoading}
+              onFinish={handleSubmit}
+              onFinishFailed={({ errorFields }) => {
+                const first = errorFields?.[0];
+                const text = first?.errors?.filter(Boolean)[0];
+                messageApi.error(text || '请检查表单');
+              }}
+              initialValues={formInitialValues}
+              submitter={false}
+              layout="vertical"
+              scrollToFirstError
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <ProFormSelect
+                    name="applicant_user_id"
+                    label="申请人"
+                    placeholder="可选中后搜索更多用户"
+                    rules={[{ required: true, message: '请选择申请人' }]}
+                    options={applicantOptions}
+                    showSearch
+                    fieldProps={{
+                      virtual: true,
+                      listHeight: 256,
+                      optionFilterProp: 'label',
+                      filterOption: false,
+                      onSearch: scheduleApplicantSearch,
+                      onChange: (v: number) => {
+                        syncDefaultDepartmentForApplicant(v);
+                      },
+                    }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <ProFormSelect
+                    name="department_uuid"
+                    label="申请部门"
+                    placeholder="请选择末级申请部门"
+                    rules={[{ required: true, message: '请选择申请部门' }]}
+                    options={leafDeptOptions}
+                    showSearch
+                    fieldProps={{
+                      virtual: true,
+                      listHeight: 256,
+                      optionFilterProp: 'label',
+                    }}
+                  />
+                </Col>
               <Col span={12}>
                 <ProFormSelect
                   name="service_type"
@@ -500,11 +794,53 @@ const MoldMaintenancePage: React.FC = () => {
               min={1}
               copyIconProps={false}
               creatorButtonProps={{ creatorButtonText: '添加模具' }}
+              itemRender={({ listDom, action }) => (
+                <div style={{ position: 'relative', marginBottom: 16 }}>
+                  {listDom}
+                  {action ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 2,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {action}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              actionRender={(field, action, _defaultActionDom, count) => {
+                if (count <= 1) return [];
+                return [
+                  <Tooltip key="remove" title="删除">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={() => action.remove(field.name)}
+                    />
+                  </Tooltip>,
+                ];
+              }}
             >
               {(meta, index) => (
-                <ProFormGroup key={meta.key} title={`模具 ${index + 1}`}>
+                <div
+                  key={meta.key}
+                  style={{
+                    position: 'relative',
+                    marginBottom: 12,
+                    padding: '10px 40px 4px 12px',
+                    background: '#fafafa',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: 6,
+                  }}
+                >
                   <Row gutter={16}>
-                    <Col span={12}>
+                    <Col xs={24} sm={8}>
                       <ProFormText
                         name="mold_code"
                         label="模具代号"
@@ -512,33 +848,22 @@ const MoldMaintenancePage: React.FC = () => {
                         rules={[{ required: true, message: '请填写模具代号' }]}
                         fieldProps={{
                           addonAfter: (
-                            <Space size={0}>
-                              <Button
-                                type="link"
-                                size="small"
-                                icon={<ScanOutlined />}
-                                onClick={() =>
-                                  messageApi.info('请使用扫码设备扫描模具条码，代号将填入本行')
-                                }
-                                aria-label="扫码"
-                              />
-                              <Button
-                                type="link"
-                                size="small"
-                                onClick={() => {
-                                  setMoldPickRow(index);
-                                  setMoldPickerOpen(true);
-                                  void loadMoldsForPicker();
-                                }}
-                              >
-                                选择
-                              </Button>
-                            </Space>
+                            <Button
+                              type="link"
+                              size="small"
+                              onClick={() => {
+                                setMoldPickRow(index);
+                                setMoldPickerOpen(true);
+                                void loadMoldsForPicker();
+                              }}
+                            >
+                              选择
+                            </Button>
                           ),
                         }}
                       />
                     </Col>
-                    <Col span={12}>
+                    <Col xs={24} sm={8}>
                       <ProFormText
                         name="mold_name"
                         label="模具名称"
@@ -546,24 +871,17 @@ const MoldMaintenancePage: React.FC = () => {
                         fieldProps={{ readOnly: true }}
                       />
                     </Col>
-                    <Col span={12}>
-                      <ProFormSelect
+                    <Col xs={24} sm={8}>
+                      <DictionarySelect
+                        dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
                         name="repair_reason"
+                        setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                         label="维修原因"
                         placeholder="请选择维修原因"
                         rules={[{ required: true, message: '请选择维修原因' }]}
-                        options={REPAIR_REASONS.map((t) => ({ label: t, value: t }))}
-                        showSearch
-                        fieldProps={{ optionFilterProp: 'label' }}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <ProFormDigit
-                        name="repair_cost"
-                        label="维修费用（元）"
-                        placeholder="请输入维修费用（元）"
-                        min={0}
-                        fieldProps={{ precision: 2, style: { width: '100%' } }}
+                        formRef={formRef}
+                        simpleQuickCreate
+                        colProps={{ span: 24 }}
                       />
                     </Col>
                     <Col span={24}>
@@ -575,10 +893,11 @@ const MoldMaintenancePage: React.FC = () => {
                       />
                     </Col>
                   </Row>
-                </ProFormGroup>
+                </div>
               )}
             </ProFormList>
           </ProForm>
+          )}
         </div>
       </Modal>
 

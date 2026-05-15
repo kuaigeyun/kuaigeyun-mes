@@ -7,10 +7,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_maintenance_mold_status import (
+    apply_mold_status_on_maintenance_sheet_created,
+    refresh_mold_status_if_no_open_maintenance_sheet,
+    unique_mold_codes_from_stored_line_items,
+)
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.models.department import Department
 from infra.models.user import User
 
 router = APIRouter(
@@ -37,6 +44,60 @@ def _strip_opt(v: Optional[str]) -> Optional[str]:
         return None
     s = str(v).strip()
     return s or None
+
+
+async def _resolve_applicant_only(tenant_id: int, applicant_user_id: int) -> tuple[int, str]:
+    """校验申请人属于当前租户，返回冗余显示名。"""
+    u = await User.filter(
+        id=applicant_user_id,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).first()
+    if not u:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="申请人不存在或不属于当前组织",
+        )
+    display = ((u.full_name or "").strip() or (u.username or "").strip() or str(u.id))
+    return applicant_user_id, display
+
+
+async def _validate_leaf_department(tenant_id: int, department_uuid: str) -> tuple[str, str]:
+    """校验申请部门为当前租户下启用、未删除的末级部门，返回 uuid 与名称。"""
+    uu = _strip_opt(department_uuid)
+    if not uu:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请选择申请部门",
+        )
+    d = await Department.filter(
+        uuid=uu,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+    ).first()
+    if not d:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="申请部门不存在、已停用或已删除",
+        )
+    has_children = await Department.filter(
+        parent_id=d.id,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).exists()
+    if has_children:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="申请部门必须为末级部门",
+        )
+    name = (d.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="申请部门名称无效",
+        )
+    return uu, name
 
 
 class MoldMaintLineIn(BaseModel):
@@ -117,6 +178,8 @@ class MoldMaintenanceSheetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    applicant_user_id: Optional[int] = None
+    applicant_name: Optional[str] = None
     department_uuid: Optional[str] = None
     department_name: Optional[str] = None
     service_type: str
@@ -127,25 +190,26 @@ class MoldMaintenanceSheetOut(BaseModel):
 
 
 class MoldMaintenanceSheetCreate(BaseModel):
-    department_uuid: Optional[str] = Field(None, max_length=36)
-    department_name: str = Field(max_length=200)
+    applicant_user_id: int = Field(description="申请人用户 ID")
+    department_uuid: str = Field(max_length=36, description="申请部门 UUID（须为末级部门）")
     service_type: ServiceTypeLiteral
     source_order_no: Optional[str] = Field(None, max_length=128)
     header_attachment_file_uuids: Optional[List[str]] = None
     line_items: List[MoldMaintLineIn] = Field(min_length=1)
 
-    @field_validator("department_name", mode="before")
+    @field_validator("department_uuid", mode="before")
     @classmethod
-    def strip_dept_name(cls, v):
+    def strip_dept_uuid(cls, v):
         if v is None:
-            raise ValueError("申请部门不能为空")
+            raise ValueError("请选择申请部门")
         s = str(v).strip()
         if not s:
-            raise ValueError("申请部门不能为空")
+            raise ValueError("请选择申请部门")
         return s
 
 
 class MoldMaintenanceSheetUpdate(BaseModel):
+    applicant_user_id: Optional[int] = None
     department_uuid: Optional[str] = Field(None, max_length=36)
     department_name: Optional[str] = Field(None, max_length=200)
     service_type: Optional[ServiceTypeLiteral] = None
@@ -175,6 +239,8 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
     return MoldMaintenanceSheetOut(
         id=row.id,
         uuid=row.uuid,
+        applicant_user_id=row.applicant_user_id,
+        applicant_name=row.applicant_name,
         department_uuid=row.department_uuid,
         department_name=row.department_name,
         service_type=row.service_type,
@@ -198,6 +264,7 @@ async def list_maintenance_sheets(
         k = keyword.strip()
         qs = qs.filter(
             Q(department_name__icontains=k)
+            | Q(applicant_name__icontains=k)
             | Q(source_order_no__icontains=k)
             | Q(service_type__icontains=k)
         )
@@ -218,15 +285,26 @@ async def create_maintenance_sheet(
     _: Annotated[User, Depends(get_current_user)],
 ):
     stored = [_line_to_store(x) for x in body.line_items]
-    row = await HaoligoMoldMaintenanceSheet.create(
-        tenant_id=tenant_id,
-        department_uuid=_strip_opt(body.department_uuid),
-        department_name=body.department_name.strip(),
-        service_type=body.service_type,
-        source_order_no=_strip_opt(body.source_order_no),
-        header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
-        line_items=stored,
-    )
+    app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
+    dept_uuid, dept_name = await _validate_leaf_department(tenant_id, body.department_uuid)
+    async with in_transaction():
+        row = await HaoligoMoldMaintenanceSheet.create(
+            tenant_id=tenant_id,
+            applicant_user_id=app_uid,
+            applicant_name=app_name,
+            department_uuid=dept_uuid,
+            department_name=dept_name,
+            service_type=body.service_type,
+            source_order_no=_strip_opt(body.source_order_no),
+            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            line_items=stored,
+        )
+        await apply_mold_status_on_maintenance_sheet_created(
+            tenant_id,
+            is_outsource=False,
+            service_type=body.service_type,
+            stored_line_items=stored,
+        )
     return _serialize(row)
 
 
@@ -253,13 +331,19 @@ async def update_maintenance_sheet(
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
-    if "department_name" in data and data["department_name"] is not None:
+    if "applicant_user_id" in data and data["applicant_user_id"] is not None:
+        app_uid, app_name = await _resolve_applicant_only(tenant_id, int(data["applicant_user_id"]))
+        data["applicant_user_id"] = app_uid
+        data["applicant_name"] = app_name
+    if "department_uuid" in data and data["department_uuid"] is not None:
+        du, dn = await _validate_leaf_department(tenant_id, str(data["department_uuid"]))
+        data["department_uuid"] = du
+        data["department_name"] = dn
+    elif "department_name" in data and data["department_name"] is not None:
         s = str(data["department_name"]).strip()
         if not s:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="申请部门不能为空")
         data["department_name"] = s
-    if "department_uuid" in data and data["department_uuid"] is not None:
-        data["department_uuid"] = _strip_opt(str(data["department_uuid"]))
     if "source_order_no" in data and data["source_order_no"] is not None:
         data["source_order_no"] = _strip_opt(str(data["source_order_no"]))
     if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
@@ -284,5 +368,8 @@ async def delete_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()
+    for mc in codes:
+        await refresh_mold_status_if_no_open_maintenance_sheet(tenant_id, mc)

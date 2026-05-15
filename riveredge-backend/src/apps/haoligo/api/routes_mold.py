@@ -1,5 +1,7 @@
 """好力 GO — 模具主数据 API。"""
 
+import asyncio
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, List, Literal, Optional
 from uuid import UUID
@@ -11,7 +13,13 @@ from tortoise.expressions import Q
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_ledger_dataset_binding import HaoligoMoldLedgerDatasetBinding
+from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
+from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
+from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import HaoligoMoldOutsourceMaintenanceCompleteSheet
+from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
@@ -42,6 +50,8 @@ class MoldOut(BaseModel):
     outsource_vendor_name: Optional[str] = None
     erp_material_code: Optional[str] = None
     remark: Optional[str] = None
+    used_times: int = 0
+    used_yield: Decimal = Decimal("0")
 
 
 class MoldCreate(BaseModel):
@@ -49,7 +59,6 @@ class MoldCreate(BaseModel):
     name: str = Field(max_length=200)
     unit: str = Field(default="", max_length=32)
     mold_capacity: Decimal = Field(default=Decimal("0"))
-    processing_time_min: Optional[int] = Field(None, ge=0)
     service_life_years: Optional[int] = Field(None, ge=0)
     usable_times: Optional[int] = Field(None, ge=0)
     usable_yield: Optional[Decimal] = None
@@ -69,7 +78,6 @@ class MoldUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     unit: Optional[str] = Field(None, max_length=32)
     mold_capacity: Optional[Decimal] = None
-    processing_time_min: Optional[int] = Field(None, ge=0)
     service_life_years: Optional[int] = Field(None, ge=0)
     usable_times: Optional[int] = Field(None, ge=0)
     usable_yield: Optional[Decimal] = None
@@ -97,7 +105,7 @@ _LIFECYCLE_BATCH_FIELDS = frozenset(
 
 
 class MoldBatchLifecycleBody(BaseModel):
-    """批量更新模具台账中与「寿命 / 维修周期」相关的数值字段。"""
+    """批量更新模具台账中与「寿命 / 额定次数与产量 / 维修周期」相关的数值字段。"""
 
     scope: Literal["selected", "all_filtered"]
     mold_ids: Optional[List[int]] = None
@@ -335,6 +343,8 @@ async def sync_mold_ledger_from_dataset(
                 outsource_vendor_name=None,
                 erp_material_code=None,
                 remark=None,
+                used_times=0,
+                used_yield=Decimal("0"),
             )
             created += 1
 
@@ -344,7 +354,7 @@ async def sync_mold_ledger_from_dataset(
 @router.post(
     "/batch-lifecycle",
     response_model=MoldBatchLifecycleOut,
-    summary="批量更新可用年限/次数/产量及维修周期",
+    summary="批量更新可用年限/额定可用次数/额定可用产量及维修周期",
 )
 async def batch_update_mold_lifecycle(
     body: MoldBatchLifecycleBody,
@@ -404,6 +414,209 @@ async def list_molds(
     }
 
 
+_JSON_SHEET_SCAN_LIMIT = 800
+_BORROW_RETURN_LIMIT = 200
+_OPERATION_RECORDS_CAP = 500
+
+MoldOperationKind = Literal[
+    "borrow",
+    "return",
+    "maintenance",
+    "maintenance_complete",
+    "outsource_maintenance",
+    "outsource_maintenance_complete",
+]
+
+
+class MoldOperationRecordOut(BaseModel):
+    """模具台账详情用：领出/还入/维保类单据摘要（按创建时间倒序合并）。"""
+
+    kind: MoldOperationKind
+    occurred_at: datetime
+    record_id: int
+    uuid: str
+    title: str
+    detail: str = ""
+
+
+class MoldOperationRecordsResponse(BaseModel):
+    items: List[MoldOperationRecordOut]
+
+
+def _line_items_contain_mold(raw, mold_code: str) -> bool:
+    m = (mold_code or "").strip()
+    if not m or raw is None:
+        return False
+    if not isinstance(raw, list):
+        return False
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("mold_code") or "").strip() == m:
+            return True
+    return False
+
+
+async def _scan_sheets_with_mold_in_lines(model, tenant_id: int, mold_code: str):
+    qs = tenant_alive(model, tenant_id).order_by("-created_at").limit(_JSON_SHEET_SCAN_LIMIT)
+    rows = await qs
+    return [r for r in rows if _line_items_contain_mold(r.line_items, mold_code)]
+
+
+@router.get(
+    "/{row_id}/operation-records",
+    response_model=MoldOperationRecordsResponse,
+    summary="模具关联操作记录（领用/还入/厂内外协维保与完修）",
+)
+async def list_mold_operation_records(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    mold = await tenant_alive(HaoligoMold, tenant_id).filter(id=row_id).first()
+    if not mold:
+        await _not_found()
+    mcode = (mold.mold_code or "").strip()
+
+    async def load_borrows():
+        return await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(mold_code=mcode).order_by(
+            "-created_at"
+        ).limit(_BORROW_RETURN_LIMIT)
+
+    async def load_returns():
+        return await tenant_alive(HaoligoMoldReturnSheet, tenant_id).filter(mold_code=mcode).order_by(
+            "-created_at"
+        ).limit(_BORROW_RETURN_LIMIT)
+
+    borrows, returns, mains, completes, outs, out_completes = await asyncio.gather(
+        load_borrows(),
+        load_returns(),
+        _scan_sheets_with_mold_in_lines(HaoligoMoldMaintenanceSheet, tenant_id, mcode),
+        _scan_sheets_with_mold_in_lines(HaoligoMoldMaintenanceCompleteSheet, tenant_id, mcode),
+        _scan_sheets_with_mold_in_lines(HaoligoMoldOutsourceMaintenanceSheet, tenant_id, mcode),
+        _scan_sheets_with_mold_in_lines(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id, mcode),
+    )
+
+    events: List[MoldOperationRecordOut] = []
+
+    for b in borrows:
+        parts: List[str] = []
+        dn = (b.department_name or "").strip()
+        if dn:
+            parts.append(f"领用部门：{dn}")
+        so = (b.source_order_no or "").strip()
+        if so:
+            parts.append(f"来源单号：{so}")
+        events.append(
+            MoldOperationRecordOut(
+                kind="borrow",
+                occurred_at=b.created_at,
+                record_id=b.id,
+                uuid=b.uuid,
+                title="领出（领用单）",
+                detail="；".join(parts),
+            )
+        )
+
+    for r in returns:
+        parts = [f"制造数量：{r.manufacture_qty}"]
+        po = (r.production_order_no or "").strip()
+        if po:
+            parts.append(f"制令：{po}")
+        br = (r.borrow_sheet_no or "").strip()
+        if br:
+            parts.append(f"领用单：{br}")
+        dn = (r.issue_department_name or "").strip()
+        if dn:
+            parts.append(f"领出部门：{dn}")
+        events.append(
+            MoldOperationRecordOut(
+                kind="return",
+                occurred_at=r.created_at,
+                record_id=r.id,
+                uuid=r.uuid,
+                title="还入（还入单）",
+                detail="；".join(parts),
+            )
+        )
+
+    for m in mains:
+        parts: List[str] = []
+        dn = (m.department_name or "").strip()
+        if dn:
+            parts.append(f"申请部门：{dn}")
+        parts.append(f"类型：{m.service_type}")
+        so = (m.source_order_no or "").strip()
+        if so:
+            parts.append(f"来源单号：{so}")
+        events.append(
+            MoldOperationRecordOut(
+                kind="maintenance",
+                occurred_at=m.created_at,
+                record_id=m.id,
+                uuid=m.uuid,
+                title="厂内维保（申请）",
+                detail="；".join(parts),
+            )
+        )
+
+    for m in completes:
+        parts = [f"来源单号：{m.source_order_no}", f"类型：{m.service_type}"]
+        if m.clear_total_production:
+            parts.append("已清空总产量")
+        events.append(
+            MoldOperationRecordOut(
+                kind="maintenance_complete",
+                occurred_at=m.created_at,
+                record_id=m.id,
+                uuid=m.uuid,
+                title="维保完修",
+                detail="；".join(parts),
+            )
+        )
+
+    for m in outs:
+        parts = [
+            f"外协单位：{(m.outsourced_unit_name or '').strip() or '—'}",
+            f"类型：{m.service_type}",
+        ]
+        so = (m.source_order_no or "").strip()
+        if so:
+            parts.append(f"来源单号：{so}")
+        events.append(
+            MoldOperationRecordOut(
+                kind="outsource_maintenance",
+                occurred_at=m.created_at,
+                record_id=m.id,
+                uuid=m.uuid,
+                title="外协维保（申请）",
+                detail="；".join(parts),
+            )
+        )
+
+    for m in out_completes:
+        parts = [
+            f"外协单位：{(m.outsourced_unit_name or '').strip() or '—'}",
+            f"来源单号：{m.source_order_no}",
+            f"类型：{m.service_type}",
+        ]
+        if m.clear_total_production:
+            parts.append("已清空总产量")
+        events.append(
+            MoldOperationRecordOut(
+                kind="outsource_maintenance_complete",
+                occurred_at=m.created_at,
+                record_id=m.id,
+                uuid=m.uuid,
+                title="外协维保完修",
+                detail="；".join(parts),
+            )
+        )
+
+    events.sort(key=lambda x: (x.occurred_at, x.record_id), reverse=True)
+    return MoldOperationRecordsResponse(items=events[:_OPERATION_RECORDS_CAP])
+
+
 @router.post("", response_model=MoldOut, summary="创建模具")
 async def create_mold(
     body: MoldCreate,
@@ -416,7 +629,6 @@ async def create_mold(
         name=body.name.strip(),
         unit=(body.unit or "").strip(),
         mold_capacity=body.mold_capacity,
-        processing_time_min=body.processing_time_min,
         service_life_years=body.service_life_years,
         usable_times=body.usable_times,
         usable_yield=body.usable_yield,
@@ -430,6 +642,8 @@ async def create_mold(
         outsource_vendor_name=body.outsource_vendor_name,
         erp_material_code=body.erp_material_code,
         remark=body.remark,
+        used_times=0,
+        used_yield=Decimal("0"),
     )
     return MoldOut.model_validate(row)
 

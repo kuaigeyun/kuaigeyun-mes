@@ -25,10 +25,22 @@ class HaoligoMold(HaoligoTenantModel):
         default=Decimal("0"),
         description="模具产能",
     )
-    processing_time_min = fields.IntField(null=True, description="加工时间（分钟）")
+    processing_time_min = fields.IntField(null=True, description="加工时间（分钟）：领用单与对应还入单创建时间之差的累计，由系统根据单据自动重算")
     service_life_years = fields.IntField(null=True, description="可用年限（年）")
-    usable_times = fields.IntField(null=True, description="可用次数")
-    usable_yield = fields.DecimalField(max_digits=18, decimal_places=4, null=True, description="可用产量")
+    usable_times = fields.IntField(null=True, description="额定可用次数（还入单不再扣减）")
+    usable_yield = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        description="额定可用产量（还入单不再扣减）",
+    )
+    used_times = fields.IntField(default=0, description="已使用次数（每笔还入单 +1）")
+    used_yield = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        default=Decimal("0"),
+        description="已使用产量（还入单制造数量累计）",
+    )
     maintenance_cycle_by_yield = fields.DecimalField(
         max_digits=18, decimal_places=4, null=True, description="维修周期（依产量）"
     )
@@ -38,7 +50,7 @@ class HaoligoMold(HaoligoTenantModel):
     status = fields.CharField(
         max_length=32,
         default="待用",
-        description="状态：在用/在修/停用/待用/报废/待启用",
+        description="状态：在用/在修/停用/待用/报废/待启用；维保占用时可细分：维修、保养、外协维修、外协保养",
     )
     total_manufacture_qty = fields.DecimalField(
         max_digits=18,

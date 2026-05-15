@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 还入单（列表 + 两栏 Modal，底栏：重置 / 转入 / 提交；对齐移动端稿）
+ * 好力 GO — 还入单（列表 + 两栏 Modal；制令单号半宽 +「带出」；选模具自动匹配领用单；领出部门选项仅末级名称）
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -13,7 +13,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Input, Modal, Row, Space, Table } from 'antd';
-import { DeleteOutlined, EditOutlined, ScanOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -24,30 +24,38 @@ import { getDepartmentTree } from '../../../../../../services/department';
 import {
   createMoldReturnSheet,
   deleteMoldReturnSheet,
+  getMoldReturnBorrowLookup,
   getMoldReturnSheet,
-  listMoldBorrowSheets,
   listMoldReturnSheets,
   listMolds,
   updateMoldReturnSheet,
-  type MoldBorrowSheetRow,
+  type MoldReturnBorrowLookupResult,
   type MoldReturnSheetCreatePayload,
   type MoldReturnSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
 
-function flattenDepartmentOptions(
-  items: DepartmentTreeItem[],
-  prefix = '',
-): { label: string; value: string }[] {
+function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
   for (const n of items) {
-    const label = prefix ? `${prefix} / ${n.name}` : n.name;
-    out.push({ label, value: n.uuid });
+    out.push({ label: n.name, value: n.uuid });
     if (n.children?.length) {
-      out.push(...flattenDepartmentOptions(n.children, label));
+      out.push(...flattenDepartmentOptions(n.children));
     }
   }
   return out;
+}
+
+function matchIssueDepartmentUuid(
+  options: { label: string; value: string }[],
+  uuid?: string | null,
+  name?: string | null,
+): string | undefined {
+  const u = (uuid ?? '').trim();
+  if (u && options.some((o) => o.value === u)) return u;
+  const n = (name ?? '').trim();
+  if (!n) return undefined;
+  return options.find((o) => o.label === n)?.value;
 }
 
 const MoldReturnInPage: React.FC = () => {
@@ -61,14 +69,11 @@ const MoldReturnInPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
-  const [borrowPickerOpen, setBorrowPickerOpen] = useState(false);
-  const [borrowRows, setBorrowRows] = useState<MoldBorrowSheetRow[]>([]);
-  const [borrowKw, setBorrowKw] = useState('');
-  const [borrowLoading, setBorrowLoading] = useState(false);
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
+  const [lookupBusy, setLookupBusy] = useState(false);
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
@@ -85,22 +90,10 @@ const MoldReturnInPage: React.FC = () => {
     }
   }, []);
 
-  const loadBorrowsForPicker = useCallback(async () => {
-    setBorrowLoading(true);
-    try {
-      const res = await listMoldBorrowSheets({ limit: 200, skip: 0 });
-      setBorrowRows(res.items);
-    } catch {
-      setBorrowRows([]);
-    } finally {
-      setBorrowLoading(false);
-    }
-  }, []);
-
   const loadMoldsForPicker = useCallback(async () => {
     setMoldLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0 });
+      const res = await listMolds({ limit: 200, skip: 0, status: '在用' });
       setMoldRows(res.items);
     } catch {
       setMoldRows([]);
@@ -108,19 +101,6 @@ const MoldReturnInPage: React.FC = () => {
       setMoldLoading(false);
     }
   }, []);
-
-  const filteredBorrows = useMemo(() => {
-    const q = borrowKw.trim().toLowerCase();
-    if (!q) return borrowRows;
-    return borrowRows.filter(
-      (r) =>
-        String(r.id).includes(q) ||
-        (r.source_order_no && r.source_order_no.toLowerCase().includes(q)) ||
-        r.department_name.toLowerCase().includes(q) ||
-        r.mold_code.toLowerCase().includes(q) ||
-        r.mold_name.toLowerCase().includes(q),
-    );
-  }, [borrowRows, borrowKw]);
 
   const filteredMolds = useMemo(() => {
     const q = moldKw.trim().toLowerCase();
@@ -143,6 +123,7 @@ const MoldReturnInPage: React.FC = () => {
       mold_name: undefined,
       finished_product_code: undefined,
       finished_product_name: undefined,
+      planned_qty: undefined,
       manufacture_qty: undefined,
     });
     await loadDepartments();
@@ -164,6 +145,7 @@ const MoldReturnInPage: React.FC = () => {
         mold_name: d.mold_name,
         finished_product_code: d.finished_product_code ?? undefined,
         finished_product_name: d.finished_product_name ?? undefined,
+        planned_qty: d.planned_qty != null ? Number(d.planned_qty) : undefined,
         manufacture_qty: d.manufacture_qty != null ? Number(d.manufacture_qty) : undefined,
       });
       await loadDepartments();
@@ -215,6 +197,12 @@ const MoldReturnInPage: React.FC = () => {
       mold_name: String(values.mold_name ?? '').trim(),
       finished_product_code: String(values.finished_product_code ?? '').trim() || null,
       finished_product_name: String(values.finished_product_name ?? '').trim() || null,
+      planned_qty: (() => {
+        const v = values.planned_qty;
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      })(),
       manufacture_qty: (() => {
         const v = values.manufacture_qty;
         if (v === undefined || v === null || v === '') return 0;
@@ -227,7 +215,7 @@ const MoldReturnInPage: React.FC = () => {
   const handleSubmit = async (values: Record<string, unknown>) => {
     const deptUuid = typeof values.issue_department_uuid === 'string' ? values.issue_department_uuid.trim() : '';
     if (!deptUuid) {
-      messageApi.error('请选择领出部门，或点「转入」从领用单带入');
+      messageApi.error('请选择领出部门，或点制令单号旁「带出」/选模具从领用单带入');
       return Promise.reject(new Error('validation'));
     }
     const deptName = deptLabelByUuid.get(deptUuid);
@@ -268,29 +256,80 @@ const MoldReturnInPage: React.FC = () => {
     messageApi.success('已重置');
   };
 
-  const onOpenTransferIn = () => {
-    setBorrowPickerOpen(true);
-    void loadBorrowsForPicker();
-  };
+  const applyBorrowLookupResult = useCallback(
+    (res: MoldReturnBorrowLookupResult) => {
+      const deptUuid = matchIssueDepartmentUuid(deptOptions, res.issue_department_uuid, res.issue_department_name);
+      if (!deptUuid) {
+        messageApi.warning('领用单上的领用部门未匹配到本系统部门，请在「领出部门」中手动选择');
+      }
+      const currentPo = String(formRef.current?.getFieldValue('production_order_no') ?? '').trim();
+      const productionOrder =
+        res.production_order_no != null && String(res.production_order_no).trim() !== ''
+          ? String(res.production_order_no).trim()
+          : currentPo || undefined;
+      formRef.current?.setFieldsValue({
+        borrow_sheet_no: res.borrow_sheet_no,
+        production_order_no: productionOrder,
+        issue_department_uuid: deptUuid,
+        mold_code: res.mold_code,
+        mold_name: res.mold_name,
+        finished_product_code: res.finished_product_code ?? undefined,
+        finished_product_name: res.finished_product_name ?? undefined,
+        planned_qty:
+          res.planned_qty !== undefined && res.planned_qty !== null && res.planned_qty !== ''
+            ? Number(res.planned_qty)
+            : undefined,
+        manufacture_qty: undefined,
+      });
+    },
+    [deptOptions, messageApi],
+  );
 
-  const onScanProductionClick = () => {
-    messageApi.info('请使用扫码设备扫描制令单条码（制令单号将填入上方）');
-  };
+  const autoFetchBorrowLookup = useCallback(
+    async (productionOrderNo: string, moldCode: string) => {
+      const p = productionOrderNo.trim();
+      const m = moldCode.trim();
+      if (!p && !m) return;
+      setLookupBusy(true);
+      try {
+        const res = await getMoldReturnBorrowLookup({
+          production_order_no: p || undefined,
+          mold_code: m || undefined,
+        });
+        applyBorrowLookupResult(res);
+        messageApi.success('已从领用单带出');
+      } catch (e) {
+        messageApi.error((e as Error).message || '匹配领用单失败');
+      } finally {
+        setLookupBusy(false);
+      }
+    },
+    [applyBorrowLookupResult, messageApi],
+  );
 
   const columns: ProColumns<MoldReturnSheetRow>[] = [
     {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '制令单/领用单/模具/部门/成品' },
+      fieldProps: { placeholder: '制令单号/模具/部门/成品' },
     },
-    { title: '制令单', dataIndex: 'production_order_no', width: 130, ellipsis: true, copyable: true },
-    { title: '领用单', dataIndex: 'borrow_sheet_no', width: 120, ellipsis: true, copyable: true },
+    { title: '制令单号', dataIndex: 'production_order_no', width: 130, ellipsis: true, copyable: true },
+    {
+      title: '领用单',
+      dataIndex: 'borrow_sheet_no',
+      width: 120,
+      ellipsis: true,
+      copyable: true,
+      hideInTable: true,
+      hideInSetting: true,
+    },
     { title: '领出部门', dataIndex: 'issue_department_name', width: 150, ellipsis: true },
     { title: '模具代号', dataIndex: 'mold_code', width: 110, ellipsis: true },
     { title: '模具名称', dataIndex: 'mold_name', width: 150, ellipsis: true },
     { title: '成品代号', dataIndex: 'finished_product_code', width: 110, ellipsis: true, hideInSearch: true },
     { title: '成品名称', dataIndex: 'finished_product_name', width: 130, ellipsis: true, hideInSearch: true },
+    { title: '计划数量', dataIndex: 'planned_qty', width: 100, hideInSearch: true },
     { title: '制造数量', dataIndex: 'manufacture_qty', width: 100, hideInSearch: true },
     {
       title: '操作',
@@ -342,7 +381,7 @@ const MoldReturnInPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1180 }}
+          scroll={{ x: 1280 }}
         />
       </ListPageTemplate>
 
@@ -369,9 +408,6 @@ const MoldReturnInPage: React.FC = () => {
               重置
             </Button>
             <Space>
-              <Button htmlType="button" type="primary" onClick={onOpenTransferIn}>
-                转入
-              </Button>
               <Button htmlType="button" type="primary" loading={formLoading} onClick={triggerSubmit}>
                 提交{SUBMIT_SHORTCUT_HINT}
               </Button>
@@ -396,23 +432,35 @@ const MoldReturnInPage: React.FC = () => {
             scrollToFirstError
           >
             <Row gutter={16}>
-              <Col span={12}>
-                <ProForm.Item name="production_order_no" label="制令单" tooltip="可手输或扫码填入制令单号">
-                  <Input
-                    placeholder="请输入内容"
-                    allowClear
-                    suffix={
-                      <Button type="text" size="small" icon={<ScanOutlined />} onClick={onScanProductionClick} aria-label="扫描" />
-                    }
-                  />
-                </ProForm.Item>
-              </Col>
+              <ProFormText name="borrow_sheet_no" hidden />
               <Col span={12}>
                 <ProFormText
-                  name="borrow_sheet_no"
-                  label="领用单"
-                  placeholder="请输入或点「转入」选择领用单"
-                  tooltip="可手输领用单号，或点底栏「转入」从领用单列表带入"
+                  name="production_order_no"
+                  label="制令单号"
+                  placeholder="请输入制令单号"
+                  tooltip="与领用单一致：填写制令单号或模具代号后点右侧「带出」，从领用单匹配并填入其余字段；选模具也会自动带出"
+                  fieldProps={{
+                    allowClear: true,
+                    addonAfter: (
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: '0 8px' }}
+                        loading={lookupBusy}
+                        onClick={() => {
+                          const po = String(formRef.current?.getFieldValue('production_order_no') ?? '').trim();
+                          const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
+                          if (!po && !mc) {
+                            messageApi.warning('请先输入制令单号或模具代号');
+                            return;
+                          }
+                          void autoFetchBorrowLookup(po, mc);
+                        }}
+                      >
+                        带出
+                      </Button>
+                    ),
+                  }}
                 />
               </Col>
               <Col span={12}>
@@ -431,13 +479,14 @@ const MoldReturnInPage: React.FC = () => {
                   name="mold_code"
                   label="模具代号"
                   placeholder="请输入内容"
+                  tooltip="点「选择」选模具后将自动按模具匹配领用单并带出；也可手输模具代号后点制令单号旁「带出」。成品代号/名称与计划数量为只读（由「带出」或选模具写入）"
                   rules={[{ required: true, message: '请输入模具代号' }]}
                   fieldProps={{
                     addonAfter: (
                       <Button
                         type="link"
                         size="small"
-                        style={{ padding: 0 }}
+                        style={{ padding: '0 8px' }}
                         onClick={() => {
                           setMoldPickerOpen(true);
                           void loadMoldsForPicker();
@@ -453,10 +502,36 @@ const MoldReturnInPage: React.FC = () => {
                 <ProFormText name="mold_name" label="模具名称" placeholder="请输入内容" rules={[{ required: true, message: '请输入模具名称' }]} />
               </Col>
               <Col span={12}>
-                <ProFormText name="finished_product_code" label="成品代号" placeholder="请输入内容" />
+                <ProFormText
+                  name="finished_product_code"
+                  label="成品代号"
+                  placeholder="由「带出」或选模具写入"
+                  tooltip="只读；请点制令单号旁「带出」或选择模具后从领用单写入"
+                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                />
               </Col>
               <Col span={12}>
-                <ProFormText name="finished_product_name" label="成品名称" placeholder="请输入内容" />
+                <ProFormText
+                  name="finished_product_name"
+                  label="成品名称"
+                  placeholder="由「带出」或选模具写入"
+                  tooltip="只读；请点制令单号旁「带出」或选择模具后从领用单写入"
+                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDigit
+                  name="planned_qty"
+                  label="计划数量"
+                  placeholder="由「带出」或选模具写入"
+                  tooltip="只读；与领用单计划数量一致，由「带出」或选模具写入"
+                  fieldProps={{
+                    readOnly: true,
+                    precision: 4,
+                    min: 0,
+                    style: { width: '100%', backgroundColor: '#fafafa' },
+                  }}
+                />
               </Col>
               <Col span={12}>
                 <ProFormDigit
@@ -483,61 +558,7 @@ const MoldReturnInPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="从领用单转入"
-        open={borrowPickerOpen}
-        onCancel={() => setBorrowPickerOpen(false)}
-        width={800}
-        footer={null}
-        destroyOnHidden
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Input placeholder="筛选单号/部门/模具" value={borrowKw} onChange={(e) => setBorrowKw(e.target.value)} allowClear />
-          <Table<MoldBorrowSheetRow>
-            size="small"
-            rowKey="id"
-            loading={borrowLoading}
-            pagination={false}
-            scroll={{ y: 360 }}
-            dataSource={filteredBorrows}
-            columns={[
-              { title: '领用单ID', dataIndex: 'id', width: 88 },
-              { title: '来源单号', dataIndex: 'source_order_no', width: 120, ellipsis: true },
-              { title: '领用部门', dataIndex: 'department_name', width: 130, ellipsis: true },
-              { title: '模具代号', dataIndex: 'mold_code', width: 110 },
-              {
-                title: '操作',
-                key: 'op',
-                width: 88,
-                render: (_, b) => (
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      formRef.current?.setFieldsValue({
-                        borrow_sheet_no: `领用单#${b.id}`,
-                        issue_department_uuid: b.department_uuid ?? undefined,
-                        production_order_no: b.source_order_no ?? undefined,
-                        mold_code: b.mold_code,
-                        mold_name: b.mold_name,
-                        finished_product_code: b.finished_product_code ?? undefined,
-                        finished_product_name: b.finished_product_name ?? undefined,
-                        manufacture_qty: b.planned_qty != null ? Number(b.planned_qty) : undefined,
-                      });
-                      setBorrowPickerOpen(false);
-                      messageApi.success(`已转入领用单 #${b.id}`);
-                    }}
-                  >
-                    选用
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </Space>
-      </Modal>
-
-      <Modal
-        title="选择模具"
+        title="选择模具（仅台账状态为「在用」）"
         open={moldPickerOpen}
         onCancel={() => setMoldPickerOpen(false)}
         width={720}
@@ -567,7 +588,7 @@ const MoldReturnInPage: React.FC = () => {
                     onClick={() => {
                       formRef.current?.setFieldsValue({ mold_code: r.mold_code, mold_name: r.name });
                       setMoldPickerOpen(false);
-                      messageApi.success(`已选择模具 ${r.mold_code}`);
+                      void autoFetchBorrowLookup('', r.mold_code.trim());
                     }}
                   >
                     选用

@@ -84,6 +84,13 @@ class ExecuteQueryRequest(BaseModel):
         None,
         description="可选：与数据集已保存的 query_config 浅合并，仅用于本次执行（不落库），便于设计器未保存时预览",
     )
+    fill_missing_sql_parameters: bool = Field(
+        False,
+        description=(
+            "仅 SQL 数据集：为 SQL 中出现但本次未传入的命名参数（:name）补 NULL，便于零行时仍解析语句。"
+            "列名探测等场景可设为 true；常规业务查询请保持 false。"
+        ),
+    )
 
 
 class ExecuteQueryResponse(BaseModel):

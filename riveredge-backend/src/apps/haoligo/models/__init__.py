@@ -13,6 +13,7 @@ from apps.haoligo.models.equipment import (
 )
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
+from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
@@ -37,6 +38,7 @@ __all__ = [
     "HaoligoWorkshop",
     "HaoligoMold",
     "HaoligoMoldBorrowSheet",
+    "HaoligoMoldBorrowDatasetBinding",
     "HaoligoMoldReturnSheet",
     "HaoligoMoldTrialSheet",
     "HaoligoMoldTrialDatasetBinding",

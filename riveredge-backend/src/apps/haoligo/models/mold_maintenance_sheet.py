@@ -13,6 +13,8 @@ class HaoligoMoldMaintenanceSheet(HaoligoTenantModel):
         table_description = "好力GO - 维保单"
         indexes = [("tenant_id",), ("service_type",), ("department_uuid",)]
 
+    applicant_user_id = fields.IntField(null=True, description="申请人用户 ID（core_users）")
+    applicant_name = fields.CharField(max_length=100, null=True, description="申请人显示名（冗余）")
     department_uuid = fields.CharField(max_length=36, null=True, description="申请部门 UUID")
     department_name = fields.CharField(max_length=200, null=True, description="申请部门名称")
     service_type = fields.CharField(max_length=16, description="维修/保养")

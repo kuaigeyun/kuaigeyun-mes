@@ -75,6 +75,11 @@ export interface DictionarySelectProps {
   colProps?: { span: number };
   /** 验证规则 */
   rules?: any[];
+  /**
+   * 快速新建成功后写入表单的路径（默认与 `name` 相同）。
+   * 嵌套在 ProFormList 等场景下请传根路径，例如 `['line_items', rowIndex, 'repair_reason']`，而 `name` 仍用相对字段名 `repair_reason`。
+   */
+  setFieldValueNamePath?: string | number | (string | number)[];
   /** 表单实例引用（用于创建新项后更新表单值） */
   formRef?: React.RefObject<any>;
   /** 是否不包裹 ProForm.Item */
@@ -117,6 +122,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   initialValue,
   colProps,
   rules,
+  setFieldValueNamePath,
   formRef,
   noStyle = false,
   size,
@@ -225,12 +231,11 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       await loadDictionaryItems();
 
       const newValue = newItem.value;
-      
-      // 如果提供了 name，则尝试通过 name 更新表单（针对 ProForm 或 antd Form）
-      if (name) {
-        if (formRef?.current) {
-          formRef.current.setFieldsValue({ [Array.isArray(name) ? name[name.length - 1] : name]: newValue });
-        }
+
+      const pathSource = setFieldValueNamePath !== undefined ? setFieldValueNamePath : name;
+      if (pathSource != null && formRef?.current?.setFieldValue) {
+        const path = (Array.isArray(pathSource) ? pathSource : [pathSource]) as (string | number)[];
+        formRef.current.setFieldValue(path, newValue);
       }
       
       // 触发 onChange 供外部同步

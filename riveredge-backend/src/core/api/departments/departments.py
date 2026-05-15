@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from pydantic import BaseModel, Field
 
 from core.models.department import Department
+from core.models.department_dataset_binding import DepartmentDatasetBinding
 from core.schemas.department import (
     DepartmentCreate,
     DepartmentUpdate,
@@ -28,6 +29,40 @@ class LoadDepartmentPresetRequest(BaseModel):
     """加载部门预设：可指定仅创建勾选的部门编码"""
 
     codes: Optional[List[str]] = Field(None, description="部门编码列表；不传则加载全部预设")
+
+
+class DepartmentDatasetBindingOut(BaseModel):
+    dataset_uuid: Optional[str] = None
+    department_name_column: Optional[str] = None
+    department_code_column: Optional[str] = None
+    parent_ref_column: Optional[str] = None
+    description_column: Optional[str] = None
+
+
+class DepartmentDatasetBindingUpsert(BaseModel):
+    dataset_uuid: Optional[str] = None
+    department_name_column: Optional[str] = None
+    department_code_column: Optional[str] = None
+    parent_ref_column: Optional[str] = None
+    description_column: Optional[str] = None
+
+
+class DepartmentSyncFromDatasetOut(BaseModel):
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
+def _serialize_department_dataset_binding(row: Optional[DepartmentDatasetBinding]) -> DepartmentDatasetBindingOut:
+    if not row:
+        return DepartmentDatasetBindingOut()
+    return DepartmentDatasetBindingOut(
+        dataset_uuid=row.dataset_uuid,
+        department_name_column=row.department_name_column,
+        department_code_column=row.department_code_column,
+        parent_ref_column=row.parent_ref_column,
+        description_column=row.description_column,
+    )
 
 
 router = APIRouter(prefix="/departments", tags=["Core · Departments"])
@@ -159,6 +194,65 @@ async def get_department_preset_preview(
 ):
     """返回预设部门清单（静态），供前端勾选后再创建。"""
     return list(DepartmentService.PRESET_DEPARTMENTS)
+
+
+@router.get("/dataset-binding", response_model=DepartmentDatasetBindingOut, summary="部门管理关联数据集配置")
+async def get_department_dataset_binding(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    row = await DepartmentDatasetBinding.filter(tenant_id=tenant_id).first()
+    return _serialize_department_dataset_binding(row)
+
+
+@router.put("/dataset-binding", response_model=DepartmentDatasetBindingOut, summary="保存部门管理关联数据集配置")
+async def put_department_dataset_binding(
+    body: DepartmentDatasetBindingUpsert,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    ds = (body.dataset_uuid or "").strip()
+    if not ds:
+        await DepartmentDatasetBinding.filter(tenant_id=tenant_id).delete()
+        return DepartmentDatasetBindingOut()
+
+    name_c = (body.department_name_column or "").strip()
+    if not name_c:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="已选择数据集时，请填写部门名称对应的结果列名（与 SQL 查询结果列别名一致）",
+        )
+
+    await DepartmentDatasetBinding.filter(tenant_id=tenant_id).delete()
+    row = await DepartmentDatasetBinding.create(
+        tenant_id=tenant_id,
+        dataset_uuid=ds,
+        department_name_column=name_c,
+        department_code_column=(body.department_code_column or "").strip() or None,
+        parent_ref_column=(body.parent_ref_column or "").strip() or None,
+        description_column=(body.description_column or "").strip() or None,
+        sort_order_column=None,
+        is_active_column=None,
+    )
+    return _serialize_department_dataset_binding(row)
+
+
+@router.post("/sync-from-dataset", response_model=DepartmentSyncFromDatasetOut, summary="从绑定数据集同步部门")
+async def sync_departments_from_dataset(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        result = await DepartmentService.sync_departments_from_dataset(
+            tenant_id=tenant_id,
+            current_user_id=current_user.id,
+        )
+        return DepartmentSyncFromDatasetOut(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
 
 @router.get("/{department_uuid}", response_model=DepartmentResponse)

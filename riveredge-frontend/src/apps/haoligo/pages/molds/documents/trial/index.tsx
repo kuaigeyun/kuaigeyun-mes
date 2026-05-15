@@ -19,7 +19,6 @@ import { App, Alert, AutoComplete, Button, Col, Form, Input, Modal, Radio, Row, 
 import { DeleteOutlined, EditOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
 import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
@@ -124,19 +123,27 @@ const MoldTrialSheetsPage: React.FC = () => {
       }
       setBindingColumnsLoading(true);
       try {
-        const res = await executeDatasetQuery(uuid, { parameters: {}, limit: 5, offset: 0 });
-        if (!res.success) {
-          if (!opts?.silent) {
-            messageApi.warning(res.error || '无法加载列名：请确认该 SQL 支持无参数执行（与「从模具采购单创建」列表一致）');
-          }
-          setBindingColumnOptions([]);
-          return;
-        }
+        const res = await executeDatasetQuery(uuid, {
+          parameters: {},
+          fill_missing_sql_parameters: true,
+          limit: 5,
+          offset: 0,
+        });
         const raw = res.columns?.length
           ? res.columns
           : res.data?.[0]
             ? Object.keys(res.data[0] as object)
             : [];
+        if (!raw.length) {
+          if (!opts?.silent) {
+            messageApi.warning(
+              res.error ||
+                '无法加载列名：请确认该 SQL 支持无参数执行（与「从模具采购单创建」列表一致）',
+            );
+          }
+          setBindingColumnOptions([]);
+          return;
+        }
         const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
         setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
         if (!opts?.silent && unique.length) {
@@ -178,7 +185,7 @@ const MoldTrialSheetsPage: React.FC = () => {
 
   const handleOpenPoFromErp = useCallback(() => {
     if (!canCreateFromPo) {
-      messageApi.warning('请先在「关联数据集配置」里选好数据集，并填齐四个结果列名后保存。');
+      messageApi.warning('请先在「数据集」里选好数据集，并填齐四个结果列名后保存。');
       return;
     }
     setPoPickerSelectedKeys([]);
@@ -262,7 +269,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         title={
           canCreateFromPo
             ? '从当前数据集拉列表，选一行带出订单与模具信息'
-            : '请完成「关联数据集配置」：一个数据集 + 四个列名'
+            : '请完成「数据集」配置：一个数据集 + 四个列名'
         }
       >
         <span>
@@ -369,19 +376,6 @@ const MoldTrialSheetsPage: React.FC = () => {
       cancelled = true;
     };
   }, []);
-
-  const handleCreate = () => {
-    setIsEdit(false);
-    setEditId(null);
-    setFormInitialValues({
-      trial_result: '合格',
-      result_attachments: [],
-      inspection_attachments: [],
-    });
-    setModalVisible(true);
-  };
-
-  useNewShortcut(handleCreate);
 
   const handleEdit = async (record: MoldTrialSheetRow) => {
     try {
@@ -749,9 +743,6 @@ const MoldTrialSheetsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          showCreateButton
-          createButtonText="手工新增"
-          onCreate={handleCreate}
           toolBarActionsBeforeCreate={createFromPoToolbar}
           showDatasetConfigButton
           onDatasetConfig={handleDatasetConfig}
