@@ -6,7 +6,7 @@ import React from 'react';
 import { Radio, Spin, Typography } from 'antd';
 import { ProForm, ProFormDateTimePicker, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import type { DictionaryItem } from '../../../../../services/dataDictionary';
-import type { WorkshopRow } from '../../../services/haoligo';
+import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
 
 const { Text } = Typography;
 
@@ -51,6 +51,23 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
         placeholder="请选择"
         options={workshops.map((w) => ({ label: w.name, value: w.id }))}
         fieldProps={{ showSearch: true, optionFilterProp: 'label', disabled: readOnly }}
+      />
+    </div>
+    <div style={{ marginBottom: 12 }}>
+      <FieldLabel label="关联设备（可选）" />
+      <ProFormSelect
+        name="equipment_id"
+        placeholder="请选择设备（可选）"
+        fieldProps={{
+          showSearch: true,
+          filterOption: false,
+          allowClear: true,
+          disabled: readOnly,
+        }}
+        request={async ({ keyWords }) => {
+          const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
+          return (res.items || []).map((e) => ({ label: `${e.asset_code} ${e.name}`, value: e.id }));
+        }}
       />
     </div>
     <div style={{ marginBottom: 12 }}>

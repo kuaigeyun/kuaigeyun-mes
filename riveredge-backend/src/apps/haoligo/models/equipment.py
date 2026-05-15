@@ -146,6 +146,16 @@ class HaoligoEquipment(HaoligoTenantModel):
         on_delete=fields.SET_NULL,
         description="点检参数集（为空时可按类别默认解析）",
     )
+    criticality = fields.CharField(
+        max_length=8,
+        null=True,
+        description="设备重要等级：A/B/C，空表示未分级",
+    )
+    operational_status = fields.CharField(
+        max_length=16,
+        null=True,
+        description="运行状态：running/repair/shutdown/standby，空表示未设置",
+    )
     remark = fields.TextField(null=True, description="备注")
 
 

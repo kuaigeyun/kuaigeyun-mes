@@ -8,6 +8,11 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from apps.haoligo.api.routes_equipment import router as equipment_router
+from apps.haoligo.api.routes_equipment_documents import router as equipment_documents_router
+from apps.haoligo.api.routes_equipment_upkeep_complete_sheet import (
+    router as equipment_upkeep_complete_sheet_router,
+)
+from apps.haoligo.api.routes_equipment_upkeep_sheet import router as equipment_upkeep_sheet_router
 from apps.haoligo.api.routes_mold import router as mold_router
 from apps.haoligo.api.routes_mold_borrow_sheet import router as mold_borrow_sheet_router
 from apps.haoligo.api.routes_mold_return_sheet import router as mold_return_sheet_router
@@ -46,6 +51,9 @@ async def get_haoligo_meta() -> HaoligoMeta:
 
 
 router.include_router(equipment_router)
+router.include_router(equipment_documents_router)
+router.include_router(equipment_upkeep_sheet_router)
+router.include_router(equipment_upkeep_complete_sheet_router)
 router.include_router(mold_borrow_sheet_router)
 router.include_router(mold_return_sheet_router)
 router.include_router(mold_trial_sheet_router)

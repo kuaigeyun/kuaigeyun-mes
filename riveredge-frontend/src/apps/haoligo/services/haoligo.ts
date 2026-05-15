@@ -44,6 +44,8 @@ export interface EquipmentRow {
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
   inspection_param_set_id?: number | null;
+  criticality?: string | null;
+  operational_status?: string | null;
   remark?: string | null;
 }
 
@@ -59,6 +61,29 @@ export function listCategories(): Promise<CategoryRow[]> {
   return apiRequest(`${PREFIX}/equipment/categories`);
 }
 
+export type CategoryCreatePayload = {
+  code: string;
+  name: string;
+  default_inspection_param_set_id?: number | null;
+};
+
+export type CategoryUpdatePayload = {
+  name?: string;
+  default_inspection_param_set_id?: number | null;
+};
+
+export function createCategory(body: CategoryCreatePayload): Promise<CategoryRow> {
+  return apiRequest(`${PREFIX}/equipment/categories`, { method: 'POST', data: body });
+}
+
+export function updateCategory(rowId: number, body: CategoryUpdatePayload): Promise<CategoryRow> {
+  return apiRequest(`${PREFIX}/equipment/categories/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteCategory(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/categories/${rowId}`, { method: 'DELETE' });
+}
+
 export type EquipmentCreatePayload = {
   asset_code: string;
   name: string;
@@ -67,6 +92,8 @@ export type EquipmentCreatePayload = {
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
   inspection_param_set_id?: number | null;
+  criticality?: string | null;
+  operational_status?: string | null;
   remark?: string | null;
 };
 
@@ -77,11 +104,14 @@ export type EquipmentUpdatePayload = {
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
   inspection_param_set_id?: number | null;
+  criticality?: string | null;
+  operational_status?: string | null;
   remark?: string | null;
 };
 
 export function listEquipments(params?: {
   workshop_id?: number;
+  keyword?: string;
   asset_code?: string;
   name?: string;
   skip?: number;
@@ -100,6 +130,21 @@ export function createEquipment(body: EquipmentCreatePayload): Promise<Equipment
 
 export function updateEquipment(rowId: number, body: EquipmentUpdatePayload): Promise<EquipmentRow> {
   return apiRequest(`${PREFIX}/equipment/equipments/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export interface EquipmentOperationalStatusLogRow {
+  id: number;
+  created_at: string;
+  old_status?: string | null;
+  new_status: string;
+  changed_by_user_id: number;
+}
+
+export function listEquipmentOperationalStatusHistory(
+  equipmentId: number,
+  params?: { limit?: number },
+): Promise<EquipmentOperationalStatusLogRow[]> {
+  return apiRequest(`${PREFIX}/equipment/equipments/${equipmentId}/operational-status-history`, { params });
 }
 
 export function deleteEquipment(rowId: number): Promise<void> {
@@ -269,7 +314,18 @@ export interface InspectionParamSetItemRow {
 }
 
 export type SetItemCreatePayload = { param_id: number; sort_order?: number; is_required?: boolean };
+export type InspectionParamSetCreateWithItemsPayload = {
+  code: string;
+  name: string;
+  items: SetItemCreatePayload[];
+};
 export type SetItemUpdatePayload = { sort_order?: number; is_required?: boolean };
+
+export function createInspectionParamSetWithItems(
+  body: InspectionParamSetCreateWithItemsPayload,
+): Promise<InspectionParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/with-items`, { method: 'POST', data: body });
+}
 
 export function listInspectionParamSetItems(setId: number): Promise<InspectionParamSetItemRow[]> {
   return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${setId}/items`);
@@ -285,6 +341,438 @@ export function updateInspectionParamSetItem(itemId: number, body: SetItemUpdate
 
 export function deleteInspectionParamSetItem(itemId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/inspection-param-set-items/${itemId}`, { method: 'DELETE' });
+}
+
+/** --- 设备运行单据（点检 / 路线巡检 / 维保 / 产出）--- */
+
+export interface EquipmentSpotCheckLineRow {
+  id: number;
+  inspection_param_id?: number | null;
+  param_code: string;
+  param_name: string;
+  sort_order: number;
+  value_type: string;
+  unit?: string | null;
+  is_required: boolean;
+  measured_value?: string | null;
+  result: string;
+  remark?: string | null;
+  attachment_file_ids?: string[] | null;
+}
+
+export interface EquipmentSpotCheckRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  recorded_at: string;
+  equipment_id: number;
+  equipment_asset_code?: string;
+  equipment_name?: string;
+  inspection_param_set_id?: number | null;
+  inspection_param_set_code?: string | null;
+  inspection_param_set_name?: string | null;
+  reporter_user_id: number;
+  abnormal_description?: string | null;
+  handling_shutdown: boolean;
+  handling_report: boolean;
+  handling_supervised: boolean;
+  created_at: string;
+  lines?: EquipmentSpotCheckLineRow[];
+}
+
+export type EquipmentSpotCheckCreatePayload = {
+  equipment_id: number;
+  inspection_param_set_id?: number | null;
+  recorded_at?: string | null;
+  abnormal_description?: string | null;
+  handling_shutdown?: boolean;
+  handling_report?: boolean;
+  handling_supervised?: boolean;
+};
+
+export type EquipmentSpotCheckLinePatch = {
+  id: number;
+  result: string;
+  remark?: string | null;
+  measured_value?: string | null;
+  attachment_file_ids?: string[] | null;
+};
+export type EquipmentSpotCheckUpdatePayload = {
+  recorded_at?: string | null;
+  abnormal_description?: string | null;
+  handling_shutdown?: boolean;
+  handling_report?: boolean;
+  handling_supervised?: boolean;
+  lines?: EquipmentSpotCheckLinePatch[];
+};
+
+export interface EquipmentSpotCheckPreviewLine {
+  inspection_param_id?: number | null;
+  param_code: string;
+  param_name: string;
+  sort_order: number;
+  value_type: string;
+  unit?: string | null;
+  is_required: boolean;
+}
+
+export interface EquipmentSpotCheckPreviewResult {
+  equipment_id: number;
+  inspection_param_set_id: number;
+  inspection_param_set_code: string;
+  inspection_param_set_name: string;
+  lines: EquipmentSpotCheckPreviewLine[];
+}
+
+export function previewEquipmentSpotCheckLines(params: {
+  equipment_id: number;
+  inspection_param_set_id?: number;
+}): Promise<EquipmentSpotCheckPreviewResult> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks/preview-lines`, { params });
+}
+
+export function listEquipmentSpotChecks(params?: {
+  skip?: number;
+  limit?: number;
+  equipment_id?: number;
+  inspection_param_set_id?: number;
+  sheet_no?: string;
+  recorded_from?: string;
+  recorded_to?: string;
+  keyword?: string;
+}): Promise<PageResult<EquipmentSpotCheckRow>> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks`, { params });
+}
+
+export function getEquipmentSpotCheck(rowId: number): Promise<EquipmentSpotCheckRow> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks/${rowId}`);
+}
+
+export function createEquipmentSpotCheck(body: EquipmentSpotCheckCreatePayload): Promise<EquipmentSpotCheckRow> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentSpotCheck(
+  rowId: number,
+  body: EquipmentSpotCheckUpdatePayload,
+): Promise<EquipmentSpotCheckRow> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentSpotCheck(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/spot-checks/${rowId}`, { method: 'DELETE' });
+}
+
+export interface EquipmentRoutePatrolLineRow {
+  id: number;
+  equipment_id: number;
+  asset_code: string;
+  equipment_name: string;
+  sequence: number;
+  is_normal: boolean;
+  abnormal_description?: string | null;
+}
+
+export interface EquipmentRoutePatrolRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  recorded_at: string;
+  patrol_route_id: number;
+  patrol_route_code?: string;
+  patrol_route_name?: string;
+  reporter_user_id: number;
+  report_required: boolean;
+  report_to_user_id?: number | null;
+  created_at: string;
+  lines?: EquipmentRoutePatrolLineRow[];
+}
+
+export type EquipmentRoutePatrolCreatePayload = {
+  patrol_route_id: number;
+  recorded_at?: string | null;
+  report_required?: boolean;
+  report_to_user_id?: number | null;
+};
+
+export type EquipmentRoutePatrolLinePatch = {
+  id: number;
+  is_normal: boolean;
+  abnormal_description?: string | null;
+};
+export type EquipmentRoutePatrolUpdatePayload = {
+  recorded_at?: string | null;
+  report_required?: boolean;
+  report_to_user_id?: number | null;
+  lines?: EquipmentRoutePatrolLinePatch[];
+};
+
+export function listEquipmentRoutePatrols(params?: {
+  skip?: number;
+  limit?: number;
+  patrol_route_id?: number;
+  sheet_no?: string;
+  recorded_from?: string;
+  recorded_to?: string;
+  keyword?: string;
+}): Promise<PageResult<EquipmentRoutePatrolRow>> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols`, { params });
+}
+
+export function getEquipmentRoutePatrol(rowId: number): Promise<EquipmentRoutePatrolRow> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols/${rowId}`);
+}
+
+export function createEquipmentRoutePatrol(
+  body: EquipmentRoutePatrolCreatePayload,
+): Promise<EquipmentRoutePatrolRow> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentRoutePatrol(
+  rowId: number,
+  body: EquipmentRoutePatrolUpdatePayload,
+): Promise<EquipmentRoutePatrolRow> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentRoutePatrol(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols/${rowId}`, { method: 'DELETE' });
+}
+
+export interface EquipmentUpkeepSheetRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
+  department_uuid?: string | null;
+  department_name?: string | null;
+  header_attachment_file_uuids: string[];
+  equipment_id: number;
+  equipment_asset_code?: string | null;
+  equipment_name?: string | null;
+  description: string;
+  reporter_user_id: number;
+  created_at: string;
+}
+
+export type EquipmentUpkeepSheetCreatePayload = {
+  applicant_user_id: number;
+  department_uuid: string;
+  equipment_id: number;
+  description: string;
+  header_attachment_file_uuids?: string[] | null;
+};
+
+export type EquipmentUpkeepSheetUpdatePayload = {
+  applicant_user_id?: number;
+  department_uuid?: string;
+  equipment_id?: number;
+  description?: string;
+  header_attachment_file_uuids?: string[] | null;
+};
+
+export function listEquipmentUpkeepSheets(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  open_for_complete?: boolean;
+}): Promise<PageResult<EquipmentUpkeepSheetRow>> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-sheets`, { params });
+}
+
+export function getEquipmentUpkeepSheet(rowId: number): Promise<EquipmentUpkeepSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-sheets/${rowId}`);
+}
+
+export function createEquipmentUpkeepSheet(
+  body: EquipmentUpkeepSheetCreatePayload,
+): Promise<EquipmentUpkeepSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-sheets`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentUpkeepSheet(
+  rowId: number,
+  body: EquipmentUpkeepSheetUpdatePayload,
+): Promise<EquipmentUpkeepSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-sheets/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentUpkeepSheet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-sheets/${rowId}`, { method: 'DELETE' });
+}
+
+export interface EquipmentUpkeepCompleteSheetRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  source_upkeep_sheet_id?: number | null;
+  source_order_no: string;
+  applicant_user_id?: number | null;
+  applicant_name?: string | null;
+  department_uuid?: string | null;
+  department_name?: string | null;
+  header_attachment_file_uuids: string[];
+  source_header_attachment_file_uuids: string[];
+  equipment_id?: number | null;
+  equipment_asset_code?: string | null;
+  equipment_name?: string | null;
+  source_description?: string | null;
+  completion_content: string;
+  reporter_user_id: number;
+  created_at: string;
+}
+
+export type EquipmentUpkeepCompleteSheetCreatePayload = {
+  source_upkeep_sheet_id: number;
+  applicant_user_id?: number | null;
+  department_uuid?: string | null;
+  header_attachment_file_uuids?: string[] | null;
+  completion_content: string;
+};
+
+export type EquipmentUpkeepCompleteSheetUpdatePayload = {
+  applicant_user_id?: number;
+  department_uuid?: string;
+  header_attachment_file_uuids?: string[] | null;
+  completion_content?: string;
+};
+
+export function listEquipmentUpkeepCompleteSheets(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  created_from?: string;
+  created_to?: string;
+}): Promise<PageResult<EquipmentUpkeepCompleteSheetRow>> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets`, { params });
+}
+
+export function getEquipmentUpkeepCompleteSheet(rowId: number): Promise<EquipmentUpkeepCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets/${rowId}`);
+}
+
+export function createEquipmentUpkeepCompleteSheet(
+  body: EquipmentUpkeepCompleteSheetCreatePayload,
+): Promise<EquipmentUpkeepCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentUpkeepCompleteSheet(
+  rowId: number,
+  body: EquipmentUpkeepCompleteSheetUpdatePayload,
+): Promise<EquipmentUpkeepCompleteSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentUpkeepCompleteSheet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets/${rowId}`, { method: 'DELETE' });
+}
+
+export interface EquipmentOutputRecordRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  recorded_at: string;
+  equipment_id: number;
+  equipment_asset_code?: string;
+  equipment_name?: string;
+  work_order_no: string;
+  customer_name?: string | null;
+  product_name?: string | null;
+  planned_qty?: string | number | null;
+  completed_qty: string | number;
+  startup_at?: string | null;
+  completed_at?: string | null;
+  operator_name?: string | null;
+  team_leader_name?: string | null;
+  reporter_user_id: number;
+  dataset_snapshot?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export type EquipmentOutputRecordCreatePayload = {
+  equipment_id: number;
+  work_order_no: string;
+  recorded_at?: string | null;
+  customer_name?: string | null;
+  product_name?: string | null;
+  planned_qty?: string | number | null;
+  completed_qty?: string | number;
+  startup_at?: string | null;
+  completed_at?: string | null;
+  operator_name?: string | null;
+  team_leader_name?: string | null;
+  dataset_snapshot?: Record<string, unknown> | null;
+};
+
+export type EquipmentOutputRecordUpdatePayload = Partial<
+  Omit<EquipmentOutputRecordCreatePayload, 'equipment_id' | 'work_order_no'>
+> & { work_order_no?: string };
+
+export function listEquipmentOutputRecords(params?: {
+  skip?: number;
+  limit?: number;
+  equipment_id?: number;
+  sheet_no?: string;
+  work_order_no?: string;
+  recorded_from?: string;
+  recorded_to?: string;
+  keyword?: string;
+}): Promise<PageResult<EquipmentOutputRecordRow>> {
+  return apiRequest(`${PREFIX}/equipment/output-records`, { params });
+}
+
+export function getEquipmentOutputRecord(rowId: number): Promise<EquipmentOutputRecordRow> {
+  return apiRequest(`${PREFIX}/equipment/output-records/${rowId}`);
+}
+
+export function createEquipmentOutputRecord(
+  body: EquipmentOutputRecordCreatePayload,
+): Promise<EquipmentOutputRecordRow> {
+  return apiRequest(`${PREFIX}/equipment/output-records`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentOutputRecord(
+  rowId: number,
+  body: EquipmentOutputRecordUpdatePayload,
+): Promise<EquipmentOutputRecordRow> {
+  return apiRequest(`${PREFIX}/equipment/output-records/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentOutputRecord(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/output-records/${rowId}`, { method: 'DELETE' });
+}
+
+export interface EquipmentOutputDatasetBindingPayload {
+  dataset_uuid?: string | null;
+  work_order_param_key?: string | null;
+  customer_column?: string | null;
+  product_name_column?: string | null;
+  planned_qty_column?: string | null;
+}
+
+export function getEquipmentOutputDatasetBinding(): Promise<EquipmentOutputDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/equipment/output-dataset-binding`);
+}
+
+export function putEquipmentOutputDatasetBinding(
+  body: EquipmentOutputDatasetBindingPayload,
+): Promise<EquipmentOutputDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/equipment/output-dataset-binding`, { method: 'PUT', data: body });
+}
+
+export function previewEquipmentOutputByWorkOrder(body: {
+  work_order_no: string;
+}): Promise<{
+  work_order_no: string;
+  customer_name?: string | null;
+  product_name?: string | null;
+  planned_qty?: string | number | null;
+  dataset_row?: Record<string, unknown> | null;
+}> {
+  return apiRequest(`${PREFIX}/equipment/output-records/preview-by-work-order`, { method: 'POST', data: body });
 }
 
 /** 模具台账（与后端 MoldOut 对齐） */
@@ -1107,6 +1595,9 @@ export function deleteMoldReturnSheet(rowId: number): Promise<void> {
 export interface HazardRow {
   id: number;
   uuid: string;
+  equipment_id?: number | null;
+  equipment_asset_code?: string | null;
+  equipment_name?: string | null;
   workshop_id?: number | null;
   workshop_name?: string | null;
   workshop_area?: string | null;
@@ -1129,6 +1620,7 @@ export function listHazardReports(params?: {
   skip?: number;
   limit?: number;
   status?: string;
+  equipment_id?: number;
   /** 为 true 时仅待治理（检查中/维修中）；与 status 同时传时以后端为准（通常只传 status） */
   for_remediation?: boolean;
 }): Promise<PageResult<HazardRow>> {
@@ -1136,6 +1628,7 @@ export function listHazardReports(params?: {
 }
 
 export type HazardCreatePayload = {
+  equipment_id?: number | null;
   workshop_id?: number | null;
   workshop_area?: string | null;
   reported_at?: string | null;

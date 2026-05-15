@@ -15,7 +15,9 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Modal, Row, Space } from 'antd';
+import { App, Button, Col, Modal, Row, Space, Table, Typography } from 'antd';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,12 +28,14 @@ import {
   getEquipment,
   listCategories,
   listEquipments,
+  listEquipmentOperationalStatusHistory,
   listInspectionParamSets,
   listManufacturers,
   listWorkshops,
   updateEquipment,
   type CategoryRow,
   type EquipmentCreatePayload,
+  type EquipmentOperationalStatusLogRow,
   type EquipmentRow,
   type EquipmentUpdatePayload,
   type InspectionParamSetRow,
@@ -48,6 +52,7 @@ function toIsoDate(v: unknown): string | null | undefined {
 }
 
 const EquipmentLedgerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -62,6 +67,9 @@ const EquipmentLedgerPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false);
+  const [statusHistoryRows, setStatusHistoryRows] = useState<EquipmentOperationalStatusLogRow[]>([]);
+  const [statusHistoryLoading, setStatusHistoryLoading] = useState(false);
 
   const loadLookups = useCallback(async () => {
     try {
@@ -76,9 +84,9 @@ const EquipmentLedgerPage: React.FC = () => {
       setManufacturers(mfr);
       setParamSets(sets);
     } catch (e) {
-      messageApi.error((e as Error).message || '加载主数据失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.loadLookupFailed'));
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   useEffect(() => {
     void loadLookups();
@@ -106,6 +114,54 @@ const EquipmentLedgerPage: React.FC = () => {
   const mfrMap = useMemo(() => new Map(manufacturers.map((m) => [m.id, m])), [manufacturers]);
   const setMap = useMemo(() => new Map(paramSets.map((s) => [s.id, s])), [paramSets]);
 
+  const criticalityLabel = useCallback(
+    (c: string | null | undefined) => {
+      const u = c?.toUpperCase();
+      if (!u) return t('app.haoligo.equipment.ledger.criticalityNone');
+      if (u === 'A') return t('app.haoligo.equipment.ledger.criticalityA');
+      if (u === 'B') return t('app.haoligo.equipment.ledger.criticalityB');
+      if (u === 'C') return t('app.haoligo.equipment.ledger.criticalityC');
+      return u;
+    },
+    [t],
+  );
+
+  const criticalitySelectOptions = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.ledger.criticalityA'), value: 'A' },
+      { label: t('app.haoligo.equipment.ledger.criticalityB'), value: 'B' },
+      { label: t('app.haoligo.equipment.ledger.criticalityC'), value: 'C' },
+    ],
+    [t],
+  );
+
+  const operationalStatusSelectOptions = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.ledger.operationalStatusRunning'), value: 'running' },
+      { label: t('app.haoligo.equipment.ledger.operationalStatusRepair'), value: 'repair' },
+      { label: t('app.haoligo.equipment.ledger.operationalStatusShutdown'), value: 'shutdown' },
+      { label: t('app.haoligo.equipment.ledger.operationalStatusStandby'), value: 'standby' },
+    ],
+    [t],
+  );
+
+  const operationalStatusLabel = useCallback(
+    (s: string | null | undefined) => {
+      const v = (s || '').trim().toLowerCase();
+      if (!v) return t('app.haoligo.equipment.ledger.operationalStatusNone');
+      const map: Record<string, string> = {
+        running: t('app.haoligo.equipment.ledger.operationalStatusRunning'),
+        repair: t('app.haoligo.equipment.ledger.operationalStatusRepair'),
+        shutdown: t('app.haoligo.equipment.ledger.operationalStatusShutdown'),
+        standby: t('app.haoligo.equipment.ledger.operationalStatusStandby'),
+      };
+      return map[v] || v;
+    },
+    [t],
+  );
+
+  const dash = useMemo(() => t('app.haoligo.equipment.ledger.commonDash'), [t]);
+
   const handleCreate = () => {
     setIsEdit(false);
     setEditId(null);
@@ -125,30 +181,48 @@ const EquipmentLedgerPage: React.FC = () => {
         workshop_id: detail.workshop_id,
         manufacturer_id: detail.manufacturer_id ?? undefined,
         inspection_param_set_id: detail.inspection_param_set_id ?? undefined,
+        criticality: detail.criticality ?? undefined,
+        operational_status: detail.operational_status ?? undefined,
         manufacture_date: detail.manufacture_date ? dayjs(detail.manufacture_date) : undefined,
         remark: detail.remark ?? '',
       });
       setModalVisible(true);
     } catch (e) {
-      messageApi.error((e as Error).message || '加载设备失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.loadEquipmentFailed'));
     }
   };
 
   const handleDeleteOne = (record: EquipmentRow) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定删除设备「${record.name}」（${record.asset_code}）吗？`,
+      title: t('app.haoligo.equipment.ledger.deleteTitle'),
+      content: t('app.haoligo.equipment.ledger.deleteContent', { name: record.name, asset_code: record.asset_code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await deleteEquipment(record.id);
-          messageApi.success('已删除');
+          messageApi.success(t('app.haoligo.equipment.deleteSuccess'));
           actionRef.current?.reload();
         } catch (e) {
-          messageApi.error((e as Error).message || '删除失败');
+          messageApi.error((e as Error).message || t('app.haoligo.equipment.deleteFailed'));
         }
       },
     });
+  };
+
+  const operationalStatusPayload = (values: Record<string, unknown>): string | null => {
+    const raw = values.operational_status;
+    if (raw == null || raw === '') return null;
+    const s = String(raw).trim().toLowerCase();
+    if (s === 'running' || s === 'repair' || s === 'shutdown' || s === 'standby') return s;
+    return null;
+  };
+
+  const criticalityPayload = (values: Record<string, unknown>): string | null => {
+    const raw = values.criticality;
+    if (raw == null || raw === '') return null;
+    const s = String(raw).trim().toUpperCase();
+    if (s === 'A' || s === 'B' || s === 'C') return s;
+    return null;
   };
 
   const buildCreatePayload = (values: Record<string, unknown>): EquipmentCreatePayload => ({
@@ -162,6 +236,8 @@ const EquipmentLedgerPage: React.FC = () => {
       values.inspection_param_set_id != null && values.inspection_param_set_id !== ''
         ? Number(values.inspection_param_set_id)
         : null,
+    criticality: criticalityPayload(values),
+    operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
     remark: String(values.remark ?? '').trim() || null,
   });
@@ -176,112 +252,148 @@ const EquipmentLedgerPage: React.FC = () => {
       values.inspection_param_set_id != null && values.inspection_param_set_id !== ''
         ? Number(values.inspection_param_set_id)
         : null,
+    criticality: criticalityPayload(values),
+    operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
     remark: String(values.remark ?? '').trim() || null,
   });
+
+  const openStatusHistory = async () => {
+    if (editId == null) return;
+    setStatusHistoryLoading(true);
+    setStatusHistoryOpen(true);
+    try {
+      const rows = await listEquipmentOperationalStatusHistory(editId, { limit: 100 });
+      setStatusHistoryRows(rows);
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.statusHistoryLoadFailed'));
+      setStatusHistoryRows([]);
+    } finally {
+      setStatusHistoryLoading(false);
+    }
+  };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     setFormLoading(true);
     try {
       if (isEdit && editId != null) {
         await updateEquipment(editId, buildUpdatePayload(values));
-        messageApi.success('已保存');
+        messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
         await createEquipment(buildCreatePayload(values));
-        messageApi.success('已创建');
+        messageApi.success(t('app.haoligo.equipment.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e) {
-      messageApi.error((e as Error).message || '保存失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
       throw e;
     } finally {
       setFormLoading(false);
     }
   };
 
-  const columns: ProColumns<EquipmentRow>[] = [
-    { title: '设备代号', dataIndex: 'asset_code', width: 120, ellipsis: true, fixed: 'left' },
-    { title: '设备名称', dataIndex: 'name', width: 180, ellipsis: true },
-    {
-      title: '类别',
-      dataIndex: 'category_id',
-      width: 160,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => {
-        const c = catMap.get(r.category_id);
-        return c ? `${c.code} · ${c.name}` : r.category_id;
+  const columns: ProColumns<EquipmentRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.ledger.colAssetCode'), dataIndex: 'asset_code', width: 120, ellipsis: true, fixed: 'left' },
+      { title: t('app.haoligo.equipment.ledger.colName'), dataIndex: 'name', width: 180, ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.ledger.colCategory'),
+        dataIndex: 'category_id',
+        width: 160,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => {
+          const c = catMap.get(r.category_id);
+          return c ? `${c.code} · ${c.name}` : r.category_id;
+        },
       },
-    },
-    {
-      title: '车间',
-      dataIndex: 'workshop_id',
-      width: 140,
-      hideInTable: true,
-      valueType: 'select',
-      fieldProps: { options: workshopOptions, allowClear: true, placeholder: '全部车间' },
-    },
-    {
-      title: '车间',
-      dataIndex: 'workshop_id',
-      width: 160,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => {
-        const w = wsMap.get(r.workshop_id);
-        return w ? `${w.code} · ${w.name}` : r.workshop_id;
+      {
+        title: t('app.haoligo.equipment.ledger.colWorkshop'),
+        dataIndex: 'workshop_id',
+        width: 140,
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: { options: workshopOptions, allowClear: true, placeholder: t('app.haoligo.equipment.ledger.workshopFilterPh') },
       },
-    },
-    {
-      title: '制造厂商',
-      dataIndex: 'manufacturer_id',
-      width: 140,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => {
-        if (r.manufacturer_id == null) return '—';
-        const m = mfrMap.get(r.manufacturer_id);
-        return m ? `${m.code} · ${m.name}` : r.manufacturer_id;
+      {
+        title: t('app.haoligo.equipment.ledger.colWorkshop'),
+        dataIndex: 'workshop_id',
+        width: 160,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => {
+          const w = wsMap.get(r.workshop_id);
+          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        },
       },
-    },
-    {
-      title: '点检方案',
-      dataIndex: 'inspection_param_set_id',
-      width: 160,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => {
-        if (r.inspection_param_set_id == null) return '—';
-        const s = setMap.get(r.inspection_param_set_id);
-        return s ? `${s.code} · ${s.name}` : r.inspection_param_set_id;
+      {
+        title: t('app.haoligo.equipment.ledger.colManufacturer'),
+        dataIndex: 'manufacturer_id',
+        width: 140,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => {
+          if (r.manufacturer_id == null) return dash;
+          const m = mfrMap.get(r.manufacturer_id);
+          return m ? `${m.code} · ${m.name}` : r.manufacturer_id;
+        },
       },
-    },
-    {
-      title: '出厂日期',
-      dataIndex: 'manufacture_date',
-      width: 112,
-      hideInSearch: true,
-      render: (_, r) => (r.manufacture_date ? String(r.manufacture_date).slice(0, 10) : '—'),
-    },
-    { title: '备注', dataIndex: 'remark', ellipsis: true, hideInSearch: true },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 140,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
-            编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('app.haoligo.equipment.ledger.colPlan'),
+        dataIndex: 'inspection_param_set_id',
+        width: 160,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => {
+          if (r.inspection_param_set_id == null) return dash;
+          const s = setMap.get(r.inspection_param_set_id);
+          return s ? `${s.code} · ${s.name}` : r.inspection_param_set_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colCriticality'),
+        dataIndex: 'criticality',
+        width: 100,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => criticalityLabel(r.criticality),
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colOperationalStatus'),
+        dataIndex: 'operational_status',
+        width: 120,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => operationalStatusLabel(r.operational_status),
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colManufactureDate'),
+        dataIndex: 'manufacture_date',
+        width: 112,
+        hideInSearch: true,
+        render: (_, r) => (r.manufacture_date ? String(r.manufacture_date).slice(0, 10) : dash),
+      },
+      { title: t('app.haoligo.equipment.ledger.colRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      {
+        title: t('app.haoligo.equipment.ledger.colActions'),
+        valueType: 'option',
+        width: 140,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+              {t('app.haoligo.equipment.ledger.actionEdit')}
+            </Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+              {t('app.haoligo.equipment.ledger.actionDelete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t, dash, catMap, wsMap, mfrMap, setMap, workshopOptions, criticalityLabel, operationalStatusLabel, handleEdit, handleDeleteOne],
+  );
 
   const codeMap = useMemo(() => {
     const cat = new Map(categories.map((c) => [c.code.trim().toUpperCase(), c.id]));
@@ -295,29 +407,30 @@ const EquipmentLedgerPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<EquipmentRow>
-          headerTitle="设备台账"
+          headerTitle={t('app.haoligo.equipment.ledger.title')}
           columnPersistenceId="apps.haoligo.pages.equipment.ledger"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText="新增"
+          createButtonText={t('app.haoligo.equipment.ledger.createBtn')}
           onCreate={handleCreate}
           showImportButton
           importHeaders={[
-            '*设备代号',
-            '*设备名称',
-            '*类别编码',
-            '*车间编码',
-            '制造厂商编码',
-            '点检方案编码',
-            '出厂日期',
-            '备注',
+            t('app.haoligo.equipment.ledger.importColAssetCode'),
+            t('app.haoligo.equipment.ledger.importColName'),
+            t('app.haoligo.equipment.ledger.importColCategory'),
+            t('app.haoligo.equipment.ledger.importColWorkshop'),
+            t('app.haoligo.equipment.ledger.importColManufacturer'),
+            t('app.haoligo.equipment.ledger.importColPlan'),
+            t('app.haoligo.equipment.ledger.importColDate'),
+            t('app.haoligo.equipment.ledger.importColRemark'),
+            t('app.haoligo.equipment.ledger.importColCriticality'),
           ]}
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('导入数据为空或格式不正确');
+              messageApi.warning(t('app.haoligo.equipment.importEmpty'));
               return;
             }
             const headers = (data[0] || []).map((h: unknown) => String(h ?? '').trim());
@@ -338,8 +451,9 @@ const EquipmentLedgerPage: React.FC = () => {
             const setIdx = getIdx('点检方案编码', '方案', 'param set', 'paramset');
             const dateIdx = getIdx('出厂日期', '日期', 'manufacture');
             const remarkIdx = getIdx('备注', 'remark');
+            const critIdx = getIdx('重要等级', 'abc', 'criticality', '等级', 'crit');
             if (acIdx < 0 || nameIdx < 0 || catIdx < 0 || wsIdx < 0) {
-              messageApi.error('导入表头需包含：设备代号、设备名称、类别编码、车间编码');
+              messageApi.error(t('app.haoligo.equipment.ledger.importErrorCoreCols'));
               return;
             }
             const items: EquipmentCreatePayload[] = [];
@@ -362,6 +476,12 @@ const EquipmentLedgerPage: React.FC = () => {
               if (setCode && inspection_param_set_id == null) continue;
               const dateRaw = dateIdx >= 0 ? String(row[dateIdx] ?? '').trim() : '';
               const manufacture_date = dateRaw ? dateRaw.slice(0, 10) : null;
+              const critRaw = critIdx >= 0 ? String(row[critIdx] ?? '').trim().toUpperCase() : '';
+              let criticality: string | null = null;
+              if (critRaw) {
+                if (critRaw !== 'A' && critRaw !== 'B' && critRaw !== 'C') continue;
+                criticality = critRaw;
+              }
               items.push({
                 asset_code,
                 name,
@@ -369,31 +489,32 @@ const EquipmentLedgerPage: React.FC = () => {
                 workshop_id,
                 manufacturer_id,
                 inspection_param_set_id,
+                criticality,
                 manufacture_date,
                 remark: remarkIdx >= 0 ? String(row[remarkIdx] ?? '').trim() || null : null,
               });
             }
             if (items.length === 0) {
-              messageApi.warning('没有可导入的有效数据（请检查编码是否与主数据一致）');
+              messageApi.warning(t('app.haoligo.equipment.ledger.importErrorEncoding'));
               return;
             }
             const result = await batchImport({
               items,
               importFn: async (item) => createEquipment(item),
-              title: '导入设备台账',
+              title: t('app.haoligo.equipment.ledger.importTitle'),
               concurrency: 3,
             });
             if (result.successCount > 0) {
-              messageApi.success(`成功导入 ${result.successCount} 条`);
+              messageApi.success(t('app.haoligo.equipment.importSuccess', { count: result.successCount }));
               actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
-              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+              messageApi.warning(t('app.haoligo.equipment.importPartialFail', { count: result.failureCount }));
             }
           }}
           showSyncButton
           onSync={() => {
-            messageApi.info('与资产 / ERP 同步能力接入后将在此执行；已刷新当前列表。');
+            messageApi.info(t('app.haoligo.equipment.syncPlaceholder'));
             void loadLookups();
             actionRef.current?.reload();
           }}
@@ -418,16 +539,16 @@ const EquipmentLedgerPage: React.FC = () => {
                 total: res.total,
               };
             } catch (e) {
-              messageApi.error((e as Error).message || '加载失败');
+              messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1500 }}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑设备' : '新增设备'}
+        title={isEdit ? t('app.haoligo.equipment.ledger.modalEdit') : t('app.haoligo.equipment.ledger.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -445,21 +566,26 @@ const EquipmentLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormText
               name="asset_code"
-              label="设备代号"
-              placeholder="资产编号或内部编码"
+              label={t('app.haoligo.equipment.ledger.formAssetCode')}
+              placeholder={t('app.haoligo.equipment.ledger.formAssetCodePh')}
               disabled={isEdit}
-              rules={[{ required: true, message: '请输入设备代号' }]}
+              rules={[{ required: true, message: t('app.haoligo.equipment.ledger.formAssetCodeReq') }]}
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="name" label="设备名称" placeholder="设备名称" rules={[{ required: true, message: '请输入设备名称' }]} />
+            <ProFormText
+              name="name"
+              label={t('app.haoligo.equipment.ledger.formName')}
+              placeholder={t('app.haoligo.equipment.ledger.formNamePh')}
+              rules={[{ required: true, message: t('app.haoligo.equipment.ledger.formNameReq') }]}
+            />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="category_id"
-              label="设备类别"
+              label={t('app.haoligo.equipment.ledger.formCategory')}
               options={categoryOptions}
-              rules={[{ required: true, message: '请选择设备类别' }]}
+              rules={[{ required: true, message: t('app.haoligo.equipment.ledger.formCategoryReq') }]}
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}
             />
@@ -467,17 +593,20 @@ const EquipmentLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="workshop_id"
-              label="所属车间"
+              label={t('app.haoligo.equipment.ledger.formWorkshop')}
               options={workshopOptions}
-              rules={[{ required: true, message: '请选择车间' }]}
+              rules={[{ required: true, message: t('app.haoligo.equipment.ledger.formWorkshopReq') }]}
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}
             />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+              <Link to="/apps/master-data/factory/workshops">{t('app.haoligo.equipment.ledger.linkMasterDataWorkshops')}</Link>
+            </Typography.Text>
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="manufacturer_id"
-              label="制造厂商"
+              label={t('app.haoligo.equipment.ledger.formManufacturer')}
               options={manufacturerOptions}
               allowClear
               showSearch
@@ -487,21 +616,93 @@ const EquipmentLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="inspection_param_set_id"
-              label="点检方案"
+              label={t('app.haoligo.equipment.ledger.formPlan')}
               options={paramSetOptions}
+              allowClear
+              showSearch
+              fieldProps={{ optionFilterProp: 'label' }}
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+              <Link to="/apps/haoligo/equipment/inspection-param-sets">{t('app.haoligo.equipment.ledger.linkInspectionPlans')}</Link>
+            </Typography.Text>
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="criticality"
+              label={t('app.haoligo.equipment.ledger.formCriticality')}
+              tooltip={t('app.haoligo.equipment.ledger.formCriticalityPh')}
+              options={criticalitySelectOptions}
               allowClear
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}
             />
           </Col>
           <Col span={12}>
-            <ProFormDatePicker name="manufacture_date" label="出厂日期" fieldProps={{ style: { width: '100%' } }} />
+            <ProFormSelect
+              name="operational_status"
+              label={t('app.haoligo.equipment.ledger.formOperationalStatus')}
+              tooltip={t('app.haoligo.equipment.ledger.formOperationalStatusPh')}
+              options={operationalStatusSelectOptions}
+              allowClear
+              showSearch
+              fieldProps={{ optionFilterProp: 'label' }}
+            />
+            {isEdit && editId != null ? (
+              <Typography.Link style={{ fontSize: 12 }} onClick={() => void openStatusHistory()}>
+                {t('app.haoligo.equipment.ledger.viewStatusHistory')}
+              </Typography.Link>
+            ) : null}
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="manufacture_date"
+              label={t('app.haoligo.equipment.ledger.formManufactureDate')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label="备注" fieldProps={{ rows: 3 }} />
+            <ProFormTextArea name="remark" label={t('app.haoligo.equipment.ledger.formRemark')} fieldProps={{ rows: 3 }} />
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <Modal
+        title={t('app.haoligo.equipment.ledger.statusHistoryTitle')}
+        open={statusHistoryOpen}
+        onCancel={() => setStatusHistoryOpen(false)}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        <Table<EquipmentOperationalStatusLogRow>
+          size="small"
+          rowKey="id"
+          loading={statusHistoryLoading}
+          pagination={false}
+          dataSource={statusHistoryRows}
+          columns={[
+            {
+              title: t('app.haoligo.equipment.ledger.statusHistoryColTime'),
+              dataIndex: 'created_at',
+              width: 180,
+              render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '—'),
+            },
+            {
+              title: t('app.haoligo.equipment.ledger.statusHistoryColOld'),
+              dataIndex: 'old_status',
+              width: 120,
+              render: (v: string | null) => operationalStatusLabel(v),
+            },
+            {
+              title: t('app.haoligo.equipment.ledger.statusHistoryColNew'),
+              dataIndex: 'new_status',
+              width: 120,
+              render: (v: string) => operationalStatusLabel(v || null),
+            },
+            { title: t('app.haoligo.equipment.ledger.statusHistoryColUser'), dataIndex: 'changed_by_user_id', width: 100 },
+          ]}
+        />
+      </Modal>
     </>
   );
 };

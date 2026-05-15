@@ -5,7 +5,7 @@
  * 业务约定：编码全局唯一；取值类型决定现场录入形态（数值 / 文本 / 是否）。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -14,6 +14,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -28,19 +29,8 @@ import {
 } from '../../../services/haoligo';
 import { batchImport } from '../../../../../utils/batchOperations';
 
-const VALUE_TYPES = [
-  { label: '数值', value: 'numeric' },
-  { label: '文本', value: 'text' },
-  { label: '是否', value: 'boolean' },
-] as const;
-
-const VALUE_TYPE_LABEL: Record<string, string> = {
-  numeric: '数值',
-  text: '文本',
-  boolean: '是否',
-};
-
 const InspectionParamsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -50,6 +40,24 @@ const InspectionParamsPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+
+  const valueTypes = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.inspectionParams.valueTypeNumeric'), value: 'numeric' },
+      { label: t('app.haoligo.equipment.inspectionParams.valueTypeText'), value: 'text' },
+      { label: t('app.haoligo.equipment.inspectionParams.valueTypeBoolean'), value: 'boolean' },
+    ],
+    [t],
+  );
+
+  const valueTypeLabel = useMemo(
+    () => ({
+      numeric: t('app.haoligo.equipment.inspectionParams.valueTypeNumeric'),
+      text: t('app.haoligo.equipment.inspectionParams.valueTypeText'),
+      boolean: t('app.haoligo.equipment.inspectionParams.valueTypeBoolean'),
+    }),
+    [t],
+  );
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -74,16 +82,16 @@ const InspectionParamsPage: React.FC = () => {
 
   const handleDeleteOne = (record: InspectionParamRow) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定删除点检项「${record.name}」（${record.code}）吗？若已被点检方案引用将无法删除。`,
+      title: t('app.haoligo.equipment.inspectionParams.deleteTitle'),
+      content: t('app.haoligo.equipment.inspectionParams.deleteContent', { name: record.name, code: record.code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await deleteInspectionParam(record.id);
-          messageApi.success('已删除');
+          messageApi.success(t('app.haoligo.equipment.deleteSuccess'));
           actionRef.current?.reload();
         } catch (e) {
-          messageApi.error((e as Error).message || '删除失败');
+          messageApi.error((e as Error).message || t('app.haoligo.equipment.deleteFailed'));
         }
       },
     });
@@ -105,68 +113,76 @@ const InspectionParamsPage: React.FC = () => {
           unit: String(values.unit ?? '').trim() || null,
           value_type: String(values.value_type ?? 'numeric'),
         });
-        messageApi.success('已保存');
+        messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
         await createInspectionParam(buildPayload(values));
-        messageApi.success('已创建');
+        messageApi.success(t('app.haoligo.equipment.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e) {
-      messageApi.error((e as Error).message || '保存失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
       throw e;
     } finally {
       setFormLoading(false);
     }
   };
 
-  const columns: ProColumns<InspectionParamRow>[] = [
-    { title: '参数编码', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '参数名称', dataIndex: 'name', width: 200, ellipsis: true },
-    { title: '单位', dataIndex: 'unit', width: 88, ellipsis: true, hideInSearch: true },
-    {
-      title: '取值类型',
-      dataIndex: 'value_type',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => <Tag>{VALUE_TYPE_LABEL[r.value_type] || r.value_type}</Tag>,
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 140,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+  const columns: ProColumns<InspectionParamRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
+      { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name', width: 200, ellipsis: true },
+      { title: t('app.haoligo.equipment.inspectionParams.colUnit'), dataIndex: 'unit', width: 88, ellipsis: true, hideInSearch: true },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colValueType'),
+        dataIndex: 'value_type',
+        width: 100,
+        hideInSearch: true,
+        render: (_, r) => <Tag>{valueTypeLabel[r.value_type] || r.value_type}</Tag>,
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colActions'),
+        valueType: 'option',
+        width: 140,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('app.haoligo.equipment.inspectionParams.actionEdit')}
+            </Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+              {t('app.haoligo.equipment.inspectionParams.actionDelete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t, valueTypeLabel],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<InspectionParamRow>
-          headerTitle="点检项"
+          headerTitle={t('app.haoligo.equipment.inspectionParams.title')}
           columnPersistenceId="apps.haoligo.pages.equipment.inspection-params"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText="新增"
+          createButtonText={t('app.haoligo.equipment.ledger.createBtn')}
           onCreate={handleCreate}
           showImportButton
-          importHeaders={['*参数编码', '*参数名称', '单位', '取值类型']}
+          importHeaders={[
+            t('app.haoligo.equipment.inspectionParams.importColCode'),
+            t('app.haoligo.equipment.inspectionParams.importColName'),
+            t('app.haoligo.equipment.inspectionParams.importColUnit'),
+            t('app.haoligo.equipment.inspectionParams.importColValueType'),
+          ]}
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('导入数据为空或格式不正确');
+              messageApi.warning(t('app.haoligo.equipment.importEmpty'));
               return;
             }
             const headers = (data[0] || []).map((h: unknown) => String(h ?? '').trim());
@@ -184,7 +200,7 @@ const InspectionParamsPage: React.FC = () => {
             const unitIdx = getIdx('单位', 'unit');
             const vtIdx = getIdx('取值类型', '类型', 'value_type');
             if (codeIdx < 0 || nameIdx < 0) {
-              messageApi.error('导入表头需包含：参数编码、参数名称');
+              messageApi.error(t('app.haoligo.equipment.inspectionParams.importErrorHeaders'));
               return;
             }
             const items: InspectionParamCreatePayload[] = [];
@@ -207,26 +223,26 @@ const InspectionParamsPage: React.FC = () => {
               });
             }
             if (items.length === 0) {
-              messageApi.warning('没有可导入的有效数据（请检查必填列是否完整）');
+              messageApi.warning(t('app.haoligo.equipment.importNoRows'));
               return;
             }
             const result = await batchImport({
               items,
               importFn: async (item) => createInspectionParam(item),
-              title: '导入点检项',
+              title: t('app.haoligo.equipment.inspectionParams.importTitle'),
               concurrency: 5,
             });
             if (result.successCount > 0) {
-              messageApi.success(`成功导入 ${result.successCount} 条`);
+              messageApi.success(t('app.haoligo.equipment.importSuccess', { count: result.successCount }));
               actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
-              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+              messageApi.warning(t('app.haoligo.equipment.importPartialFail', { count: result.failureCount }));
             }
           }}
           showSyncButton
           onSync={() => {
-            messageApi.info('与标准点检库 / ERP 同步能力接入后将在此执行；已刷新当前列表。');
+            messageApi.info(t('app.haoligo.equipment.inspectionParams.syncInfo'));
             actionRef.current?.reload();
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -246,7 +262,7 @@ const InspectionParamsPage: React.FC = () => {
                 total: rows.length,
               };
             } catch (e) {
-              messageApi.error((e as Error).message || '加载失败');
+              messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -255,7 +271,7 @@ const InspectionParamsPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑点检项' : '新增点检项'}
+        title={isEdit ? t('app.haoligo.equipment.inspectionParams.modalEdit') : t('app.haoligo.equipment.inspectionParams.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -271,18 +287,23 @@ const InspectionParamsPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="参数编码"
-          placeholder="如 VIB、TEMP"
+          label={t('app.haoligo.equipment.inspectionParams.formCode')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formCodePh')}
           disabled={isEdit}
-          rules={[{ required: true, message: '请输入参数编码' }]}
+          rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formCodeReq') }]}
         />
-        <ProFormText name="name" label="参数名称" placeholder="如 主轴振动" rules={[{ required: true, message: '请输入参数名称' }]} />
-        <ProFormText name="unit" label="单位" placeholder="可选，如 mm/s、℃" />
+        <ProFormText
+          name="name"
+          label={t('app.haoligo.equipment.inspectionParams.formName')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formNamePh')}
+          rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formNameReq') }]}
+        />
+        <ProFormText name="unit" label={t('app.haoligo.equipment.inspectionParams.formUnit')} placeholder={t('app.haoligo.equipment.inspectionParams.formUnitPh')} />
         <ProFormSelect
           name="value_type"
-          label="取值类型"
-          options={[...VALUE_TYPES]}
-          rules={[{ required: true, message: '请选择取值类型' }]}
+          label={t('app.haoligo.equipment.inspectionParams.formValueType')}
+          options={valueTypes}
+          rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formValueTypeReq') }]}
         />
       </FormModalTemplate>
     </>

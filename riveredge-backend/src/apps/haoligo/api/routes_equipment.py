@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from tortoise import timezone
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
@@ -24,10 +25,37 @@ from apps.haoligo.models.equipment import (
     HaoligoPatrolRouteStep,
     HaoligoWorkshop,
 )
+from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(prefix="/equipment", tags=["App · HaoliGO · 设备"])
+
+
+def _normalize_equipment_criticality(v: Optional[str]) -> Optional[str]:
+    if v is None or not str(v).strip():
+        return None
+    s = str(v).strip().upper()
+    if s not in ("A", "B", "C"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="设备重要等级必须为 A、B、C 之一或留空",
+        )
+    return s
+
+
+def _normalize_operational_status(v: Optional[str]) -> Optional[str]:
+    """运行状态：running / repair / shutdown / standby；空表示未设置。"""
+    if v is None or not str(v).strip():
+        return None
+    s = str(v).strip().lower()
+    allowed = frozenset({"running", "repair", "shutdown", "standby"})
+    if s not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="运行状态须为 running、repair、shutdown、standby 之一或留空",
+        )
+    return s
 
 
 # --- Pydantic ---
@@ -103,6 +131,12 @@ class InspectionParamSetCreate(BaseModel):
     name: str = Field(max_length=200)
 
 
+class InspectionParamSetCreateWithItems(BaseModel):
+    code: str = Field(max_length=64)
+    name: str = Field(max_length=200)
+    items: List[SetItemCreate] = Field(default_factory=list)
+
+
 class InspectionParamSetUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
 
@@ -158,6 +192,8 @@ class EquipmentOut(BaseModel):
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
     inspection_param_set_id: Optional[int] = None
+    criticality: Optional[str] = None
+    operational_status: Optional[str] = None
     remark: Optional[str] = None
 
 
@@ -169,6 +205,12 @@ class EquipmentCreate(BaseModel):
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
     inspection_param_set_id: Optional[int] = None
+    criticality: Optional[str] = Field(None, max_length=8, description="A/B/C")
+    operational_status: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="running/repair/shutdown/standby",
+    )
     remark: Optional[str] = None
 
 
@@ -179,7 +221,22 @@ class EquipmentUpdate(BaseModel):
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
     inspection_param_set_id: Optional[int] = None
+    criticality: Optional[str] = Field(None, max_length=8)
+    operational_status: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="running/repair/shutdown/standby；传 null 清空",
+    )
     remark: Optional[str] = None
+
+
+class EquipmentOperationalStatusLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_at: datetime
+    old_status: Optional[str] = None
+    new_status: str
+    changed_by_user_id: int
 
 
 class PatrolRouteOut(BaseModel):
@@ -223,9 +280,9 @@ async def _not_found():
 
 async def _list_workshops_synced_from_master(tenant_id: int) -> list[HaoligoWorkshop]:
     """
-    车间与主数据 APP 联动：以主数据「启用且未删除」的车间为准，按 tenant_id + code
+    车间与主数据联动：以主数据「启用且未删除」的车间为准，按 tenant_id + code
     对齐到 haoligo_workshop（新建或更新名称、必要时恢复软删），供好力侧 FK 使用。
-    主数据中无同编码的历史好力车间仍保留在列表末尾，避免设备/路线等旧引用断裂。
+    仅返回与主数据对齐后的车间，不再合并好力侧自建车间。
     """
     masters = (
         await MasterWorkshop.filter(
@@ -261,22 +318,13 @@ async def _list_workshops_synced_from_master(tenant_id: int) -> list[HaoligoWork
                 await HaoligoWorkshop.create(tenant_id=tenant_id, code=code, name=name),
             )
 
-    if master_codes:
-        orphans = (
-            await tenant_alive(HaoligoWorkshop, tenant_id)
-            .exclude(code__in=list(master_codes))
-            .order_by("code")
-            .all()
-        )
-    else:
-        orphans = await tenant_alive(HaoligoWorkshop, tenant_id).order_by("code").all()
-    return synced + list(orphans)
+    return synced
 
 
 # --- workshops ---
 
 
-@router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表（与主数据联动）")
+@router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表（主数据启用车间，同步至好力侧）")
 async def list_workshops(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -285,43 +333,41 @@ async def list_workshops(
     return [WorkshopOut.model_validate(r) for r in rows]
 
 
-@router.post("/workshops", response_model=WorkshopOut, summary="创建车间")
+@router.post("/workshops", response_model=WorkshopOut, summary="创建车间（已停用）")
 async def create_workshop(
     body: WorkshopCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    row = await HaoligoWorkshop.create(tenant_id=tenant_id, code=body.code.strip(), name=body.name.strip())
-    return WorkshopOut.model_validate(row)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="车间请在「主数据 → 厂区数据 → 车间」中维护；保存后好力设备模块会自动同步可用车间。",
+    )
 
 
-@router.patch("/workshops/{row_id}", response_model=WorkshopOut, summary="更新车间")
+@router.patch("/workshops/{row_id}", response_model=WorkshopOut, summary="更新车间（已停用）")
 async def update_workshop(
     row_id: int,
     body: WorkshopUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    row = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=row_id).first()
-    if not row:
-        await _not_found()
-    if body.name is not None:
-        row.name = body.name.strip()
-    await row.save()
-    return WorkshopOut.model_validate(row)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="车间名称请在「主数据 → 厂区数据 → 车间」中修改；列表接口会随主数据自动同步。",
+    )
 
 
-@router.delete("/workshops/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除车间")
+@router.delete("/workshops/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除车间（已停用）")
 async def delete_workshop(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    row = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=row_id).first()
-    if not row:
-        await _not_found()
-    row.deleted_at = timezone.now()
-    await row.save()
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="车间停用或删除请在「主数据 → 厂区数据 → 车间」中操作。",
+    )
 
 
 # --- manufacturers ---
@@ -465,6 +511,55 @@ async def create_inspection_param_set(
     row = await HaoligoInspectionParamSet.create(
         tenant_id=tenant_id, code=body.code.strip(), name=body.name.strip()
     )
+    return InspectionParamSetOut.model_validate(row)
+
+
+@router.post(
+    "/inspection-param-sets/with-items",
+    response_model=InspectionParamSetOut,
+    summary="创建点检参数集及明细（事务）",
+)
+async def create_inspection_param_set_with_items(
+    body: InspectionParamSetCreateWithItems,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    """先建方案头再建明细；任一步失败则整单回滚，避免空头方案。"""
+    seen: set[int] = set()
+    deduped: list[SetItemCreate] = []
+    for it in body.items:
+        if it.param_id in seen:
+            continue
+        seen.add(it.param_id)
+        deduped.append(it)
+    async with in_transaction():
+        parent = await HaoligoInspectionParamSet.create(
+            tenant_id=tenant_id, code=body.code.strip(), name=body.name.strip()
+        )
+        for idx, it in enumerate(deduped):
+            param = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(id=it.param_id).first()
+            if not param:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"点检参数不存在: {it.param_id}",
+                )
+            sort_order = it.sort_order
+            try:
+                await HaoligoInspectionParamSetItem.create(
+                    tenant_id=tenant_id,
+                    set_id=parent.id,
+                    param_id=it.param_id,
+                    sort_order=sort_order,
+                    is_required=it.is_required,
+                )
+            except IntegrityError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="点检方案明细重复或非法",
+                ) from exc
+    row = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(id=parent.id).first()
+    if not row:
+        await _not_found()
     return InspectionParamSetOut.model_validate(row)
 
 
@@ -693,6 +788,7 @@ async def list_equipments(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     workshop_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊匹配代号或名称"),
     asset_code: Optional[str] = Query(None, description="设备代号模糊匹配"),
     name: Optional[str] = Query(None, description="设备名称模糊匹配"),
     skip: int = Query(0, ge=0),
@@ -701,10 +797,14 @@ async def list_equipments(
     qs = tenant_alive(HaoligoEquipment, tenant_id)
     if workshop_id is not None:
         qs = qs.filter(workshop_id=workshop_id)
-    if asset_code:
-        qs = qs.filter(asset_code__icontains=asset_code.strip())
-    if name:
-        qs = qs.filter(name__icontains=name.strip())
+    if keyword and keyword.strip():
+        k = keyword.strip()
+        qs = qs.filter(Q(asset_code__icontains=k) | Q(name__icontains=k))
+    else:
+        if asset_code:
+            qs = qs.filter(asset_code__icontains=asset_code.strip())
+        if name:
+            qs = qs.filter(name__icontains=name.strip())
     total = await qs.count()
     rows = await qs.order_by("asset_code").offset(skip).limit(limit)
     return {
@@ -744,6 +844,8 @@ async def create_equipment(
         manufacturer_id=body.manufacturer_id,
         manufacture_date=body.manufacture_date,
         inspection_param_set_id=body.inspection_param_set_id,
+        criticality=_normalize_equipment_criticality(body.criticality),
+        operational_status=_normalize_operational_status(body.operational_status),
         remark=body.remark,
     )
     return EquipmentOut.model_validate(row)
@@ -761,12 +863,34 @@ async def get_equipment(
     return EquipmentOut.model_validate(row)
 
 
+@router.get(
+    "/equipments/{row_id}/operational-status-history",
+    response_model=List[EquipmentOperationalStatusLogOut],
+    summary="设备运行状态变更历史",
+)
+async def list_equipment_operational_status_history(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(100, ge=1, le=500),
+):
+    if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=row_id).exists():
+        await _not_found()
+    rows = (
+        await tenant_alive(HaoligoEquipmentOperationalStatusLog, tenant_id)
+        .filter(equipment_id=row_id)
+        .order_by("-created_at", "-id")
+        .limit(limit)
+    )
+    return [EquipmentOperationalStatusLogOut.model_validate(r) for r in rows]
+
+
 @router.patch("/equipments/{row_id}", response_model=EquipmentOut, summary="更新设备")
 async def update_equipment(
     row_id: int,
     body: EquipmentUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=row_id).first()
     if not row:
@@ -786,9 +910,25 @@ async def update_equipment(
         HaoligoInspectionParamSet, tenant_id
     ).filter(id=data["inspection_param_set_id"]).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="点检参数集不存在")
+    if "criticality" in data:
+        data["criticality"] = _normalize_equipment_criticality(data.get("criticality"))
+    old_operational_status: Optional[str] = None
+    new_operational_status: Optional[str] = None
+    if "operational_status" in data:
+        old_operational_status = row.operational_status
+        new_operational_status = _normalize_operational_status(data.get("operational_status"))
+        data["operational_status"] = new_operational_status
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    if "operational_status" in data and old_operational_status != new_operational_status:
+        await HaoligoEquipmentOperationalStatusLog.create(
+            tenant_id=tenant_id,
+            equipment_id=row.id,
+            old_status=old_operational_status,
+            new_status=new_operational_status or "",
+            changed_by_user_id=user.id,
+        )
     return EquipmentOut.model_validate(row)
 
 

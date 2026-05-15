@@ -13,6 +13,8 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Drawer, Modal, Select, Space, Table, Typography } from 'antd';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
@@ -57,6 +59,7 @@ function newDraftKey(): string {
 }
 
 const EquipmentPatrolRoutesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -102,7 +105,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           : [{ key: newDraftKey(), equipment_id: undefined }],
       );
     } catch (e) {
-      messageApi.error((e as Error).message || '加载步骤失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.patrolRoutes.loadStepsFailed'));
       setStepDrafts([]);
     } finally {
       setStepsLoading(false);
@@ -129,13 +132,13 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
 
   const handleDeleteRoute = (record: PatrolRouteRow) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定删除巡检路线「${record.name}」（${record.code}）吗？步骤将一并作废。`,
+      title: t('app.haoligo.equipment.patrolRoutes.deleteTitle'),
+      content: t('app.haoligo.equipment.patrolRoutes.deleteContent', { name: record.name, code: record.code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await deletePatrolRoute(record.id);
-          messageApi.success('已删除');
+          messageApi.success(t('app.haoligo.equipment.deleteSuccess'));
           actionRef.current?.reload();
           if (activeRoute?.id === record.id) {
             setDrawerOpen(false);
@@ -143,7 +146,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
             setStepDrafts([]);
           }
         } catch (e) {
-          messageApi.error((e as Error).message || '删除失败');
+          messageApi.error((e as Error).message || t('app.haoligo.equipment.deleteFailed'));
         }
       },
     });
@@ -160,7 +163,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           workshop_id,
         };
         await updatePatrolRoute(editId, patch);
-        messageApi.success('已保存');
+        messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
         const payload: PatrolRouteCreatePayload = {
           code: String(values.code ?? '').trim(),
@@ -168,7 +171,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           workshop_id,
         };
         await createPatrolRoute(payload);
-        messageApi.success('已创建');
+        messageApi.success(t('app.haoligo.equipment.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
@@ -177,7 +180,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
         setActiveRoute((r) => (r ? { ...r, name, workshop_id } : r));
       }
     } catch (e) {
-      messageApi.error((e as Error).message || '保存失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
       throw e;
     } finally {
       setFormLoading(false);
@@ -204,19 +207,19 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     const withEquip = stepDrafts.filter((r) => r.equipment_id != null);
     const emptyRows = stepDrafts.filter((r) => r.equipment_id == null);
     if (emptyRows.length > 0 && withEquip.length > 0) {
-      messageApi.warning('请为每一行选择设备，或删除空行后再保存');
+      messageApi.warning(t('app.haoligo.equipment.patrolRoutes.stepWarnPickOrRemove'));
       return;
     }
     const ids = withEquip.map((r) => r.equipment_id as number);
     if (ids.length > 0 && new Set(ids).size !== ids.length) {
-      messageApi.error('同一路线中不能重复选择同一台设备');
+      messageApi.error(t('app.haoligo.equipment.patrolRoutes.stepErrDuplicateEquipment'));
       return;
     }
     const payload = ids.map((equipment_id, sequence) => ({ equipment_id, sequence }));
     setStepsSaving(true);
     try {
       await replacePatrolSteps(activeRoute.id, payload);
-      messageApi.success('步骤已保存');
+      messageApi.success(t('app.haoligo.equipment.patrolRoutes.stepsSaved'));
       actionRef.current?.reload();
       const rid = configuringRouteIdRef.current;
       if (rid) {
@@ -228,129 +231,135 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
         );
       }
     } catch (e) {
-      messageApi.error((e as Error).message || '保存失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
     } finally {
       setStepsSaving(false);
     }
   };
 
-  const stepColumns: ColumnsType<StepDraft> = [
-    {
-      title: '顺序',
-      width: 64,
-      render: (_, __, i) => i + 1,
-    },
-    {
-      title: '设备',
-      render: (_, row) => (
-        <Select
-          style={{ width: '100%', minWidth: 260 }}
-          showSearch
-          allowClear
-          placeholder="选择台账设备"
-          options={equipmentSelectOptions}
-          value={row.equipment_id}
-          optionFilterProp="label"
-          onChange={(v) => {
-            setStepDrafts((prev) =>
-              prev.map((p) => (p.key === row.key ? { ...p, equipment_id: v ?? undefined } : p)),
-            );
-          }}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      width: 200,
-      render: (_, row, index) => (
-        <Space wrap>
-          <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => moveStep(index, -1)}>
-            上移
-          </Button>
-          <Button
-            size="small"
-            icon={<ArrowDownOutlined />}
-            disabled={index >= stepDrafts.length - 1}
-            onClick={() => moveStep(index, 1)}
-          >
-            下移
-          </Button>
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeStepAt(index)}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
-
-  const columns: ProColumns<PatrolRouteTableRow>[] = [
-    { title: '路线编码', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '路线名称', dataIndex: 'name', width: 200, ellipsis: true },
-    {
-      title: '车间',
-      dataIndex: 'workshop_id',
-      width: 160,
-      hideInTable: true,
-      valueType: 'select',
-      fieldProps: { options: workshopOptions, allowClear: true, placeholder: '全部车间' },
-    },
-    {
-      title: '车间',
-      dataIndex: 'workshop_id',
-      width: 180,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => {
-        if (r.workshop_id == null) return '—';
-        const w = wsMap.get(r.workshop_id);
-        return w ? `${w.code} · ${w.name}` : r.workshop_id;
+  const stepColumns: ColumnsType<StepDraft> = useMemo(
+    () => [
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.stepColSeq'),
+        width: 64,
+        render: (_, __, i) => i + 1,
       },
-    },
-    {
-      title: '步骤数',
-      dataIndex: 'stepCount',
-      width: 88,
-      hideInSearch: true,
-      align: 'right',
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 260,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space wrap>
-          <Button type="link" size="small" icon={<SettingOutlined />} onClick={() => void openConfigureSteps(record)}>
-            编辑步骤
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditHeader(record)}>
-            编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteRoute(record)}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.stepColEquipment'),
+        render: (_, row) => (
+          <Select
+            style={{ width: '100%', minWidth: 260 }}
+            showSearch
+            allowClear
+            placeholder={t('app.haoligo.equipment.patrolRoutes.stepEquipmentPh')}
+            options={equipmentSelectOptions}
+            value={row.equipment_id}
+            optionFilterProp="label"
+            onChange={(v) => {
+              setStepDrafts((prev) =>
+                prev.map((p) => (p.key === row.key ? { ...p, equipment_id: v ?? undefined } : p)),
+              );
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.stepColActions'),
+        width: 200,
+        render: (_, row, index) => (
+          <Space wrap>
+            <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => moveStep(index, -1)}>
+              {t('app.haoligo.equipment.patrolRoutes.moveUp')}
+            </Button>
+            <Button
+              size="small"
+              icon={<ArrowDownOutlined />}
+              disabled={index >= stepDrafts.length - 1}
+              onClick={() => moveStep(index, 1)}
+            >
+              {t('app.haoligo.equipment.patrolRoutes.moveDown')}
+            </Button>
+            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeStepAt(index)}>
+              {t('app.haoligo.equipment.patrolRoutes.stepDelete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t, equipmentSelectOptions, stepDrafts, moveStep, removeStepAt],
+  );
+
+  const columns: ProColumns<PatrolRouteTableRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.patrolRoutes.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
+      { title: t('app.haoligo.equipment.patrolRoutes.colName'), dataIndex: 'name', width: 200, ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.colWorkshop'),
+        dataIndex: 'workshop_id',
+        width: 160,
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: { options: workshopOptions, allowClear: true, placeholder: t('app.haoligo.equipment.patrolRoutes.workshopFilterPh') },
+      },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.colWorkshop'),
+        dataIndex: 'workshop_id',
+        width: 180,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => {
+          if (r.workshop_id == null) return t('app.haoligo.equipment.ledger.commonDash');
+          const w = wsMap.get(r.workshop_id);
+          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.colStepCount'),
+        dataIndex: 'stepCount',
+        width: 88,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.colActions'),
+        valueType: 'option',
+        width: 260,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space wrap>
+            <Button type="link" size="small" icon={<SettingOutlined />} onClick={() => void openConfigureSteps(record)}>
+              {t('app.haoligo.equipment.patrolRoutes.actionEditSteps')}
+            </Button>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditHeader(record)}>
+              {t('app.haoligo.equipment.patrolRoutes.actionEdit')}
+            </Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteRoute(record)}>
+              {t('app.haoligo.equipment.patrolRoutes.actionDelete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t, workshopOptions, wsMap],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<PatrolRouteTableRow>
-          headerTitle="巡检路线"
+          headerTitle={t('app.haoligo.equipment.patrolRoutes.title')}
           columnPersistenceId="apps.haoligo.pages.equipment.patrol-routes"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText="新建路线"
+          createButtonText={t('app.haoligo.equipment.patrolRoutes.createBtn')}
           onCreate={handleCreate}
           showImportButton={false}
           showSyncButton
           onSync={() => {
-            messageApi.info('与移动端模板同步能力接入后将在此执行；已刷新列表。');
+            messageApi.info(t('app.haoligo.equipment.patrolRoutes.syncMobilePlaceholder'));
             actionRef.current?.reload();
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -381,7 +390,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
                 total: rows.length,
               };
             } catch (e) {
-              messageApi.error((e as Error).message || '加载失败');
+              messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -390,7 +399,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑巡检路线' : '新建巡检路线'}
+        title={isEdit ? t('app.haoligo.equipment.patrolRoutes.modalEdit') : t('app.haoligo.equipment.patrolRoutes.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -406,24 +415,36 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="路线编码"
-          placeholder="如 LINE-A-MORNING"
+          label={t('app.haoligo.equipment.patrolRoutes.formCode')}
+          placeholder={t('app.haoligo.equipment.patrolRoutes.formCodePh')}
           disabled={isEdit}
-          rules={[{ required: true, message: '请输入路线编码' }]}
+          rules={[{ required: true, message: t('app.haoligo.equipment.patrolRoutes.formCodeReq') }]}
         />
-        <ProFormText name="name" label="路线名称" placeholder="如 A 线早班巡检" rules={[{ required: true, message: '请输入路线名称' }]} />
+        <ProFormText
+          name="name"
+          label={t('app.haoligo.equipment.patrolRoutes.formName')}
+          placeholder={t('app.haoligo.equipment.patrolRoutes.formNamePh')}
+          rules={[{ required: true, message: t('app.haoligo.equipment.patrolRoutes.formNameReq') }]}
+        />
         <ProFormSelect
           name="workshop_id"
-          label="关联车间"
+          label={t('app.haoligo.equipment.patrolRoutes.formWorkshop')}
           options={workshopOptions}
           allowClear
           showSearch
           fieldProps={{ optionFilterProp: 'label' }}
         />
+        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          <Link to="/apps/master-data/factory/workshops">{t('app.haoligo.equipment.ledger.linkMasterDataWorkshops')}</Link>
+        </Typography.Text>
       </FormModalTemplate>
 
       <Drawer
-        title={activeRoute ? `编辑步骤：${activeRoute.code} · ${activeRoute.name}` : '编辑步骤'}
+        title={
+          activeRoute
+            ? t('app.haoligo.equipment.patrolRoutes.drawerTitleWithRoute', { code: activeRoute.code, name: activeRoute.name })
+            : t('app.haoligo.equipment.patrolRoutes.drawerTitle')
+        }
         width={Math.min(920, typeof window !== 'undefined' ? window.innerWidth - 48 : 920)}
         open={drawerOpen}
         onClose={() => {
@@ -442,16 +463,16 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
               disabled={!activeRoute}
               onClick={() => setStepDrafts((prev) => [...prev, { key: newDraftKey(), equipment_id: undefined }])}
             >
-              添加步骤
+              {t('app.haoligo.equipment.patrolRoutes.addStep')}
             </Button>
             <Button type="primary" size="small" loading={stepsSaving} disabled={!activeRoute} onClick={() => void handleSaveSteps()}>
-              保存步骤
+              {t('app.haoligo.equipment.patrolRoutes.saveSteps')}
             </Button>
           </Space>
         }
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-          按现场行走顺序排列设备；保存时将覆盖服务器上的步骤列表。设备来自「设备台账」。
+          {t('app.haoligo.equipment.patrolRoutes.drawerHint')}
         </Text>
         <Table<StepDraft>
           rowKey="key"

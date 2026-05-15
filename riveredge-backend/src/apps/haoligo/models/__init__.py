@@ -11,6 +11,15 @@ from apps.haoligo.models.equipment import (
     HaoligoPatrolRouteStep,
     HaoligoWorkshop,
 )
+from apps.haoligo.models.equipment_operations import (
+    HaoligoEquipmentMaintenanceReport,
+    HaoligoEquipmentOutputDatasetBinding,
+    HaoligoEquipmentOutputRecord,
+    HaoligoEquipmentRoutePatrol,
+    HaoligoEquipmentRoutePatrolLine,
+    HaoligoEquipmentSpotCheck,
+    HaoligoEquipmentSpotCheckLine,
+)
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
@@ -25,6 +34,8 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
 )
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
 from apps.haoligo.models.patrol import HaoligoHazardReport
+from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
+from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
 
 __all__ = [
     "HaoligoEquipment",
@@ -36,6 +47,15 @@ __all__ = [
     "HaoligoPatrolRoute",
     "HaoligoPatrolRouteStep",
     "HaoligoWorkshop",
+    "HaoligoEquipmentSpotCheck",
+    "HaoligoEquipmentSpotCheckLine",
+    "HaoligoEquipmentRoutePatrol",
+    "HaoligoEquipmentRoutePatrolLine",
+    "HaoligoEquipmentMaintenanceReport",
+    "HaoligoEquipmentUpkeepSheet",
+    "HaoligoEquipmentUpkeepCompleteSheet",
+    "HaoligoEquipmentOutputRecord",
+    "HaoligoEquipmentOutputDatasetBinding",
     "HaoligoMold",
     "HaoligoMoldBorrowSheet",
     "HaoligoMoldBorrowDatasetBinding",
@@ -48,4 +68,5 @@ __all__ = [
     "HaoligoMoldOutsourceMaintenanceCompleteSheet",
     "HaoligoMoldOutsourceMaintenanceSheet",
     "HaoligoHazardReport",
+    "HaoligoEquipmentOperationalStatusLog",
 ]

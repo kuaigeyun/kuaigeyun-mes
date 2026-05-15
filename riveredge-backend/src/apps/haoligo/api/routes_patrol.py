@@ -9,7 +9,7 @@ from tortoise import timezone
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._users import resolve_tenant_user
-from apps.haoligo.models.equipment import HaoligoWorkshop
+from apps.haoligo.models.equipment import HaoligoEquipment, HaoligoWorkshop
 from apps.haoligo.models.patrol import HaoligoHazardReport
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
@@ -21,6 +21,9 @@ class HazardOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    equipment_id: Optional[int] = None
+    equipment_asset_code: Optional[str] = None
+    equipment_name: Optional[str] = None
     workshop_id: Optional[int] = None
     workshop_name: Optional[str] = None
     workshop_area: Optional[str] = None
@@ -40,6 +43,7 @@ class HazardOut(BaseModel):
 
 
 class HazardCreate(BaseModel):
+    equipment_id: Optional[int] = None
     workshop_id: Optional[int] = None
     workshop_area: Optional[str] = Field(None, max_length=200)
     reported_at: Optional[datetime] = None
@@ -56,6 +60,7 @@ class HazardCreate(BaseModel):
 
 
 class HazardUpdate(BaseModel):
+    equipment_id: Optional[int] = None
     workshop_id: Optional[int] = None
     workshop_area: Optional[str] = Field(None, max_length=200)
     reported_at: Optional[datetime] = None
@@ -133,14 +138,32 @@ def _apply_hazard_status(row: HaoligoHazardReport) -> None:
         row.status = "检查中"
 
 
-async def _serialize_hazard(row: HaoligoHazardReport, tenant_id: int) -> HazardOut:
+async def _serialize_hazard(
+    row: HaoligoHazardReport,
+    tenant_id: int,
+    *,
+    equipment_map: Optional[dict[int, tuple[str, str]]] = None,
+) -> HazardOut:
     workshop_name: Optional[str] = None
     if row.workshop_id:
         ws = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=row.workshop_id).first()
         if ws:
             workshop_name = ws.name
+    eq_code: Optional[str] = None
+    eq_name: Optional[str] = None
+    eid = getattr(row, "equipment_id", None)
+    if eid:
+        if equipment_map is not None and eid in equipment_map:
+            eq_code, eq_name = equipment_map[eid]
+        else:
+            eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=eid).first()
+            if eq:
+                eq_code = eq.asset_code
+                eq_name = eq.name
     data = HazardOut.model_validate(row).model_dump()
     data["workshop_name"] = workshop_name
+    data["equipment_asset_code"] = eq_code
+    data["equipment_name"] = eq_name
     return HazardOut(**data)
 
 
@@ -151,6 +174,7 @@ async def list_hazards(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
+    equipment_id: Optional[int] = Query(None, description="按关联设备筛选"),
     for_remediation: Optional[bool] = Query(
         None,
         description="为 true 时仅返回待治理（检查中/维修中）；与 status 同时传入时以 status 为准",
@@ -161,9 +185,16 @@ async def list_hazards(
         qs = qs.filter(status=status_filter)
     elif for_remediation:
         qs = qs.filter(status__in=["检查中", "维修中"])
+    if equipment_id is not None:
+        qs = qs.filter(equipment_id=equipment_id)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
-    items = [await _serialize_hazard(r, tenant_id) for r in rows]
+    eq_ids = {r.equipment_id for r in rows if getattr(r, "equipment_id", None)}
+    eq_map: dict[int, tuple[str, str]] = {}
+    if eq_ids:
+        for eq in await tenant_alive(HaoligoEquipment, tenant_id).filter(id__in=list(eq_ids)).all():
+            eq_map[eq.id] = (eq.asset_code, eq.name)
+    items = [await _serialize_hazard(r, tenant_id, equipment_map=eq_map) for r in rows]
     return {
         "items": items,
         "total": total,
@@ -182,6 +213,10 @@ async def create_hazard(
         id=body.workshop_id
     ).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
+    if body.equipment_id is not None and not await tenant_alive(HaoligoEquipment, tenant_id).filter(
+        id=body.equipment_id
+    ).exists():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
     hn = (body.handler_name or "").strip()
     eff_status = body.status or "检查中"
     if body.handled_at is not None and hn:
@@ -203,6 +238,7 @@ async def create_hazard(
         res_uid, res_name = await resolve_tenant_user(tenant_id, body.responsible_user_id)
     row = await HaoligoHazardReport.create(
         tenant_id=tenant_id,
+        equipment_id=body.equipment_id,
         workshop_id=body.workshop_id,
         workshop_area=body.workshop_area,
         reported_at=body.reported_at or timezone.now(),
@@ -248,6 +284,9 @@ async def update_hazard(
     if "workshop_id" in data and data["workshop_id"] is not None:
         if not await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=data["workshop_id"]).exists():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
+    if "equipment_id" in data and data["equipment_id"] is not None:
+        if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=data["equipment_id"]).exists():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
     await _apply_user_fields_patch(data, tenant_id)
     for k, v in data.items():
         setattr(row, k, v)

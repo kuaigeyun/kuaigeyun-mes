@@ -12,6 +12,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
   getHazardReport,
+  listEquipments,
   listHazardReports,
   updateHazardReport,
   type HazardRow,
@@ -132,6 +133,34 @@ const PatrolHazardsPage: React.FC = () => {
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
     },
     { title: '车间', dataIndex: 'workshop_name', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '关联设备',
+      key: 'equipment_display',
+      dataIndex: 'equipment_name',
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.equipment_id
+          ? `${r.equipment_asset_code || ''} ${r.equipment_name || ''}`.trim() || `ID ${r.equipment_id}`
+          : '—',
+    },
+    {
+      title: '关联设备',
+      dataIndex: 'equipment_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        filterOption: false,
+        allowClear: true,
+        placeholder: '全部',
+      },
+      request: async ({ keyWords }) => {
+        const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
+        return (res.items || []).map((e) => ({ label: `${e.asset_code} ${e.name}`, value: e.id }));
+      },
+    },
     { title: '巡查区域', dataIndex: 'workshop_area', width: 120, ellipsis: true, hideInSearch: true },
     { title: '问题类型', dataIndex: 'issue_type_code', width: 140, ellipsis: true, hideInSearch: true },
     { title: '解决方案', dataIndex: 'solution_note', ellipsis: true, hideInSearch: true },
@@ -187,6 +216,10 @@ const PatrolHazardsPage: React.FC = () => {
                 skip,
                 limit: pageSize,
                 status: status || undefined,
+                equipment_id:
+                  searchFormValues?.equipment_id != null && searchFormValues?.equipment_id !== ''
+                    ? Number(searchFormValues.equipment_id)
+                    : undefined,
                 for_remediation: !status && !scopeAll ? true : undefined,
               });
               return { data: res.items, success: true, total: res.total };
@@ -219,6 +252,12 @@ const PatrolHazardsPage: React.FC = () => {
       >
         {contextRow && (
           <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="关联设备">
+              {contextRow.equipment_id
+                ? `${contextRow.equipment_asset_code || ''} ${contextRow.equipment_name || ''}`.trim() ||
+                  `ID ${contextRow.equipment_id}`
+                : '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="车间">{contextRow.workshop_name ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="巡查区域">{contextRow.workshop_area ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="巡查时间">

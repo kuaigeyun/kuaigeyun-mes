@@ -109,6 +109,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       setEditId(detail.id);
       setFormInitialValues({
         workshop_id: detail.workshop_id ?? undefined,
+        equipment_id: detail.equipment_id ?? undefined,
         reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
         workshop_area: detail.workshop_area ?? undefined,
         issue_type_code: detail.issue_type_code ?? undefined,
@@ -141,6 +142,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       const responsibleUserId = values.responsible_user_id as number | undefined;
       const payload = {
         workshop_id: values.workshop_id as number | undefined,
+        equipment_id: (values.equipment_id as number | undefined) ?? null,
         workshop_area: String(values.workshop_area ?? '').trim() || undefined,
         reported_at: formDateTimeToIso(values.reported_at),
         issue_type_code: String(values.issue_type_code ?? '').trim() || undefined,
@@ -180,6 +182,18 @@ const PatrolIssueRegisterPage: React.FC = () => {
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
     },
     { title: '车间', dataIndex: 'workshop_name', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '关联设备',
+      key: 'equipment_display',
+      dataIndex: 'equipment_name',
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.equipment_id
+          ? `${r.equipment_asset_code || ''} ${r.equipment_name || ''}`.trim() || `ID ${r.equipment_id}`
+          : '—',
+    },
     { title: '巡查区域', dataIndex: 'workshop_area', width: 120, ellipsis: true, hideInSearch: true },
     { title: '问题类型', dataIndex: 'issue_type_code', width: 160, ellipsis: true, hideInSearch: true },
     { title: '登记人', dataIndex: 'registrant_name', width: 100, ellipsis: true, hideInSearch: true },

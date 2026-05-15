@@ -20,6 +20,13 @@ class HaoligoHazardReport(HaoligoTenantModel):
         on_delete=fields.SET_NULL,
         description="关联车间",
     )
+    equipment = fields.ForeignKeyField(
+        "models.HaoligoEquipment",
+        related_name="hazard_reports",
+        null=True,
+        on_delete=fields.SET_NULL,
+        description="关联设备（可选）",
+    )
     workshop_area = fields.CharField(max_length=200, null=True, description="车间区域")
     reported_at = fields.DatetimeField(null=True, description="巡查/反馈时间")
     issue_type_code = fields.CharField(max_length=64, null=True, description="问题类型编码")

@@ -7,6 +7,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormInstance, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Modal, Space } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -22,6 +23,7 @@ import {
 import { batchImport } from '../../../../../utils/batchOperations';
 
 const ManufacturersPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -53,16 +55,16 @@ const ManufacturersPage: React.FC = () => {
 
   const handleDeleteOne = (record: ManufacturerRow) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定删除制造厂商「${record.name}」（${record.code}）吗？`,
+      title: t('app.haoligo.equipment.manufacturers.deleteTitle'),
+      content: t('app.haoligo.equipment.manufacturers.deleteContent', { name: record.name, code: record.code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await deleteManufacturer(record.id);
-          messageApi.success('已删除');
+          messageApi.success(t('app.haoligo.equipment.deleteSuccess'));
           actionRef.current?.reload();
         } catch (e) {
-          messageApi.error((e as Error).message || '删除失败');
+          messageApi.error((e as Error).message || t('app.haoligo.equipment.deleteFailed'));
         }
       },
     });
@@ -78,15 +80,15 @@ const ManufacturersPage: React.FC = () => {
     try {
       if (isEdit && editId != null) {
         await updateManufacturer(editId, { name: String(values.name ?? '').trim() });
-        messageApi.success('已保存');
+        messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
         await createManufacturer(buildPayload(values));
-        messageApi.success('已创建');
+        messageApi.success(t('app.haoligo.equipment.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e) {
-      messageApi.error((e as Error).message || '保存失败');
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
       throw e;
     } finally {
       setFormLoading(false);
@@ -94,20 +96,20 @@ const ManufacturersPage: React.FC = () => {
   };
 
   const columns: ProColumns<ManufacturerRow>[] = [
-    { title: '厂商代号', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '厂商名称', dataIndex: 'name', width: 220, ellipsis: true },
+    { title: t('app.haoligo.equipment.manufacturers.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
+    { title: t('app.haoligo.equipment.manufacturers.colName'), dataIndex: 'name', width: 220, ellipsis: true },
     {
-      title: '操作',
+      title: t('app.haoligo.equipment.ledger.colActions'),
       valueType: 'option',
       width: 140,
       fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('app.haoligo.equipment.manufacturers.actionEdit')}
           </Button>
           <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
-            删除
+            {t('app.haoligo.equipment.manufacturers.actionDelete')}
           </Button>
         </Space>
       ),
@@ -118,20 +120,20 @@ const ManufacturersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ManufacturerRow>
-          headerTitle="制造厂商"
+          headerTitle={t('app.haoligo.equipment.manufacturers.title')}
           columnPersistenceId="apps.haoligo.pages.equipment.manufacturers"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText="新增"
+          createButtonText={t('app.haoligo.equipment.ledger.createBtn')}
           onCreate={handleCreate}
           showImportButton
-          importHeaders={['*厂商代号', '*厂商名称']}
+          importHeaders={[t('app.haoligo.equipment.manufacturers.importColCode'), t('app.haoligo.equipment.manufacturers.importColName')]}
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('导入数据为空或格式不正确');
+              messageApi.warning(t('app.haoligo.equipment.importEmpty'));
               return;
             }
             const headers = (data[0] || []).map((h: unknown) => String(h ?? '').trim());
@@ -147,7 +149,7 @@ const ManufacturersPage: React.FC = () => {
             const codeIdx = getIdx('厂商代号', '代号', 'code');
             const nameIdx = getIdx('厂商名称', '名称', 'name');
             if (codeIdx < 0 || nameIdx < 0) {
-              messageApi.error('导入表头需包含：厂商代号、厂商名称');
+              messageApi.error(t('app.haoligo.equipment.manufacturers.importErrorHeaders'));
               return;
             }
             const items: ManufacturerCreatePayload[] = [];
@@ -160,26 +162,26 @@ const ManufacturersPage: React.FC = () => {
               items.push({ code, name });
             }
             if (items.length === 0) {
-              messageApi.warning('没有可导入的有效数据（请检查必填列是否完整）');
+              messageApi.warning(t('app.haoligo.equipment.importNoRows'));
               return;
             }
             const result = await batchImport({
               items,
               importFn: async (item) => createManufacturer(item),
-              title: '导入制造厂商',
+              title: t('app.haoligo.equipment.manufacturers.importTitle'),
               concurrency: 5,
             });
             if (result.successCount > 0) {
-              messageApi.success(`成功导入 ${result.successCount} 条`);
+              messageApi.success(t('app.haoligo.equipment.importSuccess', { count: result.successCount }));
               actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
-              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+              messageApi.warning(t('app.haoligo.equipment.importPartialFail', { count: result.failureCount }));
             }
           }}
           showSyncButton
           onSync={() => {
-            messageApi.info('与 ERP / 主数据同步能力接入后将在此执行；已刷新当前列表。');
+            messageApi.info(t('app.haoligo.equipment.syncPlaceholder'));
             actionRef.current?.reload();
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -200,7 +202,7 @@ const ManufacturersPage: React.FC = () => {
                 total: rows.length,
               };
             } catch (e) {
-              messageApi.error((e as Error).message || '加载失败');
+              messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -209,7 +211,7 @@ const ManufacturersPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑制造厂商' : '新增制造厂商'}
+        title={isEdit ? t('app.haoligo.equipment.manufacturers.modalEdit') : t('app.haoligo.equipment.manufacturers.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -225,12 +227,17 @@ const ManufacturersPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="厂商代号"
-          placeholder="请输入厂商代号"
+          label={t('app.haoligo.equipment.manufacturers.formCode')}
+          placeholder={t('app.haoligo.equipment.manufacturers.formCodePh')}
           disabled={isEdit}
-          rules={[{ required: true, message: '请输入厂商代号' }]}
+          rules={[{ required: true, message: t('app.haoligo.equipment.manufacturers.formCodeReq') }]}
         />
-        <ProFormText name="name" label="厂商名称" placeholder="请输入厂商名称" rules={[{ required: true, message: '请输入厂商名称' }]} />
+        <ProFormText
+          name="name"
+          label={t('app.haoligo.equipment.manufacturers.formName')}
+          placeholder={t('app.haoligo.equipment.manufacturers.formNamePh')}
+          rules={[{ required: true, message: t('app.haoligo.equipment.manufacturers.formNameReq') }]}
+        />
       </FormModalTemplate>
     </>
   );
