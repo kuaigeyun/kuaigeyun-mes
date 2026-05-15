@@ -23,6 +23,7 @@ from apps.haoligo.api.routes_mold_outsource_maintenance_complete_sheet import (
     router as mold_outsource_maintenance_complete_sheet_router,
 )
 from apps.haoligo.api.routes_patrol import router as patrol_router
+from apps.haoligo.api.routes_patrol_reports import router as patrol_reports_router
 
 router = APIRouter(tags=["App · HaoliGO"])
 
@@ -54,3 +55,4 @@ router.include_router(mold_maintenance_sheet_router)
 router.include_router(mold_maintenance_complete_sheet_router)
 router.include_router(mold_router)
 router.include_router(patrol_router)
+router.include_router(patrol_reports_router)

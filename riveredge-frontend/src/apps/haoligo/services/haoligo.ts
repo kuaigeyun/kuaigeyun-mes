@@ -1168,3 +1168,37 @@ export function updateHazardReport(rowId: number, body: HazardUpdatePayload): Pr
 export function deleteHazardReport(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/patrol/hazard-reports/${rowId}`, { method: 'DELETE' });
 }
+
+export interface PatrolReportPoint {
+  label: string;
+  value: number;
+}
+
+export interface PatrolReportSeries {
+  name: string;
+  data: PatrolReportPoint[];
+}
+
+export interface PatrolReportPayload {
+  report_key: string;
+  points?: PatrolReportPoint[];
+  series?: PatrolReportSeries[];
+}
+
+export interface PatrolReportKpiSummary {
+  total_tasks: number;
+  open_tasks: number;
+  completed_tasks: number;
+  contributor_count: number;
+}
+
+export function getPatrolReportKpiSummary(): Promise<PatrolReportKpiSummary> {
+  return apiRequest(`${PREFIX}/patrol/reports/kpi-summary`);
+}
+
+export function getPatrolReport(
+  reportKey: string,
+  params?: { months?: number },
+): Promise<PatrolReportPayload> {
+  return apiRequest(`${PREFIX}/patrol/reports/${reportKey}`, { params });
+}

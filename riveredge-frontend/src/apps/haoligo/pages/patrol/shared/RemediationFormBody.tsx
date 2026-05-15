@@ -60,7 +60,7 @@ export const RemediationFormBody: React.FC<RemediationFormBodyProps> = ({
         />
       </div>
       <div style={{ marginBottom: 12 }}>
-        <SectionLabel num="06" label="处理后照片" />
+        <SectionLabel num="06" label="处理后照片（选填）" />
         <Upload {...uploadProps}>{readOnly ? null : '+'}</Upload>
       </div>
       <div style={{ marginBottom: 12 }}>

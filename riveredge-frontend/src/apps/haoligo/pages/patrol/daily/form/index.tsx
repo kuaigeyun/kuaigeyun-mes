@@ -23,27 +23,10 @@ import {
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../../services/dataDictionary';
 import { getUserList } from '../../../../../../services/user';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { formDateTimeToIso } from '../../shared/datetimeHelpers';
 import { IssueRegisterFormBody } from '../../shared/IssueRegisterFormBody';
 
 const ISSUE_TYPE_DICT_CODE = 'HAOLIGO_PATROL_ISSUE_TYPE';
-
-/** ProFormDateTimePicker 提交值可能是 dayjs / string / Date */
-function reportedAtToIso(val: unknown): string | undefined {
-  if (val == null || val === '') return undefined;
-  if (dayjs.isDayjs(val)) {
-    return val.isValid() ? val.toISOString() : undefined;
-  }
-  if (typeof val === 'string' && val.trim()) {
-    const d = dayjs(val);
-    return d.isValid() ? d.toISOString() : undefined;
-  }
-  if (val instanceof Date) {
-    const d = dayjs(val);
-    return d.isValid() ? d.toISOString() : undefined;
-  }
-  const d = dayjs(val as string | number);
-  return d.isValid() ? d.toISOString() : undefined;
-}
 
 const statusColors: Record<string, string> = {
   检查中: 'processing',
@@ -159,7 +142,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       const payload = {
         workshop_id: values.workshop_id as number | undefined,
         workshop_area: String(values.workshop_area ?? '').trim() || undefined,
-        reported_at: reportedAtToIso(values.reported_at),
+        reported_at: formDateTimeToIso(values.reported_at),
         issue_type_code: String(values.issue_type_code ?? '').trim() || undefined,
         status: '检查中' as const,
         registrant_user_id: registrantUserId,

@@ -289,87 +289,38 @@
             ]
           },
           {
-            "title": "app.haoligo.menu.patrol.group.analytics",
-            "icon": "Presentation",
+            "title": "app.haoligo.menu.patrol.group.reports",
+            "icon": "ChartNoAxesCombined",
             "permission": "haoligo:workspace:read",
             "sort_order": 20,
             "children": [
               {
-                "title": "app.haoligo.menu.patrol.management.overview",
-                "path": "/apps/haoligo/patrol/management/overview",
-                "icon": "Kanban",
+                "title": "app.haoligo.menu.patrol.group.reports.volume",
+                "path": "/apps/haoligo/patrol/reports/group/volume",
+                "icon": "ChartPie",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 21
               },
               {
-                "title": "app.haoligo.menu.patrol.charts.fault-by-workshop",
-                "path": "/apps/haoligo/patrol/charts/fault-by-workshop",
-                "icon": "ChartPie",
+                "title": "app.haoligo.menu.patrol.group.reports.completion",
+                "path": "/apps/haoligo/patrol/reports/group/completion",
+                "icon": "CircleCheckBig",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 22
               },
               {
-                "title": "app.haoligo.menu.patrol.charts.time-trend",
-                "path": "/apps/haoligo/patrol/charts/time-trend",
-                "icon": "ChartColumn",
+                "title": "app.haoligo.menu.patrol.group.reports.area",
+                "path": "/apps/haoligo/patrol/reports/group/area",
+                "icon": "Map",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 23
               },
               {
-                "title": "app.haoligo.menu.patrol.charts.keyword-cloud",
-                "path": "/apps/haoligo/patrol/charts/keyword-cloud",
+                "title": "app.haoligo.menu.patrol.group.reports.insights",
+                "path": "/apps/haoligo/patrol/reports/group/insights",
                 "icon": "Sparkles",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 24
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.area-feedback",
-                "path": "/apps/haoligo/patrol/charts/area-feedback",
-                "icon": "Map",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 25
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.status-distribution",
-                "path": "/apps/haoligo/patrol/charts/status-distribution",
-                "icon": "Donut",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 26
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.feedback-time-trend",
-                "path": "/apps/haoligo/patrol/charts/feedback-time-trend",
-                "icon": "ClockArrowUp",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 27
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.top-reporters",
-                "path": "/apps/haoligo/patrol/charts/top-reporters",
-                "icon": "Medal",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 28
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.area-counts",
-                "path": "/apps/haoligo/patrol/charts/area-counts",
-                "icon": "ChartColumnIncreasing",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 29
-              },
-              {
-                "title": "app.haoligo.menu.patrol.charts.time-vs-headcount",
-                "path": "/apps/haoligo/patrol/charts/time-vs-headcount",
-                "icon": "Users2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 30
-              },
-              {
-                "title": "app.haoligo.menu.patrol.settings.chart-bindings",
-                "path": "/apps/haoligo/patrol/settings/chart-bindings",
-                "icon": "Settings2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 31
               }
             ]
           }

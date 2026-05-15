@@ -1842,18 +1842,64 @@ export default {
   'app.haoligo.menu.patrol.group.operations': '日常巡查',
   'app.haoligo.menu.patrol.daily.form': '问题登记',
   'app.haoligo.menu.patrol.hazards': '隐患治理',
-  'app.haoligo.menu.patrol.group.analytics': '分析看板',
-  'app.haoligo.menu.patrol.management.overview': '巡检总览',
-  'app.haoligo.menu.patrol.charts.fault-by-workshop': '车间故障对比',
-  'app.haoligo.menu.patrol.charts.time-trend': '巡检时间趋势',
-  'app.haoligo.menu.patrol.charts.keyword-cloud': '问题关键词',
-  'app.haoligo.menu.patrol.charts.area-feedback': '区域反馈分布',
-  'app.haoligo.menu.patrol.charts.status-distribution': '处理状态分布',
-  'app.haoligo.menu.patrol.charts.feedback-time-trend': '反馈时间趋势',
-  'app.haoligo.menu.patrol.charts.top-reporters': '高发报障人员',
-  'app.haoligo.menu.patrol.charts.area-counts': '区域提出次数',
-  'app.haoligo.menu.patrol.charts.time-vs-headcount': '巡查时长与人数',
-  'app.haoligo.menu.patrol.settings.chart-bindings': '图表配置',
+  'app.haoligo.menu.patrol.group.reports': '统计报表',
+  'app.haoligo.menu.patrol.group.reports.volume': '类型结构与登记量',
+  'app.haoligo.menu.patrol.group.reports.completion': '办结进度与积压',
+  'app.haoligo.menu.patrol.group.reports.area': '区域与组织对比',
+  'app.haoligo.menu.patrol.group.reports.insights': '描述文本分析',
+  'app.haoligo.patrol.reports.groupLead.volume':
+    '汇总问题类型占比、各月登记量及处置阶段分布，支撑排班与现场资源配置。',
+  'app.haoligo.patrol.reports.groupLead.completion':
+    '呈现流程节点占比、月度办结率及未结工单结构，便于例会复盘与责任落实。',
+  'app.haoligo.patrol.reports.groupLead.area':
+    '按巡查区域与关联车间展示登记量走势，用于识别重点区域与跨部门协同压力。',
+  'app.haoligo.patrol.reports.groupLead.insights':
+    '对问题描述进行词频提取与可视化，识别高频表述及潜在共性问题，可与标准问题类型对照分析。',
+  'app.haoligo.patrol.reports.kpi.total': '登记工单总数',
+  'app.haoligo.patrol.reports.kpi.open': '处理中（含检查/维修）',
+  'app.haoligo.patrol.reports.kpi.completed': '已办结',
+  'app.haoligo.patrol.reports.kpi.contributors': '参与登记人数',
+  'app.haoligo.patrol.reports.groupNotFound': '报表分组不存在',
+  'app.haoligo.patrol.reports.emptyChart': '暂无数据',
+  'app.haoligo.patrol.reports.unsupportedChart': '暂不支持的图表类型',
+  'app.haoligo.patrol.reports.axisMonth': '月份',
+  'app.haoligo.patrol.reports.axisStage': '流程节点',
+  'app.haoligo.patrol.reports.axisPercent': '占比（%）',
+  'app.haoligo.patrol.reports.axisCount': '数量',
+  'app.haoligo.patrol.reports.axisPerson': '人员',
+  'app.haoligo.patrol.reports.axisCategory': '类别',
+  'app.haoligo.patrol.reports.axisSeries': '系列',
+  'app.haoligo.patrol.reports.keywordCloudHint': '字号与词频正相关：字体越大，表示该词在问题描述中出现次数越多。',
+  'app.haoligo.patrol.reports.chartTitle.issueTypeShare': '问题类型分布',
+  'app.haoligo.patrol.reports.chartDesc.issueTypeShare':
+    '按系统维护的问题类型统计占比，用于识别高发类型并指导检查要点与培训重点。',
+  'app.haoligo.patrol.reports.chartTitle.monthlyVolume': '月度登记量',
+  'app.haoligo.patrol.reports.chartDesc.monthlyVolume':
+    '按登记时间所在自然月汇总工单数量，呈现月度波动与业务峰值。',
+  'app.haoligo.patrol.reports.chartTitle.statusDistribution': '处置状态分布',
+  'app.haoligo.patrol.reports.chartDesc.statusDistribution':
+    '展示检查中、维修中与已办结等状态占比，用于评估在办积压与处置压力。',
+  'app.haoligo.patrol.reports.chartTitle.nodeCompletion': '流程节点占比',
+  'app.haoligo.patrol.reports.chartDesc.nodeCompletion':
+    '基于在册工单统计各流程节点占比，用于定位流程瓶颈与滞留环节。',
+  'app.haoligo.patrol.reports.chartTitle.monthlyCompletionRate': '月度办结率',
+  'app.haoligo.patrol.reports.chartDesc.monthlyCompletionRate':
+    '统计各自然月登记工单中已办结比例；当月无登记数据时不展示。',
+  'app.haoligo.patrol.reports.chartTitle.monthlyOverdueRate': '月度未结占比',
+  'app.haoligo.patrol.reports.chartDesc.monthlyOverdueRate':
+    '统计各自然月登记工单中仍处于检查或维修阶段的比例，用于评估滞留风险。',
+  'app.haoligo.patrol.reports.chartTitle.overdueRanking': '未结工单责任分布',
+  'app.haoligo.patrol.reports.chartDesc.overdueRanking':
+    '仅统计未办结工单，按责任人聚合（未指定责任人时取登记人），便于例会督办与协同。',
+  'app.haoligo.patrol.reports.chartTitle.areaVolumeTrend': '分区域登记量趋势',
+  'app.haoligo.patrol.reports.chartDesc.areaVolumeTrend':
+    '按巡查区域与月份展示登记量变化，用于识别持续高负荷区域。',
+  'app.haoligo.patrol.reports.chartTitle.deptHeadcountTrend': '关联车间登记人次',
+  'app.haoligo.patrol.reports.chartDesc.deptHeadcountTrend':
+    '按关联车间与月份统计去重后的登记人次，反映组织侧参与情况（人次与工单数量含义不同）。',
+  'app.haoligo.patrol.reports.chartTitle.keywordCloud': '问题描述词云',
+  'app.haoligo.patrol.reports.chartDesc.keywordCloud':
+    '基于问题描述文本进行分词与词频统计，辅助发现重复表述及潜在风险主题，可与问题类型字段交叉分析。',
   'app.haoligo.menu.patrol.group.equipmentBridge': '设备报表',
   'app.haoligo.menu.patrol.reports.point-inspection': '设备点检',
   'app.haoligo.menu.patrol.reports.patrol-records': '设备巡检',

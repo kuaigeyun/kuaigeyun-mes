@@ -40,6 +40,8 @@ const MoldReportOutsourceMaintenanceLogPage = lazy(() => import('./pages/molds/r
 const PatrolIndexPage = lazy(() => import('./pages/patrol'));
 const PatrolDailyFormPage = lazy(() => import('./pages/patrol/daily/form'));
 const PatrolHazardsPage = lazy(() => import('./pages/patrol/hazards'));
+const PatrolReportGroupPage = lazy(() => import('./pages/patrol/reports/PatrolReportGroupPage'));
+const PatrolReportLegacyRedirect = lazy(() => import('./pages/patrol/reports/PatrolReportLegacyRedirect'));
 
 const HaoligoApp: React.FC = () => (
   <Routes>
@@ -76,8 +78,65 @@ const HaoligoApp: React.FC = () => (
       <Route path="patrol" element={<Outlet />}>
         <Route index element={withPageSuspense(PatrolIndexPage)} />
         <Route path="daily/form" element={withPageSuspense(PatrolDailyFormPage)} />
-        <Route path="daily/dashboard" element={<Navigate to="/apps/haoligo/patrol/daily/form" replace />} />
+        <Route
+          path="daily/dashboard"
+          element={<Navigate to="/apps/haoligo/patrol/reports/group/volume" replace />}
+        />
         <Route path="hazards" element={withPageSuspense(PatrolHazardsPage)} />
+        <Route
+          path="reports/summary"
+          element={<Navigate to="/apps/haoligo/patrol/reports/group/volume" replace />}
+        />
+        <Route
+          path="reports/group"
+          element={<Navigate to="/apps/haoligo/patrol/reports/group/volume" replace />}
+        />
+        <Route path="reports/group/:groupKey" element={withPageSuspense(PatrolReportGroupPage)} />
+        <Route path="reports/:reportKey" element={withPageSuspense(PatrolReportLegacyRedirect)} />
+        <Route
+          path="management/overview"
+          element={<Navigate to="/apps/haoligo/patrol/reports/group/volume" replace />}
+        />
+        <Route
+          path="charts/fault-by-workshop"
+          element={<Navigate to="/apps/haoligo/patrol/reports/issue-type-share" replace />}
+        />
+        <Route
+          path="charts/time-trend"
+          element={<Navigate to="/apps/haoligo/patrol/reports/monthly-volume" replace />}
+        />
+        <Route
+          path="charts/keyword-cloud"
+          element={<Navigate to="/apps/haoligo/patrol/reports/keyword-cloud" replace />}
+        />
+        <Route
+          path="charts/area-feedback"
+          element={<Navigate to="/apps/haoligo/patrol/reports/area-volume-trend" replace />}
+        />
+        <Route
+          path="charts/status-distribution"
+          element={<Navigate to="/apps/haoligo/patrol/reports/status-distribution" replace />}
+        />
+        <Route
+          path="charts/feedback-time-trend"
+          element={<Navigate to="/apps/haoligo/patrol/reports/monthly-overdue-rate" replace />}
+        />
+        <Route
+          path="charts/top-reporters"
+          element={<Navigate to="/apps/haoligo/patrol/reports/overdue-ranking" replace />}
+        />
+        <Route
+          path="charts/area-counts"
+          element={<Navigate to="/apps/haoligo/patrol/reports/area-volume-trend" replace />}
+        />
+        <Route
+          path="charts/time-vs-headcount"
+          element={<Navigate to="/apps/haoligo/patrol/reports/dept-headcount-trend" replace />}
+        />
+        <Route
+          path="settings/chart-bindings"
+          element={<Navigate to="/apps/haoligo/patrol/reports/group/volume" replace />}
+        />
         <Route
           path="reports/point-inspection"
           element={<Navigate to="/apps/haoligo/equipment/reports/point-inspection" replace />}

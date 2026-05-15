@@ -1838,18 +1838,65 @@ export default {
   'app.haoligo.menu.patrol.group.operations': 'Daily Inspection',
   'app.haoligo.menu.patrol.daily.form': 'Issue registration',
   'app.haoligo.menu.patrol.hazards': 'Hazard remediation',
-  'app.haoligo.menu.patrol.group.analytics': 'Analytics',
-  'app.haoligo.menu.patrol.management.overview': 'Patrol Overview',
-  'app.haoligo.menu.patrol.charts.fault-by-workshop': 'Faults by Workshop',
-  'app.haoligo.menu.patrol.charts.time-trend': 'Patrol Time Trend',
-  'app.haoligo.menu.patrol.charts.keyword-cloud': 'Issue Keywords',
-  'app.haoligo.menu.patrol.charts.area-feedback': 'Feedback by Area',
-  'app.haoligo.menu.patrol.charts.status-distribution': 'Status Distribution',
-  'app.haoligo.menu.patrol.charts.feedback-time-trend': 'Feedback Time Trend',
-  'app.haoligo.menu.patrol.charts.top-reporters': 'Top Reporters',
-  'app.haoligo.menu.patrol.charts.area-counts': 'Reports by Area',
-  'app.haoligo.menu.patrol.charts.time-vs-headcount': 'Duration vs. Headcount',
-  'app.haoligo.menu.patrol.settings.chart-bindings': 'Chart Config',
+  'app.haoligo.menu.patrol.group.reports': 'Analytics',
+  'app.haoligo.menu.patrol.group.reports.volume': 'Issue mix & monthly volume',
+  'app.haoligo.menu.patrol.group.reports.completion': 'Closure progress & backlog',
+  'app.haoligo.menu.patrol.group.reports.area': 'Areas & organization',
+  'app.haoligo.menu.patrol.group.reports.insights': 'Description text analytics',
+  'app.haoligo.patrol.reports.groupLead.volume':
+    'Summarizes issue-type mix, monthly intake, and status distribution to support staffing and field resourcing.',
+  'app.haoligo.patrol.reports.groupLead.completion':
+    'Shows stage mix, monthly closure rate, and open-ticket structure for reviews and accountability.',
+  'app.haoligo.patrol.reports.groupLead.area':
+    'Trends by patrol area and linked workshop to highlight hotspots and cross-team load.',
+  'app.haoligo.patrol.reports.groupLead.insights':
+    'Term frequency from descriptions to surface recurring wording and common themes; cross-check with coded issue types.',
+  'app.haoligo.patrol.reports.kpi.total': 'Total tickets',
+  'app.haoligo.patrol.reports.kpi.open': 'In progress (inspect / repair)',
+  'app.haoligo.patrol.reports.kpi.completed': 'Closed',
+  'app.haoligo.patrol.reports.kpi.contributors': 'Distinct registrants',
+  'app.haoligo.patrol.reports.groupNotFound': 'Report group not found',
+  'app.haoligo.patrol.reports.emptyChart': 'No data',
+  'app.haoligo.patrol.reports.unsupportedChart': 'Unsupported chart type',
+  'app.haoligo.patrol.reports.axisMonth': 'Month',
+  'app.haoligo.patrol.reports.axisStage': 'Stage',
+  'app.haoligo.patrol.reports.axisPercent': 'Percent (%)',
+  'app.haoligo.patrol.reports.axisCount': 'Count',
+  'app.haoligo.patrol.reports.axisPerson': 'Person',
+  'app.haoligo.patrol.reports.axisCategory': 'Category',
+  'app.haoligo.patrol.reports.axisSeries': 'Series',
+  'app.haoligo.patrol.reports.keywordCloudHint':
+    'Font size reflects term frequency: larger text indicates more occurrences in descriptions.',
+  'app.haoligo.patrol.reports.chartTitle.issueTypeShare': 'Issue type distribution',
+  'app.haoligo.patrol.reports.chartDesc.issueTypeShare':
+    'Share by configured issue type to identify dominant categories and focus checks and training.',
+  'app.haoligo.patrol.reports.chartTitle.monthlyVolume': 'Monthly intake',
+  'app.haoligo.patrol.reports.chartDesc.monthlyVolume':
+    'Ticket counts by calendar month of registration to show seasonality and peaks.',
+  'app.haoligo.patrol.reports.chartTitle.statusDistribution': 'Status distribution',
+  'app.haoligo.patrol.reports.chartDesc.statusDistribution':
+    'Mix of inspecting, in repair, and closed to gauge backlog and processing pressure.',
+  'app.haoligo.patrol.reports.chartTitle.nodeCompletion': 'Stage mix',
+  'app.haoligo.patrol.reports.chartDesc.nodeCompletion':
+    'Share of open tickets by workflow stage to locate bottlenecks and dwell points.',
+  'app.haoligo.patrol.reports.chartTitle.monthlyCompletionRate': 'Monthly closure rate',
+  'app.haoligo.patrol.reports.chartDesc.monthlyCompletionRate':
+    'Share of tickets registered in each month that are already closed; months with no intake may be empty.',
+  'app.haoligo.patrol.reports.chartTitle.monthlyOverdueRate': 'Monthly open share',
+  'app.haoligo.patrol.reports.chartDesc.monthlyOverdueRate':
+    'Among tickets registered in the month, share still in inspecting or repair—higher values indicate aging risk.',
+  'app.haoligo.patrol.reports.chartTitle.overdueRanking': 'Open tickets by assignee',
+  'app.haoligo.patrol.reports.chartDesc.overdueRanking':
+    'Open tickets grouped by responsible person (registrant if blank) for follow-up and reviews.',
+  'app.haoligo.patrol.reports.chartTitle.areaVolumeTrend': 'Intake trend by patrol area',
+  'app.haoligo.patrol.reports.chartDesc.areaVolumeTrend':
+    'Registration volume by patrol area and month to highlight sustained hotspots.',
+  'app.haoligo.patrol.reports.chartTitle.deptHeadcountTrend': 'Registrants by linked workshop',
+  'app.haoligo.patrol.reports.chartDesc.deptHeadcountTrend':
+    'Distinct registrants per linked workshop by month (headcount differs from ticket count).',
+  'app.haoligo.patrol.reports.chartTitle.keywordCloud': 'Description word cloud',
+  'app.haoligo.patrol.reports.chartDesc.keywordCloud':
+    'Token frequency from descriptions to reveal recurring wording and themes; compare with coded issue types.',
   'app.haoligo.menu.patrol.group.equipmentBridge': 'Equipment Reports',
   'app.haoligo.menu.patrol.reports.point-inspection': 'Equipment Spot Checks',
   'app.haoligo.menu.patrol.reports.patrol-records': 'Equipment Patrol Records',

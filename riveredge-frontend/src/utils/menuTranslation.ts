@@ -88,6 +88,25 @@ function sanitizeHaoligoMenuDisplayTitle(
   return out;
 }
 
+/**
+ * 好力 GO 现场巡查统计报表：path 为 `patrol/reports/group/{volume|completion|area|insights}`，
+ * 与 manifest / zh-CN 的 key 为 `app.haoligo.menu.patrol.group.reports.*`（注意是 patrol.group.reports，不是 patrol.reports.group）。
+ * 若不单独处理，会误推成 `app.haoligo.menu.patrol.reports.group.volume` 并不命中，侧栏与面包屑回退为英文末段「Volume」等。
+ */
+function tryHaoligoPatrolReportGroupMenuTitle(
+  appCode: string,
+  relativePath: string,
+  t: (key: string, options?: { defaultValue?: string }) => string
+): string | null {
+  if (appCode !== 'haoligo' || !relativePath.startsWith('patrol/reports/group/')) return null;
+  const groupKey = relativePath.slice('patrol/reports/group/'.length).split('/')[0];
+  if (!groupKey) return null;
+  const key = `app.${appCode}.menu.patrol.group.reports.${groupKey}`;
+  const out = t(key, { defaultValue: '' });
+  if (out && out !== key && out.trim() !== '') return out;
+  return null;
+}
+
 function isAppNameKeyMisassignedToNonRootPath(
   name: string,
   path: string | undefined,
@@ -238,6 +257,9 @@ export function translateAppMenuItemName(
 
 
   if (appCode && relativePath) {
+    const patrolReportTitle = tryHaoligoPatrolReportGroupMenuTitle(appCode, relativePath, t);
+    if (patrolReportTitle) return patrolReportTitle;
+
     // 约定：path 末段 = i18n key 末段，path 推导直接命中 locale
     const pathKey = relativePath.replace(/\//g, '.');
     const menuKey = `app.${appCode}.menu.${pathKey}`;
@@ -314,6 +336,9 @@ export function translatePathTitle(path: string, t: any): string {
   const appCode = extractAppCodeFromPath(pathname);
   if (appCode) {
     const relativePath = pathname.replace(`/apps/${appCode}/`, '');
+    const patrolReportTitle = tryHaoligoPatrolReportGroupMenuTitle(appCode, relativePath, t);
+    if (patrolReportTitle) return patrolReportTitle;
+
     const menuKey = `app.${appCode}.menu.${relativePath.replace(/\//g, '.')}`;
     let translated = t(menuKey, { defaultValue: '' });
     if (translated && translated !== menuKey) return translated;

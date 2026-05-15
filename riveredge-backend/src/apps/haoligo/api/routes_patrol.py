@@ -77,11 +77,10 @@ async def _not_found():
 
 def _ensure_completed_requirements(
     solution_note: Optional[str],
-    after_image_file_ids: Optional[Any],
     handler_name: Optional[str],
     handled_at: Optional[datetime],
 ) -> None:
-    """办结（处理人 + 处理时间）时须同时具备解决方案与处理后照片。"""
+    """办结（处理人 + 处理时间）时须填写解决方案；处理后照片为选填。"""
     hn = (handler_name or "").strip() if handler_name else ""
     if handled_at is None or not hn:
         return
@@ -89,12 +88,6 @@ def _ensure_completed_requirements(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="办结需填写解决方案（05）",
-        )
-    aids = after_image_file_ids
-    if not isinstance(aids, list) or not any(str(x).strip() for x in aids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="办结需上传至少一张处理后照片（06）",
         )
 
 
@@ -198,7 +191,6 @@ async def create_hazard(
     if eff_status == "已完成":
         _ensure_completed_requirements(
             body.solution_note,
-            body.after_image_file_ids,
             body.handler_name,
             body.handled_at,
         )
@@ -263,7 +255,6 @@ async def update_hazard(
     if row.status == "已完成":
         _ensure_completed_requirements(
             row.solution_note,
-            row.after_image_file_ids,
             row.handler_name,
             row.handled_at,
         )

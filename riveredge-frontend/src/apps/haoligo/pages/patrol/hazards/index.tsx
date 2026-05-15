@@ -17,6 +17,7 @@ import {
   type HazardRow,
 } from '../../../services/haoligo';
 import { getUserList } from '../../../../../services/user';
+import { formDateTimeToIso } from '../shared/datetimeHelpers';
 import { RemediationFormBody } from '../shared/RemediationFormBody';
 import { normUploadUuids, uuidsToUploadFileList } from '../shared/uploadHelpers';
 
@@ -78,22 +79,16 @@ const PatrolHazardsPage: React.FC = () => {
     try {
       const afterIds = normUploadUuids(afterFiles);
       const handlerName = String(values.handler_name ?? '').trim();
-      const handledAt = values.handled_at as dayjs.Dayjs | undefined;
+      const handledAtIso = formDateTimeToIso(values.handled_at);
       const solution = String(values.solution_note ?? '').trim();
-      if (handledAt && handlerName) {
-        if (!solution) {
-          messageApi.warning('办结请填写解决方案（05）');
-          throw new Error('validation');
-        }
-        if (afterIds.length === 0) {
-          messageApi.warning('办结请上传至少一张处理后照片（06）');
-          throw new Error('validation');
-        }
+      if (handledAtIso && handlerName && !solution) {
+        messageApi.warning('办结请填写解决方案（05）');
+        throw new Error('validation');
       }
       await updateHazardReport(editId, {
         solution_note: solution || undefined,
         after_image_file_ids: afterIds.length ? afterIds : undefined,
-        handled_at: handledAt?.toISOString(),
+        handled_at: handledAtIso,
         handler_name: handlerName || undefined,
       });
       messageApi.success('治理信息已保存');
