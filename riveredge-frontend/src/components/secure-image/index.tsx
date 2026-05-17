@@ -30,6 +30,8 @@ export interface SecureImageProps {
   onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
   /** 加载完成回调 */
   onLoad?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  /** 在父容器内水平垂直居中，图片 max 100% 且保持比例（配合 object-fit: contain） */
+  fitCenter?: boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   preview = true,
   onError,
   onLoad,
+  fitCenter = false,
 }) => {
   const [src, setSrc] = useState<string | null>(initialSrc || null);
   const previewEnabled = !!preview;
@@ -188,15 +191,39 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     );
   }
 
+  const wrapperStyle: React.CSSProperties = fitCenter
+    ? {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        lineHeight: 0,
+      }
+    : { display: 'inline-block', lineHeight: 0 };
+
+  const imageStyle: React.CSSProperties = fitCenter
+    ? {
+        objectFit: 'contain',
+        objectPosition: 'center',
+        maxWidth: '100%',
+        maxHeight: '100%',
+        width: 'auto',
+        height: 'auto',
+        borderRadius: 4,
+        ...style,
+      }
+    : { objectFit: 'cover', borderRadius: 4, ...style };
+
   return (
-    <div ref={containerRef} style={{ display: 'inline-block', lineHeight: 0 }}>
+    <div ref={containerRef} style={wrapperStyle}>
       <Image
         key={`secure-image-${previewEpoch}`}
         src={src || undefined}
         alt={alt}
-        width={width}
-        height={height}
-        style={{ objectFit: 'cover', borderRadius: 4, ...style }}
+        width={fitCenter ? undefined : width}
+        height={fitCenter ? undefined : height}
+        style={imageStyle}
         preview={previewConfig}
         onClick={openPreview}
         placeholder={<Skeleton.Avatar active shape="square" size={typeof width === 'number' ? width : 40} />}

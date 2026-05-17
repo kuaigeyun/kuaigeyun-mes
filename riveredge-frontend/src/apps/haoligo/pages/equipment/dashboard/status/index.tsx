@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Card, Col, Dropdown, Empty, Flex, Row, Select, Spin, Typography } from 'antd';
+import { App, Card, Dropdown, Empty, Flex, Select, Spin, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import EquipmentStatusTrafficLight, {
@@ -23,6 +23,11 @@ import {
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 
 const EQUIPMENT_FETCH_LIMIT = 200;
+/** 封面区 4:3；内边距内图片 object-fit: contain 保持原始比例 */
+const CARD_COVER_ASPECT = '4 / 3';
+const CARD_COVER_PADDING = 8;
+/** 与应用中心卡片网格一致 */
+const CARD_GRID_MIN_WIDTH = 300;
 
 async function fetchEquipmentsForBoard(workshopId?: number): Promise<{ items: EquipmentRow[]; total: number }> {
   const all: EquipmentRow[] = [];
@@ -45,7 +50,26 @@ async function fetchEquipmentsForBoard(workshopId?: number): Promise<{ items: Eq
 const EquipmentStatusDashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const { formatStatus, statusOptions } = useEquipmentOperationalStatusLabels();
+
+  const cardCoverStyle = useMemo(
+    (): React.CSSProperties => ({
+      width: '100%',
+      aspectRatio: CARD_COVER_ASPECT,
+      padding: CARD_COVER_PADDING,
+      boxSizing: 'border-box',
+      overflow: 'hidden',
+      background: token.colorFillAlter,
+      borderBottom: `1px solid ${token.colorBorderSecondary}`,
+      borderTopLeftRadius: token.borderRadiusLG,
+      borderTopRightRadius: token.borderRadiusLG,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
+    [token.borderRadiusLG, token.colorBorderSecondary, token.colorFillAlter],
+  );
 
   const [loading, setLoading] = useState(true);
   const [switchingEquipmentId, setSwitchingEquipmentId] = useState<number | null>(null);
@@ -229,105 +253,140 @@ const EquipmentStatusDashboardPage: React.FC = () => {
           {!loading && equipments.length === 0 ? (
             <Empty description={t('app.haoligo.equipment.statusBoard.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
-            <Row gutter={[12, 12]}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(auto-fill, minmax(${CARD_GRID_MIN_WIDTH}px, 1fr))`,
+                gap: 16,
+              }}
+            >
               {equipments.map((eq) => {
                 const ws = wsMap.get(eq.workshop_id);
-                const workshopLabel = ws ? `${ws.code} · ${ws.name}` : '—';
+                const workshopName = ws?.name?.trim() || '—';
                 const coverUuid = eq.image_file_uuids?.[0];
                 const statusKey = eq.operational_status;
+                const statusLabel = formatStatus(
+                  statusKey,
+                  t('app.haoligo.equipment.statusBoard.statusUnset'),
+                );
 
                 return (
-                  <Col key={eq.id} xs={24} sm={12} md={8} lg={6} xl={6}>
-                    <Card
-                      size="small"
-                      hoverable
-                      styles={{ body: { padding: 12 } }}
-                      cover={
+                  <Card
+                    key={eq.id}
+                    hoverable
+                    style={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderRadius: token.borderRadiusLG,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      overflow: 'hidden',
+                    }}
+                    styles={{
+                      body: { padding: '12px 16px', background: token.colorBgContainer },
+                    }}
+                    cover={
                         coverUuid ? (
-                          <div style={{ height: 140, overflow: 'hidden', background: '#f5f5f5' }}>
-                            <SecureImage
-                              fileUuid={coverUuid}
-                              alt={eq.name}
-                              height={140}
-                              width="100%"
-                              style={{ objectFit: 'cover', width: '100%' }}
-                              preview
-                            />
+                          <div style={cardCoverStyle}>
+                            <SecureImage fileUuid={coverUuid} alt={eq.name} fitCenter preview />
                           </div>
                         ) : (
                           <div
                             style={{
-                              height: 140,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              background: '#fafafa',
-                              color: 'rgba(0,0,0,0.25)',
+                              ...cardCoverStyle,
+                              color: token.colorTextQuaternary,
                             }}
                           >
                             <ToolOutlined style={{ fontSize: 40 }} />
                           </div>
                         )
                       }
-                    >
-                      <Flex align="center" gap={12}>
-                        <Flex vertical gap={6} style={{ flex: 1, minWidth: 0 }}>
-                          <Typography.Text strong ellipsis title={eq.name}>
-                            {eq.name}
-                          </Typography.Text>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {eq.asset_code}
-                          </Typography.Text>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis title={workshopLabel}>
-                            {t('app.haoligo.equipment.ledger.formWorkshop')}：{workshopLabel}
-                          </Typography.Text>
-                        </Flex>
-                        <Dropdown
-                          menu={{ ...statusMenuForEquipment(eq), onClick: handleStatusMenuClick }}
-                          trigger={['click']}
-                          placement="bottomRight"
-                          getPopupContainer={() => document.body}
-                          disabled={switchingEquipmentId === eq.id || statusOptions.length === 0}
-                          open={statusMenuOpenId === eq.id}
-                          onOpenChange={(open) => {
-                            if (open && switchingEquipmentId === eq.id) return;
-                            setStatusMenuOpenId(open ? eq.id : null);
+                  >
+                    <Flex align="flex-start" gap={12}>
+                      <Flex vertical gap={6} style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 16,
+                          color: token.colorTextHeading,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={eq.name}
+                      >
+                        {eq.name}
+                      </span>
+                      <span
+                        style={{
+                          color: token.colorTextSecondary,
+                          fontSize: 13,
+                          lineHeight: '18px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={eq.asset_code}
+                      >
+                        {eq.asset_code}
+                      </span>
+                      <span
+                        style={{
+                          color: token.colorTextSecondary,
+                          fontSize: 13,
+                          lineHeight: '18px',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                        title={workshopName}
+                      >
+                        {t('app.haoligo.equipment.ledger.formWorkshop')}：{workshopName}
+                      </span>
+                      </Flex>
+                      <Dropdown
+                        menu={{ ...statusMenuForEquipment(eq), onClick: handleStatusMenuClick }}
+                        trigger={['click']}
+                        placement="bottomRight"
+                        getPopupContainer={() => document.body}
+                        disabled={switchingEquipmentId === eq.id || statusOptions.length === 0}
+                        open={statusMenuOpenId === eq.id}
+                        onOpenChange={(open) => {
+                          if (open && switchingEquipmentId === eq.id) return;
+                          setStatusMenuOpenId(open ? eq.id : null);
+                        }}
+                      >
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              if (switchingEquipmentId === eq.id) return;
+                              setStatusMenuOpenId((prev) => (prev === eq.id ? null : eq.id));
+                            }
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            flexShrink: 0,
+                            cursor: switchingEquipmentId === eq.id ? 'wait' : 'pointer',
+                            opacity: switchingEquipmentId === eq.id ? 0.65 : 1,
+                            outline: 'none',
                           }}
                         >
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                if (switchingEquipmentId === eq.id) return;
-                                setStatusMenuOpenId((prev) => (prev === eq.id ? null : eq.id));
-                              }
-                            }}
-                            style={{
-                              display: 'inline-flex',
-                              flexShrink: 0,
-                              cursor: switchingEquipmentId === eq.id ? 'wait' : 'pointer',
-                              opacity: switchingEquipmentId === eq.id ? 0.65 : 1,
-                              outline: 'none',
-                            }}
-                          >
-                            <EquipmentStatusTrafficLight
-                              status={statusKey}
-                              orientation="label-left"
-                              statusLabel={formatStatus(
-                                statusKey,
-                                t('app.haoligo.equipment.statusBoard.statusUnset'),
-                              )}
-                            />
-                          </span>
-                        </Dropdown>
-                      </Flex>
-                    </Card>
-                  </Col>
+                          <EquipmentStatusTrafficLight
+                            status={statusKey}
+                            orientation="label-left"
+                            statusLabel={statusLabel}
+                          />
+                        </span>
+                      </Dropdown>
+                    </Flex>
+                  </Card>
                 );
               })}
-            </Row>
+            </div>
           )}
         </Spin>
       </Flex>
