@@ -1,5 +1,5 @@
 import type { UploadFile } from 'antd/es/upload/interface';
-import { getFileDownloadUrl } from '../../../../../services/file';
+import { getFileDownloadUrl, getFileDownloadUrlWithToken } from '../../../../../services/file';
 
 export function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -23,4 +23,27 @@ export function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[]
     url: getFileDownloadUrl(uuid),
     response: { uuid },
   }));
+}
+
+/** 编辑表单回显：带 token 的缩略图 URL（生产环境 Upload 预览必需） */
+export async function uuidsToSecureUploadFileList(uuids: string[] | undefined): Promise<UploadFile[]> {
+  if (!uuids?.length) return [];
+  return Promise.all(
+    uuids.map(async (uuid) => {
+      let url = '';
+      try {
+        url = await getFileDownloadUrlWithToken(uuid);
+      } catch {
+        /* 预览失败时仍保留 uid 便于删除/提交 */
+      }
+      return {
+        uid: uuid,
+        name: '照片',
+        status: 'done' as const,
+        url: url || undefined,
+        thumbUrl: url || undefined,
+        response: { uuid },
+      };
+    }),
+  );
 }

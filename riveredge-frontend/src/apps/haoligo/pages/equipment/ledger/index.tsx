@@ -18,7 +18,7 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Image, Modal, Row, Space, Table, Typography, Upload } from 'antd';
+import { App, Button, Col, Modal, Row, Space, Table, Typography, Upload } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
@@ -52,9 +52,10 @@ import {
   type WorkshopRow,
 } from '../../../services/haoligo';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { getFileDownloadUrl, uploadFile } from '../../../../../services/file';
+import { uploadFile } from '../../../../../services/file';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { normUploadUuids, uuidsToUploadFileList } from '../../patrol/shared/uploadHelpers';
+import { EquipmentImageList } from '../../../components/EquipmentImageList';
+import { normUploadUuids, uuidsToSecureUploadFileList } from '../../patrol/shared/uploadHelpers';
 import {
   HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT,
   useEquipmentOperationalStatusLabels,
@@ -196,7 +197,7 @@ const EquipmentLedgerPage: React.FC = () => {
         operational_status: detail.operational_status ?? undefined,
         manufacture_date: detail.manufacture_date ? dayjs(detail.manufacture_date) : undefined,
         remark: detail.remark ?? '',
-        equipment_images: uuidsToUploadFileList(detail.image_file_uuids),
+        equipment_images: await uuidsToSecureUploadFileList(detail.image_file_uuids),
       });
       setModalVisible(true);
     } catch (e) {
@@ -389,19 +390,9 @@ const EquipmentLedgerPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.ledger.colEquipmentImages'),
         dataIndex: 'image_file_uuids',
-        render: (_, r) => {
-          const uuids = r.image_file_uuids || [];
-          if (!uuids.length) return dash;
-          return (
-            <Image.PreviewGroup>
-              <Space size={8} wrap>
-                {uuids.map((uuid) => (
-                  <Image key={uuid} src={getFileDownloadUrl(uuid)} width={56} height={56} style={{ objectFit: 'cover', borderRadius: 4 }} />
-                ))}
-              </Space>
-            </Image.PreviewGroup>
-          );
-        },
+        render: (_, r) => (
+          <EquipmentImageList uuids={r.image_file_uuids} width={56} height={56} fallback={dash} />
+        ),
       },
     ],
     [t, dash, catMap, wsMap, mfrMap, setMap, criticalityLabel, operationalStatusLabel],

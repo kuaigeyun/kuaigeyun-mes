@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Card, Col, Dropdown, Empty, Flex, Image, Row, Select, Spin, Typography } from 'antd';
+import { App, Card, Col, Dropdown, Empty, Flex, Row, Select, Spin, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import EquipmentStatusTrafficLight, {
@@ -12,7 +12,7 @@ import EquipmentStatusTrafficLight, {
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
-import { getFileDownloadUrl } from '../../../../../../services/file';
+import { SecureImage } from '../../../../../../components/secure-image';
 import {
   createEquipmentStatusAdjustment,
   listEquipments,
@@ -245,12 +245,12 @@ const EquipmentStatusDashboardPage: React.FC = () => {
                       cover={
                         coverUuid ? (
                           <div style={{ height: 140, overflow: 'hidden', background: '#f5f5f5' }}>
-                            <Image
-                              src={getFileDownloadUrl(coverUuid)}
+                            <SecureImage
+                              fileUuid={coverUuid}
                               alt={eq.name}
                               height={140}
                               width="100%"
-                              style={{ objectFit: 'cover' }}
+                              style={{ objectFit: 'cover', width: '100%' }}
                               preview
                             />
                           </div>

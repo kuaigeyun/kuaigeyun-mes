@@ -7,6 +7,7 @@ import {
   ActionType,
   ProColumns,
   ProForm,
+  ProFormDependency,
   ProFormDigit,
   ProFormInstance,
   ProFormRadio,
