@@ -5,12 +5,18 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormInstance, ProFormText } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Modal, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   createManufacturer,
@@ -33,6 +39,8 @@ const ManufacturersPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<ManufacturerRow | null>(null);
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -42,6 +50,11 @@ const ManufacturersPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: ManufacturerRow) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+  };
 
   const handleEdit = (record: ManufacturerRow) => {
     setIsEdit(true);
@@ -95,16 +108,24 @@ const ManufacturersPage: React.FC = () => {
     }
   };
 
+  const detailColumns: ProDescriptionsItemProps<ManufacturerRow>[] = [
+    { title: t('app.haoligo.equipment.manufacturers.colCode'), dataIndex: 'code' },
+    { title: t('app.haoligo.equipment.manufacturers.colName'), dataIndex: 'name' },
+  ];
+
   const columns: ProColumns<ManufacturerRow>[] = [
     { title: t('app.haoligo.equipment.manufacturers.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
     { title: t('app.haoligo.equipment.manufacturers.colName'), dataIndex: 'name', width: 220, ellipsis: true },
     {
       title: t('app.haoligo.equipment.ledger.colActions'),
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            {t('common.detail')}
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('app.haoligo.equipment.manufacturers.actionEdit')}
           </Button>
@@ -239,6 +260,22 @@ const ManufacturersPage: React.FC = () => {
           rules={[{ required: true, message: t('app.haoligo.equipment.manufacturers.formNameReq') }]}
         />
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.code}`
+            : t('app.haoligo.equipment.manufacturers.title')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+        }}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+      />
     </>
   );
 };

@@ -9,10 +9,13 @@ from pydantic import BaseModel, Field
 
 from apps.haoligo.api.routes_equipment import router as equipment_router
 from apps.haoligo.api.routes_equipment_documents import router as equipment_documents_router
+from apps.haoligo.api.routes_equipment_reports import router as equipment_reports_router
+from apps.haoligo.api.routes_equipment_status_adjustment import router as equipment_status_adjustment_router
 from apps.haoligo.api.routes_equipment_upkeep_complete_sheet import (
     router as equipment_upkeep_complete_sheet_router,
 )
 from apps.haoligo.api.routes_equipment_upkeep_sheet import router as equipment_upkeep_sheet_router
+from apps.haoligo.api.routes_mobile import router as mobile_router
 from apps.haoligo.api.routes_mold import router as mold_router
 from apps.haoligo.api.routes_mold_borrow_sheet import router as mold_borrow_sheet_router
 from apps.haoligo.api.routes_mold_return_sheet import router as mold_return_sheet_router
@@ -54,6 +57,8 @@ router.include_router(equipment_router)
 router.include_router(equipment_documents_router)
 router.include_router(equipment_upkeep_sheet_router)
 router.include_router(equipment_upkeep_complete_sheet_router)
+router.include_router(equipment_status_adjustment_router)
+router.include_router(equipment_reports_router)
 router.include_router(mold_borrow_sheet_router)
 router.include_router(mold_return_sheet_router)
 router.include_router(mold_trial_sheet_router)
@@ -62,5 +67,6 @@ router.include_router(mold_outsource_maintenance_complete_sheet_router)
 router.include_router(mold_maintenance_sheet_router)
 router.include_router(mold_maintenance_complete_sheet_router)
 router.include_router(mold_router)
+router.include_router(mobile_router)
 router.include_router(patrol_router)
 router.include_router(patrol_reports_router)

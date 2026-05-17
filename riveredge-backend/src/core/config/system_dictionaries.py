@@ -240,6 +240,17 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS",
+        "name": "设备运行状态",
+        "description": "好力 GO 设备台账与状态调整单中的运行状态（可在数据字典中增删改，value 建议用英文代码）",
+        "items": [
+            {"label": "运行", "value": "running", "description": "设备正常运行", "sort_order": 1},
+            {"label": "维修", "value": "repair", "description": "设备维修中", "sort_order": 2},
+            {"label": "停机", "value": "shutdown", "description": "设备停机", "sort_order": 3},
+            {"label": "待机", "value": "standby", "description": "设备待机", "sort_order": 4},
+        ],
+    },
+    {
         "code": "MOLD_STATUS",
         "name": "模具状态",
         "description": "好力 GO 模具台账状态（与 apps.haoligo.constants.mold_status 一致）",

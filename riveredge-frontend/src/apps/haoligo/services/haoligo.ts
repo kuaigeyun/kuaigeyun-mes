@@ -47,6 +47,7 @@ export interface EquipmentRow {
   criticality?: string | null;
   operational_status?: string | null;
   remark?: string | null;
+  image_file_uuids?: string[];
 }
 
 export interface CategoryRow {
@@ -95,6 +96,7 @@ export type EquipmentCreatePayload = {
   criticality?: string | null;
   operational_status?: string | null;
   remark?: string | null;
+  image_file_uuids?: string[] | null;
 };
 
 export type EquipmentUpdatePayload = {
@@ -107,6 +109,7 @@ export type EquipmentUpdatePayload = {
   criticality?: string | null;
   operational_status?: string | null;
   remark?: string | null;
+  image_file_uuids?: string[] | null;
 };
 
 export function listEquipments(params?: {
@@ -681,6 +684,8 @@ export interface EquipmentOutputRecordRow {
   work_order_no: string;
   customer_name?: string | null;
   product_name?: string | null;
+  finished_product_code?: string | null;
+  finished_product_name?: string | null;
   planned_qty?: string | number | null;
   completed_qty: string | number;
   startup_at?: string | null;
@@ -698,6 +703,8 @@ export type EquipmentOutputRecordCreatePayload = {
   recorded_at?: string | null;
   customer_name?: string | null;
   product_name?: string | null;
+  finished_product_code?: string | null;
+  finished_product_name?: string | null;
   planned_qty?: string | number | null;
   completed_qty?: string | number;
   startup_at?: string | null;
@@ -745,11 +752,54 @@ export function deleteEquipmentOutputRecord(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/output-records/${rowId}`, { method: 'DELETE' });
 }
 
+export interface EquipmentCapacitySummary {
+  record_count: number;
+  planned_qty_total?: string | number | null;
+  completed_qty_total: string | number;
+  achievement_rate_pct?: number | null;
+}
+
+export interface EquipmentCapacityByEquipmentRow {
+  equipment_id: number;
+  equipment_asset_code?: string;
+  equipment_name?: string;
+  record_count: number;
+  planned_qty_total?: string | number | null;
+  completed_qty_total: string | number;
+  achievement_rate_pct?: number | null;
+}
+
+export interface EquipmentCapacityReportResult {
+  summary: EquipmentCapacitySummary;
+  group_by: 'detail' | 'equipment' | string;
+  items: EquipmentOutputRecordRow[];
+  equipment_items: EquipmentCapacityByEquipmentRow[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export function getEquipmentCapacityReport(params?: {
+  skip?: number;
+  limit?: number;
+  equipment_id?: number;
+  sheet_no?: string;
+  work_order_no?: string;
+  recorded_from?: string;
+  recorded_to?: string;
+  keyword?: string;
+  group_by?: 'detail' | 'equipment';
+}): Promise<EquipmentCapacityReportResult> {
+  return apiRequest(`${PREFIX}/equipment/reports/capacity`, { params });
+}
+
 export interface EquipmentOutputDatasetBindingPayload {
   dataset_uuid?: string | null;
   work_order_param_key?: string | null;
   customer_column?: string | null;
   product_name_column?: string | null;
+  finished_product_code_column?: string | null;
+  finished_product_name_column?: string | null;
   planned_qty_column?: string | null;
 }
 
@@ -763,12 +813,72 @@ export function putEquipmentOutputDatasetBinding(
   return apiRequest(`${PREFIX}/equipment/output-dataset-binding`, { method: 'PUT', data: body });
 }
 
+export interface EquipmentStatusAdjustmentRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  recorded_at: string;
+  equipment_id: number;
+  equipment_asset_code?: string | null;
+  equipment_name?: string | null;
+  old_operational_status?: string | null;
+  new_operational_status: string;
+  remark?: string | null;
+  reporter_user_id: number;
+  created_at: string;
+}
+
+export type EquipmentStatusAdjustmentCreatePayload = {
+  equipment_id: number;
+  new_operational_status: string;
+  recorded_at?: string | null;
+  remark?: string | null;
+};
+
+export type EquipmentStatusAdjustmentUpdatePayload = {
+  recorded_at?: string | null;
+  remark?: string | null;
+};
+
+export function listEquipmentStatusAdjustments(params?: {
+  skip?: number;
+  limit?: number;
+  equipment_id?: number;
+  sheet_no?: string;
+  recorded_from?: string;
+  recorded_to?: string;
+  keyword?: string;
+}): Promise<PageResult<EquipmentStatusAdjustmentRow>> {
+  return apiRequest(`${PREFIX}/equipment/status-adjustments`, { params });
+}
+
+export function getEquipmentStatusAdjustment(rowId: number): Promise<EquipmentStatusAdjustmentRow> {
+  return apiRequest(`${PREFIX}/equipment/status-adjustments/${rowId}`);
+}
+
+export function createEquipmentStatusAdjustment(
+  body: EquipmentStatusAdjustmentCreatePayload,
+): Promise<EquipmentStatusAdjustmentRow> {
+  return apiRequest(`${PREFIX}/equipment/status-adjustments`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentStatusAdjustment(
+  rowId: number,
+  body: EquipmentStatusAdjustmentUpdatePayload,
+): Promise<EquipmentStatusAdjustmentRow> {
+  return apiRequest(`${PREFIX}/equipment/status-adjustments/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentStatusAdjustment(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/status-adjustments/${rowId}`, { method: 'DELETE' });
+}
+
 export function previewEquipmentOutputByWorkOrder(body: {
   work_order_no: string;
 }): Promise<{
   work_order_no: string;
-  customer_name?: string | null;
-  product_name?: string | null;
+  finished_product_code?: string | null;
+  finished_product_name?: string | null;
   planned_qty?: string | number | null;
   dataset_row?: Record<string, unknown> | null;
 }> {

@@ -1027,6 +1027,22 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_counter_digits": 3,
         "code_rule_description": "设备产出单默认规则：固定字符「CC」+ 提交日期（YYMMDD）+ 自动计数（3 位数字，每日重置）",
     },
+    {
+        "page_code": "haoligo-equipment-documents-status-adjustment",
+        "page_name": "设备状态调整单",
+        "page_path": "/apps/haoligo/equipment/documents/status-adjustment",
+        "code_field": "sheet_no",
+        "code_field_label": "调整单单号",
+        "module": "好力 GO",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "HAOLIGO_EQUIPMENT_STATUS_ADJUSTMENT_NO",
+        "allow_manual_edit": False,
+        "include_date_in_code": True,
+        "code_date_preset_format": "YYMMDD",
+        "code_counter_digits": 3,
+        "code_rule_description": "设备状态调整单默认规则：固定字符「ZTTZ」+ 提交日期（YYMMDD）+ 自动计数（3 位数字，每日重置）",
+    },
 ]
 
 
@@ -1117,6 +1133,11 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
         "sheet_no",
     ),
     "HAOLIGO_EQUIPMENT_OUTPUT_RECORD_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentOutputRecord", "sheet_no"),
+    "HAOLIGO_EQUIPMENT_STATUS_ADJUSTMENT_NO": (
+        "apps.haoligo.models.equipment_operations",
+        "HaoligoEquipmentStatusAdjustment",
+        "sheet_no",
+    ),
     "master-data-factory-work-center": ("apps.master_data.models.factory", "WorkCenter", "code"),
     "WORK_GROUP_CODE": ("apps.master_data.models.factory", "WorkGroup", "code"),
     "master-data-factory-work-group": ("apps.master_data.models.factory", "WorkGroup", "code"),

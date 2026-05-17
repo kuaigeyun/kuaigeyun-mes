@@ -6,6 +6,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProForm,
   ProFormDigit,
   ProFormInstance,
@@ -16,10 +17,16 @@ import {
 import { App, Button, Col, Divider, Modal, Popconfirm, Row, Space, Switch, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   addInspectionParamSetItem,
@@ -80,6 +87,11 @@ const InspectionParamSetsPage: React.FC = () => {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addItemLoading, setAddItemLoading] = useState(false);
 
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<InspectionParamSetRow | null>(null);
+  const [detailLines, setDetailLines] = useState<LineRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const loadParams = useCallback(async () => {
     const params = await listInspectionParams();
     setAllParams(params);
@@ -126,6 +138,33 @@ const InspectionParamSetsPage: React.FC = () => {
     setTimeout(() => {
       editorFormRef.current?.resetFields();
     }, 0);
+  };
+
+  const handleDetail = async (record: InspectionParamSetRow) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailLines([]);
+    try {
+      const [params, rawItems] = await Promise.all([listInspectionParams(), listInspectionParamSetItems(record.id)]);
+      const enriched: LineRow[] = rawItems
+        .map((it) => {
+          const p = params.find((x) => x.id === it.param_id);
+          return {
+            ...it,
+            param_code: p?.code ?? `#${it.param_id}`,
+            param_name: p?.name ?? '—',
+            param_unit: p?.unit,
+            value_type: p?.value_type,
+          };
+        })
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      setDetailLines(enriched);
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.inspectionParamSets.loadLinesFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const openEditEditor = async (record: InspectionParamSetRow) => {
@@ -344,6 +383,28 @@ const InspectionParamSetsPage: React.FC = () => {
     setPendingLines((prev) => prev.filter((x) => x.tempId !== tempId).map((row, i) => ({ ...row, sort_order: i })));
   };
 
+  const detailLineColumns: ColumnsType<LineRow> = [
+    {
+      title: t('app.haoligo.equipment.inspectionParamSets.columnSeq'),
+      width: 56,
+      render: (_, __, i) => i + 1,
+    },
+    { title: t('app.haoligo.equipment.inspectionParamSets.colParamCode'), dataIndex: 'param_code', width: 120, ellipsis: true },
+    { title: t('app.haoligo.equipment.inspectionParamSets.colParamName'), dataIndex: 'param_name', ellipsis: true },
+    { title: t('app.haoligo.equipment.inspectionParamSets.colUnit'), dataIndex: 'param_unit', width: 72, render: (u) => u ?? '—' },
+    {
+      title: t('app.haoligo.equipment.inspectionParamSets.colRequired'),
+      dataIndex: 'is_required',
+      width: 88,
+      render: (_, r) => (r.is_required ? t('app.haoligo.equipment.inspectionParamSets.colRequired') : '—'),
+    },
+  ];
+
+  const detailColumns: ProDescriptionsItemProps<InspectionParamSetRow>[] = [
+    { title: t('app.haoligo.equipment.inspectionParamSets.colSetCode'), dataIndex: 'code' },
+    { title: t('app.haoligo.equipment.inspectionParamSets.colSetName'), dataIndex: 'name' },
+  ];
+
   const persistedColumns: ColumnsType<LineRow> = [
       {
         title: t('app.haoligo.equipment.inspectionParamSets.columnSeq'),
@@ -465,10 +526,13 @@ const InspectionParamSetsPage: React.FC = () => {
     {
       title: t('app.haoligo.equipment.documents.colActions'),
       valueType: 'option',
-      width: 160,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space wrap>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            {t('common.detail')}
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditEditor(record)}>
             {t('app.haoligo.equipment.inspectionParamSets.btnEditPlan')}
           </Button>
@@ -609,6 +673,35 @@ const InspectionParamSetsPage: React.FC = () => {
           </Space>
         </div>
       </Modal>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.code}`
+            : t('app.haoligo.menu.equipment.inspection-param-sets')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+          setDetailLines([]);
+        }}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+        linesTitle={t('app.haoligo.equipment.inspectionParamSets.sectionSequence')}
+        lines={
+          <Table<LineRow>
+            rowKey="id"
+            size="small"
+            pagination={false}
+            columns={detailLineColumns}
+            dataSource={detailLines}
+            locale={{ emptyText: t('app.haoligo.equipment.inspectionParamSets.emptySequence') }}
+          />
+        }
+      />
 
       <FormModalTemplate
         title={t('app.haoligo.equipment.inspectionParamSets.addItemTitle')}

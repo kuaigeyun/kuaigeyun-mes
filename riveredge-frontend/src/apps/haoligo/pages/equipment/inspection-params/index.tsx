@@ -9,15 +9,22 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   createInspectionParam,
@@ -40,6 +47,8 @@ const InspectionParamsPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<InspectionParamRow | null>(null);
 
   const valueTypes = useMemo(
     () => [
@@ -67,6 +76,11 @@ const InspectionParamsPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: InspectionParamRow) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+  };
 
   const handleEdit = (record: InspectionParamRow) => {
     setIsEdit(true);
@@ -128,6 +142,20 @@ const InspectionParamsPage: React.FC = () => {
     }
   };
 
+  const detailColumns: ProDescriptionsItemProps<InspectionParamRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code' },
+      { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name' },
+      { title: t('app.haoligo.equipment.inspectionParams.colUnit'), dataIndex: 'unit', render: (_, r) => r.unit || '—' },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colValueType'),
+        dataIndex: 'value_type',
+        render: (_, r) => valueTypeLabel[r.value_type] || r.value_type,
+      },
+    ],
+    [t, valueTypeLabel],
+  );
+
   const columns: ProColumns<InspectionParamRow>[] = useMemo(
     () => [
       { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
@@ -143,10 +171,13 @@ const InspectionParamsPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.ledger.colActions'),
         valueType: 'option',
-        width: 140,
+        width: 200,
         fixed: 'right',
         render: (_, record) => (
           <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+              {t('common.detail')}
+            </Button>
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('app.haoligo.equipment.inspectionParams.actionEdit')}
             </Button>
@@ -306,6 +337,22 @@ const InspectionParamsPage: React.FC = () => {
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formValueTypeReq') }]}
         />
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.code}`
+            : t('app.haoligo.equipment.inspectionParams.title')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+        }}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+      />
     </>
   );
 };

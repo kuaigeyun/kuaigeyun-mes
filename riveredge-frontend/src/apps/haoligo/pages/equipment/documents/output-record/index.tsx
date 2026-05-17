@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 设备产出单（制令单号 + 数据集带出）
+ * 好力 GO — 设备产出单（制令单号 + 数据集带出；数据集关联在列表工具栏配置，对齐模具领用单）
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,13 +13,13 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Modal, Row, Space } from 'antd';
+import { App, Alert, AutoComplete, Button, Col, Form, Modal, Row, Select, Space, Spin } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { getUserList } from '../../../../../../services/user';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import {
   createEquipmentOutputRecord,
   deleteEquipmentOutputRecord,
@@ -28,15 +28,49 @@ import {
   listEquipmentOutputRecords,
   listEquipments,
   previewEquipmentOutputByWorkOrder,
+  putEquipmentOutputDatasetBinding,
   updateEquipmentOutputRecord,
   type EquipmentOutputDatasetBindingPayload,
   type EquipmentOutputRecordRow,
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
+
+function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'number' || typeof v === 'boolean') {
+      out[key] = v;
+    } else {
+      const s = String(v).trim();
+      if (s !== '') out[key] = s;
+    }
+  }
+  return out;
+}
+
+function extractSqlNamedParams(sql: string): string[] {
+  const masked = sql.replace(/::/g, '__PG_CAST__');
+  const set = new Set<string>();
+  let m: RegExpExecArray | null;
+  const reColon = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  while ((m = reColon.exec(masked)) !== null) {
+    const name = m[1];
+    if (name && !name.startsWith('__PG')) set.add(name);
+  }
+  const reAt = /(?<!@)@([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  while ((m = reAt.exec(masked)) !== null) {
+    set.add(m[1]);
+  }
+  return [...set];
+}
 
 const OutputRecordDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
@@ -48,6 +82,16 @@ const OutputRecordDocumentsPage: React.FC = () => {
   const [datasetSnapshot, setDatasetSnapshot] = useState<Record<string, unknown> | null>(null);
   const [outputDatasetBinding, setOutputDatasetBinding] = useState<EquipmentOutputDatasetBindingPayload | null>(null);
 
+  const [bindingModalOpen, setBindingModalOpen] = useState(false);
+  const [bindingCfgForm] = Form.useForm<EquipmentOutputDatasetBindingPayload>();
+  const bindingDatasetUuidWatched = Form.useWatch('dataset_uuid', bindingCfgForm);
+  const [datasetSelectOptions, setDatasetSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
+  const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
+  const [bindingModalBusy, setBindingModalBusy] = useState(false);
+  const [datasetParamKeyOptions, setDatasetParamKeyOptions] = useState<{ value: string; label: string }[]>([]);
+  const [datasetParamKeysLoading, setDatasetParamKeysLoading] = useState(false);
+
   const canPrefillFromDataset = useMemo(() => {
     const b = outputDatasetBinding;
     return Boolean(b?.dataset_uuid?.trim() && b?.work_order_param_key?.trim());
@@ -56,8 +100,32 @@ const OutputRecordDocumentsPage: React.FC = () => {
   const title = t('app.haoligo.menu.equipment.documents.output-record');
   const reload = useCallback(() => actionRef.current?.reload(), []);
 
+  const userDisplayName = useCallback((u: { full_name?: string | null; username: string }) => {
+    return (u.full_name || '').trim() || u.username;
+  }, []);
+
+  const searchUserNameOptions = useCallback(
+    async (keyword: string | undefined, selectedName?: string) => {
+      const res = await getUserList({
+        page: 1,
+        page_size: 50,
+        is_active: true,
+        keyword: keyword?.trim() || undefined,
+      });
+      const opts = (res.items || []).map((u) => {
+        const name = userDisplayName(u);
+        return { label: name, value: name };
+      });
+      const sel = (selectedName || '').trim();
+      if (sel && !opts.some((o) => o.value === sel)) {
+        opts.unshift({ label: sel, value: sel });
+      }
+      return opts;
+    },
+    [userDisplayName],
+  );
+
   useEffect(() => {
-    if (!modalOpen) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -71,7 +139,191 @@ const OutputRecordDocumentsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [modalOpen]);
+  }, []);
+
+  const loadBindingDatasetColumns = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const uuid = String(bindingDatasetUuidWatched ?? '').trim();
+      if (!uuid) {
+        setBindingColumnOptions([]);
+        return;
+      }
+      setBindingColumnsLoading(true);
+      try {
+        const ds = await getDatasetByUuid(uuid);
+        const cfg = (ds.query_config || {}) as { parameters?: Record<string, unknown> };
+        const defaultsRaw =
+          cfg.parameters && typeof cfg.parameters === 'object' && !Array.isArray(cfg.parameters)
+            ? (cfg.parameters as Record<string, unknown>)
+            : {};
+        const merged = normalizeDatasetParameterMap(defaultsRaw);
+        const res = await executeDatasetQuery(uuid, {
+          parameters: merged,
+          fill_missing_sql_parameters: true,
+          limit: 5,
+          offset: 0,
+        });
+        const raw = res.columns?.length
+          ? res.columns
+          : res.data?.[0]
+            ? Object.keys(res.data[0] as object)
+            : [];
+        if (!raw.length) {
+          if (!opts?.silent) {
+            messageApi.warning(
+              res.error ||
+                (res.success ? t('app.haoligo.equipment.documents.outputDatasetLoadColumnsEmpty') : t('app.haoligo.equipment.loadFailed')),
+            );
+          }
+          setBindingColumnOptions([]);
+          return;
+        }
+        const unique = [...new Set(raw.map((c) => String(c).trim()).filter(Boolean))];
+        setBindingColumnOptions(unique.map((c) => ({ value: c, label: c })));
+        if (!opts?.silent && unique.length) {
+          messageApi.success(t('app.haoligo.equipment.documents.outputDatasetLoadColumnsOk', { count: unique.length }));
+        }
+      } catch (e) {
+        if (!opts?.silent) messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
+        setBindingColumnOptions([]);
+      } finally {
+        setBindingColumnsLoading(false);
+      }
+    },
+    [bindingDatasetUuidWatched, messageApi, t],
+  );
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const options: { label: string; value: string }[] = [];
+        let page = 1;
+        const pageSize = 100;
+        for (;;) {
+          const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+          const items = res.items ?? [];
+          for (const d of items) {
+            options.push({ label: `${d.name} (${d.code})`, value: d.uuid });
+          }
+          if (items.length < pageSize) break;
+          page += 1;
+        }
+        if (!cancelled) setDatasetSelectOptions(options);
+      } catch (e) {
+        if (!cancelled) {
+          setDatasetSelectOptions([]);
+          messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
+        }
+      }
+    })();
+    bindingCfgForm.resetFields();
+    const d = outputDatasetBinding;
+    bindingCfgForm.setFieldsValue({
+      dataset_uuid: d?.dataset_uuid ?? undefined,
+      work_order_param_key: d?.work_order_param_key ?? undefined,
+      finished_product_code_column:
+        d?.finished_product_code_column ?? d?.customer_column ?? undefined,
+      finished_product_name_column:
+        d?.finished_product_name_column ?? d?.product_name_column ?? undefined,
+      planned_qty_column: d?.planned_qty_column ?? undefined,
+    });
+    setBindingColumnOptions([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, outputDatasetBinding, bindingCfgForm, messageApi, t]);
+
+  useEffect(() => {
+    if (!bindingModalOpen) return;
+    const uuid = String(bindingDatasetUuidWatched ?? '').trim();
+    if (!uuid) {
+      setDatasetParamKeyOptions([]);
+      setDatasetParamKeysLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDatasetParamKeysLoading(true);
+    void (async () => {
+      try {
+        const ds = await getDatasetByUuid(uuid);
+        if (cancelled) return;
+        const cfg = (ds.query_config || {}) as { sql?: string; parameters?: Record<string, unknown> };
+        let keys: string[] = [];
+        if (cfg.parameters && typeof cfg.parameters === 'object' && !Array.isArray(cfg.parameters)) {
+          keys = Object.keys(cfg.parameters)
+            .map((k) => k.trim())
+            .filter(Boolean);
+        }
+        if (keys.length === 0 && typeof cfg.sql === 'string') {
+          keys = extractSqlNamedParams(cfg.sql);
+        }
+        const opts = keys.map((k) => ({ value: k, label: k }));
+        const saved = outputDatasetBinding;
+        const savedKey =
+          saved?.dataset_uuid && String(saved.dataset_uuid).trim() === uuid
+            ? String(saved.work_order_param_key ?? '').trim()
+            : '';
+        if (savedKey && !opts.some((o) => o.value === savedKey)) {
+          opts.unshift({ value: savedKey, label: `${savedKey}（${t('app.haoligo.equipment.documents.outputDatasetParamSaved')}）` });
+        }
+        if (!cancelled) setDatasetParamKeyOptions(opts);
+      } catch {
+        if (!cancelled) setDatasetParamKeyOptions([]);
+      } finally {
+        if (!cancelled) setDatasetParamKeysLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingModalOpen, bindingDatasetUuidWatched, outputDatasetBinding, t]);
+
+  const handleDatasetConfig = useCallback(() => {
+    setBindingModalOpen(true);
+  }, []);
+
+  const handleBindingSave = async () => {
+    const ds = String(bindingCfgForm.getFieldValue('dataset_uuid') ?? '').trim();
+    if (!ds) {
+      setBindingModalBusy(true);
+      try {
+        const saved = await putEquipmentOutputDatasetBinding({});
+        setOutputDatasetBinding(saved?.dataset_uuid?.trim() ? saved : null);
+        messageApi.success(t('app.haoligo.equipment.settings.clearBinding'));
+        setBindingModalOpen(false);
+      } catch (e) {
+        messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
+      } finally {
+        setBindingModalBusy(false);
+      }
+      return;
+    }
+    let v: EquipmentOutputDatasetBindingPayload;
+    try {
+      v = await bindingCfgForm.validateFields();
+    } catch {
+      return;
+    }
+    setBindingModalBusy(true);
+    try {
+      const saved = await putEquipmentOutputDatasetBinding({
+        dataset_uuid: ds,
+        work_order_param_key: String(v.work_order_param_key ?? '').trim(),
+        finished_product_code_column: String(v.finished_product_code_column ?? '').trim() || undefined,
+        finished_product_name_column: String(v.finished_product_name_column ?? '').trim() || undefined,
+        planned_qty_column: String(v.planned_qty_column ?? '').trim() || undefined,
+      });
+      setOutputDatasetBinding(saved);
+      messageApi.success(t('app.haoligo.equipment.updateSuccess'));
+      setBindingModalOpen(false);
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
+    } finally {
+      setBindingModalBusy(false);
+    }
+  };
 
   const openNew = () => {
     setDetailMode(false);
@@ -83,14 +335,12 @@ const OutputRecordDocumentsPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         recorded_at: dayjs(),
         completed_qty: 0,
-        customer_name: undefined,
-        product_name: undefined,
+        finished_product_code: undefined,
+        finished_product_name: undefined,
         planned_qty: undefined,
       });
     }, 0);
   };
-
-  useNewShortcut(openNew);
 
   const openEdit = async (id: number, view: boolean) => {
     setFormLoading(true);
@@ -105,8 +355,8 @@ const OutputRecordDocumentsPage: React.FC = () => {
           equipment_id: row.equipment_id,
           recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
           work_order_no: row.work_order_no,
-          customer_name: row.customer_name,
-          product_name: row.product_name,
+          finished_product_code: row.finished_product_code ?? undefined,
+          finished_product_name: row.finished_product_name ?? undefined,
           planned_qty: row.planned_qty != null ? Number(row.planned_qty) : undefined,
           completed_qty: Number(row.completed_qty ?? 0),
           startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
@@ -123,6 +373,10 @@ const OutputRecordDocumentsPage: React.FC = () => {
   };
 
   const runPrefill = async () => {
+    if (!canPrefillFromDataset) {
+      messageApi.warning(t('app.haoligo.equipment.documents.outputDatasetBindingNeedConfig'));
+      return;
+    }
     const wo = String(formRef.current?.getFieldValue('work_order_no') || '').trim();
     if (!wo) {
       messageApi.warning(t('app.haoligo.equipment.documents.outputWorkOrderRequired'));
@@ -132,8 +386,8 @@ const OutputRecordDocumentsPage: React.FC = () => {
     try {
       const res = await previewEquipmentOutputByWorkOrder({ work_order_no: wo });
       formRef.current?.setFieldsValue({
-        customer_name: res.customer_name ?? undefined,
-        product_name: res.product_name ?? undefined,
+        finished_product_code: res.finished_product_code ?? undefined,
+        finished_product_name: res.finished_product_name ?? undefined,
         planned_qty: res.planned_qty != null ? Number(res.planned_qty) : undefined,
       });
       setDatasetSnapshot(res.dataset_row || null);
@@ -165,8 +419,26 @@ const OutputRecordDocumentsPage: React.FC = () => {
             : `ID ${r.equipment_id}`,
       },
       { title: t('app.haoligo.equipment.documents.colWorkOrderNo'), dataIndex: 'work_order_no', width: 140, ellipsis: true },
-      { title: t('app.haoligo.equipment.documents.colCustomer'), dataIndex: 'customer_name', ellipsis: true, hideInSearch: true },
-      { title: t('app.haoligo.equipment.documents.colProduct'), dataIndex: 'product_name', ellipsis: true, hideInSearch: true },
+      {
+        title: t('app.haoligo.equipment.documents.colFinishedProductCode'),
+        dataIndex: 'finished_product_code',
+        width: 120,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.haoligo.equipment.documents.colFinishedProductName'),
+        dataIndex: 'finished_product_name',
+        width: 140,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.haoligo.equipment.documents.colPlannedQty'),
+        dataIndex: 'planned_qty',
+        width: 100,
+        hideInSearch: true,
+      },
       {
         title: t('app.haoligo.equipment.documents.colCompletedQty'),
         dataIndex: 'completed_qty',
@@ -193,7 +465,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
             danger
             icon={<DeleteOutlined />}
             onClick={() => {
-              modal.confirm({
+              Modal.confirm({
                 title: t('app.haoligo.equipment.documents.deleteConfirm'),
                 onOk: async () => {
                   await deleteEquipmentOutputRecord(row.id);
@@ -208,7 +480,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
         ],
       },
     ],
-    [messageApi, modal, reload, t],
+    [messageApi, reload, t],
   );
 
   const submit = async () => {
@@ -224,8 +496,8 @@ const OutputRecordDocumentsPage: React.FC = () => {
         equipment_id: Number(v.equipment_id),
         work_order_no: String(v.work_order_no || '').trim(),
         recorded_at: v.recorded_at ? dayjs(v.recorded_at as string).toISOString() : undefined,
-        customer_name: (v.customer_name as string) || undefined,
-        product_name: (v.product_name as string) || undefined,
+        finished_product_code: String(v.finished_product_code ?? '').trim() || undefined,
+        finished_product_name: String(v.finished_product_name ?? '').trim() || undefined,
         planned_qty: v.planned_qty != null && v.planned_qty !== '' ? Number(v.planned_qty) : undefined,
         completed_qty: v.completed_qty != null && v.completed_qty !== '' ? Number(v.completed_qty) : 0,
         startup_at: v.startup_at ? dayjs(v.startup_at as string).toISOString() : undefined,
@@ -258,11 +530,11 @@ const OutputRecordDocumentsPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         search={{ labelWidth: 'auto' }}
-        toolBarRender={() => [
-          <Button type="primary" key="new" onClick={openNew}>
-            {t('app.haoligo.equipment.documents.btnNew')}
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText={t('app.haoligo.equipment.documents.btnNew')}
+        onCreate={openNew}
+        showDatasetConfigButton
+        onDatasetConfig={handleDatasetConfig}
         request={async (params) => {
           const res = await listEquipmentOutputRecords({
             skip: ((params.current || 1) - 1) * (params.pageSize || 50),
@@ -274,6 +546,123 @@ const OutputRecordDocumentsPage: React.FC = () => {
           return { data: res.items, total: res.total, success: true };
         }}
       />
+
+      <Modal
+        title={t('app.haoligo.equipment.documents.outputDatasetBindingTitle')}
+        open={bindingModalOpen}
+        onCancel={() => setBindingModalOpen(false)}
+        width={720}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+            {t('app.haoligo.equipment.documents.btnCancel')}
+          </Button>,
+          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+            {t('app.haoligo.equipment.documents.btnSave')}
+          </Button>,
+        ]}
+      >
+        <Form<EquipmentOutputDatasetBindingPayload> form={bindingCfgForm} layout="vertical">
+          <Form.Item name="dataset_uuid" label={t('app.haoligo.equipment.settings.outputDatasetSelect')}>
+            <Select
+              allowClear
+              showSearch
+              placeholder={t('app.haoligo.equipment.settings.outputDatasetSelectPh')}
+              optionFilterProp="label"
+              options={datasetSelectOptions}
+              onChange={() => {
+                bindingCfgForm.setFieldsValue({
+                  work_order_param_key: undefined,
+                  finished_product_code_column: undefined,
+                  finished_product_name_column: undefined,
+                  planned_qty_column: undefined,
+                });
+                setBindingColumnOptions([]);
+                setDatasetParamKeyOptions([]);
+              }}
+            />
+          </Form.Item>
+          <Spin spinning={datasetParamKeysLoading}>
+            <Form.Item
+              name="work_order_param_key"
+              label={t('app.haoligo.equipment.settings.workOrderParamKey')}
+              rules={[{ required: true, message: t('app.haoligo.equipment.documents.outputDatasetParamRequired') }]}
+            >
+              <AutoComplete
+                allowClear
+                style={{ width: '100%' }}
+                options={datasetParamKeyOptions}
+                placeholder={t('app.haoligo.equipment.documents.outputDatasetParamPh')}
+                filterOption={(input, option) =>
+                  String(option?.value ?? '')
+                    .toLowerCase()
+                    .includes(String(input).trim().toLowerCase())
+                }
+              />
+            </Form.Item>
+          </Spin>
+          <div style={{ marginBottom: 12 }}>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              loading={bindingColumnsLoading}
+              disabled={!bindingDatasetUuidWatched}
+              onClick={() => void loadBindingDatasetColumns({ silent: false })}
+            >
+              {t('app.haoligo.equipment.documents.outputDatasetLoadColumns')}
+            </Button>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="finished_product_code_column"
+                label={t('app.haoligo.equipment.settings.finishedProductCodeColumn')}
+              >
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="finished_product_name_column"
+                label={t('app.haoligo.equipment.settings.finishedProductNameColumn')}
+              >
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="planned_qty_column" label={t('app.haoligo.equipment.settings.plannedQtyColumn')}>
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Alert type="info" showIcon message={t('app.haoligo.equipment.documents.outputDatasetBindingHintTitle')} description={t('app.haoligo.equipment.settings.outputDatasetIntro')} />
+        </Form>
+      </Modal>
 
       <Modal
         {...MODAL_CONFIG}
@@ -303,6 +692,33 @@ const OutputRecordDocumentsPage: React.FC = () => {
       >
         <ProForm formRef={formRef} submitter={false} layout="vertical" disabled={detailMode}>
           <Row gutter={16}>
+            <Col span={24}>
+              <ProFormText
+                name="work_order_no"
+                label={t('app.haoligo.equipment.documents.colWorkOrderNo')}
+                tooltip={t('app.haoligo.equipment.documents.outputWorkOrderTooltip')}
+                placeholder={t('app.haoligo.equipment.documents.outputWorkOrderPh')}
+                rules={[{ required: true }]}
+                fieldProps={{
+                  allowClear: true,
+                  style: { width: '100%' },
+                  addonAfter: !detailMode ? (
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ padding: '0 8px' }}
+                      loading={prefillBusy}
+                      disabled={!canPrefillFromDataset}
+                      onClick={() => void runPrefill()}
+                    >
+                      {t('app.haoligo.equipment.documents.outputPrefillInlineBtn')}
+                    </Button>
+                  ) : undefined,
+                }}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
             <Col xs={24} md={12}>
               <ProFormSelect
                 name="equipment_id"
@@ -327,35 +743,8 @@ const OutputRecordDocumentsPage: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <ProFormText
-                name="work_order_no"
-                label={t('app.haoligo.equipment.documents.colWorkOrderNo')}
-                tooltip={t('app.haoligo.equipment.documents.outputWorkOrderTooltip')}
-                placeholder={t('app.haoligo.equipment.documents.outputWorkOrderPh')}
-                rules={[{ required: true }]}
-                fieldProps={{
-                  allowClear: true,
-                  style: { width: '100%' },
-                  addonAfter: !detailMode ? (
-                      <Button
-                        type="link"
-                        size="small"
-                        style={{ padding: '0 8px' }}
-                        loading={prefillBusy}
-                        disabled={!canPrefillFromDataset}
-                        onClick={() => void runPrefill()}
-                      >
-                        {t('app.haoligo.equipment.documents.outputPrefillInlineBtn')}
-                      </Button>
-                    ) : undefined,
-                }}
-              />
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <ProFormText
-                name="customer_name"
-                label={t('app.haoligo.equipment.documents.colCustomer')}
+                name="finished_product_code"
+                label={t('app.haoligo.equipment.documents.colFinishedProductCode')}
                 placeholder={t('app.haoligo.equipment.documents.outputPrefilledPlaceholder')}
                 tooltip={t('app.haoligo.equipment.documents.outputPrefilledFieldTooltip')}
                 fieldProps={{
@@ -366,8 +755,8 @@ const OutputRecordDocumentsPage: React.FC = () => {
             </Col>
             <Col xs={24} md={12}>
               <ProFormText
-                name="product_name"
-                label={t('app.haoligo.equipment.documents.colProduct')}
+                name="finished_product_name"
+                label={t('app.haoligo.equipment.documents.colFinishedProductName')}
                 placeholder={t('app.haoligo.equipment.documents.outputPrefilledPlaceholder')}
                 tooltip={t('app.haoligo.equipment.documents.outputPrefilledFieldTooltip')}
                 fieldProps={{
@@ -419,13 +808,37 @@ const OutputRecordDocumentsPage: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <ProFormText name="operator_name" label={t('app.haoligo.equipment.documents.formOperator')} fieldProps={{ style: { width: '100%' } }} />
+              <ProFormSelect
+                name="operator_name"
+                label={t('app.haoligo.equipment.documents.formOperator')}
+                showSearch
+                allowClear
+                debounceTime={300}
+                request={async ({ keyWords }) =>
+                  searchUserNameOptions(keyWords, formRef.current?.getFieldValue('operator_name') as string | undefined)
+                }
+                fieldProps={{
+                  style: { width: '100%' },
+                  placeholder: t('app.haoligo.equipment.documents.formOperatorPh'),
+                  filterOption: false,
+                }}
+              />
             </Col>
             <Col xs={24} md={12}>
-              <ProFormText
+              <ProFormSelect
                 name="team_leader_name"
                 label={t('app.haoligo.equipment.documents.formTeamLeader')}
-                fieldProps={{ style: { width: '100%' } }}
+                showSearch
+                allowClear
+                debounceTime={300}
+                request={async ({ keyWords }) =>
+                  searchUserNameOptions(keyWords, formRef.current?.getFieldValue('team_leader_name') as string | undefined)
+                }
+                fieldProps={{
+                  style: { width: '100%' },
+                  placeholder: t('app.haoligo.equipment.documents.formTeamLeaderPh'),
+                  filterOption: false,
+                }}
               />
             </Col>
           </Row>

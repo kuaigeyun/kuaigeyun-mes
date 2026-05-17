@@ -157,6 +157,10 @@ class HaoligoEquipment(HaoligoTenantModel):
         description="运行状态：running/repair/shutdown/standby，空表示未设置",
     )
     remark = fields.TextField(null=True, description="备注")
+    image_file_uuids = fields.JSONField(
+        default=list,
+        description="设备图片（core 文件 uuid 列表）",
+    )
 
 
 class HaoligoPatrolRoute(HaoligoTenantModel):

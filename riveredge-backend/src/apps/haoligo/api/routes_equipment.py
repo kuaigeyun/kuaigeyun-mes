@@ -13,6 +13,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.services.equipment_operational_status import normalize_operational_status
 from apps.master_data.models.factory import Workshop as MasterWorkshop
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
@@ -40,20 +41,6 @@ def _normalize_equipment_criticality(v: Optional[str]) -> Optional[str]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="设备重要等级必须为 A、B、C 之一或留空",
-        )
-    return s
-
-
-def _normalize_operational_status(v: Optional[str]) -> Optional[str]:
-    """运行状态：running / repair / shutdown / standby；空表示未设置。"""
-    if v is None or not str(v).strip():
-        return None
-    s = str(v).strip().lower()
-    allowed = frozenset({"running", "repair", "shutdown", "standby"})
-    if s not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="运行状态须为 running、repair、shutdown、standby 之一或留空",
         )
     return s
 
@@ -181,6 +168,17 @@ class CategoryUpdate(BaseModel):
     default_inspection_param_set_id: Optional[int] = None
 
 
+def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
+    if not v:
+        return []
+    out: List[str] = []
+    for x in v:
+        s = (x or "").strip()
+        if s:
+            out.append(s)
+    return out
+
+
 class EquipmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -195,6 +193,7 @@ class EquipmentOut(BaseModel):
     criticality: Optional[str] = None
     operational_status: Optional[str] = None
     remark: Optional[str] = None
+    image_file_uuids: List[str] = Field(default_factory=list)
 
 
 class EquipmentCreate(BaseModel):
@@ -212,6 +211,7 @@ class EquipmentCreate(BaseModel):
         description="running/repair/shutdown/standby",
     )
     remark: Optional[str] = None
+    image_file_uuids: Optional[List[str]] = Field(default_factory=list, description="设备图片文件 uuid")
 
 
 class EquipmentUpdate(BaseModel):
@@ -228,6 +228,7 @@ class EquipmentUpdate(BaseModel):
         description="running/repair/shutdown/standby；传 null 清空",
     )
     remark: Optional[str] = None
+    image_file_uuids: Optional[List[str]] = None
 
 
 class EquipmentOperationalStatusLogOut(BaseModel):
@@ -845,8 +846,9 @@ async def create_equipment(
         manufacture_date=body.manufacture_date,
         inspection_param_set_id=body.inspection_param_set_id,
         criticality=_normalize_equipment_criticality(body.criticality),
-        operational_status=_normalize_operational_status(body.operational_status),
+        operational_status=await normalize_operational_status(tenant_id, body.operational_status),
         remark=body.remark,
+        image_file_uuids=_norm_uuid_list(body.image_file_uuids),
     )
     return EquipmentOut.model_validate(row)
 
@@ -916,8 +918,10 @@ async def update_equipment(
     new_operational_status: Optional[str] = None
     if "operational_status" in data:
         old_operational_status = row.operational_status
-        new_operational_status = _normalize_operational_status(data.get("operational_status"))
+        new_operational_status = await normalize_operational_status(tenant_id, data.get("operational_status"))
         data["operational_status"] = new_operational_status
+    if "image_file_uuids" in data and data["image_file_uuids"] is not None:
+        data["image_file_uuids"] = _norm_uuid_list(data["image_file_uuids"])
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()

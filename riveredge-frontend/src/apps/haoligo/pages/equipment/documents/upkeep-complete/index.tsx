@@ -19,7 +19,6 @@ import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
@@ -454,8 +453,6 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       setFormOptionsReady(false);
     }
   }, [loadSourcesForPicker, messageApi, preloadTenantFormOptions, t]);
-
-  useNewShortcut(handleCreate);
 
   const openSheetForm = useCallback(
     async (record: EquipmentUpkeepCompleteSheetRow, detailOnly: boolean) => {

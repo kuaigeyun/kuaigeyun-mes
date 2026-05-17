@@ -28,6 +28,8 @@ import {
   getMoldTrialDatasetBinding,
   getMoldTrialSheet,
   listMoldTrialSheets,
+  listMolds,
+  batchMoldsLifecycle,
   putMoldTrialDatasetBinding,
   updateMoldTrialSheet,
   type MoldTrialDatasetBindingPayload,
@@ -396,6 +398,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         result_attachments: uuidsToUploadFileList(detail.result_attachment_file_uuids),
         inspection_attachments: uuidsToUploadFileList(detail.inspection_attachment_file_uuids),
         trial_result: detail.trial_result,
+        sync_mold_status: true,
       });
       setModalVisible(true);
     } catch (e) {
@@ -451,6 +454,22 @@ const MoldTrialSheetsPage: React.FC = () => {
         await createMoldTrialSheet(payload);
         messageApi.success('已创建');
       }
+
+      if (payload.trial_result === '合格' && values.sync_mold_status && payload.mold_code) {
+        try {
+          const res = await listMolds({ keyword: payload.mold_code, limit: 10, skip: 0 });
+          const target = res.items.find((m) => m.mold_code === payload.mold_code);
+          if (target) {
+            await batchMoldsLifecycle({ scope: 'selected', mold_ids: [target.id], status: '待用' });
+            messageApi.success('模具状态已更新为「待用」');
+          } else {
+            messageApi.warning('未找到对应模具代号，无法自动更新状态');
+          }
+        } catch (e) {
+          messageApi.warning('自动更新模具状态失败');
+        }
+      }
+
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e) {
@@ -910,6 +929,36 @@ const MoldTrialSheetsPage: React.FC = () => {
               ]}
             />
           </Col>
+          <ProFormDependency name={['trial_result']}>
+            {({ trial_result }) => {
+              if (trial_result === '合格') {
+                return (
+                  <Col span={24}>
+                    <ProForm.Item name="sync_mold_status" valuePropName="checked" style={{ marginBottom: 0 }}>
+                      <Alert
+                        message="合格后关联操作"
+                        description={
+                          <Form.Item name="sync_mold_status" valuePropName="checked" noStyle>
+                            <Radio.Group
+                              optionType="button"
+                              buttonStyle="solid"
+                              options={[
+                                { label: '将模具状态更新为待用', value: true },
+                                { label: '暂不更新模具状态', value: false },
+                              ]}
+                            />
+                          </Form.Item>
+                        }
+                        type="info"
+                        showIcon
+                      />
+                    </ProForm.Item>
+                  </Col>
+                );
+              }
+              return null;
+            }}
+          </ProFormDependency>
           <Col span={12}>
             <ProFormUploadButton
               name="result_attachments"

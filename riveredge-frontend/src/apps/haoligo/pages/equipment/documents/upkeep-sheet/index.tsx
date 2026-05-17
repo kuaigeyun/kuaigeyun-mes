@@ -13,12 +13,11 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Modal, Row, Space, Spin, Upload } from 'antd';
+import { App, Button, Col, Form, Input, Modal, Row, Space, Spin, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
@@ -29,9 +28,11 @@ import { useGlobalStore } from '../../../../../../stores';
 import {
   createEquipmentUpkeepSheet,
   deleteEquipmentUpkeepSheet,
+  getEquipment,
   getEquipmentUpkeepSheet,
   listEquipmentUpkeepSheets,
   listEquipments,
+  listWorkshops,
   updateEquipmentUpkeepSheet,
   type EquipmentUpkeepSheetRow,
 } from '../../../../services/haoligo';
@@ -93,7 +94,9 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   const applicantSearchSeqRef = useRef(0);
   const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
+  const workshopMapRef = useRef<Map<number, { code: string; name: string }>>(new Map());
   const tenantFormOptionsValidUntilRef = useRef(0);
+  const [equipmentWorkshopLabel, setEquipmentWorkshopLabel] = useState('');
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isDetailView, setIsDetailView] = useState(false);
@@ -133,6 +136,36 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       setLeafDeptOptions([]);
     }
   }, []);
+
+  const loadWorkshopMap = useCallback(async () => {
+    try {
+      const rows = await listWorkshops();
+      workshopMapRef.current = new Map(rows.map((w) => [w.id, { code: w.code, name: w.name }]));
+    } catch {
+      workshopMapRef.current = new Map();
+    }
+  }, []);
+
+  const formatWorkshopLabel = useCallback((workshopId: number) => {
+    const w = workshopMapRef.current.get(workshopId);
+    return w ? `${w.code} · ${w.name}` : '—';
+  }, []);
+
+  const syncEquipmentWorkshop = useCallback(
+    async (equipmentId: number | null | undefined) => {
+      if (equipmentId == null || !Number.isFinite(Number(equipmentId))) {
+        setEquipmentWorkshopLabel('');
+        return;
+      }
+      try {
+        const eq = await getEquipment(Number(equipmentId));
+        setEquipmentWorkshopLabel(formatWorkshopLabel(eq.workshop_id));
+      } catch {
+        setEquipmentWorkshopLabel('');
+      }
+    },
+    [formatWorkshopLabel],
+  );
 
   const bootstrapApplicantOptions = useCallback(
     async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
@@ -244,12 +277,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         !extras &&
         now < tenantFormOptionsValidUntilRef.current &&
         applicantDeptUuidByUserIdRef.current.size > 0 &&
-        departmentTreeRef.current.length > 0;
+        departmentTreeRef.current.length > 0 &&
+        workshopMapRef.current.size > 0;
       if (warm) return;
-      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments()]);
+      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments(), loadWorkshopMap()]);
       tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
     },
-    [bootstrapApplicantOptions, loadLeafDepartments],
+    [bootstrapApplicantOptions, loadLeafDepartments, loadWorkshopMap],
   );
 
   const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
@@ -299,6 +333,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
+    setEquipmentWorkshopLabel('');
     setFormOptionsReady(false);
     setModalVisible(true);
     void (async () => {
@@ -333,9 +368,8 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     setEditId(null);
     setFormOptionsReady(false);
     setIsDetailView(false);
+    setEquipmentWorkshopLabel('');
   }, []);
-
-  useNewShortcut(handleCreate);
 
   const openSheetForm = useCallback(
     async (record: EquipmentUpkeepSheetRow, detailOnly: boolean) => {
@@ -369,6 +403,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           description: d.description,
           header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
         });
+        await syncEquipmentWorkshop(d.equipment_id);
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
         messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -377,7 +412,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setIsDetailView(false);
       }
     },
-    [messageApi, preloadTenantFormOptions, t],
+    [messageApi, preloadTenantFormOptions, syncEquipmentWorkshop, t],
   );
 
   const triggerSubmit = useCallback(() => {
@@ -676,19 +711,35 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     }}
                   />
                 </Col>
-                <Col span={24}>
+                <Col span={12}>
                   <ProFormSelect
                     name="equipment_id"
                     label={t('app.haoligo.equipment.documents.formEquipment')}
                     rules={[{ required: true }]}
                     disabled={isDetailView}
                     showSearch
-                    fieldProps={{ filterOption: false }}
+                    fieldProps={{
+                      filterOption: false,
+                      style: { width: '100%' },
+                      onChange: (val: number | null) => {
+                        void syncEquipmentWorkshop(val);
+                      },
+                    }}
                     request={async ({ keyWords }) => {
                       const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
                       return (res.items || []).map((e) => ({ label: `${e.asset_code} ${e.name}`, value: e.id }));
                     }}
                   />
+                </Col>
+                <Col span={12}>
+                  <Form.Item label={t('app.haoligo.equipment.ledger.formWorkshop')}>
+                    <Input
+                      readOnly
+                      value={equipmentWorkshopLabel}
+                      placeholder={t('app.haoligo.equipment.upkeep.equipmentWorkshopAutoPh')}
+                      style={{ width: '100%', backgroundColor: isDetailView ? undefined : '#fafafa' }}
+                    />
+                  </Form.Item>
                 </Col>
                 <Col span={24}>
                   <ProFormTextArea

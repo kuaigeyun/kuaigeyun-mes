@@ -51,6 +51,7 @@ import {
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
+  PAGE_SPACING,
 } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -528,28 +529,25 @@ const MoldLedgerPage: React.FC = () => {
     );
   }, [datasetBinding]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await supplierApi.list({ limit: 1000, isActive: true });
-        const list = unwrapSupplyPagedList<Supplier>(res);
-        if (cancelled) return;
-        setSupplierOptions(
-          list.map((s) => ({
-            key: s.uuid,
-            value: s.name,
-            label: s.code ? `${s.code} · ${s.name}` : s.name,
-          })),
-        );
-      } catch {
-        if (!cancelled) setSupplierOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const loadSuppliers = useCallback(async (keyword?: string) => {
+    try {
+      const res = await supplierApi.list({ limit: 100, isActive: true, keyword });
+      const list = unwrapSupplyPagedList<Supplier>(res);
+      setSupplierOptions(
+        list.map((s) => ({
+          key: s.uuid,
+          value: s.name,
+          label: s.code ? `${s.code} · ${s.name}` : s.name,
+        })),
+      );
+    } catch {
+      setSupplierOptions([]);
+    }
   }, []);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
 
   const handleOpenBatchModal = useCallback(() => {
     batchForm.resetFields();
@@ -648,7 +646,7 @@ const MoldLedgerPage: React.FC = () => {
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({
-      status: '待用',
+      status: '待启用',
       allow_repeated_borrow: true,
       mold_capacity: undefined,
       unit: undefined,
@@ -1092,7 +1090,7 @@ const MoldLedgerPage: React.FC = () => {
           moldDetail ? (
             <>
               <MoldLifecycleMetricCards row={moldDetail} loading={detailLoading} />
-              <DetailDrawerSection title="基本信息" marginBottom={16}>
+              <DetailDrawerSection title="基本信息" marginBottom={PAGE_SPACING.PADDING}>
                 <Descriptions
                   column={2}
                   items={detailDrawerDescriptionItems(moldDetailColumnsBasic, moldDetail)}
@@ -1100,7 +1098,7 @@ const MoldLedgerPage: React.FC = () => {
               </DetailDrawerSection>
               <DetailDrawerSection title="操作记录" marginBottom={0}>
                 {detailLoading ? (
-                  <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ padding: `${PAGE_SPACING.BLOCK_GAP}px 0`, display: 'flex', justifyContent: 'center' }}>
                     <Spin />
                   </div>
                 ) : moldOperationRecords.length === 0 ? (
@@ -1264,6 +1262,7 @@ const MoldLedgerPage: React.FC = () => {
                 options={supplierOptions}
                 placeholder="请选择或输入购买厂商"
                 allowClear
+                onSearch={(kw) => loadSuppliers(kw)}
                 filterOption={(input, option) => {
                   const q = input.trim().toLowerCase();
                   if (!q) return true;

@@ -8,6 +8,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
@@ -15,10 +16,24 @@ import {
 import { App, Button, Drawer, Modal, Select, Space, Table, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import {
   createPatrolRoute,
   deletePatrolRoute,
@@ -32,6 +47,7 @@ import {
   type PatrolRouteCreatePayload,
   type PatrolRouteRow,
   type PatrolRouteUpdatePayload,
+  type PatrolStepRow,
   type WorkshopRow,
 } from '../../../services/haoligo';
 
@@ -80,6 +96,12 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
   const [stepsSaving, setStepsSaving] = useState(false);
   const configuringRouteIdRef = useRef<number | null>(null);
 
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<PatrolRouteRow | null>(null);
+  const [detailSteps, setDetailSteps] = useState<PatrolStepRow[]>([]);
+  const [detailEquipments, setDetailEquipments] = useState<EquipmentRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const workshopOptions = useMemo(
     () => workshops.map((w) => ({ label: `${w.code} · ${w.name}`, value: w.id })),
     [workshops],
@@ -90,6 +112,27 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     () => equipments.map((e) => ({ label: `${e.asset_code} · ${e.name}`, value: e.id })),
     [equipments],
   );
+
+  const detailEquipmentLabelMap = useMemo(
+    () => new Map(detailEquipments.map((e) => [e.id, `${e.asset_code} · ${e.name}`])),
+    [detailEquipments],
+  );
+
+  const handleDetail = async (record: PatrolRouteRow) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailSteps([]);
+    try {
+      const [eqList, steps] = await Promise.all([fetchAllEquipments(), listPatrolSteps(record.id)]);
+      setDetailEquipments(eqList);
+      setDetailSteps(steps.sort((a, b) => a.sequence - b.sequence || a.id - b.id));
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.patrolRoutes.loadStepsFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const openConfigureSteps = async (record: PatrolRouteRow) => {
     configuringRouteIdRef.current = record.id;
@@ -289,6 +332,35 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     [t, equipmentSelectOptions, stepDrafts, moveStep, removeStepAt],
   );
 
+  const detailColumns: ProDescriptionsItemProps<PatrolRouteRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.patrolRoutes.colCode'), dataIndex: 'code' },
+      { title: t('app.haoligo.equipment.patrolRoutes.colName'), dataIndex: 'name' },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.colWorkshop'),
+        dataIndex: 'workshop_id',
+        render: (_, r) => {
+          if (r.workshop_id == null) return t('app.haoligo.equipment.ledger.commonDash');
+          const w = wsMap.get(r.workshop_id);
+          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        },
+      },
+    ],
+    [t, wsMap],
+  );
+
+  const detailStepColumns: ColumnsType<PatrolStepRow> = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.patrolRoutes.stepColSeq'), dataIndex: 'sequence', width: 72 },
+      {
+        title: t('app.haoligo.equipment.patrolRoutes.stepColEquipment'),
+        dataIndex: 'equipment_id',
+        render: (equipmentId: number) => detailEquipmentLabelMap.get(equipmentId) ?? equipmentId,
+      },
+    ],
+    [t, detailEquipmentLabelMap],
+  );
+
   const columns: ProColumns<PatrolRouteTableRow>[] = useMemo(
     () => [
       { title: t('app.haoligo.equipment.patrolRoutes.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
@@ -323,10 +395,13 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.patrolRoutes.colActions'),
         valueType: 'option',
-        width: 260,
+        width: 320,
         fixed: 'right',
         render: (_, record) => (
           <Space wrap>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+              {t('common.detail')}
+            </Button>
             <Button type="link" size="small" icon={<SettingOutlined />} onClick={() => void openConfigureSteps(record)}>
               {t('app.haoligo.equipment.patrolRoutes.actionEditSteps')}
             </Button>
@@ -438,6 +513,35 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           <Link to="/apps/master-data/factory/workshops">{t('app.haoligo.equipment.ledger.linkMasterDataWorkshops')}</Link>
         </Typography.Text>
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.code}`
+            : t('app.haoligo.equipment.patrolRoutes.title')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+          setDetailSteps([]);
+          setDetailEquipments([]);
+        }}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+        linesTitle={t('app.haoligo.equipment.patrolRoutes.colStepCount')}
+        lines={
+          <Table<PatrolStepRow>
+            rowKey="id"
+            size="small"
+            pagination={false}
+            columns={detailStepColumns}
+            dataSource={detailSteps}
+          />
+        }
+      />
 
       <Drawer
         title={

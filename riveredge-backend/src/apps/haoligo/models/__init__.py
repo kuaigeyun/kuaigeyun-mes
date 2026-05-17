@@ -19,6 +19,7 @@ from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentRoutePatrolLine,
     HaoligoEquipmentSpotCheck,
     HaoligoEquipmentSpotCheckLine,
+    HaoligoEquipmentStatusAdjustment,
 )
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
@@ -55,6 +56,7 @@ __all__ = [
     "HaoligoEquipmentUpkeepSheet",
     "HaoligoEquipmentUpkeepCompleteSheet",
     "HaoligoEquipmentOutputRecord",
+    "HaoligoEquipmentStatusAdjustment",
     "HaoligoEquipmentOutputDatasetBinding",
     "HaoligoMold",
     "HaoligoMoldBorrowSheet",

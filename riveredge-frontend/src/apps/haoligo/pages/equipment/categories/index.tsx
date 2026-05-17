@@ -6,15 +6,22 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   createCategory,
@@ -43,6 +50,8 @@ const CategoriesPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<CategoryTableRow | null>(null);
 
   const loadParamSets = useCallback(async () => {
     try {
@@ -70,6 +79,11 @@ const CategoriesPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: CategoryTableRow) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+  };
 
   const handleEdit = (record: CategoryTableRow) => {
     setIsEdit(true);
@@ -135,6 +149,16 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
+  const detailColumns: ProDescriptionsItemProps<CategoryTableRow>[] = [
+    { title: t('app.haoligo.equipment.categories.colCode'), dataIndex: 'code' },
+    { title: t('app.haoligo.equipment.categories.colName'), dataIndex: 'name' },
+    {
+      title: t('app.haoligo.equipment.categories.colDefaultSet'),
+      dataIndex: 'default_set_label',
+      render: (_, r) => r.default_set_label || '—',
+    },
+  ];
+
   const columns: ProColumns<CategoryTableRow>[] = [
     {
       title: t('app.haoligo.equipment.categories.colCode'),
@@ -158,10 +182,13 @@ const CategoriesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 140,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            {t('common.detail')}
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>
@@ -260,6 +287,22 @@ const CategoriesPage: React.FC = () => {
           fieldProps={{ showSearch: true, optionFilterProp: 'label' }}
         />
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.code}`
+            : t('app.haoligo.menu.equipment.categories')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+        }}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+      />
     </>
   );
 };

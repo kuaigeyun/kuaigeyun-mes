@@ -166,8 +166,10 @@ class HaoligoEquipmentOutputRecord(HaoligoTenantModel):
         description="设备",
     )
     work_order_no = fields.CharField(max_length=128, description="制令单号")
-    customer_name = fields.CharField(max_length=200, null=True, description="客户")
-    product_name = fields.CharField(max_length=200, null=True, description="品号/名称")
+    customer_name = fields.CharField(max_length=200, null=True, description="客户（历史字段，新单请用成品代号/名称）")
+    product_name = fields.CharField(max_length=200, null=True, description="品号/名称（历史字段）")
+    finished_product_code = fields.CharField(max_length=128, null=True, description="成品代号")
+    finished_product_name = fields.CharField(max_length=200, null=True, description="成品名称")
     planned_qty = fields.DecimalField(max_digits=18, decimal_places=4, null=True, description="计划数量")
     completed_qty = fields.DecimalField(max_digits=18, decimal_places=4, description="完成数量")
     startup_at = fields.DatetimeField(null=True, description="开机时间")
@@ -176,6 +178,28 @@ class HaoligoEquipmentOutputRecord(HaoligoTenantModel):
     team_leader_name = fields.CharField(max_length=100, null=True, description="组长")
     reporter_user_id = fields.IntField(description="填报人用户 ID")
     dataset_snapshot = fields.JSONField(null=True, description="数据集带出原始行快照")
+
+
+class HaoligoEquipmentStatusAdjustment(HaoligoTenantModel):
+    """设备状态调整单（手工切换设备运行状态）。"""
+
+    class Meta:
+        table = "haoligo_equipment_status_adjustment"
+        table_description = "好力GO - 设备状态调整单"
+        indexes = [("tenant_id",), ("equipment_id",), ("recorded_at",), ("sheet_no",)]
+
+    sheet_no = fields.CharField(max_length=64, null=True, description="单号（编码规则生成）")
+    recorded_at = fields.DatetimeField(description="调整时间")
+    equipment = fields.ForeignKeyField(
+        "models.HaoligoEquipment",
+        related_name="status_adjustments",
+        on_delete=fields.RESTRICT,
+        description="设备",
+    )
+    old_operational_status = fields.CharField(max_length=32, null=True, description="调整前运行状态")
+    new_operational_status = fields.CharField(max_length=32, description="调整后运行状态")
+    remark = fields.TextField(null=True, description="备注")
+    reporter_user_id = fields.IntField(description="填报人用户 ID")
 
 
 class HaoligoEquipmentOutputDatasetBinding(HaoligoTenantModel):
@@ -188,6 +212,8 @@ class HaoligoEquipmentOutputDatasetBinding(HaoligoTenantModel):
 
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     work_order_param_key = fields.CharField(max_length=64, null=True, description="制令单号 SQL 参数名")
-    customer_column = fields.CharField(max_length=128, null=True, description="客户列名")
-    product_name_column = fields.CharField(max_length=128, null=True, description="品号名称列名")
-    planned_qty_column = fields.CharField(max_length=128, null=True, description="计划数量列名")
+    customer_column = fields.CharField(max_length=128, null=True, description="客户列名（历史）")
+    product_name_column = fields.CharField(max_length=128, null=True, description="品号名称列名（历史）")
+    finished_product_code_column = fields.CharField(max_length=128, null=True, description="成品代号列名（可选）")
+    finished_product_name_column = fields.CharField(max_length=128, null=True, description="成品名称列名（可选）")
+    planned_qty_column = fields.CharField(max_length=128, null=True, description="计划数量列名（可选）")

@@ -25,12 +25,12 @@ const REPORT_LINKS: NavItem[] = [
   { to: '/apps/haoligo/equipment/documents/upkeep-sheet', titleKey: 'app.haoligo.menu.equipment.documents.upkeep-sheet' },
   { to: '/apps/haoligo/equipment/documents/upkeep-complete', titleKey: 'app.haoligo.menu.equipment.documents.upkeep-complete' },
   { to: '/apps/haoligo/equipment/documents/output-record', titleKey: 'app.haoligo.menu.equipment.documents.output-record' },
+  { to: '/apps/haoligo/equipment/documents/status-adjustment', titleKey: 'app.haoligo.menu.equipment.documents.status-adjustment' },
 ];
 
 const ANALYTICS_LINKS: NavItem[] = [
   { to: '/apps/haoligo/equipment/dashboard/status', titleKey: 'app.haoligo.menu.equipment.dashboard.status' },
   { to: '/apps/haoligo/equipment/reports/capacity', titleKey: 'app.haoligo.menu.equipment.reports.capacity' },
-  { to: '/apps/haoligo/equipment/settings/integration', titleKey: 'app.haoligo.menu.equipment.settings.integration' },
 ];
 
 const EquipmentPage: React.FC = () => {

@@ -252,6 +252,13 @@
                 "icon": "Factory",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 25
+              },
+              {
+                "title": "app.haoligo.menu.equipment.documents.status-adjustment",
+                "path": "/apps/haoligo/equipment/documents/status-adjustment",
+                "icon": "ArrowLeftRight",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 26
               }
             ]
           },
@@ -274,28 +281,6 @@
                 "icon": "Activity",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 32
-              }
-            ]
-          },
-          {
-            "title": "app.haoligo.menu.equipment.group.integration",
-            "icon": "Cable",
-            "permission": "haoligo:workspace:read",
-            "sort_order": 40,
-            "children": [
-              {
-                "title": "app.haoligo.menu.equipment.settings.integration",
-                "path": "/apps/haoligo/equipment/settings/integration",
-                "icon": "Link2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 41
-              },
-              {
-                "title": "app.haoligo.menu.equipment.settings.output-dataset",
-                "path": "/apps/haoligo/equipment/settings/output-dataset",
-                "icon": "Database",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 42
               }
             ]
           }

@@ -97,6 +97,8 @@ class EquipmentOutputDatasetBindingOut(BaseModel):
     work_order_param_key: Optional[str] = None
     customer_column: Optional[str] = None
     product_name_column: Optional[str] = None
+    finished_product_code_column: Optional[str] = None
+    finished_product_name_column: Optional[str] = None
     planned_qty_column: Optional[str] = None
 
 
@@ -105,6 +107,8 @@ class EquipmentOutputDatasetBindingUpsert(BaseModel):
     work_order_param_key: Optional[str] = None
     customer_column: Optional[str] = None
     product_name_column: Optional[str] = None
+    finished_product_code_column: Optional[str] = None
+    finished_product_name_column: Optional[str] = None
     planned_qty_column: Optional[str] = None
 
 
@@ -116,6 +120,8 @@ def _serialize_output_binding(row: Optional[HaoligoEquipmentOutputDatasetBinding
         work_order_param_key=row.work_order_param_key,
         customer_column=row.customer_column,
         product_name_column=row.product_name_column,
+        finished_product_code_column=row.finished_product_code_column,
+        finished_product_name_column=row.finished_product_name_column,
         planned_qty_column=row.planned_qty_column,
     )
 
@@ -146,23 +152,16 @@ async def put_equipment_output_dataset_binding(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="已选择数据集时，请填写制令单号对应的查询参数名（与 SQL 占位符一致）",
         )
-    cc = (body.customer_column or "").strip()
-    pc = (body.product_name_column or "").strip()
-    pq = (body.planned_qty_column or "").strip()
-    if not cc or not pc or not pq:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="已选择数据集时，请填写客户、品名/品号、计划数量对应的结果列名",
-        )
-
     await HaoligoEquipmentOutputDatasetBinding.filter(tenant_id=tenant_id).delete()
     row = await HaoligoEquipmentOutputDatasetBinding.create(
         tenant_id=tenant_id,
         dataset_uuid=ds,
         work_order_param_key=pk,
-        customer_column=cc,
-        product_name_column=pc,
-        planned_qty_column=pq,
+        customer_column=(body.customer_column or "").strip() or None,
+        product_name_column=(body.product_name_column or "").strip() or None,
+        finished_product_code_column=(body.finished_product_code_column or "").strip() or None,
+        finished_product_name_column=(body.finished_product_name_column or "").strip() or None,
+        planned_qty_column=(body.planned_qty_column or "").strip() or None,
     )
     return _serialize_output_binding(row)
 
@@ -181,8 +180,8 @@ class EquipmentOutputPrefillFromDatasetBody(BaseModel):
 
 class EquipmentOutputPrefillFromDatasetOut(BaseModel):
     work_order_no: str
-    customer_name: Optional[str] = None
-    product_name: Optional[str] = None
+    finished_product_code: Optional[str] = None
+    finished_product_name: Optional[str] = None
     planned_qty: Optional[Decimal] = None
     dataset_row: Optional[dict] = None
 
@@ -201,21 +200,20 @@ async def preview_equipment_output_by_work_order(
     if not binding or not (binding.dataset_uuid or "").strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先在「设备产出数据集配置」中选择数据集并保存列映射",
+            detail="请先在设备产出单列表「数据集」中配置数据集并保存列映射",
         )
     ds_uuid = binding.dataset_uuid.strip()
     param_key = (binding.work_order_param_key or "").strip()
     if not param_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="数据集绑定缺少制令单号查询参数名")
 
-    cust_c = (binding.customer_column or "").strip()
-    prod_c = (binding.product_name_column or "").strip()
-    pq_c = (binding.planned_qty_column or "").strip()
-    if not cust_c or not prod_c or not pq_c:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="数据集列映射不完整：请配置客户、品名、计划数量列并保存",
-        )
+    fcode_c = (binding.finished_product_code_column or "").strip() or (
+        (binding.customer_column or "").strip() or None
+    )
+    fname_c = (binding.finished_product_name_column or "").strip() or (
+        (binding.product_name_column or "").strip() or None
+    )
+    pq_c = (binding.planned_qty_column or "").strip() or None
 
     svc = DatasetService()
     params: Dict[str, Any] = {param_key: body.work_order_no}
@@ -236,14 +234,14 @@ async def preview_equipment_output_by_work_order(
             detail="未查询到与制令单号匹配的数据，请检查参数名与数据集 SQL",
         )
     raw = rows[0] if isinstance(rows[0], dict) else {}
-    cust = _cell_str(raw, cust_c)
-    prod = _cell_str(raw, prod_c)
-    pq = _cell_decimal(raw, pq_c)
+    fcode = _cell_str(raw, fcode_c) if fcode_c else ""
+    fname = _cell_str(raw, fname_c) if fname_c else ""
+    pq = _cell_decimal(raw, pq_c) if pq_c else None
 
     return EquipmentOutputPrefillFromDatasetOut(
         work_order_no=body.work_order_no,
-        customer_name=cust[:200] if cust else None,
-        product_name=prod[:200] if prod else None,
+        finished_product_code=fcode[:128] if fcode else None,
+        finished_product_name=fname[:200] if fname else None,
         planned_qty=pq,
         dataset_row=raw,
     )
@@ -953,6 +951,8 @@ class OutputRecordOut(BaseModel):
     work_order_no: str
     customer_name: Optional[str] = None
     product_name: Optional[str] = None
+    finished_product_code: Optional[str] = None
+    finished_product_name: Optional[str] = None
     planned_qty: Optional[Decimal] = None
     completed_qty: Decimal
     startup_at: Optional[datetime] = None
@@ -970,6 +970,8 @@ class OutputRecordCreate(BaseModel):
     recorded_at: Optional[datetime] = None
     customer_name: Optional[str] = Field(None, max_length=200)
     product_name: Optional[str] = Field(None, max_length=200)
+    finished_product_code: Optional[str] = Field(None, max_length=128)
+    finished_product_name: Optional[str] = Field(None, max_length=200)
     planned_qty: Optional[Decimal] = None
     completed_qty: Decimal = Field(default=Decimal("0"))
     startup_at: Optional[datetime] = None
@@ -992,6 +994,8 @@ class OutputRecordUpdate(BaseModel):
     work_order_no: Optional[str] = Field(None, max_length=128)
     customer_name: Optional[str] = Field(None, max_length=200)
     product_name: Optional[str] = Field(None, max_length=200)
+    finished_product_code: Optional[str] = Field(None, max_length=128)
+    finished_product_name: Optional[str] = Field(None, max_length=200)
     planned_qty: Optional[Decimal] = None
     completed_qty: Optional[Decimal] = None
     startup_at: Optional[datetime] = None
@@ -1006,7 +1010,7 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
     eq = row.equipment
     return OutputRecordOut(
         id=row.id,
-        uuid=row.uuid,
+        uuid=str(row.uuid),
         sheet_no=row.sheet_no,
         recorded_at=row.recorded_at,
         equipment_id=row.equipment_id,
@@ -1015,6 +1019,8 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
         work_order_no=row.work_order_no,
         customer_name=row.customer_name,
         product_name=row.product_name,
+        finished_product_code=row.finished_product_code or row.customer_name,
+        finished_product_name=row.finished_product_name or row.product_name,
         planned_qty=row.planned_qty,
         completed_qty=row.completed_qty,
         startup_at=row.startup_at,
@@ -1060,6 +1066,8 @@ async def list_output_records(
             | Q(work_order_no__icontains=k)
             | Q(customer_name__icontains=k)
             | Q(product_name__icontains=k)
+            | Q(finished_product_code__icontains=k)
+            | Q(finished_product_name__icontains=k)
             | Q(equipment__asset_code__icontains=k)
             | Q(equipment__name__icontains=k)
         )
@@ -1096,6 +1104,8 @@ async def create_output_record(
             work_order_no=body.work_order_no.strip(),
             customer_name=(body.customer_name or "").strip() or None,
             product_name=(body.product_name or "").strip() or None,
+            finished_product_code=(body.finished_product_code or "").strip() or None,
+            finished_product_name=(body.finished_product_name or "").strip() or None,
             planned_qty=body.planned_qty,
             completed_qty=body.completed_qty,
             startup_at=body.startup_at,
@@ -1137,7 +1147,14 @@ async def update_output_record(
         if not s:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="制令单号不能为空")
         data["work_order_no"] = s
-    for k in ("customer_name", "product_name", "operator_name", "team_leader_name"):
+    for k in (
+        "customer_name",
+        "product_name",
+        "finished_product_code",
+        "finished_product_name",
+        "operator_name",
+        "team_leader_name",
+    ):
         if k in data and data[k] is not None:
             v = str(data[k]).strip()
             data[k] = v or None

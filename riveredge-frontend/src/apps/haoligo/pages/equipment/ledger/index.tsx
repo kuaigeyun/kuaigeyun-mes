@@ -9,19 +9,28 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
+  ProFormUploadButton,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Modal, Row, Space, Table, Typography } from 'antd';
+import type { UploadProps } from 'antd';
+import { App, Button, Col, Image, Modal, Row, Space, Table, Typography, Upload } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import {
   createEquipment,
   deleteEquipment,
@@ -43,6 +52,13 @@ import {
   type WorkshopRow,
 } from '../../../services/haoligo';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { getFileDownloadUrl, uploadFile } from '../../../../../services/file';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
+import { normUploadUuids, uuidsToUploadFileList } from '../../patrol/shared/uploadHelpers';
+import {
+  HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT,
+  useEquipmentOperationalStatusLabels,
+} from '../../../utils/equipmentOperationalStatus';
 
 function toIsoDate(v: unknown): string | null | undefined {
   if (v == null || v === '') return null;
@@ -70,6 +86,9 @@ const EquipmentLedgerPage: React.FC = () => {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false);
   const [statusHistoryRows, setStatusHistoryRows] = useState<EquipmentOperationalStatusLogRow[]>([]);
   const [statusHistoryLoading, setStatusHistoryLoading] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<EquipmentRow | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const loadLookups = useCallback(async () => {
     try {
@@ -135,30 +154,8 @@ const EquipmentLedgerPage: React.FC = () => {
     [t],
   );
 
-  const operationalStatusSelectOptions = useMemo(
-    () => [
-      { label: t('app.haoligo.equipment.ledger.operationalStatusRunning'), value: 'running' },
-      { label: t('app.haoligo.equipment.ledger.operationalStatusRepair'), value: 'repair' },
-      { label: t('app.haoligo.equipment.ledger.operationalStatusShutdown'), value: 'shutdown' },
-      { label: t('app.haoligo.equipment.ledger.operationalStatusStandby'), value: 'standby' },
-    ],
-    [t],
-  );
-
-  const operationalStatusLabel = useCallback(
-    (s: string | null | undefined) => {
-      const v = (s || '').trim().toLowerCase();
-      if (!v) return t('app.haoligo.equipment.ledger.operationalStatusNone');
-      const map: Record<string, string> = {
-        running: t('app.haoligo.equipment.ledger.operationalStatusRunning'),
-        repair: t('app.haoligo.equipment.ledger.operationalStatusRepair'),
-        shutdown: t('app.haoligo.equipment.ledger.operationalStatusShutdown'),
-        standby: t('app.haoligo.equipment.ledger.operationalStatusStandby'),
-      };
-      return map[v] || v;
-    },
-    [t],
-  );
+  const { formatStatus: operationalStatusLabel } = useEquipmentOperationalStatusLabels();
+  const operationalStatusNoneLabel = t('app.haoligo.equipment.ledger.operationalStatusNone');
 
   const dash = useMemo(() => t('app.haoligo.equipment.ledger.commonDash'), [t]);
 
@@ -167,6 +164,20 @@ const EquipmentLedgerPage: React.FC = () => {
     setEditId(null);
     setFormInitialValues({});
     setModalVisible(true);
+  };
+
+  const handleDetail = async (record: EquipmentRow) => {
+    setDetailOpen(true);
+    setDetailRecord(record);
+    setDetailLoading(true);
+    try {
+      const detail = await getEquipment(record.id);
+      setDetailRecord(detail);
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.loadEquipmentFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleEdit = async (record: EquipmentRow) => {
@@ -185,6 +196,7 @@ const EquipmentLedgerPage: React.FC = () => {
         operational_status: detail.operational_status ?? undefined,
         manufacture_date: detail.manufacture_date ? dayjs(detail.manufacture_date) : undefined,
         remark: detail.remark ?? '',
+        equipment_images: uuidsToUploadFileList(detail.image_file_uuids),
       });
       setModalVisible(true);
     } catch (e) {
@@ -208,6 +220,31 @@ const EquipmentLedgerPage: React.FC = () => {
       },
     });
   };
+
+  const uploadFieldProps = useMemo(
+    (): Partial<UploadProps> => ({
+      listType: 'picture-card',
+      accept: '.jpg,.jpeg,.png,.gif,.webp',
+      beforeUpload: (file) => {
+        const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
+        if (!isLt30M) {
+          messageApi.error(t('app.haoligo.equipment.ledger.imageSizeLimit'));
+          return Upload.LIST_IGNORE;
+        }
+        return true;
+      },
+      customRequest: async (options) => {
+        try {
+          const file = options.file as Parameters<typeof uploadFile>[0];
+          const res = await uploadFile(file, { category: 'haoligo_equipment' });
+          options.onSuccess?.(res, options.file);
+        } catch (err) {
+          options.onError?.(err instanceof Error ? err : new Error(String(err)));
+        }
+      },
+    }),
+    [messageApi, t],
+  );
 
   const operationalStatusPayload = (values: Record<string, unknown>): string | null => {
     const raw = values.operational_status;
@@ -240,6 +277,7 @@ const EquipmentLedgerPage: React.FC = () => {
     operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
     remark: String(values.remark ?? '').trim() || null,
+    image_file_uuids: normUploadUuids(values.equipment_images),
   });
 
   const buildUpdatePayload = (values: Record<string, unknown>): EquipmentUpdatePayload => ({
@@ -256,6 +294,7 @@ const EquipmentLedgerPage: React.FC = () => {
     operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
     remark: String(values.remark ?? '').trim() || null,
+    image_file_uuids: normUploadUuids(values.equipment_images),
   });
 
   const openStatusHistory = async () => {
@@ -292,6 +331,81 @@ const EquipmentLedgerPage: React.FC = () => {
       setFormLoading(false);
     }
   };
+
+  const detailColumns: ProDescriptionsItemProps<EquipmentRow>[] = useMemo(
+    () => [
+      { title: t('app.haoligo.equipment.ledger.colAssetCode'), dataIndex: 'asset_code' },
+      { title: t('app.haoligo.equipment.ledger.colName'), dataIndex: 'name' },
+      {
+        title: t('app.haoligo.equipment.ledger.colCategory'),
+        dataIndex: 'category_id',
+        render: (_, r) => {
+          const c = catMap.get(r.category_id);
+          return c ? `${c.code} · ${c.name}` : r.category_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colWorkshop'),
+        dataIndex: 'workshop_id',
+        render: (_, r) => {
+          const w = wsMap.get(r.workshop_id);
+          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colManufacturer'),
+        dataIndex: 'manufacturer_id',
+        render: (_, r) => {
+          if (r.manufacturer_id == null) return dash;
+          const m = mfrMap.get(r.manufacturer_id);
+          return m ? `${m.code} · ${m.name}` : r.manufacturer_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colPlan'),
+        dataIndex: 'inspection_param_set_id',
+        render: (_, r) => {
+          if (r.inspection_param_set_id == null) return dash;
+          const s = setMap.get(r.inspection_param_set_id);
+          return s ? `${s.code} · ${s.name}` : r.inspection_param_set_id;
+        },
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colCriticality'),
+        dataIndex: 'criticality',
+        render: (_, r) => criticalityLabel(r.criticality),
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colOperationalStatus'),
+        dataIndex: 'operational_status',
+        render: (_, r) => operationalStatusLabel(r.operational_status, operationalStatusNoneLabel),
+      },
+      {
+        title: t('app.haoligo.equipment.ledger.colManufactureDate'),
+        dataIndex: 'manufacture_date',
+        render: (_, r) => (r.manufacture_date ? String(r.manufacture_date).slice(0, 10) : dash),
+      },
+      { title: t('app.haoligo.equipment.ledger.colRemark'), dataIndex: 'remark', render: (_, r) => r.remark || dash },
+      {
+        title: t('app.haoligo.equipment.ledger.colEquipmentImages'),
+        dataIndex: 'image_file_uuids',
+        render: (_, r) => {
+          const uuids = r.image_file_uuids || [];
+          if (!uuids.length) return dash;
+          return (
+            <Image.PreviewGroup>
+              <Space size={8} wrap>
+                {uuids.map((uuid) => (
+                  <Image key={uuid} src={getFileDownloadUrl(uuid)} width={56} height={56} style={{ objectFit: 'cover', borderRadius: 4 }} />
+                ))}
+              </Space>
+            </Image.PreviewGroup>
+          );
+        },
+      },
+    ],
+    [t, dash, catMap, wsMap, mfrMap, setMap, criticalityLabel, operationalStatusLabel],
+  );
 
   const columns: ProColumns<EquipmentRow>[] = useMemo(
     () => [
@@ -365,7 +479,7 @@ const EquipmentLedgerPage: React.FC = () => {
         width: 120,
         hideInSearch: true,
         ellipsis: true,
-        render: (_, r) => operationalStatusLabel(r.operational_status),
+        render: (_, r) => operationalStatusLabel(r.operational_status, operationalStatusNoneLabel),
       },
       {
         title: t('app.haoligo.equipment.ledger.colManufactureDate'),
@@ -378,10 +492,13 @@ const EquipmentLedgerPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.ledger.colActions'),
         valueType: 'option',
-        width: 140,
+        width: 200,
         fixed: 'right',
         render: (_, record) => (
           <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+              {t('common.detail')}
+            </Button>
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
               {t('app.haoligo.equipment.ledger.actionEdit')}
             </Button>
@@ -638,14 +755,11 @@ const EquipmentLedgerPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormSelect
+            <DictionarySelect
+              dictionaryCode={HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT}
               name="operational_status"
               label={t('app.haoligo.equipment.ledger.formOperationalStatus')}
-              tooltip={t('app.haoligo.equipment.ledger.formOperationalStatusPh')}
-              options={operationalStatusSelectOptions}
-              allowClear
-              showSearch
-              fieldProps={{ optionFilterProp: 'label' }}
+              placeholder={t('app.haoligo.equipment.ledger.formOperationalStatusPh')}
             />
             {isEdit && editId != null ? (
               <Typography.Link style={{ fontSize: 12 }} onClick={() => void openStatusHistory()}>
@@ -661,10 +775,35 @@ const EquipmentLedgerPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <ProFormUploadButton
+              name="equipment_images"
+              label={t('app.haoligo.equipment.ledger.formEquipmentImages')}
+              max={10}
+              fieldProps={uploadFieldProps}
+            />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea name="remark" label={t('app.haoligo.equipment.ledger.formRemark')} fieldProps={{ rows: 3 }} />
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={
+          detailRecord
+            ? `${t('common.detail')} · ${detailRecord.asset_code}`
+            : t('app.haoligo.equipment.ledger.title')
+        }
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+        }}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailRecord}
+        columns={detailColumns}
+      />
 
       <Modal
         title={t('app.haoligo.equipment.ledger.statusHistoryTitle')}
@@ -691,13 +830,13 @@ const EquipmentLedgerPage: React.FC = () => {
               title: t('app.haoligo.equipment.ledger.statusHistoryColOld'),
               dataIndex: 'old_status',
               width: 120,
-              render: (v: string | null) => operationalStatusLabel(v),
+              render: (v: string | null) => operationalStatusLabel(v, operationalStatusNoneLabel),
             },
             {
               title: t('app.haoligo.equipment.ledger.statusHistoryColNew'),
               dataIndex: 'new_status',
               width: 120,
-              render: (v: string) => operationalStatusLabel(v || null),
+              render: (v: string) => operationalStatusLabel(v || null, operationalStatusNoneLabel),
             },
             { title: t('app.haoligo.equipment.ledger.statusHistoryColUser'), dataIndex: 'changed_by_user_id', width: 100 },
           ]}

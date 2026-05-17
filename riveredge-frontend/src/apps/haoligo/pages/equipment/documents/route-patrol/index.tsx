@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { getUserList } from '../../../../../../services/user';
 import {
   ActionType,
   ProColumns,
@@ -12,13 +13,12 @@ import {
   ProFormSelect,
   ProFormSwitch,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Input, Modal, Row, Space, Switch, Table, Typography } from 'antd';
+import { App, Button, Input, Modal, Space, Switch, Table, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import {
   createEquipmentRoutePatrol,
   deleteEquipmentRoutePatrol,
@@ -43,9 +43,30 @@ const RoutePatrolDocumentsPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [lines, setLines] = useState<EquipmentRoutePatrolLineRow[]>([]);
+  const reportToUserLabelRef = useRef<Map<number, string>>(new Map());
 
   const title = t('app.haoligo.menu.equipment.documents.route-patrol');
   const reload = useCallback(() => actionRef.current?.reload(), []);
+
+  const searchReportToUsers = useCallback(async (keyword?: string) => {
+    const res = await getUserList({
+      page: 1,
+      page_size: 50,
+      is_active: true,
+      keyword: keyword?.trim() || undefined,
+    });
+    const opts = (res.items || []).map((u) => {
+      const label = (u.full_name || '').trim() || u.username;
+      reportToUserLabelRef.current.set(u.id, label);
+      return { label, value: u.id };
+    });
+    const selId = formRef.current?.getFieldValue('report_to_user_id') as number | undefined;
+    if (selId != null && Number.isFinite(selId) && !opts.some((o) => o.value === selId)) {
+      const label = reportToUserLabelRef.current.get(selId) || `用户#${selId}`;
+      opts.unshift({ value: selId, label });
+    }
+    return opts;
+  }, []);
 
   const openNew = () => {
     setDetailMode(false);
@@ -62,8 +83,6 @@ const RoutePatrolDocumentsPage: React.FC = () => {
     }, 0);
   };
 
-  useNewShortcut(openNew);
-
   const openEdit = async (id: number, view: boolean) => {
     setFormLoading(true);
     setDetailMode(view);
@@ -73,7 +92,19 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       setLines(row.lines || []);
       setPhase('lines');
       setModalOpen(true);
-      setTimeout(() => {
+      setTimeout(async () => {
+        if (row.report_to_user_id != null) {
+          try {
+            const res = await getUserList({ page: 1, page_size: 50, is_active: true });
+            const hit = (res.items || []).find((u) => u.id === row.report_to_user_id);
+            if (hit) {
+              const label = (hit.full_name || '').trim() || hit.username;
+              reportToUserLabelRef.current.set(hit.id, label);
+            }
+          } catch {
+            /* keep fallback label */
+          }
+        }
         formRef.current?.setFieldsValue({
           patrol_route_id: row.patrol_route_id,
           recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
@@ -152,6 +183,13 @@ const RoutePatrolDocumentsPage: React.FC = () => {
     [messageApi, modal, reload, t],
   );
 
+  const parseReportToUserId = (v: Record<string, unknown>): number | null => {
+    const raw = v.report_to_user_id;
+    if (raw == null || raw === '') return null;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : null;
+  };
+
   const submitHeader = async () => {
     try {
       await formRef.current?.validateFields();
@@ -159,13 +197,17 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       return;
     }
     const v = formRef.current?.getFieldsValue() as Record<string, unknown>;
+    if (Boolean(v.report_required) && parseReportToUserId(v) == null) {
+      messageApi.warning(t('app.haoligo.equipment.documents.selectReportToUser'));
+      return;
+    }
     setFormLoading(true);
     try {
       const row = await createEquipmentRoutePatrol({
         patrol_route_id: Number(v.patrol_route_id),
         recorded_at: v.recorded_at ? dayjs(v.recorded_at as string).toISOString() : undefined,
         report_required: Boolean(v.report_required),
-        report_to_user_id: v.report_to_user_id != null && v.report_to_user_id !== '' ? Number(v.report_to_user_id) : null,
+        report_to_user_id: parseReportToUserId(v),
       });
       setEditId(row.id);
       setLines(row.lines || []);
@@ -186,12 +228,16 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       return;
     }
     const v = formRef.current?.getFieldsValue() as Record<string, unknown>;
+    if (Boolean(v.report_required) && parseReportToUserId(v) == null) {
+      messageApi.warning(t('app.haoligo.equipment.documents.selectReportToUser'));
+      return;
+    }
     setFormLoading(true);
     try {
       await updateEquipmentRoutePatrol(editId, {
         recorded_at: v.recorded_at ? dayjs(v.recorded_at as string).toISOString() : undefined,
         report_required: Boolean(v.report_required),
-        report_to_user_id: v.report_to_user_id != null && v.report_to_user_id !== '' ? Number(v.report_to_user_id) : null,
+        report_to_user_id: parseReportToUserId(v),
         lines: lines.map((ln) => ({
           id: ln.id,
           is_normal: ln.is_normal,
@@ -217,11 +263,9 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         search={{ labelWidth: 'auto' }}
-        toolBarRender={() => [
-          <Button type="primary" key="new" onClick={openNew}>
-            {t('app.haoligo.equipment.documents.btnNew')}
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText={t('app.haoligo.equipment.documents.btnNew')}
+        onCreate={openNew}
         request={async (params) => {
           const res = await listEquipmentRoutePatrols({
             skip: ((params.current || 1) - 1) * (params.pageSize || 50),
@@ -244,7 +288,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         }
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
-        width={920}
+        width={phase === 'lines' ? 920 : 520}
         destroyOnClose
         footer={
           detailMode ? (
@@ -267,45 +311,46 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         }
       >
         <ProForm formRef={formRef} submitter={false} layout="vertical" disabled={detailMode}>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <ProFormSelect
-                name="patrol_route_id"
-                label={t('app.haoligo.equipment.documents.formPatrolRoute')}
-                rules={[{ required: true }]}
-                disabled={detailMode || phase === 'lines' || editId != null}
-                fieldProps={{ style: { width: '100%' } }}
-                request={async () => {
-                  const rows = await listPatrolRoutes();
-                  return (rows || []).map((r) => ({ label: `${r.code} ${r.name}`, value: r.id }));
-                }}
-              />
-            </Col>
-            <Col xs={24} md={12}>
-              <ProFormDateTimePicker
-                name="recorded_at"
-                label={t('app.haoligo.equipment.documents.formRecordedAt')}
-                fieldProps={{ style: { width: '100%' } }}
-              />
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <ProFormSwitch name="report_required" label={t('app.haoligo.equipment.documents.formReportRequired')} />
-            </Col>
-            <Col xs={24} md={12}>
-              <ProFormSelect
-                name="report_to_user_id"
-                label={t('app.haoligo.equipment.documents.formReportToUserId')}
-                allowClear
-                options={[]}
-                fieldProps={{
-                  style: { width: '100%' },
-                  placeholder: t('app.haoligo.equipment.documents.formReportToUserIdPh'),
-                }}
-              />
-            </Col>
-          </Row>
+          <ProFormSelect
+            name="patrol_route_id"
+            label={t('app.haoligo.equipment.documents.formPatrolRoute')}
+            rules={[{ required: true }]}
+            disabled={detailMode || phase === 'lines' || editId != null}
+            fieldProps={{ style: { width: '100%' } }}
+            request={async () => {
+              const rows = await listPatrolRoutes();
+              return (rows || []).map((r) => ({ label: `${r.code} ${r.name}`, value: r.id }));
+            }}
+          />
+          <ProFormDateTimePicker
+            name="recorded_at"
+            label={t('app.haoligo.equipment.documents.formRecordedAt')}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+          <ProFormSelect
+            name="report_to_user_id"
+            label={t('app.haoligo.equipment.documents.formReportToUser')}
+            allowClear
+            showSearch
+            debounceTime={300}
+            request={async ({ keyWords }) => searchReportToUsers(keyWords)}
+            fieldProps={{
+              style: { width: '100%' },
+              placeholder: t('app.haoligo.equipment.documents.formReportToUserPh'),
+              filterOption: false,
+            }}
+          />
+          <ProFormSwitch
+            name="report_required"
+            label={t('app.haoligo.equipment.documents.formReportRequired')}
+            fieldProps={{
+              onChange: (checked: boolean) => {
+                if (!checked) {
+                  formRef.current?.setFieldsValue({ report_to_user_id: undefined });
+                }
+              },
+            }}
+          />
         </ProForm>
 
         {phase === 'lines' && lines.length > 0 && (
