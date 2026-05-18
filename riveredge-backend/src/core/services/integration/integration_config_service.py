@@ -892,7 +892,9 @@ class IntegrationConfigService:
                 " 常见排查：①连接测试由「后端服务所在机器」发起，花生壳/FRP 须把公网端口映射到 SQL Server 的 TCP "
                 "端口（与配置中端口一致），并放行防火墙；② SQL Server 配置管理器中启用 TCP/IP、确认实际监听端口；"
                 "③ SQL Server 2008 R2 / 无 TLS 时优先选加密「关闭(off)」、TDS 选 7.2 或 7.4（勿选 8.0：FreeTDS 不支持该字面版本）；"
-                "④已安装 ODBC Driver 17/18 时，后端会在 pymssql 失败后自动用 ODBC 再试（与 Navicat 常用栈一致）。"
+                "④已安装 ODBC Driver 17/18 时，后端会优先或回退使用 ODBC（与 Navicat 常用栈一致）；"
+                "Driver 17 仅支持 Encrypt=yes/no，勿在连接串中使用 optional；"
+                "⑤主机须与 Navicat 一致写成「域名,穿透端口」（如 vicp.fun,30198），勿只填域名却用默认 1433。"
             )
         return msg
 
@@ -926,6 +928,15 @@ class IntegrationConfigService:
         return sorted(names, key=sort_key)
 
     @staticmethod
+    def _sqlserver_pyodbc_runtime_ready() -> bool:
+        """pyodbc 已安装且本机已注册 SQL Server ODBC 驱动（与 Navicat 常用栈一致）。"""
+        try:
+            import pyodbc  # noqa: F401
+        except ImportError:
+            return False
+        return bool(IntegrationConfigService._sqlserver_pyodbc_drivers())
+
+    @staticmethod
     def _sqlserver_odbc_server_clause(host: str, port_int: int) -> str:
         """ODBC Server= 片段：默认实例用 tcp: 前缀强制 TCP；命名实例用「实例,端口」形式。"""
         if "\\" in host:
@@ -933,24 +944,79 @@ class IntegrationConfigService:
         return f"tcp:{host},{port_int}"
 
     @staticmethod
-    def _sqlserver_pyodbc_encrypt_modes_for_odbc(config: Dict[str, Any]) -> List[str]:
-        """ODBC Driver 17/18 的 Encrypt= 取值（与 UI 下拉含义对齐）。"""
+    def _sqlserver_pyodbc_driver_major_version(driver_name: str) -> Optional[int]:
+        """从驱动注册名解析主版本（17/18 等），未知时返回 None。"""
+        lo = (driver_name or "").lower()
+        for ver in (18, 17, 13, 11):
+            if f"odbc driver {ver}" in lo or f"native client {ver}" in lo:
+                return ver
+        return None
+
+    @staticmethod
+    def _sqlserver_pyodbc_logical_encrypt_modes(config: Dict[str, Any]) -> List[str]:
+        """逻辑加密策略（与 UI / pymssql 含义对齐）；尚未按 ODBC 驱动版本裁剪。"""
         enc_raw = config.get("encryption")
         if isinstance(enc_raw, str):
             k = enc_raw.strip().lower()
-            if k in ("off", "false", "no", "disable"):
+            if k in ("off", "false", "no", "disable", "0"):
                 return ["no"]
-            if k in ("require", "strict", "mandatory", "true", "yes", "on"):
+            if k in ("require", "strict", "mandatory", "true", "yes", "on", "1"):
                 return ["yes", "mandatory"]
             if k in ("request", "optional", "prefer", "auto"):
                 return ["optional", "yes"]
             if k == "default":
-                return ["optional", "no", "yes", "mandatory"]
-        if config.get("encrypt") is True:
-            return ["yes", "mandatory"]
-        if config.get("encrypt") is False:
+                return ["no", "optional", "yes", "mandatory"]
+        if enc_raw in (0, False):
             return ["no"]
-        return ["optional", "no", "yes", "mandatory"]
+        if enc_raw in (1, True):
+            return ["yes", "mandatory"]
+        enc_legacy = config.get("encrypt")
+        if enc_legacy in (0, False):
+            return ["no"]
+        if enc_legacy in (1, True, "1"):
+            return ["yes", "mandatory"]
+        if enc_legacy in ("0",):
+            return ["no"]
+        return ["no", "optional", "yes", "mandatory"]
+
+    @staticmethod
+    def _sqlserver_pyodbc_encrypt_literals_for_driver(
+        driver_name: str, logical_modes: List[str]
+    ) -> List[str]:
+        """
+        将逻辑模式映射为 ODBC 连接串合法的 Encrypt= 字面量。
+        Driver 17 及更早仅支持 yes/no；optional/mandatory 为 Driver 18+ 同义词。
+        """
+        major = IntegrationConfigService._sqlserver_pyodbc_driver_major_version(driver_name)
+        supports_extended = major is None or major >= 18
+        odbc_map = {
+            "no": "no",
+            "yes": "yes",
+            "optional": "optional" if supports_extended else "no",
+            "mandatory": "mandatory" if supports_extended else "yes",
+        }
+        out: List[str] = []
+        seen: set[str] = set()
+        for mode in logical_modes:
+            literal = odbc_map.get(mode)
+            if literal and literal not in seen:
+                seen.add(literal)
+                out.append(literal)
+        return out if out else ["no", "yes"]
+
+    @staticmethod
+    def _sqlserver_pyodbc_encrypt_modes_for_odbc(
+        config: Dict[str, Any], driver_name: str = ""
+    ) -> List[str]:
+        """按驱动版本返回合法的 Encrypt= 取值列表（去重、保序）。"""
+        logical = IntegrationConfigService._sqlserver_pyodbc_logical_encrypt_modes(config)
+        if driver_name:
+            return IntegrationConfigService._sqlserver_pyodbc_encrypt_literals_for_driver(
+                driver_name, logical
+            )
+        return IntegrationConfigService._sqlserver_pyodbc_encrypt_literals_for_driver(
+            "ODBC Driver 17 for SQL Server", logical
+        )
 
     @staticmethod
     def _sqlserver_pyodbc_try_sync(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -986,11 +1052,11 @@ class IntegrationConfigService:
         login_timeout = int(config.get("login_timeout", 15))
         server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
 
-        enc_modes = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(config)
-        encrypt_sequence = list(dict.fromkeys(enc_modes))
-
         last_err: Optional[BaseException] = None
         for driver in drivers:
+            encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(
+                config, driver
+            )
             for enc in encrypt_sequence:
                 conn_str = (
                     f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
@@ -1059,7 +1125,11 @@ class IntegrationConfigService:
             return {
                 "success": False,
                 "skipped": True,
-                "hint": "pyodbc 未安装，无法使用 ODBC 回退执行 SQL。",
+                "hint": (
+                    "pyodbc 未安装，无法使用 ODBC 回退执行 SQL。"
+                    "请在 riveredge-backend 目录执行：uv sync --no-install-project；"
+                    "Linux 还需安装 Microsoft ODBC Driver 17/18 与 unixODBC。"
+                ),
             }
 
         drivers = IntegrationConfigService._sqlserver_pyodbc_drivers()
@@ -1078,11 +1148,11 @@ class IntegrationConfigService:
             password = ""
         login_timeout = int(config.get("login_timeout", 15))
         server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
-        enc_modes = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(config)
-        encrypt_sequence = list(dict.fromkeys(enc_modes))
-
         last_err: Optional[BaseException] = None
         for driver in drivers:
+            encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(
+                config, driver
+            )
             for enc in encrypt_sequence:
                 conn_str = (
                     f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
@@ -1240,6 +1310,42 @@ class IntegrationConfigService:
             attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
         except ValueError as e:
             return {"success": False, "message": str(e)}
+
+        if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+            odbc_res = await asyncio.to_thread(
+                IntegrationConfigService._sqlserver_pyodbc_try_sync,
+                config,
+            )
+            if odbc_res.get("success"):
+                drv = odbc_res.get("driver", "ODBC")
+                enc = odbc_res.get("encrypt", "")
+                detail = f"{drv}" + (f"，Encrypt={enc}" if enc else "")
+                return {
+                    "success": True,
+                    "message": f"SQL Server 连接成功（ODBC / {detail}，与常见 Navicat 配置一致）",
+                }
+            if not odbc_res.get("skipped"):
+                odbc_err = (odbc_res.get("error") or "").strip()
+                pymssql_note = ""
+                try:
+                    await asyncio.to_thread(
+                        IntegrationConfigService._sqlserver_ping_sync,
+                        attempts,
+                    )
+                    return {
+                        "success": True,
+                        "message": "SQL Server 连接成功（pymssql；ODBC 曾失败已自动回退）",
+                    }
+                except Exception as e:
+                    pymssql_note = IntegrationConfigService._format_sqlserver_error(e)
+                return {
+                    "success": False,
+                    "message": (
+                        f"ODBC 连接失败：{odbc_err}。"
+                        + (f" pymssql：{pymssql_note}" if pymssql_note else "")
+                    ),
+                }
+
         try:
             await asyncio.to_thread(
                 IntegrationConfigService._sqlserver_ping_sync,

@@ -590,14 +590,24 @@ class DatasetService:
 
     @staticmethod
     def _execute_sqlserver_query_sync(config: Dict[str, Any], sql: str, args: List[Any]) -> Dict[str, Any]:
-        """在线程中连接 SQL Server 并执行只读查询：先 pymssql，失败后 ODBC/pyodbc（与测试连接一致）。"""
+        """在线程中连接 SQL Server：若本机有 pyodbc+ODBC 驱动则优先 ODBC（贴近 Navicat），否则 pymssql，再 ODBC 回退。"""
         import pymssql
 
         from core.services.integration.integration_config_service import IntegrationConfigService
 
+        tup = tuple(args) if args else tuple()
+        if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+            odbc_first = IntegrationConfigService._sqlserver_pyodbc_execute_query_sync(config, sql, tup)
+            if odbc_first.get("success"):
+                return {
+                    "success": True,
+                    "data": odbc_first.get("data", []),
+                    "columns": odbc_first.get("columns", []),
+                    "total": odbc_first.get("total", 0),
+                }
+
         attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
         last_exc: Optional[BaseException] = None
-        tup = tuple(args) if args else tuple()
         for kw in attempts:
             try:
                 conn = pymssql.connect(**kw)
