@@ -841,7 +841,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       setFormLoading(true);
       try {
         await createMoldOutsourceMaintenanceCompleteSheet(payload);
-        messageApi.success('已提交，请至「委外审核」确认');
+        messageApi.success('已提交，请至「外协维保审核」确认');
         setModalVisible(false);
         actionRef.current?.reload();
       } catch (e) {

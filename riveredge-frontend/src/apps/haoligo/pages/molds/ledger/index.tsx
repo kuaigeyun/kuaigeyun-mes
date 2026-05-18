@@ -83,11 +83,28 @@ import {
   MOLD_LEDGER_STATUS_SET,
   getMoldLedgerStatusTagColor,
 } from '../../../constants/moldStatus';
+import {
+  MOLD_LEDGER_SOURCE_LABELS,
+  MOLD_LEDGER_SOURCE_VALUES,
+  getMoldLedgerSourceLabel,
+  getMoldLedgerSourceTagColor,
+} from '../../../constants/moldLedgerSource';
 
 const statusValueEnum = MOLD_LEDGER_STATUSES.reduce<Record<string, { text: string }>>((acc, s) => {
   acc[s] = { text: s };
   return acc;
 }, {});
+
+const sourceValueEnum = MOLD_LEDGER_SOURCE_VALUES.reduce<Record<string, { text: string }>>((acc, s) => {
+  acc[s] = { text: MOLD_LEDGER_SOURCE_LABELS[s] };
+  return acc;
+}, {});
+
+function renderMoldLedgerSourceCell(source: string | null | undefined) {
+  const label = getMoldLedgerSourceLabel(source);
+  const color = getMoldLedgerSourceTagColor(source);
+  return color !== undefined ? <Tag color={color}>{label}</Tag> : <Tag>{label}</Tag>;
+}
 
 function renderMoldLedgerStatusCell(status: string) {
   const color = getMoldLedgerStatusTagColor(status);
@@ -138,6 +155,13 @@ function parseMoldDecimal(v: string | null | undefined): number {
 function formatMoldMetricNumber(n: number, fractionDigits = 4): string {
   if (!Number.isFinite(n)) return '—';
   return n.toLocaleString(undefined, { maximumFractionDigits: fractionDigits });
+}
+
+/** 剩余占比环形图颜色：与工作台模具寿命预警阈值一致（消耗 ≥95% 红、≥85% 黄、其余绿） */
+function moldRemainingRingColor(remainingPct: number, token: ReturnType<typeof theme.useToken>['token']): string {
+  if (remainingPct <= 5) return token.colorError;
+  if (remainingPct <= 15) return token.colorWarning;
+  return token.colorSuccess;
 }
 
 function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boolean }) {
@@ -197,127 +221,83 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
     </div>
   );
 
-  const cardBodyTimes = (
+  const cardBodyMetric = (
     title: string,
     helpText: string,
+    ratedLabel: string,
+    usedLabel: string,
     rated: string,
     used: string,
     pct: number | undefined,
-  ) => (
-    <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 6,
-              marginBottom: 10,
-            }}
-          >
-            <Typography.Text strong>{title}</Typography.Text>
-            <Tooltip title={helpText} placement="topLeft" overlayStyle={{ maxWidth: 380 }}>
-              <QuestionCircleOutlined
-                aria-label="指标说明"
-                style={{ color: token.colorTextTertiary, cursor: 'help', fontSize: 14 }}
-              />
-            </Tooltip>
-          </div>
-          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
-            <div>
-              <Typography.Text type="secondary">额定可用次数</Typography.Text>
-              <Typography.Text style={{ marginLeft: 8 }}>{rated}</Typography.Text>
+  ) => {
+    const ringColor = pct != null ? moldRemainingRingColor(pct, token) : undefined;
+    return (
+      <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 6,
+                marginBottom: 10,
+              }}
+            >
+              <Typography.Text strong>{title}</Typography.Text>
+              <Tooltip title={helpText} placement="topLeft" overlayStyle={{ maxWidth: 380 }}>
+                <QuestionCircleOutlined
+                  aria-label="指标说明"
+                  style={{ color: token.colorTextTertiary, cursor: 'help', fontSize: 14 }}
+                />
+              </Tooltip>
             </div>
-            <div>
-              <Typography.Text type="secondary">已使用次数</Typography.Text>
-              <Typography.Text style={{ marginLeft: 8 }}>{used}</Typography.Text>
+            <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+              <div>
+                <Typography.Text type="secondary">{ratedLabel}</Typography.Text>
+                <Typography.Text style={{ marginLeft: 8 }}>{rated}</Typography.Text>
+              </div>
+              <div>
+                <Typography.Text type="secondary">{usedLabel}</Typography.Text>
+                <Typography.Text style={{ marginLeft: 8 }}>{used}</Typography.Text>
+              </div>
             </div>
           </div>
+          {pct != null && ringColor != null ? (
+            <Progress
+              type="circle"
+              percent={Math.min(100, Math.max(0, pct))}
+              width={88}
+              format={(p) => <span style={{ color: ringColor, fontSize: 14 }}>{p}%</span>}
+              strokeColor={ringColor}
+            />
+          ) : (
+            ringPlaceholder
+          )}
         </div>
-        {pct != null ? (
-          <Progress
-            type="circle"
-            percent={Math.min(100, Math.max(0, pct))}
-            width={88}
-            format={(p) => `${p}%`}
-            strokeColor={token.colorPrimary}
-          />
-        ) : (
-          ringPlaceholder
-        )}
-      </div>
-    </Card>
-  );
-
-  const cardBodyYield = (
-    title: string,
-    helpText: string,
-    rated: string,
-    used: string,
-    pct: number | undefined,
-  ) => (
-    <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 6,
-              marginBottom: 10,
-            }}
-          >
-            <Typography.Text strong>{title}</Typography.Text>
-            <Tooltip title={helpText} placement="topLeft" overlayStyle={{ maxWidth: 380 }}>
-              <QuestionCircleOutlined
-                aria-label="指标说明"
-                style={{ color: token.colorTextTertiary, cursor: 'help', fontSize: 14 }}
-              />
-            </Tooltip>
-          </div>
-          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
-            <div>
-              <Typography.Text type="secondary">额定可用产量</Typography.Text>
-              <Typography.Text style={{ marginLeft: 8 }}>{rated}</Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">已使用产量</Typography.Text>
-              <Typography.Text style={{ marginLeft: 8 }}>{used}</Typography.Text>
-            </div>
-          </div>
-        </div>
-        {pct != null ? (
-          <Progress
-            type="circle"
-            percent={Math.min(100, Math.max(0, pct))}
-            width={88}
-            format={(p) => `${p}%`}
-            strokeColor={token.colorSuccess}
-          />
-        ) : (
-          ringPlaceholder
-        )}
-      </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   return (
     <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
       <Col xs={24} md={12}>
-        {cardBodyTimes(
+        {cardBodyMetric(
           '额定可用次数 / 已使用次数',
           '环形图：剩余次数占比 =（额定可用次数 − 已使用次数）÷ 额定可用次数；还入单不再扣减额定值',
+          '额定可用次数',
+          '已使用次数',
           ratedTimes != null ? formatMoldMetricNumber(ratedTimes, 0) : '—',
           formatMoldMetricNumber(usedTimes, 0),
           pctTimesRemaining,
         )}
       </Col>
       <Col xs={24} md={12}>
-        {cardBodyYield(
+        {cardBodyMetric(
           '额定可用产量 / 已使用产量',
           '环形图：剩余产量占比 =（额定可用产量 − 已使用产量）÷ 额定可用产量',
+          '额定可用产量',
+          '已使用产量',
           !Number.isNaN(ratedYield) ? formatMoldMetricNumber(ratedYield) : '—',
           !Number.isNaN(usedYield) ? formatMoldMetricNumber(usedYield) : '—',
           pctYieldRemaining,
@@ -574,7 +554,7 @@ const MoldLedgerPage: React.FC = () => {
       .then((r) => {
         hideLoading();
         messageApi.success(
-          `同步完成：新增 ${r.created} 条，更新 ${r.updated} 条，跳过 ${r.skipped} 行（无代号）`,
+          `同步完成：新增 ${r.created} 条，更新 ${r.updated} 条，跳过 ${r.skipped} 行（无代号）；数据集内记录来源已标记为「同步」`,
         );
         actionRef.current?.reload();
       })
@@ -757,6 +737,7 @@ const MoldLedgerPage: React.FC = () => {
   const moldDetailColumnsBasic: ProDescriptionsItemProps<MoldRow>[] = [
     { title: '模具代号', dataIndex: 'mold_code', copyable: true },
     { title: '模具名称', dataIndex: 'name' },
+    { title: '来源', dataIndex: 'ledger_source', render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source) },
     { title: '单位', dataIndex: 'unit', render: (_, r) => r.unit || '—' },
     { title: '模具产能', dataIndex: 'mold_capacity' },
     {
@@ -843,6 +824,15 @@ const MoldLedgerPage: React.FC = () => {
   const columns: ProColumns<MoldRow>[] = [
     { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true, fixed: 'left' },
     { title: '模具名称', dataIndex: 'name', width: 180, ellipsis: true },
+    {
+      title: '来源',
+      dataIndex: 'ledger_source',
+      width: 96,
+      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: sourceValueEnum,
+      render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source),
+    },
     { title: '单位', dataIndex: 'unit', width: 72, hideInSearch: true, render: (_, r) => r.unit || '—' },
     { title: '模具产能', dataIndex: 'mold_capacity', width: 100, hideInSearch: true },
     {

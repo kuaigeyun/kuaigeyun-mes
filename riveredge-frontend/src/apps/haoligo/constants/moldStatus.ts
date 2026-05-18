@@ -18,7 +18,7 @@ export type MoldLedgerStatus = (typeof MOLD_LEDGER_STATUSES)[number];
 export const MOLD_LEDGER_STATUS_SET: ReadonlySet<string> = new Set(MOLD_LEDGER_STATUSES);
 
 export const MOLD_STATUS_TAG_COLORS: Record<MoldLedgerStatus, string> = {
-  待启用: 'geekblue',
+  待启用: 'cyan',
   待用: 'blue',
   在用: 'green',
   维修: 'volcano',

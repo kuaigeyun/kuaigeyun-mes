@@ -701,15 +701,19 @@ const EquipmentLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="workshop_id"
-              label={t('app.haoligo.equipment.ledger.formWorkshop')}
+              label={
+                <span>
+                  {t('app.haoligo.equipment.ledger.formWorkshop')}{' '}
+                  <Link to="/apps/master-data/factory/workshops" style={{ fontSize: 12, fontWeight: 400 }}>
+                    {t('app.haoligo.equipment.ledger.linkMasterDataWorkshops')}
+                  </Link>
+                </span>
+              }
               options={workshopOptions}
               rules={[{ required: true, message: t('app.haoligo.equipment.ledger.formWorkshopReq') }]}
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}
             />
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-              <Link to="/apps/master-data/factory/workshops">{t('app.haoligo.equipment.ledger.linkMasterDataWorkshops')}</Link>
-            </Typography.Text>
           </Col>
           <Col span={12}>
             <ProFormSelect
@@ -724,15 +728,19 @@ const EquipmentLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="inspection_param_set_id"
-              label={t('app.haoligo.equipment.ledger.formPlan')}
+              label={
+                <span>
+                  {t('app.haoligo.equipment.ledger.formPlan')}{' '}
+                  <Link to="/apps/haoligo/equipment/inspection-param-sets" style={{ fontSize: 12, fontWeight: 400 }}>
+                    {t('app.haoligo.equipment.ledger.linkInspectionPlans')}
+                  </Link>
+                </span>
+              }
               options={paramSetOptions}
               allowClear
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}
             />
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-              <Link to="/apps/haoligo/equipment/inspection-param-sets">{t('app.haoligo.equipment.ledger.linkInspectionPlans')}</Link>
-            </Typography.Text>
           </Col>
           <Col span={12}>
             <ProFormSelect

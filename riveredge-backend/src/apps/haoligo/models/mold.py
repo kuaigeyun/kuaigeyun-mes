@@ -61,4 +61,10 @@ class HaoligoMold(HaoligoTenantModel):
     outsource_vendor_code = fields.CharField(max_length=64, null=True, description="外协厂商代号")
     outsource_vendor_name = fields.CharField(max_length=200, null=True, description="外协厂商名称")
     erp_material_code = fields.CharField(max_length=64, null=True, description="ERP 物料编码（同步引用）")
+    ledger_source = fields.CharField(
+        max_length=16,
+        null=True,
+        default=None,
+        description="来源：sync=数据集同步，manual=手工创建/导入，NULL=历史或未同步回填",
+    )
     remark = fields.TextField(null=True, description="备注")

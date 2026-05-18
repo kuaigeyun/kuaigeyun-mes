@@ -11,7 +11,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Typography } from 'antd';
+import { App, Button, Modal, Space } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -33,8 +33,6 @@ import {
   type CategoryRow,
   type InspectionParamSetRow,
 } from '../../../services/haoligo';
-
-const { Paragraph } = Typography;
 
 type CategoryTableRow = CategoryRow & { default_set_label?: string };
 
@@ -203,9 +201,6 @@ const CategoriesPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          {t('app.haoligo.equipment.categories.intro')}
-        </Paragraph>
         <UniTable<CategoryTableRow>
           headerTitle={t('app.haoligo.menu.equipment.categories')}
           columnPersistenceId="apps.haoligo.pages.equipment.categories"

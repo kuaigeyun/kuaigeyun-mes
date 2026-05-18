@@ -49,9 +49,37 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
   const [currentEquipmentStatus, setCurrentEquipmentStatus] = useState<string | null>(null);
   const [savedNewStatus, setSavedNewStatus] = useState<string | null>(null);
   const [statusPreviewLoading, setStatusPreviewLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const title = t('app.haoligo.menu.equipment.documents.status-adjustment');
   const reload = useCallback(() => actionRef.current?.reload(), []);
+
+  const handleBatchDelete = useCallback(
+    async (keys: React.Key[]) => {
+      try {
+        let done = 0;
+        let fail = 0;
+        for (const key of keys) {
+          try {
+            await deleteEquipmentStatusAdjustment(Number(key));
+            done++;
+          } catch {
+            fail++;
+          }
+        }
+        if (fail > 0) {
+          messageApi.warning(t('app.haoligo.equipment.documents.batchDeletePartial', { done, fail }));
+        } else {
+          messageApi.success(t('common.batchDeleteSuccess', { count: done }));
+        }
+        setSelectedRowKeys([]);
+        reload();
+      } catch (e) {
+        messageApi.error((e as Error).message || t('common.batchDeleteFailed'));
+      }
+    },
+    [messageApi, reload, t],
+  );
 
   const loadEquipmentCurrentStatus = useCallback(
     async (equipmentId: number | undefined) => {
@@ -228,9 +256,20 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
       <UniTable<EquipmentStatusAdjustmentRow>
         actionRef={actionRef}
         rowKey="id"
+        columnPersistenceId="apps.haoligo.pages.equipment.documents.status-adjustment"
         columns={columns}
         showCreateButton
         onCreate={openNew}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteButtonText={t('common.batchDelete')}
+        deleteConfirmTitle={t('app.haoligo.equipment.documents.batchDeleteTitle')}
+        deleteConfirmDescription={(count) =>
+          t('app.haoligo.equipment.documents.batchDeleteDescription', { count })
+        }
         request={async (params) => {
           const skip = ((params.current || 1) - 1) * (params.pageSize || 20);
           const res = await listEquipmentStatusAdjustments({

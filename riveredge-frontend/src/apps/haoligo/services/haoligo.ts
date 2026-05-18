@@ -938,6 +938,8 @@ export interface MoldRow {
   outsource_vendor_name?: string | null;
   erp_material_code?: string | null;
   remark?: string | null;
+  /** 来源：sync=数据集同步，manual=手工创建/导入 */
+  ledger_source?: string;
   /** 已使用次数（每笔还入单 +1，存于台账） */
   used_times?: number;
   /** 已使用产量（还入制造数量累计） */

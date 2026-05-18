@@ -12,6 +12,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_ledger_source import MOLD_LEDGER_SOURCE_MANUAL, MOLD_LEDGER_SOURCE_SYNC
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
@@ -53,6 +54,7 @@ class MoldOut(BaseModel):
     outsource_vendor_name: Optional[str] = None
     erp_material_code: Optional[str] = None
     remark: Optional[str] = None
+    ledger_source: Optional[str] = None
     used_times: int = 0
     used_yield: Decimal = Decimal("0")
 
@@ -358,6 +360,9 @@ async def sync_mold_ledger_from_dataset(
             existing.unit = unit
             if cap_c:
                 existing.mold_capacity = cap_for_row
+            # 数据集同步：刷新业务字段；来源为「手工创建」的不改写（本系统新增）
+            if existing.ledger_source != MOLD_LEDGER_SOURCE_MANUAL:
+                existing.ledger_source = MOLD_LEDGER_SOURCE_SYNC
             await existing.save()
             updated += 1
         else:
@@ -381,6 +386,7 @@ async def sync_mold_ledger_from_dataset(
                 outsource_vendor_name=None,
                 erp_material_code=None,
                 remark=None,
+                ledger_source=MOLD_LEDGER_SOURCE_SYNC,
                 used_times=0,
                 used_yield=Decimal("0"),
             )
@@ -735,6 +741,7 @@ async def create_mold(
         outsource_vendor_name=body.outsource_vendor_name,
         erp_material_code=body.erp_material_code,
         remark=body.remark,
+        ledger_source=MOLD_LEDGER_SOURCE_MANUAL,
         used_times=0,
         used_yield=Decimal("0"),
     )

@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 委外审核（外协维保完修单；审核人为申请人；列表含待审核/已通过/已驳回）
+ * 好力 GO — 外协维保审核（外协维保完修单；审核人为申请人；列表含待审核/已通过/已驳回）
  */
 
 import React, { useRef, useState } from 'react';
@@ -7,6 +7,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Divider, Modal, Space, Spin, Table, Tag, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { CheckOutlined, CloseOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { getFileDownloadUrl } from '../../../../../../services/file';
@@ -60,6 +61,7 @@ function auditStatusTag(r: MoldOutsourceMaintenanceCompleteSheetRow) {
 }
 
 const MoldOutsourcePendingReviewPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const [detailOpen, setDetailOpen] = useState(false);
@@ -263,7 +265,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
-          headerTitle="委外审核"
+          headerTitle={t('app.haoligo.menu.molds.workbench.pending')}
           columnPersistenceId="apps.haoligo.pages.molds.workbench.pending"
           actionRef={actionRef}
           rowKey="id"
