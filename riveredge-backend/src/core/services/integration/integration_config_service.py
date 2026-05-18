@@ -787,6 +787,22 @@ class IntegrationConfigService:
         return "7.4"
 
     @staticmethod
+    def _sqlserver_resolve_charset(config: Dict[str, Any]) -> str:
+        """
+        pymssql/FreeTDS 字符集。国内 Sunlike 等库 varchar 多为 GBK(CP936)；
+        TDS 7.0 若不指定 charset 易出现「测试厂」类乱码。可在 config 中设 charset 覆盖。
+        """
+        raw = config.get("charset") or config.get("character_set")
+        if isinstance(raw, str) and raw.strip():
+            k = raw.strip().lower().replace("-", "")
+            if k in ("utf8", "utf"):
+                return "UTF-8"
+            if k in ("gbk", "gb2312", "cp936", "936"):
+                return "CP936"
+            return raw.strip()
+        return "CP936"
+
+    @staticmethod
     def _sqlserver_user_locked_encryption(config: Dict[str, Any]) -> bool:
         """
         用户是否锁定了加密策略（仅尝试其选择）。
@@ -1183,6 +1199,7 @@ class IntegrationConfigService:
         tds_version = config.get("tds_version")
         # SQL Server 2008 R2 等：默认 7.2；UI 的 8.0 会规范为 7.4（见 _normalize_pymssql_tds_version）
         kwargs["tds_version"] = IntegrationConfigService._normalize_pymssql_tds_version(tds_version)
+        kwargs["charset"] = IntegrationConfigService._sqlserver_resolve_charset(config)
 
         return kwargs
 
