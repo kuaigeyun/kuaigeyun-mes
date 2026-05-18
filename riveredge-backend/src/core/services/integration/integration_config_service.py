@@ -814,7 +814,9 @@ class IntegrationConfigService:
         locked_enc = IntegrationConfigService._sqlserver_user_locked_encryption(config)
 
         if locked_enc:
-            return [dict(t) for t in transports]
+            return IntegrationConfigService._sqlserver_expand_tds_fallback_attempts(
+                [dict(t) for t in transports], config
+            )
 
         # off 优先：穿透/老版本 SQL Server 在 FreeTDS 下常先于 TLS 协商成功
         enc_profiles: List[Optional[str]] = ["off", None, "request", "default", "require"]
@@ -846,7 +848,37 @@ class IntegrationConfigService:
                         extras.append(alt)
             attempts.extend(extras)
 
-        return attempts
+        return IntegrationConfigService._sqlserver_expand_tds_fallback_attempts(attempts, config)
+
+    @staticmethod
+    def _sqlserver_expand_tds_fallback_attempts(
+        attempts: List[Dict[str, Any]], config: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """加密已锁定为 off 或未指定 TDS 时，补充 7.2/7.1 等 FreeTDS 回退（缓解 Unknown error / 20002）。"""
+        if config.get("tds_version"):
+            return attempts
+        logical = IntegrationConfigService._sqlserver_pyodbc_logical_encrypt_modes(config)
+        if logical != ["no"]:
+            return attempts
+        out = list(attempts)
+        seen = {repr(sorted(kw.items())) for kw in out}
+        for kw in attempts:
+            cur = kw.get("tds_version", "7.4")
+            for alt in ("7.2", "7.1", "7.0"):
+                if alt == cur:
+                    continue
+                alt_kw = dict(kw)
+                alt_kw["tds_version"] = alt
+                sig = repr(sorted(alt_kw.items()))
+                if sig not in seen:
+                    seen.add(sig)
+                    out.append(alt_kw)
+        return out
+
+    @staticmethod
+    def _sqlserver_prefers_plaintext_tds(config: Dict[str, Any]) -> bool:
+        """穿透 / 老版本 SQL Server：用户已选关闭加密时，优先走 pymssql/FreeTDS 而非 ODBC/TLS。"""
+        return IntegrationConfigService._sqlserver_pyodbc_logical_encrypt_modes(config) == ["no"]
 
     @staticmethod
     def _sqlserver_ping_sync(attempts: List[Dict[str, Any]]) -> None:
@@ -896,6 +928,13 @@ class IntegrationConfigService:
                 "Driver 17 仅支持 Encrypt=yes/no，勿在连接串中使用 optional；"
                 "⑤主机须与 Navicat 一致写成「域名,穿透端口」（如 vicp.fun,30198），勿只填域名却用默认 1433。"
             )
+        low = text.lower()
+        if "ssl provider" in low or "unsupported protocol" in low:
+            msg += (
+                " ⑥ ODBC 在 Linux/OpenSSL 3 上若 SQL Server 开启「强制加密」或仅支持旧版 TLS，"
+                "即使配置 Encrypt=no 也可能报 SSL unsupported protocol；可在服务器启用 TLS 1.2、"
+                "关闭强制加密，或升级 msodbcsql17 至 17.9+；穿透/老库建议加密选「关闭」并优先 pymssql（TDS 7.2）。"
+            )
         return msg
 
     @staticmethod
@@ -942,6 +981,49 @@ class IntegrationConfigService:
         if "\\" in host:
             return f"{host},{port_int}"
         return f"tcp:{host},{port_int}"
+
+    @staticmethod
+    def _sqlserver_odbc_server_candidates(host: str, port_int: int) -> List[str]:
+        """ODBC SERVER= 多种写法（NAT/穿透下 tcp: 与纯 host,port 表现可能不同）。"""
+        if "\\" in host:
+            return [f"{host},{port_int}"]
+        clauses: List[str] = []
+        for clause in (f"tcp:{host},{port_int}", f"{host},{port_int}"):
+            if clause not in clauses:
+                clauses.append(clause)
+        return clauses
+
+    @staticmethod
+    def _sqlserver_pyodbc_trust_cert_fragments(encrypt_literal: str) -> List[str]:
+        """Encrypt=no 时 TrustServerCertificate 对结果影响小，仍尝试多种组合以兼容不同驱动/服务端。"""
+        if encrypt_literal == "no":
+            return ["TrustServerCertificate=no;", "TrustServerCertificate=yes;", ""]
+        return ["TrustServerCertificate=yes;"]
+
+    @staticmethod
+    def _sqlserver_pyodbc_connection_string(
+        driver: str,
+        server_clause: str,
+        database: str,
+        user: str,
+        password: str,
+        encrypt_literal: str,
+        trust_cert_fragment: str,
+        login_timeout: int,
+        app_name: str,
+    ) -> str:
+        return (
+            f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
+            f"SERVER={IntegrationConfigService._odbc_brace_segment(server_clause)};"
+            f"DATABASE={IntegrationConfigService._odbc_brace_segment(database)};"
+            f"UID={IntegrationConfigService._odbc_brace_segment(user)};"
+            f"PWD={IntegrationConfigService._odbc_brace_segment(password)};"
+            f"Encrypt={encrypt_literal};"
+            f"{trust_cert_fragment}"
+            "MARS_Connection=no;"
+            f"LoginTimeout={login_timeout};"
+            f"APP={app_name};"
+        )
 
     @staticmethod
     def _sqlserver_pyodbc_driver_major_version(driver_name: str) -> Optional[int]:
@@ -1050,43 +1132,51 @@ class IntegrationConfigService:
         if password is None:
             password = ""
         login_timeout = int(config.get("login_timeout", 15))
-        server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
+        pwd_str = str(password)
+        server_clauses = IntegrationConfigService._sqlserver_odbc_server_candidates(host, port_int)
 
         last_err: Optional[BaseException] = None
+        last_no_encrypt_err: Optional[BaseException] = None
         for driver in drivers:
             encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(
                 config, driver
             )
-            for enc in encrypt_sequence:
-                conn_str = (
-                    f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
-                    f"SERVER={IntegrationConfigService._odbc_brace_segment(server_clause)};"
-                    f"DATABASE={IntegrationConfigService._odbc_brace_segment(database)};"
-                    f"UID={IntegrationConfigService._odbc_brace_segment(user)};"
-                    f"PWD={IntegrationConfigService._odbc_brace_segment(str(password))};"
-                    f"Encrypt={enc};"
-                    "TrustServerCertificate=yes;"
-                    "MARS_Connection=no;"
-                    f"LoginTimeout={login_timeout};"
-                    "APP=RiverEdge-integration-test;"
-                )
-                try:
-                    conn = pyodbc.connect(conn_str)
-                    try:
-                        cur = conn.cursor()
-                        cur.execute("SELECT 1 AS n")
-                        row = cur.fetchone()
-                        if row is None or int(row[0]) != 1:
-                            raise RuntimeError("SQL Server ODBC 探测查询无有效结果")
-                    finally:
-                        conn.close()
-                    return {"success": True, "driver": driver, "encrypt": enc}
-                except Exception as e:
-                    last_err = e
+            for server_clause in server_clauses:
+                for enc in encrypt_sequence:
+                    for trust_frag in IntegrationConfigService._sqlserver_pyodbc_trust_cert_fragments(
+                        enc
+                    ):
+                        conn_str = IntegrationConfigService._sqlserver_pyodbc_connection_string(
+                            driver,
+                            server_clause,
+                            database,
+                            user,
+                            pwd_str,
+                            enc,
+                            trust_frag,
+                            login_timeout,
+                            "RiverEdge-integration-test",
+                        )
+                        try:
+                            conn = pyodbc.connect(conn_str)
+                            try:
+                                cur = conn.cursor()
+                                cur.execute("SELECT 1 AS n")
+                                row = cur.fetchone()
+                                if row is None or int(row[0]) != 1:
+                                    raise RuntimeError("SQL Server ODBC 探测查询无有效结果")
+                            finally:
+                                conn.close()
+                            return {"success": True, "driver": driver, "encrypt": enc}
+                        except Exception as e:
+                            last_err = e
+                            if enc == "no":
+                                last_no_encrypt_err = e
 
+        report_err = last_no_encrypt_err or last_err
         err_text = (
-            IntegrationConfigService._sqlserver_exception_repr(last_err)
-            if last_err is not None
+            IntegrationConfigService._sqlserver_exception_repr(report_err)
+            if report_err is not None
             else "unknown"
         )
         return {"success": False, "error": err_text}
@@ -1147,47 +1237,60 @@ class IntegrationConfigService:
         if password is None:
             password = ""
         login_timeout = int(config.get("login_timeout", 15))
-        server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
+        pwd_str = str(password)
+        server_clauses = IntegrationConfigService._sqlserver_odbc_server_candidates(host, port_int)
         last_err: Optional[BaseException] = None
+        last_no_encrypt_err: Optional[BaseException] = None
         for driver in drivers:
             encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(
                 config, driver
             )
-            for enc in encrypt_sequence:
-                conn_str = (
-                    f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
-                    f"SERVER={IntegrationConfigService._odbc_brace_segment(server_clause)};"
-                    f"DATABASE={IntegrationConfigService._odbc_brace_segment(database)};"
-                    f"UID={IntegrationConfigService._odbc_brace_segment(user)};"
-                    f"PWD={IntegrationConfigService._odbc_brace_segment(str(password))};"
-                    f"Encrypt={enc};"
-                    "TrustServerCertificate=yes;"
-                    "MARS_Connection=no;"
-                    f"LoginTimeout={login_timeout};"
-                    "APP=RiverEdge-dataset-sql;"
-                )
-                try:
-                    conn = pyodbc.connect(conn_str)
-                    try:
-                        cur = conn.cursor()
-                        if tup:
-                            cur.execute(sql_odbc, tup)
-                        else:
-                            cur.execute(sql_odbc)
-                        rows = cur.fetchall()
-                        cols = [c[0] for c in (cur.description or [])]
-                        if not rows:
-                            return {"success": True, "data": [], "columns": cols, "total": 0}
-                        data = [dict(zip(cols, row)) for row in rows]
-                        return {"success": True, "data": data, "columns": cols, "total": len(data)}
-                    finally:
-                        conn.close()
-                except Exception as e:
-                    last_err = e
+            for server_clause in server_clauses:
+                for enc in encrypt_sequence:
+                    for trust_frag in IntegrationConfigService._sqlserver_pyodbc_trust_cert_fragments(
+                        enc
+                    ):
+                        conn_str = IntegrationConfigService._sqlserver_pyodbc_connection_string(
+                            driver,
+                            server_clause,
+                            database,
+                            user,
+                            pwd_str,
+                            enc,
+                            trust_frag,
+                            login_timeout,
+                            "RiverEdge-dataset-sql",
+                        )
+                        try:
+                            conn = pyodbc.connect(conn_str)
+                            try:
+                                cur = conn.cursor()
+                                if tup:
+                                    cur.execute(sql_odbc, tup)
+                                else:
+                                    cur.execute(sql_odbc)
+                                rows = cur.fetchall()
+                                cols = [c[0] for c in (cur.description or [])]
+                                if not rows:
+                                    return {"success": True, "data": [], "columns": cols, "total": 0}
+                                data = [dict(zip(cols, row)) for row in rows]
+                                return {
+                                    "success": True,
+                                    "data": data,
+                                    "columns": cols,
+                                    "total": len(data),
+                                }
+                            finally:
+                                conn.close()
+                        except Exception as e:
+                            last_err = e
+                            if enc == "no":
+                                last_no_encrypt_err = e
 
+        report_err = last_no_encrypt_err or last_err
         err_text = (
-            IntegrationConfigService._sqlserver_exception_repr(last_err)
-            if last_err is not None
+            IntegrationConfigService._sqlserver_exception_repr(report_err)
+            if report_err is not None
             else "unknown"
         )
         return {"success": False, "error": err_text, "skipped": False}
@@ -1311,11 +1414,52 @@ class IntegrationConfigService:
         except ValueError as e:
             return {"success": False, "message": str(e)}
 
-        if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
-            odbc_res = await asyncio.to_thread(
+        prefer_pymssql = IntegrationConfigService._sqlserver_prefers_plaintext_tds(config)
+
+        async def _try_pymssql() -> Optional[Dict[str, Any]]:
+            try:
+                await asyncio.to_thread(
+                    IntegrationConfigService._sqlserver_ping_sync,
+                    attempts,
+                )
+                return {"success": True, "message": "SQL Server 连接成功（pymssql）"}
+            except Exception as e:
+                return {"success": False, "message": IntegrationConfigService._format_sqlserver_error(e)}
+
+        async def _try_odbc() -> Dict[str, Any]:
+            return await asyncio.to_thread(
                 IntegrationConfigService._sqlserver_pyodbc_try_sync,
                 config,
             )
+
+        if prefer_pymssql:
+            pymssql_res = await _try_pymssql()
+            if pymssql_res.get("success"):
+                return pymssql_res
+            if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+                odbc_res = await _try_odbc()
+                if odbc_res.get("success"):
+                    drv = odbc_res.get("driver", "ODBC")
+                    enc = odbc_res.get("encrypt", "")
+                    detail = f"{drv}" + (f"，Encrypt={enc}" if enc else "")
+                    return {
+                        "success": True,
+                        "message": (
+                            f"SQL Server 连接成功（ODBC / {detail}；pymssql 未成功已回退）"
+                        ),
+                    }
+                if not odbc_res.get("skipped"):
+                    odbc_err = (odbc_res.get("error") or "").strip()
+                    return {
+                        "success": False,
+                        "message": (
+                            f"{pymssql_res.get('message', '')} ODBC：{odbc_err}"
+                        ),
+                    }
+            return pymssql_res
+
+        if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+            odbc_res = await _try_odbc()
             if odbc_res.get("success"):
                 drv = odbc_res.get("driver", "ODBC")
                 enc = odbc_res.get("encrypt", "")
@@ -1326,23 +1470,17 @@ class IntegrationConfigService:
                 }
             if not odbc_res.get("skipped"):
                 odbc_err = (odbc_res.get("error") or "").strip()
-                pymssql_note = ""
-                try:
-                    await asyncio.to_thread(
-                        IntegrationConfigService._sqlserver_ping_sync,
-                        attempts,
-                    )
+                pymssql_res = await _try_pymssql()
+                if pymssql_res.get("success"):
                     return {
                         "success": True,
                         "message": "SQL Server 连接成功（pymssql；ODBC 曾失败已自动回退）",
                     }
-                except Exception as e:
-                    pymssql_note = IntegrationConfigService._format_sqlserver_error(e)
                 return {
                     "success": False,
                     "message": (
                         f"ODBC 连接失败：{odbc_err}。"
-                        + (f" pymssql：{pymssql_note}" if pymssql_note else "")
+                        + (f" pymssql：{pymssql_res.get('message', '')}" if pymssql_res else "")
                     ),
                 }
 

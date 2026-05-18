@@ -596,7 +596,11 @@ class DatasetService:
         from core.services.integration.integration_config_service import IntegrationConfigService
 
         tup = tuple(args) if args else tuple()
-        if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+        prefer_pymssql = IntegrationConfigService._sqlserver_prefers_plaintext_tds(config)
+        if (
+            not prefer_pymssql
+            and IntegrationConfigService._sqlserver_pyodbc_runtime_ready()
+        ):
             odbc_first = IntegrationConfigService._sqlserver_pyodbc_execute_query_sync(config, sql, tup)
             if odbc_first.get("success"):
                 return {
@@ -631,6 +635,14 @@ class DatasetService:
                 last_exc = e
 
         pymssql_err = str(last_exc) if last_exc else "SQL Server pymssql 连接或查询失败"
+        if not IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
+            return {
+                "success": False,
+                "data": [],
+                "columns": [],
+                "total": 0,
+                "error": pymssql_err,
+            }
         odbc_res = IntegrationConfigService._sqlserver_pyodbc_execute_query_sync(config, sql, tup)
         if odbc_res.get("success"):
             return {
