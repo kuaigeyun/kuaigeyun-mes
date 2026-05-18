@@ -11,6 +11,8 @@ import {
   ProColumns,
   ProDescriptionsItemProps,
   ProFormInstance,
+  ProFormDependency,
+  ProFormDigit,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
@@ -35,6 +37,16 @@ import {
   type InspectionParamRow,
 } from '../../../services/haoligo';
 import { batchImport } from '../../../../../utils/batchOperations';
+
+type ValueTypeKey = 'numeric' | 'text' | 'boolean';
+
+function normalizeValueType(raw?: string | null): ValueTypeKey {
+  const v = (raw ?? 'numeric').trim().toLowerCase();
+  if (v === 'text' || v === '文本') return 'text';
+  if (v === 'boolean' || v === 'bool' || v === '是否') return 'boolean';
+  if (v === 'numeric' || v === 'number' || v === '数值') return 'numeric';
+  return 'numeric';
+}
 
 const InspectionParamsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -68,6 +80,26 @@ const InspectionParamsPage: React.FC = () => {
     [t],
   );
 
+  const valueTypeValueEnum = useMemo(
+    () => ({
+      numeric: { text: t('app.haoligo.equipment.inspectionParams.valueTypeNumeric') },
+      text: { text: t('app.haoligo.equipment.inspectionParams.valueTypeText') },
+      boolean: { text: t('app.haoligo.equipment.inspectionParams.valueTypeBoolean') },
+    }),
+    [t],
+  );
+
+  const textDefaultOptions = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.inspectionParams.textDefaultPass'), value: '通过' },
+      { label: t('app.haoligo.equipment.inspectionParams.textDefaultFail'), value: '不通过' },
+      { label: t('app.haoligo.equipment.inspectionParams.textDefaultQualified'), value: '合格' },
+      { label: t('app.haoligo.equipment.inspectionParams.textDefaultUnqualified'), value: '不合格' },
+      { label: t('app.haoligo.equipment.inspectionParams.textDefaultNormal'), value: '正常' },
+    ],
+    [t],
+  );
+
   const handleCreate = () => {
     setIsEdit(false);
     setEditId(null);
@@ -89,7 +121,8 @@ const InspectionParamsPage: React.FC = () => {
       code: record.code,
       name: record.name,
       unit: record.unit ?? '',
-      value_type: record.value_type || 'numeric',
+      value_type: normalizeValueType(record.value_type),
+      default_value: record.default_value ?? undefined,
     });
     setModalVisible(true);
   };
@@ -111,11 +144,18 @@ const InspectionParamsPage: React.FC = () => {
     });
   };
 
+  const normalizeDefaultValue = (values: Record<string, unknown>): string | null => {
+    const raw = values.default_value;
+    if (raw == null || raw === '') return null;
+    return String(raw).trim() || null;
+  };
+
   const buildPayload = (values: Record<string, unknown>): InspectionParamCreatePayload => ({
     code: String(values.code ?? '').trim(),
     name: String(values.name ?? '').trim(),
     unit: String(values.unit ?? '').trim() || null,
-    value_type: String(values.value_type ?? 'numeric'),
+    value_type: normalizeValueType(String(values.value_type ?? 'numeric')),
+    default_value: normalizeDefaultValue(values),
   });
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -125,7 +165,8 @@ const InspectionParamsPage: React.FC = () => {
         await updateInspectionParam(editId, {
           name: String(values.name ?? '').trim(),
           unit: String(values.unit ?? '').trim() || null,
-          value_type: String(values.value_type ?? 'numeric'),
+          value_type: normalizeValueType(String(values.value_type ?? 'numeric')),
+          default_value: normalizeDefaultValue(values),
         });
         messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
@@ -150,7 +191,20 @@ const InspectionParamsPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.inspectionParams.colValueType'),
         dataIndex: 'value_type',
-        render: (_, r) => valueTypeLabel[r.value_type] || r.value_type,
+        render: (_, r) => valueTypeLabel[normalizeValueType(r.value_type)] || r.value_type,
+      },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colDefaultValue'),
+        dataIndex: 'default_value',
+        render: (_, r) => {
+          if (r.default_value == null || r.default_value === '') return '—';
+          if (normalizeValueType(r.value_type) === 'boolean') {
+            return r.default_value === 'true'
+              ? t('app.haoligo.equipment.inspectionParams.defaultBoolYes')
+              : t('app.haoligo.equipment.inspectionParams.defaultBoolNo');
+          }
+          return r.default_value;
+        },
       },
     ],
     [t, valueTypeLabel],
@@ -165,8 +219,25 @@ const InspectionParamsPage: React.FC = () => {
         title: t('app.haoligo.equipment.inspectionParams.colValueType'),
         dataIndex: 'value_type',
         width: 100,
+        valueType: 'select',
+        valueEnum: valueTypeValueEnum,
+        render: (_, r) => <Tag>{valueTypeLabel[normalizeValueType(r.value_type)] || r.value_type}</Tag>,
+      },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colDefaultValue'),
+        dataIndex: 'default_value',
+        width: 120,
+        ellipsis: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{valueTypeLabel[r.value_type] || r.value_type}</Tag>,
+        render: (_, r) => {
+          if (r.default_value == null || r.default_value === '') return '—';
+          if (normalizeValueType(r.value_type) === 'boolean') {
+            return r.default_value === 'true'
+              ? t('app.haoligo.equipment.inspectionParams.defaultBoolYes')
+              : t('app.haoligo.equipment.inspectionParams.defaultBoolNo');
+          }
+          return r.default_value;
+        },
       },
       {
         title: t('app.haoligo.equipment.ledger.colActions'),
@@ -188,7 +259,7 @@ const InspectionParamsPage: React.FC = () => {
         ),
       },
     ],
-    [t, valueTypeLabel],
+    [t, valueTypeLabel, valueTypeValueEnum],
   );
 
   return (
@@ -210,6 +281,7 @@ const InspectionParamsPage: React.FC = () => {
             t('app.haoligo.equipment.inspectionParams.importColName'),
             t('app.haoligo.equipment.inspectionParams.importColUnit'),
             t('app.haoligo.equipment.inspectionParams.importColValueType'),
+            t('app.haoligo.equipment.inspectionParams.importColDefaultValue'),
           ]}
           onImport={async (data) => {
             if (!data || data.length < 2) {
@@ -230,6 +302,7 @@ const InspectionParamsPage: React.FC = () => {
             const nameIdx = getIdx('参数名称', '名称', 'name');
             const unitIdx = getIdx('单位', 'unit');
             const vtIdx = getIdx('取值类型', '类型', 'value_type');
+            const dvIdx = getIdx('默认值', 'default');
             if (codeIdx < 0 || nameIdx < 0) {
               messageApi.error(t('app.haoligo.equipment.inspectionParams.importErrorHeaders'));
               return;
@@ -246,11 +319,19 @@ const InspectionParamsPage: React.FC = () => {
               if (rawVt.includes('文本') || rawVt === 'text') value_type = 'text';
               else if (rawVt.includes('是否') || rawVt === 'bool' || rawVt === 'boolean') value_type = 'boolean';
               else if (rawVt.includes('数值') || rawVt === 'numeric' || rawVt === 'number') value_type = 'numeric';
+              const defaultRaw = dvIdx >= 0 ? String(row[dvIdx] ?? '').trim() : '';
+              let default_value: string | null = defaultRaw || null;
+              if (default_value && value_type === 'boolean') {
+                const dl = default_value.toLowerCase();
+                if (dl.includes('是') || dl === 'true' || dl === '1' || dl === 'yes') default_value = 'true';
+                else if (dl.includes('否') || dl === 'false' || dl === '0' || dl === 'no') default_value = 'false';
+              }
               items.push({
                 code,
                 name,
                 unit: unitIdx >= 0 ? String(row[unitIdx] ?? '').trim() || null : null,
                 value_type,
+                default_value,
               });
             }
             if (items.length === 0) {
@@ -283,9 +364,11 @@ const InspectionParamsPage: React.FC = () => {
               const all = await listInspectionParams();
               const codeQ = String(searchFormValues?.code ?? '').trim().toLowerCase();
               const nameQ = String(searchFormValues?.name ?? '').trim().toLowerCase();
+              const vtQ = searchFormValues?.value_type as ValueTypeKey | undefined;
               let rows = all;
               if (codeQ) rows = rows.filter((r) => r.code.toLowerCase().includes(codeQ));
               if (nameQ) rows = rows.filter((r) => r.name.toLowerCase().includes(nameQ));
+              if (vtQ) rows = rows.filter((r) => normalizeValueType(r.value_type) === vtQ);
               const start = (current - 1) * pageSize;
               return {
                 data: rows.slice(start, start + pageSize),
@@ -297,11 +380,12 @@ const InspectionParamsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1020 }}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
+        key={modalVisible ? (isEdit ? `edit-${editId}` : 'create') : 'closed'}
         title={isEdit ? t('app.haoligo.equipment.inspectionParams.modalEdit') : t('app.haoligo.equipment.inspectionParams.modalCreate')}
         open={modalVisible}
         onClose={() => {
@@ -315,6 +399,11 @@ const InspectionParamsPage: React.FC = () => {
         initialValues={formInitialValues}
         loading={formLoading}
         grid={false}
+        onValuesChange={(changed) => {
+          if ('value_type' in changed) {
+            formRef.current?.setFieldValue('default_value', undefined);
+          }
+        }}
       >
         <ProFormText
           name="code"
@@ -333,9 +422,63 @@ const InspectionParamsPage: React.FC = () => {
         <ProFormSelect
           name="value_type"
           label={t('app.haoligo.equipment.inspectionParams.formValueType')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formValueTypePh')}
           options={valueTypes}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formValueTypeReq') }]}
+          fieldProps={{
+            optionFilterProp: 'label',
+            style: { width: '100%' },
+            listHeight: 256,
+          }}
         />
+        <ProFormDependency name={['value_type']}>
+          {({ value_type }) => {
+            const vt = normalizeValueType(String(value_type ?? 'numeric'));
+            if (vt === 'boolean') {
+              return (
+                <ProFormSelect
+                  name="default_value"
+                  label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
+                  placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValuePh')}
+                  allowClear
+                  options={[
+                    { label: t('app.haoligo.equipment.inspectionParams.defaultBoolYes'), value: 'true' },
+                    { label: t('app.haoligo.equipment.inspectionParams.defaultBoolNo'), value: 'false' },
+                  ]}
+                />
+              );
+            }
+            if (vt === 'numeric') {
+              return (
+                <ProFormDigit
+                  name="default_value"
+                  label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
+                  placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueNumericPh')}
+                  fieldProps={{ stringMode: true, style: { width: '100%' } }}
+                />
+              );
+            }
+            const currentDefault = formRef.current?.getFieldValue('default_value');
+            const dv = currentDefault != null && currentDefault !== '' ? String(currentDefault) : '';
+            const options =
+              dv && !textDefaultOptions.some((o) => o.value === dv)
+                ? [...textDefaultOptions, { label: dv, value: dv }]
+                : textDefaultOptions;
+            return (
+              <ProFormSelect
+                name="default_value"
+                label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
+                placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueTextPh')}
+                allowClear
+                options={options}
+                fieldProps={{
+                  optionFilterProp: 'label',
+                  style: { width: '100%' },
+                }}
+              />
+            );
+          }}
+        </ProFormDependency>
       </FormModalTemplate>
 
       <DetailDrawerTemplate

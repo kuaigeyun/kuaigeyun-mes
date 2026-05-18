@@ -52,6 +52,8 @@ export function resolveButtonTone(text: string): ResolvedRowActionTone {
 
 export function isAuditSemanticAction(text: string): boolean {
   const normalized = text.replace(/\s+/g, '')
+  // 撤回/撤销审核不属于「发起审核」语义，不应被站点审核开关隐藏
+  if (/撤回|撤销/.test(normalized)) return false
   return (
     normalized === '确认' ||
     normalized.includes('审核') ||

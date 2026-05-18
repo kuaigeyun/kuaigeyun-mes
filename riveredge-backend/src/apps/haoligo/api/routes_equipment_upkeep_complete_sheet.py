@@ -79,7 +79,7 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     equipment_id: Optional[int] = None
     equipment_asset_code: Optional[str] = None
     equipment_name: Optional[str] = None
-    source_description: Optional[str] = Field(None, description="来源保养单说明（只读对比）")
+    source_description: Optional[str] = Field(None, description="来源保养单保养要求（只读对比）")
     completion_content: str
     reporter_user_id: int
     created_at: datetime

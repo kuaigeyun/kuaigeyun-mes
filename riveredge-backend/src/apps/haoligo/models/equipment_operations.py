@@ -33,9 +33,11 @@ class HaoligoEquipmentSpotCheck(HaoligoTenantModel):
     )
     reporter_user_id = fields.IntField(description="填报人用户 ID")
     abnormal_description = fields.TextField(null=True, description="异常描述")
-    handling_shutdown = fields.BooleanField(default=False, description="停机")
-    handling_report = fields.BooleanField(default=False, description="上报")
-    handling_supervised = fields.BooleanField(default=False, description="临时监护运行")
+    applied_operational_status = fields.CharField(
+        max_length=32, null=True, description="本单调整后的设备运行状态（数据字典 value）"
+    )
+    report_enabled = fields.BooleanField(default=False, description="是否上报")
+    report_notify_user_ids = fields.JSONField(default=list, description="上报通知接收人用户 ID 列表")
     inspection_param_set = fields.ForeignKeyField(
         "models.HaoligoInspectionParamSet",
         related_name="spot_checks_used",
@@ -97,8 +99,8 @@ class HaoligoEquipmentRoutePatrol(HaoligoTenantModel):
         description="巡检路线",
     )
     reporter_user_id = fields.IntField(description="填报人用户 ID")
-    report_required = fields.BooleanField(default=False, description="是否上报")
-    report_to_user_id = fields.IntField(null=True, description="上报接收人用户 ID")
+    report_enabled = fields.BooleanField(default=False, description="是否上报")
+    report_notify_user_ids = fields.JSONField(default=list, description="上报通知接收人用户 ID 列表")
 
 
 class HaoligoEquipmentRoutePatrolLine(HaoligoTenantModel):
@@ -126,6 +128,10 @@ class HaoligoEquipmentRoutePatrolLine(HaoligoTenantModel):
     sequence = fields.IntField(default=0, description="顺序号")
     is_normal = fields.BooleanField(default=True, description="是否正常")
     abnormal_description = fields.TextField(null=True, description="异常描述")
+    applied_operational_status = fields.CharField(
+        max_length=32, null=True, description="本行调整后的设备运行状态（数据字典 value）"
+    )
+    attachment_file_ids = fields.JSONField(null=True, description="巡检设备现场照片 core 文件 id 列表")
 
 
 class HaoligoEquipmentMaintenanceReport(HaoligoTenantModel):

@@ -169,6 +169,45 @@ class MessageConfigService:
         message_config.deleted_at = datetime.now()
         await message_config.save()
     
+    INTERNAL_DEFAULT_CONFIG_CODE = "default_internal"
+
+    @staticmethod
+    async def ensure_default_internal_config(tenant_id: int) -> MessageConfig:
+        """确保租户存在站内信默认配置（无 SMTP 等参数，仅用于落库与收件箱）。"""
+        existing = await MessageConfigService.get_default_config(tenant_id, "internal")
+        if existing:
+            return existing
+        try:
+            return await MessageConfigService.create_message_config(
+                tenant_id,
+                MessageConfigCreate(
+                    name="站内信（系统默认）",
+                    code=MessageConfigService.INTERNAL_DEFAULT_CONFIG_CODE,
+                    type="internal",
+                    description="系统自动创建，用于站内信投递",
+                    config={},
+                    is_active=True,
+                    is_default=True,
+                ),
+            )
+        except ValidationError:
+            # 并发创建时可能已存在同 code，再取默认
+            row = await MessageConfig.filter(
+                tenant_id=tenant_id,
+                code=MessageConfigService.INTERNAL_DEFAULT_CONFIG_CODE,
+                deleted_at__isnull=True,
+            ).first()
+            if row:
+                if not row.is_default:
+                    row.is_default = True
+                    row.is_active = True
+                    await row.save()
+                return row
+            fallback = await MessageConfigService.get_default_config(tenant_id, "internal")
+            if fallback:
+                return fallback
+            raise
+
     @staticmethod
     async def get_default_config(
         tenant_id: int,

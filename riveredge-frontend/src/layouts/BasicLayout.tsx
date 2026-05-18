@@ -493,7 +493,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
       '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 智能建议
-      '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台
+      '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台（仪表板分组下）
       '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
       '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
       '/apps/haoligo/patrol': ManufacturingIcons.clipboardCheck, // 好力 GO 现场巡查（点检/记录）
@@ -4445,7 +4445,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     title={t('ui.sidebar.systemSettings')}
                     aria-expanded={!!systemSettingsPanelMounted && !systemSettingsPanelExiting}
                     aria-label={t('ui.sidebar.systemSettings')}
-                  />
+                  >
+                    {!collapsed ? '系统配置' : null}
+                  </Button>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Button
@@ -4835,6 +4837,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                           marginBottom: 4,
                                           fontSize: 12,
                                           color: token.colorTextSecondary,
+                                          whiteSpace: 'pre-wrap',
                                         }}
                                       >
                                         {item.content}

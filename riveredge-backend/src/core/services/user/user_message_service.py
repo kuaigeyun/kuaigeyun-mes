@@ -78,7 +78,7 @@ class UserMessageService:
         
         # 使用 OR 条件查询
         # Tortoise ORM 的 Q 对象支持使用 __in 操作符进行多值匹配
-        query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions)
+        query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions, deleted_at__isnull=True)
         
         # 状态过滤
         if status:
@@ -143,7 +143,8 @@ class UserMessageService:
         message = await MessageLog.filter(
             uuid=message_uuid,
             tenant_id=tenant_id,
-            recipient__in=recipient_conditions
+            recipient__in=recipient_conditions,
+            deleted_at__isnull=True,
         ).first()
         
         if not message:
@@ -183,7 +184,8 @@ class UserMessageService:
             tenant_id=tenant_id,
             recipient__in=recipient_conditions,
             uuid__in=message_uuids,
-            status__in=["pending", "sending", "success"]  # 只标记未读消息
+            status__in=["pending", "sending", "success"],  # 只标记未读消息
+            deleted_at__isnull=True,
         )
         
         # 更新消息状态为已读
@@ -225,7 +227,7 @@ class UserMessageService:
             recipient_conditions.append(user.email)
         
         # 构建基础查询条件
-        base_query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions)
+        base_query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions, deleted_at__isnull=True)
         
         # 统计总数
         total = await MessageLog.filter(base_query).count()

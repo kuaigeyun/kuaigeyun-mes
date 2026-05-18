@@ -16,7 +16,24 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Alert, AutoComplete, Button, Col, Form, Input, Modal, Radio, Row, Select, Space, Table, Tag, Tooltip, Upload } from 'antd';
+import {
+  App,
+  Alert,
+  AutoComplete,
+  Button,
+  Col,
+  Form,
+  Input,
+  Modal,
+  Radio,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Upload,
+} from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -260,6 +277,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       mold_code: pick(codeK),
       mold_name: pick(nameK),
       trial_result: '合格',
+      sync_mold_status: true,
       result_attachments: [],
       inspection_attachments: [],
     });
@@ -919,7 +937,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               fieldProps={{ precision: 0, style: { width: '100%' } }}
             />
           </Col>
-          <Col span={12}>
+          <Col span={6}>
             <ProFormRadio.Group
               name="trial_result"
               label="试模结果"
@@ -932,32 +950,20 @@ const MoldTrialSheetsPage: React.FC = () => {
           </Col>
           <ProFormDependency name={['trial_result']}>
             {({ trial_result }) => {
-              if (trial_result === '合格') {
-                return (
-                  <Col span={24}>
-                    <ProForm.Item name="sync_mold_status" valuePropName="checked" style={{ marginBottom: 0 }}>
-                      <Alert
-                        message="合格后关联操作"
-                        description={
-                          <Form.Item name="sync_mold_status" valuePropName="checked" noStyle>
-                            <Radio.Group
-                              optionType="button"
-                              buttonStyle="solid"
-                              options={[
-                                { label: '将模具状态更新为待用', value: true },
-                                { label: '暂不更新模具状态', value: false },
-                              ]}
-                            />
-                          </Form.Item>
-                        }
-                        type="info"
-                        showIcon
-                      />
-                    </ProForm.Item>
-                  </Col>
-                );
-              }
-              return null;
+              if (trial_result !== '合格' || isDetailView) return null;
+              return (
+                <Col span={6}>
+                  <ProFormRadio.Group
+                    name="sync_mold_status"
+                    label="模具状态"
+                    tooltip="保存成功后，按模具代号匹配台账"
+                    options={[
+                      { label: '待用', value: true },
+                      { label: '不变', value: false },
+                    ]}
+                  />
+                </Col>
+              );
             }}
           </ProFormDependency>
           <Col span={12}>

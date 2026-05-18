@@ -191,6 +191,13 @@ class MessageTemplateService:
         await message_template.save()
     
     @staticmethod
+    def _normalize_message_newlines(text: str) -> str:
+        """将模板中误存为字面量的 \\n / \\r\\n 转为真实换行。"""
+        if not text:
+            return text
+        return text.replace("\\r\\n", "\n").replace("\\n", "\n")
+
+    @staticmethod
     def render_template(
         template: MessageTemplate,
         variables: dict
@@ -205,8 +212,8 @@ class MessageTemplateService:
         Returns:
             tuple[str, str]: (subject, content) 渲染后的主题和内容
         """
-        subject = template.subject or ""
-        content = template.content or ""
+        subject = MessageTemplateService._normalize_message_newlines(template.subject or "")
+        content = MessageTemplateService._normalize_message_newlines(template.content or "")
         
         # 简单的变量替换（使用 {variable_name} 格式）
         for key, value in variables.items():

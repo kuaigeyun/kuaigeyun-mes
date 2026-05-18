@@ -7,10 +7,11 @@ import {
   ActionType,
   ProColumns,
   ProForm,
-  ProFormCheckbox,
   ProFormDateTimePicker,
+  ProFormDependency,
   ProFormInstance,
   ProFormSelect,
+  ProFormSwitch,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -53,8 +54,10 @@ import {
   type EquipmentSpotCheckRow,
 } from '../../../../services/haoligo';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
+import { getUserList } from '../../../../../../services/user';
 import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 
 function normalizeLine(ln: EquipmentSpotCheckLineRow): EquipmentSpotCheckLineRow {
   const ids = ln.attachment_file_ids;
@@ -78,7 +81,7 @@ function previewLineToDraft(pl: EquipmentSpotCheckPreviewLine): EquipmentSpotChe
     unit: pl.unit,
     is_required: pl.is_required,
     result: 'normal',
-    measured_value: null,
+    measured_value: pl.default_value ?? null,
     remark: null,
     attachment_file_ids: null,
   });
@@ -94,6 +97,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const loadLinesSeqRef = useRef(0);
+  const reportUserLabelRef = useRef<Map<number, string>>(new Map());
+  const { formatStatus, statusOptions } = useEquipmentOperationalStatusLabels();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [detailMode, setDetailMode] = useState(false);
@@ -105,6 +110,33 @@ const SpotCheckDocumentsPage: React.FC = () => {
 
   const title = t('app.haoligo.menu.equipment.documents.spot-check');
   const reload = useCallback(() => actionRef.current?.reload(), []);
+
+  const searchReportNotifyUsers = useCallback(async (keyword?: string) => {
+    const res = await getUserList({
+      page: 1,
+      page_size: 50,
+      is_active: true,
+      keyword: keyword?.trim() || undefined,
+    });
+    const opts = (res.items || []).map((u) => {
+      const label = (u.full_name || '').trim() || u.username;
+      reportUserLabelRef.current.set(u.id, label);
+      return { label, value: u.id };
+    });
+    const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
+    for (const id of selIds) {
+      if (Number.isFinite(id) && !opts.some((o) => o.value === id)) {
+        opts.unshift({ value: id, label: reportUserLabelRef.current.get(id) || `用户#${id}` });
+      }
+    }
+    return opts;
+  }, []);
+
+  const parseReportNotifyUserIds = (v: Record<string, unknown>): number[] => {
+    const raw = v.report_notify_user_ids;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((x) => Number(x)).filter((id) => Number.isFinite(id) && id > 0);
+  };
 
   const loadInspectionLines = useCallback(
     async (opts?: { equipmentId?: number; setId?: number | null }) => {
@@ -155,9 +187,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const getNewFormDefaults = useCallback(
     () => ({
       recorded_at: dayjs(),
-      handling_shutdown: false,
-      handling_report: false,
-      handling_supervised: false,
+      report_enabled: false,
+      report_notify_user_ids: [] as number[],
     }),
     [],
   );
@@ -179,14 +210,28 @@ const SpotCheckDocumentsPage: React.FC = () => {
           : null,
       );
       setModalOpen(true);
-      setTimeout(() => {
+      setTimeout(async () => {
+        const notifyIds = row.report_notify_user_ids || [];
+        if (notifyIds.length) {
+          try {
+            const res = await getUserList({ page: 1, page_size: 50, is_active: true });
+            for (const uid of notifyIds) {
+              const hit = (res.items || []).find((u) => u.id === uid);
+              if (hit) {
+                reportUserLabelRef.current.set(hit.id, (hit.full_name || '').trim() || hit.username);
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         formRef.current?.setFieldsValue({
           equipment_id: row.equipment_id,
           inspection_param_set_id: row.inspection_param_set_id ?? undefined,
           recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-          handling_shutdown: row.handling_shutdown,
-          handling_report: row.handling_report,
-          handling_supervised: row.handling_supervised,
+          applied_operational_status: row.applied_operational_status ?? undefined,
+          report_enabled: row.report_enabled,
+          report_notify_user_ids: notifyIds,
         });
       }, 0);
     } catch (e) {
@@ -261,6 +306,20 @@ const SpotCheckDocumentsPage: React.FC = () => {
             ? `${r.inspection_param_set_code || ''} ${r.inspection_param_set_name || ''}`.trim()
             : '—',
       },
+      {
+        title: t('app.haoligo.equipment.documents.colAppliedOperationalStatus'),
+        dataIndex: 'applied_operational_status',
+        width: 100,
+        hideInSearch: true,
+        render: (_, r) => formatStatus(r.applied_operational_status),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.colReportEnabled'),
+        dataIndex: 'report_enabled',
+        width: 88,
+        hideInSearch: true,
+        render: (_, r) => (r.report_enabled ? t('app.haoligo.equipment.documents.yes') : t('app.haoligo.equipment.documents.no')),
+      },
       moldDocumentCreatedAtColumn<EquipmentSpotCheckRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -296,7 +355,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
         ],
       },
     ],
-    [messageApi, modal, reload, t],
+    [formatStatus, messageApi, modal, reload, t],
   );
 
   const validateLines = (): boolean => {
@@ -340,11 +399,18 @@ const SpotCheckDocumentsPage: React.FC = () => {
     if (!validateLines()) return;
 
     const v = formRef.current?.getFieldsValue() as Record<string, unknown>;
+    const reportNotifyIds = parseReportNotifyUserIds(v);
+    if (Boolean(v.report_enabled) && !reportNotifyIds.length) {
+      messageApi.warning(t('app.haoligo.equipment.documents.selectReportToUser'));
+      return;
+    }
+    const appliedRaw = v.applied_operational_status;
     const headerPayload = {
       recorded_at: v.recorded_at ? dayjs(v.recorded_at as string).toISOString() : undefined,
-      handling_shutdown: Boolean(v.handling_shutdown),
-      handling_report: Boolean(v.handling_report),
-      handling_supervised: Boolean(v.handling_supervised),
+      applied_operational_status:
+        appliedRaw != null && appliedRaw !== '' ? String(appliedRaw) : null,
+      report_enabled: Boolean(v.report_enabled),
+      report_notify_user_ids: reportNotifyIds,
     };
 
     setFormLoading(true);
@@ -369,7 +435,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
           ...headerPayload,
         });
         const patches = buildLinePatches((created.lines || []).map(normalizeLine));
-        await updateEquipmentSpotCheck(created.id, { lines: patches });
+        await updateEquipmentSpotCheck(created.id, { ...headerPayload, lines: patches });
       }
       messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       reload();
@@ -714,7 +780,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
               </Col>
             </Row>
 
-            <div style={{ marginTop: 4 }}>
+            <div className="haoligo-spot-check-lines-panel" style={{ marginTop: 4 }}>
               <Flex justify="space-between" align="center" wrap="wrap" gap={8} style={{ marginBottom: 8 }}>
                 <Typography.Text strong>{t('app.haoligo.equipment.documents.spotCheckLinesTitle')}</Typography.Text>
                 {lines.length > 0 ? <Tag color="processing">{lines.length}</Tag> : null}
@@ -733,29 +799,61 @@ const SpotCheckDocumentsPage: React.FC = () => {
               </Spin>
             </div>
 
-            <Row gutter={[0, 8]} style={{ marginTop: 12 }}>
-              <Col span={24}>
+            <Row gutter={[16, 8]} style={{ marginTop: 12 }}>
+              <Col xs={24} md={12}>
                 <ProFormDateTimePicker
                   name="recorded_at"
                   label={t('app.haoligo.equipment.documents.formRecordedAt')}
-                  fieldProps={{ style: { width: '100%', maxWidth: 320 } }}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col xs={24} md={12}>
+                <ProFormSelect
+                  name="applied_operational_status"
+                  label={t('app.haoligo.equipment.documents.formAppliedOperationalStatus')}
+                  allowClear
+                  options={statusOptions}
+                  fieldProps={{
+                    style: { width: '100%' },
+                    placeholder: t('app.haoligo.equipment.documents.formAppliedOperationalStatusPh'),
+                  }}
                 />
               </Col>
               <Col span={24}>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  {t('app.haoligo.equipment.documents.spotCheckHandlingGroup')}
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  {t('app.haoligo.equipment.documents.spotCheckReportGroup')}
                 </Typography.Text>
-                <Space size="large" wrap>
-                  <ProFormCheckbox name="handling_shutdown" noStyle>
-                    {t('app.haoligo.equipment.documents.formShutdown')}
-                  </ProFormCheckbox>
-                  <ProFormCheckbox name="handling_report" noStyle>
-                    {t('app.haoligo.equipment.documents.formReport')}
-                  </ProFormCheckbox>
-                  <ProFormCheckbox name="handling_supervised" noStyle>
-                    {t('app.haoligo.equipment.documents.formSupervised')}
-                  </ProFormCheckbox>
-                </Space>
+                <ProFormSwitch
+                  name="report_enabled"
+                  label={t('app.haoligo.equipment.documents.formReportRequired')}
+                  fieldProps={{
+                    onChange: (checked: boolean) => {
+                      if (!checked) {
+                        formRef.current?.setFieldsValue({ report_notify_user_ids: [] });
+                      }
+                    },
+                  }}
+                />
+                <ProFormDependency name={['report_enabled']}>
+                  {({ report_enabled: reportOn }) =>
+                    reportOn ? (
+                      <ProFormSelect
+                        name="report_notify_user_ids"
+                        label={t('app.haoligo.equipment.documents.formReportNotifyUsers')}
+                        mode="multiple"
+                        showSearch
+                        debounceTime={300}
+                        rules={[{ required: true, message: t('app.haoligo.equipment.documents.selectReportToUser') }]}
+                        request={async ({ keyWords }) => searchReportNotifyUsers(keyWords)}
+                        fieldProps={{
+                          style: { width: '100%', maxWidth: 480 },
+                          placeholder: t('app.haoligo.equipment.documents.formReportNotifyUsersPh'),
+                          filterOption: false,
+                        }}
+                      />
+                    ) : null
+                  }
+                </ProFormDependency>
               </Col>
             </Row>
           </ProForm>
@@ -786,6 +884,12 @@ const SpotCheckDocumentsPage: React.FC = () => {
         .haoligo-spot-check-modal-spin,
         .haoligo-spot-check-modal-spin > .ant-spin-container {
           min-height: 0;
+        }
+        .haoligo-spot-check-lines-panel {
+          background: #fafafa;
+          border: 1px solid #f0f0f0;
+          border-radius: 8px;
+          padding: 12px 14px;
         }
         .haoligo-spot-check-line-field {
           width: 100%;

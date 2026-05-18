@@ -437,9 +437,10 @@ const InspectionParamSetsPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.documents.colActions'),
         key: 'op',
-        width: 200,
+        width: 220,
+        onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, r, index) => (
-          <Space wrap>
+          <Space size={4} style={{ flexWrap: 'nowrap' }}>
             <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => void movePersisted(index, -1)}>
               {t('app.haoligo.equipment.inspectionParamSets.moveUp')}
             </Button>
@@ -498,9 +499,10 @@ const InspectionParamSetsPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.documents.colActions'),
         key: 'op',
-        width: 200,
+        width: 220,
+        onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, r, index) => (
-          <Space wrap>
+          <Space size={4} style={{ flexWrap: 'nowrap' }}>
             <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePending(index, -1)}>
               {t('app.haoligo.equipment.inspectionParamSets.moveUp')}
             </Button>

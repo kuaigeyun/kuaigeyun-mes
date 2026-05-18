@@ -373,7 +373,7 @@ const CardView: React.FC = () => {
                                   
                                   <Paragraph
                                     ellipsis={{ rows: 2, expandable: false }}
-                                    style={{ marginBottom: 0, fontSize: 12 }}
+                                    style={{ marginBottom: 0, fontSize: 12, whiteSpace: 'pre-wrap' }}
                                   >
                                     {message.content}
                                   </Paragraph>

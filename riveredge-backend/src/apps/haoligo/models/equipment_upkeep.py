@@ -6,7 +6,7 @@ from apps.haoligo.models.base import HaoligoTenantModel
 
 
 class HaoligoEquipmentUpkeepSheet(HaoligoTenantModel):
-    """设备保养单：申请部门、保养前附件、单台设备、保养说明。"""
+    """设备保养单：申请部门、保养前附件、单台设备、保养要求。"""
 
     class Meta:
         table = "haoligo_equipment_upkeep_sheet"
@@ -28,7 +28,7 @@ class HaoligoEquipmentUpkeepSheet(HaoligoTenantModel):
         on_delete=fields.RESTRICT,
         description="设备",
     )
-    description = fields.TextField(description="保养说明/计划")
+    description = fields.TextField(null=True, description="保养要求（可选）")
     reporter_user_id = fields.IntField(description="填报人用户 ID")
 
 

@@ -76,9 +76,9 @@ const WorkspacePage: React.FC = () => {
       const [m, ws, h1, h2, h3, eqAll, moAll, hazards] = await Promise.all([
         fetchHaoligoMeta(),
         listWorkshops(),
-        listHazardReports({ status: '检查中', limit: 1 }),
-        listHazardReports({ status: '维修中', limit: 1 }),
-        listHazardReports({ status: '已完成', limit: 1 }),
+        listHazardReports({ status: '已登记', limit: 1 }),
+        listHazardReports({ status: '已治理', limit: 1 }),
+        listHazardReports({ limit: 1 }),
         fetchAll((skip, limit) => listEquipments({ skip, limit })),
         fetchAll((skip, limit) => listMolds({ skip, limit })),
         fetchAll((skip, limit) => listHazardReports({ skip, limit, created_from: fromDate, created_to: toDate })),
@@ -353,10 +353,10 @@ const WorkspacePage: React.FC = () => {
               <div style={{ flex: 1 }}>
                 <Text type="secondary" style={{ fontSize: 14 }}>隐患处置单</Text>
                 <div style={{ fontSize: 28, fontWeight: 600, color: token.colorTextHeading, lineHeight: 1.2 }}>
-                  {hazardChecking + hazardRepairing + hazardDone} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>单</span>
+                  {hazardDone} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>单</span>
                 </div>
                 <div style={{ fontSize: 12, color: token.colorTextDescription, marginTop: 4 }}>
-                  <span style={{ color: '#faad14' }}>{hazardChecking}</span> 检查 / <span style={{ color: '#1677ff' }}>{hazardRepairing}</span> 维修 / <span style={{ color: '#52c41a' }}>{hazardDone}</span> 完成
+                  <span style={{ color: '#faad14' }}>{hazardChecking}</span> 已登记 / <span style={{ color: '#52c41a' }}>{hazardRepairing}</span> 已治理
                 </div>
               </div>
             </div>

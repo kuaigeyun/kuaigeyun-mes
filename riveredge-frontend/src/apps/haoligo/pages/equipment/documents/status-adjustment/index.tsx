@@ -72,16 +72,19 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
     [],
   );
 
+  const getNewFormDefaults = useCallback(
+    () => ({
+      recorded_at: dayjs(),
+    }),
+    [],
+  );
+
   const openNew = () => {
     setDetailMode(false);
     setEditId(null);
     setCurrentEquipmentStatus(null);
     setSavedNewStatus(null);
     setModalOpen(true);
-    setTimeout(() => {
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({ recorded_at: dayjs() });
-    }, 0);
   };
 
   const openEdit = async (id: number, view: boolean) => {
@@ -193,7 +196,7 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         ? dayjs.isDayjs(values.recorded_at)
           ? values.recorded_at.toISOString()
           : String(values.recorded_at)
-        : undefined;
+        : dayjs().toISOString();
       const remark = values.remark != null ? String(values.remark).trim() || null : null;
       setFormLoading(true);
       if (editId == null) {
@@ -251,6 +254,11 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         }
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
+        afterOpenChange={(open) => {
+          if (open && editId == null && !detailMode) {
+            formRef.current?.setFieldsValue(getNewFormDefaults());
+          }
+        }}
         onOk={detailMode ? () => setModalOpen(false) : handleSubmit}
         okText={detailMode ? t('common.close') : t('common.save')}
         cancelButtonProps={{ style: detailMode ? { display: 'none' } : undefined }}
@@ -259,26 +267,34 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         width={640}
       >
         <Spin spinning={formLoading}>
-          <ProForm formRef={formRef} submitter={false} layout="vertical" disabled={detailMode}>
+          <ProForm
+            formRef={formRef}
+            submitter={false}
+            layout="vertical"
+            disabled={detailMode}
+            initialValues={editId == null && !detailMode ? getNewFormDefaults() : undefined}
+          >
             <Row gutter={16}>
               <Col span={24}>
                 <ProFormSelect
                   name="equipment_id"
                   label={t('app.haoligo.equipment.documents.colEquipment')}
                   rules={[{ required: isCreate, message: t('app.haoligo.equipment.documents.statusAdjEquipmentRequired') }]}
-                  showSearch
                   disabled={!isCreate || detailMode}
-                  request={async () => {
-                    const res = await listEquipments({ limit: 500 });
-                    return (res.items || []).map((e) => ({
-                      label: `${e.asset_code} · ${e.name}`,
-                      value: e.id,
-                    }));
-                  }}
                   fieldProps={{
+                    showSearch: true,
+                    filterOption: false,
+                    style: { width: '100%' },
                     onChange: (v: number) => {
                       if (isCreate && !detailMode) void loadEquipmentCurrentStatus(v);
                     },
+                  }}
+                  request={async ({ keyWords }) => {
+                    const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
+                    return (res.items || []).map((e) => ({
+                      label: `${e.asset_code} ${e.name}`,
+                      value: e.id,
+                    }));
                   }}
                 />
               </Col>

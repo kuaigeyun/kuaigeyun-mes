@@ -26,6 +26,7 @@ from apps.haoligo.models.equipment import (
     HaoligoInspectionParamSetItem,
     HaoligoPatrolRoute,
     HaoligoPatrolRouteStep,
+    HaoligoWorkshop,
 )
 from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentOutputDatasetBinding,
@@ -34,6 +35,18 @@ from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentRoutePatrolLine,
     HaoligoEquipmentSpotCheck,
     HaoligoEquipmentSpotCheckLine,
+)
+from apps.haoligo.services.route_patrol_side_effects import (
+    _route_patrol_report_already_sent,
+    apply_route_patrol_line_equipment_statuses,
+    send_route_patrol_report_messages,
+)
+from apps.haoligo.services.spot_check_side_effects import (
+    _spot_check_report_already_sent,
+    apply_spot_check_equipment_status,
+    normalize_report_user_ids,
+    send_spot_check_report_messages,
+    validate_report_notify_users,
 )
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
@@ -323,6 +336,7 @@ class SpotCheckPreviewLineOut(BaseModel):
     value_type: str
     unit: Optional[str] = None
     is_required: bool = True
+    default_value: Optional[str] = None
 
 
 class SpotCheckPreviewOut(BaseModel):
@@ -379,9 +393,9 @@ class SpotCheckOut(BaseModel):
     inspection_param_set_name: Optional[str] = None
     reporter_user_id: int
     abnormal_description: Optional[str] = None
-    handling_shutdown: bool = False
-    handling_report: bool = False
-    handling_supervised: bool = False
+    applied_operational_status: Optional[str] = None
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
     lines: List[SpotCheckLineOut] = Field(default_factory=list)
 
@@ -391,18 +405,67 @@ class SpotCheckCreate(BaseModel):
     inspection_param_set_id: Optional[int] = Field(None, description="指定点检方案；不传则按设备/类别默认解析")
     recorded_at: Optional[datetime] = None
     abnormal_description: Optional[str] = None
-    handling_shutdown: bool = False
-    handling_report: bool = False
-    handling_supervised: bool = False
+    applied_operational_status: Optional[str] = Field(None, description="调整后设备运行状态（数据字典 value）")
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
 
 
 class SpotCheckUpdate(BaseModel):
     recorded_at: Optional[datetime] = None
     abnormal_description: Optional[str] = None
-    handling_shutdown: Optional[bool] = None
-    handling_report: Optional[bool] = None
-    handling_supervised: Optional[bool] = None
+    applied_operational_status: Optional[str] = None
+    report_enabled: Optional[bool] = None
+    report_notify_user_ids: Optional[List[int]] = None
     lines: Optional[List[SpotCheckLinePatchItem]] = None
+
+
+async def _spot_check_report_fields(
+    tenant_id: int,
+    *,
+    report_enabled: bool,
+    report_notify_user_ids: Optional[List[int]],
+) -> tuple[bool, List[int]]:
+    user_ids = normalize_report_user_ids(report_notify_user_ids)
+    if report_enabled and not user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="开启上报时请至少选择一名接收人",
+        )
+    await validate_report_notify_users(tenant_id, user_ids)
+    return report_enabled, user_ids
+
+
+async def _run_spot_check_side_effects(
+    tenant_id: int,
+    header: HaoligoEquipmentSpotCheck,
+    equipment: HaoligoEquipment,
+    *,
+    applied_operational_status: Optional[str],
+    report_enabled: bool,
+    report_notify_user_ids: List[int],
+    actor_user_id: int,
+    send_report: bool,
+) -> None:
+    status_before = equipment.operational_status
+    status_after: Optional[str] = None
+    requested_status = (applied_operational_status or "").strip() or None
+    if requested_status:
+        status_after, status_before = await apply_spot_check_equipment_status(
+            tenant_id, equipment, requested_status, actor_user_id
+        )
+        if status_after:
+            header.applied_operational_status = status_after
+            await header.save(update_fields=["applied_operational_status"])
+    if send_report and report_enabled and report_notify_user_ids:
+        await send_spot_check_report_messages(
+            tenant_id,
+            header,
+            equipment,
+            report_notify_user_ids,
+            equipment_status_before=status_before,
+            equipment_status_after=status_after,
+            requested_equipment_status=requested_status,
+        )
 
 
 async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: bool) -> SpotCheckOut:
@@ -446,9 +509,9 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
         inspection_param_set_name=row.inspection_param_set_name,
         reporter_user_id=row.reporter_user_id,
         abnormal_description=row.abnormal_description,
-        handling_shutdown=row.handling_shutdown,
-        handling_report=row.handling_report,
-        handling_supervised=row.handling_supervised,
+        applied_operational_status=row.applied_operational_status,
+        report_enabled=row.report_enabled,
+        report_notify_user_ids=normalize_report_user_ids(row.report_notify_user_ids),
         created_at=row.created_at,
         lines=lines_out,
     )
@@ -472,15 +535,23 @@ async def preview_spot_check_lines(
     lines: List[SpotCheckPreviewLineOut] = []
     for it in items:
         p = it.param
+        vtype = (p.value_type if p else "numeric") or "numeric"
+        default_mv: Optional[str] = None
+        if p and p.default_value:
+            try:
+                default_mv = _normalize_measured_value(vtype, p.default_value)
+            except ValueError:
+                default_mv = None
         lines.append(
             SpotCheckPreviewLineOut(
                 inspection_param_id=p.id if p else None,
                 param_code=p.code if p else "",
                 param_name=p.name if p else "",
                 sort_order=it.sort_order,
-                value_type=(p.value_type if p else "numeric") or "numeric",
+                value_type=vtype,
                 unit=p.unit if p else None,
                 is_required=it.is_required,
+                default_value=default_mv,
             )
         )
     return SpotCheckPreviewOut(
@@ -555,6 +626,12 @@ async def create_spot_check(
         )
 
     rec_at = body.recorded_at or timezone.now()
+    report_enabled, report_user_ids = await _spot_check_report_fields(
+        tenant_id,
+        report_enabled=body.report_enabled,
+        report_notify_user_ids=body.report_notify_user_ids,
+    )
+    applied_status_raw = (body.applied_operational_status or "").strip() or None
     async with in_transaction():
         try:
             sheet_no = await generate_equipment_sheet_no(tenant_id, HAOLIGO_EQUIPMENT_SPOT_CHECK_NO)
@@ -570,9 +647,9 @@ async def create_spot_check(
             inspection_param_set_name=ps.name,
             reporter_user_id=user.id,
             abnormal_description=(body.abnormal_description or "").strip() or None,
-            handling_shutdown=body.handling_shutdown,
-            handling_report=body.handling_report,
-            handling_supervised=body.handling_supervised,
+            applied_operational_status=applied_status_raw,
+            report_enabled=report_enabled,
+            report_notify_user_ids=report_user_ids,
         )
         for it in items:
             p = it.param
@@ -580,6 +657,12 @@ async def create_spot_check(
             name = p.name if p else ""
             pid = p.id if p else None
             vtype = (p.value_type if p else None) or "numeric"
+            initial_mv: Optional[str] = None
+            if p and p.default_value:
+                try:
+                    initial_mv = _normalize_measured_value(vtype, p.default_value)
+                except ValueError:
+                    initial_mv = None
             await HaoligoEquipmentSpotCheckLine.create(
                 tenant_id=tenant_id,
                 header=header,
@@ -590,11 +673,21 @@ async def create_spot_check(
                 value_type=vtype,
                 unit=(p.unit if p else None) or None,
                 is_required=it.is_required,
-                measured_value=None,
+                measured_value=initial_mv,
                 result="normal",
                 remark=None,
                 attachment_file_ids=None,
             )
+        await _run_spot_check_side_effects(
+            tenant_id,
+            header,
+            eq,
+            applied_operational_status=applied_status_raw,
+            report_enabled=report_enabled,
+            report_notify_user_ids=report_user_ids,
+            actor_user_id=user.id,
+            send_report=False,
+        )
     await header.fetch_related("equipment")
     return await _serialize_spot_check(header, with_lines=True)
 
@@ -616,15 +709,51 @@ async def update_spot_check(
     row_id: int,
     body: SpotCheckUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
-    row = await tenant_alive(HaoligoEquipmentSpotCheck, tenant_id).filter(id=row_id).first()
+    row = await tenant_alive(HaoligoEquipmentSpotCheck, tenant_id).filter(id=row_id).prefetch_related("equipment").first()
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
     line_updates = data.pop("lines", None)
 
+    old_report_enabled = row.report_enabled
+    old_report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    report_enabled = row.report_enabled
+    report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    if "report_enabled" in data:
+        report_enabled = bool(data.pop("report_enabled"))
+    if "report_notify_user_ids" in data:
+        report_user_ids = normalize_report_user_ids(data.pop("report_notify_user_ids"))
+    report_enabled, report_user_ids = await _spot_check_report_fields(
+        tenant_id,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+    )
+
+    applied_status_raw: Optional[str] = None
+    if "applied_operational_status" in data:
+        raw = data.pop("applied_operational_status")
+        applied_status_raw = (raw or "").strip() or None
+
+    body_set = body.model_dump(exclude_unset=True)
+    report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
+    send_report = False
+    if report_enabled and report_user_ids:
+        if report_fields_touched and (
+            (not old_report_enabled and report_enabled)
+            or set(old_report_user_ids) != set(report_user_ids)
+        ):
+            send_report = True
+        elif line_updates is not None and report_fields_touched:
+            if not await _spot_check_report_already_sent(tenant_id, row.id):
+                send_report = True
+
     async with in_transaction():
+        row.report_enabled = report_enabled
+        row.report_notify_user_ids = report_user_ids
+        if applied_status_raw is not None:
+            row.applied_operational_status = applied_status_raw
         for k, v in data.items():
             setattr(row, k, v)
         await row.save()
@@ -664,6 +793,21 @@ async def update_spot_check(
                     ln.attachment_file_ids = patch.attachment_file_ids
                 await ln.save()
 
+        eq = row.equipment
+        if not eq:
+            eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=row.equipment_id).first()
+        if eq:
+            await _run_spot_check_side_effects(
+                tenant_id,
+                row,
+                eq,
+                applied_operational_status=applied_status_raw if applied_status_raw is not None else None,
+                report_enabled=report_enabled,
+                report_notify_user_ids=report_user_ids,
+                actor_user_id=user.id,
+                send_report=send_report,
+            )
+
     await row.fetch_related("equipment")
     return await _serialize_spot_check(row, with_lines=True)
 
@@ -691,6 +835,19 @@ async def delete_spot_check(
 # --- route patrol ---
 
 
+def _norm_attachment_file_ids(v: Optional[list]) -> Optional[list]:
+    if v is None:
+        return None
+    if not isinstance(v, list):
+        return None
+    out: List[str] = []
+    for x in v:
+        s = str(x or "").strip()
+        if s:
+            out.append(s)
+    return out if out else None
+
+
 class RoutePatrolLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -700,12 +857,23 @@ class RoutePatrolLineOut(BaseModel):
     sequence: int
     is_normal: bool
     abnormal_description: Optional[str] = None
+    applied_operational_status: Optional[str] = None
+    attachment_file_ids: Optional[list] = None
 
 
 class RoutePatrolLinePatchItem(BaseModel):
     id: int
     is_normal: bool
     abnormal_description: Optional[str] = None
+    applied_operational_status: Optional[str] = None
+    attachment_file_ids: Optional[list] = None
+
+
+class RoutePatrolPreviewLineOut(BaseModel):
+    equipment_id: int
+    asset_code: str = ""
+    equipment_name: str = ""
+    sequence: int
 
 
 class RoutePatrolOut(BaseModel):
@@ -717,9 +885,11 @@ class RoutePatrolOut(BaseModel):
     patrol_route_id: int
     patrol_route_code: str = ""
     patrol_route_name: str = ""
+    patrol_route_workshop_id: Optional[int] = None
+    patrol_route_workshop_name: Optional[str] = None
     reporter_user_id: int
-    report_required: bool = False
-    report_to_user_id: Optional[int] = None
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
     lines: List[RoutePatrolLineOut] = Field(default_factory=list)
 
@@ -727,20 +897,48 @@ class RoutePatrolOut(BaseModel):
 class RoutePatrolCreate(BaseModel):
     patrol_route_id: int = Field(..., ge=1)
     recorded_at: Optional[datetime] = None
-    report_required: bool = False
-    report_to_user_id: Optional[int] = None
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
 
 
 class RoutePatrolUpdate(BaseModel):
     recorded_at: Optional[datetime] = None
-    report_required: Optional[bool] = None
-    report_to_user_id: Optional[int] = None
+    report_enabled: Optional[bool] = None
+    report_notify_user_ids: Optional[List[int]] = None
     lines: Optional[List[RoutePatrolLinePatchItem]] = None
 
 
+async def _route_patrol_report_fields(
+    tenant_id: int,
+    *,
+    report_enabled: bool,
+    report_notify_user_ids: Optional[List[int]],
+) -> tuple[bool, List[int]]:
+    user_ids = normalize_report_user_ids(report_notify_user_ids)
+    if report_enabled and not user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="开启上报时请至少选择一名接收人",
+        )
+    await validate_report_notify_users(tenant_id, user_ids)
+    return report_enabled, user_ids
+
+
 async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_lines: bool) -> RoutePatrolOut:
-    await row.fetch_related("patrol_route")
+    await row.fetch_related("patrol_route", "patrol_route__workshop")
     pr = row.patrol_route
+    workshop_id: Optional[int] = None
+    workshop_name: Optional[str] = None
+    if pr:
+        ws = getattr(pr, "workshop", None)
+        if ws:
+            workshop_id = ws.id
+            workshop_name = f"{(ws.code or '').strip()} {(ws.name or '').strip()}".strip() or None
+        elif pr.workshop_id:
+            workshop_id = pr.workshop_id
+            ws_row = await tenant_alive(HaoligoWorkshop, row.tenant_id).filter(id=pr.workshop_id).first()
+            if ws_row:
+                workshop_name = f"{(ws_row.code or '').strip()} {(ws_row.name or '').strip()}".strip() or None
     lines_out: List[RoutePatrolLineOut] = []
     if with_lines:
         lns = (
@@ -758,6 +956,8 @@ async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_line
                 sequence=ln.sequence,
                 is_normal=ln.is_normal,
                 abnormal_description=ln.abnormal_description,
+                applied_operational_status=ln.applied_operational_status,
+                attachment_file_ids=ln.attachment_file_ids,
             )
             for ln in lns
         ]
@@ -769,12 +969,44 @@ async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_line
         patrol_route_id=row.patrol_route_id,
         patrol_route_code=pr.code if pr else "",
         patrol_route_name=pr.name if pr else "",
+        patrol_route_workshop_id=workshop_id,
+        patrol_route_workshop_name=workshop_name,
         reporter_user_id=row.reporter_user_id,
-        report_required=row.report_required,
-        report_to_user_id=row.report_to_user_id,
+        report_enabled=row.report_enabled,
+        report_notify_user_ids=normalize_report_user_ids(row.report_notify_user_ids),
         created_at=row.created_at,
         lines=lines_out,
     )
+
+
+@router.get("/route-patrols/preview-lines", response_model=List[RoutePatrolPreviewLineOut], summary="预览巡检路线展开行（不落库）")
+async def preview_route_patrol_lines(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    patrol_route_id: int = Query(..., ge=1, description="巡检路线 id"),
+):
+    route = await tenant_alive(HaoligoPatrolRoute, tenant_id).filter(id=patrol_route_id).first()
+    if not route:
+        await _not_found()
+    steps = (
+        await tenant_alive(HaoligoPatrolRouteStep, tenant_id)
+        .filter(route_id=route.id)
+        .prefetch_related("equipment")
+        .order_by("sequence", "id")
+        .all()
+    )
+    out: List[RoutePatrolPreviewLineOut] = []
+    for st in steps:
+        eq = st.equipment
+        out.append(
+            RoutePatrolPreviewLineOut(
+                equipment_id=eq.id if eq else st.equipment_id,
+                asset_code=eq.asset_code if eq else "",
+                equipment_name=eq.name if eq else "",
+                sequence=st.sequence,
+            )
+        )
+    return out
 
 
 @router.get("/route-patrols", summary="设备路线巡检单分页列表")
@@ -829,6 +1061,11 @@ async def create_route_patrol(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该巡检路线下没有设备步骤，无法生成巡检行")
 
     rec_at = body.recorded_at or timezone.now()
+    report_enabled, report_user_ids = await _route_patrol_report_fields(
+        tenant_id,
+        report_enabled=body.report_enabled,
+        report_notify_user_ids=body.report_notify_user_ids,
+    )
     async with in_transaction():
         try:
             sheet_no = await generate_equipment_sheet_no(tenant_id, HAOLIGO_EQUIPMENT_ROUTE_PATROL_NO)
@@ -840,8 +1077,8 @@ async def create_route_patrol(
             recorded_at=rec_at,
             patrol_route=route,
             reporter_user_id=user.id,
-            report_required=body.report_required,
-            report_to_user_id=body.report_to_user_id,
+            report_enabled=report_enabled,
+            report_notify_user_ids=report_user_ids,
         )
         for st in steps:
             eq = st.equipment
@@ -881,19 +1118,52 @@ async def update_route_patrol(
     row_id: int,
     body: RoutePatrolUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
-    row = await tenant_alive(HaoligoEquipmentRoutePatrol, tenant_id).filter(id=row_id).first()
+    row = await tenant_alive(HaoligoEquipmentRoutePatrol, tenant_id).filter(id=row_id).prefetch_related("patrol_route").first()
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
     line_updates = data.pop("lines", None)
 
+    old_report_enabled = row.report_enabled
+    old_report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    report_enabled = row.report_enabled
+    report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    if "report_enabled" in data:
+        report_enabled = bool(data.pop("report_enabled"))
+    if "report_notify_user_ids" in data:
+        report_user_ids = normalize_report_user_ids(data.pop("report_notify_user_ids"))
+    report_enabled, report_user_ids = await _route_patrol_report_fields(
+        tenant_id,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+    )
+
+    body_set = body.model_dump(exclude_unset=True)
+    report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
+    send_report = False
+    if report_enabled and report_user_ids:
+        if report_fields_touched and (
+            (not old_report_enabled and report_enabled)
+            or set(old_report_user_ids) != set(report_user_ids)
+        ):
+            send_report = True
+        elif line_updates is not None and report_fields_touched:
+            if not await _route_patrol_report_already_sent(tenant_id, row.id):
+                send_report = True
+
+    line_status_by_id: dict[int, Optional[str]] = {}
+    status_changes: List[tuple[str, Optional[str], Optional[str]]] = []
+
     async with in_transaction():
+        row.report_enabled = report_enabled
+        row.report_notify_user_ids = report_user_ids
         for k, v in data.items():
             setattr(row, k, v)
         await row.save()
 
+        existing: List[HaoligoEquipmentRoutePatrolLine] = []
         if line_updates is not None:
             line_ids = {x["id"] for x in line_updates}
             existing = await tenant_alive(HaoligoEquipmentRoutePatrolLine, tenant_id).filter(header_id=row.id).all()
@@ -907,10 +1177,38 @@ async def update_route_patrol(
                 ln = next((x for x in existing if x.id == lu["id"]), None)
                 if not ln:
                     continue
-                ln.is_normal = lu["is_normal"]
-                ad = lu.get("abnormal_description")
-                ln.abnormal_description = (str(ad).strip() if ad is not None else None) or None
+                patch = RoutePatrolLinePatchItem.model_validate(lu)
+                pd = patch.model_dump(exclude_unset=True)
+                ln.is_normal = patch.is_normal
+                if "abnormal_description" in pd:
+                    ad = patch.abnormal_description
+                    ln.abnormal_description = (str(ad).strip() if ad is not None else None) or None
+                if not patch.is_normal and not (ln.abnormal_description or "").strip():
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"顺序 {ln.sequence} 设备异常时请填写异常说明",
+                    )
+                if "applied_operational_status" in pd:
+                    raw_st = patch.applied_operational_status
+                    line_status_by_id[ln.id] = (raw_st or "").strip() or None
+                if "attachment_file_ids" in pd:
+                    ln.attachment_file_ids = _norm_attachment_file_ids(patch.attachment_file_ids)
                 await ln.save()
+
+            status_changes = await apply_route_patrol_line_equipment_statuses(
+                tenant_id,
+                existing,
+                line_status_by_id=line_status_by_id,
+                actor_user_id=user.id,
+            )
+
+        if send_report and report_enabled and report_user_ids:
+            await send_route_patrol_report_messages(
+                tenant_id,
+                row,
+                report_user_ids,
+                status_changes=status_changes,
+            )
 
     await row.fetch_related("patrol_route")
     return await _serialize_route_patrol(row, with_lines=True)

@@ -13,6 +13,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api.routes_equipment_documents import _normalize_measured_value
 from apps.haoligo.services.equipment_operational_status import normalize_operational_status
 from apps.master_data.models.factory import Workshop as MasterWorkshop
 from apps.haoligo.models.equipment import (
@@ -90,6 +91,7 @@ class InspectionParamOut(BaseModel):
     name: str
     unit: Optional[str] = None
     value_type: str = "numeric"
+    default_value: Optional[str] = None
 
 
 class InspectionParamCreate(BaseModel):
@@ -97,12 +99,21 @@ class InspectionParamCreate(BaseModel):
     name: str = Field(max_length=200)
     unit: Optional[str] = Field(None, max_length=32)
     value_type: str = Field(default="numeric", max_length=32)
+    default_value: Optional[str] = Field(None, description="默认值；空表示不预填")
 
 
 class InspectionParamUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     unit: Optional[str] = Field(None, max_length=32)
     value_type: Optional[str] = Field(None, max_length=32)
+    default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
+
+
+def _normalize_inspection_param_default(value_type: str, raw: Optional[str]) -> Optional[str]:
+    """规范化点检项默认值；空输入存 NULL。"""
+    if raw is None:
+        return None
+    return _normalize_measured_value(value_type or "numeric", raw)
 
 
 class InspectionParamSetOut(BaseModel):
@@ -253,6 +264,13 @@ class PatrolRouteCreate(BaseModel):
     code: str = Field(max_length=64)
     name: str = Field(max_length=200)
     workshop_id: Optional[int] = None
+
+
+class PatrolRouteCreateWithSteps(BaseModel):
+    code: str = Field(max_length=64)
+    name: str = Field(max_length=200)
+    workshop_id: Optional[int] = None
+    steps: List[PatrolStepIn] = Field(default_factory=list)
 
 
 class PatrolRouteUpdate(BaseModel):
@@ -440,12 +458,18 @@ async def create_inspection_param(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
+    vt = (body.value_type or "numeric").strip()
+    try:
+        default_value = _normalize_inspection_param_default(vt, body.default_value)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     row = await HaoligoInspectionParam.create(
         tenant_id=tenant_id,
         code=body.code.strip(),
         name=body.name.strip(),
         unit=body.unit,
-        value_type=body.value_type,
+        value_type=vt,
+        default_value=default_value,
     )
     return InspectionParamOut.model_validate(row)
 
@@ -468,6 +492,19 @@ async def update_inspection_param(
         row.unit = None if u is None else (str(u).strip() or None)
     if "value_type" in patch and patch["value_type"] is not None:
         row.value_type = str(patch["value_type"]).strip()
+    if "default_value" in patch:
+        vt = row.value_type or "numeric"
+        try:
+            row.default_value = _normalize_inspection_param_default(vt, patch["default_value"])
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    elif "value_type" in patch and row.default_value:
+        try:
+            row.default_value = _normalize_inspection_param_default(
+                row.value_type or "numeric", row.default_value
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     await row.save()
     return InspectionParamOut.model_validate(row)
 
@@ -977,6 +1014,66 @@ async def create_patrol_route(
         name=body.name.strip(),
         workshop_id=body.workshop_id,
     )
+    return PatrolRouteOut.model_validate(row)
+
+
+@router.post(
+    "/patrol-routes/with-steps",
+    response_model=PatrolRouteOut,
+    summary="创建巡检路线及步骤（事务）",
+)
+async def create_patrol_route_with_steps(
+    body: PatrolRouteCreateWithSteps,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    """先建路线头再建步骤；任一步失败则整单回滚，避免空路线。"""
+    if body.workshop_id is not None and not await tenant_alive(HaoligoWorkshop, tenant_id).filter(
+        id=body.workshop_id
+    ).exists():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
+    seen: set[int] = set()
+    deduped: list[PatrolStepIn] = []
+    for st in body.steps:
+        if st.equipment_id in seen:
+            continue
+        seen.add(st.equipment_id)
+        deduped.append(st)
+    if not deduped:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请至少添加一个巡检设备后再创建路线",
+        )
+    async with in_transaction() as conn:
+        parent = await HaoligoPatrolRoute.create(
+            tenant_id=tenant_id,
+            code=body.code.strip(),
+            name=body.name.strip(),
+            workshop_id=body.workshop_id,
+            using_db=conn,
+        )
+        for idx, st in enumerate(sorted(deduped, key=lambda x: x.sequence)):
+            if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=st.equipment_id).exists():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"设备 id={st.equipment_id} 不存在",
+                )
+            try:
+                await HaoligoPatrolRouteStep.create(
+                    tenant_id=tenant_id,
+                    route_id=parent.id,
+                    equipment_id=st.equipment_id,
+                    sequence=idx,
+                    using_db=conn,
+                )
+            except IntegrityError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="巡检路线步骤重复或非法",
+                ) from exc
+    row = await tenant_alive(HaoligoPatrolRoute, tenant_id).filter(id=parent.id).first()
+    if not row:
+        await _not_found()
     return PatrolRouteOut.model_validate(row)
 
 

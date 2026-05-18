@@ -325,21 +325,19 @@ const OutputRecordDocumentsPage: React.FC = () => {
     }
   };
 
+  const getNewFormDefaults = useCallback(
+    () => ({
+      recorded_at: dayjs(),
+      completed_qty: 0,
+    }),
+    [],
+  );
+
   const openNew = () => {
     setDetailMode(false);
     setEditId(null);
     setDatasetSnapshot(null);
     setModalOpen(true);
-    setTimeout(() => {
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
-        recorded_at: dayjs(),
-        completed_qty: 0,
-        finished_product_code: undefined,
-        finished_product_name: undefined,
-        planned_qty: undefined,
-      });
-    }, 0);
   };
 
   const openEdit = async (id: number, view: boolean) => {
@@ -495,7 +493,11 @@ const OutputRecordDocumentsPage: React.FC = () => {
       const body = {
         equipment_id: Number(v.equipment_id),
         work_order_no: String(v.work_order_no || '').trim(),
-        recorded_at: v.recorded_at ? dayjs(v.recorded_at as string).toISOString() : undefined,
+        recorded_at: v.recorded_at
+          ? dayjs.isDayjs(v.recorded_at)
+            ? (v.recorded_at as dayjs.Dayjs).toISOString()
+            : dayjs(v.recorded_at as string).toISOString()
+          : dayjs().toISOString(),
         finished_product_code: String(v.finished_product_code ?? '').trim() || undefined,
         finished_product_name: String(v.finished_product_name ?? '').trim() || undefined,
         planned_qty: v.planned_qty != null && v.planned_qty !== '' ? Number(v.planned_qty) : undefined,
@@ -675,6 +677,11 @@ const OutputRecordDocumentsPage: React.FC = () => {
         }
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
+        afterOpenChange={(open) => {
+          if (open && editId == null && !detailMode) {
+            formRef.current?.setFieldsValue(getNewFormDefaults());
+          }
+        }}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         destroyOnClose
         footer={
@@ -690,7 +697,13 @@ const OutputRecordDocumentsPage: React.FC = () => {
           )
         }
       >
-        <ProForm formRef={formRef} submitter={false} layout="vertical" disabled={detailMode}>
+        <ProForm
+          formRef={formRef}
+          submitter={false}
+          layout="vertical"
+          disabled={detailMode}
+          initialValues={editId == null && !detailMode ? getNewFormDefaults() : undefined}
+        >
           <Row gutter={16}>
             <Col span={24}>
               <ProFormText

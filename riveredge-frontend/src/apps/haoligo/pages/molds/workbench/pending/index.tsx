@@ -131,14 +131,14 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
 
   const handleRevoke = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
     modalApi.confirm({
-      title: '撤销审核',
-      content: `确认撤销外协维保完修单「${record.sheet_no || record.id}」的审核通过？撤销后将回到待审核，模具台账将按未通过审核重新计算（通常回到外协维修）。`,
+      title: '撤回审核',
+      content: `确认撤回外协维保完修单「${record.sheet_no || record.id}」的审核通过？撤回后将回到待审核，模具台账将按未通过审核重新计算（通常回到外协维修）。`,
       okButtonProps: { danger: true },
       onOk: async () => {
         setActionLoadingId(record.id);
         try {
           await revokeApprovalMoldOutsourceMaintenanceCompleteSheet(record.id);
-          messageApi.success('已撤销审核');
+          messageApi.success('已撤回审核');
           if (detailRow?.id === record.id) {
             const d = await getMoldOutsourceMaintenanceCompleteSheet(record.id);
             setDetailRow(d);
@@ -207,12 +207,13 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 280,
+      width: 220,
       fixed: 'right',
+      uniActionRenderOptions: { suppressAuditSemanticActions: false, directMax: 4 },
       render: (_, record) => {
         const st = effectiveSheetStatus(record);
         return (
-          <Space wrap>
+          <Space size={4} style={{ flexWrap: 'nowrap' }}>
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record)}>
               详情
             </Button>
@@ -247,7 +248,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
                 loading={actionLoadingId === record.id}
                 onClick={() => handleRevoke(record)}
               >
-                撤销审核
+                撤回审核
               </Button>
             ) : null}
           </Space>
@@ -336,7 +337,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
                   loading={actionLoadingId === detailRow.id}
                   onClick={() => handleRevoke(detailRow)}
                 >
-                  撤销审核
+                  撤回审核
                 </Button>
               ) : null}
             </Space>

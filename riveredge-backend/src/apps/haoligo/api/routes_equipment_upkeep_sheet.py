@@ -60,7 +60,7 @@ class EquipmentUpkeepSheetOut(BaseModel):
     equipment_id: int
     equipment_asset_code: Optional[str] = None
     equipment_name: Optional[str] = None
-    description: str
+    description: Optional[str] = None
     reporter_user_id: int
     created_at: datetime
 
@@ -69,7 +69,7 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     applicant_user_id: int = Field(ge=1, description="申请人用户 ID")
     department_uuid: str = Field(max_length=36, description="申请部门 UUID（须为末级部门）")
     equipment_id: int = Field(ge=1)
-    description: str = Field(min_length=1, description="保养说明/计划")
+    description: Optional[str] = Field(default=None, description="保养要求（可选）")
     header_attachment_file_uuids: Optional[List[str]] = None
 
     @field_validator("department_uuid", mode="before")
@@ -86,11 +86,9 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     @classmethod
     def strip_desc(cls, v):
         if v is None:
-            raise ValueError("请填写保养说明")
+            return None
         s = str(v).strip()
-        if not s:
-            raise ValueError("请填写保养说明")
-        return s
+        return s or None
 
 
 class EquipmentUpkeepSheetUpdate(BaseModel):
@@ -193,7 +191,7 @@ async def create_upkeep_sheet(
             department_name=dept_name,
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             equipment=eq,
-            description=body.description.strip(),
+            description=_strip_opt(body.description),
             reporter_user_id=user.id,
         )
     await row.fetch_related("equipment")
@@ -234,11 +232,9 @@ async def update_upkeep_sheet(
             if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=int(eid)).exists():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
             row.equipment_id = int(eid)
-    if "description" in data and data["description"] is not None:
-        s = str(data["description"]).strip()
-        if not s:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="保养说明不能为空")
-        data["description"] = s
+    if "description" in data:
+        raw = data["description"]
+        data["description"] = _strip_opt(str(raw) if raw is not None else None)
     if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
         data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
     if "applicant_user_id" in data:

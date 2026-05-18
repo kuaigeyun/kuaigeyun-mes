@@ -175,6 +175,10 @@ export type PatrolRouteCreatePayload = {
   workshop_id?: number | null;
 };
 
+export type PatrolRouteCreateWithStepsPayload = PatrolRouteCreatePayload & {
+  steps: PatrolStepInPayload[];
+};
+
 export type PatrolRouteUpdatePayload = {
   name?: string;
   workshop_id?: number | null;
@@ -191,6 +195,10 @@ export function listPatrolRoutes(): Promise<PatrolRouteRow[]> {
 
 export function createPatrolRoute(body: PatrolRouteCreatePayload): Promise<PatrolRouteRow> {
   return apiRequest(`${PREFIX}/equipment/patrol-routes`, { method: 'POST', data: body });
+}
+
+export function createPatrolRouteWithSteps(body: PatrolRouteCreateWithStepsPayload): Promise<PatrolRouteRow> {
+  return apiRequest(`${PREFIX}/equipment/patrol-routes/with-steps`, { method: 'POST', data: body });
 }
 
 export function updatePatrolRoute(rowId: number, body: PatrolRouteUpdatePayload): Promise<PatrolRouteRow> {
@@ -250,6 +258,7 @@ export interface InspectionParamRow {
   name: string;
   unit?: string | null;
   value_type: string;
+  default_value?: string | null;
 }
 
 export type InspectionParamCreatePayload = {
@@ -257,12 +266,14 @@ export type InspectionParamCreatePayload = {
   name: string;
   unit?: string | null;
   value_type?: string;
+  default_value?: string | null;
 };
 
 export type InspectionParamUpdatePayload = {
   name?: string;
   unit?: string | null;
   value_type?: string;
+  default_value?: string | null;
 };
 
 export function listInspectionParams(): Promise<InspectionParamRow[]> {
@@ -376,9 +387,9 @@ export interface EquipmentSpotCheckRow {
   inspection_param_set_name?: string | null;
   reporter_user_id: number;
   abnormal_description?: string | null;
-  handling_shutdown: boolean;
-  handling_report: boolean;
-  handling_supervised: boolean;
+  applied_operational_status?: string | null;
+  report_enabled: boolean;
+  report_notify_user_ids: number[];
   created_at: string;
   lines?: EquipmentSpotCheckLineRow[];
 }
@@ -388,9 +399,9 @@ export type EquipmentSpotCheckCreatePayload = {
   inspection_param_set_id?: number | null;
   recorded_at?: string | null;
   abnormal_description?: string | null;
-  handling_shutdown?: boolean;
-  handling_report?: boolean;
-  handling_supervised?: boolean;
+  applied_operational_status?: string | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
 };
 
 export type EquipmentSpotCheckLinePatch = {
@@ -403,9 +414,9 @@ export type EquipmentSpotCheckLinePatch = {
 export type EquipmentSpotCheckUpdatePayload = {
   recorded_at?: string | null;
   abnormal_description?: string | null;
-  handling_shutdown?: boolean;
-  handling_report?: boolean;
-  handling_supervised?: boolean;
+  applied_operational_status?: string | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
   lines?: EquipmentSpotCheckLinePatch[];
 };
 
@@ -417,6 +428,7 @@ export interface EquipmentSpotCheckPreviewLine {
   value_type: string;
   unit?: string | null;
   is_required: boolean;
+  default_value?: string | null;
 }
 
 export interface EquipmentSpotCheckPreviewResult {
@@ -474,6 +486,15 @@ export interface EquipmentRoutePatrolLineRow {
   sequence: number;
   is_normal: boolean;
   abnormal_description?: string | null;
+  applied_operational_status?: string | null;
+  attachment_file_ids?: string[] | null;
+}
+
+export interface EquipmentRoutePatrolPreviewLine {
+  equipment_id: number;
+  asset_code: string;
+  equipment_name: string;
+  sequence: number;
 }
 
 export interface EquipmentRoutePatrolRow {
@@ -484,9 +505,11 @@ export interface EquipmentRoutePatrolRow {
   patrol_route_id: number;
   patrol_route_code?: string;
   patrol_route_name?: string;
+  patrol_route_workshop_id?: number | null;
+  patrol_route_workshop_name?: string | null;
   reporter_user_id: number;
-  report_required: boolean;
-  report_to_user_id?: number | null;
+  report_enabled: boolean;
+  report_notify_user_ids: number[];
   created_at: string;
   lines?: EquipmentRoutePatrolLineRow[];
 }
@@ -494,21 +517,29 @@ export interface EquipmentRoutePatrolRow {
 export type EquipmentRoutePatrolCreatePayload = {
   patrol_route_id: number;
   recorded_at?: string | null;
-  report_required?: boolean;
-  report_to_user_id?: number | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
 };
 
 export type EquipmentRoutePatrolLinePatch = {
   id: number;
   is_normal: boolean;
   abnormal_description?: string | null;
+  applied_operational_status?: string | null;
+  attachment_file_ids?: string[] | null;
 };
 export type EquipmentRoutePatrolUpdatePayload = {
   recorded_at?: string | null;
-  report_required?: boolean;
-  report_to_user_id?: number | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
   lines?: EquipmentRoutePatrolLinePatch[];
 };
+
+export function previewEquipmentRoutePatrolLines(params: {
+  patrol_route_id: number;
+}): Promise<EquipmentRoutePatrolPreviewLine[]> {
+  return apiRequest(`${PREFIX}/equipment/route-patrols/preview-lines`, { params });
+}
 
 export function listEquipmentRoutePatrols(params?: {
   skip?: number;
@@ -555,7 +586,7 @@ export interface EquipmentUpkeepSheetRow {
   equipment_id: number;
   equipment_asset_code?: string | null;
   equipment_name?: string | null;
-  description: string;
+  description?: string | null;
   reporter_user_id: number;
   created_at: string;
 }
@@ -564,7 +595,7 @@ export type EquipmentUpkeepSheetCreatePayload = {
   applicant_user_id: number;
   department_uuid: string;
   equipment_id: number;
-  description: string;
+  description?: string | null;
   header_attachment_file_uuids?: string[] | null;
 };
 
@@ -981,7 +1012,7 @@ export function updateMold(rowId: number, body: MoldUpdatePayload): Promise<Mold
   return apiRequest(`${PREFIX}/molds/${rowId}`, { method: 'PATCH', data: body });
 }
 
-/** 批量更新寿命/维修周期等（与列表筛选一致） */
+/** 批量更新寿命/维修周期/状态等（与列表筛选一致） */
 export type MoldBatchLifecycleScope = 'selected' | 'all_filtered';
 
 export interface MoldBatchLifecyclePayload {
@@ -994,6 +1025,7 @@ export interface MoldBatchLifecyclePayload {
   usable_yield?: string | number;
   maintenance_cycle_by_yield?: string | number;
   maintenance_cycle_by_days?: number;
+  status?: string;
 }
 
 export function batchMoldsLifecycle(body: MoldBatchLifecyclePayload): Promise<{ updated: number }> {
@@ -1713,6 +1745,7 @@ export interface HazardRow {
   workshop_area?: string | null;
   reported_at?: string | null;
   issue_type_code?: string | null;
+  issue_type_codes?: string[];
   problem_summary?: string | null;
   solution_note?: string | null;
   status: string;
@@ -1724,6 +1757,8 @@ export interface HazardRow {
   registrant_name?: string | null;
   responsible_user_id?: number | null;
   responsible_name?: string | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
 }
 
 export function listHazardReports(params?: {
@@ -1731,7 +1766,7 @@ export function listHazardReports(params?: {
   limit?: number;
   status?: string;
   equipment_id?: number;
-  /** 为 true 时仅待治理（检查中/维修中）；与 status 同时传时以后端为准（通常只传 status） */
+  /** 为 true 时仅待治理（已登记）；与 status 同时传时以后端为准（通常只传 status） */
   for_remediation?: boolean;
 }): Promise<PageResult<HazardRow>> {
   return apiRequest(`${PREFIX}/patrol/hazard-reports`, { params });
@@ -1743,6 +1778,7 @@ export type HazardCreatePayload = {
   workshop_area?: string | null;
   reported_at?: string | null;
   issue_type_code?: string | null;
+  issue_type_codes?: string[];
   problem_summary?: string | null;
   solution_note?: string | null;
   status?: string;
@@ -1752,6 +1788,8 @@ export type HazardCreatePayload = {
   handled_at?: string | null;
   registrant_user_id?: number | null;
   responsible_user_id?: number | null;
+  report_enabled?: boolean;
+  report_notify_user_ids?: number[];
 };
 
 export function createHazardReport(body: HazardCreatePayload): Promise<HazardRow> {

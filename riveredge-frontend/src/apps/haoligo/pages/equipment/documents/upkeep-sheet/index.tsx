@@ -459,11 +459,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       messageApi.error(t('app.haoligo.equipment.documents.spotCheckSelectEquipmentFirst'));
       return Promise.reject(new Error('validation'));
     }
-    const desc = String(values.description ?? '').trim();
-    if (!desc) {
-      messageApi.error(t('app.haoligo.equipment.upkeep.descRequired'));
-      return Promise.reject(new Error('validation'));
-    }
+    const desc = String(values.description ?? '').trim() || null;
     const headerUuids = normUploadUuids(values.header_attachments);
     setFormLoading(true);
     try {
@@ -555,7 +551,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           : `ID ${r.equipment_id}`,
     },
     {
-      title: t('app.haoligo.equipment.documents.colDescription'),
+      title: t('app.haoligo.equipment.upkeep.desc'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -745,7 +741,6 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                   <ProFormTextArea
                     name="description"
                     label={t('app.haoligo.equipment.upkeep.desc')}
-                    rules={[{ required: true, message: t('app.haoligo.equipment.upkeep.descRequired') }]}
                     fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
                   />
                 </Col>

@@ -16,15 +16,6 @@ const trialResultEnum: Record<string, { text: string }> = {
   不合格: { text: '不合格' },
 };
 
-const sheetStatusEnum: Record<string, { text: string }> = {
-  草稿: { text: '草稿' },
-  已提交: { text: '已提交' },
-  待审核: { text: '待审核' },
-  已通过: { text: '已通过' },
-  已驳回: { text: '已驳回' },
-  已作废: { text: '已作废' },
-};
-
 const MoldTrialRecordReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -95,14 +86,6 @@ const MoldTrialRecordReportPage: React.FC = () => {
         <Tag color={r.trial_result === '合格' ? 'success' : 'error'}>{r.trial_result}</Tag>
       ),
     },
-    {
-      title: '单据状态',
-      dataIndex: 'sheet_status',
-      valueType: 'select',
-      valueEnum: sheetStatusEnum,
-      width: 100,
-      fieldProps: { allowClear: true },
-    },
     moldDocumentCreatedAtColumn<MoldTrialSheetRow>(),
   ];
 
@@ -127,10 +110,6 @@ const MoldTrialRecordReportPage: React.FC = () => {
               trial_result:
                 typeof searchFormValues?.trial_result === 'string' && searchFormValues.trial_result
                   ? searchFormValues.trial_result
-                  : undefined,
-              sheet_status:
-                typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
-                  ? searchFormValues.sheet_status
                   : undefined,
               keyword:
                 typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()

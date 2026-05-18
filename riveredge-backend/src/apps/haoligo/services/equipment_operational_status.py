@@ -10,6 +10,13 @@ HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT = "HAOLIGO_EQUIPMENT_OPERATIONAL_STATU
 
 _LEGACY_ALLOWED: FrozenSet[str] = frozenset({"running", "repair", "shutdown", "standby"})
 
+_LEGACY_LABELS: dict[str, str] = {
+    "running": "运行",
+    "repair": "维修",
+    "shutdown": "停机",
+    "standby": "待机",
+}
+
 
 async def allowed_operational_status_values(tenant_id: int) -> FrozenSet[str]:
     """当前租户可用的运行状态取值（字典项 value，小写）。"""
@@ -37,3 +44,29 @@ async def normalize_operational_status(tenant_id: int, v: Optional[str]) -> Opti
             detail="运行状态不在数据字典「设备运行状态」允许范围内",
         )
     return s
+
+
+async def operational_status_label_map(tenant_id: int) -> dict[str, str]:
+    """运行状态 value（小写）→ 显示名。"""
+    labels = dict(_LEGACY_LABELS)
+    dictionary = await DataDictionaryService.get_dictionary_by_code(
+        tenant_id, HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT, use_cache=True
+    )
+    if dictionary:
+        items = await DataDictionaryService.get_items_by_dictionary(
+            tenant_id, str(dictionary.uuid), is_active=True
+        )
+        for it in items:
+            v = str(it.value or "").strip().lower()
+            if not v:
+                continue
+            labels[v] = str(it.label or it.value or v).strip() or v
+    return labels
+
+
+async def format_operational_status_label(tenant_id: int, value: Optional[str], *, empty_label: str = "—") -> str:
+    if value is None or not str(value).strip():
+        return empty_label
+    key = str(value).strip().lower()
+    labels = await operational_status_label_map(tenant_id)
+    return labels.get(key, str(value).strip())

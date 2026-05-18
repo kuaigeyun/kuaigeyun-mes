@@ -10,12 +10,12 @@ const { Title, Paragraph, Text } = Typography;
 type NavItem = { to: string; titleKey: string };
 
 const MASTER_LINKS: NavItem[] = [
+  { to: '/apps/haoligo/equipment/ledger', titleKey: 'app.haoligo.menu.equipment.ledger' },
   { to: '/apps/master-data/factory/workshops', titleKey: 'app.haoligo.menu.equipment.masterDataWorkshops' },
   { to: '/apps/haoligo/equipment/categories', titleKey: 'app.haoligo.menu.equipment.categories' },
   { to: '/apps/haoligo/equipment/manufacturers', titleKey: 'app.haoligo.menu.equipment.manufacturers' },
   { to: '/apps/haoligo/equipment/inspection-params', titleKey: 'app.haoligo.menu.equipment.inspection-params' },
   { to: '/apps/haoligo/equipment/inspection-param-sets', titleKey: 'app.haoligo.menu.equipment.inspection-param-sets' },
-  { to: '/apps/haoligo/equipment/ledger', titleKey: 'app.haoligo.menu.equipment.ledger' },
   { to: '/apps/haoligo/equipment/patrol-routes', titleKey: 'app.haoligo.menu.equipment.patrol-routes' },
 ];
 

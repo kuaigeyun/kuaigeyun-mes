@@ -340,6 +340,14 @@ function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldUpda
   if (my !== undefined) patch.maintenance_cycle_by_yield = my;
   const md = numOrUndef(values.maintenance_cycle_by_days);
   if (md !== undefined) patch.maintenance_cycle_by_days = md;
+  const statusRaw = values.status;
+  if (statusRaw != null && statusRaw !== '') {
+    const status = String(statusRaw).trim();
+    if (!MOLD_LEDGER_STATUS_SET.has(status)) {
+      throw new Error(`状态无效，须为：${MOLD_LEDGER_STATUSES.join('、')}`);
+    }
+    patch.status = status;
+  }
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
@@ -578,7 +586,13 @@ const MoldLedgerPage: React.FC = () => {
 
   const handleBatchSubmit = async () => {
     const values = batchForm.getFieldsValue();
-    const patch = buildMoldLifecycleBatchPatch(values);
+    let patch: MoldUpdatePayload | null;
+    try {
+      patch = buildMoldLifecycleBatchPatch(values);
+    } catch (e) {
+      messageApi.error((e as Error).message || '请检查填写内容');
+      return;
+    }
     if (!patch) {
       messageApi.warning('请至少填写一项要修改的字段');
       return;
@@ -1283,7 +1297,7 @@ const MoldLedgerPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="批量修改（可用年限 / 额定可用次数 / 额定可用产量 / 维修周期）"
+        title="批量修改（状态 / 可用年限 / 额定可用次数 / 额定可用产量 / 维修周期）"
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
@@ -1322,6 +1336,16 @@ const MoldLedgerPage: React.FC = () => {
         ) : null}
         <Form form={batchForm} layout="vertical">
           <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="status" label="状态">
+                <Select
+                  allowClear
+                  placeholder="留空不修改"
+                  style={{ width: '100%' }}
+                  options={MOLD_LEDGER_STATUSES.map((s) => ({ label: s, value: s }))}
+                />
+              </Form.Item>
+            </Col>
             <Col span={12}>
               <Form.Item name="service_life_years" label="可用年限">
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />

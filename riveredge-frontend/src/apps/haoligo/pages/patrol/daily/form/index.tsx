@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -25,13 +26,14 @@ import { getUserList } from '../../../../../../services/user';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../../shared/datetimeHelpers';
 import { IssueRegisterFormBody } from '../../shared/IssueRegisterFormBody';
+import { formatIssueTypeLabels, hazardIssueTypeCodes } from '../../shared/patrolIssueHelpers';
+import { normUploadUuids, uuidsToSecureUploadFileList } from '../../shared/uploadHelpers';
 
 const ISSUE_TYPE_DICT_CODE = 'HAOLIGO_PATROL_ISSUE_TYPE';
 
 const statusColors: Record<string, string> = {
-  检查中: 'processing',
-  维修中: 'warning',
-  已完成: 'success',
+  已登记: 'processing',
+  已治理: 'success',
 };
 
 const PatrolIssueRegisterPage: React.FC = () => {
@@ -50,6 +52,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
   const [issueTypes, setIssueTypes] = useState<DictionaryItem[]>([]);
   const [dictLoading, setDictLoading] = useState(true);
   const [userOptions, setUserOptions] = useState<{ label: string; value: number }[]>([]);
+  const [beforeFiles, setBeforeFiles] = useState<UploadFile[]>([]);
 
   const loadIssueTypes = useCallback(async () => {
     setDictLoading(true);
@@ -92,9 +95,13 @@ const PatrolIssueRegisterPage: React.FC = () => {
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
+    setBeforeFiles([]);
     setFormInitialValues({
       reported_at: dayjs(),
       registrant_user_id: cu?.id,
+      issue_type_codes: [],
+      report_enabled: false,
+      report_notify_user_ids: [],
     });
     setModalVisible(true);
   };
@@ -107,14 +114,17 @@ const PatrolIssueRegisterPage: React.FC = () => {
       setIsDetailView(detailOnly);
       setIsEdit(!detailOnly);
       setEditId(detail.id);
+      const beforeIds = (detail.before_image_file_ids as string[] | undefined) ?? [];
+      setBeforeFiles(await uuidsToSecureUploadFileList(beforeIds));
       setFormInitialValues({
         workshop_id: detail.workshop_id ?? undefined,
         equipment_id: detail.equipment_id ?? undefined,
         reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
         workshop_area: detail.workshop_area ?? undefined,
-        issue_type_code: detail.issue_type_code ?? undefined,
+        issue_type_codes: hazardIssueTypeCodes(detail),
         registrant_user_id: detail.registrant_user_id ?? undefined,
-        responsible_user_id: detail.responsible_user_id ?? undefined,
+        report_enabled: detail.report_enabled ?? false,
+        report_notify_user_ids: detail.report_notify_user_ids ?? [],
       });
       setModalVisible(true);
     } catch (e) {
@@ -135,20 +145,40 @@ const PatrolIssueRegisterPage: React.FC = () => {
     });
   };
 
+  const parseReportNotifyUserIds = (raw: unknown): number[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((x) => Number(x)).filter((id) => Number.isFinite(id) && id > 0);
+  };
+
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const reportEnabled = Boolean(values.report_enabled);
+    const reportNotifyIds = parseReportNotifyUserIds(values.report_notify_user_ids);
+    if (reportEnabled && !reportNotifyIds.length) {
+      messageApi.warning('开启上报时请至少选择一名责任人');
+      throw new Error('validation');
+    }
+    const issueTypeCodes = Array.isArray(values.issue_type_codes)
+      ? (values.issue_type_codes as string[]).map((c) => String(c).trim()).filter(Boolean)
+      : [];
+    if (!issueTypeCodes.length) {
+      messageApi.warning('请至少选择一种问题类型');
+      throw new Error('validation');
+    }
     setFormLoading(true);
     try {
       const registrantUserId = values.registrant_user_id as number | undefined;
-      const responsibleUserId = values.responsible_user_id as number | undefined;
+      const beforeIds = normUploadUuids(beforeFiles);
       const payload = {
         workshop_id: values.workshop_id as number | undefined,
         equipment_id: (values.equipment_id as number | undefined) ?? null,
         workshop_area: String(values.workshop_area ?? '').trim() || undefined,
         reported_at: formDateTimeToIso(values.reported_at),
-        issue_type_code: String(values.issue_type_code ?? '').trim() || undefined,
-        status: '检查中' as const,
+        issue_type_codes: issueTypeCodes,
+        status: '已登记' as const,
+        before_image_file_ids: beforeIds.length ? beforeIds : undefined,
         registrant_user_id: registrantUserId,
-        responsible_user_id: responsibleUserId ?? null,
+        report_enabled: reportEnabled,
+        report_notify_user_ids: reportNotifyIds,
       };
       if (isEdit && editId != null) {
         await updateHazardReport(editId, payload);
@@ -174,9 +204,8 @@ const PatrolIssueRegisterPage: React.FC = () => {
       width: 96,
       valueType: 'select',
       valueEnum: {
-        检查中: { text: '检查中' },
-        维修中: { text: '维修中' },
-        已完成: { text: '已完成' },
+        已登记: { text: '已登记' },
+        已治理: { text: '已治理' },
       },
       fieldProps: { allowClear: true },
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
@@ -195,9 +224,23 @@ const PatrolIssueRegisterPage: React.FC = () => {
           : '—',
     },
     { title: '巡查区域', dataIndex: 'workshop_area', width: 120, ellipsis: true, hideInSearch: true },
-    { title: '问题类型', dataIndex: 'issue_type_code', width: 160, ellipsis: true, hideInSearch: true },
+    {
+      title: '问题类型',
+      dataIndex: 'issue_type_codes',
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => formatIssueTypeLabels(hazardIssueTypeCodes(r), issueTypes),
+    },
     { title: '登记人', dataIndex: 'registrant_name', width: 100, ellipsis: true, hideInSearch: true },
-    { title: '责任人', dataIndex: 'responsible_name', width: 100, ellipsis: true, hideInSearch: true },
+    {
+      title: '责任人',
+      dataIndex: 'responsible_name',
+      width: 100,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => r.responsible_name?.trim() || '—',
+    },
     {
       title: '巡查时间',
       dataIndex: 'reported_at',
@@ -219,7 +262,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
             type="link"
             size="small"
             icon={<EditOutlined />}
-            disabled={record.status === '已完成'}
+            disabled={record.status === '已治理'}
             onClick={() => void openForm(record, false)}
           >
             编辑
@@ -275,6 +318,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
           setModalVisible(false);
           setEditId(null);
           setIsDetailView(false);
+          setBeforeFiles([]);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -285,10 +329,13 @@ const PatrolIssueRegisterPage: React.FC = () => {
         grid={false}
       >
         <IssueRegisterFormBody
+          formRef={formRef}
           workshops={workshops}
           issueTypes={issueTypes}
           dictLoading={dictLoading}
           userOptions={userOptions}
+          beforeFiles={beforeFiles}
+          onBeforeFilesChange={setBeforeFiles}
           readOnly={isDetailView}
         />
       </FormModalTemplate>

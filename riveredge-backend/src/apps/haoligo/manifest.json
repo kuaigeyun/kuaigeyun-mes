@@ -18,11 +18,19 @@
     "permission": "haoligo:workspace:read",
     "children": [
       {
-        "title": "app.haoligo.menu.workspace",
-        "path": "/apps/haoligo/workspace",
+        "title": "app.haoligo.menu.dashboard",
         "icon": "LayoutDashboard",
         "permission": "haoligo:workspace:read",
-        "sort_order": 0
+        "sort_order": 0,
+        "children": [
+          {
+            "title": "app.haoligo.menu.workspace",
+            "path": "/apps/haoligo/workspace",
+            "icon": "LayoutDashboard",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 0
+          }
+        ]
       },
       {
         "title": "app.haoligo.menu.molds",
@@ -162,44 +170,44 @@
             "sort_order": 10,
             "children": [
               {
+                "title": "app.haoligo.menu.equipment.ledger",
+                "path": "/apps/haoligo/equipment/ledger",
+                "icon": "HardDrive",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 10
+              },
+              {
                 "title": "app.haoligo.menu.equipment.masterDataWorkshops",
                 "path": "/apps/master-data/factory/workshops",
                 "icon": "Warehouse",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 10
+                "sort_order": 11
               },
               {
                 "title": "app.haoligo.menu.equipment.categories",
                 "path": "/apps/haoligo/equipment/categories",
                 "icon": "Shapes",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 11
+                "sort_order": 12
               },
               {
                 "title": "app.haoligo.menu.equipment.manufacturers",
                 "path": "/apps/haoligo/equipment/manufacturers",
                 "icon": "Factory",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 12
+                "sort_order": 13
               },
               {
                 "title": "app.haoligo.menu.equipment.inspection-params",
                 "path": "/apps/haoligo/equipment/inspection-params",
                 "icon": "SlidersHorizontal",
                 "permission": "haoligo:workspace:read",
-                "sort_order": 13
+                "sort_order": 14
               },
               {
                 "title": "app.haoligo.menu.equipment.inspection-param-sets",
                 "path": "/apps/haoligo/equipment/inspection-param-sets",
                 "icon": "Layers2",
-                "permission": "haoligo:workspace:read",
-                "sort_order": 14
-              },
-              {
-                "title": "app.haoligo.menu.equipment.ledger",
-                "path": "/apps/haoligo/equipment/ledger",
-                "icon": "HardDrive",
                 "permission": "haoligo:workspace:read",
                 "sort_order": 15
               },

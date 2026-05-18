@@ -32,8 +32,8 @@ REPORT_KEYS = frozenset(
     }
 )
 
-_OVERDUE_STATUSES = ("检查中", "维修中")
-_NODE_LABELS = ("检查中", "维修中", "已完成")
+_OVERDUE_STATUSES = ("已登记",)
+_NODE_LABELS = ("已登记", "已治理")
 
 
 class ChartPoint(BaseModel):
@@ -56,15 +56,15 @@ class PatrolKpiSummary(BaseModel):
     """与移动端看板顶部 KPI 对齐的台账汇总（隐患单）。"""
 
     total_tasks: int = Field(description="隐患单总数")
-    open_tasks: int = Field(description="检查中 + 维修中（待闭环）")
-    completed_tasks: int = Field(description="已完成")
+    open_tasks: int = Field(description="已登记（待治理）")
+    completed_tasks: int = Field(description="已治理")
     contributor_count: int = Field(description="有登记记录的去重人数（用户或姓名）")
 
 
 async def _kpi_summary(tenant_id: int) -> PatrolKpiSummary:
     qs = tenant_alive(HaoligoHazardReport, tenant_id)
     total = await qs.count()
-    completed = await qs.filter(status="已完成").count()
+    completed = await qs.filter(status="已治理").count()
     open_tasks = await qs.filter(status__in=_OVERDUE_STATUSES).count()
     uid_rows = await qs.filter(registrant_user_id__isnull=False).values_list("registrant_user_id", flat=True)
     contributors = len(set(uid_rows)) if uid_rows else 0
@@ -104,6 +104,36 @@ async def _group_count(
     return [ChartPoint(label=str(r["label"]), value=float(r["value"])) for r in rows]
 
 
+async def _issue_type_share(tenant_id: int) -> List[ChartPoint]:
+    """按问题类型编码统计（支持 issue_type_codes 多选展开）。"""
+    conn = await _conn()
+    sql = """
+        SELECT COALESCE(NULLIF(TRIM(elem), ''), '未分类') AS label,
+               COUNT(*)::float AS value
+        FROM haoligo_hazard_report h,
+             LATERAL (
+                 SELECT jsonb_array_elements_text(
+                     CASE
+                         WHEN h.issue_type_codes IS NOT NULL
+                              AND jsonb_array_length(h.issue_type_codes) > 0
+                         THEN h.issue_type_codes
+                         WHEN h.issue_type_code IS NOT NULL AND TRIM(h.issue_type_code) <> ''
+                         THEN jsonb_build_array(h.issue_type_code)
+                         ELSE '[]'::jsonb
+                     END
+                 ) AS elem
+             ) expanded
+        WHERE h.tenant_id = $1 AND h.deleted_at IS NULL
+        GROUP BY 1
+        ORDER BY value DESC, label
+        LIMIT 50
+    """
+    rows = await conn.execute_query_dict(sql, [tenant_id])
+    if rows:
+        return [ChartPoint(label=str(r["label"]), value=float(r["value"])) for r in rows]
+    return await _group_count(tenant_id, "issue_type_code")
+
+
 async def _monthly_count(tenant_id: int, *, months: int = 12) -> List[ChartPoint]:
     conn = await _conn()
     sql = """
@@ -128,7 +158,7 @@ async def _monthly_rate(
 ) -> List[ChartPoint]:
     conn = await _conn()
     if numerator_overdue:
-        num_expr = "SUM(CASE WHEN status IN ('检查中', '维修中') THEN 1 ELSE 0 END)"
+        num_expr = "SUM(CASE WHEN status = '已登记' THEN 1 ELSE 0 END)"
     elif numerator_status:
         num_expr = f"SUM(CASE WHEN status = '{numerator_status}' THEN 1 ELSE 0 END)"
     else:
@@ -164,7 +194,7 @@ async def _overdue_ranking(tenant_id: int, *, limit: int = 20) -> List[ChartPoin
         SELECT COALESCE(NULLIF(TRIM(responsible_name), ''), NULLIF(TRIM(registrant_name), ''), '未指定') AS label,
                COUNT(*)::float AS value
         FROM haoligo_hazard_report
-        WHERE tenant_id = $1 AND deleted_at IS NULL AND status IN ('检查中', '维修中')
+        WHERE tenant_id = $1 AND deleted_at IS NULL AND status = '已登记'
         GROUP BY 1
         ORDER BY value DESC, label
         LIMIT $2
@@ -258,7 +288,7 @@ async def get_patrol_report(
 
     if key == "issue-type-share":
         return PatrolReportPayload(
-            report_key=key, points=await _group_count(tenant_id, "issue_type_code")
+            report_key=key, points=await _issue_type_share(tenant_id)
         )
     if key == "monthly-volume":
         return PatrolReportPayload(report_key=key, points=await _monthly_count(tenant_id, months=months))
@@ -269,7 +299,7 @@ async def get_patrol_report(
     if key == "monthly-completion-rate":
         return PatrolReportPayload(
             report_key=key,
-            points=await _monthly_rate(tenant_id, months=months, numerator_status="已完成"),
+            points=await _monthly_rate(tenant_id, months=months, numerator_status="已治理"),
         )
     if key == "monthly-overdue-rate":
         return PatrolReportPayload(

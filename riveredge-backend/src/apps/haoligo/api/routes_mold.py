@@ -114,19 +114,20 @@ class MoldUpdate(BaseModel):
         return s
 
 
-_LIFECYCLE_BATCH_FIELDS = frozenset(
+_MOLD_BATCH_PATCH_FIELDS = frozenset(
     {
         "service_life_years",
         "usable_times",
         "usable_yield",
         "maintenance_cycle_by_yield",
         "maintenance_cycle_by_days",
+        "status",
     }
 )
 
 
 class MoldBatchLifecycleBody(BaseModel):
-    """批量更新模具台账中与「寿命 / 额定次数与产量 / 维修周期」相关的数值字段。"""
+    """批量更新模具台账：寿命/维修周期数值字段，或 status。"""
 
     scope: Literal["selected", "all_filtered"]
     mold_ids: Optional[List[int]] = None
@@ -137,6 +138,19 @@ class MoldBatchLifecycleBody(BaseModel):
     usable_yield: Optional[Decimal] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
     maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = Field(None, max_length=32)
+
+    @field_validator("status")
+    @classmethod
+    def mold_batch_status_allowed(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            return None
+        if s not in MOLD_LEDGER_STATUS_SET:
+            raise ValueError(f"模具状态无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
+        return s
 
     @model_validator(mode="after")
     def validate_scope(self) -> "MoldBatchLifecycleBody":
@@ -378,7 +392,7 @@ async def sync_mold_ledger_from_dataset(
 @router.post(
     "/batch-lifecycle",
     response_model=MoldBatchLifecycleOut,
-    summary="批量更新可用年限/额定可用次数/额定可用产量及维修周期",
+    summary="批量更新可用年限/额定次数与产量/维修周期或状态",
 )
 async def batch_update_mold_lifecycle(
     body: MoldBatchLifecycleBody,
@@ -389,7 +403,7 @@ async def batch_update_mold_lifecycle(
         exclude_unset=True,
         exclude={"scope", "mold_ids", "filter_status", "filter_keyword"},
     )
-    patch = {k: v for k, v in patch_raw.items() if k in _LIFECYCLE_BATCH_FIELDS and v is not None}
+    patch = {k: v for k, v in patch_raw.items() if k in _MOLD_BATCH_PATCH_FIELDS and v is not None}
     if not patch:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

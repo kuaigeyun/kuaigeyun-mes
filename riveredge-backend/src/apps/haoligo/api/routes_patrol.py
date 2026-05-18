@@ -1,7 +1,7 @@
 """好力 GO — 巡查隐患单 API。"""
 
 from datetime import datetime
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,14 @@ from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._users import resolve_tenant_user
 from apps.haoligo.models.equipment import HaoligoEquipment, HaoligoWorkshop
 from apps.haoligo.models.patrol import HaoligoHazardReport
+from apps.haoligo.services.hazard_report_side_effects import (
+    _hazard_report_already_sent,
+    maybe_send_hazard_report_on_save,
+)
+from apps.haoligo.services.spot_check_side_effects import (
+    normalize_report_user_ids,
+    validate_report_notify_users,
+)
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -29,6 +37,7 @@ class HazardOut(BaseModel):
     workshop_area: Optional[str] = None
     reported_at: Optional[datetime] = None
     issue_type_code: Optional[str] = None
+    issue_type_codes: List[str] = Field(default_factory=list)
     problem_summary: Optional[str] = None
     solution_note: Optional[str] = None
     status: str
@@ -40,6 +49,8 @@ class HazardOut(BaseModel):
     registrant_name: Optional[str] = None
     responsible_user_id: Optional[int] = None
     responsible_name: Optional[str] = None
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
 
 
 class HazardCreate(BaseModel):
@@ -48,15 +59,18 @@ class HazardCreate(BaseModel):
     workshop_area: Optional[str] = Field(None, max_length=200)
     reported_at: Optional[datetime] = None
     issue_type_code: Optional[str] = Field(None, max_length=64)
+    issue_type_codes: Optional[List[str]] = None
     problem_summary: Optional[str] = None
     solution_note: Optional[str] = None
-    status: str = Field(default="检查中", max_length=32)
+    status: str = Field(default="已登记", max_length=32)
     before_image_file_ids: Optional[list] = None
     after_image_file_ids: Optional[list] = None
     handler_name: Optional[str] = Field(None, max_length=100)
     handled_at: Optional[datetime] = None
     registrant_user_id: Optional[int] = Field(None, ge=1)
     responsible_user_id: Optional[int] = Field(None, ge=1)
+    report_enabled: bool = False
+    report_notify_user_ids: List[int] = Field(default_factory=list)
 
 
 class HazardUpdate(BaseModel):
@@ -65,6 +79,7 @@ class HazardUpdate(BaseModel):
     workshop_area: Optional[str] = Field(None, max_length=200)
     reported_at: Optional[datetime] = None
     issue_type_code: Optional[str] = Field(None, max_length=64)
+    issue_type_codes: Optional[List[str]] = None
     problem_summary: Optional[str] = None
     solution_note: Optional[str] = None
     status: Optional[str] = Field(None, max_length=32)
@@ -74,6 +89,24 @@ class HazardUpdate(BaseModel):
     handled_at: Optional[datetime] = None
     registrant_user_id: Optional[int] = Field(None, ge=1)
     responsible_user_id: Optional[int] = Field(None, ge=1)
+    report_enabled: Optional[bool] = None
+    report_notify_user_ids: Optional[List[int]] = None
+
+
+async def _hazard_report_fields(
+    tenant_id: int,
+    *,
+    report_enabled: bool,
+    report_notify_user_ids: Optional[List[int]],
+) -> tuple[bool, List[int]]:
+    user_ids = normalize_report_user_ids(report_notify_user_ids)
+    if report_enabled and not user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="开启上报时请至少选择一名接收人",
+        )
+    await validate_report_notify_users(tenant_id, user_ids)
+    return report_enabled, user_ids
 
 
 async def _not_found():
@@ -106,7 +139,7 @@ async def _resolve_registrant_on_create(
 
 
 async def _apply_user_fields_patch(data: dict, tenant_id: int) -> None:
-    """就地处理 PATCH 中的登记人/责任人字段（弹出 id，写入 id+name）。"""
+    """就地处理 PATCH 中的登记人字段（弹出 id，写入 id+name）。"""
     if "registrant_user_id" in data:
         rid = data.pop("registrant_user_id")
         if rid is None:
@@ -117,25 +150,60 @@ async def _apply_user_fields_patch(data: dict, tenant_id: int) -> None:
         uid, name = await resolve_tenant_user(tenant_id, int(rid))
         data["registrant_user_id"] = uid
         data["registrant_name"] = name
-    if "responsible_user_id" in data:
-        rid = data.pop("responsible_user_id")
-        if rid is None:
-            data["responsible_user_id"] = None
-            data["responsible_name"] = None
-        else:
-            uid, name = await resolve_tenant_user(tenant_id, int(rid))
-            data["responsible_user_id"] = uid
-            data["responsible_name"] = name
+    data.pop("responsible_user_id", None)
+
+
+def _normalize_issue_type_codes(
+    codes: Optional[List[str]],
+    legacy_code: Optional[str] = None,
+) -> List[str]:
+    out: List[str] = []
+    for raw in codes or []:
+        s = str(raw).strip()
+        if s and s not in out:
+            out.append(s)
+    if not out and legacy_code and str(legacy_code).strip():
+        out.append(str(legacy_code).strip())
+    return out
+
+
+def _apply_issue_type_fields(data: dict) -> None:
+    """写入 issue_type_codes，并同步 issue_type_code 为首项（报表/兼容）。"""
+    codes: Optional[List[str]] = None
+    legacy = data.pop("issue_type_code", None) if "issue_type_code" in data else None
+    if "issue_type_codes" in data:
+        codes = _normalize_issue_type_codes(data.pop("issue_type_codes"), legacy)
+    elif legacy is not None:
+        codes = _normalize_issue_type_codes(None, legacy)
+    if codes is None:
+        return
+    data["issue_type_codes"] = codes
+    data["issue_type_code"] = codes[0] if codes else None
+
+
+async def _sync_responsible_from_recipients(
+    tenant_id: int,
+    user_ids: List[int],
+) -> tuple[Optional[int], Optional[str]]:
+    """上报接收人即责任人：首项写入 responsible_user_id，姓名以顿号拼接。"""
+    if not user_ids:
+        return None, None
+    first_uid: Optional[int] = None
+    names: List[str] = []
+    for uid in user_ids:
+        resolved_uid, name = await resolve_tenant_user(tenant_id, int(uid))
+        if first_uid is None:
+            first_uid = resolved_uid
+        names.append(name)
+    return first_uid, "、".join(names)
 
 
 def _apply_hazard_status(row: HaoligoHazardReport) -> None:
     hn = (row.handler_name or "").strip()
     if row.handled_at is not None and hn:
-        row.status = "已完成"
-    elif (row.solution_note or "").strip():
-        row.status = "维修中"
-    elif row.status not in ("检查中", "维修中", "已完成"):
-        row.status = "检查中"
+        row.status = "已治理"
+    elif row.status not in ("已登记", "已治理"):
+        row.status = "已登记"
 
 
 async def _serialize_hazard(
@@ -164,6 +232,14 @@ async def _serialize_hazard(
     data["workshop_name"] = workshop_name
     data["equipment_asset_code"] = eq_code
     data["equipment_name"] = eq_name
+    data["report_notify_user_ids"] = normalize_report_user_ids(row.report_notify_user_ids)
+    codes = _normalize_issue_type_codes(
+        getattr(row, "issue_type_codes", None) or [],
+        row.issue_type_code,
+    )
+    data["issue_type_codes"] = codes
+    if codes and not data.get("issue_type_code"):
+        data["issue_type_code"] = codes[0]
     return HazardOut(**data)
 
 
@@ -177,14 +253,14 @@ async def list_hazards(
     equipment_id: Optional[int] = Query(None, description="按关联设备筛选"),
     for_remediation: Optional[bool] = Query(
         None,
-        description="为 true 时仅返回待治理（检查中/维修中）；与 status 同时传入时以 status 为准",
+        description="为 true 时仅返回待治理（已登记）；与 status 同时传入时以 status 为准",
     ),
 ):
     qs = tenant_alive(HaoligoHazardReport, tenant_id)
     if status_filter:
         qs = qs.filter(status=status_filter)
     elif for_remediation:
-        qs = qs.filter(status__in=["检查中", "维修中"])
+        qs = qs.filter(status="已登记")
     if equipment_id is not None:
         qs = qs.filter(equipment_id=equipment_id)
     total = await qs.count()
@@ -218,12 +294,10 @@ async def create_hazard(
     ).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
     hn = (body.handler_name or "").strip()
-    eff_status = body.status or "检查中"
+    eff_status = body.status or "已登记"
     if body.handled_at is not None and hn:
-        eff_status = "已完成"
-    elif (body.solution_note or "").strip():
-        eff_status = "维修中"
-    if eff_status == "已完成":
+        eff_status = "已治理"
+    if eff_status == "已治理":
         _ensure_completed_requirements(
             body.solution_note,
             body.handler_name,
@@ -232,17 +306,26 @@ async def create_hazard(
     reg_uid, reg_name = await _resolve_registrant_on_create(
         tenant_id, user, body.registrant_user_id
     )
-    res_uid: Optional[int] = None
-    res_name: Optional[str] = None
-    if body.responsible_user_id is not None:
-        res_uid, res_name = await resolve_tenant_user(tenant_id, body.responsible_user_id)
+    report_enabled, report_user_ids = await _hazard_report_fields(
+        tenant_id,
+        report_enabled=body.report_enabled,
+        report_notify_user_ids=body.report_notify_user_ids,
+    )
+    res_uid, res_name = await _sync_responsible_from_recipients(tenant_id, report_user_ids)
+    issue_codes = _normalize_issue_type_codes(body.issue_type_codes, body.issue_type_code)
+    if not issue_codes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请至少选择一种问题类型",
+        )
     row = await HaoligoHazardReport.create(
         tenant_id=tenant_id,
         equipment_id=body.equipment_id,
         workshop_id=body.workshop_id,
         workshop_area=body.workshop_area,
         reported_at=body.reported_at or timezone.now(),
-        issue_type_code=body.issue_type_code,
+        issue_type_code=issue_codes[0] if issue_codes else None,
+        issue_type_codes=issue_codes,
         problem_summary=body.problem_summary,
         solution_note=body.solution_note,
         status=eff_status,
@@ -254,6 +337,15 @@ async def create_hazard(
         registrant_name=reg_name,
         responsible_user_id=res_uid,
         responsible_name=res_name,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+    )
+    await maybe_send_hazard_report_on_save(
+        tenant_id,
+        row,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+        send_report=report_enabled and bool(report_user_ids),
     )
     return await _serialize_hazard(row, tenant_id)
 
@@ -280,7 +372,28 @@ async def update_hazard(
     row = await tenant_alive(HaoligoHazardReport, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    data = body.model_dump(exclude_unset=True)
+    body_set = body.model_dump(exclude_unset=True)
+    old_report_enabled = row.report_enabled
+    old_report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    report_enabled = row.report_enabled
+    report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
+    data = dict(body_set)
+    if "report_enabled" in data:
+        report_enabled = bool(data.pop("report_enabled"))
+    if "report_notify_user_ids" in data:
+        report_user_ids = normalize_report_user_ids(data.pop("report_notify_user_ids"))
+    report_enabled, report_user_ids = await _hazard_report_fields(
+        tenant_id,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+    )
+    report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
+    send_report = False
+    if report_enabled and report_user_ids:
+        if not old_report_enabled and report_enabled:
+            send_report = True
+        elif report_fields_touched and not await _hazard_report_already_sent(tenant_id, row.id):
+            send_report = True
     if "workshop_id" in data and data["workshop_id"] is not None:
         if not await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=data["workshop_id"]).exists():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
@@ -288,16 +401,29 @@ async def update_hazard(
         if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=data["equipment_id"]).exists():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
     await _apply_user_fields_patch(data, tenant_id)
+    _apply_issue_type_fields(data)
+    row.report_enabled = report_enabled
+    row.report_notify_user_ids = report_user_ids
+    res_uid, res_name = await _sync_responsible_from_recipients(tenant_id, report_user_ids)
+    row.responsible_user_id = res_uid
+    row.responsible_name = res_name
     for k, v in data.items():
         setattr(row, k, v)
     _apply_hazard_status(row)
-    if row.status == "已完成":
+    if row.status == "已治理":
         _ensure_completed_requirements(
             row.solution_note,
             row.handler_name,
             row.handled_at,
         )
     await row.save()
+    await maybe_send_hazard_report_on_save(
+        tenant_id,
+        row,
+        report_enabled=report_enabled,
+        report_notify_user_ids=report_user_ids,
+        send_report=send_report,
+    )
     return await _serialize_hazard(row, tenant_id)
 
 

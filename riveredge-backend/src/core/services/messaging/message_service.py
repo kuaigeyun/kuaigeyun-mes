@@ -8,6 +8,8 @@ from typing import Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
+from tortoise import timezone
+
 from core.models.message_log import MessageLog
 from core.models.message_config import MessageConfig
 from core.models.message_template import MessageTemplate
@@ -71,6 +73,8 @@ class MessageService:
             config = await MessageConfigService.get_message_config_by_uuid(
                 tenant_id, str(request.config_uuid)
             )
+        elif request.type == "internal":
+            config = await MessageConfigService.ensure_default_internal_config(tenant_id)
         else:
             config = await MessageConfigService.get_default_config(tenant_id, request.type)
         
@@ -89,6 +93,17 @@ class MessageService:
             variables=request.variables,
             status="pending",
         )
+
+        # 站内信无需外部通道，同步标记成功即可（不依赖 Taskiq worker）
+        if request.type == "internal":
+            message_log.status = "success"
+            message_log.sent_at = timezone.now()
+            await message_log.save()
+            return SendMessageResponse(
+                success=True,
+                message_log_uuid=message_log.uuid,
+                inngest_run_id=None,
+            )
         
         from core.tasks.dispatcher import TaskEvent, dispatch_event
 

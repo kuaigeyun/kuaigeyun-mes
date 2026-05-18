@@ -18,15 +18,22 @@ import {
   type HazardRow,
 } from '../../../services/haoligo';
 import { getUserList } from '../../../../../services/user';
+import { useGlobalStore } from '../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../shared/datetimeHelpers';
 import { RemediationFormBody } from '../shared/RemediationFormBody';
+import { hazardIssueTypeCodes } from '../shared/patrolIssueHelpers';
 import { normUploadUuids, uuidsToUploadFileList } from '../shared/uploadHelpers';
 
 const statusColors: Record<string, string> = {
-  检查中: 'processing',
-  维修中: 'warning',
-  已完成: 'success',
+  已登记: 'processing',
+  已治理: 'success',
 };
+
+function currentUserDisplayName(): string | undefined {
+  const cu = useGlobalStore.getState().currentUser;
+  if (!cu) return undefined;
+  return (cu.full_name || '').trim() || cu.username || undefined;
+}
 
 const PatrolHazardsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -44,14 +51,17 @@ const PatrolHazardsPage: React.FC = () => {
 
   useEffect(() => {
     void getUserList({ page: 1, page_size: 500, is_active: true })
-      .then((res) =>
-        setUserOptions(
-          (res.items || []).map((u) => {
-            const name = (u.full_name || '').trim() || u.username;
-            return { label: name, value: name };
-          }),
-        ),
-      )
+      .then((res) => {
+        const opts = (res.items || []).map((u) => {
+          const name = (u.full_name || '').trim() || u.username;
+          return { label: name, value: name };
+        });
+        const me = currentUserDisplayName();
+        if (me && !opts.some((o) => o.value === me)) {
+          opts.unshift({ label: me, value: me });
+        }
+        setUserOptions(opts);
+      })
       .catch(() => setUserOptions([]));
   }, []);
 
@@ -61,10 +71,12 @@ const PatrolHazardsPage: React.FC = () => {
       setContextRow(detail);
       setIsDetailView(detailOnly);
       setEditId(detail.id);
+      const savedHandler = detail.handler_name?.trim();
       setFormInitialValues({
         solution_note: detail.solution_note ?? undefined,
-        handled_at: detail.handled_at ? dayjs(detail.handled_at) : undefined,
-        handler_name: detail.handler_name ?? undefined,
+        handled_at: detail.handled_at ? dayjs(detail.handled_at) : detailOnly ? undefined : dayjs(),
+        handler_name:
+          savedHandler || (detailOnly ? undefined : currentUserDisplayName()),
       });
       const ids = (detail.after_image_file_ids as string[] | undefined) ?? [];
       setAfterFiles(uuidsToUploadFileList(ids));
@@ -113,10 +125,10 @@ const PatrolHazardsPage: React.FC = () => {
       hideInTable: true,
       valueType: 'select',
       valueEnum: {
-        pending: { text: '待治理（检查中/维修中）' },
         all: { text: '全部记录' },
+        pending: { text: '待治理（已登记）' },
       },
-      initialValue: 'pending',
+      initialValue: 'all',
       fieldProps: { allowClear: false },
     },
     {
@@ -125,11 +137,16 @@ const PatrolHazardsPage: React.FC = () => {
       width: 96,
       valueType: 'select',
       valueEnum: {
-        检查中: { text: '检查中' },
-        维修中: { text: '维修中' },
-        已完成: { text: '已完成' },
+        all: { text: '全部' },
+        已登记: { text: '已登记' },
+        已治理: { text: '已治理' },
       },
-      fieldProps: { allowClear: true },
+      initialValue: 'all',
+      fieldProps: {
+        allowClear: false,
+        optionType: 'button',
+        buttonStyle: 'solid',
+      },
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
     },
     { title: '车间', dataIndex: 'workshop_name', width: 120, ellipsis: true, hideInSearch: true },
@@ -162,7 +179,14 @@ const PatrolHazardsPage: React.FC = () => {
       },
     },
     { title: '巡查区域', dataIndex: 'workshop_area', width: 120, ellipsis: true, hideInSearch: true },
-    { title: '问题类型', dataIndex: 'issue_type_code', width: 140, ellipsis: true, hideInSearch: true },
+    {
+      title: '问题类型',
+      dataIndex: 'issue_type_codes',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => hazardIssueTypeCodes(r).join('、') || '—',
+    },
     { title: '解决方案', dataIndex: 'solution_note', ellipsis: true, hideInSearch: true },
     { title: '处理人', dataIndex: 'handler_name', width: 100, ellipsis: true, hideInSearch: true },
     {
@@ -182,7 +206,7 @@ const PatrolHazardsPage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openRemediate(record, true)}>
             详情
           </Button>
-          {record.status !== '已完成' && (
+          {record.status !== '已治理' && (
             <Button type="link" size="small" icon={<ToolOutlined />} onClick={() => void openRemediate(record, false)}>
               治理
             </Button>
@@ -207,11 +231,10 @@ const PatrolHazardsPage: React.FC = () => {
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
             try {
+              const statusRaw = searchFormValues?.status;
               const status =
-                typeof searchFormValues?.status === 'string' && searchFormValues.status
-                  ? searchFormValues.status
-                  : undefined;
-              const scopeAll = searchFormValues?.remediation_scope === 'all';
+                typeof statusRaw === 'string' && statusRaw && statusRaw !== 'all' ? statusRaw : undefined;
+              const scopePending = searchFormValues?.remediation_scope === 'pending';
               const res = await listHazardReports({
                 skip,
                 limit: pageSize,
@@ -220,7 +243,7 @@ const PatrolHazardsPage: React.FC = () => {
                   searchFormValues?.equipment_id != null && searchFormValues?.equipment_id !== ''
                     ? Number(searchFormValues.equipment_id)
                     : undefined,
-                for_remediation: !status && !scopeAll ? true : undefined,
+                for_remediation: !status && scopePending ? true : undefined,
               });
               return { data: res.items, success: true, total: res.total };
             } catch (e) {
@@ -263,9 +286,11 @@ const PatrolHazardsPage: React.FC = () => {
             <Descriptions.Item label="巡查时间">
               {contextRow.reported_at ? dayjs(contextRow.reported_at).format('YYYY-MM-DD HH:mm') : '—'}
             </Descriptions.Item>
-            <Descriptions.Item label="问题类型">{contextRow.issue_type_code ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="问题类型">
+              {hazardIssueTypeCodes(contextRow).join('、') || '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="登记人">{contextRow.registrant_name ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="责任人">{contextRow.responsible_name ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="责任人">{contextRow.responsible_name?.trim() || '—'}</Descriptions.Item>
             <Descriptions.Item label="问题描述" span={2}>
               {contextRow.problem_summary?.trim() ? contextRow.problem_summary : '—'}
             </Descriptions.Item>

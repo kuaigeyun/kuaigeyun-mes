@@ -166,7 +166,12 @@ const UserMessagesPage: React.FC = () => {
             <div>
               <Typography.Paragraph
                 ellipsis={{ rows: 2, expandable: false }}
-                style={{ marginBottom: 8, fontSize: 12, color: themeToken.colorTextSecondary }}
+                style={{
+                  marginBottom: 8,
+                  fontSize: 12,
+                  color: themeToken.colorTextSecondary,
+                  whiteSpace: 'pre-wrap',
+                }}
               >
                 {message.content}
               </Typography.Paragraph>
