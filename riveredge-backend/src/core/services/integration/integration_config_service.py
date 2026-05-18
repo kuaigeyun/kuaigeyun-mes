@@ -768,6 +768,53 @@ class IntegrationConfigService:
             return f"无法建立 TCP 连接 {host}:{port}（{e.strerror or e}）"
 
     @staticmethod
+    def _sqlserver_peer_banner_probe_sync(host: str, port: int, timeout: float = 5.0) -> Optional[str]:
+        """
+        TCP 连通后窥探对端是否主动发送非 TDS 数据（HTTP/SSH 等），用于识别花生壳映射到错误服务。
+        SQL Server 通常等待客户端先发 Pre-Login，recv 超时属正常。
+        """
+        import socket
+
+        try:
+            with socket.create_connection((host, int(port)), timeout=timeout) as sock:
+                sock.settimeout(0.8)
+                try:
+                    chunk = sock.recv(128)
+                except socket.timeout:
+                    return None
+                if not chunk:
+                    return None
+                low = chunk.lower()
+                if chunk.startswith(b"HTTP") or chunk.startswith(b"GET ") or b"<html" in low:
+                    return (
+                        f"对端 {host}:{port} 返回 HTTP 类数据，穿透端口可能未指向 SQL Server。"
+                    )
+                if chunk.startswith(b"SSH-"):
+                    return f"对端 {host}:{port} 为 SSH 服务，不是 SQL Server。"
+                if chunk[0:1] != b"\x12":
+                    return (
+                        f"对端 {host}:{port} 主动发送非 TDS Pre-Login 数据（首字节 0x{chunk[0]:02x}），"
+                        "请核对花生壳映射目标与 SQL Server TCP 端口。"
+                    )
+        except OSError:
+            return None
+        return None
+
+    @staticmethod
+    def _sqlserver_tds_login_failure_hint(host: str, port: int, banner_hint: Optional[str] = None) -> str:
+        """TCP 可达但 pymssql/ODBC 均失败时的补充说明。"""
+        parts: List[str] = []
+        if banner_hint:
+            parts.append(banner_hint)
+        parts.append(
+            f"TCP {host}:{port} 已连通但 TDS/SQL 登录未成功：请在后端服务器上用与 Navicat 完全相同的"
+            "主机、端口、SQL 账号、密码、数据库名验证；确认 SQL Server 已启用「混合模式」身份验证；"
+            "花生壳须映射到「SQL Server 配置管理器 → TCP/IP → IPAll」中的 TCP 端口（勿映射 RDP/其它服务）。"
+            "ODBC 报 SSL unsupported protocol 时，请在 SQL Server 端关闭「强制加密」或启用 TLS 1.2。"
+        )
+        return " ".join(parts)
+
+    @staticmethod
     def _normalize_pymssql_tds_version(raw: Any) -> str:
         """
         pymssql/FreeTDS 仅支持约 4.2–7.4；前端「8.0」对应 ODBC/TDS 命名，传入 FreeTDS 易触发 20002，映射为 7.4。
@@ -851,21 +898,50 @@ class IntegrationConfigService:
         return IntegrationConfigService._sqlserver_expand_tds_fallback_attempts(attempts, config)
 
     @staticmethod
-    def _sqlserver_expand_tds_fallback_attempts(
-        attempts: List[Dict[str, Any]], config: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """加密已锁定为 off 或未指定 TDS 时，补充 7.2/7.1 等 FreeTDS 回退（缓解 Unknown error / 20002）。"""
-        if config.get("tds_version"):
-            return attempts
-        logical = IntegrationConfigService._sqlserver_pyodbc_logical_encrypt_modes(config)
-        if logical != ["no"]:
-            return attempts
+    def _sqlserver_append_charset_attempts(attempts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """补充 charset=UTF-8（部分实例在穿透场景下需要）。"""
         out = list(attempts)
         seen = {repr(sorted(kw.items())) for kw in out}
         for kw in attempts:
-            cur = kw.get("tds_version", "7.4")
-            for alt in ("7.2", "7.1", "7.0"):
-                if alt == cur:
+            if kw.get("charset"):
+                continue
+            alt = dict(kw)
+            alt["charset"] = "UTF-8"
+            sig = repr(sorted(alt.items()))
+            if sig not in seen:
+                seen.add(sig)
+                out.append(alt)
+        return out
+
+    @staticmethod
+    def _sqlserver_expand_tds_fallback_attempts(
+        attempts: List[Dict[str, Any]], config: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """加密关闭时补充多 TDS 版本、整型 port、charset（缓解穿透下 Unknown error / 20002）。"""
+        logical = IntegrationConfigService._sqlserver_pyodbc_logical_encrypt_modes(config)
+        if logical != ["no"]:
+            return IntegrationConfigService._sqlserver_append_charset_attempts(attempts)
+
+        preferred: Optional[str] = None
+        if config.get("tds_version"):
+            preferred = IntegrationConfigService._normalize_pymssql_tds_version(config.get("tds_version"))
+
+        out: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for kw in attempts:
+            sig = repr(sorted(kw.items()))
+            if sig not in seen:
+                seen.add(sig)
+                out.append(dict(kw))
+
+        tds_order: Tuple[str, ...] = ("7.4", "7.2", "7.1", "7.0", "5.0")
+        if preferred:
+            tds_order = (preferred,) + tuple(x for x in tds_order if x != preferred)
+
+        for kw in list(out):
+            base_tds = kw.get("tds_version", "7.2")
+            for alt in tds_order:
+                if alt == base_tds:
                     continue
                 alt_kw = dict(kw)
                 alt_kw["tds_version"] = alt
@@ -873,7 +949,16 @@ class IntegrationConfigService:
                 if sig not in seen:
                     seen.add(sig)
                     out.append(alt_kw)
-        return out
+            port_val = kw.get("port")
+            if isinstance(port_val, str) and port_val.isdigit():
+                alt_kw = dict(kw)
+                alt_kw["port"] = int(port_val)
+                sig = repr(sorted(alt_kw.items()))
+                if sig not in seen:
+                    seen.add(sig)
+                    out.append(alt_kw)
+
+        return IntegrationConfigService._sqlserver_append_charset_attempts(out)
 
     @staticmethod
     def _sqlserver_prefers_plaintext_tds(config: Dict[str, Any]) -> bool:
@@ -1416,6 +1501,16 @@ class IntegrationConfigService:
 
         prefer_pymssql = IntegrationConfigService._sqlserver_prefers_plaintext_tds(config)
 
+        async def _tds_failure_diagnosis() -> str:
+            banner = await asyncio.to_thread(
+                IntegrationConfigService._sqlserver_peer_banner_probe_sync,
+                host,
+                port_int,
+            )
+            return IntegrationConfigService._sqlserver_tds_login_failure_hint(
+                host, port_int, banner
+            )
+
         async def _try_pymssql() -> Optional[Dict[str, Any]]:
             try:
                 await asyncio.to_thread(
@@ -1450,13 +1545,18 @@ class IntegrationConfigService:
                     }
                 if not odbc_res.get("skipped"):
                     odbc_err = (odbc_res.get("error") or "").strip()
+                    diag = await _tds_failure_diagnosis()
                     return {
                         "success": False,
                         "message": (
-                            f"{pymssql_res.get('message', '')} ODBC：{odbc_err}"
+                            f"{pymssql_res.get('message', '')} ODBC：{odbc_err} {diag}"
                         ),
                     }
-            return pymssql_res
+            diag = await _tds_failure_diagnosis()
+            return {
+                "success": False,
+                "message": f"{pymssql_res.get('message', '')} {diag}",
+            }
 
         if IntegrationConfigService._sqlserver_pyodbc_runtime_ready():
             odbc_res = await _try_odbc()
@@ -1476,11 +1576,13 @@ class IntegrationConfigService:
                         "success": True,
                         "message": "SQL Server 连接成功（pymssql；ODBC 曾失败已自动回退）",
                     }
+                diag = await _tds_failure_diagnosis()
                 return {
                     "success": False,
                     "message": (
                         f"ODBC 连接失败：{odbc_err}。"
                         + (f" pymssql：{pymssql_res.get('message', '')}" if pymssql_res else "")
+                        + f" {diag}"
                     ),
                 }
 
@@ -1511,11 +1613,13 @@ class IntegrationConfigService:
                     "message": IntegrationConfigService._format_sqlserver_error(e) + sep + hint,
                 }
             odbc_err = odbc_res.get("error", "")
+            diag = await _tds_failure_diagnosis()
             return {
                 "success": False,
                 "message": IntegrationConfigService._format_sqlserver_error(e)
                 + " ODBC（pyodbc）补充尝试仍失败："
-                + str(odbc_err).strip(),
+                + str(odbc_err).strip()
+                + f" {diag}",
             }
 
     @staticmethod

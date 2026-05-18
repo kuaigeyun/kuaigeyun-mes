@@ -34,7 +34,7 @@ dependencies = [
     "taskiq>=0.12.0",
     "taskiq-postgres[asyncpg]>=0.7.0",
     "webauthn>=2.7.1",
-    "pymssql>=2.2.11,<3",
+    "pymssql>=2.3.0,<3",
     "pyodbc>=5.0.0,<6",
 ]
 
