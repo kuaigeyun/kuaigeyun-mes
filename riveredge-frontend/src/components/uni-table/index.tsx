@@ -216,21 +216,6 @@ function buildDefaultColumnsStateMap(columns: any[]): Record<string, any> {
   return map
 }
 
-function countTableRowsWithChildren(rows: any[]): number {
-  if (!Array.isArray(rows) || rows.length === 0) return 0
-  let total = 0
-  const walk = (items: any[]) => {
-    for (const item of items) {
-      total += 1
-      if (Array.isArray(item?.children) && item.children.length > 0) {
-        walk(item.children)
-      }
-    }
-  }
-  walk(rows)
-  return total
-}
-
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
   onResetResizable,
@@ -974,8 +959,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
-  // 当前分页大小（用于决定是否需要注入纵向 scroll.y）
-  const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
   const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch()
   // 模糊搜索关键词状态
@@ -1598,7 +1581,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
         const pageSize = params.pageSize ?? liveDefaultPageSize
         const current = params.current ?? 1
-        setCurrentPageSize((prev) => (prev === pageSize ? prev : pageSize))
         const staleTimeMs = tq.staleTime ?? 60_000
         const gcTimeMs = tq.gcTime ?? 300_000
         const paramsKey = stableJsonForQueryKey(params)
@@ -1677,8 +1659,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           })
         }
       } else {
-        const pageSize = params.pageSize ?? liveDefaultPageSize
-        setCurrentPageSize((prev) => (prev === pageSize ? prev : pageSize))
         result = await runRequest()
       }
 
@@ -2014,7 +1994,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     pageSizeOptions: ['10', '20', '50', '100'],
     showTotal: (total: number, range: [number, number]) =>
       t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
-  }), [defaultPageSize, t])
+    ...(restProps.pagination as Record<string, unknown> | undefined),
+  }), [defaultPageSize, t, restProps.pagination])
   const effectiveTableAlertRender = (restProps as any).tableAlertRender ?? false
 
   React.useLayoutEffect(() => {
@@ -2205,6 +2186,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 const {
                   toolBarRender,
                   search,
+                  pagination: _omitPagination,
                   scroll: userScroll,
                   components: userComponents,
                   virtual: userVirtual,
@@ -2243,18 +2225,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       ? normalizedUserScroll
                       : { ...(normalizedUserScroll || {}), x: 'max-content' as const }
                 const useVirtual = virtualized || userVirtual === true
-                const hasTreeRows =
-                  Array.isArray(tableData) &&
-                  tableData.some((row) => Array.isArray((row as { children?: unknown[] })?.children) && (row as { children?: unknown[] }).children!.length > 0)
-                const hasExpandable = !!otherProps.expandable || hasTreeRows
-                const effectiveRenderedRowCount = hasTreeRows
-                  ? countTableRowsWithChildren(tableData as any[])
-                  : tableData.length
-                const shouldDisableAutoScrollY =
-                  !allowCustomScrollY &&
-                  effectiveRenderedRowCount > 0 &&
-                  effectiveRenderedRowCount < currentPageSize
-                if (!useVirtual && mergedScroll?.y === undefined && !shouldDisableAutoScrollY) {
+                if (!useVirtual && mergedScroll?.y === undefined) {
                   mergedScroll = {
                     ...(mergedScroll || {}),
                     y: `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (56px - var(--header-height, 56px)))`,

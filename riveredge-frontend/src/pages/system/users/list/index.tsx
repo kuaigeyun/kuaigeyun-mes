@@ -672,7 +672,6 @@ const UserListPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<User>
         columnPersistenceId="pages.system.users.list"
-        viewTypes={['table', 'help']}
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {
@@ -697,26 +696,16 @@ const UserListPage: React.FC = () => {
         }}
         rowKey="uuid"
         showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-        }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="batch-qrcode"
-            icon={<QrcodeOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={handleBatchGenerateQRCode}
-          >
-            {t('field.user.batchQrcode')}
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText={t('field.user.createButton')}
+        onCreate={handleCreate}
+        enableRowSelection
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton={true}
+        deleteButtonText={t('field.user.batchDeleteButton')}
+        deleteConfirmTitle={t('field.user.batchDeleteConfirmTitle')}
+        deleteConfirmDescription={(c) => t('field.user.batchDeleteConfirmDescription', { count: c })}
+        onDelete={handleBatchDelete}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={[
@@ -784,14 +773,16 @@ const UserListPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        showCreateButton
-        createButtonText={t('field.user.createButton')}
-        onCreate={handleCreate}
-        showDeleteButton={true}
-        deleteButtonText={t('field.user.batchDeleteButton')}
-        deleteConfirmTitle={t('field.user.batchDeleteConfirmTitle')}
-        deleteConfirmDescription={(c) => t('field.user.batchDeleteConfirmDescription', { count: c })}
-        onDelete={handleBatchDelete}
+        toolBarActionsAfterBatch={[
+          <Button
+            key="batch-qrcode"
+            icon={<QrcodeOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchGenerateQRCode}
+          >
+            {t('field.user.batchQrcode')}
+          </Button>,
+        ]}
         />
       </ListPageTemplate>
 

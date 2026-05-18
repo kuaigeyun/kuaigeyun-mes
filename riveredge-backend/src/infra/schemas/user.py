@@ -6,6 +6,7 @@
 
 from datetime import datetime
 from typing import Optional, List
+import re
 
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 
@@ -18,13 +19,23 @@ class UserBase(BaseModel):
     """
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
-    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
+    phone: Optional[str] = Field(None, description="手机号（可选，11位中国大陆手机号）")
     email: Optional[str] = Field(None, description="用户邮箱（可选，用于邮件通知）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: bool = Field(default=True, description="是否激活")
     is_infra_admin: bool = Field(default=False, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
     is_tenant_admin: bool = Field(default=False, description="是否为组织管理员")
     source: Optional[str] = Field(None, max_length=50, description="用户来源（invite_code, personal, organization等）")
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v):
+        """空字符串视为未填写；有值时须为大陆手机号。"""
+        if v is None or v == "":
+            return None
+        if not re.match(r'^1[3-9]\d{9}$', str(v).strip()):
+            raise ValueError('手机号格式不正确，须为11位中国大陆手机号')
+        return str(v).strip()
 
     @field_validator('email')
     @classmethod
@@ -55,6 +66,7 @@ class UserCreate(UserBase):
         is_tenant_admin: 是否为组织管理员（默认 False）
     """
     
+    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 
