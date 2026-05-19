@@ -4,12 +4,13 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { Button, Input } from 'antd';
+import { Button, Input, theme } from 'antd';
 import type { ButtonProps } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import ErrorBoundary from '../error-boundary';
+import { getUniToolbarControlShellStyle } from './toolbarChrome';
 
 const LazyQuerySearchButton = lazy(() =>
   import('../uni-query').then((m) => ({ default: m.QuerySearchButton })),
@@ -120,6 +121,7 @@ const UniSearch: React.FC<UniSearchProps> = ({
   style,
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const placeholder = fuzzyPlaceholder ?? t('components.uniSearch.fuzzySearch');
   const resetLabel = resetText ?? t('components.uniSearch.reset');
 
@@ -169,8 +171,8 @@ const UniSearch: React.FC<UniSearchProps> = ({
           }
           style={{
             width: isMobile ? 'calc(100% - 100px)' : 160,
-            height: 32,
             flex: isMobile ? '1 1 auto' : '0 0 160px',
+            ...getUniToolbarControlShellStyle(token),
           }}
         />
       )}

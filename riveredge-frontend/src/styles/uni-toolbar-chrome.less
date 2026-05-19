@@ -1,0 +1,26 @@
+/**
+ * 列表工具栏并排控件（模糊搜索、分段选择等）统一外框
+ * 与 getUniToolbarControlShellStyle / ant Input 默认描边一致
+ */
+.pro-table-button-container {
+  .uni-search-fuzzy-input.ant-input,
+  .uni-toolbar-segmented.ant-segmented {
+    border-radius: var(--ant-border-radius);
+    border: 1px solid var(--ant-color-border);
+    background-color: var(--ant-color-bg-container);
+    box-shadow: none;
+  }
+
+  .uni-toolbar-segmented.ant-segmented {
+    padding: 2px;
+
+    .ant-segmented-group {
+      height: 100%;
+    }
+
+    .ant-segmented-item-label {
+      min-height: 26px;
+      line-height: 26px;
+    }
+  }
+}

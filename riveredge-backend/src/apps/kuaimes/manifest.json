@@ -9,7 +9,7 @@
   "route_path": "/apps/kuaimes",
   "sort_order": 22,
   "menu_config": {
-    "title": "快车间",
+    "title": "app.kuaimes.name",
     "icon": "production",
     "path": "/apps/kuaimes",
     "children": [

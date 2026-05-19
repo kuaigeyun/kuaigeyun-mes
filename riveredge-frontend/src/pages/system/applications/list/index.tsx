@@ -9,7 +9,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Segmented, Select, Table } from 'antd';
+import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 const { Title, Paragraph, Text } = Typography;
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -2185,14 +2186,15 @@ const ApplicationListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           beforeSearchButtons={
-            <Segmented
+            <ThemedSegmented
+              surfaceBackground
               size="middle"
               value={appCategoryFilter}
               options={[
                 { label: '全部', value: 'all' },
                 { label: '通用', value: 'general' },
-                { label: '行业', value: 'industry' },
                 { label: '其他', value: 'other' },
+                { label: '行业', value: 'industry' },
                 { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
                 { label: '基础版', value: 'basic' },
                 { label: '专业版', value: 'pro' },

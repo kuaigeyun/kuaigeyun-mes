@@ -1184,6 +1184,8 @@ export default {
   'pages.traceability.operationName': 'Operation',
   'pages.traceability.viewWorkOrder': 'View Work Order Details',
   'path.kuaizhizao': 'Quick Manufacturing',
+  'path.kuaierp': 'Inventory & Sales',
+  'path.kuaimes': 'Shop Floor',
   'path.kuaicaiwu': 'Light Management Accounting',
   'path.plan-management': 'Plan Management',
   'path.demand-management': 'Demand Plan Management',
@@ -1771,6 +1773,8 @@ export default {
 
   // Application name translations (unified spec)
   'app.kuaizhizao.name': 'Kuaizhizao',
+  'app.kuaierp.name': 'Inventory & Sales',
+  'app.kuaimes.name': 'Shop Floor',
   'app.kuaiiot.name': 'kuaiiot',
   'app.kuaiiot.menu.dashboard': 'Dashboard',
   'app.kuaiiot.menu.devices': 'Devices',
@@ -2702,6 +2706,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.product-inbound': 'Product Inbound',
   'app.kuaizhizao.menu.warehouse-management.inbound-group': 'Inbound Operations',
   'app.kuaizhizao.menu.warehouse-management.outbound-group': 'Outbound Operations',
+  'app.kuaizhizao.menu.warehouse-management.dashboard': 'Warehouse Dashboard',
   'app.kuaizhizao.menu.warehouse-management.inventory-group': 'Inventory Management',
   'app.kuaizhizao.menu.warehouse-management.function-group': 'Function Operations',
   'app.kuaizhizao.menu.warehouse-management.inventory': 'Real-time Inventory',

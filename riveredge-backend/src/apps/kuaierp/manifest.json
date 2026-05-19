@@ -9,7 +9,7 @@
   "route_path": "/apps/kuaierp",
   "sort_order": 21,
   "menu_config": {
-    "title": "进销存",
+    "title": "app.kuaierp.name",
     "icon": "shop",
     "path": "/apps/kuaierp",
     "children": [

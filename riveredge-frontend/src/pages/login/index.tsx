@@ -50,7 +50,7 @@ import {
   SITE_LOGO_FALLBACK_SVG_URL,
   nextSiteLogoUrlAfterImageError,
 } from '../../constants/siteAssets';
-import { applyLottieThemeColor, prepareLoginDecorationLottie } from '../../utils/lottieTheme';
+import { prepareBackgroundLottie, prepareLoginDecorationLottie } from '../../utils/lottieTheme';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -801,7 +801,7 @@ export default function LoginPage() {
 
   const backgroundAnimationData = useMemo(
     () =>
-      lottieSourceBackground ? applyLottieThemeColor(lottieSourceBackground, '#ffffff') : null,
+      lottieSourceBackground ? prepareBackgroundLottie(lottieSourceBackground) : null,
     [lottieSourceBackground],
   );
 

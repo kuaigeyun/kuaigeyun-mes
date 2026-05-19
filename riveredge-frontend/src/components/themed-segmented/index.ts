@@ -1,1 +1,1 @@
-export { ThemedSegmented, useSegmentedComponentTheme } from './ThemedSegmented';
+export { ThemedSegmented, useSegmentedComponentTheme, type ThemedSegmentedProps } from './ThemedSegmented';

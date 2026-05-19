@@ -8,42 +8,23 @@ const BG_GRADIENT_PURPLE: Rgb01[] = [
   [0.569, 0.286, 1],
 ];
 
-function parseHexColor(hex: string): Rgb01 {
-  const normalized = hex.trim().replace(/^#/, '');
-  const full =
-    normalized.length === 3
-      ? normalized
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : normalized.slice(0, 6);
-  if (!/^[0-9a-f]{6}$/i.test(full)) {
-    return [0.09, 0.47, 1];
-  }
-  return [
-    parseInt(full.slice(0, 2), 16) / 255,
-    parseInt(full.slice(2, 4), 16) / 255,
-    parseInt(full.slice(4, 6), 16) / 255,
-  ];
+/** 背景 Lottie 固定为白色系时的渐变替换色（由原主题色逻辑在 #ffffff 下推导） */
+const WHITE_GRADIENT_START: Rgb01 = [0.65, 0.65, 0.65];
+const WHITE_GRADIENT_END: Rgb01 = [1, 1, 1];
+const WHITE_DARK_NEUTRAL: Rgb01 = [0.5, 0.5, 0.5];
+
+function cloneLottie<T extends object>(animationData: T): T {
+  const clone = globalThis.structuredClone;
+  return typeof clone === 'function'
+    ? clone(animationData)
+    : (JSON.parse(JSON.stringify(animationData)) as T);
 }
 
 function colorDistance(a: Rgb01, b: Rgb01): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
-function mix(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-function adjustLightness(rgb: Rgb01, delta: number): Rgb01 {
-  if (delta >= 0) {
-    return rgb.map((c) => mix(c, 1, delta)) as Rgb01;
-  }
-  const factor = 1 + delta;
-  return rgb.map((c) => c * factor) as Rgb01;
-}
-
-function replaceGradientColors(k: number[], theme: Rgb01): number[] {
+function replaceGradientColors(k: number[]): number[] {
   if (k.length < 8) return k;
   const next = [...k];
   let i = 0;
@@ -57,19 +38,22 @@ function replaceGradientColors(k: number[], theme: Rgb01): number[] {
     if (typeof r !== 'number' || typeof g !== 'number' || typeof b !== 'number') break;
     if (r > 1 || g > 1 || b > 1) break;
 
-    let rgb: Rgb01 = [r, g, b];
+    const rgb: Rgb01 = [r, g, b];
     const isPurple = BG_GRADIENT_PURPLE.some((p) => colorDistance(rgb, p) <= COLOR_EPS);
     const isDarkNeutral = colorDistance(rgb, [0.15, 0.15, 0.15]) <= COLOR_EPS;
 
+    let replacement: Rgb01 | null = null;
     if (isPurple) {
-      rgb = pos <= 0.01 ? adjustLightness(theme, -0.35) : pos >= 0.99 ? adjustLightness(theme, 0.2) : theme;
+      replacement = pos <= 0.01 ? WHITE_GRADIENT_START : WHITE_GRADIENT_END;
     } else if (isDarkNeutral) {
-      rgb = adjustLightness(theme, -0.5);
+      replacement = WHITE_DARK_NEUTRAL;
     }
 
-    next[i + 1] = rgb[0];
-    next[i + 2] = rgb[1];
-    next[i + 3] = rgb[2];
+    if (replacement) {
+      next[i + 1] = replacement[0];
+      next[i + 2] = replacement[1];
+      next[i + 3] = replacement[2];
+    }
     i += 4;
   }
   return next;
@@ -85,7 +69,7 @@ function stripSolidBackgroundLayers(layers?: Array<Record<string, unknown>>): Ar
     );
 }
 
-function walkBackgroundLottieColors(node: unknown, theme: Rgb01): void {
+function walkBackgroundLottieColors(node: unknown): void {
   if (!node || typeof node !== 'object') return;
 
   const obj = node as Record<string, unknown>;
@@ -93,24 +77,21 @@ function walkBackgroundLottieColors(node: unknown, theme: Rgb01): void {
   if (obj.ty === 'gs' || obj.ty === 'gf') {
     const g = obj.g as { k?: { k?: number[] } } | undefined;
     if (Array.isArray(g?.k?.k)) {
-      g.k.k = replaceGradientColors(g.k.k, theme);
+      g.k.k = replaceGradientColors(g.k.k);
     }
   }
 
   if (Array.isArray(node)) {
-    node.forEach((item) => walkBackgroundLottieColors(item, theme));
+    node.forEach(walkBackgroundLottieColors);
     return;
   }
 
-  Object.values(obj).forEach((value) => walkBackgroundLottieColors(value, theme));
+  Object.values(obj).forEach(walkBackgroundLottieColors);
 }
 
 /** 隐藏 login.json 内置圆形底（页面不再显示磨砂圆） */
 export function prepareLoginDecorationLottie<T extends object>(animationData: T): T {
-  const cloned =
-    typeof structuredClone === 'function'
-      ? structuredClone(animationData)
-      : (JSON.parse(JSON.stringify(animationData)) as T);
+  const cloned = cloneLottie(animationData);
   const root = cloned as { layers?: Array<{ nm?: string; ks?: { o?: { k?: number } } }> };
 
   for (const layer of root.layers ?? []) {
@@ -122,17 +103,17 @@ export function prepareLoginDecorationLottie<T extends object>(animationData: T)
   return cloned;
 }
 
-/** 将 background.json 中的强调色替换为平台主题色（不修改源文件） */
-export function applyLottieThemeColor<T extends object>(animationData: T, themeHex: string): T {
-  const cloned =
-    typeof structuredClone === 'function'
-      ? structuredClone(animationData)
-      : (JSON.parse(JSON.stringify(animationData)) as T);
-  const root = cloned as { layers?: Array<Record<string, unknown>>; assets?: Array<{ layers?: Array<Record<string, unknown>> }> };
+/** 预处理 background.json：去除纯色底并统一为白色系渐变（不修改源文件） */
+export function prepareBackgroundLottie<T extends object>(animationData: T): T {
+  const cloned = cloneLottie(animationData);
+  const root = cloned as {
+    layers?: Array<Record<string, unknown>>;
+    assets?: Array<{ layers?: Array<Record<string, unknown>> }>;
+  };
   if (root.layers) root.layers = stripSolidBackgroundLayers(root.layers);
   for (const asset of root.assets ?? []) {
     if (asset.layers) asset.layers = stripSolidBackgroundLayers(asset.layers);
   }
-  walkBackgroundLottieColors(cloned, parseHexColor(themeHex));
+  walkBackgroundLottieColors(cloned);
   return cloned;
 }

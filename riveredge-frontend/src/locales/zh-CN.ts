@@ -1138,6 +1138,8 @@ export default {
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
   'path.kuaizhizao': '快制造',
+  'path.kuaierp': '进销存',
+  'path.kuaimes': '快车间',
   'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
   'path.demand-management': '需求计划',
@@ -1774,6 +1776,8 @@ export default {
 
   // 应用名称翻译（统一规范）
   'app.kuaizhizao.name': '快制造',
+  'app.kuaierp.name': '进销存',
+  'app.kuaimes.name': '快车间',
   'app.kuaiiot.name': '快数采',
   'app.kuaiiot.menu.dashboard': '仪表盘',
   'app.kuaiiot.menu.devices': '设备连接',

@@ -23,6 +23,60 @@ export function extractAppCodeFromPath(path: string | undefined): string | null 
   return match ? match[1] : null;
 }
 
+/** 虚拟拆分应用：菜单文案与快制造共用 locale（app.kuaizhizao.menu.*） */
+const KUAIZHIZAO_VIRTUAL_APP_CODES = new Set(['kuaierp', 'kuaimes']);
+
+function translateWithKuaizhizaoMenuFallback(
+  appCode: string,
+  menuSuffix: string,
+  t: (key: string, options?: { defaultValue?: string }) => string
+): string {
+  const primaryKey = `app.${appCode}.menu.${menuSuffix}`;
+  let translated = t(primaryKey, { defaultValue: '' });
+  if (translated && translated !== primaryKey && translated.trim() !== '') return translated;
+  if (!KUAIZHIZAO_VIRTUAL_APP_CODES.has(appCode)) return '';
+  const fallbackKey = `app.kuaizhizao.menu.${menuSuffix}`;
+  translated = t(fallbackKey, { defaultValue: '' });
+  if (translated && translated !== fallbackKey && translated.trim() !== '') return translated;
+  return '';
+}
+
+/** 从 /apps/{code}/... 路径解析菜单 i18n 后缀并翻译（虚拟应用回退快制造） */
+function translateAppMenuByPath(
+  path: string,
+  t: (key: string, options?: { defaultValue?: string }) => string
+): string {
+  const appCode = extractAppCodeFromPath(path);
+  if (!appCode) return '';
+  const normalized = path.replace(/\/$/, '');
+  if (normalized === `/apps/${appCode}`) {
+    return getAppDisplayName(appCode, t, '');
+  }
+  const relativePath = normalized.replace(`/apps/${appCode}/`, '');
+  if (!relativePath) return '';
+
+  const patrolReportTitle = tryHaoligoPatrolReportGroupMenuTitle(appCode, relativePath, t);
+  if (patrolReportTitle) return patrolReportTitle;
+
+  const pathKey = relativePath.replace(/\//g, '.');
+  let translated = translateWithKuaizhizaoMenuFallback(appCode, pathKey, t);
+  if (translated) return translated;
+
+  if (relativePath.includes('reports/')) {
+    const reportSuffix = relativePath.split('reports/').pop()?.replace(/\//g, '.') || '';
+    translated = translateWithKuaizhizaoMenuFallback(appCode, `reports.${reportSuffix}`, t);
+    if (translated) return translated;
+  }
+
+  if (relativePath.startsWith('performance/')) {
+    const perfSuffix = `performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
+    translated = translateWithKuaizhizaoMenuFallback(appCode, perfSuffix, t);
+    if (translated) return translated;
+  }
+
+  return '';
+}
+
 /**
  * 数据库或历史同步可能把根菜单的 title（形如 app.some-app.name）错误写到子菜单上。
  * 若仍按该 key 直译，侧边栏会出现多个应用名。此时应走 path / 子节点 path 推导业务标题。
@@ -222,15 +276,13 @@ export function translateAppMenuItemName(
   let appCode = extractAppCodeFromPath(path);
   let relativePath: string | null = null;
 
-  if (path && appCode) {
-    // 应用根菜单（path === `/apps/${appCode}`）：优先使用统一的应用显示名 locale，
-    // 避免历史数据库中 root 菜单的 name 字段写入过旧名称（如「轻管理会计」「基础数据」）导致侧边栏/菜单管理错显。
-    const normalized = path.replace(/\/$/, '');
-    if (normalized === `/apps/${appCode}`) {
-      const appDisplay = getAppDisplayName(appCode, t, '');
-      if (appDisplay) return appDisplay;
+  if (path) {
+    const fromPath = translateAppMenuByPath(path, t);
+    if (fromPath) return fromPath;
+    appCode = extractAppCodeFromPath(path);
+    if (appCode) {
+      relativePath = path.replace(`/apps/${appCode}/`, '');
     }
-    relativePath = path.replace(`/apps/${appCode}/`, '');
   } else if (children && children.length > 0) {
     // 处理分组菜单：递归找到第一个有 path 的子孙节点
     const findFirstPath = (items: any[]): string | null => {
@@ -257,59 +309,43 @@ export function translateAppMenuItemName(
 
 
   if (appCode && relativePath) {
-    const patrolReportTitle = tryHaoligoPatrolReportGroupMenuTitle(appCode, relativePath, t);
-    if (patrolReportTitle) return patrolReportTitle;
+    const translated = translateWithKuaizhizaoMenuFallback(appCode, relativePath.replace(/\//g, '.'), t);
+    if (translated) return translated;
 
-    // 约定：path 末段 = i18n key 末段，path 推导直接命中 locale
-    const pathKey = relativePath.replace(/\//g, '.');
-    const menuKey = `app.${appCode}.menu.${pathKey}`;
-    let translated = t(menuKey, { defaultValue: '' });
-    if (translated && translated !== menuKey && translated.trim() !== '') {
-      return translated;
-    }
-
-    // 报表类菜单使用扁平命名空间 app.xxx.menu.reports.yyy，path 为 module/reports/yyy
-    // 路径推导会得到 app.xxx.menu.module.reports.yyy（不存在），需额外尝试 app.xxx.menu.reports.yyy
     if (relativePath.includes('reports/')) {
-      const reportKey = `app.${appCode}.menu.reports.${relativePath.split('reports/').pop()?.replace(/\//g, '.') || ''}`;
-      translated = t(reportKey, { defaultValue: '' });
-      if (translated && translated !== reportKey && translated.trim() !== '') {
-        return translated;
-      }
+      const reportSuffix = relativePath.split('reports/').pop()?.replace(/\//g, '.') || '';
+      const reportTranslated = translateWithKuaizhizaoMenuFallback(appCode, `reports.${reportSuffix}`, t);
+      if (reportTranslated) return reportTranslated;
     }
 
-    // 绩效管理：path 为 performance/xxx，i18n key 为 app.xxx.menu.performance-management.xxx
-    // 路径推导会得到 app.xxx.menu.performance.xxx（不存在），需额外尝试 performance-management
     if (relativePath.startsWith('performance/')) {
-      const perfKey = `app.${appCode}.menu.performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
-      translated = t(perfKey, { defaultValue: '' });
-      if (translated && translated !== perfKey && translated.trim() !== '') {
-        return translated;
-      }
+      const perfSuffix = `performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
+      const perfTranslated = translateWithKuaizhizaoMenuFallback(appCode, perfSuffix, t);
+      if (perfTranslated) return perfTranslated;
     }
 
-    const lastSegment = relativePath.split('/').pop() || '';
-    // 应用菜单分组：由子路径反推时 relativePath 可能仅为目录名（如 equipment/reports/xxx → reports），
-    // 若再命中全局 path.reports 等，会误显为「报表分析」等与当前应用无关的文案。
     const isSingleSegment = !relativePath.includes('/');
     const skipGlobalPathFallback =
       !!appCode &&
       isSingleSegment &&
       ['reports', 'charts', 'settings', 'dashboard', 'documents', 'management', 'daily'].includes(relativePath);
-    if (lastSegment && !skipGlobalPathFallback) {
-      const segmentKey = `path.${lastSegment}`;
-      const segmentTranslated = t(segmentKey, { defaultValue: '' });
-      if (segmentTranslated && segmentTranslated !== segmentKey && segmentTranslated.trim() !== '') {
-        return segmentTranslated;
+    if (!skipGlobalPathFallback) {
+      const lastSegment = relativePath.split('/').pop() || '';
+      if (lastSegment) {
+        const segmentKey = `path.${lastSegment}`;
+        const segmentTranslated = t(segmentKey, { defaultValue: '' });
+        if (segmentTranslated && segmentTranslated !== segmentKey && segmentTranslated.trim() !== '') {
+          return segmentTranslated;
+        }
       }
     }
-
-    // ⚠️ 禁止：有 path 的叶子项绝不能 fallback 到父级 key，否则会错误显示父级名称
-    // 原逻辑用 firstSegment(groupKey) 导致 "收款记录" 显示成 "财务管理"
   }
 
-  // 回退到通用翻译（兼容库中仍存的「模块·子菜单」及口号式旧分组名）
   const displayName = sanitizeHaoligoMenuDisplayTitle(name, path, children);
+  if (path) {
+    const pathTitle = translatePathTitle(path, t);
+    if (pathTitle && pathTitle !== path) return pathTitle;
+  }
   return translateMenuName(displayName, t, path);
 }
 
@@ -333,28 +369,8 @@ export function translatePathTitle(path: string, t: any): string {
   }
 
   // 1. 优先尝试应用菜单翻译（针对 /apps/{app-code}/... 格式的路径）
-  const appCode = extractAppCodeFromPath(pathname);
-  if (appCode) {
-    const relativePath = pathname.replace(`/apps/${appCode}/`, '');
-    const patrolReportTitle = tryHaoligoPatrolReportGroupMenuTitle(appCode, relativePath, t);
-    if (patrolReportTitle) return patrolReportTitle;
-
-    const menuKey = `app.${appCode}.menu.${relativePath.replace(/\//g, '.')}`;
-    let translated = t(menuKey, { defaultValue: '' });
-    if (translated && translated !== menuKey) return translated;
-    // 报表路径 module/reports/xxx 使用扁平 key app.xxx.menu.reports.xxx
-    if (relativePath.includes('reports/')) {
-      const reportKey = `app.${appCode}.menu.reports.${relativePath.split('reports/').pop()?.replace(/\//g, '.') || ''}`;
-      translated = t(reportKey, { defaultValue: '' });
-      if (translated && translated !== reportKey) return translated;
-    }
-    // 绩效管理路径 performance/xxx 使用 app.xxx.menu.performance-management.xxx
-    if (relativePath.startsWith('performance/')) {
-      const perfKey = `app.${appCode}.menu.performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
-      translated = t(perfKey, { defaultValue: '' });
-      if (translated && translated !== perfKey) return translated;
-    }
-  }
+  const fromAppPath = translateAppMenuByPath(pathname, t);
+  if (fromAppPath) return fromAppPath;
 
   // 2. 尝试多种前缀的翻译 (path.*, menu.*)
   const dotPath = pathname.replace(/^\//, '').replace(/\//g, '.');
@@ -371,13 +387,17 @@ export function translatePathTitle(path: string, t: any): string {
     }
   }
 
-  // 3. 尝试段翻译
+  // 3. 尝试段翻译（虚拟应用禁止回退为英文 path 片段）
   if (segment) {
     const segmentKey = `path.${segment}`;
     const segmentTranslated = t(segmentKey, { defaultValue: '' });
     if (segmentTranslated && segmentTranslated !== segmentKey) return segmentTranslated;
-    
-    // 默认大写
+
+    const appCode = extractAppCodeFromPath(pathname);
+    if (appCode && KUAIZHIZAO_VIRTUAL_APP_CODES.has(appCode)) {
+      return segment;
+    }
+
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   }
 
