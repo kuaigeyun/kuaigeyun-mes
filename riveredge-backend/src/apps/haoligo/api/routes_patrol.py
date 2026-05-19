@@ -6,9 +6,13 @@ from typing import Annotated, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from tortoise import timezone
+from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._users import resolve_tenant_user
+from apps.haoligo.constants.patrol_sheet_rule_codes import HAOLIGO_PATROL_HAZARD_REPORT_NO
 from apps.haoligo.models.equipment import HaoligoEquipment, HaoligoWorkshop
 from apps.haoligo.models.patrol import HaoligoHazardReport
 from apps.haoligo.services.hazard_report_side_effects import (
@@ -20,6 +24,7 @@ from apps.haoligo.services.spot_check_side_effects import (
     validate_report_notify_users,
 )
 from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/patrol/hazard-reports", tags=["App · HaoliGO · 巡查"])
@@ -29,6 +34,7 @@ class HazardOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
+    sheet_no: Optional[str] = None
     equipment_id: Optional[int] = None
     equipment_asset_code: Optional[str] = None
     equipment_name: Optional[str] = None
@@ -258,6 +264,8 @@ async def list_hazards(
     ),
     reported_from: Optional[datetime] = Query(None, description="巡查/反馈时间起（含）"),
     reported_to: Optional[datetime] = Query(None, description="巡查/反馈时间止（含）"),
+    sheet_no: Optional[str] = Query(None, description="登记单号（模糊）"),
+    keyword: Optional[str] = Query(None, description="单号/区域/登记人/责任人（模糊）"),
 ):
     qs = tenant_alive(HaoligoHazardReport, tenant_id)
     if status_filter:
@@ -270,6 +278,16 @@ async def list_hazards(
         qs = qs.filter(reported_at__gte=reported_from)
     if reported_to is not None:
         qs = qs.filter(reported_at__lte=reported_to)
+    if sheet_no and sheet_no.strip():
+        qs = qs.filter(sheet_no__icontains=sheet_no.strip())
+    k = (keyword or "").strip()
+    if k:
+        qs = qs.filter(
+            Q(sheet_no__icontains=k)
+            | Q(workshop_area__icontains=k)
+            | Q(registrant_name__icontains=k)
+            | Q(responsible_name__icontains=k)
+        )
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     eq_ids = {r.equipment_id for r in rows if getattr(r, "equipment_id", None)}
@@ -325,28 +343,34 @@ async def create_hazard(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="请至少选择一种问题类型",
         )
-    row = await HaoligoHazardReport.create(
-        tenant_id=tenant_id,
-        equipment_id=body.equipment_id,
-        workshop_id=body.workshop_id,
-        workshop_area=body.workshop_area,
-        reported_at=body.reported_at or timezone.now(),
-        issue_type_code=issue_codes[0] if issue_codes else None,
-        issue_type_codes=issue_codes,
-        problem_summary=body.problem_summary,
-        solution_note=body.solution_note,
-        status=eff_status,
-        before_image_file_ids=body.before_image_file_ids,
-        after_image_file_ids=body.after_image_file_ids,
-        handler_name=hn or None,
-        handled_at=body.handled_at,
-        registrant_user_id=reg_uid,
-        registrant_name=reg_name,
-        responsible_user_id=res_uid,
-        responsible_name=res_name,
-        report_enabled=report_enabled,
-        report_notify_user_ids=report_user_ids,
-    )
+    async with in_transaction():
+        try:
+            sheet_no = await generate_equipment_sheet_no(tenant_id, HAOLIGO_PATROL_HAZARD_REPORT_NO)
+        except ValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        row = await HaoligoHazardReport.create(
+            tenant_id=tenant_id,
+            sheet_no=sheet_no,
+            equipment_id=body.equipment_id,
+            workshop_id=body.workshop_id,
+            workshop_area=body.workshop_area,
+            reported_at=body.reported_at or timezone.now(),
+            issue_type_code=issue_codes[0] if issue_codes else None,
+            issue_type_codes=issue_codes,
+            problem_summary=body.problem_summary,
+            solution_note=body.solution_note,
+            status=eff_status,
+            before_image_file_ids=body.before_image_file_ids,
+            after_image_file_ids=body.after_image_file_ids,
+            handler_name=hn or None,
+            handled_at=body.handled_at,
+            registrant_user_id=reg_uid,
+            registrant_name=reg_name,
+            responsible_user_id=res_uid,
+            responsible_name=res_name,
+            report_enabled=report_enabled,
+            report_notify_user_ids=report_user_ids,
+        )
     await maybe_send_hazard_report_on_save(
         tenant_id,
         row,

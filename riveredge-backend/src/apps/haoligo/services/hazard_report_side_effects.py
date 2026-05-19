@@ -84,7 +84,7 @@ async def _hazard_report_message_variables(
     workshop_name: Optional[str] = None,
     equipment_label: Optional[str] = None,
 ) -> dict[str, str]:
-    hazard_ref = f"#{row.id}"
+    hazard_ref = (row.sheet_no or "").strip() or f"#{row.id}"
     ws_name = workshop_name or "—"
     if not workshop_name and row.workshop_id:
         ws = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=row.workshop_id).first()

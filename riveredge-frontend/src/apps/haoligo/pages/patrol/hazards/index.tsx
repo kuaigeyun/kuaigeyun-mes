@@ -150,6 +150,7 @@ const PatrolHazardsPage: React.FC = () => {
       },
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
     },
+    { title: '单号', dataIndex: 'sheet_no', width: 140, ellipsis: true, hideInSearch: true },
     { title: '车间', dataIndex: 'workshop_name', width: 120, ellipsis: true, hideInSearch: true },
     {
       title: '关联设备',
@@ -276,6 +277,7 @@ const PatrolHazardsPage: React.FC = () => {
       >
         {contextRow && (
           <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="单号">{contextRow.sheet_no?.trim() || `#${contextRow.id}`}</Descriptions.Item>
             <Descriptions.Item label="关联设备">
               {contextRow.equipment_id
                 ? `${contextRow.equipment_asset_code || ''} ${contextRow.equipment_name || ''}`.trim() ||

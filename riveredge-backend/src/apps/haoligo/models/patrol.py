@@ -11,8 +11,9 @@ class HaoligoHazardReport(HaoligoTenantModel):
     class Meta:
         table = "haoligo_hazard_report"
         table_description = "好力GO - 检查隐患单"
-        indexes = [("tenant_id",), ("status",), ("workshop_id",), ("reported_at",)]
+        indexes = [("tenant_id",), ("status",), ("workshop_id",), ("reported_at",), ("sheet_no",)]
 
+    sheet_no = fields.CharField(max_length=64, null=True, description="登记单号（编码规则生成）")
     workshop = fields.ForeignKeyField(
         "models.HaoligoWorkshop",
         related_name="hazard_reports",

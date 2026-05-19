@@ -71,6 +71,8 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "haoligo-molds-documents-maintenance-complete": "WBWX",
     "haoligo-molds-documents-outsource-maintenance": "WXWB",
     "haoligo-molds-documents-outsource-complete": "WXWBWX",
+    # 好力 GO — 现场巡查
+    "haoligo-patrol-hazard-reports": "XC",
 }
 
 # 页面配置数据结构
@@ -980,6 +982,22 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_rule_description": "路线巡检单默认规则：固定字符「XJ」+ 提交日期（YYMMDD）+ 自动计数（3 位数字，每日重置）",
     },
     {
+        "page_code": "haoligo-patrol-hazard-reports",
+        "page_name": "现场巡查登记",
+        "page_path": "/apps/haoligo/patrol/daily/form",
+        "code_field": "sheet_no",
+        "code_field_label": "登记单号",
+        "module": "好力 GO",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "HAOLIGO_PATROL_HAZARD_REPORT_NO",
+        "allow_manual_edit": False,
+        "include_date_in_code": True,
+        "code_date_preset_format": "YYMMDD",
+        "code_counter_digits": 3,
+        "code_rule_description": "现场巡查登记默认规则：固定字符「XC」+ 提交日期（YYMMDD）+ 自动计数（3 位数字，每日重置）",
+    },
+    {
         "page_code": "haoligo-equipment-documents-upkeep-sheet",
         "page_name": "设备保养单",
         "page_path": "/apps/haoligo/equipment/documents/upkeep-sheet",
@@ -1126,6 +1144,7 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     ),
     "HAOLIGO_EQUIPMENT_SPOT_CHECK_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentSpotCheck", "sheet_no"),
     "HAOLIGO_EQUIPMENT_ROUTE_PATROL_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentRoutePatrol", "sheet_no"),
+    "HAOLIGO_PATROL_HAZARD_REPORT_NO": ("apps.haoligo.models.patrol", "HaoligoHazardReport", "sheet_no"),
     "HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO": ("apps.haoligo.models.equipment_upkeep", "HaoligoEquipmentUpkeepSheet", "sheet_no"),
     "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO": (
         "apps.haoligo.models.equipment_upkeep",

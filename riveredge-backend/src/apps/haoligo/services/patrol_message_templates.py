@@ -26,7 +26,7 @@ PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_CONTENT = (
 )
 
 PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_VARIABLES: Dict[str, str] = {
-    "hazard_ref": "登记单号（业务单号或 ID）",
+    "hazard_ref": "登记单号（业务单号）",
     "hazard_id": "隐患单 ID",
     "workshop_name": "车间名称",
     "workshop_area": "巡查区域",

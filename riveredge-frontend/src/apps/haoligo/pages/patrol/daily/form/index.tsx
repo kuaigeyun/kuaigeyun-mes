@@ -135,7 +135,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
   const handleDeleteOne = (record: HazardRow) => {
     modal.confirm({
       title: '确认删除',
-      content: `确定删除该巡查问题记录吗？`,
+      content: `确定删除巡查单 ${record.sheet_no?.trim() || `#${record.id}`} 吗？`,
       okType: 'danger',
       onOk: async () => {
         await deleteHazardReport(record.id);
@@ -210,6 +210,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       fieldProps: { allowClear: true },
       render: (_, r) => <Tag color={statusColors[r.status] || 'default'}>{r.status}</Tag>,
     },
+    { title: '单号', dataIndex: 'sheet_no', width: 140, ellipsis: true, hideInSearch: true },
     { title: '车间', dataIndex: 'workshop_name', width: 120, ellipsis: true, hideInSearch: true },
     {
       title: '关联设备',

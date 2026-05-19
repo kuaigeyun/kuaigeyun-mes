@@ -1739,6 +1739,7 @@ export function deleteMoldReturnSheet(rowId: number): Promise<void> {
 export interface HazardRow {
   id: number;
   uuid: string;
+  sheet_no?: string | null;
   equipment_id?: number | null;
   equipment_asset_code?: string | null;
   equipment_name?: string | null;
@@ -1775,6 +1776,8 @@ export function listHazardReports(params?: {
   reported_to?: string;
   /** 为 true 时仅待治理（已登记）；与 status 同时传时以后端为准（通常只传 status） */
   for_remediation?: boolean;
+  sheet_no?: string;
+  keyword?: string;
 }): Promise<PageResult<HazardRow>> {
   return apiRequest(`${PREFIX}/patrol/hazard-reports`, { params });
 }
