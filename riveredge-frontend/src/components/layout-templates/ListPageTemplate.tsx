@@ -70,6 +70,8 @@ export interface ListPageTemplateProps {
    * 便于浏览器优先布局/绘制主内容；无表格的纯列表页可设 false。
    */
   prioritizeMainContentPaint?: boolean;
+  /** 主内容区 flex 占满剩余高度（Outlook 分栏等非 UniTable 页面） */
+  fillMain?: boolean;
 }
 
 /**
@@ -100,6 +102,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   className,
   style,
   prioritizeMainContentPaint = true,
+  fillMain = false,
 }) => {
   const { token } = AntdTheme.useToken();
   const screens = Grid.useBreakpoint();
@@ -239,7 +242,15 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
       </div>
     ) : null;
 
-  const mainRow = <div style={prioritizeMainContentPaint ? { minWidth: 0 } : undefined}>{children}</div>;
+  const mainRowInnerStyle: React.CSSProperties | undefined = fillMain
+    ? { flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }
+    : prioritizeMainContentPaint
+      ? { minWidth: 0 }
+      : undefined;
+  const mainRow = <div style={mainRowInnerStyle}>{children}</div>;
+  const mainRowWrapperStyle: React.CSSProperties = fillMain
+    ? { order: 3, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+    : { order: 3 };
 
   if (!prioritizeMainContentPaint) {
     return (
@@ -258,6 +269,10 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
     );
   }
 
+  const fillMainShellStyle: React.CSSProperties = fillMain
+    ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' }
+    : {};
+
   return (
     <div
       className={className}
@@ -266,13 +281,14 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         display: 'flex',
         flexDirection: 'column',
         ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
+        ...fillMainShellStyle,
         ...style,
       }}
     >
       {/* DOM 顺序：主内容 → 工具栏 → 指标卡；flex order 保持视觉仍为 指标卡 / 工具栏 / 表格 */}
-      <div style={{ order: 3 }}>{mainRow}</div>
-      {toolbarRow ? <div style={{ order: 2 }}>{toolbarRow}</div> : null}
-      {statCardsRow ? <div style={{ order: 1 }}>{statCardsRow}</div> : null}
+      <div style={mainRowWrapperStyle}>{mainRow}</div>
+      {toolbarRow ? <div style={{ order: 2, flexShrink: fillMain ? 0 : undefined }}>{toolbarRow}</div> : null}
+      {statCardsRow ? <div style={{ order: 1, flexShrink: fillMain ? 0 : undefined }}>{statCardsRow}</div> : null}
     </div>
   );
 };
