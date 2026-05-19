@@ -18,6 +18,7 @@ import { getUserList } from '../../../../../services/user';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
 import type { DictionaryItem } from '../../../../../services/dataDictionary';
 import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
+import { PatrolImagePreview } from './PatrolImagePreview';
 
 const { Text } = Typography;
 
@@ -221,7 +222,11 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
           上报
         </Typography.Text>
         <ProForm.Item label="现场图片">
-          <Upload {...uploadProps}>{readOnly ? null : '+'}</Upload>
+          {readOnly ? (
+            <PatrolImagePreview files={beforeFiles} />
+          ) : (
+            <Upload {...uploadProps}>+</Upload>
+          )}
         </ProForm.Item>
         <ProFormSelect
           name="registrant_user_id"

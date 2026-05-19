@@ -7,6 +7,7 @@ import { Typography, Upload } from 'antd';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { ProFormDateTimePicker, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
+import { PatrolImagePreview } from './PatrolImagePreview';
 
 const { Text } = Typography;
 
@@ -61,7 +62,11 @@ export const RemediationFormBody: React.FC<RemediationFormBodyProps> = ({
       </div>
       <div style={{ marginBottom: 12 }}>
         <SectionLabel num="06" label="处理后照片（选填）" />
-        <Upload {...uploadProps}>{readOnly ? null : '+'}</Upload>
+        {readOnly ? (
+          <PatrolImagePreview files={afterFiles} />
+        ) : (
+          <Upload {...uploadProps}>+</Upload>
+        )}
       </div>
       <div style={{ marginBottom: 12 }}>
         <SectionLabel num="07" label="处理时间" />
