@@ -424,6 +424,7 @@ class DatasetService:
                         parameters=execute_request.parameters,
                         limit=execute_request.limit,
                         offset=execute_request.offset,
+                        fill_missing_sql_parameters=execute_request.fill_missing_sql_parameters,
                     )
                 elif qt == 'api':
                     result = await self._execute_api_query(
@@ -550,6 +551,46 @@ class DatasetService:
         return "".join(parts), args
 
     @staticmethod
+    def _list_sql_named_parameters(sql: str) -> List[str]:
+        """提取 SQL 中 :name 命名参数（排除 PostgreSQL ::type）。"""
+        return list(dict.fromkeys(re.findall(r"(?<!:):(\w+)\b", sql)))
+
+    @staticmethod
+    def _build_sql_query_parameters(
+        sql: str,
+        query_config: Dict[str, Any],
+        parameters: Optional[Dict[str, Any]],
+        *,
+        tenant_id: int,
+        apply_tenant_isolation: bool,
+        fill_missing_sql_parameters: bool,
+    ) -> Dict[str, Any]:
+        query_params = dict(query_config.get("parameters", {}))
+        if parameters:
+            query_params.update(parameters)
+        if apply_tenant_isolation:
+            query_params["tenant_id"] = tenant_id
+        if fill_missing_sql_parameters:
+            for name in DatasetService._list_sql_named_parameters(sql):
+                if name not in query_params:
+                    query_params[name] = None
+        return query_params
+
+    @staticmethod
+    def _cursor_column_names(cursor: Any) -> List[str]:
+        """DB-API cursor.description → 列名（0 行时仍可用于列名探测）。"""
+        desc = getattr(cursor, "description", None) or []
+        names: List[str] = []
+        for item in desc:
+            if not item:
+                continue
+            name = item[0]
+            if name is None:
+                continue
+            names.append(str(name))
+        return names
+
+    @staticmethod
     def _escape_pymssql_literal_percents(sql: str) -> str:
         """
         pymssql 通过 Python「%」格式化绑定 %s 参数；SQL 里 LIKE 等字面量 % 须写成 %%，否则会破坏语句
@@ -631,9 +672,11 @@ class DatasetService:
                         else:
                             cur.execute(sql_pymssql)
                         rows = cur.fetchall()
+                        columns = DatasetService._cursor_column_names(cur)
                         if not rows:
-                            return {"success": True, "data": [], "columns": [], "total": 0}
-                        columns = list(rows[0].keys())
+                            return {"success": True, "data": [], "columns": columns, "total": 0}
+                        if not columns and rows:
+                            columns = list(rows[0].keys())
                         data = [dict(r) for r in rows]
                         return {"success": True, "data": data, "columns": columns, "total": len(data)}
                     finally:
@@ -719,6 +762,7 @@ class DatasetService:
         parameters: Optional[Dict[str, Any]] = None,
         limit: int = 100,
         offset: int = 0,
+        fill_missing_sql_parameters: bool = False,
     ) -> Dict[str, Any]:
         """
         执行 SQL 查询
@@ -777,12 +821,14 @@ class DatasetService:
             if apply_tenant_isolation:
                 sql = self._inject_tenant_filter_sql(sql)
 
-            # 合并查询参数；仅在开启隔离时强制注入 tenant_id（不允许被覆盖）
-            query_params = dict(query_config.get("parameters", {}))
-            if parameters:
-                query_params.update(parameters)
-            if apply_tenant_isolation:
-                query_params["tenant_id"] = tenant_id  # 强制注入当前租户ID
+            query_params = self._build_sql_query_parameters(
+                sql,
+                query_config,
+                parameters,
+                tenant_id=tenant_id,
+                apply_tenant_isolation=apply_tenant_isolation,
+                fill_missing_sql_parameters=fill_missing_sql_parameters,
+            )
 
             if db_type == "postgresql":
                 # 添加 LIMIT 和 OFFSET
