@@ -591,36 +591,16 @@ class DatasetService:
 
     @staticmethod
     def _execute_sqlserver_query_sync(config: Dict[str, Any], sql: str, args: List[Any]) -> Dict[str, Any]:
-        """在线程中连接 SQL Server 并执行只读查询：先 pymssql，失败后 ODBC/pyodbc（与测试连接一致）。"""
+        """
+        在线程中连接 SQL Server 并执行只读查询。
+        优先 pyodbc（? 占位，无 pymssql 的 % 格式化问题）；失败再试 pymssql（转义字面量 %）。
+        """
         import pymssql
 
         from core.services.integration.integration_config_service import IntegrationConfigService
 
-        sql = DatasetService._escape_pymssql_literal_percents(sql)
-        attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
-        last_exc: Optional[BaseException] = None
         tup = tuple(args) if args else tuple()
-        for kw in attempts:
-            try:
-                conn = pymssql.connect(**kw)
-                try:
-                    cur = conn.cursor(as_dict=True)
-                    if tup:
-                        cur.execute(sql, tup)
-                    else:
-                        cur.execute(sql)
-                    rows = cur.fetchall()
-                    if not rows:
-                        return {"success": True, "data": [], "columns": [], "total": 0}
-                    columns = list(rows[0].keys())
-                    data = [dict(r) for r in rows]
-                    return {"success": True, "data": data, "columns": columns, "total": len(data)}
-                finally:
-                    conn.close()
-            except Exception as e:
-                last_exc = e
 
-        pymssql_err = str(last_exc) if last_exc else "SQL Server pymssql 连接或查询失败"
         odbc_res = IntegrationConfigService._sqlserver_pyodbc_execute_query_sync(config, sql, tup)
         if odbc_res.get("success"):
             return {
@@ -629,6 +609,39 @@ class DatasetService:
                 "columns": odbc_res.get("columns", []),
                 "total": odbc_res.get("total", 0),
             }
+
+        sql_pymssql = DatasetService._escape_pymssql_literal_percents(sql)
+        base_attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
+        charset_primary = IntegrationConfigService._sqlserver_resolve_charset(config)
+        charset_candidates = list(
+            dict.fromkeys([charset_primary, "UTF-8" if charset_primary.upper() != "UTF-8" else "CP936"])
+        )
+
+        last_exc: Optional[BaseException] = None
+        for charset in charset_candidates:
+            for base_kw in base_attempts:
+                kw = dict(base_kw)
+                kw["charset"] = charset
+                try:
+                    conn = pymssql.connect(**kw)
+                    try:
+                        cur = conn.cursor(as_dict=True)
+                        if tup:
+                            cur.execute(sql_pymssql, tup)
+                        else:
+                            cur.execute(sql_pymssql)
+                        rows = cur.fetchall()
+                        if not rows:
+                            return {"success": True, "data": [], "columns": [], "total": 0}
+                        columns = list(rows[0].keys())
+                        data = [dict(r) for r in rows]
+                        return {"success": True, "data": data, "columns": columns, "total": len(data)}
+                    finally:
+                        conn.close()
+                except Exception as e:
+                    last_exc = e
+
+        pymssql_err = str(last_exc) if last_exc else "SQL Server pymssql 连接或查询失败"
         if odbc_res.get("skipped"):
             hint = (odbc_res.get("hint") or "").strip()
             sep = " " if hint else ""
@@ -712,7 +725,7 @@ class DatasetService:
 
         数据隔离：仅对系统默认（本地应用）数据源默认注入 tenant_id；第三方连接不注入，除非在 query_config 中设置 tenant_isolation: true。
         若业务表含 tenant_id 列且需隔离，请在 WHERE 中使用 tenant_id = :tenant_id，并开启 tenant_isolation。
-        支持 PostgreSQL（asyncpg）与 SQL Server（pymssql，失败时 ODBC/pyodbc 回退，与数据源「测试连接」策略一致）。
+        支持 PostgreSQL（asyncpg）与 SQL Server（优先 pyodbc，失败再 pymssql；与数据源「测试连接」策略一致）。
 
         Args:
             tenant_id: 当前租户ID（用于数据隔离）
