@@ -48,6 +48,8 @@
 
   /* 左侧品牌展示区 */
   .login-left {
+    position: relative;
+    overflow: hidden;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -61,9 +63,48 @@
       display: none;
     }
 
+    .login-left-bg-lottie {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: auto;
+      /* 略高于面板并自底部锚定，使画面整体略靠下 */
+      height: 50%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.3;
+      filter: brightness(0) invert(1);
+      background: transparent;
+
+      > div,
+      svg {
+        background: transparent !important;
+      }
+
+      > div {
+        width: 100% !important;
+        height: 100% !important;
+      }
+    }
+
+    /* 四角暗影：中间尽量透明，仅压暗边角以衬托 LOGO / 文案 */
+    .login-left-bg-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(120% 85% at 0% 0%, rgba(0, 0, 0, 0.2) 0%, transparent 58%),
+        radial-gradient(120% 85% at 100% 0%, rgba(0, 0, 0, 0.2) 0%, transparent 58%),
+        radial-gradient(120% 85% at 0% 100%, rgba(0, 0, 0, 0.22) 0%, transparent 58%),
+        radial-gradient(120% 85% at 100% 100%, rgba(0, 0, 0, 0.22) 0%, transparent 58%);
+    }
+
     /* LOGO 和框架名称放在左上角（桌面端） */
     .logo-top-left {
       position: absolute;
+      z-index: 2;
       top: 40px;
       left: 40px;
       display: flex;
@@ -96,23 +137,38 @@
     }
 
     .login-left-content {
+      position: relative;
+      z-index: 2;
       max-width: 400px;
       text-align: center;
 
-      /* Lottie 动画装饰 */
+      /* Lottie 装饰画 */
       .login-decoration-lottie {
+        position: relative;
         width: 100%;
-        max-width: 600px;
-        margin-bottom: 40px;
+        max-width: 520px;
+        margin: 0 auto 32px;
         display: flex;
         align-items: center;
         justify-content: center;
-        
-        /* 确保动画容器居中显示 */
+
         > div {
           width: 100% !important;
-          max-width: 600px;
+          max-width: 520px;
+          display: flex;
+          justify-content: center;
+
+          svg {
+            display: block;
+            margin: 0 auto;
+          }
         }
+      }
+
+      .login-decoration-lottie-placeholder {
+        width: 100%;
+        max-width: 520px;
+        aspect-ratio: 946 / 892;
       }
 
       /* 框架简介 */

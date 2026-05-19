@@ -19,7 +19,7 @@ import {
   DownloadOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons';
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import {
   registerPersonal,
@@ -50,6 +50,7 @@ import {
   SITE_LOGO_FALLBACK_SVG_URL,
   nextSiteLogoUrlAfterImageError,
 } from '../../constants/siteAssets';
+import { applyLottieThemeColor, prepareLoginDecorationLottie } from '../../utils/lottieTheme';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -252,7 +253,9 @@ export default function LoginPage() {
     };
   }, []);
 
-  // Lottie：空闲加载；小屏不加载动效，优先表单可交互
+  // 背景 Lottie 源数据（空闲加载）；主题色在下方 useMemo 中注入
+  const [lottieSourceBackground, setLottieSourceBackground] = useState<object | null>(null);
+  // 装饰画 Lottie：保持原始配色，不跟随主题
   const [animationData, setAnimationData] = useState<object | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return () => {};
@@ -260,19 +263,24 @@ export default function LoginPage() {
       return;
     }
     let cancelled = false;
-    const loadAnimation = () => {
-      import('../../../static/lottie/login.json').then((m) => {
-        if (!cancelled) setAnimationData(m.default);
+    const loadAnimations = () => {
+      void Promise.all([
+        import('../../../static/lottie/background.json'),
+        import('../../../static/lottie/login.json'),
+      ]).then(([background, decoration]) => {
+        if (cancelled) return;
+        setLottieSourceBackground(background.default);
+        setAnimationData(prepareLoginDecorationLottie(decoration.default));
       });
     };
     if ('requestIdleCallback' in window) {
-      const id = (window as any).requestIdleCallback(loadAnimation, { timeout: 1800 });
+      const id = (window as any).requestIdleCallback(loadAnimations, { timeout: 1800 });
       return () => {
         cancelled = true;
         (window as any).cancelIdleCallback?.(id);
       };
     }
-    const t = globalThis.setTimeout(loadAnimation, 600);
+    const t = globalThis.setTimeout(loadAnimations, 600);
     return () => {
       cancelled = true;
       globalThis.clearTimeout(t);
@@ -790,6 +798,12 @@ export default function LoginPage() {
   // 平台主题颜色（与 infra 登录页一致，从平台设置读取）
   /** 未拉到平台主题时与 Ant Design 5 默认主色一致（独立登录 MPA 无静态骨架，首帧由本页渲染） */
   const themeColor = platformSettings?.theme_color || '#1677ff';
+
+  const backgroundAnimationData = useMemo(
+    () =>
+      lottieSourceBackground ? applyLottieThemeColor(lottieSourceBackground, '#ffffff') : null,
+    [lottieSourceBackground],
+  );
 
   /**
    * 处理登录成功后的逻辑
@@ -1576,8 +1590,25 @@ export default function LoginPage() {
         className="login-left"
         style={{
           background: themeColor,
+          ['--login-theme-color' as string]: themeColor,
         }}
       >
+        {backgroundAnimationData ? (
+          <>
+            <div className="login-left-bg-lottie" aria-hidden>
+              <Suspense fallback={null}>
+                <LottiePlayer
+                  key="bg-white"
+                  animationData={backgroundAnimationData}
+                  loop
+                  rendererSettings={{ preserveAspectRatio: 'xMidYMax slice' }}
+                />
+              </Suspense>
+            </div>
+            <div className="login-left-bg-overlay" aria-hidden />
+          </>
+        ) : null}
+
         {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left" style={{
           opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
@@ -1618,15 +1649,15 @@ export default function LoginPage() {
           {/* Lottie 动画装饰显示在左侧上方（懒加载，未加载时显示占位） */}
           <div className="login-decoration-lottie">
             {animationData ? (
-              <Suspense fallback={<div style={{ width: '100%', maxWidth: '600px', aspectRatio: '1', background: 'rgba(255,255,255,0.1)', borderRadius: '16px' }} />}>
+              <Suspense fallback={<div className="login-decoration-lottie-placeholder" />}>
                 <LottiePlayer
                   animationData={animationData}
                   loop
-                  style={{ width: '100%', maxWidth: '600px', height: 'auto' }}
+                  style={{ width: '100%', maxWidth: '400px',height: 'auto' }}
                 />
               </Suspense>
             ) : (
-              <div style={{ width: '100%', maxWidth: '600px', aspectRatio: '1', background: 'rgba(255,255,255,0.1)', borderRadius: '16px' }} />
+              <div className="login-decoration-lottie-placeholder" />
             )}
           </div>
 
