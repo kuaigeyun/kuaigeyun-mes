@@ -34,7 +34,7 @@ import {
   Tooltip,
   Upload,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, CodeSandboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
@@ -50,6 +50,7 @@ import {
   batchMoldsLifecycle,
   putMoldTrialDatasetBinding,
   updateMoldTrialSheet,
+  type MoldRow,
   type MoldTrialDatasetBindingPayload,
   type MoldTrialSheetCreatePayload,
   type MoldTrialSheetRow,
@@ -135,6 +136,13 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [poPickerSelectedKeys, setPoPickerSelectedKeys] = useState<React.Key[]>([]);
   const [poPickerSelectedRow, setPoPickerSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [poPickerTrialFilter, setPoPickerTrialFilter] = useState<PoPickerTrialFilter>('all');
+
+  const [moldPickerOpen, setMoldPickerOpen] = useState(false);
+  const [moldPickerLoading, setMoldPickerLoading] = useState(false);
+  const [moldKw, setMoldKw] = useState('');
+  const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
+  /** 从待启用模具创建时跳过采购订单号必填 */
+  const [skipPurchaseOrder, setSkipPurchaseOrder] = useState(false);
 
   const loadBindingDatasetColumns = useCallback(
     async (datasetUuid: string | undefined, opts?: { silent?: boolean }) => {
@@ -271,6 +279,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
+    setSkipPurchaseOrder(false);
     setFormInitialValues({
       purchase_order_no,
       supplier_name: pick(supK),
@@ -286,7 +295,60 @@ const MoldTrialSheetsPage: React.FC = () => {
     setPoPickerSelectedRow(null);
   }, [datasetBinding, poPickerSelectedRow, messageApi]);
 
-  const createFromPoToolbar = useMemo(
+  const loadPendingEnableMolds = useCallback(async () => {
+    setMoldPickerLoading(true);
+    try {
+      const res = await listMolds({ limit: 200, skip: 0, status: '待启用' });
+      setMoldRows(res.items ?? []);
+    } catch {
+      setMoldRows([]);
+      messageApi.error('加载待启用模具失败');
+    } finally {
+      setMoldPickerLoading(false);
+    }
+  }, [messageApi]);
+
+  const handleOpenMoldPicker = useCallback(() => {
+    setMoldKw('');
+    setMoldPickerOpen(true);
+    void loadPendingEnableMolds();
+  }, [loadPendingEnableMolds]);
+
+  const handleUsePendingMold = useCallback(
+    (row: MoldRow) => {
+      setIsDetailView(false);
+      setIsEdit(false);
+      setEditId(null);
+      setSkipPurchaseOrder(true);
+      setFormInitialValues({
+        purchase_order_no: undefined,
+        supplier_name: undefined,
+        mold_code: row.mold_code,
+        mold_name: row.name,
+        trial_times: undefined,
+        trial_result: '合格',
+        sync_mold_status: true,
+        result_attachments: [],
+        inspection_attachments: [],
+      });
+      setMoldPickerOpen(false);
+      setModalVisible(true);
+      messageApi.success(`已选择模具 ${row.mold_code}`);
+    },
+    [messageApi],
+  );
+
+  const filteredPendingMolds = useMemo(() => {
+    const q = moldKw.trim().toLowerCase();
+    if (!q) return moldRows;
+    return moldRows.filter(
+      (r) =>
+        r.mold_code.toLowerCase().includes(q) ||
+        (r.name && r.name.toLowerCase().includes(q)),
+    );
+  }, [moldRows, moldKw]);
+
+  const createToolbarActions = useMemo(
     () => [
       <Tooltip
         key="from-po-tip"
@@ -308,8 +370,11 @@ const MoldTrialSheetsPage: React.FC = () => {
           </Button>
         </span>
       </Tooltip>,
+      <Button key="from-pending-mold" icon={<CodeSandboxOutlined />} onClick={handleOpenMoldPicker}>
+        从待启用模具创建
+      </Button>,
     ],
-    [canCreateFromPo, handleOpenPoFromErp],
+    [canCreateFromPo, handleOpenPoFromErp, handleOpenMoldPicker],
   );
 
   const poPickerFilteredRows = useMemo(() => {
@@ -407,6 +472,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(detail.id);
+      setSkipPurchaseOrder(!String(detail.purchase_order_no ?? '').trim());
       editSheetStatusRef.current = detail.sheet_status;
       setFormInitialValues({
         purchase_order_no: detail.purchase_order_no,
@@ -431,7 +497,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   const handleDeleteOne = (record: MoldTrialSheetRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除试模单「${record.purchase_order_no}」吗？`,
+      content: `确定删除试模单「${record.sheet_no || record.purchase_order_no || record.mold_code || record.id}」吗？`,
       okType: 'danger',
       onOk: async () => {
         try {
@@ -446,7 +512,10 @@ const MoldTrialSheetsPage: React.FC = () => {
   };
 
   const buildPayload = (values: Record<string, unknown>): MoldTrialSheetCreatePayload => ({
-    purchase_order_no: String(values.purchase_order_no ?? '').trim(),
+    purchase_order_no: (() => {
+      const s = String(values.purchase_order_no ?? '').trim();
+      return s || null;
+    })(),
     supplier_name: String(values.supplier_name ?? '').trim() || null,
     mold_code: String(values.mold_code ?? '').trim() || null,
     mold_name: String(values.mold_name ?? '').trim() || null,
@@ -463,6 +532,16 @@ const MoldTrialSheetsPage: React.FC = () => {
   });
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const po = String(values.purchase_order_no ?? '').trim();
+    const mc = String(values.mold_code ?? '').trim();
+    if (!skipPurchaseOrder && !po) {
+      messageApi.warning('请输入采购订单号');
+      throw new Error('validation');
+    }
+    if (skipPurchaseOrder && !mc) {
+      messageApi.warning('请选择或填写模具代号');
+      throw new Error('validation');
+    }
     setFormLoading(true);
     try {
       const payload = buildPayload(values);
@@ -762,6 +841,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       ellipsis: true,
       copyable: true,
       hideInSearch: true,
+      render: (_, r) => r.purchase_order_no?.trim() || '—',
     },
     {
       title: '供应商',
@@ -839,7 +919,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          toolBarActionsBeforeCreate={createFromPoToolbar}
+          toolBarActionsBeforeCreate={createToolbarActions}
           showDatasetConfigButton
           onDatasetConfig={handleDatasetConfig}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -878,6 +958,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           setModalVisible(false);
           setEditId(null);
           setIsDetailView(false);
+          setSkipPurchaseOrder(false);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -892,12 +973,14 @@ const MoldTrialSheetsPage: React.FC = () => {
             <ProFormText
               name="purchase_order_no"
               label="采购订单号"
-              placeholder="请输入采购订单号"
-              rules={[{ required: true, message: '请输入采购订单号' }]}
+              placeholder={skipPurchaseOrder ? '无采购单时可留空' : '请输入采购订单号'}
+              rules={skipPurchaseOrder ? [] : [{ required: true, message: '请输入采购订单号' }]}
               extra={
-                (datasetBinding?.dataset_uuid && (datasetBinding.order_param_key || '').trim())
-                  ? '已填订单号参数：离开输入框时会按订单号查询并带出供应商与模具信息'
-                  : undefined
+                skipPurchaseOrder
+                  ? '从待启用模具创建，可跳过模具采购单'
+                  : (datasetBinding?.dataset_uuid && (datasetBinding.order_param_key || '').trim())
+                    ? '已填订单号参数：离开输入框时会按订单号查询并带出供应商与模具信息'
+                    : undefined
               }
               fieldProps={{
                 onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
@@ -923,7 +1006,12 @@ const MoldTrialSheetsPage: React.FC = () => {
             </ProForm.Item>
           </Col>
           <Col span={12}>
-            <ProFormText name="mold_code" label="模具代号" placeholder="请输入模具代号" />
+            <ProFormText
+              name="mold_code"
+              label="模具代号"
+              placeholder="请输入模具代号"
+              rules={skipPurchaseOrder ? [{ required: true, message: '请填写模具代号' }] : []}
+            />
           </Col>
           <Col span={12}>
             <ProFormText name="mold_name" label="模具名称" placeholder="请输入模具名称" />
@@ -1177,6 +1265,46 @@ const MoldTrialSheetsPage: React.FC = () => {
             },
           }}
         />
+      </Modal>
+
+      <Modal
+        title="从待启用模具创建试模单"
+        open={moldPickerOpen}
+        onCancel={() => setMoldPickerOpen(false)}
+        width={720}
+        footer={null}
+        destroyOnHidden
+      >
+        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)' }}>
+          选择状态为「待启用」的模具，直接新建试模单，无需关联模具采购单。
+        </p>
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
+          <Table<MoldRow>
+            size="small"
+            rowKey="id"
+            loading={moldPickerLoading}
+            pagination={false}
+            scroll={{ y: 360 }}
+            dataSource={filteredPendingMolds}
+            locale={{ emptyText: '暂无待启用模具' }}
+            columns={[
+              { title: '模具代号', dataIndex: 'mold_code', width: 120 },
+              { title: '模具名称', dataIndex: 'name', ellipsis: true },
+              { title: '状态', dataIndex: 'status', width: 88 },
+              {
+                title: '操作',
+                key: 'op',
+                width: 88,
+                render: (_, r) => (
+                  <Button type="link" size="small" onClick={() => handleUsePendingMold(r)}>
+                    选用
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        </Space>
       </Modal>
     </>
   );

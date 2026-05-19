@@ -284,6 +284,29 @@ def _normalize_measured_value(value_type: str, raw: Optional[str]) -> Optional[s
         if sl in ("false", "0", "no", "n", "否", "off"):
             return "false"
         raise ValueError("布尔型实测值须为 true/false 或 是/否 等")
+    if vt in ("multiselect", "multi_select", "multi", "多选"):
+        if s.startswith("["):
+            try:
+                import json
+
+                arr = json.loads(s)
+                if isinstance(arr, list):
+                    parts = [str(x).strip() for x in arr if str(x).strip()]
+                    if not parts:
+                        return None
+                    joined = ",".join(parts)
+                    if len(joined) > 2000:
+                        raise ValueError("多选型实测值过长（最多 2000 字符）")
+                    return joined
+            except json.JSONDecodeError:
+                pass
+        parts = [p.strip() for p in s.replace("，", ",").split(",") if p.strip()]
+        if not parts:
+            return None
+        joined = ",".join(parts)
+        if len(joined) > 2000:
+            raise ValueError("多选型实测值过长（最多 2000 字符）")
+        return joined
     if len(s) > 2000:
         raise ValueError("文本型实测值过长（最多 2000 字符）")
     return s

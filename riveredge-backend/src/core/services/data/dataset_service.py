@@ -677,7 +677,10 @@ class DatasetService:
                             return {"success": True, "data": [], "columns": columns, "total": 0}
                         if not columns and rows:
                             columns = list(rows[0].keys())
-                        data = [dict(r) for r in rows]
+                        data = IntegrationConfigService._sqlserver_normalize_rows(
+                            [dict(r) for r in rows],
+                            config,
+                        )
                         return {"success": True, "data": data, "columns": columns, "total": len(data)}
                     finally:
                         conn.close()

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_ledger_source import MOLD_LEDGER_SOURCE_MANUAL, MOLD_LEDGER_SOURCE_SYNC
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
@@ -346,7 +347,7 @@ async def sync_mold_ledger_from_dataset(
     skipped = 0
     for raw in all_rows:
         row = raw if isinstance(raw, dict) else {}
-        mold_code = str(row.get(mc) or "").strip()
+        mold_code = parse_erp_mold_code(str(row.get(mc) or ""))
         if not mold_code:
             skipped += 1
             continue
@@ -455,7 +456,7 @@ async def list_molds(
         )
     qs = _molds_filtered_queryset(tenant_id, stf, keyword)
     total = await qs.count()
-    rows = await qs.order_by("mold_code").offset(skip).limit(limit)
+    rows = await qs.order_by("-updated_at", "-created_at", "mold_code").offset(skip).limit(limit)
     return {
         "items": [MoldOut.model_validate(r) for r in rows],
         "total": total,

@@ -14,7 +14,7 @@ class HaoligoMoldTrialSheet(HaoligoTenantModel):
         indexes = [("tenant_id",), ("purchase_order_no",), ("sheet_status",)]
 
     sheet_no = fields.CharField(max_length=64, null=True, description="试模单单号（系统编码规则生成）")
-    purchase_order_no = fields.CharField(max_length=128, description="采购订单号")
+    purchase_order_no = fields.CharField(max_length=128, null=True, description="采购订单号（从待启用模具试模时可空）")
     supplier_name = fields.CharField(max_length=200, null=True, description="供应商")
     mold_code = fields.CharField(max_length=64, null=True, description="模具代号")
     mold_name = fields.CharField(max_length=200, null=True, description="模具名称")

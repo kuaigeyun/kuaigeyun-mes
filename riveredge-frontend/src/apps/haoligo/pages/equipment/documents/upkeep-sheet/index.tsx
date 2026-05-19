@@ -13,6 +13,7 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 import { App, Button, Col, Form, Input, Modal, Row, Space, Spin, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +37,8 @@ import {
   updateEquipmentUpkeepSheet,
   type EquipmentUpkeepSheetRow,
 } from '../../../../services/haoligo';
-import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
+import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
 const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
@@ -401,7 +403,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           department_uuid: initDept || undefined,
           equipment_id: d.equipment_id,
           description: d.description,
-          header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
+          header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
         });
         await syncEquipmentWorkshop(d.equipment_id);
         startTransition(() => setFormOptionsReady(true));
@@ -745,12 +747,20 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                   />
                 </Col>
                 <Col span={24}>
-                  <ProFormUploadButton
-                    name="header_attachments"
-                    label={t('app.haoligo.equipment.upkeep.attachBefore')}
-                    max={10}
-                    fieldProps={uploadFieldProps}
-                  />
+                  {isDetailView ? (
+                    <Form.Item label={t('app.haoligo.equipment.upkeep.attachBefore')}>
+                      <PatrolImagePreview
+                        files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
+                      />
+                    </Form.Item>
+                  ) : (
+                    <ProFormUploadButton
+                      name="header_attachments"
+                      label={t('app.haoligo.equipment.upkeep.attachBefore')}
+                      max={10}
+                      fieldProps={uploadFieldProps}
+                    />
+                  )}
                 </Col>
               </Row>
             </ProForm>

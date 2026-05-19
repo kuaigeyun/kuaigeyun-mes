@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tortoise import timezone
 from tortoise.expressions import Q
 
@@ -39,7 +39,7 @@ class MoldTrialSheetOut(BaseModel):
     id: int
     uuid: str
     sheet_no: Optional[str] = None
-    purchase_order_no: str
+    purchase_order_no: Optional[str] = None
     supplier_name: Optional[str] = None
     mold_code: Optional[str] = None
     mold_name: Optional[str] = None
@@ -52,7 +52,7 @@ class MoldTrialSheetOut(BaseModel):
 
 
 class MoldTrialSheetCreate(BaseModel):
-    purchase_order_no: str = Field(max_length=128)
+    purchase_order_no: Optional[str] = Field(None, max_length=128)
     supplier_name: Optional[str] = Field(None, max_length=200)
     mold_code: Optional[str] = Field(None, max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
@@ -62,13 +62,21 @@ class MoldTrialSheetCreate(BaseModel):
     trial_result: TrialResultLiteral
     sheet_status: SheetStatusLiteral = "草稿"
 
-    @field_validator("purchase_order_no")
+    @field_validator("purchase_order_no", mode="before")
     @classmethod
-    def strip_po(cls, v: str) -> str:
-        s = v.strip()
-        if not s:
-            raise ValueError("采购订单号不能为空")
-        return s
+    def normalize_po(cls, v: object) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
+
+    @model_validator(mode="after")
+    def require_po_or_mold(self) -> "MoldTrialSheetCreate":
+        po = self.purchase_order_no
+        mc = (self.mold_code or "").strip()
+        if not po and not mc:
+            raise ValueError("请填写采购订单号，或选择待启用模具并填写模具代号")
+        return self
 
 
 class MoldTrialSheetUpdate(BaseModel):
@@ -236,7 +244,7 @@ async def create_trial_sheet(
     row = await HaoligoMoldTrialSheet.create(
         tenant_id=tenant_id,
         sheet_no=sheet_no,
-        purchase_order_no=body.purchase_order_no.strip(),
+        purchase_order_no=body.purchase_order_no,
         supplier_name=(body.supplier_name or "").strip() or None,
         mold_code=(body.mold_code or "").strip() or None,
         mold_name=(body.mold_name or "").strip() or None,
@@ -272,11 +280,18 @@ async def update_trial_sheet(
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
-    if "purchase_order_no" in data and data["purchase_order_no"] is not None:
-        s = str(data["purchase_order_no"]).strip()
-        if not s:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="采购订单号不能为空")
-        data["purchase_order_no"] = s
+    if "purchase_order_no" in data:
+        if data["purchase_order_no"] is None:
+            pass
+        else:
+            s = str(data["purchase_order_no"]).strip()
+            data["purchase_order_no"] = s or None
+            mc = str(data.get("mold_code") or row.mold_code or "").strip()
+            if not s and not mc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="采购订单号与模具代号不能同时为空",
+                )
     for k in ("supplier_name", "mold_code", "mold_name"):
         if k in data and data[k] is not None:
             data[k] = str(data[k]).strip() or None

@@ -60,7 +60,7 @@ class HaoligoInspectionParam(HaoligoTenantModel):
     code = fields.CharField(max_length=64, description="参数编码")
     name = fields.CharField(max_length=200, description="参数名称")
     unit = fields.CharField(max_length=32, null=True, description="单位")
-    value_type = fields.CharField(max_length=32, default="numeric", description="取值类型：numeric/text/boolean")
+    value_type = fields.CharField(max_length=32, default="numeric", description="取值类型：numeric/text/boolean/multiselect")
     default_value = fields.TextField(null=True, description="默认值（文本存储，创建设备点检单时预填实测值）")
 
 

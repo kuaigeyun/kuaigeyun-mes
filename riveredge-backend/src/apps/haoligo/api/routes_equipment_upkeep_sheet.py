@@ -112,7 +112,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOu
         applicant_name=row.applicant_name,
         department_uuid=row.department_uuid,
         department_name=row.department_name,
-        header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
+        header_attachment_file_uuids=_norm_uuid_list(row.header_attachment_file_uuids),
         equipment_id=row.equipment_id,
         equipment_asset_code=ac,
         equipment_name=nm,

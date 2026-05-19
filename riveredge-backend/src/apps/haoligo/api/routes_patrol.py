@@ -36,6 +36,7 @@ class HazardOut(BaseModel):
     workshop_name: Optional[str] = None
     workshop_area: Optional[str] = None
     reported_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     issue_type_code: Optional[str] = None
     issue_type_codes: List[str] = Field(default_factory=list)
     problem_summary: Optional[str] = None
@@ -255,6 +256,8 @@ async def list_hazards(
         None,
         description="为 true 时仅返回待治理（已登记）；与 status 同时传入时以 status 为准",
     ),
+    reported_from: Optional[datetime] = Query(None, description="巡查/反馈时间起（含）"),
+    reported_to: Optional[datetime] = Query(None, description="巡查/反馈时间止（含）"),
 ):
     qs = tenant_alive(HaoligoHazardReport, tenant_id)
     if status_filter:
@@ -263,6 +266,10 @@ async def list_hazards(
         qs = qs.filter(status="已登记")
     if equipment_id is not None:
         qs = qs.filter(equipment_id=equipment_id)
+    if reported_from is not None:
+        qs = qs.filter(reported_at__gte=reported_from)
+    if reported_to is not None:
+        qs = qs.filter(reported_at__lte=reported_to)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     eq_ids = {r.equipment_id for r in rows if getattr(r, "equipment_id", None)}

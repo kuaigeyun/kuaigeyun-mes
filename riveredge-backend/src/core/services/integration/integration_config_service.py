@@ -817,6 +817,92 @@ class IntegrationConfigService:
         return "CP936"
 
     @staticmethod
+    def _sqlserver_python_encoding(charset: str) -> str:
+        """TDS/ODBC charset 名 → Python codec（pymssql charset / pyodbc setdecoding）。"""
+        raw = (charset or "CP936").strip()
+        k = raw.lower().replace("-", "")
+        if k in ("utf8", "utf"):
+            return "utf-8"
+        if k in ("gbk", "gb2312", "cp936", "936", "gb18030"):
+            return "gbk"
+        return raw
+
+    @staticmethod
+    def _sqlserver_configure_pyodbc_conn(conn, config: Dict[str, Any]) -> None:
+        """SQL Server varchar 多为 CP936；pyodbc 默认按 UTF-8 解 SQL_CHAR 会导致中文乱码。"""
+        try:
+            import pyodbc
+        except ImportError:
+            return
+        enc = IntegrationConfigService._sqlserver_python_encoding(
+            IntegrationConfigService._sqlserver_resolve_charset(config)
+        )
+        try:
+            conn.setdecoding(pyodbc.SQL_CHAR, encoding=enc)
+            conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-16le")
+            conn.setencoding(encoding=enc)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _sqlserver_normalize_text(val: str, charset: str = "CP936") -> str:
+        """修正 ODBC/pymssql 路径上 varchar 的常见编码误解。"""
+        if not val:
+            return val
+        if val.isascii():
+            return val
+        enc = IntegrationConfigService._sqlserver_python_encoding(charset)
+        for src, tgt in (("latin-1", "utf-8"), ("cp1252", "utf-8")):
+            try:
+                fixed = val.encode(src).decode(tgt)
+                if fixed != val:
+                    return fixed
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                continue
+        if enc != "utf-8":
+            try:
+                fixed = val.encode("latin-1").decode(enc)
+                if fixed != val:
+                    return fixed
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                pass
+        return val
+
+    @staticmethod
+    def _sqlserver_normalize_cell_value(val: Any, config: Dict[str, Any]) -> Any:
+        from datetime import date, datetime, time
+        from decimal import Decimal
+
+        if val is None or isinstance(val, (bool, int, float, Decimal, datetime, date, time)):
+            return val
+        charset = IntegrationConfigService._sqlserver_resolve_charset(config)
+        if isinstance(val, bytes):
+            enc = IntegrationConfigService._sqlserver_python_encoding(charset)
+            for candidate in (enc, "gbk", "utf-8"):
+                try:
+                    return val.decode(candidate)
+                except UnicodeDecodeError:
+                    continue
+            return val.decode("utf-8", errors="replace")
+        if isinstance(val, str):
+            return IntegrationConfigService._sqlserver_normalize_text(val, charset)
+        return val
+
+    @staticmethod
+    def _sqlserver_normalize_rows(rows: List[Any], config: Dict[str, Any]) -> List[dict]:
+        out: List[dict] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            out.append(
+                {
+                    k: IntegrationConfigService._sqlserver_normalize_cell_value(v, config)
+                    for k, v in row.items()
+                }
+            )
+        return out
+
+    @staticmethod
     def _sqlserver_user_locked_encryption(config: Dict[str, Any]) -> bool:
         """
         用户是否锁定了加密策略（仅尝试其选择）。
@@ -1136,6 +1222,7 @@ class IntegrationConfigService:
                 )
                 try:
                     conn = pyodbc.connect(conn_str)
+                    IntegrationConfigService._sqlserver_configure_pyodbc_conn(conn, config)
                     try:
                         cur = conn.cursor()
                         if tup:
@@ -1146,7 +1233,10 @@ class IntegrationConfigService:
                         cols = [c[0] for c in (cur.description or [])]
                         if not rows:
                             return {"success": True, "data": [], "columns": cols, "total": 0}
-                        data = [dict(zip(cols, row)) for row in rows]
+                        data = IntegrationConfigService._sqlserver_normalize_rows(
+                            [dict(zip(cols, row)) for row in rows],
+                            config,
+                        )
                         return {"success": True, "data": data, "columns": cols, "total": len(data)}
                     finally:
                         conn.close()

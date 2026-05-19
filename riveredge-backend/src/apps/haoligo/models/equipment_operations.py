@@ -73,7 +73,7 @@ class HaoligoEquipmentSpotCheckLine(HaoligoTenantModel):
     param_code = fields.CharField(max_length=64, description="参数编码快照")
     param_name = fields.CharField(max_length=200, description="参数名称快照")
     sort_order = fields.IntField(default=0, description="顺序号（与方案明细一致）")
-    value_type = fields.CharField(max_length=32, default="numeric", description="取值类型快照：numeric/text/boolean")
+    value_type = fields.CharField(max_length=32, default="numeric", description="取值类型快照：numeric/text/boolean/multiselect")
     unit = fields.CharField(max_length=32, null=True, description="单位快照")
     is_required = fields.BooleanField(default=True, description="是否必检快照")
     measured_value = fields.TextField(null=True, description="实测值（文本存储，按 value_type 解析）")

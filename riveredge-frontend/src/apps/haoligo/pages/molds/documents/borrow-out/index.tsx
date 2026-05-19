@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDebounceFn } from 'ahooks';
 import {
   ActionType,
   ProColumns,
@@ -411,11 +412,16 @@ const MoldBorrowOutPage: React.FC = () => {
     }
   }, []);
 
-  const loadMoldsForPicker = useCallback(async () => {
+  const loadMoldsForPicker = useCallback(async (keyword?: string) => {
     setMoldLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0 });
-      setMoldRows(res.items);
+      const kw = (keyword ?? '').trim();
+      const res = await listMolds({
+        limit: 200,
+        skip: 0,
+        ...(kw ? { keyword: kw } : {}),
+      });
+      setMoldRows(res.items ?? []);
     } catch {
       setMoldRows([]);
     } finally {
@@ -423,15 +429,18 @@ const MoldBorrowOutPage: React.FC = () => {
     }
   }, []);
 
-  const filteredMolds = useMemo(() => {
-    const q = moldKw.trim().toLowerCase();
-    if (!q) return moldRows;
-    return moldRows.filter(
-      (r) =>
-        r.mold_code.toLowerCase().includes(q) ||
-        (r.name && r.name.toLowerCase().includes(q)),
-    );
-  }, [moldRows, moldKw]);
+  const { run: debouncedLoadMoldsForPicker } = useDebounceFn(
+    (keyword: string) => {
+      void loadMoldsForPicker(keyword);
+    },
+    { wait: 300 },
+  );
+
+  const handleOpenMoldPicker = useCallback(() => {
+    setMoldKw('');
+    setMoldPickerOpen(true);
+    void loadMoldsForPicker('');
+  }, [loadMoldsForPicker]);
 
   const handleCreate = async () => {
     setIsDetailView(false);
@@ -737,10 +746,7 @@ const MoldBorrowOutPage: React.FC = () => {
                         type="link"
                         size="small"
                         style={{ padding: '0 8px' }}
-                        onClick={() => {
-                          setMoldPickerOpen(true);
-                          void loadMoldsForPicker();
-                        }}
+                        onClick={handleOpenMoldPicker}
                       >
                         选择
                       </Button>
@@ -963,14 +969,23 @@ const MoldBorrowOutPage: React.FC = () => {
         destroyOnHidden
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
+          <Input
+            placeholder="筛选模具代号/名称"
+            value={moldKw}
+            onChange={(e) => {
+              const v = e.target.value;
+              setMoldKw(v);
+              debouncedLoadMoldsForPicker(v);
+            }}
+            allowClear
+          />
           <Table<MoldRow>
             size="small"
             rowKey="id"
             loading={moldLoading}
             pagination={false}
             scroll={{ y: 360 }}
-            dataSource={filteredMolds}
+            dataSource={moldRows}
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true },

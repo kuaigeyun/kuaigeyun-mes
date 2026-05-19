@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Space, Tag, Typography } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -20,6 +20,7 @@ import {
 import { getUserList } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../shared/datetimeHelpers';
+import { PatrolImagePreview } from '../shared/PatrolImagePreview';
 import { RemediationFormBody } from '../shared/RemediationFormBody';
 import { hazardIssueTypeCodes } from '../shared/patrolIssueHelpers';
 import { normUploadUuids, uuidsToUploadFileList } from '../shared/uploadHelpers';
@@ -295,6 +296,17 @@ const PatrolHazardsPage: React.FC = () => {
               {contextRow.problem_summary?.trim() ? contextRow.problem_summary : '—'}
             </Descriptions.Item>
           </Descriptions>
+        )}
+        {contextRow && (
+          <div style={{ marginBottom: 16 }}>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+              登记现场照片
+            </Typography.Text>
+            <PatrolImagePreview
+              files={uuidsToUploadFileList((contextRow.before_image_file_ids as string[] | undefined) ?? [])}
+              emptyText="无"
+            />
+          </div>
         )}
         <RemediationFormBody
           userOptions={userOptions}

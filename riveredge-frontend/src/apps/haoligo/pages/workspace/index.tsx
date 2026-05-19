@@ -84,7 +84,9 @@ const WorkspacePage: React.FC = () => {
         listHazardReports({ limit: 1 }),
         fetchAll((skip, limit) => listEquipments({ skip, limit })),
         fetchAll((skip, limit) => listMolds({ skip, limit })),
-        fetchAll((skip, limit) => listHazardReports({ skip, limit, created_from: fromDate, created_to: toDate })),
+        fetchAll((skip, limit) =>
+          listHazardReports({ skip, limit, reported_from: fromDate, reported_to: toDate }),
+        ),
       ]);
       setMeta(m);
       setWorkshopCount(ws.length);
@@ -117,9 +119,8 @@ const WorkspacePage: React.FC = () => {
       // --- 隐患上报趋势统计 ---
       const hTrendMap: Record<string, number> = {};
       last7Days.forEach(d => hTrendMap[d] = 0);
-      hazards.items.forEach(h => {
-        // Assume hazard report has a created_at or recorded_at
-        const dateStr = (h as any).created_at || (h as any).recorded_at;
+      hazards.items.forEach((h) => {
+        const dateStr = h.reported_at ?? h.created_at;
         if (dateStr) {
           const dStr = dayjs(dateStr).format('MM-DD');
           if (hTrendMap[dStr] !== undefined) hTrendMap[dStr]++;
@@ -218,14 +219,36 @@ const WorkspacePage: React.FC = () => {
     colorMap: Record<string, string>,
     domainOrder: readonly string[],
   ) => {
-    const chartData = data.filter((item) => item.value > 0);
-    const total = chartData.reduce((sum, item) => sum + item.value, 0);
+    const OTHER_SLICE = '其他';
+    const minSlicePct = 5;
+    const positive = data.filter((item) => item.value > 0);
+    const total = positive.reduce((sum, item) => sum + item.value, 0);
+
+    /** 过小扇区合并为「其他」，避免 spider 为空标签仍画引线 */
+    let chartData = positive;
+    if (total > 0 && positive.length > 1) {
+      const major: { type: string; value: number }[] = [];
+      let otherValue = 0;
+      for (const d of positive) {
+        if ((d.value / total) * 100 >= minSlicePct) major.push(d);
+        else otherValue += d.value;
+      }
+      if (otherValue > 0) {
+        chartData = [...major, { type: OTHER_SLICE, value: otherValue }];
+      } else if (major.length > 0) {
+        chartData = major;
+      }
+    }
+
     const present = new Set(chartData.map((d) => d.type));
     const domain = [
       ...domainOrder.filter((t) => present.has(t)),
       ...chartData.map((d) => d.type).filter((t) => !domainOrder.includes(t)),
     ];
-    const range = domain.map((t) => colorMap[t] ?? token.colorTextQuaternary);
+    const otherColor = token.colorTextQuaternary;
+    const range = domain.map((t) =>
+      t === OTHER_SLICE ? otherColor : (colorMap[t] ?? otherColor),
+    );
     return {
       data: chartData,
       angleField: 'value',
@@ -234,22 +257,25 @@ const WorkspacePage: React.FC = () => {
       innerRadius: 0.42,
       height: 300,
       autoFit: true,
-      padding: [32, 48, 16, 48],
+      padding: [40, 56, 20, 56],
       scale: { color: { type: 'ordinal', domain, range } },
       legend: {
         color: {
           position: 'bottom',
           layout: { justifyContent: 'center' },
+          flipPage: true,
+          maxRow: 2,
         },
       },
       label: {
         text: (d: { type: string; value: number }) => {
-          const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+          if (total <= 0) return '';
+          const pct = Math.round((d.value / total) * 100);
           return `${d.type}\n${pct}%`;
         },
         position: 'spider',
         style: { fontSize: 11, fill: token.colorText, lineHeight: 14 },
-        transform: [{ type: 'exceedAdjust', bounds: 'padding' }],
+        transform: [{ type: 'overlapDodgeY' }, { type: 'exceedAdjust', bounds: 'padding' }],
       },
     };
   };
@@ -449,9 +475,13 @@ const WorkspacePage: React.FC = () => {
             styles={{ body: chartCardBodyStyle }}
             style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: '100%' }}
           >
-            <div style={columnChartShellStyle}>
-              <Column {...hazardTrendConfig} />
-            </div>
+            {hazardTrendData.some((d) => d.count > 0) ? (
+              <div style={columnChartShellStyle}>
+                <Column {...hazardTrendConfig} />
+              </div>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+            )}
           </Card>
         </Col>
       </Row>

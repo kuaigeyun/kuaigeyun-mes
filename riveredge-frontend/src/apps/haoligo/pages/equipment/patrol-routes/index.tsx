@@ -333,13 +333,23 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
   };
 
   const handleAddEquipmentSubmit = async (values: Record<string, unknown>) => {
-    const equipment_id = Number(values.equipment_id);
-    if (!Number.isFinite(equipment_id)) {
+    const raw = values.equipment_ids;
+    const equipmentIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+    if (!equipmentIds.length) {
       messageApi.warning(t('app.haoligo.equipment.patrolRoutes.pickEquipment'));
       return;
     }
-    const eq = allEquipments.find((x) => x.id === equipment_id);
-    if (!eq) {
+
+    const rows = equipmentIds
+      .map((equipment_id) => {
+        const eq = allEquipments.find((x) => x.id === equipment_id);
+        if (!eq) return null;
+        return { equipment_id, eq };
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null);
+    if (!rows.length) {
       messageApi.warning(t('app.haoligo.equipment.patrolRoutes.pickEquipment'));
       return;
     }
@@ -347,13 +357,13 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     if (editorCreateMode) {
       setPendingLines((prev) => [
         ...prev,
-        {
+        ...rows.map(({ equipment_id, eq }, i) => ({
           tempId: newTempId(),
           equipment_id,
-          sequence: prev.length,
+          sequence: prev.length + i,
           asset_code: eq.asset_code,
           equipment_name: eq.name,
-        },
+        })),
       ]);
       setAddEquipOpen(false);
       addEquipFormRef.current?.resetFields();
@@ -362,13 +372,13 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
 
     setLines((prev) => [
       ...prev,
-      {
+      ...rows.map(({ equipment_id, eq }, i) => ({
         id: 0,
         equipment_id,
-        sequence: prev.length,
+        sequence: prev.length + i,
         asset_code: eq.asset_code,
         equipment_name: eq.name,
-      },
+      })),
     ]);
     setAddEquipOpen(false);
     addEquipFormRef.current?.resetFields();
@@ -749,13 +759,17 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
         grid={false}
       >
         <ProFormSelect
-          name="equipment_id"
+          name="equipment_ids"
           label={t('app.haoligo.equipment.patrolRoutes.stepColEquipment')}
           placeholder={t('app.haoligo.equipment.patrolRoutes.stepEquipmentPh')}
           rules={[{ required: true, message: t('app.haoligo.equipment.patrolRoutes.pickEquipment') }]}
           options={addableEquipmentOptions}
           showSearch
-          fieldProps={{ optionFilterProp: 'label' }}
+          fieldProps={{
+            mode: 'multiple',
+            optionFilterProp: 'label',
+            maxTagCount: 'responsive',
+          }}
         />
       </FormModalTemplate>
     </>

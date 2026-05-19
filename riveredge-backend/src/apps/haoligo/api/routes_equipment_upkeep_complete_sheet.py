@@ -1,7 +1,8 @@
 """好力 GO — 设备保养完成单 API（关联设备保养单；仅保养）。"""
 
+import re
 from datetime import datetime
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -24,17 +25,32 @@ router = APIRouter(
 )
 
 _COMPLETION_MAX = 4000
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
-def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
-    if not v:
+def _norm_uuid_list(v: Any) -> List[str]:
+    """归一化 JSON 文件 uuid 列表；兼容历史 JSONB 误存为单个 uuid 字符串。"""
+    if v is None:
         return []
-    out: List[str] = []
-    for x in v:
-        s = (x or "").strip()
-        if s:
-            out.append(s)
-    return s
+    if isinstance(v, str):
+        s = v.strip()
+        return [s] if s and _UUID_RE.fullmatch(s) else []
+    if isinstance(v, (list, tuple)):
+        out: List[str] = []
+        for item in v:
+            out.extend(_norm_uuid_list(item))
+        seen: set[str] = set()
+        deduped: List[str] = []
+        for u in out:
+            if u not in seen:
+                seen.add(u)
+                deduped.append(u)
+        return deduped
+    s = str(v).strip()
+    return [s] if s and _UUID_RE.fullmatch(s) else []
 
 
 def _strip_opt(v: Optional[str]) -> Optional[str]:
@@ -84,6 +100,11 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     reporter_user_id: int
     created_at: datetime
 
+    @field_validator("header_attachment_file_uuids", "source_header_attachment_file_uuids", mode="before")
+    @classmethod
+    def _coerce_attachment_uuids(cls, v: Any) -> List[str]:
+        return _norm_uuid_list(v)
+
 
 class EquipmentUpkeepCompleteSheetCreate(BaseModel):
     source_upkeep_sheet_id: int = Field(ge=1, description="设备保养单主键")
@@ -120,7 +141,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
     if sid:
         src_row = await tenant_alive(HaoligoEquipmentUpkeepSheet, row.tenant_id).filter(id=sid).prefetch_related("equipment").first()
         if src_row:
-            src_header = _norm_uuid_list(list(src_row.header_attachment_file_uuids or []))
+            src_header = _norm_uuid_list(src_row.header_attachment_file_uuids)
             src_desc = src_row.description
             await src_row.fetch_related("equipment")
             if src_row.equipment:
@@ -137,7 +158,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
         applicant_name=row.applicant_name,
         department_uuid=row.department_uuid,
         department_name=row.department_name,
-        header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
+        header_attachment_file_uuids=_norm_uuid_list(row.header_attachment_file_uuids),
         source_header_attachment_file_uuids=src_header,
         equipment_id=eq_id,
         equipment_asset_code=eq_ac,

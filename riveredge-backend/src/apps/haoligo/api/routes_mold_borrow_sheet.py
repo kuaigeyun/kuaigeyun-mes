@@ -12,6 +12,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._mold_processing_time import recompute_mold_processing_time_minutes
+from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
 from apps.haoligo.api._mold_ledger_sync import (
     MAINTENANCE_OCCUPY_STATUSES,
     count_active_borrow_sheets as _count_active_borrow_sheets,
@@ -257,8 +258,13 @@ async def prefill_mold_borrow_from_dataset(
     raw = rows[0] if isinstance(rows[0], dict) else {}
 
     dept_uuid, dept_name = await _resolve_department_uuid_name(tenant_id, raw, uuid_c, dname_c)
-    mold_code = _cell_str(raw, mc) if mc else ""
+    mold_code = parse_erp_mold_code(_cell_str(raw, mc)) if mc else ""
     mold_name = _cell_str(raw, mn) if mn else ""
+
+    if mold_code:
+        mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mold_code).first()
+        if mold and (mold.name or "").strip():
+            mold_name = mold.name.strip()
 
     fcode = _cell_str(raw, fcode_c) if fcode_c else ""
     fname = _cell_str(raw, fname_c) if fname_c else ""

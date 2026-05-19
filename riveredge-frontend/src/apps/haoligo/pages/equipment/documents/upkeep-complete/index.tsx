@@ -13,8 +13,9 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 import type { ColumnsType } from 'antd/es/table';
-import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Upload } from 'antd';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -36,7 +37,8 @@ import {
   type EquipmentUpkeepCompleteSheetRow,
   type EquipmentUpkeepSheetRow,
 } from '../../../../services/haoligo';
-import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
+import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
 const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
@@ -84,9 +86,17 @@ function resolveDefaultLeafDeptUuid(
 }
 
 function ReadonlyAttachmentStrip({ uuids }: { uuids: string[] | undefined }) {
-  const fl = uuidsToUploadFileList(uuids);
-  if (!fl.length) return <span style={{ color: '#999' }}>—</span>;
-  return <Upload listType="picture-card" disabled fileList={fl} />;
+  return (
+    <PatrolImagePreview
+      files={(uuids ?? []).map((uuid) => ({
+        uid: uuid,
+        name: '照片',
+        status: 'done' as const,
+        response: { uuid },
+      }))}
+      emptyText={<span style={{ color: '#999' }}>—</span>}
+    />
+  );
 }
 
 function formatUpkeepRowLabel(r: EquipmentUpkeepSheetRow): string {
@@ -496,7 +506,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept || undefined,
           completion_content: d.completion_content,
-          header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
+          header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
         });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
@@ -880,13 +890,27 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                     </>
                   ) : null}
                   <Divider dashed style={{ margin: '12px 0' }} />
-                  <ProFormUploadButton
-                    name="header_attachments"
-                    label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}
-                    max={10}
-                    fieldProps={uploadFieldProps}
-                  />
+                  {isDetailView ? (
+                    <Form.Item label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}>
+                      <PatrolImagePreview
+                        files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
+                      />
+                    </Form.Item>
+                  ) : (
+                    <ProFormUploadButton
+                      name="header_attachments"
+                      label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}
+                      max={10}
+                      fieldProps={uploadFieldProps}
+                    />
+                  )}
                 </div>
+              ) : isDetailView ? (
+                <Form.Item label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}>
+                  <PatrolImagePreview
+                    files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
+                  />
+                </Form.Item>
               ) : (
                 <ProFormUploadButton
                   name="header_attachments"

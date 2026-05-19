@@ -1072,7 +1072,7 @@ export interface MoldTrialSheetRow {
   id: number;
   uuid: string;
   sheet_no?: string | null;
-  purchase_order_no: string;
+  purchase_order_no?: string | null;
   supplier_name?: string | null;
   mold_code?: string | null;
   mold_name?: string | null;
@@ -1085,7 +1085,7 @@ export interface MoldTrialSheetRow {
 }
 
 export type MoldTrialSheetCreatePayload = {
-  purchase_order_no: string;
+  purchase_order_no?: string | null;
   supplier_name?: string | null;
   mold_code?: string | null;
   mold_name?: string | null;
@@ -1746,6 +1746,7 @@ export interface HazardRow {
   workshop_name?: string | null;
   workshop_area?: string | null;
   reported_at?: string | null;
+  created_at?: string | null;
   issue_type_code?: string | null;
   issue_type_codes?: string[];
   problem_summary?: string | null;
@@ -1768,6 +1769,10 @@ export function listHazardReports(params?: {
   limit?: number;
   status?: string;
   equipment_id?: number;
+  /** 巡查/反馈时间起（含，ISO8601） */
+  reported_from?: string;
+  /** 巡查/反馈时间止（含，ISO8601） */
+  reported_to?: string;
   /** 为 true 时仅待治理（已登记）；与 status 同时传时以后端为准（通常只传 status） */
   for_remediation?: boolean;
 }): Promise<PageResult<HazardRow>> {

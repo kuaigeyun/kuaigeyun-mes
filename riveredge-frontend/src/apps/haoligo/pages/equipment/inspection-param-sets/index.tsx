@@ -290,33 +290,43 @@ const InspectionParamSetsPage: React.FC = () => {
   };
 
   const handleAddItemSubmit = async (values: Record<string, unknown>) => {
-    const param_id = Number(values.param_id);
-    if (!Number.isFinite(param_id)) {
-      messageApi.warning(t('app.haoligo.equipment.inspectionParamSets.pickParam'));
-      return;
-    }
-    const p = allParams.find((x) => x.id === param_id);
-    if (!p) {
+    const raw = values.param_ids;
+    const paramIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+    if (!paramIds.length) {
       messageApi.warning(t('app.haoligo.equipment.inspectionParamSets.pickParam'));
       return;
     }
 
+    const baseSortRaw = values.sort_order;
+    const baseSort =
+      baseSortRaw != null && baseSortRaw !== '' ? Number(baseSortRaw) : editorCreateMode ? pendingLines.length : lines.length;
+    const sortStart = Number.isFinite(baseSort) ? baseSort : 0;
+    const isRequired = values.is_required !== false;
+
     if (editorCreateMode) {
-      const sort_order =
-        values.sort_order != null && values.sort_order !== '' ? Number(values.sort_order) : pendingLines.length;
-      setPendingLines((prev) => [
-        ...prev,
-        {
-          tempId: newTempId(),
-          param_id,
-          sort_order: Number.isFinite(sort_order) ? sort_order : prev.length,
-          is_required: values.is_required !== false,
-          param_code: p.code,
-          param_name: p.name,
-          param_unit: p.unit,
-          value_type: p.value_type,
-        },
-      ]);
+      const rows = paramIds
+        .map((param_id, i) => {
+          const p = allParams.find((x) => x.id === param_id);
+          if (!p) return null;
+          return {
+            tempId: newTempId(),
+            param_id,
+            sort_order: sortStart + i,
+            is_required: isRequired,
+            param_code: p.code,
+            param_name: p.name,
+            param_unit: p.unit,
+            value_type: p.value_type,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null);
+      if (!rows.length) {
+        messageApi.warning(t('app.haoligo.equipment.inspectionParamSets.pickParam'));
+        return;
+      }
+      setPendingLines((prev) => [...prev, ...rows]);
       setAddItemOpen(false);
       addItemFormRef.current?.resetFields();
       return;
@@ -325,11 +335,15 @@ const InspectionParamSetsPage: React.FC = () => {
     if (editorSetId == null) return;
     setAddItemLoading(true);
     try {
-      await addInspectionParamSetItem(editorSetId, {
-        param_id,
-        sort_order: values.sort_order != null && values.sort_order !== '' ? Number(values.sort_order) : 0,
-        is_required: values.is_required !== false,
-      });
+      await Promise.all(
+        paramIds.map((param_id, i) =>
+          addInspectionParamSetItem(editorSetId, {
+            param_id,
+            sort_order: sortStart + i,
+            is_required: isRequired,
+          }),
+        ),
+      );
       messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       setAddItemOpen(false);
       addItemFormRef.current?.resetFields();
@@ -718,13 +732,17 @@ const InspectionParamSetsPage: React.FC = () => {
         grid={false}
       >
         <ProFormSelect
-          name="param_id"
+          name="param_ids"
           label={t('app.haoligo.menu.equipment.inspection-params')}
           placeholder={t('app.haoligo.equipment.inspectionParamSets.addItemParamPh')}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParamSets.pickParam') }]}
           options={addableParamOptions}
           showSearch
-          fieldProps={{ optionFilterProp: 'label' }}
+          fieldProps={{
+            mode: 'multiple',
+            optionFilterProp: 'label',
+            maxTagCount: 'responsive',
+          }}
         />
         <ProFormDigit
           name="sort_order"

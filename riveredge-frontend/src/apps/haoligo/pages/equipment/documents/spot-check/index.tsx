@@ -28,6 +28,7 @@ import {
   Space,
   Spin,
   Switch,
+  Select,
   Tag,
   Tooltip,
   Typography,
@@ -58,6 +59,11 @@ import { getUserList } from '../../../../../../services/user';
 import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
+import {
+  formatMultiselectMeasuredValue,
+  normalizeInspectionValueType,
+  parseMultiselectMeasuredValue,
+} from '../../../../utils/inspectionParamValueType';
 
 function normalizeLine(ln: EquipmentSpotCheckLineRow): EquipmentSpotCheckLineRow {
   const ids = ln.attachment_file_ids;
@@ -470,14 +476,15 @@ const SpotCheckDocumentsPage: React.FC = () => {
   });
 
   const valueTypeLabel = (vt: string) => {
-    const key = (vt || 'numeric').toLowerCase();
+    const key = normalizeInspectionValueType(vt);
     if (key === 'boolean') return t('app.haoligo.equipment.inspectionParams.valueTypeBoolean');
     if (key === 'text') return t('app.haoligo.equipment.inspectionParams.valueTypeText');
+    if (key === 'multiselect') return t('app.haoligo.equipment.inspectionParams.valueTypeMultiselect');
     return t('app.haoligo.equipment.inspectionParams.valueTypeNumeric');
   };
 
   const renderMeasuredField = (row: EquipmentSpotCheckLineRow, idx: number, readOnly: boolean) => {
-    const vt = (row.value_type || 'numeric').toLowerCase();
+    const vt = normalizeInspectionValueType(row.value_type);
     if (readOnly) {
       if (vt === 'boolean') {
         return row.measured_value === 'true'
@@ -485,6 +492,10 @@ const SpotCheckDocumentsPage: React.FC = () => {
           : row.measured_value === 'false'
             ? t('app.haoligo.equipment.documents.boolNo')
             : '—';
+      }
+      if (vt === 'multiselect') {
+        const parts = parseMultiselectMeasuredValue(row.measured_value);
+        return parts.length ? parts.join('、') : '—';
       }
       return row.measured_value || '—';
     }
@@ -510,6 +521,22 @@ const SpotCheckDocumentsPage: React.FC = () => {
           onChange={(val) => {
             const s = val == null ? '' : String(val);
             setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, measured_value: s || null } : x)));
+          }}
+        />
+      );
+    }
+    if (vt === 'multiselect') {
+      const selected = parseMultiselectMeasuredValue(row.measured_value);
+      return (
+        <Select
+          mode="tags"
+          style={{ width: '100%' }}
+          value={selected}
+          tokenSeparators={[',', '，']}
+          placeholder={t('app.haoligo.equipment.documents.spotCheckMultiselectPh')}
+          onChange={(vals) => {
+            const s = formatMultiselectMeasuredValue(vals.map(String));
+            setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, measured_value: s } : x)));
           }}
         />
       );

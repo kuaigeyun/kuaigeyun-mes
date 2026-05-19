@@ -46,7 +46,7 @@ def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
         s = (x or "").strip()
         if s:
             out.append(s)
-    return s
+    return out
 
 
 def _strip_opt(v: Optional[str]) -> Optional[str]:
