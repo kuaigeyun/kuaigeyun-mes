@@ -35,3 +35,15 @@ export function getMoldLedgerStatusTagColor(status: string): string | undefined 
   }
   return MOLD_STATUS_TAG_COLORS[status as MoldLedgerStatus];
 }
+
+/** 模具台账状态 → 图表配色（与 Tag 语义一致，值为 hex） */
+export const MOLD_STATUS_CHART_COLORS: Record<MoldLedgerStatus, string> = {
+  待启用: '#13c2c2',
+  待用: '#1677ff',
+  在用: '#52c41a',
+  维修: '#fa541c',
+  保养: '#faad14',
+  外协维修: '#722ed1',
+  报废: '#ff4d4f',
+  停用: 'rgba(0, 0, 0, 0.45)',
+};

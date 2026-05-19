@@ -30,3 +30,23 @@ export function operationalStatusTextColor(status: string | null | undefined): s
   const active = operationalStatusActiveBulb(status);
   return active ? TRAFFIC_LIGHT_BULB_COLORS[active].on : 'rgba(0, 0, 0, 0.45)';
 }
+
+/** 工作台等设备中文状态 → 环状图配色（与 Andon 语义一致） */
+export const EQUIPMENT_STATUS_LABEL_ORDER = [
+  '正常运行',
+  '停机',
+  '维修',
+  '闲置备用',
+  '未知',
+] as const;
+
+export const EQUIPMENT_STATUS_LABEL_CHART_COLORS: Record<
+  (typeof EQUIPMENT_STATUS_LABEL_ORDER)[number],
+  string
+> = {
+  正常运行: TRAFFIC_LIGHT_BULB_COLORS.green.on,
+  停机: TRAFFIC_LIGHT_BULB_COLORS.red.on,
+  维修: TRAFFIC_LIGHT_BULB_COLORS.yellow.on,
+  闲置备用: '#1677ff',
+  未知: 'rgba(0, 0, 0, 0.45)',
+};
