@@ -21,6 +21,10 @@ import {
   type WorkshopRow,
 } from '../../../../services/haoligo';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
+import {
+  formatOperationalStatusDuration,
+  isShutdownOperationalStatus,
+} from '../../../../utils/formatOperationalStatusDuration';
 
 const EQUIPMENT_FETCH_LIMIT = 200;
 /** 封面区 21:9；内边距内图片 object-fit: contain 保持原始比例 */
@@ -90,8 +94,15 @@ const EquipmentStatusDashboardPage: React.FC = () => {
   const [equipments, setEquipments] = useState<EquipmentRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [statusMenuOpenId, setStatusMenuOpenId] = useState<number | null>(null);
+  /** 每分钟刷新停机时长展示 */
+  const [durationTick, setDurationTick] = useState(() => Date.now());
 
   const wsMap = useMemo(() => new Map(workshops.map((w) => [w.id, w])), [workshops]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setDurationTick(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const viewModeOptions = useMemo(
     () => [
@@ -204,7 +215,15 @@ const EquipmentStatusDashboardPage: React.FC = () => {
           remark: t('app.haoligo.equipment.statusBoard.quickSwitchRemark'),
         });
         setEquipments((prev) =>
-          prev.map((item) => (item.id === eq.id ? { ...item, operational_status: next } : item)),
+          prev.map((item) =>
+            item.id === eq.id
+              ? {
+                  ...item,
+                  operational_status: next,
+                  operational_status_since: row.recorded_at ?? dayjs().toISOString(),
+                }
+              : item,
+          ),
         );
         messageApi.success(
           t('app.haoligo.equipment.statusBoard.switchSuccess', { sheetNo: row.sheet_no || row.id }),
@@ -263,11 +282,15 @@ const EquipmentStatusDashboardPage: React.FC = () => {
       const coverUuid = eq.image_file_uuids?.[0];
       const statusKey = eq.operational_status;
       const statusLabel = formatStatus(statusKey, t('app.haoligo.equipment.statusBoard.statusUnset'));
+      const shutdownDuration =
+        isShutdownOperationalStatus(statusKey) && eq.operational_status_since
+          ? formatOperationalStatusDuration(eq.operational_status_since, durationTick)
+          : '';
 
       return (
-        <Card
-          key={eq.id}
-          hoverable
+        <div key={eq.id} style={{ position: 'relative', height: '100%' }}>
+          <Card
+            hoverable
           style={{
             height: '100%',
             display: 'flex',
@@ -377,11 +400,34 @@ const EquipmentStatusDashboardPage: React.FC = () => {
               </span>
             </Dropdown>
           </Flex>
-        </Card>
+          </Card>
+          {shutdownDuration ? (
+            <Typography.Text
+              type="danger"
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                zIndex: 2,
+                fontSize: 12,
+                lineHeight: '20px',
+                whiteSpace: 'nowrap',
+                padding: '2px 8px',
+                borderRadius: token.borderRadiusSM,
+                background: token.colorBgContainer,
+                boxShadow: token.boxShadowSecondary,
+              }}
+              title={shutdownDuration}
+            >
+              {t('app.haoligo.equipment.statusBoard.shutdownDuration', { duration: shutdownDuration })}
+            </Typography.Text>
+          ) : null}
+        </div>
       );
     },
     [
       cardCoverStyle,
+      durationTick,
       formatStatus,
       handleStatusMenuClick,
       statusMenuForEquipment,
@@ -390,6 +436,8 @@ const EquipmentStatusDashboardPage: React.FC = () => {
       switchingEquipmentId,
       t,
       token.borderRadiusLG,
+      token.borderRadiusSM,
+      token.boxShadowSecondary,
       token.colorBgContainer,
       token.colorBorderSecondary,
       token.colorTextHeading,

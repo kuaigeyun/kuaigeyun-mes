@@ -41,6 +41,9 @@ from apps.haoligo.services.route_patrol_side_effects import (
     apply_route_patrol_line_equipment_statuses,
     send_route_patrol_report_messages,
 )
+from apps.haoligo.services.inspection_numeric_range import (
+    spot_check_result_from_numeric_range,
+)
 from apps.haoligo.services.spot_check_side_effects import (
     _spot_check_report_already_sent,
     apply_spot_check_equipment_status,
@@ -360,6 +363,8 @@ class SpotCheckPreviewLineOut(BaseModel):
     unit: Optional[str] = None
     is_required: bool = True
     default_value: Optional[str] = None
+    numeric_min: Optional[Decimal] = None
+    numeric_max: Optional[Decimal] = None
 
 
 class SpotCheckPreviewOut(BaseModel):
@@ -380,10 +385,18 @@ class SpotCheckLineOut(BaseModel):
     value_type: str = "numeric"
     unit: Optional[str] = None
     is_required: bool = True
+    numeric_min: Optional[Decimal] = None
+    numeric_max: Optional[Decimal] = None
     measured_value: Optional[str] = None
     result: str
     remark: Optional[str] = None
     attachment_file_ids: Optional[list] = None
+
+
+def _apply_spot_check_line_numeric_range_result(ln: HaoligoEquipmentSpotCheckLine) -> None:
+    inferred = spot_check_result_from_numeric_range(ln.measured_value, ln.numeric_min, ln.numeric_max)
+    if inferred is not None:
+        ln.result = inferred
 
 
 class SpotCheckLinePatchItem(BaseModel):
@@ -512,6 +525,8 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
                 value_type=ln.value_type,
                 unit=ln.unit,
                 is_required=ln.is_required,
+                numeric_min=ln.numeric_min,
+                numeric_max=ln.numeric_max,
                 measured_value=ln.measured_value,
                 result=ln.result,
                 remark=ln.remark,
@@ -575,6 +590,8 @@ async def preview_spot_check_lines(
                 unit=p.unit if p else None,
                 is_required=it.is_required,
                 default_value=default_mv,
+                numeric_min=p.numeric_min if p else None,
+                numeric_max=p.numeric_max if p else None,
             )
         )
     return SpotCheckPreviewOut(
@@ -680,12 +697,15 @@ async def create_spot_check(
             name = p.name if p else ""
             pid = p.id if p else None
             vtype = (p.value_type if p else None) or "numeric"
+            num_min = p.numeric_min if p else None
+            num_max = p.numeric_max if p else None
             initial_mv: Optional[str] = None
             if p and p.default_value:
                 try:
                     initial_mv = _normalize_measured_value(vtype, p.default_value)
                 except ValueError:
                     initial_mv = None
+            line_result = spot_check_result_from_numeric_range(initial_mv, num_min, num_max) or "normal"
             await HaoligoEquipmentSpotCheckLine.create(
                 tenant_id=tenant_id,
                 header=header,
@@ -696,8 +716,10 @@ async def create_spot_check(
                 value_type=vtype,
                 unit=(p.unit if p else None) or None,
                 is_required=it.is_required,
+                numeric_min=num_min,
+                numeric_max=num_max,
                 measured_value=initial_mv,
-                result="normal",
+                result=line_result,
                 remark=None,
                 attachment_file_ids=None,
             )
@@ -796,7 +818,8 @@ async def update_spot_check(
                     continue
                 patch = SpotCheckLinePatchItem.model_validate(lu)
                 pd = patch.model_dump(exclude_unset=True)
-                ln.result = patch.result
+                if "result" in pd:
+                    ln.result = patch.result
                 if "remark" in pd:
                     rmk = patch.remark
                     ln.remark = (str(rmk).strip() if rmk is not None else None) or None
@@ -812,6 +835,7 @@ async def update_spot_check(
                             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail=f"第 {ln.sort_order} 行 {ln.param_name}: {e}",
                         ) from e
+                    _apply_spot_check_line_numeric_range_result(ln)
                 if "attachment_file_ids" in pd:
                     ln.attachment_file_ids = patch.attachment_file_ids
                 await ln.save()

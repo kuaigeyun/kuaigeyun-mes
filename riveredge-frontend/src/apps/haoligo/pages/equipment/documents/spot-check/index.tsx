@@ -64,6 +64,11 @@ import {
   normalizeInspectionValueType,
   parseMultiselectMeasuredValue,
 } from '../../../../utils/inspectionParamValueType';
+import {
+  applyNumericRangeToSpotCheckLine,
+  formatNumericRangeLabel,
+  isNumericMeasuredOutOfRange,
+} from '../../../../utils/inspectionNumericRange';
 
 function normalizeLine(ln: EquipmentSpotCheckLineRow): EquipmentSpotCheckLineRow {
   const ids = ln.attachment_file_ids;
@@ -77,7 +82,7 @@ function normalizeLine(ln: EquipmentSpotCheckLineRow): EquipmentSpotCheckLineRow
 }
 
 function previewLineToDraft(pl: EquipmentSpotCheckPreviewLine): EquipmentSpotCheckLineRow {
-  return normalizeLine({
+  const base = normalizeLine({
     id: 0,
     inspection_param_id: pl.inspection_param_id,
     param_code: pl.param_code,
@@ -86,11 +91,14 @@ function previewLineToDraft(pl: EquipmentSpotCheckPreviewLine): EquipmentSpotChe
     value_type: pl.value_type,
     unit: pl.unit,
     is_required: pl.is_required,
+    numeric_min: pl.numeric_min ?? null,
+    numeric_max: pl.numeric_max ?? null,
     result: 'normal',
     measured_value: pl.default_value ?? null,
     remark: null,
     attachment_file_ids: null,
   });
+  return applyNumericRangeToSpotCheckLine(base);
 }
 
 function lineMatchKey(ln: { param_code: string; sort_order: number }) {
@@ -514,15 +522,28 @@ const SpotCheckDocumentsPage: React.FC = () => {
     }
     if (vt === 'numeric') {
       const n = row.measured_value != null && row.measured_value !== '' ? Number(row.measured_value) : undefined;
+      const outOfRange = isNumericMeasuredOutOfRange(row.measured_value, row.numeric_min, row.numeric_max);
       return (
-        <InputNumber
-          style={{ width: '100%' }}
-          value={Number.isFinite(n as number) ? (n as number) : undefined}
-          onChange={(val) => {
-            const s = val == null ? '' : String(val);
-            setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, measured_value: s || null } : x)));
-          }}
-        />
+        <div>
+          <InputNumber
+            style={{ width: '100%' }}
+            status={outOfRange === true ? 'error' : undefined}
+            value={Number.isFinite(n as number) ? (n as number) : undefined}
+            onChange={(val) => {
+              const s = val == null ? '' : String(val);
+              setLines((prev) =>
+                prev.map((x, i) =>
+                  i === idx ? applyNumericRangeToSpotCheckLine({ ...x, measured_value: s || null }) : x,
+                ),
+              );
+            }}
+          />
+          {outOfRange === true ? (
+            <Typography.Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+              {t('app.haoligo.equipment.documents.spotCheckOutOfRangeHint')}
+            </Typography.Text>
+          ) : null}
+        </div>
       );
     }
     if (vt === 'multiselect') {
@@ -555,7 +576,13 @@ const SpotCheckDocumentsPage: React.FC = () => {
 
   const renderLineCard = (row: EquipmentSpotCheckLineRow, idx: number) => {
     const readOnly = detailMode;
-    const meta = [valueTypeLabel(row.value_type), row.unit ? row.unit : null].filter(Boolean).join(' · ');
+    const rangeLabel =
+      normalizeInspectionValueType(row.value_type) === 'numeric'
+        ? formatNumericRangeLabel(row.numeric_min, row.numeric_max)
+        : '';
+    const meta = [valueTypeLabel(row.value_type), row.unit ? row.unit : null, rangeLabel || null]
+      .filter(Boolean)
+      .join(' · ');
 
     return (
       <Card
@@ -616,7 +643,14 @@ const SpotCheckDocumentsPage: React.FC = () => {
                     );
                   }}
                 >
-                  <Radio.Button value="normal">{t('app.haoligo.equipment.documents.resultNormal')}</Radio.Button>
+                  <Radio.Button
+                    value="normal"
+                    disabled={
+                      isNumericMeasuredOutOfRange(row.measured_value, row.numeric_min, row.numeric_max) === true
+                    }
+                  >
+                    {t('app.haoligo.equipment.documents.resultNormal')}
+                  </Radio.Button>
                   <Radio.Button value="abnormal">{t('app.haoligo.equipment.documents.resultAbnormal')}</Radio.Button>
                 </Radio.Group>
               )}

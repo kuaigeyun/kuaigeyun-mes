@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 设备保养完成单（关联设备保养单；保养前后附件分区；对齐维保完修单交互习惯）
+ * 好力 GO — 设备维保完成单（维修/保养；关联设备维保单；对齐模具维保完修单交互）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -15,7 +15,7 @@ import {
 import type { UploadProps } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { ColumnsType } from 'antd/es/table';
-import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Upload } from 'antd';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tabs, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -31,6 +31,7 @@ import {
   createEquipmentUpkeepCompleteSheet,
   deleteEquipmentUpkeepCompleteSheet,
   getEquipmentUpkeepCompleteSheet,
+  HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
   listEquipmentUpkeepCompleteSheets,
   listEquipmentUpkeepSheets,
   updateEquipmentUpkeepCompleteSheet,
@@ -100,7 +101,7 @@ function ReadonlyAttachmentStrip({ uuids }: { uuids: string[] | undefined }) {
 }
 
 function formatUpkeepRowLabel(r: EquipmentUpkeepSheetRow): string {
-  const no = (r.sheet_no && String(r.sheet_no).trim()) || `保养单#${r.id}`;
+  const no = (r.sheet_no && String(r.sheet_no).trim()) || `维保单#${r.id}`;
   const eq =
     r.equipment_asset_code || r.equipment_name
       ? `${r.equipment_asset_code || ''} ${r.equipment_name || ''}`.trim()
@@ -182,11 +183,22 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
   const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
   const [sourceRows, setSourceRows] = useState<EquipmentUpkeepSheetRow[]>([]);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [sourcePickerTab, setSourcePickerTab] = useState<'维修' | '保养'>('维修');
+  const [formServiceType, setFormServiceType] = useState<'维修' | '保养'>('保养');
   const [beforePreview, setBeforePreview] = useState<{ header: string[]; description: string } | null>(null);
   const [sourceOrderDisplay, setSourceOrderDisplay] = useState('');
   const [equipmentDisplay, setEquipmentDisplay] = useState('');
 
   const title = t('app.haoligo.menu.equipment.documents.upkeep-complete');
+
+  const sourceRowsRepair = useMemo(
+    () => sourceRows.filter((r) => String(r.service_type ?? '').trim() === '维修'),
+    [sourceRows],
+  );
+  const sourceRowsUpkeep = useMemo(
+    () => sourceRows.filter((r) => String(r.service_type ?? '保养').trim() !== '维修'),
+    [sourceRows],
+  );
 
   useEffect(() => {
     if (modalVisible) return;
@@ -399,14 +411,20 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
             ]
           : undefined,
       );
+      const st = String(row.service_type ?? '').trim() === '维修' ? '维修' : '保养';
+      setFormServiceType(st);
       setBeforePreview({
         header: [...(row.header_attachment_file_uuids || [])],
         description: row.description || '',
       });
       formRef.current?.setFieldsValue({
         source_upkeep_sheet_id: n,
+        service_type: st,
         applicant_user_id: row.applicant_user_id ?? undefined,
         department_uuid: (row.department_uuid || '').trim() || undefined,
+        completion_content: '',
+        repair_content: '',
+        repair_result: undefined,
       });
       setSourcePickerOpen(false);
     },
@@ -415,9 +433,14 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
 
   const clearSelectedSource = useCallback(() => {
     setBeforePreview(null);
+    setFormServiceType('保养');
     formRef.current?.setFieldsValue({
       source_upkeep_sheet_id: undefined,
+      service_type: undefined,
       header_attachments: [],
+      completion_content: '',
+      repair_content: '',
+      repair_result: undefined,
     });
   }, []);
 
@@ -427,6 +450,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
     setIsDetailView(false);
     setFormOptionsReady(false);
     setBeforePreview(null);
+    setFormServiceType('保养');
     setSourceOrderDisplay('');
     setEquipmentDisplay('');
   }, []);
@@ -448,11 +472,15 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
         deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
       }
+      setFormServiceType('保养');
       setFormInitialValues({
+        service_type: undefined,
         applicant_user_id: uid,
         department_uuid: deptUuid,
         source_upkeep_sheet_id: undefined,
         completion_content: '',
+        repair_content: '',
+        repair_result: undefined,
         header_attachments: [],
       });
       setBeforePreview(null);
@@ -493,6 +521,8 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           header: [...(d.source_header_attachment_file_uuids || [])],
           description: d.source_description || '',
         });
+        const st = (d.service_type || d.source_service_type || '保养').trim() === '维修' ? '维修' : '保养';
+        setFormServiceType(st);
         setSourceOrderDisplay(d.source_order_no || '');
         const eqLabel =
           d.equipment_asset_code || d.equipment_name
@@ -502,10 +532,13 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               : '';
         setEquipmentDisplay(eqLabel);
         setFormInitialValues({
+          service_type: st,
           source_upkeep_sheet_id: d.source_upkeep_sheet_id ?? undefined,
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept || undefined,
-          completion_content: d.completion_content,
+          completion_content: d.completion_content ?? '',
+          repair_content: d.repair_content ?? '',
+          repair_result: d.repair_result ?? undefined,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
         });
         startTransition(() => setFormOptionsReady(true));
@@ -557,10 +590,24 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       messageApi.error(t('app.haoligo.equipment.upkeep.deptInvalid'));
       return Promise.reject(new Error('validation'));
     }
+    const st = formServiceType;
     const completion = String(values.completion_content ?? '').trim();
-    if (!completion) {
-      messageApi.error(t('app.haoligo.equipment.upkeepComplete.completionRequired'));
-      return Promise.reject(new Error('validation'));
+    const repairContent = String(values.repair_content ?? '').trim();
+    const repairResult = String(values.repair_result ?? '').trim();
+    if (st === '保养') {
+      if (!completion) {
+        messageApi.error(t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'));
+        return Promise.reject(new Error('validation'));
+      }
+    } else {
+      if (!repairContent) {
+        messageApi.error(t('app.haoligo.equipment.upkeepComplete.repairContentRequired'));
+        return Promise.reject(new Error('validation'));
+      }
+      if (!repairResult) {
+        messageApi.error(t('app.haoligo.equipment.upkeepComplete.repairResultRequired'));
+        return Promise.reject(new Error('validation'));
+      }
     }
     const headerUuids = normUploadUuids(values.header_attachments);
     setFormLoading(true);
@@ -569,7 +616,9 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         await updateEquipmentUpkeepCompleteSheet(editId, {
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
-          completion_content: completion,
+          completion_content: st === '保养' ? completion : null,
+          repair_content: st === '维修' ? repairContent : null,
+          repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
@@ -583,7 +632,9 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           source_upkeep_sheet_id: sid,
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
-          completion_content: completion,
+          completion_content: st === '保养' ? completion : null,
+          repair_content: st === '维修' ? repairContent : null,
+          repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
@@ -619,6 +670,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
 
   const pickerColumns: ColumnsType<EquipmentUpkeepSheetRow> = useMemo(
     () => [
+      { title: t('app.haoligo.equipment.upkeep.serviceType'), dataIndex: 'service_type', width: 80 },
       { title: t('app.haoligo.equipment.documents.colSheetNo'), dataIndex: 'sheet_no', ellipsis: true, width: 130 },
       {
         title: t('app.haoligo.equipment.documents.colEquipment'),
@@ -660,6 +712,12 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.haoligo.equipment.upkeep.serviceType'),
+      dataIndex: 'service_type',
+      width: 90,
+      hideInSearch: true,
+    },
+    {
       title: t('app.haoligo.equipment.upkeep.department'),
       dataIndex: 'department_name',
       width: 160,
@@ -673,9 +731,21 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('app.haoligo.equipment.upkeepComplete.completion'),
+      title: t('app.haoligo.equipment.upkeepComplete.upkeepContent'),
       dataIndex: 'completion_content',
       ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.haoligo.equipment.upkeepComplete.repairContent'),
+      dataIndex: 'repair_content',
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.haoligo.equipment.upkeepComplete.repairResult'),
+      dataIndex: 'repair_result',
+      width: 100,
       hideInSearch: true,
     },
     moldDocumentCreatedAtColumn<EquipmentUpkeepCompleteSheetRow>(),
@@ -785,7 +855,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               layout="vertical"
               scrollToFirstError
             >
-              {!isEdit && sourceRows.length === 0 ? (
+              {!isEdit && sourceRowsRepair.length === 0 && sourceRowsUpkeep.length === 0 ? (
                 <Alert
                   type="info"
                   showIcon
@@ -796,16 +866,17 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               ) : null}
               <Row gutter={16}>
                 <Col span={24}>
-                  {!isEdit && sourceRows.length > 0 ? (
+                  {!isEdit && (sourceRowsRepair.length > 0 || sourceRowsUpkeep.length > 0) ? (
                     <ProForm.Item
                       name="source_upkeep_sheet_id"
                       label={t('app.haoligo.equipment.upkeepComplete.sourceSheet')}
                       rules={[{ required: true, message: t('app.haoligo.equipment.upkeepComplete.sourceRequired') }]}
                     >
                       <SourceUpkeepPickerTrigger
-                        rows={sourceRows}
+                        rows={[...sourceRowsRepair, ...sourceRowsUpkeep]}
                         disabled={isDetailView}
                         onOpen={() => {
+                          setSourcePickerTab('维修');
                           setSourcePickerOpen(true);
                           void loadSourcesForPicker();
                         }}
@@ -816,16 +887,19 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                       />
                     </ProForm.Item>
                   ) : null}
-                  {isEdit ? (
+                  {!isEdit && beforePreview ? (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('app.haoligo.equipment.upkeepComplete.sourceSheet')}</div>
-                      <Input readOnly value={sourceOrderDisplay} />
-                      {equipmentDisplay ? (
-                        <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
-                          {t('app.haoligo.equipment.documents.colEquipment')}: {equipmentDisplay}
-                        </div>
-                      ) : null}
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>{t('app.haoligo.equipment.upkeep.serviceType')}</span>
+                      <Input readOnly value={formServiceType} />
                     </div>
+                  ) : null}
+                  {isEdit ? (
+                    <section style={{ marginBottom: 12 }}>
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>{t('app.haoligo.equipment.upkeep.serviceType')}</span>
+                      <Input readOnly value={formServiceType} style={{ marginBottom: 8 }} />
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>{t('app.haoligo.equipment.upkeepComplete.sourceSheet')}</span>
+                      <Input readOnly value={sourceOrderDisplay} />
+                    </section>
                   ) : null}
                 </Col>
               </Row>
@@ -868,64 +942,131 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                 </Col>
               </Row>
 
-              {beforePreview ? (
-                <div
-                  style={{
-                    marginBottom: 16,
-                    padding: 12,
-                    background: '#fafafa',
-                    border: '1px solid #f0f0f0',
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.haoligo.equipment.upkeepComplete.beforeStrip')}</div>
-                  <ReadonlyAttachmentStrip uuids={beforePreview.header} />
-                  {beforePreview.description ? (
-                    <>
-                      <Divider dashed style={{ margin: '12px 0' }} />
-                      <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.65)', marginBottom: 4 }}>
-                        {t('app.haoligo.equipment.upkeepComplete.sourceDesc')}
-                      </div>
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{beforePreview.description}</div>
-                    </>
+              {(beforePreview || isEdit) && formServiceType ? (
+                <>
+                  <Divider titlePlacement="left">{t('app.haoligo.equipment.upkeepComplete.sectionSource')}</Divider>
+                  {equipmentDisplay ? (
+                    <div style={{ marginBottom: 12, fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
+                      {t('app.haoligo.equipment.documents.colEquipment')}: {equipmentDisplay}
+                    </div>
                   ) : null}
-                  <Divider dashed style={{ margin: '12px 0' }} />
-                  {isDetailView ? (
-                    <Form.Item label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}>
-                      <PatrolImagePreview
-                        files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
-                      />
-                    </Form.Item>
-                  ) : (
-                    <ProFormUploadButton
-                      name="header_attachments"
-                      label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}
-                      max={10}
-                      fieldProps={uploadFieldProps}
-                    />
-                  )}
-                </div>
-              ) : isDetailView ? (
-                <Form.Item label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}>
-                  <PatrolImagePreview
-                    files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
-                  />
-                </Form.Item>
-              ) : (
-                <ProFormUploadButton
-                  name="header_attachments"
-                  label={t('app.haoligo.equipment.upkeepComplete.attachAfter')}
-                  max={10}
-                  fieldProps={uploadFieldProps}
-                />
-              )}
+                  {beforePreview ? (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        padding: 12,
+                        background: '#fafafa',
+                        border: '1px solid #f0f0f0',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
+                        {formServiceType === '维修'
+                          ? t('app.haoligo.equipment.upkeepComplete.equipPhotoBeforeRepair')
+                          : t('app.haoligo.equipment.upkeepComplete.equipPhotoBefore')}
+                      </div>
+                      <ReadonlyAttachmentStrip uuids={beforePreview.header} />
+                      {beforePreview.description ? (
+                        <>
+                          <Divider dashed style={{ margin: '12px 0' }} />
+                          <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.65)', marginBottom: 4 }}>
+                            {formServiceType === '维修'
+                              ? t('app.haoligo.equipment.upkeepComplete.sourceDescRepair')
+                              : t('app.haoligo.equipment.upkeepComplete.sourceDesc')}
+                          </div>
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{beforePreview.description}</div>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
 
-              <ProFormTextArea
-                name="completion_content"
-                label={t('app.haoligo.equipment.upkeepComplete.completion')}
-                rules={[{ required: true, message: t('app.haoligo.equipment.upkeepComplete.completionRequired') }]}
-                fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
-              />
+              {formServiceType ? (
+                <>
+                  <Divider titlePlacement="left">{t('app.haoligo.equipment.upkeepComplete.sectionComplete')}</Divider>
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      padding: 12,
+                      background: '#fafafa',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 8,
+                    }}
+                  >
+                    {formServiceType === '保养' ? (
+                      <ProFormTextArea
+                        name="completion_content"
+                        label={t('app.haoligo.equipment.upkeepComplete.upkeepContent')}
+                        rules={[
+                          {
+                            required: !isDetailView,
+                            message: t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'),
+                          },
+                        ]}
+                        fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
+                      />
+                    ) : (
+                      <>
+                        <ProFormTextArea
+                          name="repair_content"
+                          label={t('app.haoligo.equipment.upkeepComplete.repairContent')}
+                          rules={[
+                            {
+                              required: !isDetailView,
+                              message: t('app.haoligo.equipment.upkeepComplete.repairContentRequired'),
+                            },
+                          ]}
+                          fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
+                        />
+                        <Row gutter={16}>
+                          <Col xs={24} md={12}>
+                            <ProFormSelect
+                              name="repair_result"
+                              label={t('app.haoligo.equipment.upkeepComplete.repairResult')}
+                              rules={[
+                                {
+                                  required: !isDetailView,
+                                  message: t('app.haoligo.equipment.upkeepComplete.repairResultRequired'),
+                                },
+                              ]}
+                              options={HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS.map((v) => ({
+                                label: v,
+                                value: v,
+                              }))}
+                            />
+                          </Col>
+                        </Row>
+                      </>
+                    )}
+                    <Divider dashed style={{ margin: '14px 0' }} />
+                    {isDetailView ? (
+                      <Form.Item
+                        label={
+                          formServiceType === '维修'
+                            ? t('app.haoligo.equipment.upkeepComplete.equipPhotoAfterRepair')
+                            : t('app.haoligo.equipment.upkeepComplete.equipPhotoAfter')
+                        }
+                      >
+                        <PatrolImagePreview
+                          files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
+                        />
+                      </Form.Item>
+                    ) : (
+                      <ProFormUploadButton
+                        name="header_attachments"
+                        label={
+                          formServiceType === '维修'
+                            ? t('app.haoligo.equipment.upkeepComplete.equipPhotoAfterRepair')
+                            : t('app.haoligo.equipment.upkeepComplete.equipPhotoAfter')
+                        }
+                        max={10}
+                        fieldProps={uploadFieldProps}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : null}
             </ProForm>
           )}
         </div>
@@ -939,15 +1080,49 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         width={800}
         destroyOnClose
       >
-        <Table<EquipmentUpkeepSheetRow>
-          size="small"
-          rowKey="id"
-          columns={pickerColumns}
-          dataSource={sourceRows}
-          pagination={{ pageSize: 8 }}
-          onRow={(r) => ({
-            onClick: () => void applySelectedSource(r),
-          })}
+        <Tabs
+          activeKey={sourcePickerTab}
+          onChange={(k) => setSourcePickerTab(k as '维修' | '保养')}
+          items={[
+            {
+              key: '维修',
+              label: `${t('app.haoligo.equipment.upkeepComplete.tabRepair')}（${sourceRowsRepair.length}）`,
+              children: (
+                <Table<EquipmentUpkeepSheetRow>
+                  size="small"
+                  rowKey="id"
+                  columns={pickerColumns}
+                  dataSource={sourceRowsRepair}
+                  pagination={false}
+                  scroll={{ y: 380 }}
+                  locale={{ emptyText: t('app.haoligo.equipment.upkeepComplete.noneOpenRepair') }}
+                  onRow={(record) => ({
+                    onClick: () => void applySelectedSource(record),
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              ),
+            },
+            {
+              key: '保养',
+              label: `${t('app.haoligo.equipment.upkeepComplete.tabUpkeep')}（${sourceRowsUpkeep.length}）`,
+              children: (
+                <Table<EquipmentUpkeepSheetRow>
+                  size="small"
+                  rowKey="id"
+                  columns={pickerColumns}
+                  dataSource={sourceRowsUpkeep}
+                  pagination={false}
+                  scroll={{ y: 380 }}
+                  locale={{ emptyText: t('app.haoligo.equipment.upkeepComplete.noneOpenUpkeep') }}
+                  onRow={(record) => ({
+                    onClick: () => void applySelectedSource(record),
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              ),
+            },
+          ]}
         />
         <div style={{ marginTop: 12, textAlign: 'right' }}>
           <Button onClick={() => setSourcePickerOpen(false)}>{t('app.haoligo.equipment.documents.btnClose')}</Button>

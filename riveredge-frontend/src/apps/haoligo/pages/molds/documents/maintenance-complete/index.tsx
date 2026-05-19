@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 维保完修单（基础信息 + 模具信息；对齐移动端稿）
+ * 好力 GO — 模具维保完成单（基础信息 + 模具信息；对齐移动端稿）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -664,7 +664,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       }
       startTransition(() => setFormOptionsReady(true));
     } catch (e) {
-      messageApi.error((e as Error).message || '加载维保完修单失败');
+      messageApi.error((e as Error).message || '加载模具维保完成单失败');
       closeSheetModal();
     }
   };
@@ -675,7 +675,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
   const handleDeleteOne = (record: MoldMaintenanceCompleteSheetRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除维保完修单「${record.source_order_no}」吗？`,
+      content: `确定删除模具维保完成单「${record.source_order_no}」吗？`,
       okType: 'danger',
       onOk: async () => {
         try {
@@ -966,7 +966,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       fieldProps: { placeholder: '单号/来源单号/维修保养/申请人/申请部门' },
     },
     {
-      title: '完修单单号',
+      title: '维保完成单单号',
       dataIndex: 'sheet_no',
       width: 150,
       ellipsis: true,
@@ -1049,7 +1049,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldMaintenanceCompleteSheetRow>
-          headerTitle="维保完修单"
+          headerTitle="模具维保完成单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.maintenance-complete"
           actionRef={actionRef}
           rowKey="id"
@@ -1082,7 +1082,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isDetailView ? '维保完修单详情' : isEdit ? '编辑维保完修单' : '维保完修单'}
+        title={isDetailView ? '模具维保完成单详情' : isEdit ? '编辑模具维保完成单' : '模具维保完成单'}
         open={modalVisible}
         onCancel={closeSheetModal}
         width={MODAL_CONFIG.LARGE_WIDTH}
@@ -1152,7 +1152,7 @@ const MoldMaintenanceCompletePage: React.FC = () => {
                 showIcon
                 style={{ marginBottom: 16 }}
                 message="暂无可确认完修的厂内维保单"
-                description="请先创建维保单且尚未确认完修后，再在此新增维保完修单。"
+                description="请先创建维保单且尚未确认完修后，再在此新增模具维保完成单。"
               />
             ) : null}
             <Row gutter={16}>

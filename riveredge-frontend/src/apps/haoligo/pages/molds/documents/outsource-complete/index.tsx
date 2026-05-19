@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 外协维保完修单（维修专用：基础信息 + 模具行；对齐厂内维保完修单交互）
+ * 好力 GO — 模具外协维保完成单（维修专用：基础信息 + 模具行；对齐厂内模具维保完成单交互）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -660,7 +660,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       }
       startTransition(() => setFormOptionsReady(true));
     } catch (e) {
-      messageApi.error((e as Error).message || '加载外协维保完修单失败');
+      messageApi.error((e as Error).message || '加载模具外协维保完成单失败');
       setIsDetailView(false);
       setModalVisible(false);
       setFormOptionsReady(false);
@@ -673,7 +673,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const handleDeleteOne = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除外协维保完修单「${record.source_order_no}」吗？`,
+      content: `确定删除模具外协维保完成单「${record.source_order_no}」吗？`,
       okType: 'danger',
       onOk: async () => {
         try {
@@ -942,7 +942,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       fieldProps: { placeholder: '单号/来源单号/申请人/申请部门/外协单位' },
     },
     {
-      title: '完修单单号',
+      title: '维保完成单单号',
       dataIndex: 'sheet_no',
       width: 150,
       ellipsis: true,
@@ -1021,7 +1021,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
-          headerTitle="外协维保完修单"
+          headerTitle="模具外协维保完成单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-complete"
           actionRef={actionRef}
           rowKey="id"
@@ -1054,7 +1054,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isDetailView ? '外协维保完修单详情' : isEdit ? '编辑外协维保完修单' : '外协维保完修单'}
+        title={isDetailView ? '模具外协维保完成单详情' : isEdit ? '编辑模具外协维保完成单' : '模具外协维保完成单'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);

@@ -62,6 +62,18 @@ class HaoligoInspectionParam(HaoligoTenantModel):
     unit = fields.CharField(max_length=32, null=True, description="单位")
     value_type = fields.CharField(max_length=32, default="numeric", description="取值类型：numeric/text/boolean/multiselect")
     default_value = fields.TextField(null=True, description="默认值（文本存储，创建设备点检单时预填实测值）")
+    numeric_min = fields.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        description="数值型取值下限（含），空表示不限制",
+    )
+    numeric_max = fields.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        description="数值型取值上限（含），空表示不限制",
+    )
 
 
 class HaoligoInspectionParamSetItem(HaoligoTenantModel):

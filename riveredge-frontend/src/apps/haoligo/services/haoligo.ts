@@ -46,6 +46,8 @@ export interface EquipmentRow {
   inspection_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
+  /** 进入当前运行状态的时间（ISO），用于看板停机时长等 */
+  operational_status_since?: string | null;
   remark?: string | null;
   image_file_uuids?: string[];
 }
@@ -259,6 +261,8 @@ export interface InspectionParamRow {
   unit?: string | null;
   value_type: string;
   default_value?: string | null;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
 }
 
 export type InspectionParamCreatePayload = {
@@ -267,6 +271,8 @@ export type InspectionParamCreatePayload = {
   unit?: string | null;
   value_type?: string;
   default_value?: string | null;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
 };
 
 export type InspectionParamUpdatePayload = {
@@ -274,6 +280,8 @@ export type InspectionParamUpdatePayload = {
   unit?: string | null;
   value_type?: string;
   default_value?: string | null;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
 };
 
 export function listInspectionParams(): Promise<InspectionParamRow[]> {
@@ -368,6 +376,8 @@ export interface EquipmentSpotCheckLineRow {
   value_type: string;
   unit?: string | null;
   is_required: boolean;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
   measured_value?: string | null;
   result: string;
   remark?: string | null;
@@ -429,6 +439,8 @@ export interface EquipmentSpotCheckPreviewLine {
   unit?: string | null;
   is_required: boolean;
   default_value?: string | null;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
 }
 
 export interface EquipmentSpotCheckPreviewResult {
@@ -578,6 +590,7 @@ export interface EquipmentUpkeepSheetRow {
   id: number;
   uuid: string;
   sheet_no?: string | null;
+  service_type?: string;
   applicant_user_id?: number | null;
   applicant_name?: string | null;
   department_uuid?: string | null;
@@ -592,6 +605,7 @@ export interface EquipmentUpkeepSheetRow {
 }
 
 export type EquipmentUpkeepSheetCreatePayload = {
+  service_type?: '维修' | '保养';
   applicant_user_id: number;
   department_uuid: string;
   equipment_id: number;
@@ -600,6 +614,7 @@ export type EquipmentUpkeepSheetCreatePayload = {
 };
 
 export type EquipmentUpkeepSheetUpdatePayload = {
+  service_type?: '维修' | '保养';
   applicant_user_id?: number;
   department_uuid?: string;
   equipment_id?: number;
@@ -611,6 +626,7 @@ export function listEquipmentUpkeepSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  service_type?: string;
   open_for_complete?: boolean;
 }): Promise<PageResult<EquipmentUpkeepSheetRow>> {
   return apiRequest(`${PREFIX}/equipment/upkeep-sheets`, { params });
@@ -641,6 +657,7 @@ export interface EquipmentUpkeepCompleteSheetRow {
   id: number;
   uuid: string;
   sheet_no?: string | null;
+  service_type?: string;
   source_upkeep_sheet_id?: number | null;
   source_order_no: string;
   applicant_user_id?: number | null;
@@ -653,7 +670,10 @@ export interface EquipmentUpkeepCompleteSheetRow {
   equipment_asset_code?: string | null;
   equipment_name?: string | null;
   source_description?: string | null;
-  completion_content: string;
+  source_service_type?: string | null;
+  completion_content?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
   reporter_user_id: number;
   created_at: string;
 }
@@ -663,20 +683,25 @@ export type EquipmentUpkeepCompleteSheetCreatePayload = {
   applicant_user_id?: number | null;
   department_uuid?: string | null;
   header_attachment_file_uuids?: string[] | null;
-  completion_content: string;
+  completion_content?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
 };
 
 export type EquipmentUpkeepCompleteSheetUpdatePayload = {
   applicant_user_id?: number;
   department_uuid?: string;
   header_attachment_file_uuids?: string[] | null;
-  completion_content?: string;
+  completion_content?: string | null;
+  repair_content?: string | null;
+  repair_result?: string | null;
 };
 
 export function listEquipmentUpkeepCompleteSheets(params?: {
   skip?: number;
   limit?: number;
   keyword?: string;
+  service_type?: string;
   created_from?: string;
   created_to?: string;
 }): Promise<PageResult<EquipmentUpkeepCompleteSheetRow>> {

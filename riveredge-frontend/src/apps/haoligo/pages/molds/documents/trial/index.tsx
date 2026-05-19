@@ -913,7 +913,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldTrialSheetRow>
-          headerTitle="试模单"
+          headerTitle="模具试模单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.trial.v2"
           actionRef={actionRef}
           rowKey="id"

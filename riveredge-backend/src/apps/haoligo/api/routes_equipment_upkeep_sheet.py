@@ -1,7 +1,7 @@
-"""好力 GO — 设备保养单 API（仅保养；字段形态对齐厂内维保单头表 + 单台设备）。"""
+"""好力 GO — 设备维保单 API（维修/保养；单台设备；对齐厂内维保单头表）。"""
 
 from datetime import datetime
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -11,8 +11,16 @@ from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api.equipment_maintenance_equipment_status import (
+    apply_equipment_status_on_upkeep_sheet_created,
+    refresh_equipment_status_after_maintenance_change,
+)
 from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only, _validate_leaf_department
-from apps.haoligo.constants.equipment_sheet_rule_codes import HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO
+from apps.haoligo.constants.equipment_maintenance import normalize_equipment_service_type
+from apps.haoligo.constants.equipment_sheet_rule_codes import (
+    HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO,
+    HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO,
+)
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -21,8 +29,10 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment/upkeep-sheets",
-    tags=["App · HaoliGO · 设备保养单"],
+    tags=["App · HaoliGO · 设备维保单"],
 )
+
+ServiceTypeLiteral = Literal["维修", "保养"]
 
 
 def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
@@ -52,6 +62,7 @@ class EquipmentUpkeepSheetOut(BaseModel):
     id: int
     uuid: str
     sheet_no: Optional[str] = None
+    service_type: str = "保养"
     applicant_user_id: Optional[int] = None
     applicant_name: Optional[str] = None
     department_uuid: Optional[str] = None
@@ -69,7 +80,8 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     applicant_user_id: int = Field(ge=1, description="申请人用户 ID")
     department_uuid: str = Field(max_length=36, description="申请部门 UUID（须为末级部门）")
     equipment_id: int = Field(ge=1)
-    description: Optional[str] = Field(default=None, description="保养要求（可选）")
+    service_type: ServiceTypeLiteral = Field(description="维修/保养")
+    description: Optional[str] = Field(default=None, description="维修原因/保养要求（可选）")
     header_attachment_file_uuids: Optional[List[str]] = None
 
     @field_validator("department_uuid", mode="before")
@@ -95,6 +107,7 @@ class EquipmentUpkeepSheetUpdate(BaseModel):
     applicant_user_id: Optional[int] = Field(None, ge=1)
     department_uuid: Optional[str] = Field(None, max_length=36)
     equipment_id: Optional[int] = Field(None, ge=1)
+    service_type: Optional[ServiceTypeLiteral] = None
     description: Optional[str] = None
     header_attachment_file_uuids: Optional[List[str]] = None
 
@@ -108,6 +121,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOu
         id=row.id,
         uuid=row.uuid,
         sheet_no=row.sheet_no,
+        service_type=(row.service_type or "保养").strip(),
         applicant_user_id=row.applicant_user_id,
         applicant_name=row.applicant_name,
         department_uuid=row.department_uuid,
@@ -122,16 +136,17 @@ async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOu
     )
 
 
-@router.get("", summary="设备保养单分页列表")
+@router.get("", summary="设备维保单分页列表")
 async def list_upkeep_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    service_type: Optional[str] = Query(None, description="维修/保养"),
     open_for_complete: bool = Query(
         False,
-        description="为 true 时仅返回尚未关联未删除保养完成单的保养单（用于完成单选源）",
+        description="为 true 时仅返回尚未关联未删除维保完成单的维保单（用于完成单选源）",
     ),
 ):
     qs = tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).prefetch_related("equipment")
@@ -144,12 +159,19 @@ async def list_upkeep_sheets(
         lid = [int(x) for x in linked_ids if x is not None]
         if lid:
             qs = qs.filter(~Q(id__in=lid))
+    if service_type and str(service_type).strip():
+        try:
+            st = normalize_equipment_service_type(service_type)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        qs = qs.filter(service_type=st)
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(
             Q(department_name__icontains=k)
             | Q(applicant_name__icontains=k)
             | Q(sheet_no__icontains=k)
+            | Q(service_type__icontains=k)
             | Q(description__icontains=k)
             | Q(equipment__asset_code__icontains=k)
             | Q(equipment__name__icontains=k)
@@ -164,12 +186,16 @@ async def list_upkeep_sheets(
     }
 
 
-@router.post("", response_model=EquipmentUpkeepSheetOut, summary="创建设备保养单")
+@router.post("", response_model=EquipmentUpkeepSheetOut, summary="创建设备维保单")
 async def create_upkeep_sheet(
     body: EquipmentUpkeepSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
 ):
+    try:
+        svc = normalize_equipment_service_type(body.service_type)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=body.equipment_id).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
     app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
@@ -177,14 +203,18 @@ async def create_upkeep_sheet(
     eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=body.equipment_id).first()
     if not eq:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
+    rule_code = (
+        HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO if svc == "维修" else HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO
+    )
     async with in_transaction():
         try:
-            sheet_no = await generate_equipment_sheet_no(tenant_id, HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO)
+            sheet_no = await generate_equipment_sheet_no(tenant_id, rule_code)
         except ValidationError as e:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
         row = await HaoligoEquipmentUpkeepSheet.create(
             tenant_id=tenant_id,
             sheet_no=sheet_no,
+            service_type=svc,
             applicant_user_id=app_uid,
             applicant_name=app_name,
             department_uuid=dept_uuid,
@@ -194,11 +224,17 @@ async def create_upkeep_sheet(
             description=_strip_opt(body.description),
             reporter_user_id=user.id,
         )
+        await apply_equipment_status_on_upkeep_sheet_created(
+            tenant_id,
+            eq.id,
+            service_type=svc,
+            changed_by_user_id=user.id,
+        )
     await row.fetch_related("equipment")
     return await _serialize(row)
 
 
-@router.get("/{row_id}", response_model=EquipmentUpkeepSheetOut, summary="设备保养单详情")
+@router.get("/{row_id}", response_model=EquipmentUpkeepSheetOut, summary="设备维保单详情")
 async def get_upkeep_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -215,17 +251,23 @@ async def get_upkeep_sheet(
     return await _serialize(row)
 
 
-@router.patch("/{row_id}", response_model=EquipmentUpkeepSheetOut, summary="更新设备保养单")
+@router.patch("/{row_id}", response_model=EquipmentUpkeepSheetOut, summary="更新设备维保单")
 async def update_upkeep_sheet(
     row_id: int,
     body: EquipmentUpkeepSheetUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    old_equipment_id = row.equipment_id
     data = body.model_dump(exclude_unset=True)
+    if "service_type" in data and data["service_type"] is not None:
+        try:
+            data["service_type"] = normalize_equipment_service_type(data["service_type"])
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     if "equipment_id" in data:
         eid = data.pop("equipment_id")
         if eid is not None:
@@ -254,15 +296,26 @@ async def update_upkeep_sheet(
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    await refresh_equipment_status_after_maintenance_change(
+        tenant_id,
+        row.equipment_id,
+        changed_by_user_id=user.id,
+    )
+    if old_equipment_id != row.equipment_id:
+        await refresh_equipment_status_after_maintenance_change(
+            tenant_id,
+            old_equipment_id,
+            changed_by_user_id=user.id,
+        )
     await row.fetch_related("equipment")
     return await _serialize(row)
 
 
-@router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备保养单")
+@router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备维保单")
 async def delete_upkeep_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).filter(id=row_id).first()
     if not row:
@@ -273,7 +326,13 @@ async def delete_upkeep_sheet(
     ).exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="已存在关联的保养完成单，请先删除完成单后再删除保养单",
+            detail="已存在关联的维保完成单，请先删除完成单后再删除维保单",
         )
+    equipment_id = row.equipment_id
     row.deleted_at = timezone.now()
     await row.save()
+    await refresh_equipment_status_after_maintenance_change(
+        tenant_id,
+        equipment_id,
+        changed_by_user_id=user.id,
+    )

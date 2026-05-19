@@ -668,7 +668,7 @@ const MoldMaintenancePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldMaintenanceSheetRow>
-          headerTitle="维保单"
+          headerTitle="模具维保单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.maintenance"
           actionRef={actionRef}
           rowKey="id"

@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 设备保养单（对齐厂内维保单头区：申请人、末级部门、保养前附件、单台设备；仅保养）
+ * 好力 GO — 设备维保单（维修/保养；单台设备；对齐厂内维保单头区）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -7,9 +7,9 @@ import {
   ActionType,
   ProColumns,
   ProForm,
+  ProFormDependency,
   ProFormInstance,
   ProFormSelect,
-  ProFormTextArea,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
@@ -17,6 +17,7 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import { App, Button, Col, Form, Input, Modal, Row, Space, Spin, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
@@ -350,6 +351,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
         }
         setFormInitialValues({
+          service_type: '保养',
           applicant_user_id: uid,
           department_uuid: deptUuid,
           equipment_id: undefined,
@@ -399,6 +401,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
         }
         setFormInitialValues({
+          service_type: (d.service_type || '保养').trim() === '维修' ? '维修' : '保养',
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept || undefined,
           equipment_id: d.equipment_id,
@@ -461,25 +464,36 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       messageApi.error(t('app.haoligo.equipment.documents.spotCheckSelectEquipmentFirst'));
       return Promise.reject(new Error('validation'));
     }
-    const desc = String(values.description ?? '').trim() || null;
+    const serviceType = values.service_type === '维修' ? '维修' : '保养';
+    const desc = String(values.description ?? '').trim();
+    if (!desc) {
+      messageApi.error(
+        serviceType === '维修'
+          ? t('app.haoligo.equipment.upkeep.descRepairRequired')
+          : t('app.haoligo.equipment.upkeep.descRequired'),
+      );
+      return Promise.reject(new Error('validation'));
+    }
     const headerUuids = normUploadUuids(values.header_attachments);
     setFormLoading(true);
     try {
       if (isEdit && editId != null) {
         await updateEquipmentUpkeepSheet(editId, {
+          service_type: serviceType,
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
           equipment_id: equipmentId,
-          description: desc,
+          description: desc || null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
       } else {
         await createEquipmentUpkeepSheet({
+          service_type: serviceType,
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
           equipment_id: equipmentId,
-          description: desc,
+          description: desc || null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
@@ -529,6 +543,12 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.haoligo.equipment.upkeep.serviceType'),
+      dataIndex: 'service_type',
+      width: 90,
+      hideInSearch: true,
+    },
+    {
       title: t('app.haoligo.equipment.upkeep.department'),
       dataIndex: 'department_name',
       width: 180,
@@ -553,7 +573,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           : `ID ${r.equipment_id}`,
     },
     {
-      title: t('app.haoligo.equipment.upkeep.desc'),
+      title: t('app.haoligo.equipment.upkeep.reasonCol'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -739,28 +759,86 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={24}>
-                  <ProFormTextArea
-                    name="description"
-                    label={t('app.haoligo.equipment.upkeep.desc')}
-                    fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
+                <Col span={12}>
+                  <ProFormSelect
+                    name="service_type"
+                    label={t('app.haoligo.equipment.upkeep.serviceType')}
+                    disabled={isEdit || isDetailView}
+                    rules={[{ required: true }]}
+                    options={[
+                      { label: t('app.haoligo.equipment.upkeep.serviceTypeUpkeep'), value: '保养' },
+                      { label: t('app.haoligo.equipment.upkeep.serviceTypeRepair'), value: '维修' },
+                    ]}
+                    fieldProps={{
+                      onChange: () => {
+                        formRef.current?.setFieldsValue({ description: undefined });
+                      },
+                    }}
                   />
                 </Col>
+                <Col span={12}>
+                  <ProFormDependency name={['service_type']}>
+                    {({ service_type }) => {
+                      const isUpkeep = service_type === '保养';
+                      const reasonLabel = isUpkeep
+                        ? t('app.haoligo.equipment.upkeep.desc')
+                        : t('app.haoligo.equipment.upkeep.descRepair');
+                      const dictCode = isUpkeep
+                        ? 'HAOLIGO_EQUIPMENT_MAINTENANCE_REASON'
+                        : 'HAOLIGO_EQUIPMENT_REPAIR_REASON';
+                      return (
+                        <DictionarySelect
+                          key={dictCode}
+                          dictionaryCode={dictCode}
+                          name="description"
+                          label={reasonLabel}
+                          placeholder={t('app.haoligo.equipment.upkeep.descPh', { label: reasonLabel })}
+                          rules={[
+                            {
+                              required: true,
+                              message: isUpkeep
+                                ? t('app.haoligo.equipment.upkeep.descRequired')
+                                : t('app.haoligo.equipment.upkeep.descRepairRequired'),
+                            },
+                          ]}
+                          formRef={formRef}
+                          simpleQuickCreate
+                          disabled={isDetailView}
+                          colProps={{ span: 12 }}
+                        />
+                      );
+                    }}
+                  </ProFormDependency>
+                </Col>
                 <Col span={24}>
-                  {isDetailView ? (
-                    <Form.Item label={t('app.haoligo.equipment.upkeep.attachBefore')}>
-                      <PatrolImagePreview
-                        files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
-                      />
-                    </Form.Item>
-                  ) : (
-                    <ProFormUploadButton
-                      name="header_attachments"
-                      label={t('app.haoligo.equipment.upkeep.attachBefore')}
-                      max={10}
-                      fieldProps={uploadFieldProps}
-                    />
-                  )}
+                  <ProFormDependency name={['service_type']}>
+                    {({ service_type }) =>
+                      isDetailView ? (
+                        <Form.Item
+                          label={
+                            service_type === '维修'
+                              ? t('app.haoligo.equipment.upkeep.attachBeforeRepair')
+                              : t('app.haoligo.equipment.upkeep.attachBefore')
+                          }
+                        >
+                          <PatrolImagePreview
+                            files={(formInitialValues?.header_attachments as UploadFile[] | undefined) ?? []}
+                          />
+                        </Form.Item>
+                      ) : (
+                        <ProFormUploadButton
+                          name="header_attachments"
+                          label={
+                            service_type === '维修'
+                              ? t('app.haoligo.equipment.upkeep.attachBeforeRepair')
+                              : t('app.haoligo.equipment.upkeep.attachBefore')
+                          }
+                          max={10}
+                          fieldProps={uploadFieldProps}
+                        />
+                      )
+                    }
+                  </ProFormDependency>
                 </Col>
               </Row>
             </ProForm>

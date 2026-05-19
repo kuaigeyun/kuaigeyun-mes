@@ -713,7 +713,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldOutsourceMaintenanceSheetRow>
-          headerTitle="外协维保单"
+          headerTitle="模具外协维保单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-maintenance"
           actionRef={actionRef}
           rowKey="id"

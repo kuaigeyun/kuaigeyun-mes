@@ -25,6 +25,7 @@ import {
   DRAWER_CONFIG,
   ListPageTemplate,
   FormModalTemplate,
+  FORM_LAYOUT,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -43,6 +44,7 @@ import {
   parseMultiselectMeasuredValue,
   type InspectionValueTypeKey,
 } from '../../../utils/inspectionParamValueType';
+import { formatNumericRangeLabel } from '../../../utils/inspectionNumericRange';
 
 const InspectionParamsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -114,6 +116,8 @@ const InspectionParamsPage: React.FC = () => {
         normalizeInspectionValueType(record.value_type) === 'multiselect'
           ? parseMultiselectMeasuredValue(record.default_value)
           : (record.default_value ?? undefined),
+      numeric_min: record.numeric_min ?? undefined,
+      numeric_max: record.numeric_max ?? undefined,
     });
     setModalVisible(true);
   };
@@ -148,23 +152,42 @@ const InspectionParamsPage: React.FC = () => {
     return String(raw).trim() || null;
   };
 
-  const buildPayload = (values: Record<string, unknown>): InspectionParamCreatePayload => ({
-    code: String(values.code ?? '').trim(),
-    name: String(values.name ?? '').trim(),
-    unit: String(values.unit ?? '').trim() || null,
-    value_type: normalizeInspectionValueType(String(values.value_type ?? 'numeric')),
-    default_value: normalizeDefaultValue(values),
-  });
+  const normalizeNumericBound = (raw: unknown): number | null => {
+    if (raw == null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const buildPayload = (values: Record<string, unknown>): InspectionParamCreatePayload => {
+    const value_type = normalizeInspectionValueType(String(values.value_type ?? 'numeric'));
+    const lo = normalizeNumericBound(values.numeric_min);
+    const hi = normalizeNumericBound(values.numeric_max);
+    if (lo != null && hi != null && lo > hi) {
+      throw new Error(t('app.haoligo.equipment.inspectionParams.formNumericRangeInvalid'));
+    }
+    return {
+      code: String(values.code ?? '').trim(),
+      name: String(values.name ?? '').trim(),
+      unit: String(values.unit ?? '').trim() || null,
+      value_type,
+      default_value: normalizeDefaultValue(values),
+      numeric_min: value_type === 'numeric' ? lo : null,
+      numeric_max: value_type === 'numeric' ? hi : null,
+    };
+  };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     setFormLoading(true);
     try {
       if (isEdit && editId != null) {
+        const payload = buildPayload(values);
         await updateInspectionParam(editId, {
-          name: String(values.name ?? '').trim(),
-          unit: String(values.unit ?? '').trim() || null,
-          value_type: normalizeInspectionValueType(String(values.value_type ?? 'numeric')),
-          default_value: normalizeDefaultValue(values),
+          name: payload.name,
+          unit: payload.unit,
+          value_type: payload.value_type,
+          default_value: payload.default_value,
+          numeric_min: payload.numeric_min,
+          numeric_max: payload.numeric_max,
         });
         messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
@@ -190,6 +213,15 @@ const InspectionParamsPage: React.FC = () => {
         title: t('app.haoligo.equipment.inspectionParams.colValueType'),
         dataIndex: 'value_type',
         render: (_, r) => valueTypeLabel[normalizeInspectionValueType(r.value_type)] || r.value_type,
+      },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colNumericRange'),
+        dataIndex: 'numeric_min',
+        render: (_, r) => {
+          if (normalizeInspectionValueType(r.value_type) !== 'numeric') return '—';
+          const label = formatNumericRangeLabel(r.numeric_min, r.numeric_max);
+          return label || '—';
+        },
       },
       {
         title: t('app.haoligo.equipment.inspectionParams.colDefaultValue'),
@@ -401,14 +433,18 @@ const InspectionParamsPage: React.FC = () => {
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         initialValues={formInitialValues}
         loading={formLoading}
-        grid={false}
+        grid
         onValuesChange={(changed) => {
           if ('value_type' in changed) {
-            formRef.current?.setFieldValue('default_value', undefined);
+            formRef.current?.setFieldsValue({
+              default_value: undefined,
+              numeric_min: undefined,
+              numeric_max: undefined,
+            });
           }
         }}
       >
@@ -417,20 +453,28 @@ const InspectionParamsPage: React.FC = () => {
           label={t('app.haoligo.equipment.inspectionParams.formCode')}
           placeholder={t('app.haoligo.equipment.inspectionParams.formCodePh')}
           disabled={isEdit}
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formCodeReq') }]}
         />
         <ProFormText
           name="name"
           label={t('app.haoligo.equipment.inspectionParams.formName')}
           placeholder={t('app.haoligo.equipment.inspectionParams.formNamePh')}
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formNameReq') }]}
         />
-        <ProFormText name="unit" label={t('app.haoligo.equipment.inspectionParams.formUnit')} placeholder={t('app.haoligo.equipment.inspectionParams.formUnitPh')} />
+        <ProFormText
+          name="unit"
+          label={t('app.haoligo.equipment.inspectionParams.formUnit')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formUnitPh')}
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
+        />
         <ProFormSelect
           name="value_type"
           label={t('app.haoligo.equipment.inspectionParams.formValueType')}
           placeholder={t('app.haoligo.equipment.inspectionParams.formValueTypePh')}
           options={valueTypes}
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formValueTypeReq') }]}
           fieldProps={{
             optionFilterProp: 'label',
@@ -441,12 +485,16 @@ const InspectionParamsPage: React.FC = () => {
         <ProFormDependency name={['value_type']}>
           {({ value_type }) => {
             const vt = normalizeInspectionValueType(String(value_type ?? 'numeric'));
+            const fullCol = { span: FORM_LAYOUT.FULL_COL_SPAN };
+            const thirdCol = { span: 8 };
+            const digitFieldProps = { stringMode: true as const, style: { width: '100%' } };
             if (vt === 'boolean') {
               return (
                 <ProFormSelect
                   name="default_value"
                   label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
                   placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValuePh')}
+                  colProps={fullCol}
                   allowClear
                   options={[
                     { label: t('app.haoligo.equipment.inspectionParams.defaultBoolYes'), value: 'true' },
@@ -457,12 +505,40 @@ const InspectionParamsPage: React.FC = () => {
             }
             if (vt === 'numeric') {
               return (
-                <ProFormDigit
-                  name="default_value"
-                  label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
-                  placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueNumericPh')}
-                  fieldProps={{ stringMode: true, style: { width: '100%' } }}
-                />
+                <>
+                  <ProFormDigit
+                    name="numeric_min"
+                    label={t('app.haoligo.equipment.inspectionParams.formNumericMin')}
+                    placeholder={t('app.haoligo.equipment.inspectionParams.formNumericMinPh')}
+                    colProps={thirdCol}
+                    fieldProps={digitFieldProps}
+                  />
+                  <ProFormDigit
+                    name="numeric_max"
+                    label={t('app.haoligo.equipment.inspectionParams.formNumericMax')}
+                    placeholder={t('app.haoligo.equipment.inspectionParams.formNumericMaxPh')}
+                    colProps={thirdCol}
+                    fieldProps={digitFieldProps}
+                    rules={[
+                      ({ getFieldValue }) => ({
+                        validator: async (_, value) => {
+                          const lo = getFieldValue('numeric_min');
+                          if (value == null || value === '' || lo == null || lo === '') return;
+                          if (Number(lo) > Number(value)) {
+                            throw new Error(t('app.haoligo.equipment.inspectionParams.formNumericRangeInvalid'));
+                          }
+                        },
+                      }),
+                    ]}
+                  />
+                  <ProFormDigit
+                    name="default_value"
+                    label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
+                    placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueNumericPh')}
+                    colProps={thirdCol}
+                    fieldProps={digitFieldProps}
+                  />
+                </>
               );
             }
             if (vt === 'multiselect') {
@@ -471,6 +547,7 @@ const InspectionParamsPage: React.FC = () => {
                   name="default_value"
                   label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
                   placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueMultiselectPh')}
+                  colProps={fullCol}
                   allowClear
                   fieldProps={{
                     mode: 'tags',
@@ -486,6 +563,7 @@ const InspectionParamsPage: React.FC = () => {
                   name="default_value"
                   label={t('app.haoligo.equipment.inspectionParams.formDefaultValue')}
                   placeholder={t('app.haoligo.equipment.inspectionParams.formDefaultValueTextPh')}
+                  colProps={fullCol}
                   allowClear
                 />
               );

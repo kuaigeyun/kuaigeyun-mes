@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +16,7 @@ from tortoise.transactions import in_transaction
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.routes_equipment_documents import _normalize_measured_value
 from apps.haoligo.services.equipment_operational_status import normalize_operational_status
+from apps.haoligo.services.inspection_numeric_range import normalize_numeric_range_bounds
 from apps.master_data.models.factory import Workshop as MasterWorkshop
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
@@ -28,6 +30,7 @@ from apps.haoligo.models.equipment import (
     HaoligoWorkshop,
 )
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
+from apps.haoligo.services.equipment_operational_status_since import operational_status_since_by_equipment
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -92,6 +95,8 @@ class InspectionParamOut(BaseModel):
     unit: Optional[str] = None
     value_type: str = "numeric"
     default_value: Optional[str] = None
+    numeric_min: Optional[Decimal] = Field(None, description="数值型取值下限（含）")
+    numeric_max: Optional[Decimal] = Field(None, description="数值型取值上限（含）")
 
 
 class InspectionParamCreate(BaseModel):
@@ -100,6 +105,8 @@ class InspectionParamCreate(BaseModel):
     unit: Optional[str] = Field(None, max_length=32)
     value_type: str = Field(default="numeric", max_length=32)
     default_value: Optional[str] = Field(None, description="默认值；空表示不预填")
+    numeric_min: Optional[Decimal] = Field(None, description="数值型取值下限（含）")
+    numeric_max: Optional[Decimal] = Field(None, description="数值型取值上限（含）")
 
 
 class InspectionParamUpdate(BaseModel):
@@ -107,6 +114,8 @@ class InspectionParamUpdate(BaseModel):
     unit: Optional[str] = Field(None, max_length=32)
     value_type: Optional[str] = Field(None, max_length=32)
     default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
+    numeric_min: Optional[Decimal] = Field(None, description="数值型取值下限（含）；传 null 清除")
+    numeric_max: Optional[Decimal] = Field(None, description="数值型取值上限（含）；传 null 清除")
 
 
 def _normalize_inspection_param_default(value_type: str, raw: Optional[str]) -> Optional[str]:
@@ -203,6 +212,10 @@ class EquipmentOut(BaseModel):
     inspection_param_set_id: Optional[int] = None
     criticality: Optional[str] = None
     operational_status: Optional[str] = None
+    operational_status_since: Optional[datetime] = Field(
+        None,
+        description="进入当前运行状态的时间（状态调整单 recorded_at 或变更日志 created_at）",
+    )
     remark: Optional[str] = None
     image_file_uuids: List[str] = Field(default_factory=list)
 
@@ -461,6 +474,7 @@ async def create_inspection_param(
     vt = (body.value_type or "numeric").strip()
     try:
         default_value = _normalize_inspection_param_default(vt, body.default_value)
+        numeric_min, numeric_max = normalize_numeric_range_bounds(vt, body.numeric_min, body.numeric_max)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     row = await HaoligoInspectionParam.create(
@@ -470,6 +484,8 @@ async def create_inspection_param(
         unit=body.unit,
         value_type=vt,
         default_value=default_value,
+        numeric_min=numeric_min,
+        numeric_max=numeric_max,
     )
     return InspectionParamOut.model_validate(row)
 
@@ -492,6 +508,14 @@ async def update_inspection_param(
         row.unit = None if u is None else (str(u).strip() or None)
     if "value_type" in patch and patch["value_type"] is not None:
         row.value_type = str(patch["value_type"]).strip()
+    vt_for_range = row.value_type or "numeric"
+    if "numeric_min" in patch or "numeric_max" in patch or "value_type" in patch:
+        try:
+            lo = patch["numeric_min"] if "numeric_min" in patch else row.numeric_min
+            hi = patch["numeric_max"] if "numeric_max" in patch else row.numeric_max
+            row.numeric_min, row.numeric_max = normalize_numeric_range_bounds(vt_for_range, lo, hi)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     if "default_value" in patch:
         vt = row.value_type or "numeric"
         try:
@@ -845,8 +869,16 @@ async def list_equipments(
             qs = qs.filter(name__icontains=name.strip())
     total = await qs.count()
     rows = await qs.order_by("asset_code").offset(skip).limit(limit)
+    status_since_map = await operational_status_since_by_equipment(tenant_id, rows)
+    items: List[EquipmentOut] = []
+    for r in rows:
+        out = EquipmentOut.model_validate(r)
+        since = status_since_map.get(r.id)
+        if since is not None:
+            out = out.model_copy(update={"operational_status_since": since})
+        items.append(out)
     return {
-        "items": [EquipmentOut.model_validate(r) for r in rows],
+        "items": items,
         "total": total,
         "skip": skip,
         "limit": limit,

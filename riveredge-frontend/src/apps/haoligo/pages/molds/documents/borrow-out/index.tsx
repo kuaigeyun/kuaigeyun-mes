@@ -1,6 +1,6 @@
 /**
  * 好力 GO — 领用单（列表 + 两栏 Modal，底栏：重置 / 提交）
- * 电脑端：制令单号手输；模具代号可手输或「选择」台账。扫码制令单等能力预留到移动端再接。
+ * 电脑端：从制令单新建（数据集带出）或从浇铸货品新建（无制令单，手填浇铸货品后关联模具领用）。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -86,12 +86,16 @@ function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string;
   return out;
 }
 
+/** 新建来源：制令单（数据集带出）或浇铸货品（无制令单） */
+type BorrowCreateMode = 'work_order' | 'casting_product';
+
 const MoldBorrowOutPage: React.FC = () => {
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [createMode, setCreateMode] = useState<BorrowCreateMode>('work_order');
   const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -436,13 +440,13 @@ const MoldBorrowOutPage: React.FC = () => {
     { wait: 300 },
   );
 
-  const handleOpenMoldPicker = useCallback(() => {
-    setMoldKw('');
-    setMoldPickerOpen(true);
-    void loadMoldsForPicker('');
-  }, [loadMoldsForPicker]);
+  const isCastingProductMode = createMode === 'casting_product';
 
-  const handleCreate = async () => {
+  const resolveCreateModeFromRecord = (sourceOrderNo?: string | null): BorrowCreateMode =>
+    String(sourceOrderNo ?? '').trim() ? 'work_order' : 'casting_product';
+
+  const openCreateForm = async (mode: BorrowCreateMode) => {
+    setCreateMode(mode);
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
@@ -459,11 +463,25 @@ const MoldBorrowOutPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  useNewShortcut(handleCreate);
+  const handleCreateFromWorkOrder = () => void openCreateForm('work_order');
+  const handleCreateFromCastingProduct = () => void openCreateForm('casting_product');
+
+  useNewShortcut(handleCreateFromWorkOrder);
+
+  const handleOpenMoldPicker = useCallback(() => {
+    const productKw =
+      createMode === 'casting_product'
+        ? String(formRef.current?.getFieldValue('finished_product_code') ?? '').trim()
+        : '';
+    setMoldKw(productKw);
+    setMoldPickerOpen(true);
+    void loadMoldsForPicker(productKw);
+  }, [createMode, loadMoldsForPicker]);
 
   const openSheetForm = async (record: MoldBorrowSheetRow, detailOnly: boolean) => {
     try {
       const d = await getMoldBorrowSheet(record.id);
+      setCreateMode(resolveCreateModeFromRecord(d.source_order_no));
       setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(d.id);
@@ -537,6 +555,18 @@ const MoldBorrowOutPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    if (isCastingProductMode) {
+      const productCode = String(values.finished_product_code ?? '').trim();
+      const productName = String(values.finished_product_name ?? '').trim();
+      if (!productCode) {
+        messageApi.error('请填写浇铸货品代号');
+        return Promise.reject(new Error('validation'));
+      }
+      if (!productName) {
+        messageApi.error('请填写浇铸货品名称');
+        return Promise.reject(new Error('validation'));
+      }
+    }
     const deptUuid = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
     if (!deptUuid) {
       messageApi.error('请选择领用部门');
@@ -549,7 +579,11 @@ const MoldBorrowOutPage: React.FC = () => {
     }
     setFormLoading(true);
     try {
-      const payload = buildPayload({ ...values, department_name: deptName });
+      const payload = buildPayload({
+        ...values,
+        department_name: deptName,
+        ...(isCastingProductMode ? { source_order_no: null } : {}),
+      });
       if (isEdit && editId != null) {
         await updateMoldBorrowSheet(editId, payload);
         messageApi.success('已保存');
@@ -590,7 +624,14 @@ const MoldBorrowOutPage: React.FC = () => {
       fixed: 'left',
       hideInSearch: true,
     },
-    { title: '制令单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
+    {
+      title: '制令单号',
+      dataIndex: 'source_order_no',
+      width: 140,
+      ellipsis: true,
+      copyable: true,
+      render: (_, r) => r.source_order_no?.trim() || '—',
+    },
     { title: '领用部门', dataIndex: 'department_name', width: 160, ellipsis: true },
     { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true },
     { title: '模具名称', dataIndex: 'mold_name', width: 160, ellipsis: true },
@@ -623,15 +664,20 @@ const MoldBorrowOutPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldBorrowSheetRow>
-          headerTitle="领用单"
+          headerTitle="模具领用单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.borrow-out"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText="新增"
-          onCreate={handleCreate}
+          createButtonText="从制令单新建"
+          onCreate={handleCreateFromWorkOrder}
+          toolBarActionsAfterCreate={[
+            <Button key="create-from-casting" onClick={handleCreateFromCastingProduct}>
+              从浇铸货品新建
+            </Button>,
+          ]}
           request={async (params, _sort, _filter, searchFormValues) => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
@@ -658,12 +704,21 @@ const MoldBorrowOutPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isDetailView ? '领用单详情' : isEdit ? '编辑领用单' : '领用单'}
+        title={
+          isDetailView
+            ? '领用单详情'
+            : isEdit
+              ? '编辑领用单'
+              : isCastingProductMode
+                ? '从浇铸货品新建领用单'
+                : '从制令单新建领用单'
+        }
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
           setEditId(null);
           setIsDetailView(false);
+          setCreateMode('work_order');
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
@@ -684,7 +739,7 @@ const MoldBorrowOutPage: React.FC = () => {
       >
         <div className="form-modal-content-inner">
           <ProForm
-            key={modalVisible ? `${isEdit}-${editId ?? 'n'}` : 'closed'}
+            key={modalVisible ? `${isEdit}-${editId ?? 'n'}-${createMode}` : 'closed'}
             formRef={formRef}
             loading={formLoading}
             readonly={isDetailView}
@@ -700,29 +755,31 @@ const MoldBorrowOutPage: React.FC = () => {
             scrollToFirstError
           >
             <Row gutter={16}>
-              <Col span={12}>
-                <ProFormText
-                  name="source_order_no"
-                  label="制令单号"
-                  tooltip="作为数据集查询参数传入；填写后点右侧「带出」可拉取其余字段"
-                  placeholder="请输入制令单号"
-                  fieldProps={{
-                    allowClear: true,
-                    addonAfter: (
-                      <Button
-                        type="link"
-                        size="small"
-                        style={{ padding: '0 8px' }}
-                        loading={prefillBusy}
-                        disabled={!canPrefillFromDataset}
-                        onClick={() => void handlePrefillFromDataset()}
-                      >
-                        带出
-                      </Button>
-                    ),
-                  }}
-                />
-              </Col>
+              {!isCastingProductMode ? (
+                <Col span={12}>
+                  <ProFormText
+                    name="source_order_no"
+                    label="制令单号"
+                    tooltip="作为数据集查询参数传入；填写后点右侧「带出」可拉取其余字段"
+                    placeholder="请输入制令单号"
+                    fieldProps={{
+                      allowClear: true,
+                      addonAfter: (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: '0 8px' }}
+                          loading={prefillBusy}
+                          disabled={!canPrefillFromDataset}
+                          onClick={() => void handlePrefillFromDataset()}
+                        >
+                          带出
+                        </Button>
+                      ),
+                    }}
+                  />
+                </Col>
+              ) : null}
               <Col span={12}>
                 <ProFormSelect
                   name="department_uuid"
@@ -734,6 +791,27 @@ const MoldBorrowOutPage: React.FC = () => {
                   fieldProps={{ optionFilterProp: 'label' }}
                 />
               </Col>
+              {isCastingProductMode ? (
+                <>
+                  <Col span={12}>
+                    <ProFormText
+                      name="finished_product_code"
+                      label="浇铸货品代号"
+                      placeholder="请输入浇铸货品代号"
+                      tooltip="填写后点模具「选择」将按台账 ERP 物料编码筛选关联模具"
+                      rules={[{ required: true, message: '请填写浇铸货品代号' }]}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="finished_product_name"
+                      label="浇铸货品名称"
+                      placeholder="请输入浇铸货品名称"
+                      rules={[{ required: true, message: '请填写浇铸货品名称' }]}
+                    />
+                  </Col>
+                </>
+              ) : null}
               <Col span={12}>
                 <ProFormText
                   name="mold_code"
@@ -757,38 +835,52 @@ const MoldBorrowOutPage: React.FC = () => {
               <Col span={12}>
                 <ProFormText name="mold_name" label="模具名称" placeholder="请输入内容" rules={[{ required: true, message: '请输入模具名称' }]} />
               </Col>
-              <Col span={12}>
-                <ProFormText
-                  name="finished_product_code"
-                  label="成品代号"
-                  placeholder="由「带出」填入"
-                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
-                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
-                />
-              </Col>
-              <Col span={12}>
-                <ProFormText
-                  name="finished_product_name"
-                  label="成品名称"
-                  placeholder="由「带出」填入"
-                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
-                  fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
-                />
-              </Col>
-              <Col span={12}>
-                <ProFormDigit
-                  name="planned_qty"
-                  label="计划数量"
-                  placeholder="由「带出」填入"
-                  tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
-                  min={0}
-                  fieldProps={{
-                    readOnly: true,
-                    precision: 4,
-                    style: { width: '100%', backgroundColor: '#fafafa' },
-                  }}
-                />
-              </Col>
+              {!isCastingProductMode ? (
+                <>
+                  <Col span={12}>
+                    <ProFormText
+                      name="finished_product_code"
+                      label="成品代号"
+                      placeholder="由「带出」填入"
+                      tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
+                      fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="finished_product_name"
+                      label="成品名称"
+                      placeholder="由「带出」填入"
+                      tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
+                      fieldProps={{ readOnly: true, style: { backgroundColor: '#fafafa' } }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormDigit
+                      name="planned_qty"
+                      label="计划数量"
+                      placeholder="由「带出」填入"
+                      tooltip="只读；请通过制令单号右侧「带出」从数据集写入"
+                      min={0}
+                      fieldProps={{
+                        readOnly: true,
+                        precision: 4,
+                        style: { width: '100%', backgroundColor: '#fafafa' },
+                      }}
+                    />
+                  </Col>
+                </>
+              ) : (
+                <Col span={12}>
+                  <ProFormDigit
+                    name="planned_qty"
+                    label="计划数量"
+                    placeholder="选填"
+                    min={0}
+                    fieldProps={{ precision: 4, style: { width: '100%' } }}
+                  />
+                </Col>
+              )}
             </Row>
           </ProForm>
         </div>
@@ -961,7 +1053,7 @@ const MoldBorrowOutPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="选择模具"
+        title={isCastingProductMode ? '选择模具（按浇铸货品关联）' : '选择模具'}
         open={moldPickerOpen}
         onCancel={() => setMoldPickerOpen(false)}
         width={720}
@@ -969,8 +1061,15 @@ const MoldBorrowOutPage: React.FC = () => {
         destroyOnHidden
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          {isCastingProductMode ? (
+            <Alert
+              type="info"
+              showIcon
+              message="按浇铸货品代号匹配台账 ERP 物料编码筛选模具；可继续在下方输入框缩小范围"
+            />
+          ) : null}
           <Input
-            placeholder="筛选模具代号/名称"
+            placeholder={isCastingProductMode ? '筛选模具代号/名称/ERP 物料编码' : '筛选模具代号/名称'}
             value={moldKw}
             onChange={(e) => {
               const v = e.target.value;
@@ -989,6 +1088,9 @@ const MoldBorrowOutPage: React.FC = () => {
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true },
+              ...(isCastingProductMode
+                ? [{ title: 'ERP 物料编码', dataIndex: 'erp_material_code', width: 120, ellipsis: true }]
+                : []),
               {
                 title: '操作',
                 key: 'op',

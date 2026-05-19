@@ -76,6 +76,18 @@ class HaoligoEquipmentSpotCheckLine(HaoligoTenantModel):
     value_type = fields.CharField(max_length=32, default="numeric", description="取值类型快照：numeric/text/boolean/multiselect")
     unit = fields.CharField(max_length=32, null=True, description="单位快照")
     is_required = fields.BooleanField(default=True, description="是否必检快照")
+    numeric_min = fields.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        description="数值型取值下限快照（含）",
+    )
+    numeric_max = fields.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        description="数值型取值上限快照（含）",
+    )
     measured_value = fields.TextField(null=True, description="实测值（文本存储，按 value_type 解析）")
     result = fields.CharField(max_length=16, description="结果：normal / abnormal")
     remark = fields.TextField(null=True, description="备注")
