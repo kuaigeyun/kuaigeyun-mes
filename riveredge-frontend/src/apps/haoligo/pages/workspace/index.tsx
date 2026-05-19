@@ -11,10 +11,12 @@ import { useNavigate } from 'react-router-dom';
 import { Column, Pie } from '@ant-design/charts';
 import dayjs from 'dayjs';
 import {
+  fetchHaoligoMeta,
   listEquipments,
   listHazardReports,
   listMolds,
   listWorkshops,
+  type HaoligoMeta,
 } from '../../services/haoligo';
 import { useGlobalStore } from '../../../../stores/globalStore';
 import { PAGE_SPACING } from '../../../../components/layout-templates/constants';
@@ -37,6 +39,7 @@ const WorkspacePage: React.FC = () => {
   const { currentUser } = useGlobalStore();
 
   const [loading, setLoading] = useState(true);
+  const [meta, setMeta] = useState<HaoligoMeta | null>(null);
   const [workshopCount, setWorkshopCount] = useState(0);
   const [equipmentTotal, setEquipmentTotal] = useState(0);
   const [moldTotal, setMoldTotal] = useState(0);
@@ -73,7 +76,8 @@ const WorkspacePage: React.FC = () => {
         return { items: allItems, total };
       };
 
-      const [ws, h1, h2, h3, eqAll, moAll, hazards] = await Promise.all([
+      const [m, ws, h1, h2, h3, eqAll, moAll, hazards] = await Promise.all([
+        fetchHaoligoMeta(),
         listWorkshops(),
         listHazardReports({ status: '已登记', limit: 1 }),
         listHazardReports({ status: '已治理', limit: 1 }),
@@ -84,6 +88,7 @@ const WorkspacePage: React.FC = () => {
           listHazardReports({ skip, limit, reported_from: fromDate, reported_to: toDate }),
         ),
       ]);
+      setMeta(m);
       setWorkshopCount(ws.length);
       setEquipmentTotal(eqAll.total);
       setMoldTotal(moAll.total);
