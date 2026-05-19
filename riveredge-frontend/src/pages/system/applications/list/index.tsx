@@ -44,6 +44,8 @@ import {
   ToolOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
+import { ManufacturingAppStack, MANUFACTURING_STACK_CODES } from './ManufacturingAppStack';
+import './manufacturing-app-stack.less';
 import { useGlobalStore } from '../../../../stores';
 import {
   getApplicationList,
@@ -69,7 +71,19 @@ import {
 import { syncAllMenus } from '../../../../services/menu';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
-const OTHER_PLACEHOLDER_CODES = ['kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', 'kuaitms', 'kuailtms', 'kuaiip', 'kuaiems'];
+/** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
+const OTHER_PLACEHOLDER_CODES = [
+  'kuaicrm',
+  'kuaiplm',
+  'kuaisrm',
+  'kuaiasms',
+  'kuaitms',
+  'kuailtms',
+  'kuaiip',
+  'kuaiems',
+  'kuaiiot',
+  'kuaiai',
+];
 const INDUSTRY_VALUE_PACK_CODES = [
   'kuaimachinery',
   'kuaimolding',
@@ -91,7 +105,6 @@ const INDUSTRY_VALUE_PACK_CODES = [
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
   // 通用应用保持现有编号（不变）
   kuaicaiwu: 40,
-  kuaiiot: 45,
   kuaireport: 46,
   // 其他类：从 100 开始
   kuaicrm: 100,
@@ -102,6 +115,8 @@ const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
   kuailtms: 105,
   kuaiip: 106,
   kuaiems: 107,
+  kuaiiot: 108,
+  kuaiai: 109,
   // 行业增值包：从 200 开始
   kuaimachinery: 200,
   kuaimolding: 201,
@@ -129,7 +144,6 @@ const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';
 
 const PRO_KNOWN_CODES = [
-  'kuaireport',
   'kuaiiot',
   'kuaiai',
   'bi',
@@ -392,7 +406,7 @@ const ApplicationHelpView: React.FC = () => {
           <Title level={2}>3.2 应用的启用与授权</Title>
           <ul>
             <li style={{ marginBottom: 12 }}><Text strong>启用 / 禁用</Text>：在应用卡片底部或表格行内切换 <b>[启用状态]</b> 开关。禁用的应用将不会在左侧菜单栏向普通用户展示。</li>
-            <li><Text strong>激活专业版应用</Text>：在尝试启用专业版应用（如 快报表 kuaireport、快数采 kuaiiot）时，系统会自动弹出授权验证窗口。您需要输入正确的授权码（License Key），校验通过后应用才会成功启用。</li>
+            <li><Text strong>激活专业版应用</Text>：在尝试启用专业版应用（如 快数采 kuaiiot、KU-AI kuaiai）时，系统会自动弹出授权验证窗口。您需要输入正确的授权码（License Key），校验通过后应用才会成功启用。</li>
           </ul>
         </>
       )
@@ -457,8 +471,8 @@ const ApplicationHelpView: React.FC = () => {
             <Card size="small" title="Q: 我刚点击了“扫描应用”并提示成功，为什么左侧菜单栏还是没有出现新应用的入口？">
               <Text>A: “扫描应用”仅将应用的配置注册到系统。请您接着点击顶部的 <b>[一键同步菜单]</b>，系统才会将菜单结构完整写入数据库并触发界面的刷新。</Text>
             </Card>
-            <Card size="small" title="Q: 启用快报表（kuaireport）时为什么提示需要授权？">
-              <Text>A: 快报表等属于 Pro 级别的专业应用，需要向供应商获取有效的 License Key，校验并激活通过后方可开放使用。</Text>
+            <Card size="small" title="Q: 启用快数采（kuaiiot）时为什么提示需要授权？">
+              <Text>A: 快数采等属于 Pro 级别的专业应用，需要向供应商获取有效的 License Key，校验并激活通过后方可开放使用。</Text>
             </Card>
           </Space>
         </>
@@ -815,7 +829,7 @@ const ApplicationListPage: React.FC = () => {
     }
     try {
       if (checked) {
-        const isProApp = record.is_pro || record.code === 'kuaireport' || record.code === 'bi' || record.code === 'kuaiiot';
+        const isProApp = record.is_pro || record.code === 'bi' || record.code === 'kuaiiot';
         if (isProApp && !record.can_access) {
           setProKeyTargetApp(record);
           setPendingEnableAfterActivation(true);
@@ -1251,7 +1265,15 @@ const ApplicationListPage: React.FC = () => {
    * 渲染应用卡片
    */
   /* eslint-disable @typescript-eslint/no-unused-vars */
-  const renderApplicationCard = (application: Application, _index: number) => {
+  const renderApplicationCard = (
+    application: Application,
+    _index: number,
+    options?: { inManufacturingStack?: boolean },
+  ) => {
+    const inManufacturingStack = options?.inManufacturingStack === true;
+    const cardRadius = inManufacturingStack
+      ? `0 ${themeToken.borderRadiusLG}px ${themeToken.borderRadiusLG}px 0`
+      : themeToken.borderRadiusLG;
     const menuItems = [
       {
         key: 'view',
@@ -1394,10 +1416,10 @@ const ApplicationListPage: React.FC = () => {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: themeToken.borderRadiusLG,
-          border: `1px solid ${themeToken.colorBorderSecondary}`,
+          borderRadius: cardRadius,
+          border: inManufacturingStack ? 'none' : `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
-          boxShadow: isDark ? themeToken.boxShadowSecondary : undefined,
+          boxShadow: inManufacturingStack ? 'none' : isDark ? themeToken.boxShadowSecondary : undefined,
         }}
         cover={
           <div
@@ -1415,13 +1437,13 @@ const ApplicationListPage: React.FC = () => {
               ),
               padding: '16px 20px',
               borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
-              borderTopLeftRadius: themeToken.borderRadiusLG,
+              borderTopLeftRadius: inManufacturingStack ? 0 : themeToken.borderRadiusLG,
               borderTopRightRadius: themeToken.borderRadiusLG,
             }}
           >
             {(() => {
-              const isPro = application.is_pro || ['kuaireport', 'bi', 'kuaiiot', 'kuaiai', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code);
-              const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu'].includes(application.code);
+              const isPro = application.is_pro || ['bi', 'kuaiiot', 'kuaiai', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code);
+              const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu', 'kuaireport'].includes(application.code);
 
               return (
                 <>
@@ -1616,7 +1638,7 @@ const ApplicationListPage: React.FC = () => {
                                   undefined,
                                   { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
                                 )}
-                              {(application.is_pro || ['kuaireport', 'bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
+                              {(application.is_pro || ['bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
                                 <Tooltip title={t('pages.system.applications.proLockedTag')}>
                                   <span
                                     style={{
@@ -2141,8 +2163,8 @@ const ApplicationListPage: React.FC = () => {
                 const appWithDisplay = overriddenDescription !== undefined
                   ? { ...appWithSort, description: overriddenDescription }
                   : appWithSort;
-                // 强制将快报表和 BI 识别为非授权 PRO 模式，与 AI 保持一致
-                if (['kuaireport', 'bi'].includes(appWithDisplay.code)) {
+                // BI 占位仍按未授权 PRO 展示（无 manifest 时前端兜底）
+                if (appWithDisplay.code === 'bi') {
                   return { ...appWithDisplay, is_pro: true, can_access: false };
                 }
                 return appWithDisplay;
@@ -2263,6 +2285,14 @@ const ApplicationListPage: React.FC = () => {
             renderCard: renderApplicationCard,
             columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
             emptyCard: appCategoryFilter === 'dedicated' ? renderCustomAppsCategoryEmpty() : undefined,
+            cardStackGroups: [
+              {
+                codes: [...MANUFACTURING_STACK_CODES],
+                renderStack: (items, renderCard) => (
+                  <ManufacturingAppStack apps={items} renderCard={renderCard} />
+                ),
+              },
+            ],
           }}
         />
       </ListPageTemplate>

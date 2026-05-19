@@ -707,6 +707,17 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
      * 卡片视图无数据时的占位（不传则使用全局默认空状态文案）
      */
     emptyCard?: ReactNode
+    /**
+     * 叠放组：同一组内应用合并为一个网格位（如快制造三卡叠加）
+     * codes 顺序为从后到前，末项为前景
+     */
+    cardStackGroups?: Array<{
+      codes: string[]
+      renderStack: (
+        items: T[],
+        renderCard: (item: T, index: number) => ReactNode,
+      ) => ReactNode
+    }>
   }
   /**
    * 看板视图配置（仅当 viewTypes 包含 'kanban' 时生效）
@@ -2387,11 +2398,58 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       <div
                         style={layout === 'waterfall' ? { columns: '300px auto', columnGap: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
                       >
-                        {tableData.map((item, index) => (
-                          <div key={index} style={layout === 'waterfall' ? { breakInside: 'avoid' as const, marginBottom: 16 } : {}}>
-                            {cardViewConfig!.renderCard!(item, index)}
-                          </div>
-                        ))}
+                        {(() => {
+                          const stackGroups = cardViewConfig.cardStackGroups ?? []
+                          const renderedStackKeys = new Set<string>()
+                          type CardSlot =
+                            | { kind: 'item'; item: T; index: number; key: string }
+                            | { kind: 'stack'; items: T[]; key: string; groupIndex: number }
+                          const cardSlots: CardSlot[] = []
+                          tableData.forEach((item, index) => {
+                            const code = String((item as Record<string, unknown>).code ?? '')
+                            const groupIndex = stackGroups.findIndex((g) => g.codes.includes(code))
+                            if (groupIndex >= 0) {
+                              const group = stackGroups[groupIndex]
+                              const stackKey = group.codes.join('|')
+                              if (renderedStackKeys.has(stackKey)) return
+                              renderedStackKeys.add(stackKey)
+                              const items = group.codes
+                                .map((c) =>
+                                  tableData.find(
+                                    (row) => String((row as Record<string, unknown>).code ?? '') === c,
+                                  ),
+                                )
+                                .filter((row): row is T => Boolean(row))
+                              if (items.length > 0) {
+                                cardSlots.push({ kind: 'stack', items, key: stackKey, groupIndex })
+                              }
+                              return
+                            }
+                            cardSlots.push({
+                              kind: 'item',
+                              item,
+                              index,
+                              key: String((item as Record<string, unknown>).uuid ?? `row-${index}`),
+                            })
+                          })
+                          return cardSlots.map((slot) => (
+                            <div
+                              key={slot.key}
+                              style={
+                                layout === 'waterfall'
+                                  ? { breakInside: 'avoid' as const, marginBottom: 16 }
+                                  : undefined
+                              }
+                            >
+                              {slot.kind === 'stack'
+                                ? stackGroups[slot.groupIndex].renderStack(
+                                    slot.items,
+                                    cardViewConfig!.renderCard!,
+                                  )
+                                : cardViewConfig!.renderCard!(slot.item, slot.index)}
+                            </div>
+                          ))
+                        })()}
                       </div>
                     )
                   })()
