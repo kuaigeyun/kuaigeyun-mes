@@ -747,12 +747,26 @@ class IntegrationConfigService:
         if args and len(args) == 1 and isinstance(args[0], tuple) and len(args[0]) >= 2:
             code, msg = args[0][0], args[0][1]
             if isinstance(msg, (bytes, bytearray)):
-                msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
+                for enc in ("utf-8", "gbk", "cp936", "latin-1"):
+                    try:
+                        msg = msg.decode(enc).strip()
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
             return f"{code}, {msg}"
         if isinstance(exc, tuple) and len(exc) >= 2:
             code, msg = exc[0], exc[1]
             if isinstance(msg, (bytes, bytearray)):
-                msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
+                for enc in ("utf-8", "gbk", "cp936", "latin-1"):
+                    try:
+                        msg = msg.decode(enc).strip()
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
             return f"{code}, {msg}"
         return str(exc).strip() or type(exc).__name__
 
@@ -961,12 +975,13 @@ class IntegrationConfigService:
             if k in ("request", "optional", "prefer", "auto"):
                 return ["optional", "yes"]
             if k == "default":
-                return ["optional", "no", "yes", "mandatory"]
+                return ["no", "optional", "yes", "mandatory"]
         if config.get("encrypt") is True:
-            return ["yes", "mandatory"]
+            return ["yes", "mandatory", "no"]
         if config.get("encrypt") is False:
             return ["no"]
-        return ["optional", "no", "yes", "mandatory"]
+        # 老版本 / 穿透 SQL Server：优先 Encrypt=no，避免 Driver 18 先协商 TLS 报 unsupported protocol
+        return ["no", "optional", "yes", "mandatory"]
 
     @staticmethod
     def _sqlserver_pyodbc_try_sync(config: Dict[str, Any]) -> Dict[str, Any]:

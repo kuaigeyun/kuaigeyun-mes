@@ -550,6 +550,17 @@ class DatasetService:
         return "".join(parts), args
 
     @staticmethod
+    def _escape_pymssql_literal_percents(sql: str) -> str:
+        """
+        pymssql 通过 Python「%」格式化绑定 %s 参数；SQL 里 LIKE 等字面量 % 须写成 %%，否则会破坏语句
+        （常见表现：Incorrect syntax near '\\xb3'，多字节中文被截断）。
+        """
+        parts = sql.split("%s")
+        if len(parts) == 1:
+            return sql.replace("%", "%%")
+        return "%s".join(p.replace("%", "%%") for p in parts)
+
+    @staticmethod
     def _sqlserver_should_wrap_paging(sql: str) -> bool:
         """若语句已含 TOP / OFFSET-FETCH，则不再外包分页。"""
         u = sql.upper()
@@ -585,6 +596,7 @@ class DatasetService:
 
         from core.services.integration.integration_config_service import IntegrationConfigService
 
+        sql = DatasetService._escape_pymssql_literal_percents(sql)
         attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
         last_exc: Optional[BaseException] = None
         tup = tuple(args) if args else tuple()
