@@ -12,6 +12,71 @@ import { CurrentUser } from '../types/api';
 const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'];
 const SYSTEM_ADMIN_ROLE_NAME = '系统管理员';
 
+/** 与后端 PermissionRegistryService._clean_code 一致 */
+export function normalizePermissionCode(code: string): string {
+  return String(code ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-');
+}
+
+function buildUserPermissionSet(user: CurrentUser): Set<string> {
+  if (!user.permissions?.length) return new Set();
+  return new Set(user.permissions.map(normalizePermissionCode));
+}
+
+/**
+ * 菜单所需权限是否被用户持有（含连字符/下划线归一化及好力 GO 应用入口兼容）
+ */
+function matchesRequiredPermission(userPerms: Set<string>, required: string): boolean {
+  const normalized = normalizePermissionCode(required);
+  if (!normalized) return false;
+  if (userPerms.has(normalized)) return true;
+
+  const parts = normalized.split(':').filter(Boolean);
+  if (parts.length < 3) return false;
+  const app = parts[0];
+  const action = parts[parts.length - 1];
+  const resource = parts.slice(1, -1).join(':');
+
+  if (app === 'haoligo') {
+    return haoligoPermissionMatches(userPerms, normalized, resource, action);
+  }
+
+  return false;
+}
+
+/** 好力 GO：按资源精确匹配，禁止 molds: 误匹配 molds-ledger: 等子资源 */
+function haoligoPermissionMatches(
+  userPerms: Set<string>,
+  normalizedRequired: string,
+  resource: string,
+  action: string,
+): boolean {
+  const exactRead = `haoligo:${resource}:read`;
+  const exactAction = `haoligo:${resource}:${action}`;
+
+  if (userPerms.has(normalizedRequired) || userPerms.has(exactAction)) {
+    return true;
+  }
+
+  const resourcePrefix = `haoligo:${resource}:`;
+  for (const p of userPerms) {
+    if (!p.startsWith(resourcePrefix)) continue;
+    const parts = p.split(':').filter(Boolean);
+    if (parts.length < 3) continue;
+    const permResource = parts.slice(1, -1).join(':');
+    if (permResource !== resource) continue;
+
+    if (p === exactRead || p === exactAction) return true;
+    if (action === 'read' && (p.endsWith(':read') || p.endsWith(':create') || p.endsWith(':update'))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * 判断用户是否拥有「系统管理员」角色（与后端判定一致，用于菜单等前端权限展示）
  */
@@ -41,13 +106,8 @@ export function hasPermission(user: CurrentUser | undefined, permissionCode: str
     return true;
   }
 
-  // 检查用户权限列表（如果用户对象包含权限列表）
-  if (user.permissions && Array.isArray(user.permissions)) {
-    return user.permissions.includes(permissionCode);
-  }
-
-  // 如果没有权限列表，返回false
-  return false;
+  const userPerms = buildUserPermissionSet(user);
+  return matchesRequiredPermission(userPerms, permissionCode);
 }
 
 /**
@@ -70,12 +130,8 @@ export function hasAnyPermission(
     return true;
   }
 
-  // 检查用户权限列表
-  if (user.permissions && Array.isArray(user.permissions)) {
-    return permissionCodes.some(code => user.permissions!.includes(code));
-  }
-
-  return false;
+  const userPerms = buildUserPermissionSet(user);
+  return permissionCodes.some(code => matchesRequiredPermission(userPerms, code));
 }
 
 /**
@@ -98,12 +154,8 @@ export function hasAllPermissions(
     return true;
   }
 
-  // 检查用户权限列表
-  if (user.permissions && Array.isArray(user.permissions)) {
-    return permissionCodes.every(code => user.permissions!.includes(code));
-  }
-
-  return false;
+  const userPerms = buildUserPermissionSet(user);
+  return permissionCodes.every(code => matchesRequiredPermission(userPerms, code));
 }
 
 /**

@@ -514,6 +514,7 @@ const ApplicationListPage: React.FC = () => {
   const queryClient = useQueryClient();
   /** 后端写入菜单或清单后失效侧边栏与工作台菜单缓存（与 increment + invalidate 双通道，避免漏刷新） */
   const refreshApplicationMenusAfterBackendMenuChange = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     useGlobalStore.getState().incrementApplicationMenuVersion();

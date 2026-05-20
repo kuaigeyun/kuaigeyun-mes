@@ -233,7 +233,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 只有在以下情况才需要获取用户信息：
   // 1. 有 token 但没有 currentUser
   // 注意：避免在 currentUser 已存在时重复获取，防止无限循环
-  const shouldFetchUser = !!getToken() && !currentUser;
+  // 租户用户由 App AuthGuard 定期拉取 /auth/me；此处仅平台超管在无 currentUser 时补拉
+  const shouldFetchUser = !!getToken() && !currentUser && isInfraSuperAdmin;
 
   // 根据用户类型调用不同的接口
   const { data: userData, isLoading, error } = useQuery({
@@ -1303,6 +1304,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const justLoggedIn = userId !== undefined && prevUserIdRef.current === undefined;
     prevUserIdRef.current = userId;
     if (!justLoggedIn) return;
+    queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
   }, [currentUser?.id, queryClient]);
 
@@ -1311,6 +1313,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const tid = currentUser?.tenant_id;
     if (tid !== undefined && prevTenantIdRef.current !== undefined && prevTenantIdRef.current !== tid) {
+      queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     }
     prevTenantIdRef.current = tid;
@@ -1770,6 +1773,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setTechStackModalOpen(true);
         break;
       case 'clear-menu-cache':
+        queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
         queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
         message.success(t('ui.clearCacheSuccess'));

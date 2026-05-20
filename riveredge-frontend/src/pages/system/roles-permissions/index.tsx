@@ -67,6 +67,8 @@ import {
   DataPermissionPolicy,
   FieldPermissionPolicy,
 } from '../../../services/role';
+import { refreshCurrentUserInStore } from '../../../services/auth';
+import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import { PERMISSION_TEMPLATES, getPermissionUuidsByTemplate } from '../../../config/permission-modules';
@@ -142,52 +144,78 @@ function normalizeFunctionPermissionCode(code: string): string {
   return res;
 }
 
-const anchorCache = new Map<string, string | null>();
-/**
- * 从 app:resource:action 解析 resource 锚点（resource 内可含冒号，如多段）。
- * 用于避免父资源前缀 startsWith 误吞子资源码（例：...-reporting 不得匹配 ...-reporting-statistics）。
- */
-function resourceAnchorFromPermissionCode(full: string): string | null {
-  if (!full) return null;
-  let res = anchorCache.get(full);
-  if (res !== undefined) return res;
-  const parts = normalizeFunctionPermissionCode(full).split(':').filter(Boolean);
-  if (parts.length < 3) {
-    anchorCache.set(full, null);
-    return null;
-  }
-  const computed = parts.slice(1, -1).join(':');
-  anchorCache.set(full, computed);
-  return computed;
+/** 功能权限树操作项；UI 勾选真源为 permissionCode（与后端 code 一致，避免权限同步后 UUID 变化导致无法回显） */
+type PermissionActionItem = {
+  key: string;
+  label: string;
+  permissionCode: string;
+  mergedCodes?: string[];
+};
+
+function permissionCodesFromActionItem(item: PermissionActionItem): string[] {
+  if (item.mergedCodes?.length) return item.mergedCodes;
+  if (item.permissionCode) return [item.permissionCode];
+  return [];
 }
 
-const prefixCache = new Map<string, string[]>();
-/**
- * 菜单 permission_code 对应的资源前缀（含 app 段），兼容 meta.node 下划线与 manifest 连字符两种写法。
- */
-function resourcePrefixesForMenuCode(menuCode: string): string[] {
-  if (!menuCode) return [];
-  let res = prefixCache.get(menuCode);
-  if (res !== undefined) return res;
-  const parts = normalizeFunctionPermissionCode(menuCode).split(':').filter(Boolean);
-  if (parts.length < 2) {
-    prefixCache.set(menuCode, []);
-    return [];
-  }
-  const app = parts[0];
-  const appVariants = [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
-  const resourceParts = parts.length >= 3 ? parts.slice(1, -1) : parts.slice(1);
-  const resourceJoined = resourceParts.join(':');
-  const asHyphen = resourceJoined.replace(/_/g, '-');
-  const asUnder = resourceJoined.replace(/-/g, '_');
-  const uniq = [...new Set([resourceJoined, asHyphen, asUnder])];
-  const computed = appVariants.flatMap((a) => uniq.map((r) => `${a}:${r}:`));
-  prefixCache.set(menuCode, computed);
-  return computed;
+function isActionItemChecked(item: PermissionActionItem, selectedCodes: Set<string>): boolean {
+  const codes = permissionCodesFromActionItem(item);
+  if (codes.length === 0) return false;
+  return codes.every((c) => selectedCodes.has(c));
 }
 
-/** 路径型菜单资源（如 quality-management-incoming-inspection）对应到 manifest 短资源码（incoming-inspection） */
-const GENERIC_RESOURCE_SUFFIX = new Set(['dashboard', 'reports', 'statistics', 'terminal']);
+function applyActionItemToggle(
+  selectedCodes: Set<string>,
+  item: PermissionActionItem,
+  checked: boolean
+): Set<string> {
+  const next = new Set(selectedCodes);
+  permissionCodesFromActionItem(item).forEach((c) => {
+    if (checked) next.add(c);
+    else next.delete(c);
+  });
+  return next;
+}
+
+function collectPermissionCodesFromTree(nodes: DataNode[]): string[] {
+  const codes: string[] = [];
+  const walk = (list: DataNode[]) => {
+    for (const node of list) {
+      const items = (node as { _actionItems?: PermissionActionItem[] })._actionItems;
+      if (items?.length) {
+        items.forEach((item) => {
+          codes.push(...permissionCodesFromActionItem(item));
+        });
+      }
+      const ch = node.children as DataNode[] | undefined;
+      if (ch?.length) walk(ch);
+    }
+  };
+  walk(nodes);
+  return [...new Set(codes)];
+}
+
+function permissionCodesFromRolePermissions(rolePermissions: Permission[]): string[] {
+  const codes = rolePermissions
+    .map((p) => normalizeFunctionPermissionCode(p.code || ''))
+    .filter(Boolean);
+  return [...new Set(codes)];
+}
+
+function permissionUuidsFromCodes(codes: Iterable<string>, pool: Permission[]): string[] {
+  const byCode = new Map<string, string>();
+  pool.forEach((p) => {
+    const c = normalizeFunctionPermissionCode(p.code || '');
+    if (c) byCode.set(c, p.uuid);
+  });
+  const uuids: string[] = [];
+  for (const code of codes) {
+    const uuid = byCode.get(code);
+    if (uuid) uuids.push(uuid);
+  }
+  return [...new Set(uuids)];
+}
+
 const RESOURCE_ALIAS_MAP: Record<string, string[]> = {
   'purchase-request': ['purchase-requisition'],
   'purchase-requisition': ['purchase-request'],
@@ -200,93 +228,98 @@ const RESOURCE_ALIAS_MAP: Record<string, string[]> = {
   'material-batch-rule': ['material-batch'],
 };
 
-function resourceSuffixAliases(resource: string): string[] {
-  if (!resource || !resource.includes('-')) return [];
-  const parts = resource.split('-').filter(Boolean);
-  if (parts.length < 2) return [];
-  const out: string[] = [];
-  for (let i = 1; i < parts.length; i++) {
-    const cand = parts.slice(i).join('-');
-    const segCount = parts.length - i;
-    if (segCount === 1 && GENERIC_RESOURCE_SUFFIX.has(cand)) continue;
-    if (cand.split('-').length < 2) continue;
-    out.push(cand);
-  }
-  return out;
-}
-
 function resourceExactAliases(resource: string): string[] {
   if (!resource) return [];
   return RESOURCE_ALIAS_MAP[resource] || [];
 }
 
-/** 与菜单 permission_code 同资源前缀下的所有权限（菜单下列为可勾选操作） */
-function permissionsMatchingMenuCode(menuCode: string, pool: Permission[]): Permission[] {
-  const c = normalizeFunctionPermissionCode(menuCode);
-  if (!c) return [];
-  
-  const prefixes: string[] = [];
-  prefixes.push(...resourcePrefixesForMenuCode(c));
-  const parts = c.split(':').filter(Boolean);
-  if (parts.length >= 3) {
-    const app = parts[0];
-    const appVariants = [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
+function normalizeResourceKey(resource: string): string {
+  return resource.trim().toLowerCase().replace(/_/g, '-');
+}
+
+/** 分组/占位菜单码（非页面级资源，不得用前缀吞并子菜单权限） */
+function isGenericMenuPermissionCode(norm: string): boolean {
+  if (!norm) return true;
+  const parts = norm.split(':').filter(Boolean);
+  if (parts.length >= 3 && parts[parts.length - 1] === 'read') {
     const resource = parts.slice(1, -1).join(':');
-    for (const alias of resourceExactAliases(resource)) {
-      for (const appv of appVariants) {
-        prefixes.push(`${appv}:${alias}:`);
-      }
-    }
-    for (const alias of resourceSuffixAliases(resource)) {
-      for (const appv of appVariants) {
-        prefixes.push(`${appv}:${alias}:`);
-      }
-    }
+    if (resource === 'workspace' || resource === parts[0]) return true;
   }
-  if (parts.length === 1) {
-    prefixes.push(`${parts[0]}:`);
+  return false;
+}
+
+/** 从应用路由解析资源段，如 /apps/haoligo/molds/documents/trial → molds-documents-trial */
+function resourceFromMenuPath(path: string): string | null {
+  const normalized = (path || '').replace(/\/$/, '');
+  const match = normalized.match(/^\/apps\/[^/]+\/(.+)$/);
+  if (!match) return null;
+  const segments = match[1].split('/').filter(Boolean);
+  if (segments.length === 0) return null;
+  return segments.join('-');
+}
+
+function appCodeFromMenu(menu: MenuTree): string | null {
+  const code = menu.permission_code?.trim();
+  if (code) {
+    const parts = normalizeFunctionPermissionCode(code).split(':').filter(Boolean);
+    if (parts.length >= 1) return parts[0];
   }
+  const path = menu.path || '';
+  const m = path.match(/^\/apps\/([^/]+)/);
+  return m ? normalizeFunctionPermissionCode(m[1]).split(':')[0] : null;
+}
+
+/**
+ * 解析菜单对应的功能资源（唯一绑定依据）。
+ * 有具体 permission_code 时用其 resource；仅占位码时用 path 推导页面资源。
+ */
+function resolveMenuTargetResource(menu: MenuTree): string | null {
+  const code = menu.permission_code?.trim() || '';
+  const norm = normalizeFunctionPermissionCode(code);
+  const parsed = code ? parseResourceAndAction(code) : null;
+  if (parsed?.resource && !isGenericMenuPermissionCode(norm)) {
+    return parsed.resource;
+  }
+  const fromPath = resourceFromMenuPath(menu.path || '');
+  if (fromPath) return fromPath;
+  return parsed?.resource ?? null;
+}
+
+function appVariants(app: string): string[] {
+  return [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
+}
+
+/**
+ * 菜单节点可勾选权限：仅同一 app + 同一 resource（含显式别名表），禁止前缀/后缀扩展匹配。
+ */
+function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
+  const targetResource = resolveMenuTargetResource(menu);
+  const app = appCodeFromMenu(menu);
+  if (!targetResource || !app) return [];
+
+  const resourceKeys = new Set<string>([
+    normalizeResourceKey(targetResource),
+    ...resourceExactAliases(targetResource).map(normalizeResourceKey),
+  ]);
+  const apps = new Set(appVariants(app));
 
   const seen = new Set<string>();
   const out: Permission[] = [];
-
-  for (let i = 0; i < pool.length; i++) {
-    const p = pool[i];
+  for (const p of pool) {
     if (!p.code) continue;
     const pNorm = normalizeFunctionPermissionCode(p.code);
-    let matched = false;
-    if (pNorm === c) {
-      matched = true;
-    } else {
-      for (let j = 0; j < prefixes.length; j++) {
-        if (pNorm.startsWith(prefixes[j])) {
-          matched = true;
-          break;
-        }
-      }
-    }
-    if (matched && !seen.has(p.uuid)) {
-      seen.add(p.uuid);
-      out.push(p);
-    }
+    const parts = pNorm.split(':').filter(Boolean);
+    if (parts.length < 3) continue;
+    if (!apps.has(parts[0])) continue;
+    const pr = parseResourceAndAction(p.code);
+    if (!pr) continue;
+    if (!resourceKeys.has(normalizeResourceKey(pr.resource))) continue;
+    if (seen.has(p.uuid)) continue;
+    seen.add(p.uuid);
+    out.push(p);
   }
-
-  const menuAnchor = resourceAnchorFromPermissionCode(c);
-  const filtered =
-    menuAnchor == null
-      ? out
-      : out.filter((p) => {
-          const pNorm = normalizeFunctionPermissionCode(p.code || '');
-          if (pNorm === c) return true;
-          const pAnchor = resourceAnchorFromPermissionCode(pNorm);
-          if (!pAnchor) return true;
-          if (pAnchor === menuAnchor) return true;
-          if (pAnchor !== menuAnchor && pAnchor.startsWith(`${menuAnchor}-`)) return false;
-          return true;
-        });
-
-  filtered.sort((a, b) => a.code.localeCompare(b.code));
-  return filtered;
+  out.sort((a, b) => a.code.localeCompare(b.code));
+  return out;
 }
 
 /** 仅保留「子树内仍有可展示权限」的菜单分支 */
@@ -295,8 +328,7 @@ function filterMenusForDisplay(menus: MenuTree[], pool: Permission[]): MenuTree[
   const sorted = [...menus].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   for (const m of sorted) {
     const sub = m.children?.length ? filterMenusForDisplay(m.children, pool) : [];
-    const code = m.permission_code?.trim();
-    const myPerms = code ? permissionsMatchingMenuCode(code, pool) : [];
+    const myPerms = permissionsForMenu(m, pool);
     if (sub.length > 0 || myPerms.length > 0) {
       result.push({ ...m, children: sub });
     }
@@ -347,8 +379,7 @@ function buildMenuPermissionTreeData(
   pool: Permission[],
   expandKeys: React.Key[],
   t: (key: string, opts?: { defaultValue?: string }) => string,
-  token: { colorPrimary: string },
-  mergedPermissionMap: Record<string, string[]>
+  token: { colorPrimary: string }
 ): DataNode[] {
   const sorted = [...menus].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   const nodes: DataNode[] = [];
@@ -358,47 +389,27 @@ function buildMenuPermissionTreeData(
     expandKeys.push(key);
 
     const childMenus = m.children?.length
-      ? buildMenuPermissionTreeData(
-          m.children,
-          pool,
-          expandKeys,
-          t,
-          token,
-          mergedPermissionMap
-        )
+      ? buildMenuPermissionTreeData(m.children, pool, expandKeys, t, token)
       : [];
 
-    const code = m.permission_code?.trim();
-    let actionItems: Array<{ key: string; label: string }> = [];
-    if (code) {
-      let matchPool = permissionsMatchingMenuCode(code, pool);
-      // 菜单展示不做全局占用去重，避免前序节点“吃掉”后序分组导致菜单被误判为空。
-      const matched = matchPool;
-      const parsedMenu = parseResourceAndAction(code);
+    let actionItems: PermissionActionItem[] = [];
+    const matched = permissionsForMenu(m, pool);
+    if (matched.length > 0) {
       const preferredByAction = new Map<string, Permission>();
       matched.forEach((permission) => {
         const parsed = parseResourceAndAction(permission.code || '');
         const actionKey = (parsed?.action || permission.action || permission.code || '').toLowerCase();
-        const existing = preferredByAction.get(actionKey);
-        if (!existing) {
-          preferredByAction.set(actionKey, permission);
-          return;
-        }
-        const existingParsed = parseResourceAndAction(existing.code || '');
-        const isCurr = parsedMenu && parsed && parsed.resource === parsedMenu.resource;
-        const existingIsCurr =
-          parsedMenu && existingParsed && existingParsed.resource === parsedMenu.resource;
-        if (isCurr && !existingIsCurr) {
-          preferredByAction.set(actionKey, permission);
-        }
+        preferredByAction.set(actionKey, permission);
       });
       const matchedUnique = [...preferredByAction.values()];
 
-      const plainActionItems = matchedUnique.map((permission) => {
+      const plainActionItems: PermissionActionItem[] = matchedUnique.map((permission) => {
         const actionLabel = permissionLeafDisplayLabel(permission, t);
+        const permCode = normalizeFunctionPermissionCode(permission.code || '');
         return {
-          key: permission.uuid,
+          key: `${m.uuid}:${permCode}`,
           label: actionLabel,
+          permissionCode: permCode,
         };
       });
 
@@ -406,22 +417,30 @@ function buildMenuPermissionTreeData(
       matchedUnique.forEach((permission) => {
         const parsed = parseResourceAndAction(permission.code || '');
         if (!parsed || !REVIEW_ACTIONS.has(parsed.action)) return;
+        const permCode = normalizeFunctionPermissionCode(permission.code || '');
+        if (!permCode) return;
         if (!reviewGroup.has(parsed.resource)) reviewGroup.set(parsed.resource, []);
-        reviewGroup.get(parsed.resource)!.push(permission.uuid);
+        reviewGroup.get(parsed.resource)!.push(permCode);
       });
 
-      const mergedReviewItems: Array<{ key: string; label: string }> = [];
-      reviewGroup.forEach((uuids, resource) => {
-        if (uuids.length < 2) return;
-        const mergedKey = `merged-review:${resource}`;
-        mergedPermissionMap[mergedKey] = uuids;
-        mergedReviewItems.push({ key: mergedKey, label: '审核' });
+      const mergedReviewItems: PermissionActionItem[] = [];
+      reviewGroup.forEach((codes, resource) => {
+        if (codes.length < 2) return;
+        const mergedKey = `merged-review:${m.uuid}:${resource}`;
+        mergedReviewItems.push({
+          key: mergedKey,
+          label: '审核',
+          permissionCode: codes[0],
+          mergedCodes: codes,
+        });
       });
 
-      const covered = new Set(Object.values(mergedPermissionMap).flat());
-      const remaining = plainActionItems
-        .filter((n) => !covered.has(String(n.key)))
-        .map((n) => ({ key: String(n.key), label: n.label || '' }));
+      const covered = new Set(
+        mergedReviewItems.flatMap((item) => item.mergedCodes ?? [])
+      );
+      const remaining = plainActionItems.filter(
+        (n) => !n.permissionCode || !covered.has(n.permissionCode)
+      );
       actionItems = [...mergedReviewItems, ...remaining];
     }
 
@@ -441,10 +460,6 @@ function buildMenuPermissionTreeData(
     } as DataNode);
   }
   return nodes;
-}
-
-function isAssignablePermissionTreeKey(key: string): boolean {
-  return !key.startsWith('menu-');
 }
 
 const FieldNameInput: React.FC<{
@@ -496,7 +511,8 @@ const RolesPermissionsPage: React.FC = () => {
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
-  const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
+  /** 功能权限 UI 真源：规范化 permission.code；保存时映射为当前权限池 UUID */
+  const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
@@ -511,10 +527,11 @@ const RolesPermissionsPage: React.FC = () => {
   const [selectedFieldIndexes, setSelectedFieldIndexes] = useState<number[]>([]);
   const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('masked');
   const [fieldKeywordInput, setFieldKeywordInput] = useState('amount,price,customer_name');
-  const [mergedPermissionKeyMap, setMergedPermissionKeyMap] = useState<Record<string, string[]>>({});
-  const mergedPermissionKeyMapRef = useRef<Record<string, string[]>>({});
   const initializedExpandRef = useRef(false);
-  const checkedPermissionSet = useMemo(() => new Set(checkedKeys.map(String)), [checkedKeys]);
+  const selectedPermissionCodeSet = useMemo(
+    () => new Set(selectedPermissionCodes),
+    [selectedPermissionCodes]
+  );
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [currentEditRole, setCurrentEditRole] = useState<Role | null>(null);
@@ -592,7 +609,7 @@ const RolesPermissionsPage: React.FC = () => {
       // 如果删除的是当前选中的角色，清空选择
       setSelectedRole((prev) => {
         if (prev?.uuid === role.uuid) {
-          setCheckedKeys([]);
+          setSelectedPermissionCodes([]);
           setSelectedRoleKeys([]);
           return null;
         }
@@ -775,23 +792,11 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 按菜单树结构展示权限：菜单标题与侧栏翻译一致，带 permission_code 的节点下挂同资源前缀的操作权限
    */
-  const togglePermissionKey = useCallback(
-    (key: string, checked: boolean) => {
-      setCheckedKeys((prev) => {
-        const set = new Set(prev.map(String));
-        const merged = mergedPermissionKeyMapRef.current[key] || [];
-        if (checked) {
-          set.add(key);
-          if (merged.length > 0) merged.forEach((u) => set.delete(u));
-        } else {
-          set.delete(key);
-          if (merged.length > 0) merged.forEach((u) => set.delete(u));
-        }
-        return Array.from(set);
-      });
-    },
-    []
-  );
+  const togglePermissionActionItem = useCallback((item: PermissionActionItem, checked: boolean) => {
+    setSelectedPermissionCodes((prev) =>
+      Array.from(applyActionItemToggle(new Set(prev), item, checked))
+    );
+  }, []);
 
   useEffect(() => {
     if (allPermissions.length === 0) {
@@ -818,20 +823,16 @@ const RolesPermissionsPage: React.FC = () => {
         setPermissionTreeExpandedKeys(expandKeys);
         initializedExpandRef.current = true;
       }
-      mergedPermissionKeyMapRef.current = {};
-      setMergedPermissionKeyMap({});
       return;
     }
 
     const menusForPool = menuTree;
-    const mergedMap: Record<string, string[]> = {};
     const treeData = buildMenuPermissionTreeData(
       menusForPool,
       filteredItems,
       expandKeys,
       t,
-      token,
-      mergedMap
+      token
     );
 
     setPermissionTreeData(treeData);
@@ -839,8 +840,6 @@ const RolesPermissionsPage: React.FC = () => {
       setPermissionTreeExpandedKeys(expandKeys);
       initializedExpandRef.current = true;
     }
-    mergedPermissionKeyMapRef.current = mergedMap;
-    setMergedPermissionKeyMap(mergedMap);
   }, [
     allPermissions,
     permissionSearchKeyword,
@@ -849,49 +848,17 @@ const RolesPermissionsPage: React.FC = () => {
     token,
   ]);
 
-  useEffect(() => {
-    if (Object.keys(mergedPermissionKeyMap).length === 0) return;
-    setCheckedKeys((prev) => {
-      const set = new Set(prev.map(String));
-      Object.entries(mergedPermissionKeyMap).forEach(([mergedKey, uuids]) => {
-        if (uuids.some((u) => set.has(u))) {
-          set.add(mergedKey);
-          uuids.forEach((u) => set.delete(u));
-        }
-      });
-      return Array.from(set);
-    });
-  }, [mergedPermissionKeyMap]);
+  /** 当前权限树可见的操作权限 UUID（受搜索过滤影响，用于批量勾选） */
+  const visibleFunctionPermissionCodes = useMemo(
+    () => collectPermissionCodesFromTree(permissionTreeData),
+    [permissionTreeData]
+  );
 
-  /**
-   * 当前树中展示的权限 UUID 列表（受搜索和类型筛选影响）
-   */
-  const displayedPermissionUuids = useMemo(() => {
-    const collect: string[] = [];
-    const walk = (nodes: any[]) => {
-      if (!nodes) return;
-      for (const node of nodes) {
-        if (Array.isArray(node.actionKeys)) {
-          node.actionKeys.forEach((k: string) => collect.push(k));
-        }
-        if (node.children && node.children.length > 0) {
-          walk(node.children);
-        }
-        const k = typeof node.key === 'string' ? node.key : '';
-        if (k && isAssignablePermissionTreeKey(k)) {
-          collect.push(k);
-        }
-      }
-    };
-    walk(permissionTreeData);
-    return collect;
-  }, [permissionTreeData]);
-
-  const permissionUuidSet = useMemo(() => new Set(allPermissions.map((p) => p.uuid)), [allPermissions]);
-  const visibleFunctionPermissionUuids = useMemo(() => {
-    const uniq = Array.from(new Set(displayedPermissionUuids));
-    return uniq.filter((k) => permissionUuidSet.has(k));
-  }, [displayedPermissionUuids, permissionUuidSet]);
+  const assignedFunctionPermissionCount = selectedPermissionCodes.length;
+  const treeVisibleAssignedCount = useMemo(() => {
+    const visible = new Set(visibleFunctionPermissionCodes);
+    return selectedPermissionCodes.filter((c) => visible.has(c)).length;
+  }, [selectedPermissionCodes, visibleFunctionPermissionCodes]);
 
   const functionBatchAppOptions = useMemo(() => {
     const byApp = new Set<string>();
@@ -1014,9 +981,15 @@ const RolesPermissionsPage: React.FC = () => {
   const handleApplyTemplate = useCallback(
     (templateKey: string) => {
       const uuids = getPermissionUuidsByTemplate(templateKey, allPermissions);
-      setCheckedKeys(uuids);
+      const codes = uuids
+        .map((uuid) => {
+          const p = allPermissions.find((x) => x.uuid === uuid);
+          return p ? normalizeFunctionPermissionCode(p.code || '') : '';
+        })
+        .filter(Boolean);
+      setSelectedPermissionCodes(codes);
       const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
-      messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: uuids.length }));
+      messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: codes.length }));
     },
     [allPermissions, messageApi, t]
   );
@@ -1049,7 +1022,7 @@ const RolesPermissionsPage: React.FC = () => {
         getRoleDataPolicies(role.uuid),
         getRoleFieldPolicies(role.uuid),
       ]);
-      setCheckedKeys(rolePermissions.map(p => p.uuid));
+      setSelectedPermissionCodes(permissionCodesFromRolePermissions(rolePermissions));
       setDataPolicies(roleDataPolicies);
       setFieldPolicies(roleFieldPolicies);
     } catch (error: any) {
@@ -1071,19 +1044,11 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setSavingPermissions(true);
       if (permissionLayer === 'function') {
-        const expanded = new Set<string>();
-        checkedKeys.forEach((key) => {
-          if (typeof key !== 'string' || !isAssignablePermissionTreeKey(key)) return;
-          const merged = mergedPermissionKeyMap[key];
-          if (merged?.length) {
-            merged.forEach((u) => expanded.add(u));
-          } else {
-            expanded.add(key);
-          }
-        });
-        const permissionUuids = Array.from(expanded);
+        const permissionUuids = permissionUuidsFromCodes(selectedPermissionCodes, allPermissions);
         await assignPermissions(selectedRole.uuid, permissionUuids);
         messageApi.success(`功能权限保存成功：${permissionUuids.length} 项`);
+        const refreshed = await getRolePermissions(selectedRole.uuid);
+        setSelectedPermissionCodes(permissionCodesFromRolePermissions(refreshed));
       } else if (permissionLayer === 'data') {
         const payload = dataPolicies
           .filter((x) => x.resource)
@@ -1120,6 +1085,15 @@ const RolesPermissionsPage: React.FC = () => {
 
       // 重新加载角色列表（更新权限数）
       await loadRoles();
+
+      if (permissionLayer === 'function') {
+        try {
+          await refreshCurrentUserInStore();
+        } catch {
+          /* 非阻塞：当前账号刷新失败时仍提示用户重新登录 */
+        }
+        useGlobalStore.getState().incrementApplicationMenuVersion();
+      }
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.roles.assignFailed'));
     } finally {
@@ -1143,10 +1117,10 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setCopying(true);
       const rolePermissions = await getRolePermissions(sourceRoleUuid);
-      const uuids = rolePermissions.map(p => p.uuid);
-      
-      // 更新当前勾选状态（覆盖）
-      setCheckedKeys(uuids);
+
+      setSelectedPermissionCodes(
+        permissionCodesFromRolePermissions(rolePermissions)
+      );
       messageApi.success(t('pages.system.roles.copySuccess'));
       setCopyModalVisible(false);
       setSourceRoleUuid(null);
@@ -1187,43 +1161,49 @@ const RolesPermissionsPage: React.FC = () => {
   }, [permissionTreeExpandedKeys, permissionTreeData]);
 
   const selectAllVisibleFunctionPermissions = useCallback(() => {
-    if (!visibleFunctionPermissionUuids.length) return;
-    setCheckedKeys((prev) => Array.from(new Set([...prev.map(String), ...visibleFunctionPermissionUuids])));
-  }, [visibleFunctionPermissionUuids]);
+    if (!visibleFunctionPermissionCodes.length) return;
+    setSelectedPermissionCodes((prev) =>
+      Array.from(new Set([...prev, ...visibleFunctionPermissionCodes]))
+    );
+  }, [visibleFunctionPermissionCodes]);
 
   const clearVisibleFunctionPermissions = useCallback(() => {
-    if (!visibleFunctionPermissionUuids.length) return;
-    const target = new Set(visibleFunctionPermissionUuids);
-    setCheckedKeys((prev) => prev.map(String).filter((k) => !target.has(k)));
-  }, [visibleFunctionPermissionUuids]);
+    if (!visibleFunctionPermissionCodes.length) return;
+    const target = new Set(visibleFunctionPermissionCodes);
+    setSelectedPermissionCodes((prev) => prev.filter((c) => !target.has(c)));
+  }, [visibleFunctionPermissionCodes]);
 
   const invertVisibleFunctionPermissions = useCallback(() => {
-    if (!visibleFunctionPermissionUuids.length) return;
-    const visible = new Set(visibleFunctionPermissionUuids);
-    setCheckedKeys((prev) => {
-      const curr = new Set(prev.map(String));
-      visible.forEach((u) => {
-        if (curr.has(u)) curr.delete(u);
-        else curr.add(u);
+    if (!visibleFunctionPermissionCodes.length) return;
+    const visible = new Set(visibleFunctionPermissionCodes);
+    setSelectedPermissionCodes((prev) => {
+      const curr = new Set(prev);
+      visible.forEach((c) => {
+        if (curr.has(c)) curr.delete(c);
+        else curr.add(c);
       });
       return Array.from(curr);
     });
-  }, [visibleFunctionPermissionUuids]);
+  }, [visibleFunctionPermissionCodes]);
 
   const selectByFunctionModule = useCallback(() => {
     if (!functionBatchApp) return;
-    const uuids = allPermissions
+    const codes = allPermissions
       .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
-      .map((p) => p.uuid);
-    setCheckedKeys((prev) => Array.from(new Set([...prev.map(String), ...uuids])));
+      .map((p) => normalizeFunctionPermissionCode(p.code || ''))
+      .filter(Boolean);
+    setSelectedPermissionCodes((prev) => Array.from(new Set([...prev, ...codes])));
   }, [functionBatchApp, allPermissions]);
 
   const clearByFunctionModule = useCallback(() => {
     if (!functionBatchApp) return;
     const target = new Set(
-      allPermissions.filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`)).map((p) => p.uuid)
+      allPermissions
+        .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
+        .map((p) => normalizeFunctionPermissionCode(p.code || ''))
+        .filter(Boolean)
     );
-    setCheckedKeys((prev) => prev.map(String).filter((k) => !target.has(k)));
+    setSelectedPermissionCodes((prev) => prev.filter((c) => !target.has(c)));
   }, [functionBatchApp, allPermissions]);
 
   return (
@@ -1437,7 +1417,7 @@ const RolesPermissionsPage: React.FC = () => {
                     placeholder={t('pages.system.roles.applyTemplate')}
                     style={{ width: 180 }}
                     allowClear
-                    onChange={(key) => key && handleApplyTemplate(key)}
+                    onSelect={(key) => handleApplyTemplate(String(key))}
                     options={PERMISSION_TEMPLATES.map((tmpl) => ({
                       value: tmpl.key,
                       label: tmpl.name + (tmpl.description ? ` (${tmpl.description})` : ''),
@@ -1538,14 +1518,14 @@ const RolesPermissionsPage: React.FC = () => {
                               {node.title}
                             </span>
                             <div className="permission-action-row">
-                              {node._actionItems.map((item: any) => {
-                                const mergedChildren = mergedPermissionKeyMapRef.current[item.key] || [];
-                                const checked = mergedChildren.length
-                                  ? checkedPermissionSet.has(item.key) || mergedChildren.some((u) => checkedPermissionSet.has(u))
-                                  : checkedPermissionSet.has(item.key);
+                              {node._actionItems.map((item: PermissionActionItem) => {
+                                const checked = isActionItemChecked(item, selectedPermissionCodeSet);
                                 return (
                                   <label key={item.key} className="permission-action-chip">
-                                    <Checkbox checked={checked} onChange={(e) => togglePermissionKey(item.key, e.target.checked)} />
+                                    <Checkbox
+                                      checked={checked}
+                                      onChange={(e) => togglePermissionActionItem(item, e.target.checked)}
+                                    />
                                     <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
                                   </label>
                                 );
@@ -1839,9 +1819,16 @@ const RolesPermissionsPage: React.FC = () => {
           >
             <Space separator={<Divider orientation="vertical" />}>
               <span>系统总权限：{allPermissions.length} 项</span>
-              <span>当前已授权：<span style={{ color: token.colorPrimary, fontWeight: 500 }}>{checkedKeys.filter(
-                (key) => typeof key === 'string' && isAssignablePermissionTreeKey(key)
-              ).length}</span> 项</span>
+              <span>
+                当前已授权：
+                <span style={{ color: token.colorPrimary, fontWeight: 500 }}>{assignedFunctionPermissionCount}</span> 项
+                {permissionLayer === 'function' &&
+                  treeVisibleAssignedCount !== assignedFunctionPermissionCount && (
+                    <span style={{ color: token.colorTextSecondary, marginLeft: 4 }}>
+                      （树上可见 {treeVisibleAssignedCount} 项）
+                    </span>
+                  )}
+              </span>
               <span>角色关联用户：<span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人</span>
             </Space>
           </div>

@@ -109,19 +109,20 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
   const shouldFetchUser = React.useMemo(() => {
     const token = getToken();
-    // 如果是公开页面，不尝试获取用户信息（避免后端未运行时出现连接错误）
     if (isPublicPath) {
       return false;
     }
-    // ⚠️ 关键修复：不再在 render 期间访问 ref.current
-    return !!token && !currentUser;
-  }, [currentUser, isPublicPath]);
+    // 有 token 即拉取 /auth/me，避免 persist 中的 permissions 在角色授权后长期过期
+    return !!token;
+  }, [isPublicPath]);
 
   const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
     enabled: shouldFetchUser,
     retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   // 处理用户信息加载成功

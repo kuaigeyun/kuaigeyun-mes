@@ -105,6 +105,18 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 /**
+ * 从服务端拉取最新用户权限并写入全局 Store / localStorage（角色权限变更后需调用）
+ */
+export async function refreshCurrentUserInStore(): Promise<CurrentUser> {
+  const { setUserInfo } = await import('../utils/auth');
+  const { useGlobalStore } = await import('../stores');
+  const user = await getCurrentUser();
+  useGlobalStore.getState().setCurrentUser(user);
+  setUserInfo(user);
+  return user;
+}
+
+/**
  * 刷新 Token
  *
  * @param refreshToken - 刷新令牌

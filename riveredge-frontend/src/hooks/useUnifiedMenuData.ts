@@ -2,7 +2,7 @@
  * 统一菜单数据 Hook
  *
  * 平台级/系统级：使用原有 getMenuConfig 硬编号
- * 应用级 APP：数据库 getMenuTree(is_active=true) → 权限过滤 → 输出
+ * 应用级 APP：数据库 getNavigationMenuTree() → 权限过滤 → 输出
  *
  * 菜单显示层级（蓝图设置已下线）：
  * 1. 菜单管理：getMenuTree(is_active=true)，未入库或禁用则不返回（= 功能关闭）
@@ -14,14 +14,14 @@
 import { useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { getMenuTree, type MenuTree } from '../services/menu';
+import { getNavigationMenuTree, type MenuTree } from '../services/menu';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { hasAnyPermission } from '../utils/permission';
 
 /** 与 BasicLayout 保持一致，确保缓存共享 */
-const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
+const APPLICATION_MENUS_QUERY_KEY = 'navigationMenuTree';
 
 /** 递归按 sort_order 排序应用菜单树（与后端 manifest / 库表一致，避免历史 children 顺序错乱） */
 function sortMenuTreeBySortOrder(nodes: MenuTree[]): MenuTree[] {
@@ -148,7 +148,7 @@ export function useUnifiedMenuData(
 
   const { data: fullMenuTree, isLoading, refetch } = useQuery({
     queryKey: [APPLICATION_MENUS_QUERY_KEY],
-    queryFn: () => getMenuTree({ is_active: true }),
+    queryFn: () => getNavigationMenuTree(),
     enabled: !!currentUser,
     // dev 与 prod 统一 5 分钟，避免开发期频繁 refetch 菜单；需要强制刷新请手动 invalidate
     staleTime: 5 * 60 * 1000,
@@ -172,7 +172,8 @@ export function useUnifiedMenuData(
   useEffect(() => {
     if (applicationMenuVersion > 0) {
       queryClient.invalidateQueries({ queryKey: [APPLICATION_MENUS_QUERY_KEY] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] }); // Dashboard 快捷入口共用菜单源
+      queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     }
   }, [applicationMenuVersion, queryClient]);
 

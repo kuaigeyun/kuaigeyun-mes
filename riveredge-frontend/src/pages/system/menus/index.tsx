@@ -163,6 +163,7 @@ const MenuListPage: React.FC = () => {
   /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
   const refreshLayoutMenus = useCallback(() => {
     useGlobalStore.getState().incrementApplicationMenuVersion();
+    queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
   }, [queryClient]);

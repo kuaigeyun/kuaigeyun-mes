@@ -413,15 +413,32 @@ class RoleService:
             ).all()
             changed_permission_codes.extend([p.code for p in removed_permissions])
         
-        # 更新关联菜单的可见性（异步，不阻塞主流程）
+        # 更新关联菜单可见性
+        import asyncio
+        from core.services.system.menu_service import MenuService
+
+        if permission_ids:
+            assigned_codes = [
+                p.code
+                for p in await Permission.filter(
+                    id__in=list(permission_ids),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).all()
+                if p.code
+            ]
+            if assigned_codes:
+                await MenuService.activate_menus_for_permission_codes(
+                    tenant_id=tenant_id,
+                    permission_codes=assigned_codes,
+                )
+
         if changed_permission_codes:
-            import asyncio
-            from core.services.system.menu_service import MenuService
             for permission_code in changed_permission_codes:
                 asyncio.create_task(
                     MenuService.update_menus_by_permission_code(
                         tenant_id=tenant_id,
-                        permission_code=permission_code
+                        permission_code=permission_code,
                     )
                 )
         # 权限变更后 bump：

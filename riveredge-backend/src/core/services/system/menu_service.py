@@ -265,7 +265,9 @@ class MenuService:
         parent_uuid: Optional[str] = None,
         application_uuid: Optional[str] = None,
         is_active: Optional[bool] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        *,
+        cache_key_suffix: str = "",
     ) -> List[MenuTreeResponse]:
         """
         获取菜单树
@@ -276,13 +278,18 @@ class MenuService:
             application_uuid: 应用UUID过滤（可选）
             is_active: 是否启用过滤（可选）
             use_cache: 是否使用缓存（默认True）
+            cache_key_suffix: 缓存键附加段（导航树与管理树分离）
             
         Returns:
             List[MenuTreeResponse]: 菜单树列表
         """
         # 生成缓存键（基于查询参数）
         # v3：树返回前对每级 children 做 sort_order 稳定排序；改版本号使旧缓存失效，避免长期读到乱序 JSON
-        cache_key_value = f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}_i{is_active if is_active is not None else 'all'}_v3"
+        suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
+        cache_key_value = (
+            f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
+            f"_i{is_active if is_active is not None else 'all'}_v3{suffix}"
+        )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
         
         # 尝试从缓存获取
@@ -745,6 +752,26 @@ class MenuService:
             )
             return updated_count
         return 0
+
+    @staticmethod
+    async def activate_menus_for_permission_codes(
+        tenant_id: int,
+        permission_codes: list[str],
+    ) -> int:
+        """
+        角色被授予权限后，启用仍绑定这些 permission_code 的菜单（仅 is_active 置 True，不改 permission_code）。
+        """
+        codes = [c.strip() for c in permission_codes if isinstance(c, str) and c.strip()]
+        if not codes:
+            return 0
+        updated = await Menu.filter(
+            tenant_id=tenant_id,
+            permission_code__in=codes,
+            deleted_at__isnull=True,
+        ).update(is_active=True)
+        if updated:
+            await MenuService._clear_menu_cache(tenant_id)
+        return updated
 
     @staticmethod
     async def sync_menus_from_application_config(

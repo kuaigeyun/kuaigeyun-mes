@@ -90,7 +90,7 @@ export async function getMenus(params?: {
 }
 
 /**
- * 获取菜单树
+ * 获取菜单树（菜单管理 / 权限配置，需 system.menu:read）
  */
 export async function getMenuTree(params?: {
   parent_uuid?: string;
@@ -100,6 +100,13 @@ export async function getMenuTree(params?: {
   return apiRequest<MenuTree[]>('/core/menus/tree', {
     params,
   });
+}
+
+/**
+ * 侧栏 / 工作台导航菜单树（任意登录用户可读，前端再按 RBAC 过滤）
+ */
+export async function getNavigationMenuTree(): Promise<MenuTree[]> {
+  return apiRequest<MenuTree[]>('/core/menus/navigation-tree');
 }
 
 /**

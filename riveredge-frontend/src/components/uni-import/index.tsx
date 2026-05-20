@@ -176,7 +176,8 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [loading, setLoading] = useState(false);
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sheetGeneration, setSheetGeneration] = useState(0);
+  /** 变更后强制 React 重建表格 DOM，再初始化 Univer（映射/上传后 reload） */
+  const [sheetMountKey, setSheetMountKey] = useState(0);
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [mappingRawRows, setMappingRawRows] = useState<string[][]>([]);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -189,7 +190,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const exampleRowRef = useRef(exampleRow);
   const importFieldMapRef = useRef(importFieldMap);
   const uploadedSheetRowsRef = useRef<string[][] | null>(null);
-  const lastInitGenerationRef = useRef(-1);
+  const lastMountedKeyRef = useRef(-1);
   headersRef.current = headers;
   exampleRowRef.current = exampleRow;
   importFieldMapRef.current = importFieldMap;
@@ -239,14 +240,14 @@ export const UniImport: React.FC<UniImportProps> = ({
     if (open ?? visible) return;
     setIsFullscreen(false);
     uploadedSheetRowsRef.current = null;
-    setSheetGeneration(0);
+    setSheetMountKey(0);
     setMappingModalOpen(false);
     setMappingRawRows([]);
     setPreviewModalOpen(false);
     setPreviewData([]);
     setPrecheckResult(null);
     setPrecheckLoading(false);
-    lastInitGenerationRef.current = -1;
+    lastMountedKeyRef.current = -1;
     disposeUniverInstance();
   }, [open, visible, disposeUniverInstance]);
 
@@ -267,8 +268,33 @@ export const UniImport: React.FC<UniImportProps> = ({
     return () => window.clearTimeout(timer);
   }, [open, visible, isFullscreen]);
 
+  const scheduleSheetReload = useCallback(() => {
+    disposeUniverInstance();
+    setLoading(true);
+    setSheetMountKey(key => key + 1);
+  }, [disposeUniverInstance]);
+
+  const notifyUniverResize = useCallback(() => {
+    window.dispatchEvent(new Event('resize'));
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  }, []);
+
+  const waitForContainerReady = async (maxAttempts = 24) => {
+    for (let i = 0; i < maxAttempts; i++) {
+      const el = containerRef.current;
+      if (el) {
+        const { width, height: h } = el.getBoundingClientRect();
+        if (width > 0 && h > 0) return el;
+      }
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => resolve());
+      });
+    }
+    return containerRef.current;
+  };
+
   /**
-   * 初始化 Univer Sheet（弹窗打开时一次；关闭/主题切换时销毁）
+   * 初始化 Univer Sheet（随 sheetMountKey 重建 DOM 后挂载）
    */
   useLayoutEffect(() => {
     if (!(open ?? visible)) {
@@ -276,214 +302,165 @@ export const UniImport: React.FC<UniImportProps> = ({
       return undefined;
     }
 
-    if (univerInstanceRef.current && lastInitGenerationRef.current === sheetGeneration) {
+    if (univerInstanceRef.current && lastMountedKeyRef.current === sheetMountKey) {
       return undefined;
-    }
-    if (univerInstanceRef.current) {
-      disposeUniverInstance();
     }
 
     const importHeaders = headersRef.current;
     const importExampleRow = exampleRowRef.current;
     const sheetRows = uploadedSheetRowsRef.current ?? undefined;
-    let cancelled = false;
+    const mountKey = sheetMountKey;
+    let alive = true;
 
     const initUniver = async () => {
-        await new Promise(resolve => setTimeout(resolve, 50));
+      disposeUniverInstance();
+      setLoading(true);
 
-        if (!containerRef.current) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      const containerEl = await waitForContainerReady();
+      if (!alive || !containerEl) {
+        if (alive) {
+          messageApi.error('容器元素不存在，请刷新页面重试');
+          setLoading(false);
         }
+        return;
+      }
 
-        if (cancelled || !containerRef.current) {
-          if (!cancelled && !containerRef.current) {
-            messageApi.error('容器元素不存在，请刷新页面重试');
+      try {
+        containerEl.innerHTML = '';
+        const containerId = `univer-sheet-import-${mountKey}-${Date.now()}`;
+        containerIdRef.current = containerId;
+        containerEl.id = containerId;
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        if (!alive) return;
+
+        const { univer, univerAPI } = createUniver({
+          locale: LocaleType.ZH_CN,
+          locales: {
+            [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
+          },
+          theme: defaultTheme,
+          darkMode: isDark,
+          presets: [
+            UniverSheetsCorePreset({
+              container: containerEl,
+            }),
+          ],
+        });
+
+        if (!alive) {
+          try {
+            univer.dispose();
+          } catch {
+            // ignore
           }
           return;
         }
 
+        const { cellData, columnCount, rowCount, sheetStyles } = buildImportCellData({
+          headers: importHeaders,
+          exampleRow: importExampleRow,
+          sheetRows,
+        });
+
+        univerAPI.createWorkbook({
+          name: '导入数据',
+          sheets: {
+            'sheet-1': {
+              id: 'sheet-1',
+              name: 'Sheet1',
+              cellData: cellData,
+              styles: sheetStyles.styles,
+              rowCount: rowCount,
+              columnCount: columnCount,
+              defaultColumnWidth: 120,
+            } as any,
+          },
+        });
+
+        univerInstanceRef.current = { univer, univerAPI };
+        lastMountedKeyRef.current = mountKey;
+
+        notifyUniverResize();
+        window.setTimeout(notifyUniverResize, 120);
+        window.setTimeout(notifyUniverResize, 400);
+
         try {
-          setLoading(true);
-
-          // 创建容器 ID（确保唯一）
-          const containerId = `univer-sheet-import-${Date.now()}`;
-          containerIdRef.current = containerId;
-          containerRef.current.id = containerId;
-
-          // 清空容器内容
-          containerRef.current.innerHTML = '';
-
-          // 等待 DOM 更新完成
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          if (cancelled) return;
-
-          const { univer, univerAPI } = createUniver({
-            locale: LocaleType.ZH_CN,
-            locales: {
-              [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
-            },
-            theme: defaultTheme,
-            darkMode: isDark,
-            presets: [
-              UniverSheetsCorePreset({
-                container: containerId,
-              }),
-            ],
-          });
-
-          if (cancelled) {
-            try {
-              univer.dispose();
-            } catch {
-              // ignore
+          const workbook = univerAPI.getActiveWorkbook();
+          if (workbook) {
+            const worksheet = workbook.getActiveSheet();
+            // @ts-ignore
+            if (worksheet && typeof worksheet.autoResizeColumns === 'function') {
+              // @ts-ignore
+              worksheet.autoResizeColumns(0, columnCount);
             }
-            return;
           }
+        } catch {
+          // ignore
+        }
 
-          const { cellData, columnCount, rowCount, sheetStyles } = buildImportCellData({
-            headers: importHeaders,
-            exampleRow: importExampleRow,
-            sheetRows,
-          });
-
-          univerAPI.createWorkbook({
-            name: '导入数据',
-            sheets: {
-              'sheet-1': {
-                id: 'sheet-1',
-                name: 'Sheet1',
-                cellData: cellData,
-                styles: sheetStyles.styles,
-                rowCount: rowCount,
-                columnCount: columnCount,
-                defaultColumnWidth: 120, // 设置默认列宽为 120 像素
-              } as any, // 使用类型断言绕过类型检查
-            },
-          });
-
-          univerInstanceRef.current = { univer, univerAPI };
-          lastInitGenerationRef.current = sheetGeneration;
-
-          await new Promise(resolve => setTimeout(resolve, 200));
-
-          if (cancelled) return;
-
-          try {
-            // 获取活动工作表
-            const workbook = univerAPI.getActiveWorkbook();
-            if (workbook) {
-              const worksheet = workbook.getActiveSheet();
-              if (worksheet) {
-                // 自动调整所有列的宽度以适应内容
-                // 根据 Univer 文档，autoResizeColumns 方法在 worksheet 对象上
-                // @ts-ignore - Univer API 类型定义可能不完整
-                if (typeof worksheet.autoResizeColumns === 'function') {
-                  // @ts-ignore
-                  worksheet.autoResizeColumns(0, columnCount);
-                  console.log(`✓ 列宽已自动调整（共 ${columnCount} 列）`);
-                }
-                // 如果 worksheet 上没有，尝试通过 workbook 调用
-                // @ts-ignore
-                else if (typeof workbook.autoResizeColumns === 'function') {
-                  // @ts-ignore
-                  workbook.autoResizeColumns(0, columnCount);
-                  console.log(`✓ 列宽已自动调整（通过 workbook，共 ${columnCount} 列）`);
-                }
-                // 最后尝试通过 univerAPI 调用
-                // @ts-ignore
-                else if (typeof univerAPI.autoResizeColumns === 'function') {
-                  // @ts-ignore
-                  univerAPI.autoResizeColumns(0, columnCount);
-                  console.log(`✓ 列宽已自动调整（通过 univerAPI，共 ${columnCount} 列）`);
-                } else {
-                  console.warn('⚠ autoResizeColumns 方法不可用，列宽将使用默认值 120px');
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('⚠ 自动调整列宽失败：', error);
-            // 不影响主流程，继续执行
+        const handleKeyDown = (e: KeyboardEvent) => {
+          const container = containerRef.current;
+          if (!container) return;
+          const activeElement = document.activeElement;
+          const isInContainer =
+            container.contains(activeElement) || container === activeElement;
+          if (!isInContainer) return;
+          if ((e.ctrlKey || e.metaKey) && e.key === 'd' && !e.shiftKey && !e.altKey) {
+            e.preventDefault();
+            e.stopPropagation();
           }
-
-          // 添加键盘事件监听器，确保 Univer Sheet 的快捷键优先级高于浏览器默认快捷键
-          const handleKeyDown = (e: KeyboardEvent) => {
-            // 检查是否在 Univer 容器内
-            const container = containerRef.current;
-            if (!container) return;
-
-            // 检查焦点是否在容器内或其子元素内
-            const activeElement = document.activeElement;
-            const isInContainer = container.contains(activeElement) ||
-              container === activeElement;
-
-            if (!isInContainer) return;
-
-            // 处理 Ctrl+D（或 Cmd+D on Mac）
-            // Ctrl+D 在浏览器中是"添加书签"的快捷键
-            // 如果 Univer Sheet 支持 Ctrl+D（通常用于向下复制单元格内容），需要阻止浏览器默认行为
-            if ((e.ctrlKey || e.metaKey) && e.key === 'd' && !e.shiftKey && !e.altKey) {
-              // 阻止浏览器默认行为（添加书签）
+          if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'z' || e.key === 'y')) {
+            if (!e.shiftKey && !e.altKey) {
               e.preventDefault();
               e.stopPropagation();
-              // 让 Univer Sheet 自己处理这个快捷键（如果它支持的话）
-              // 如果 Univer 不支持，这个事件会被忽略，不会造成问题
             }
-
-            // 可以在这里添加其他需要优先处理的快捷键
-            // 例如：Ctrl+S（保存）、Ctrl+Z（撤销）、Ctrl+Y（重做）等
-            // 这些快捷键在浏览器中也有默认行为，但在表格编辑器中应该优先处理
-            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'z' || e.key === 'y')) {
-              if (!e.shiftKey && !e.altKey) {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }
-          };
-
-          // 添加事件监听器（使用 capture 阶段，确保优先捕获）
-          document.addEventListener('keydown', handleKeyDown, true);
-
-          if (cancelled || !univerInstanceRef.current) {
-            document.removeEventListener('keydown', handleKeyDown, true);
-            return;
           }
-          (univerInstanceRef.current as any)._keyDownHandler = handleKeyDown;
+        };
 
-          await new Promise(resolve => setTimeout(resolve, 500));
+        document.addEventListener('keydown', handleKeyDown, true);
+        if (!alive || !univerInstanceRef.current) {
+          document.removeEventListener('keydown', handleKeyDown, true);
+          return;
+        }
+        (univerInstanceRef.current as { _keyDownHandler?: (e: KeyboardEvent) => void })._keyDownHandler =
+          handleKeyDown;
 
-          if (cancelled) return;
-
-          if (!sheetRows) {
-            if (importHeaders && importHeaders.length > 0) {
-              if (importExampleRow && importExampleRow.length > 0) {
-                messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
-              } else {
-                messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
-              }
+        if (!sheetRows && alive) {
+          if (importHeaders && importHeaders.length > 0) {
+            if (importExampleRow && importExampleRow.length > 0) {
+              messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
             } else {
-              messageApi.success('表格已加载，可以开始编辑数据');
+              messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
             }
-          }
-        } catch (error: any) {
-          if (!cancelled) {
-            messageApi.error('表格加载失败：' + (error.message || '未知错误'));
-          }
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
+          } else {
+            messageApi.success('表格已加载，可以开始编辑数据');
           }
         }
-      };
+      } catch (error: unknown) {
+        if (alive) {
+          const msg = error instanceof Error ? error.message : String(error);
+          messageApi.error('表格加载失败：' + msg);
+        }
+      } finally {
+        if (alive) {
+          setLoading(false);
+        }
+      }
+    };
 
-    initUniver();
+    void initUniver();
 
     return () => {
-      cancelled = true;
-      setLoading(false);
+      alive = false;
       disposeUniverInstance();
     };
-  }, [open, visible, isDark, sheetGeneration, disposeUniverInstance]);
+  }, [open, visible, isDark, sheetMountKey, disposeUniverInstance, notifyUniverResize, messageApi]);
 
   const handleDownloadTemplate = async () => {
     const importHeaders = headersRef.current;
@@ -512,9 +489,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       setXlsxBusy(true);
       const rows = await parseImportXlsxFile(file as File);
       uploadedSheetRowsRef.current = rows;
-      disposeUniverInstance();
-      lastInitGenerationRef.current = -1;
-      setSheetGeneration(gen => gen + 1);
+      scheduleSheetReload();
       messageApi.success(t('components.uniImport.uploadSuccess'));
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -523,13 +498,6 @@ export const UniImport: React.FC<UniImportProps> = ({
       setXlsxBusy(false);
     }
     return false;
-  };
-
-  const applyMappedRowsToSheet = (mappedRows: string[][]) => {
-    uploadedSheetRowsRef.current = mappedRows;
-    disposeUniverInstance();
-    lastInitGenerationRef.current = -1;
-    setSheetGeneration(gen => gen + 1);
   };
 
   const handleMappingUpload: UploadProps['beforeUpload'] = async (file) => {
@@ -553,9 +521,13 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const handleMappingApply = (mappedRows: string[][]) => {
-    applyMappedRowsToSheet(mappedRows);
+    uploadedSheetRowsRef.current = mappedRows;
     setMappingModalOpen(false);
     messageApi.success(t('components.uniImport.mappingApplySuccess'));
+    // 等映射弹窗关闭动画结束后再 remount 表格容器
+    window.setTimeout(() => {
+      scheduleSheetReload();
+    }, 200);
   };
 
   const runImportPrecheck = useCallback(
@@ -1133,10 +1105,12 @@ export const UniImport: React.FC<UniImportProps> = ({
             height: isFullscreen ? undefined : `${height}px`,
             maxHeight: isFullscreen ? 'none' : undefined,
             overflow: 'hidden',
+            position: 'relative',
           },
         }}
       >
         <div
+          key={`uni-import-sheet-${sheetMountKey}`}
           ref={containerRef}
           style={{
             width: '100%',
@@ -1145,16 +1119,20 @@ export const UniImport: React.FC<UniImportProps> = ({
               ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_CONTAINER_PX)
               : `${height - 12}px`,
             border: `1px solid ${token.colorBorder}`,
+            boxSizing: 'border-box',
+            overflow: 'hidden',
           }}
         />
         {loading && (
           <div
             style={{
               position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               zIndex: 1000,
+              background: token.colorBgMask,
             }}
           >
             <div style={{ textAlign: 'center' }}>

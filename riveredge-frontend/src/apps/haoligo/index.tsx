@@ -8,6 +8,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import HaoligoAppLayout from './layouts/AppLayout';
+import { withHaoligoPermission } from './components/HaoligoPermissionRoute';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<PageSkeleton />}>
@@ -91,7 +92,10 @@ const HaoligoApp: React.FC = () => (
       <Route path="equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="molds" element={<Outlet />}>
         <Route index element={<Navigate to="ledger" replace />} />
-        <Route path="ledger" element={withPageSuspense(MoldLedgerPage)} />
+        <Route
+          path="ledger"
+          element={withHaoligoPermission('haoligo:molds-ledger:read', withPageSuspense(MoldLedgerPage))}
+        />
         <Route path="documents/trial" element={withPageSuspense(MoldTrialSheetsPage)} />
         <Route path="documents/borrow-out" element={withPageSuspense(MoldBorrowOutPage)} />
         <Route path="documents/return-in" element={withPageSuspense(MoldReturnInPage)} />

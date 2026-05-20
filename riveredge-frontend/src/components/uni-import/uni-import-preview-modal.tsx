@@ -70,8 +70,27 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
     [preview.previewRows, dataStartRow],
   );
 
-  const hasErrors = Boolean(precheckResult?.errors?.length);
+  const errorMessages = useMemo(
+    () => (precheckResult?.errors ?? []).map(s => String(s).trim()).filter(Boolean),
+    [precheckResult?.errors],
+  );
+  const warningMessages = useMemo(
+    () => (precheckResult?.warnings ?? []).map(s => String(s).trim()).filter(Boolean),
+    [precheckResult?.warnings],
+  );
+
+  const hasErrors = errorMessages.length > 0;
   const canCommit = !precheckLoading && !hasErrors && preview.totalDataRows > 0;
+
+  const renderAlertLines = (lines: string[]) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {lines.map((line, index) => (
+        <Typography.Paragraph key={index} style={{ marginBottom: 0 }}>
+          {line}
+        </Typography.Paragraph>
+      ))}
+    </div>
+  );
 
   return (
     <Modal
@@ -105,12 +124,22 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
           </div>
         )}
 
-        {!precheckLoading && precheckResult?.errors?.map((msg, i) => (
-          <Alert key={`err-${i}`} type="error" showIcon message={msg} />
-        ))}
-        {!precheckLoading && precheckResult?.warnings?.map((msg, i) => (
-          <Alert key={`warn-${i}`} type="warning" showIcon message={msg} />
-        ))}
+        {!precheckLoading && errorMessages.length > 0 && (
+          <Alert
+            type="error"
+            showIcon
+            message={t('components.uniImport.previewPrecheckErrorTitle')}
+            description={renderAlertLines(errorMessages)}
+          />
+        )}
+        {!precheckLoading && warningMessages.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('components.uniImport.previewPrecheckWarningTitle')}
+            description={renderAlertLines(warningMessages)}
+          />
+        )}
 
         <Table
           size="small"

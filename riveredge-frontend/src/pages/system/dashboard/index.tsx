@@ -53,7 +53,7 @@ import {
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
 import { getUserMessageStats, type UserMessageStats } from '../../../services/userMessage';
-import { getMenuTree, type MenuTree } from '../../../services/menu';
+import { getNavigationMenuTree, type MenuTree } from '../../../services/menu';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
@@ -1250,11 +1250,11 @@ export default function DashboardPage() {
   });
 
   // 获取菜单树（菜单管理）
-  // 与 BasicLayout 的 useUnifiedMenuData 共用 queryKey ['applicationMenus']，
+  // 与 BasicLayout 的 useUnifiedMenuData 共用 queryKey ['navigationMenuTree']，
   // 避免工作台与侧边栏重复拉 /menus/tree（在 staleTime 内 react-query 会命中缓存）
   const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
-    queryKey: ['applicationMenus'],
-    queryFn: () => getMenuTree({ is_active: true }),
+    queryKey: ['navigationMenuTree'],
+    queryFn: () => getNavigationMenuTree(),
     enabled: !!currentUser,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

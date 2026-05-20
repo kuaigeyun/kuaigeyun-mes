@@ -1435,6 +1435,8 @@ export default {
   'components.uniImport.previewBackEdit': 'Back to edit',
   'components.uniImport.previewConfirmImport': 'Confirm import',
   'components.uniImport.previewPrechecking': 'Running precheck…',
+  'components.uniImport.previewPrecheckWarningTitle': 'Precheck notice',
+  'components.uniImport.previewPrecheckErrorTitle': 'Precheck failed',
   'components.uniImport.previewPrecheckFailed': 'Precheck failed: {{message}}',
   'components.uniImport.previewNoDataRows': 'No importable data rows.',
   'components.uniTable.export': 'Export',

@@ -23,12 +23,42 @@ from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceShe
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import HaoligoMoldOutsourceMaintenanceCompleteSheet
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
+from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
 from infra.models.user import User
 
 router = APIRouter(prefix="/molds", tags=["App · HaoliGO · 模具"])
+
+_LEDGER_READ = Depends(
+    require_access(
+        "haoligo.molds-ledger",
+        "read",
+        required_permissions=["haoligo:molds-ledger:read"],
+    )
+)
+_LEDGER_CREATE = Depends(
+    require_access(
+        "haoligo.molds-ledger",
+        "create",
+        required_permissions=["haoligo:molds-ledger:create"],
+    )
+)
+_LEDGER_UPDATE = Depends(
+    require_access(
+        "haoligo.molds-ledger",
+        "update",
+        required_permissions=["haoligo:molds-ledger:update"],
+    )
+)
+_LEDGER_DELETE = Depends(
+    require_access(
+        "haoligo.molds-ledger",
+        "delete",
+        required_permissions=["haoligo:molds-ledger:delete"],
+    )
+)
 
 _ALLOWED_MOLD_STATUS_STR = "、".join(MOLD_LEDGER_STATUS_VALUES)
 
@@ -259,6 +289,7 @@ def _decimal_from_dataset_cell(val) -> Decimal:
 async def get_mold_ledger_dataset_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_READ],
 ):
     row = await tenant_alive(HaoligoMoldLedgerDatasetBinding, tenant_id).first()
     return _serialize_ledger_binding(row)
@@ -269,6 +300,7 @@ async def put_mold_ledger_dataset_binding(
     body: MoldLedgerDatasetBindingUpsert,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_UPDATE],
 ):
     ds = (body.dataset_uuid or "").strip()
     if not ds:
@@ -301,6 +333,7 @@ async def put_mold_ledger_dataset_binding(
 async def sync_mold_ledger_from_dataset(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_UPDATE],
 ):
     binding = await tenant_alive(HaoligoMoldLedgerDatasetBinding, tenant_id).first()
     if not binding or not (binding.dataset_uuid or "").strip():
@@ -405,6 +438,7 @@ async def batch_update_mold_lifecycle(
     body: MoldBatchLifecycleBody,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_UPDATE],
 ):
     patch_raw = body.model_dump(
         exclude_unset=True,
@@ -440,6 +474,7 @@ async def batch_update_mold_lifecycle(
 async def list_molds(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_READ],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -555,6 +590,7 @@ async def list_mold_operation_records(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_READ],
 ):
     mold = await tenant_alive(HaoligoMold, tenant_id).filter(id=row_id).first()
     if not mold:
@@ -722,6 +758,7 @@ async def create_mold(
     body: MoldCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_CREATE],
 ):
     row = await HaoligoMold.create(
         tenant_id=tenant_id,
@@ -754,6 +791,7 @@ async def get_mold(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_READ],
 ):
     row = await tenant_alive(HaoligoMold, tenant_id).filter(id=row_id).first()
     if not row:
@@ -767,6 +805,7 @@ async def update_mold(
     body: MoldUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_UPDATE],
 ):
     row = await tenant_alive(HaoligoMold, tenant_id).filter(id=row_id).first()
     if not row:
@@ -785,6 +824,7 @@ async def delete_mold(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    __auth: Annotated[object, _LEDGER_DELETE],
 ):
     row = await tenant_alive(HaoligoMold, tenant_id).filter(id=row_id).first()
     if not row:

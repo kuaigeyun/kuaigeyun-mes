@@ -96,28 +96,35 @@ async def get_menu_tree(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    获取菜单树
-    
-    Args:
-        parent_uuid: 父菜单UUID（可选）
-        application_uuid: 应用UUID过滤（可选）
-        is_active: 是否启用过滤（可选）
-        current_user: 当前用户
-        tenant_id: 当前组织ID
-        
-    Returns:
-        List[MenuTreeResponse]: 菜单树列表
+    获取菜单树（菜单管理 / 权限配置用，需 system.menu:read）
     """
-    
-    # 生产环境使用缓存，但通过定期扫描确保菜单更新
     use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
-    
+
     return await MenuService.get_menu_tree(
         tenant_id=tenant_id,
         parent_uuid=parent_uuid,
         application_uuid=application_uuid,
         is_active=is_active,
         use_cache=use_cache,
+    )
+
+
+@router.get("/navigation-tree", response_model=List[MenuTreeResponse])
+async def get_navigation_menu_tree(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    侧栏 / 工作台导航用菜单树：任意登录用户可读（仅返回 is_active=true）。
+    可见性由前端按 RBAC 过滤；勿与菜单管理接口共用 system.menu 权限。
+    """
+    use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
+
+    return await MenuService.get_menu_tree(
+        tenant_id=tenant_id,
+        is_active=True,
+        use_cache=use_cache,
+        cache_key_suffix="nav_v1",
     )
 
 

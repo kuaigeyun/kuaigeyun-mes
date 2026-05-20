@@ -6,6 +6,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 const SESSION_MENU_QUERY_KEYS: readonly (readonly string[])[] = [
+  ['navigationMenuTree'],
   ['applicationMenus'],
   ['dashboard-menu-tree'],
   ['businessConfig'],

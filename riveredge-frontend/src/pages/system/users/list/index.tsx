@@ -430,6 +430,9 @@ const UserListPage: React.FC = () => {
   const handleImportPrecheck = useCallback(async (data: any[][]) => {
     const preview = await previewUserImport(data);
     const warnings: string[] = [];
+    if (preview.has_missing) {
+      warnings.push(t('field.user.importMissingRefsHint'));
+    }
     if (preview.missing_departments.length > 0) {
       warnings.push(
         t('field.user.importMissingDepartments', { names: preview.missing_departments.join('、') }),
@@ -442,9 +445,6 @@ const UserListPage: React.FC = () => {
     }
     if (preview.missing_roles.length > 0) {
       warnings.push(t('field.user.importMissingRoles', { names: preview.missing_roles.join('、') }));
-    }
-    if (preview.has_missing) {
-      warnings.push(t('field.user.importMissingRefsHint'));
     }
     return { canImport: true, warnings: warnings.length ? warnings : undefined };
   }, [t]);
