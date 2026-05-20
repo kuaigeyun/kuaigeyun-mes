@@ -20,6 +20,8 @@ export interface UseCustomFieldsForListOptions {
 export interface UseCustomFieldsForListResult<T = any> {
   /** 自定义字段列表 */
   customFields: CustomField[];
+  /** 自定义字段定义是否已从服务端加载完成（含「无字段」的空结果） */
+  customFieldsLoaded: boolean;
   /** 当前详情记录的字段值 */
   customFieldValues: Record<string, any>;
   /** 生成表格自定义列 */
@@ -37,21 +39,28 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
   recordIdField = 'id',
 }: UseCustomFieldsForListOptions): UseCustomFieldsForListResult<T> {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldsLoaded, setCustomFieldsLoaded] = useState(false);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
         const fields = await getCustomFieldsByTable(tableName, true).catch((err) => {
           if (err?.response?.status === 401) return [];
           throw err;
         });
-        setCustomFields(fields);
+        if (!cancelled) setCustomFields(fields);
       } catch (e) {
         console.error('加载自定义字段失败:', e);
+      } finally {
+        if (!cancelled) setCustomFieldsLoaded(true);
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [tableName]);
 
   const loadFieldValuesForDetail = useCallback(async (recordId: number) => {
@@ -132,6 +141,7 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
 
   return {
     customFields,
+    customFieldsLoaded,
     customFieldValues,
     generateCustomFieldColumns,
     enrichRecordsWithCustomFields,

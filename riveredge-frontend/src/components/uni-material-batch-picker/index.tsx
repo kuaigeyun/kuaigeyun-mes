@@ -33,7 +33,8 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const [searchText, setSearchText] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
   const [sourceType, setSourceType] = useState<string | undefined>(undefined);
   const [groupTree, setGroupTree] = useState<MaterialGroupTreeNode[]>([]);
@@ -115,42 +116,31 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     [message, t],
   );
 
-  const skipNextFilterFetchRef = useRef(false);
-  const openRef = useRef(open);
-  openRef.current = open;
-
   useEffect(() => {
     if (!open) return;
     void loadTree();
     void loadUnits();
   }, [open, loadTree, loadUnits]);
 
+  /** 打开弹窗：重置筛选与选中；关闭时取消在途请求 */
   useEffect(() => {
     if (!open) {
       fetchSeqRef.current += 1;
       return;
     }
-    setSearchText((s) => (s ? '' : s));
+    setSearchDraft('');
+    setSearchKeyword('');
     setGroupId(undefined);
     setSourceType(undefined);
     setPage(1);
     setSelectedMap(new Map());
-    skipNextFilterFetchRef.current = true;
-    void fetchList('', undefined, undefined, 1);
-  }, [open, fetchList]);
+  }, [open]);
 
+  /** 筛选 / 分页变化时拉列表（open 纳入依赖，保证首次打开也会请求） */
   useEffect(() => {
-    if (!openRef.current) return;
-    if (skipNextFilterFetchRef.current) {
-      skipNextFilterFetchRef.current = false;
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      if (!openRef.current) return;
-      void fetchList(searchText, groupId, sourceType, page);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [searchText, groupId, sourceType, page, fetchList]);
+    if (!open) return;
+    void fetchList(searchKeyword, groupId, sourceType, page);
+  }, [open, searchKeyword, groupId, sourceType, page, fetchList]);
 
   const selectedCount = selectedMap.size;
   const selectedRowKeys = useMemo(() => Array.from(selectedMap.keys()), [selectedMap]);
@@ -276,10 +266,16 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           allowClear
           placeholder={t('app.kuaizhizao.common.materialBatchSearchPlaceholder')}
           style={{ width: FILTER_SEARCH_WIDTH }}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           onSearch={(v) => {
-            setSearchText(v);
+            setSearchDraft(v);
+            setSearchKeyword(v);
+            setPage(1);
+          }}
+          onClear={() => {
+            setSearchDraft('');
+            setSearchKeyword('');
             setPage(1);
           }}
         />

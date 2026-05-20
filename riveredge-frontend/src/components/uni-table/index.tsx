@@ -8,7 +8,7 @@
  *    - **2.1 左侧**：**uni-search** — `UniSearch`（模糊/高级搜索、重置等）。
  *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
  * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
- *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（`UniBatchButton` / 内置删除用 `UniBatchDeleteButton`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
+ *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push（下推等单据能力请放此区，勿与右侧数据能力混排）**、**uni-batch**（删除用 `UniBatchDeleteButton`；其它批量操作用 `UniBatchMenuButton` 或 `toolBarActionsAfterDelete`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
  *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**、**uni-export**、**uni-sync**、**数据集**（可选，位于同步后）、**打印**；**表格设定**为 ProTable 原生 **`options`**。
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
@@ -2241,6 +2241,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const shouldDisableAutoScrollY = React.useMemo(() => {
     if (allowCustomScrollY) return false
     if (virtualized || restTableVirtual) return false
+    // 空表 / 未装满：优先走 natural-height；expandable/树表仅在确有数据且需限高时才启用 scroll.y
+    if (tableData.length === 0 || tableData.length < currentPageSize) {
+      return true
+    }
     const hasTreeRows =
       Array.isArray(tableData) &&
       tableData.some(
@@ -2249,7 +2253,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           (row as { children?: unknown[] }).children!.length > 0,
       )
     if (restTableExpandable || hasTreeRows) return false
-    return tableData.length === 0 || tableData.length < currentPageSize
+    return false
   }, [
     allowCustomScrollY,
     virtualized,
@@ -2258,6 +2262,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     tableData,
     currentPageSize,
   ])
+
+  const isEmptyTable = tableData.length === 0
 
   const proTableBodyScrollYEnabled = React.useMemo(() => {
     if (allowCustomScrollY && restTableScrollY != null) return true
@@ -2300,6 +2306,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           el.style.overflowY = 'hidden'
           el.style.maxHeight = 'none'
           el.style.scrollbarGutter = 'auto'
+          if (isEmptyTable) {
+            el.style.setProperty('overflow-x', 'hidden', 'important')
+          } else {
+            el.style.removeProperty('overflow-x')
+          }
         })
     }
 
@@ -2311,7 +2322,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const tableHost = root.querySelector('.ant-table-wrapper')
     if (ro && tableHost) ro.observe(tableHost)
     return () => ro?.disconnect()
-  }, [proTableBodyScrollYEnabled, tableData, currentViewType, showDelayedLoading])
+  }, [proTableBodyScrollYEnabled, isEmptyTable, tableData, currentViewType, showDelayedLoading])
 
   React.useLayoutEffect(() => {
     if (!enableRowSelection || selectedRowKeys.length === 0) return
@@ -2437,6 +2448,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           height: 6px !important;
           display: block !important;
         }
+        /* 空表 natural-height：不注入 scroll.x 时关闭横向滚动，避免仅表头时出现空横条 */
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-content,
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-body,
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-body-inner,
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-fixed-left .ant-table-body-inner,
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-fixed-right .ant-table-body-inner {
+          overflow-x: hidden !important;
+        }
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+          height: 0 !important;
+          display: none !important;
+        }
         /* 已限高（scroll.y）：表头/表体同步预留纵向滚动条占位，避免列宽抖动 */
         .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header,
         .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-body,
@@ -2446,7 +2470,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       `}</style>
       <div
         ref={containerRef}
-        className={`uni-table-container${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}`}
+        className={`uni-table-container${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}`}
         style={{
           position: 'relative',
           padding: isMobile ? '0 8px' : 0,
@@ -2632,6 +2656,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 if (!proTableBodyScrollYEnabled && mergedScroll?.y !== undefined) {
                   const { y: _omitScrollY, ...scrollWithoutY } = mergedScroll
                   mergedScroll = scrollWithoutY
+                }
+                /** 空表 + natural-height：不强制 scroll.x=max-content，避免固定列布局产生空横向滚动条 */
+                if (!proTableBodyScrollYEnabled && isEmptyTable) {
+                  mergedScroll =
+                    ourScrollX != null ? ({ x: ourScrollX } as typeof mergedScroll) : undefined
                 }
 
                 const mergedOnRow =

@@ -466,15 +466,17 @@ class QuotationService:
                 total_amount=total_amt,
             )
             quotation = await Quotation.get(id=quotation.id)
-            # 蓝图 nodes.quotation.auditRequired=False 时视为自动审核：创建后直接「已发送」且审核通过
+            # 创建完成后即提交为「已发送」，生命周期进入「已报价」（审核按蓝图 quotation.auditRequired）
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "quotation"
             )
-            if not audit_required:
-                await self._release_quotation_from_draft(
-                    tenant_id, quotation.id, created_by, auto_approved=True
-                )
-                quotation = await Quotation.get(id=quotation.id)
+            await self._release_quotation_from_draft(
+                tenant_id,
+                quotation.id,
+                created_by,
+                auto_approved=not audit_required,
+            )
+            quotation = await Quotation.get(id=quotation.id)
             items = await QuotationItem.filter(
                 tenant_id=tenant_id, quotation_id=quotation.id
             ).order_by("id")

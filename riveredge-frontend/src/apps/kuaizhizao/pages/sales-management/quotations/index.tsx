@@ -12,11 +12,12 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select, Switch } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -26,7 +27,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -262,25 +263,8 @@ const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 /** 报价单详情内打开下游销售订单时：二层抽屉宽度（zIndex 见组件内 token.zIndexPopupBase + 50） */
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
 
-/** 全链路悬浮层外边距：左/上与视口留白；宽度方向仍与中线各收一侧（左半屏）；高度方向为视口上下留白 */
-const QUOTATION_FULL_CHAIN_FLOAT_MARGIN = 16;
-
-/** 左半屏「全链路」与「关联单据简览」两块悬浮窗之间的垂直间距（与全局 16px 间距体系一致） */
-const QUOTATION_LEFT_CHAIN_GAP = 16;
-
-/** 左侧「全链路 + 关联简览」悬浮窗与右侧报价单抽屉之间的水平间距（避免两块视觉贴死） */
-const QUOTATION_CHAIN_DRAWER_GAP = 16;
-
-/** 关闭报价详情时：先收起左侧悬浮层，再触发抽屉关闭（与 drawerSlideMotion 入场 320ms 无关，此处仅留出绘制间隙） */
-const QUOTATION_CHAIN_OVERLAY_HIDE_BEFORE_DRAWER_MS = 48;
-
-/** 左半屏上下两块悬浮窗参与高度平分的纵向扣除：上外边距 + 下外边距 + 中间间隙 */
-const QUOTATION_CHAIN_VERTICAL_TRIM =
-  QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_LEFT_CHAIN_GAP;
-
-const quotationChainHalfHeightCss = `calc((100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const quotationChainPanelWidthCss = `calc(50vw - ${QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_CHAIN_DRAWER_GAP}px)`;
-const quotationBriefPanelTopCss = `calc(${QUOTATION_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2 + ${QUOTATION_LEFT_CHAIN_GAP}px)`;
+/** 详情抽屉内嵌全链路图固定高度 */
+const QUOTATION_INLINE_FULL_CHAIN_HEIGHT = 360;
 
 /** 列表树形行（antd Table children） */
 type QuotationTableRow = Quotation & { children?: QuotationTableRow[] };
@@ -551,7 +535,6 @@ const QuotationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const quotationDetailDrawerZIndex = token.zIndexPopupBase;
-  const quotationChainOverlayZIndex = token.zIndexPopupBase + 1;
   const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
   const quotationElevatedModalZIndex = token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET;
   const quotationNestedElevatedPopupZIndex = quotationElevatedModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
@@ -569,13 +552,7 @@ const QuotationsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
-  /** 抽屉滑入结束后再显示左侧「全链路 / 关联预览」悬浮层；关闭时先隐藏悬浮层再关抽屉 */
-  const [quotationChainOverlayVisible, setQuotationChainOverlayVisible] = useState(false);
-  const quotationDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** 抽屉外全链路悬浮窗：刷新追溯图（驱动 DocumentTraceFlowGraph refreshKey） */
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  /** 抽屉外全链路浮层：点击关联节点后下半区展示该单据简览（默认不展示当前报价单本身） */
+  /** 点击全链路节点后在图下方展示关联单据简览 */
   const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
     null
   );
@@ -944,13 +921,6 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
-        if (canConfirmCustomerQuotation(record, quotationAuditRequired)) {
-          parts.push(
-            <Button key="cc" type="link" size="small" onClick={() => handleConfirmCustomer(record)}>
-              客户确认
-            </Button>
-          );
-        }
         if (canReopenQuotation(record)) {
           parts.push(
             <Button key="ro" type="link" size="small" onClick={() => handleReopen(record)}>
@@ -996,18 +966,6 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
-        if (canCreateRevision(record)) {
-          parts.push(
-            <Button
-              key="rev"
-              type="link"
-              size="small"
-              onClick={() => handleRevision(record)}
-            >
-              {t('app.kuaizhizao.quotation.saveAsRevision')}
-            </Button>
-          );
-        }
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
           parts.push(
             <Button key="fu" type="link" size="small" onClick={() => openFollowUpFromQuotation(record)}>
@@ -1026,6 +984,7 @@ const QuotationsPage: React.FC = () => {
     try {
       const res = await getQuotation(id);
       if (res) {
+        setFullChainBriefDoc(null);
         setQuotationDetail(res);
         setDetailDrawerVisible(true);
       }
@@ -1044,6 +1003,7 @@ const QuotationsPage: React.FC = () => {
       try {
         const res = await getQuotation(id);
         if (res) {
+          setFullChainBriefDoc(null);
           setQuotationDetail(res);
           setDetailDrawerVisible(true);
         }
@@ -1182,23 +1142,18 @@ const QuotationsPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条报价单吗？`,
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await deleteQuotation(Number(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条报价单`);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
-        }
-      },
-    });
+    try {
+      for (const k of keys) {
+        await deleteQuotation(Number(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条报价单`);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setSelectedRowKeys([]);
+    } catch (error: any) {
+      messageApi.error(error.message || '批量删除失败');
+      throw error;
+    }
   };
 
   const handleBatchOperation = async (
@@ -1234,14 +1189,10 @@ const QuotationsPage: React.FC = () => {
     setSelectedRowKeys([]);
   };
 
-  const handleBatchSubmit = (keys: React.Key[]) =>
-    handleBatchOperation(keys, '批量提交', (id) => submitQuotation(id));
   const handleBatchApprove = (keys: React.Key[]) =>
     handleBatchOperation(keys, '批量审核通过', (id) => approveQuotation(id));
-  const handleBatchWithdraw = (keys: React.Key[]) =>
-    handleBatchOperation(keys, '批量撤回', (id) => withdrawQuotation(id));
-  const handleBatchReopen = (keys: React.Key[]) =>
-    handleBatchOperation(keys, '批量重新编辑', (id) => reopenQuotation(id));
+  const handleBatchConfirmCustomer = (keys: React.Key[]) =>
+    handleBatchOperation(keys, '批量客户确认', (id) => confirmCustomerQuotation(id));
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
     try {
@@ -1657,6 +1608,19 @@ const QuotationsPage: React.FC = () => {
     setPrintModalVisible(true);
   };
 
+  const handleOpenPrintTemplateDesign = () => {
+    if (selectedPrintTemplateUuid) {
+      navigate(`/system/print-templates/design/${selectedPrintTemplateUuid}`);
+      return;
+    }
+    navigate('/system/print-templates');
+  };
+
+  const selectedPrintTemplate = useMemo(
+    () => printTemplates.find((tpl) => tpl.uuid === selectedPrintTemplateUuid),
+    [printTemplates, selectedPrintTemplateUuid],
+  );
+
   const handleToolbarPrint = useCallback(
     async (keys: React.Key[]) => {
       if (!keys || keys.length !== 1) return;
@@ -1677,6 +1641,28 @@ const QuotationsPage: React.FC = () => {
       }
     },
     [handlePrint, messageApi, quotationAuditRequired, t]
+  );
+
+  const handleToolbarRevision = useCallback(
+    async (keys: React.Key[]) => {
+      if (!keys || keys.length !== 1) return;
+      const numericId = Number(keys[0]);
+      if (!Number.isFinite(numericId) || numericId <= 0) {
+        messageApi.warning('请选择一条有效记录');
+        return;
+      }
+      try {
+        const latest = await getQuotation(numericId);
+        if (!canCreateRevision(latest)) {
+          messageApi.warning('仅系列最新且非草稿的报价单可创建新版');
+          return;
+        }
+        handleRevision(latest);
+      } catch (error: any) {
+        messageApi.error(error?.message || '加载报价单失败');
+      }
+    },
+    [handleRevision, messageApi]
   );
 
   const handleConfirmPrint = async () => {
@@ -2028,6 +2014,83 @@ const QuotationsPage: React.FC = () => {
     [quotationDetail?.id]
   );
 
+  const quotationInlineFullChain = useMemo(() => {
+    if (!quotationDetail?.id) return undefined;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <div
+          style={{
+            width: '100%',
+            height: QUOTATION_INLINE_FULL_CHAIN_HEIGHT,
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid var(--ant-color-border-secondary)',
+            borderRadius: token.borderRadiusLG,
+            overflow: 'hidden',
+            background: 'var(--ant-color-fill-quaternary)',
+          }}
+        >
+          <DocumentTrackingRelationsTabsBody
+            documentType="quotation"
+            documentId={quotationDetail.id as number}
+            onDocumentClick={onFullChainGraphNodeClick}
+            compact
+            hideInlineRefresh
+          />
+        </div>
+        {fullChainBriefDoc ? (
+          <div
+            style={{
+              border: '1px solid var(--ant-color-border-secondary)',
+              borderRadius: token.borderRadiusLG,
+              padding: 12,
+              background: 'var(--ant-color-bg-container)',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <TraceLinkedDocumentBrief
+              documentType={fullChainBriefDoc.document_type}
+              documentId={fullChainBriefDoc.document_id}
+              compactChrome
+            />
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+              <Space wrap>
+                <Button size="small" onClick={() => setFullChainBriefDoc(null)}>
+                  {t('components.documentTrackingPanel.traceBriefDismiss')}
+                </Button>
+                {fullChainBriefDoc.document_type === 'sales_order' ? (
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => openLinkedSalesOrderDrawer(fullChainBriefDoc.document_id)}
+                  >
+                    {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                  </Button>
+                ) : null}
+              </Space>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }, [
+    fullChainBriefDoc,
+    onFullChainGraphNodeClick,
+    openLinkedSalesOrderDrawer,
+    quotationDetail?.id,
+    t,
+    token.borderRadiusLG,
+  ]);
+
   useEffect(() => {
     if (detailDrawerVisible && quotationDetail?.id != null) {
       setFullChainBriefDoc(null);
@@ -2041,36 +2104,11 @@ const QuotationsPage: React.FC = () => {
   }, []);
 
   const closeQuotationDetailDrawer = useCallback(() => {
-    if (quotationDrawerCloseTimerRef.current) {
-      clearTimeout(quotationDrawerCloseTimerRef.current);
-      quotationDrawerCloseTimerRef.current = null;
-    }
-    setQuotationChainOverlayVisible(false);
     setFullChainBriefDoc(null);
     closeLinkedSalesOrderDrawer();
-    quotationDrawerCloseTimerRef.current = setTimeout(() => {
-      quotationDrawerCloseTimerRef.current = null;
-      setDetailDrawerVisible(false);
-      setQuotationDetail(null);
-    }, QUOTATION_CHAIN_OVERLAY_HIDE_BEFORE_DRAWER_MS);
+    setDetailDrawerVisible(false);
+    setQuotationDetail(null);
   }, [closeLinkedSalesOrderDrawer]);
-
-  useEffect(() => {
-    if (!detailDrawerVisible) return;
-    if (quotationDrawerCloseTimerRef.current) {
-      clearTimeout(quotationDrawerCloseTimerRef.current);
-      quotationDrawerCloseTimerRef.current = null;
-    }
-  }, [detailDrawerVisible]);
-
-  useEffect(
-    () => () => {
-      if (quotationDrawerCloseTimerRef.current) {
-        clearTimeout(quotationDrawerCloseTimerRef.current);
-      }
-    },
-    [],
-  );
 
   const appendQuotationItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -2727,54 +2765,57 @@ const QuotationsPage: React.FC = () => {
           createButtonText="新建报价单"
           onCreate={handleCreate}
           enableRowSelection
-          toolBarRender={() => [
-            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
-              <Button
-                disabled={selectedRowKeys.length === 0}
-                danger
-                onClick={() => handleBatchDelete(selectedRowKeys)}
-              >
-                <DeleteOutlined /> 批量删除
-              </Button>
-              <Dropdown
-                disabled={selectedRowKeys.length === 0}
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'submit',
-                      label: '批量提交',
-                      icon: <SendOutlined />,
-                      onClick: () => handleBatchSubmit(selectedRowKeys),
-                    },
-                    ...(quotationAuditRequired
-                      ? [
-                          {
-                            key: 'approve',
-                            label: '批量审核通过',
-                            icon: <CheckOutlined />,
-                            onClick: () => handleBatchApprove(selectedRowKeys),
-                          } as const,
-                        ]
-                      : []),
-                    {
-                      key: 'withdraw',
-                      label: '批量撤回',
-                      icon: <RollbackOutlined />,
-                      onClick: () => handleBatchWithdraw(selectedRowKeys),
-                    },
-                    {
-                      key: 'reopen',
-                      label: '批量重新编辑',
-                      icon: <EditOutlined />,
-                      onClick: () => handleBatchReopen(selectedRowKeys),
-                    },
-                  ],
-                }}
-              >
-                <Button danger icon={<ArrowDownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条报价单吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="quotation-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'confirmCustomer',
+                  label: '批量客户确认',
+                  icon: <CommentOutlined />,
+                  requireConfirm: true,
+                  confirmTitle: '批量客户确认',
+                  confirmDescription: (count) =>
+                    `确定将选中的 ${count} 条报价单标记为「已接受」吗？仅「已报价」且符合确认条件的单据会成功。`,
+                  onClick: handleBatchConfirmCustomer,
+                },
+                ...(quotationAuditRequired
+                  ? [
+                      {
+                        key: 'approve',
+                        label: '批量审核通过',
+                        icon: <CheckOutlined />,
+                        onClick: handleBatchApprove,
+                      },
+                    ]
+                  : []),
+              ]}
+              toolBarButtonSize="middle"
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
+            <Button
+              key="quotation-revision"
+              icon={<BranchesOutlined />}
+              size="middle"
+              disabled={selectedRowKeys.length !== 1}
+              onClick={() => void handleToolbarRevision(selectedRowKeys)}
+            >
+              {t('app.kuaizhizao.quotation.saveAsRevision')}
+            </Button>,
+            <Button
+              key="quotation-print"
+              icon={<PrinterOutlined />}
+              size="middle"
+              disabled={selectedRowKeys.length !== 1}
+              onClick={() => void handleToolbarPrint(selectedRowKeys)}
+            >
+              {t('app.kuaizhizao.quotation.formalPrint')}
+            </Button>,
           ]}
           showImportButton={true}
           onImport={handleListImport}
@@ -2824,11 +2865,6 @@ const QuotationsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          showPrintButton
-          printButtonText={t('app.kuaizhizao.quotation.formalPrint')}
-          onPrint={(keys) => {
-            void handleToolbarPrint(keys);
-          }}
           request={async (params, _sort, _filter, searchFormValues) => {
             try {
               const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
@@ -2868,158 +2904,18 @@ const QuotationsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {detailDrawerVisible && quotationDetail && quotationChainOverlayVisible ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
-              top: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
-              width: quotationChainPanelWidthCss,
-              height: quotationChainHalfHeightCss,
-              zIndex: quotationChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: 13,
-                      color: 'var(--ant-color-text)',
-                    }}
-                  >
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="quotation"
-                documentId={quotationDetail.id as number}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
-              top: quotationBriefPanelTopCss,
-              width: quotationChainPanelWidthCss,
-              height: quotationChainHalfHeightCss,
-              zIndex: quotationChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'sales_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => openLinkedSalesOrderDrawer(fullChainBriefDoc.document_id)}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
         zIndex={quotationDetailDrawerZIndex}
         onClose={closeQuotationDetailDrawer}
-        afterOpenChange={(open) => {
-          if (open) setQuotationChainOverlayVisible(true);
-          else setQuotationChainOverlayVisible(false);
-        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           quotationDetail && (
             <Space wrap>
+              {canDeleteQuotation(quotationDetail) && (
+                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
+              )}
               {quotationDetail.status === '草稿' && (
                 <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
               )}
@@ -3040,9 +2936,6 @@ const QuotationsPage: React.FC = () => {
               )}
               {canReopenQuotation(quotationDetail) && (
                 <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>重新编辑</Button>
-              )}
-              {canDeleteQuotation(quotationDetail) && (
-                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
               )}
               {canConvertQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转销售订单</Button>
@@ -3111,6 +3004,7 @@ const QuotationsPage: React.FC = () => {
               })()
             : undefined
         }
+        collaborationRelations={quotationInlineFullChain}
         lines={
           quotationDetail ? (
             <>
@@ -3402,6 +3296,7 @@ const QuotationsPage: React.FC = () => {
       <Modal
         open={printModalVisible}
         title="选择打印模板"
+        width={MODAL_CONFIG.TINY_WIDTH}
         zIndex={quotationElevatedModalZIndex}
         onCancel={() => {
           if (printSubmitting) return;
@@ -3410,20 +3305,255 @@ const QuotationsPage: React.FC = () => {
         }}
         onOk={handleConfirmPrint}
         okText="预览打印"
+        okButtonProps={{ icon: <PrinterOutlined /> }}
         confirmLoading={printSubmitting}
         destroyOnHidden
+        styles={{ body: { paddingTop: 4, paddingBottom: 8 } }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Typography.Text type="secondary">
-            报价单：{printingRecord?.quotation_code ?? printingRecord?.id ?? '-'}
-          </Typography.Text>
-          <Select
-            allowClear
-            placeholder="请选择模板（为空则使用后端默认模板）"
-            value={selectedPrintTemplateUuid}
-            onChange={(v) => setSelectedPrintTemplateUuid(v)}
-            options={printTemplates.map((tpl) => ({ label: tpl.name, value: tpl.uuid }))}
-          />
+        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <div
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '14px 16px',
+              borderRadius: token.borderRadiusLG,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              background: `linear-gradient(135deg, ${token.colorPrimaryBg} 0%, ${token.colorFillAlter} 100%)`,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                right: -24,
+                top: -24,
+                width: 88,
+                height: 88,
+                borderRadius: '50%',
+                background: `${token.colorPrimary}12`,
+                pointerEvents: 'none',
+              }}
+            />
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: token.borderRadius,
+                background: token.colorBgContainer,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: token.colorPrimary,
+                fontSize: 18,
+                flexShrink: 0,
+                boxShadow: token.boxShadowTertiary,
+              }}
+            >
+              <FileTextOutlined />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>
+                当前报价单
+              </Typography.Text>
+              <Typography.Text
+                strong
+                style={{
+                  fontSize: 16,
+                  letterSpacing: 0.4,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: token.colorText,
+                }}
+              >
+                {printingRecord?.quotation_code ?? printingRecord?.id ?? '-'}
+              </Typography.Text>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '14px 16px 12px',
+              borderRadius: token.borderRadiusLG,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorBgContainer,
+              boxShadow: token.boxShadowTertiary,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                marginBottom: 10,
+              }}
+            >
+              <Space size={6}>
+                <PrinterOutlined style={{ color: token.colorPrimary, fontSize: 14 }} />
+                <Typography.Text strong>打印模板</Typography.Text>
+              </Space>
+              <Button
+                type="link"
+                size="small"
+                icon={<FormOutlined />}
+                onClick={handleOpenPrintTemplateDesign}
+                style={{
+                  padding: '0 8px',
+                  height: 26,
+                  borderRadius: token.borderRadiusSM,
+                  background: token.colorPrimaryBg,
+                  flexShrink: 0,
+                }}
+              >
+                {t('app.kuaizhizao.quotation.printTemplateDesign')}
+              </Button>
+            </div>
+            {printTemplates.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无可用打印模板"
+                style={{ margin: '8px 0 4px' }}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  maxHeight: 260,
+                  overflowY: 'auto',
+                  paddingRight: 2,
+                }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedPrintTemplateUuid(undefined)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedPrintTemplateUuid(undefined);
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: token.borderRadius,
+                    border: `1px solid ${selectedPrintTemplateUuid == null ? token.colorPrimary : token.colorBorderSecondary}`,
+                    background: selectedPrintTemplateUuid == null ? token.colorPrimaryBg : token.colorFillAlter,
+                    cursor: 'pointer',
+                    transition: 'border-color 0.2s, background 0.2s',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: token.borderRadiusSM,
+                      background: token.colorBgContainer,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: token.colorTextSecondary,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <PrinterOutlined />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Typography.Text strong>系统默认模板</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                      由后端自动匹配报价单默认模板
+                    </Typography.Text>
+                  </div>
+                  {selectedPrintTemplateUuid == null ? (
+                    <CheckOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} />
+                  ) : null}
+                </div>
+                {printTemplates.map((tpl) => {
+                  const selected = selectedPrintTemplateUuid === tpl.uuid;
+                  return (
+                    <div
+                      key={tpl.uuid}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedPrintTemplateUuid(tpl.uuid)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedPrintTemplateUuid(tpl.uuid);
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: token.borderRadius,
+                        border: `1px solid ${selected ? token.colorPrimary : token.colorBorderSecondary}`,
+                        background: selected ? token.colorPrimaryBg : token.colorFillAlter,
+                        cursor: 'pointer',
+                        transition: 'border-color 0.2s, background 0.2s',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: token.borderRadiusSM,
+                          background: token.colorBgContainer,
+                          border: `1px solid ${token.colorBorderSecondary}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: selected ? token.colorPrimary : token.colorTextSecondary,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FileTextOutlined />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Space size={6} wrap>
+                          <Typography.Text strong ellipsis style={{ maxWidth: 280 }}>
+                            {tpl.name}
+                          </Typography.Text>
+                          {tpl.is_default ? <Tag color="blue" style={{ margin: 0 }}>默认</Tag> : null}
+                        </Space>
+                        {tpl.description ? (
+                          <Typography.Text
+                            type="secondary"
+                            ellipsis
+                            style={{ fontSize: 12, display: 'block', marginTop: 2 }}
+                          >
+                            {tpl.description}
+                          </Typography.Text>
+                        ) : (
+                          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                            {tpl.code}
+                          </Typography.Text>
+                        )}
+                      </div>
+                      {selected ? <CheckOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} /> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, marginTop: 10, display: 'block', lineHeight: 1.5 }}
+            >
+              {selectedPrintTemplate
+                ? `已选「${selectedPrintTemplate.name}」，预览后将生成 PDF 报价文件`
+                : '将使用系统默认报价单模板生成 PDF'}
+            </Typography.Text>
+          </div>
         </Space>
       </Modal>
 

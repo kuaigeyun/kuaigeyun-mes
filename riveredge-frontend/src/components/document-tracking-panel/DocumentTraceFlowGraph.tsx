@@ -594,15 +594,31 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         }}
       >
         {hideInlineRefresh ? (
-          <Tooltip title={traceChartFullscreen ? t('components.documentRelationGraph.exitFullscreen') : t('components.documentRelationGraph.fullscreen')}>
+          <Space size={4} style={{ position: 'absolute', top: 8, right: 8, zIndex: 5 }}>
             <Button
               type="default"
               size="small"
-              icon={traceChartFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-              onClick={() => void toggleTraceChartFullscreen()}
-              style={{ position: 'absolute', top: 8, right: 8, zIndex: 5 }}
-            />
-          </Tooltip>
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => run()}
+            >
+              {t('components.documentRelationGraph.refresh')}
+            </Button>
+            <Tooltip
+              title={
+                traceChartFullscreen
+                  ? t('components.documentRelationGraph.exitFullscreen')
+                  : t('components.documentRelationGraph.fullscreen')
+              }
+            >
+              <Button
+                type="default"
+                size="small"
+                icon={traceChartFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                onClick={() => void toggleTraceChartFullscreen()}
+              />
+            </Tooltip>
+          </Space>
         ) : null}
         {loading && (
           <div

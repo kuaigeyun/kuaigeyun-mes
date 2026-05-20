@@ -4,7 +4,7 @@
  * 提供车间的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
@@ -15,7 +15,9 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
-import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
+const WorkshopFormModal = lazy(() =>
+  import('../../../components/WorkshopFormModal').then((m) => ({ default: m.WorkshopFormModal })),
+);
 import {
   workshopApi,
   plantApi,
@@ -52,6 +54,7 @@ const WorkshopsPage: React.FC = () => {
 
   const {
     customFields,
+    customFieldsLoaded,
     customFieldValues,
     generateCustomFieldColumns,
     enrichRecordsWithCustomFields,
@@ -73,18 +76,6 @@ const WorkshopsPage: React.FC = () => {
     };
     loadPlants();
   }, []);
-
-  /**
-   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
-   */
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      // 延迟刷新，确保列定义已更新
-      setTimeout(() => {
-        actionRef.current?.reload();
-      }, 200);
-    }
-  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -732,6 +723,7 @@ const WorkshopsPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
+        {customFieldsLoaded ? (
         <UniTable<Workshop>
         columnPersistenceId="apps.master-data.pages.factory.workshops"
         actionRef={actionRef}
@@ -852,6 +844,7 @@ const WorkshopsPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+        ) : null}
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
@@ -874,12 +867,16 @@ const WorkshopsPage: React.FC = () => {
         }
       />
 
-      <WorkshopFormModal
-        open={modalVisible}
-        onClose={() => { setModalVisible(false); setEditUuid(null); }}
-        editUuid={editUuid}
-        onSuccess={handleModalSuccess}
-      />
+      {modalVisible ? (
+        <Suspense fallback={null}>
+          <WorkshopFormModal
+            open={modalVisible}
+            onClose={() => { setModalVisible(false); setEditUuid(null); }}
+            editUuid={editUuid}
+            onSuccess={handleModalSuccess}
+          />
+        </Suspense>
+      ) : null}
     </>
     );
 };

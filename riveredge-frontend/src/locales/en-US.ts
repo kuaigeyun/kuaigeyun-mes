@@ -1449,6 +1449,7 @@ export default {
   'components.uniTable.edit': 'Edit',
   'components.uniTable.detail': 'Detail',
   'components.uniTable.delete': 'Batch Delete',
+  'components.uniBatch.batchActions': 'Batch Actions',
   'components.uniTable.configOnImport': 'Configure onImport callback to handle import data',
   'components.uniTable.configOnSync': 'Configure onSync callback',
   'components.uniTable.configOnExport': 'Configure onExport callback to handle export data',
@@ -2537,6 +2538,7 @@ export default {
   'app.kuaizhizao.quotation.saveAsRevisionHint':
     'Copy the latest revision in this series to a new draft revision so you can change lines and prices. Continue?',
   'app.kuaizhizao.quotation.formalPrint': 'Generate PDF',
+  'app.kuaizhizao.quotation.printTemplateDesign': 'Print template design',
   'app.kuaizhizao.quotation.formalPrintDenied':
     'PDF generation is available after approval, customer acceptance, or conversion to sales order.',
   'app.kuaizhizao.quotation.colSeries': 'Series code',
@@ -9275,6 +9277,7 @@ export default {
   'components.documentTrackingPanel.noRelations': 'No upstream/downstream links',
   'components.documentTrackingPanel.relationsTitle': 'Upstream & Downstream',
   'components.documentTrackingPanel.relationsFullChainTitle': 'Full relation chain',
+  'components.documentTrackingPanel.openFullChainLink': 'Full chain',
   'components.documentTrackingPanel.traceBriefTitle': 'Linked document snapshot',
   'components.documentTrackingPanel.traceBriefSelectNode': 'Click a node in the graph above to view basic fields and line items here.',
   'components.documentTrackingPanel.traceBriefDismiss': 'Dismiss',

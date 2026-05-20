@@ -38,6 +38,7 @@ import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
+import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
 import dayjs from 'dayjs';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
@@ -5208,17 +5209,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const systemPaths: string[] = [];
             const pluginCodes = new Set<string>();
             const kuaiPaths: string[] = [];
+            const masterDataPaths: string[] = [];
             for (const p of paths) {
               if (p.startsWith('/apps/')) {
                 const code = extractAppCodeFromPath(p);
                 if (code) pluginCodes.add(code);
                 if (p.startsWith('/apps/kuaizhizao')) kuaiPaths.push(p);
+                if (p.startsWith('/apps/master-data')) masterDataPaths.push(p);
               } else {
                 systemPaths.push(p);
               }
             }
             pluginCodes.forEach((code) => prefetchPlugin(code));
             kuaiPaths.forEach((p) => prefetchKuaizhizaoRoute(p));
+            masterDataPaths.forEach((p) => prefetchMasterDataRoute(p));
             if (systemPaths.length > 0) prefetchSystemRoutes(systemPaths);
           };
           /* 侧栏收起时不要写 display:inline-flex + width:100%：会套在 .ant-menu-title-content 与 Pro 的 item-title 之间，
@@ -5395,6 +5399,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     const appCode = extractAppCodeFromPath(path);
                     if (appCode) prefetchPlugin(appCode);
                     if (path.startsWith('/apps/kuaizhizao')) prefetchKuaizhizaoRoute(path);
+                    if (path.startsWith('/apps/master-data')) prefetchMasterDataRoute(path);
                     const menuPath = path.split('?')[0];
                     if (
                       menuPath.includes('/apps/kuaizhizao/') &&

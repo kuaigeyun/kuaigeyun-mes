@@ -1152,12 +1152,11 @@ def get_finished_goods_inspection_lifecycle(
 
 # ---------------------------------------------------------------------------
 # 报价单生命周期（统一主轴）
-# 草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单
+# 草稿 → 已报价 → 客户确认 → 已转订单
 # ---------------------------------------------------------------------------
 QUOTATION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "generated", "label": "已生成"},
-    {"key": "sent_pending_confirm", "label": "已发送待确认"},
+    {"key": "generated", "label": "已报价"},
     {"key": "customer_confirmed", "label": "客户确认"},
     {"key": "converted", "label": "已转订单"},
 ]
@@ -1226,7 +1225,7 @@ def get_demand_computation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单）
+# 报价单生命周期（草稿 → 已报价 → 客户确认 → 已转订单）
 # ---------------------------------------------------------------------------
 def _merge_quotation_version_meta(quotation: Any, result: Dict[str, Any]) -> Dict[str, Any]:
     """为生命周期结果附加版本系列信息，供列表/详情 UniLifecycle 与引导文案使用。"""
@@ -1259,7 +1258,7 @@ def get_quotation_lifecycle(
     *,
     converted_sales_order_missing: bool = False,
 ) -> Dict[str, Any]:
-    """报价单生命周期：结合 status 与 review_status 映射为主轴五节点（见 QUOTATION_MAIN_STAGES）。"""
+    """报价单生命周期：结合 status 与 review_status 映射为主轴四节点（见 QUOTATION_MAIN_STAGES）。"""
     status = _norm(getattr(quotation, "status", None))
     review_status = _norm(getattr(quotation, "review_status", None))
     milestones = milestones or []
@@ -1310,7 +1309,7 @@ def get_quotation_lifecycle(
 
     if status in ("草稿", "draft"):
         return _merge_quotation_version_meta(
-            quotation, _ret("draft", "草稿", "normal", ["提交报价单（进入审核）"])
+            quotation, _ret("draft", "草稿", "normal", ["提交报价单"])
         )
 
     if status == "已转订单":
@@ -1335,7 +1334,7 @@ def get_quotation_lifecycle(
                 quotation,
                 _ret(
                     "generated",
-                    "已生成（待审核）",
+                    "已报价（待审核）",
                     "normal",
                     ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
                 ),
@@ -1344,12 +1343,13 @@ def get_quotation_lifecycle(
             return _merge_quotation_version_meta(
                 quotation,
                 _ret(
-                    "sent_pending_confirm",
-                    "已发送待确认",
+                    "generated",
+                    "已报价",
                     "normal",
                     [
                         "客户确认（标记已接受）",
                         "转销售订单（下推，可直接下推不经客户确认）",
+                        "生成正式报价 PDF",
                         "撤回审核（回到待审核）",
                     ],
                 ),
@@ -1358,7 +1358,7 @@ def get_quotation_lifecycle(
             quotation,
             _ret(
                 "generated",
-                "已生成（待审核）",
+                "已报价（待审核）",
                 "normal",
                 ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
             ),

@@ -1,11 +1,16 @@
 /**
  * uni-batch：列表批量操作统一入口（不限于删除）。
- * 任意「依赖选中行」的批量能力可共用同一按钮形态：可选二次确认、无选中时默认禁用等。
- * 删除场景请使用预设 `UniBatchDeleteButton`（基于 `UniBatchButton`）。
+ *
+ * 推荐组合：
+ * - `UniBatchDeleteButton` — 独立批量删除（带确认）
+ * - `UniBatchMenuButton` — 其它批量能力收拢到一个下拉按钮
+ * - `UniBatchSplitToolbar` — 上述两者并排（兼容旧页，内部已按新形态拆分）
+ *
+ * 任意「依赖选中行」的批量能力可共用 `UniBatchButton` 基座。
  */
 
 import React from 'react';
-import { Button, Dropdown, Popconfirm, Space } from 'antd';
+import { App, Button, Dropdown, Popconfirm, Space } from 'antd';
 import type { ButtonProps, MenuProps, PopconfirmProps } from 'antd';
 import { DeleteOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -133,14 +138,81 @@ export const UniBatchDeleteButton: React.FC<UniBatchDeleteButtonProps> = ({
   );
 };
 
-export type UniBatchSplitMenuItem = {
+export type UniBatchMenuItem = {
   key: string;
   label: React.ReactNode;
   icon?: React.ReactNode;
   /** 点击菜单项；默认传入当前 selectedRowKeys */
   onClick: (keys: React.Key[]) => void | Promise<void>;
   disabled?: boolean;
+  requireConfirm?: boolean;
+  confirmTitle?: React.ReactNode | ((count: number) => React.ReactNode);
+  confirmDescription?: React.ReactNode | ((count: number) => React.ReactNode);
 };
+
+export interface UniBatchMenuButtonProps {
+  selectedRowKeys: React.Key[];
+  menuItems: UniBatchMenuItem[];
+  toolBarButtonSize?: ButtonProps['size'];
+  buttonText?: string;
+  disabled?: boolean;
+}
+
+/** 批量操作下拉：与 `UniBatchDeleteButton` 并列，承载除删除外的批量能力 */
+export const UniBatchMenuButton: React.FC<UniBatchMenuButtonProps> = ({
+  selectedRowKeys,
+  menuItems,
+  toolBarButtonSize = 'middle',
+  buttonText,
+  disabled: disabledProp,
+}) => {
+  const { t } = useTranslation();
+  const { modal } = App.useApp();
+  const count = selectedRowKeys.length;
+  const emptyDisabled = count === 0 || menuItems.length === 0;
+  const disabled = disabledProp ?? emptyDisabled;
+
+  const runMenuItem = (item: UniBatchMenuItem) => {
+    const run = () => void item.onClick(selectedRowKeys);
+    if (item.requireConfirm) {
+      modal.confirm({
+        title:
+          typeof item.confirmTitle === 'function'
+            ? item.confirmTitle(count)
+            : item.confirmTitle,
+        content:
+          typeof item.confirmDescription === 'function'
+            ? item.confirmDescription(count)
+            : item.confirmDescription,
+        onOk: run,
+      });
+      return;
+    }
+    run();
+  };
+
+  const dropdownMenu: MenuProps = {
+    items: menuItems.map((it) => ({
+      key: it.key,
+      label: it.label,
+      icon: it.icon,
+      disabled: it.disabled ?? disabled,
+      onClick: () => runMenuItem(it),
+    })),
+  };
+
+  return (
+    <Dropdown menu={dropdownMenu} trigger={['click']} disabled={disabled}>
+      <Button type="default" disabled={disabled} size={toolBarButtonSize}>
+        {buttonText ?? t('components.uniBatch.batchActions')}
+        <DownOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.75 }} />
+      </Button>
+    </Dropdown>
+  );
+};
+
+/** @deprecated 请优先使用 `UniBatchDeleteButton` + `UniBatchMenuButton` 并列 */
+export type UniBatchSplitMenuItem = UniBatchMenuItem;
 
 export interface UniBatchSplitToolbarProps {
   selectedRowKeys: React.Key[];
@@ -149,12 +221,13 @@ export interface UniBatchSplitToolbarProps {
   menuItems?: UniBatchSplitMenuItem[];
   toolBarButtonSize?: ButtonProps['size'];
   deleteButtonText?: string;
+  menuButtonText?: string;
   confirmTitle?: string | ((count: number) => string);
   confirmDescription?: string | ((count: number) => string);
 }
 
 /**
- * 批量操作分裂按钮：主按钮为批量删除（带确认），右侧下拉为更多批量能力。
+ * 批量操作工具条：左侧独立删除 + 右侧批量操作下拉（uni-batch 推荐形态）。
  */
 export const UniBatchSplitToolbar: React.FC<UniBatchSplitToolbarProps> = ({
   selectedRowKeys,
@@ -162,62 +235,28 @@ export const UniBatchSplitToolbar: React.FC<UniBatchSplitToolbarProps> = ({
   menuItems = [],
   toolBarButtonSize = 'middle',
   deleteButtonText,
+  menuButtonText,
   confirmTitle,
   confirmDescription,
 }) => {
-  const { t } = useTranslation();
-  const count = selectedRowKeys.length;
-  const disabled = count === 0;
-
-  const runDelete = () => void onDelete(selectedRowKeys);
-
-  const title =
-    typeof confirmTitle === 'function' ? confirmTitle(count) : (confirmTitle ?? t('common.confirmBatchDelete'));
-  const description =
-    typeof confirmDescription === 'function'
-      ? confirmDescription(count)
-      : (confirmDescription ?? t('common.confirmBatchDeleteContent', { count }));
-
-  const dropdownMenu: MenuProps = {
-    items: menuItems.map((it) => ({
-      key: it.key,
-      label: it.label,
-      icon: it.icon,
-      disabled: it.disabled ?? disabled,
-      onClick: () => void it.onClick(selectedRowKeys),
-    })),
-  };
-
   return (
-    <Space.Compact className="uni-batch-split-toolbar">
-      <Popconfirm
-        title={title}
-        description={description}
-        onConfirm={runDelete}
-        okText={t('common.confirm')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ danger: true }}
-        disabled={disabled}
-      >
-        <Button
-          type="default"
-          danger
-          disabled={disabled}
-          icon={<DeleteOutlined />}
-          size={toolBarButtonSize}
-        >
-          {deleteButtonText ?? t('components.uniTable.delete')}
-        </Button>
-      </Popconfirm>
-      <Dropdown menu={dropdownMenu} trigger={['click']} disabled={disabled && menuItems.length === 0}>
-        <Button
-          type="default"
-          danger
-          disabled={disabled}
-          icon={<DownOutlined style={{ fontSize: 10, opacity: 0.75 }} />}
-          size={toolBarButtonSize}
+    <Space size={8}>
+      <UniBatchDeleteButton
+        selectedRowKeys={selectedRowKeys}
+        onConfirm={onDelete}
+        toolBarButtonSize={toolBarButtonSize}
+        buttonText={deleteButtonText}
+        confirmTitle={confirmTitle}
+        confirmDescription={confirmDescription}
+      />
+      {menuItems.length > 0 ? (
+        <UniBatchMenuButton
+          selectedRowKeys={selectedRowKeys}
+          menuItems={menuItems}
+          toolBarButtonSize={toolBarButtonSize}
+          buttonText={menuButtonText}
         />
-      </Dropdown>
-    </Space.Compact>
+      ) : null}
+    </Space>
   );
 };

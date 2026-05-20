@@ -1,6 +1,6 @@
 /**
  * 报价单生命周期：前端兜底（无 lifecycle 字段时），与后端 get_quotation_lifecycle / QUOTATION_MAIN_STAGES 对齐。
- * 主轴：草稿 → 已生成 → 已发送待确认 → 客户确认 → 已转订单
+ * 主轴：草稿 → 已报价 → 客户确认 → 已转订单
  */
 
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
@@ -11,11 +11,10 @@ function norm(s: string | undefined): string {
   return (s ?? '').trim();
 }
 
-const MAIN_STAGE_KEYS = ['draft', 'generated', 'sent_pending_confirm', 'customer_confirmed', 'converted'] as const;
+const MAIN_STAGE_KEYS = ['draft', 'generated', 'customer_confirmed', 'converted'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
   draft: '草稿',
-  generated: '已生成',
-  sent_pending_confirm: '已发送待确认',
+  generated: '已报价',
   customer_confirmed: '客户确认',
   converted: '已转订单',
 };
@@ -52,41 +51,23 @@ function buildMainStages(currentKey: (typeof MAIN_STAGE_KEYS)[number]): SubStage
   });
 }
 
-/** 未启用审核时主轴可直接跳过「已生成」：草稿 → 已发送待确认 → 客户确认 → 已转订单 */
-const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'sent_pending_confirm', 'customer_confirmed', 'converted'] as const;
-
 const NO_AUDIT_STAGE_PERCENT: Record<string, number> = {
   draft: 0,
-  submitted: 34,
-  send_or_push: 67,
+  generated: 33,
+  customer_confirmed: 67,
   converted: 100,
 };
 
-function buildMainStagesNoAudit(currentKey: (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number]): SubStage[] {
-  const currentIdx = Math.max(
-    0,
-    MAIN_STAGE_KEYS_NO_AUDIT.indexOf(currentKey as (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number])
-  );
-  return MAIN_STAGE_KEYS_NO_AUDIT.map((key, i) => {
-    let status: SubStage['status'] = 'pending';
-    if (currentKey === 'converted' && key === 'converted') {
-      status = 'done';
-    } else if (i < currentIdx) {
-      status = 'done';
-    } else if (i === currentIdx) {
-      status = 'active';
-    } else {
-      status = 'pending';
-    }
-    return { key, label: MAIN_STAGE_LABELS[key] ?? key, status };
-  });
+function buildMainStagesNoAudit(currentKey: (typeof MAIN_STAGE_KEYS)[number]): SubStage[] {
+  return buildMainStages(currentKey);
 }
 
-function mapQuotationStageKeyWhenNoAudit(key: string): (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number] {
+function mapQuotationStageKeyWhenNoAudit(key: string): (typeof MAIN_STAGE_KEYS)[number] {
   const k = String(key ?? '').trim();
-  if (k === 'generated') return 'sent_pending_confirm';
-  const allowed = MAIN_STAGE_KEYS_NO_AUDIT as readonly string[];
-  if (allowed.includes(k)) return k as (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number];
+  // 兼容旧后端：已发送待确认阶段合并为「已报价」
+  if (k === 'sent_pending_confirm') return 'generated';
+  const allowed = MAIN_STAGE_KEYS as readonly string[];
+  if (allowed.includes(k)) return k as (typeof MAIN_STAGE_KEYS)[number];
   return 'draft';
 }
 
@@ -114,7 +95,7 @@ function sanitizeQuotationSuggestionsNoAudit(suggestions: string[]): string[] {
     );
 }
 
-/** 关闭报价审核后：移除「已审核」节点并重映射进度 */
+/** 关闭报价审核后：移除审核相关引导文案 */
 function adaptQuotationLifecycleForNoAudit(
   base: LifecycleResult,
   record: Record<string, unknown>,
@@ -125,9 +106,11 @@ function adaptQuotationLifecycleForNoAudit(
   const percent = NO_AUDIT_STAGE_PERCENT[pipelineKey] ?? base.percent;
 
   let stageName = base.stageName;
-  if (stageName === '已生成（待审核）' || stageName === '待审核') {
-    const active = mainStages.find((s) => s.status === 'active');
-    stageName = active?.label ?? stageName;
+  if (stageName === '已报价（待审核）' || stageName === '已生成（待审核）' || stageName === '待审核') {
+    stageName = '已报价';
+  }
+  if (stageName === '已发送待确认') {
+    stageName = '已报价';
   }
 
   const nextStepSuggestions = sanitizeQuotationSuggestionsNoAudit(base.nextStepSuggestions ?? []);
@@ -175,7 +158,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       current_stage_name: '草稿',
       status: 'normal',
       main_stages: buildMainStages('draft'),
-      next_step_suggestions: ['提交报价单（进入审核）'],
+      next_step_suggestions: ['提交报价单'],
     };
   }
 
@@ -203,7 +186,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     if (isPendingRs(rs)) {
       return {
         current_stage_key: 'generated',
-        current_stage_name: '已生成（待审核）',
+        current_stage_name: '已报价（待审核）',
         status: 'normal',
         main_stages: buildMainStages('generated'),
         next_step_suggestions: ['审核通过', '审核驳回', '撤回提交（整单回草稿）'],
@@ -211,20 +194,21 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     }
     if (isApprovedRs(rs)) {
       return {
-        current_stage_key: 'sent_pending_confirm',
-        current_stage_name: '已发送待确认',
+        current_stage_key: 'generated',
+        current_stage_name: '已报价',
         status: 'normal',
-        main_stages: buildMainStages('sent_pending_confirm'),
+        main_stages: buildMainStages('generated'),
         next_step_suggestions: [
           '客户确认（标记已接受）',
           '转销售订单（下推）',
+          '生成正式报价 PDF',
           '撤回审核（回到待审核）',
         ],
       };
     }
     return {
       current_stage_key: 'generated',
-      current_stage_name: '已生成（待审核）',
+      current_stage_name: '已报价（待审核）',
       status: 'normal',
       main_stages: buildMainStages('generated'),
       next_step_suggestions: ['审核通过', '审核驳回', '撤回提交（整单回草稿）'],
@@ -254,9 +238,20 @@ export function getQuotationLifecycle(
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const raw = record as Record<string, unknown>;
   const backend = (record?.lifecycle ?? raw.lifecycle) as BackendLifecycle | undefined;
-  const base = backend?.main_stages?.length
+  let base = backend?.main_stages?.length
     ? parseBackendLifecycle(backend)
     : parseBackendLifecycle(buildFallbackLifecycle(raw));
+
+  const activeKey = base.mainStages?.find((s) => s.status === 'active')?.key;
+  if (activeKey === 'sent_pending_confirm' || base.stageName === '已发送待确认') {
+    base = {
+      ...base,
+      stageName: '已报价',
+      mainStages: buildMainStages('generated'),
+      percent: auditRequired ? base.percent : NO_AUDIT_STAGE_PERCENT.generated,
+    };
+  }
+
   if (auditRequired) return base;
   return adaptQuotationLifecycleForNoAudit(base, raw);
 }
