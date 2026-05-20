@@ -237,11 +237,19 @@ class DefaultValuesService:
         Returns:
             List[Dict[str, Any]]: 规则组件列表
         """
-        # 物料主编码：分组编码 + 4位流水（不自动重置）
+        # 物料主编码：末级物料分组编号 + 流水（隔离字段 group_code = 末级分组编号）
         if page_code == "master-data-material":
             return [
                 {"type": "form_field", "order": 0, "field_name": "group_code"},
-                {"type": "auto_counter", "order": 1, "digits": 4, "fixed_width": True, "reset_cycle": "never", "initial_value": 1},
+                {
+                    "type": "auto_counter",
+                    "order": 1,
+                    "digits": 4,
+                    "fixed_width": True,
+                    "reset_cycle": "never",
+                    "initial_value": 1,
+                    "scope_fields": ["group_code"],
+                },
             ]
 
         # BOM编码：BOM-物料编码-版本号

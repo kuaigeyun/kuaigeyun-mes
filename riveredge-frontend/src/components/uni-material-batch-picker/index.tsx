@@ -189,7 +189,9 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
                   ? firstImage
                   : null;
             if (fileUuid) {
-              return <SecureImage fileUuid={fileUuid} width={40} height={40} />;
+              return (
+                <SecureImage fileUuid={fileUuid} width={40} height={40} lazyLoad thumbSize={64} />
+              );
             }
           }
           return '-';

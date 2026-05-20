@@ -111,7 +111,7 @@ export const PAGE_SPACING = {
   /** 内容区下边距 */
   CONTENT_BOTTOM: 16,
   /** 区块间距 */
-  BLOCK_GAP: 24,
+  BLOCK_GAP: 16,
 } as const;
 
 /**

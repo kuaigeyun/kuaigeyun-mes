@@ -5,7 +5,7 @@
  * 参考文件管理页面的左右两栏布局
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import {
@@ -22,6 +22,7 @@ import {
   Typography,
   Checkbox,
   Select,
+  TreeSelect,
   Alert,
   Segmented,
   Card,
@@ -48,6 +49,8 @@ import {
   AppstoreOutlined,
   FileOutlined,
   FilePdfOutlined,
+  SwapOutlined,
+  RedoOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -83,6 +86,7 @@ function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boole
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable } from '../../../../components/uni-table'
+import { UniBatchSplitToolbar } from '../../../../components/uni-batch'
 import { TwoColumnLayout, FormModalTemplate, flushDrawerOpen } from '../../../../components/layout-templates'
 import {
   MODAL_CONFIG,
@@ -95,15 +99,17 @@ import { QRCodeGenerator } from '../../../../components/qrcode'
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
-import type {
-  Material,
-  MaterialCreate,
-  MaterialUpdate,
-  MaterialGroup,
-  MaterialGroupCreate,
-  MaterialGroupUpdate,
-  MaterialBulkTrackingPayload,
-  StandardPartsPresetCatalog,
+import {
+  formatMaterialGroupLabel,
+  formatMaterialGroupHoverTitle,
+  type Material,
+  type MaterialCreate,
+  type MaterialUpdate,
+  type MaterialGroup,
+  type MaterialGroupCreate,
+  type MaterialGroupUpdate,
+  type MaterialBulkTrackingPayload,
+  type StandardPartsPresetCatalog,
 } from '../../types/material'
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
@@ -117,6 +123,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 import { extractProTableSort } from '../../../../utils/tableQueryKey'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
+import { useTrialRunMode } from '../../../../hooks/useTrialRunMode'
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -124,6 +131,32 @@ import {
 
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
+
+const CONTEXT_MENU_VIEWPORT_PADDING = 8
+
+/** 右键菜单贴边时向上/向左偏移，避免底部或右侧被裁切 */
+function clampContextMenuPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  const pad = CONTEXT_MENU_VIEWPORT_PADDING
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let nextX = x
+  let nextY = y
+  if (x + width > vw - pad) {
+    nextX = Math.max(pad, vw - width - pad)
+  }
+  if (y + height > vh - pad) {
+    nextY = Math.max(pad, y - height)
+  }
+  if (nextY + height > vh - pad) {
+    nextY = Math.max(pad, vh - height - pad)
+  }
+  return { x: nextX, y: nextY }
+}
 
 /** 列表首列附件：图片走缩略图，PDF/DWG 等显示图标并可新开下载页 */
 const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({ fileUuid, alt }) => {
@@ -152,13 +185,19 @@ const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({
     }
   }, [fileUuid])
 
-  if (ext === null) {
-    return <Skeleton.Avatar active shape="square" size={40} />
-  }
-
   const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
-  if (imageExt.includes(ext)) {
-    return <SecureImage fileUuid={fileUuid} alt={alt || ''} width={40} height={40} />
+  // 未知扩展名时先按图片展示，避免 getFileByUuid 阻塞整表缩略图
+  if (ext === null || imageExt.includes(ext)) {
+    return (
+      <SecureImage
+        fileUuid={fileUuid}
+        alt={alt || ''}
+        width={40}
+        height={40}
+        lazyLoad
+        thumbSize={64}
+      />
+    )
   }
 
   const open = async () => {
@@ -229,6 +268,7 @@ type StandardPartFlatRow = {
  */
 const MaterialsManagementPage: React.FC = () => {
   const { t } = useTranslation()
+  const trialRunMode = useTrialRunMode()
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -247,6 +287,13 @@ const MaterialsManagementPage: React.FC = () => {
 
   /** 批量批号/序列号管理（后端 batch-tracking 单接口） */
   const [batchSerialModalOpen, setBatchSerialModalOpen] = useState(false)
+  const [batchMoveGroupOpen, setBatchMoveGroupOpen] = useState(false)
+  const [batchMoveGroupId, setBatchMoveGroupId] = useState<number | undefined>(undefined)
+  const [batchMoveGroupSubmitting, setBatchMoveGroupSubmitting] = useState(false)
+  const [rewriteMainCodesOpen, setRewriteMainCodesOpen] = useState(false)
+  const [rewriteMainCodesSubmitting, setRewriteMainCodesSubmitting] = useState(false)
+  const [rewriteMainCodesScope, setRewriteMainCodesScope] = useState<'selected' | 'group'>('selected')
+  const [rewriteResetSequence, setRewriteResetSequence] = useState(false)
   const [bulkTrackingMode, setBulkTrackingMode] = useState<'enable' | 'disable'>('enable')
   const [bulkApplyBatch, setBulkApplyBatch] = useState(true)
   const [bulkApplySerial, setBulkApplySerial] = useState(true)
@@ -264,6 +311,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [groupModalVisible, setGroupModalVisible] = useState(false)
   const [groupIsEdit, setGroupIsEdit] = useState(false)
   const [currentGroup, setCurrentGroup] = useState<MaterialGroup | null>(null)
+  /** 新建分组时预填的父分组 ID（右键「新建子分组」） */
+  const [groupParentIdPreset, setGroupParentIdPreset] = useState<number | undefined>(undefined)
   const [groupFormLoading, setGroupFormLoading] = useState(false)
 
   const [materialModalVisible, setMaterialModalVisible] = useState(false)
@@ -286,6 +335,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuVisible, setContextMenuVisible] = useState(false)
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
 
   const [baseUnitOptions, setBaseUnitOptions] = useState<Array<{ label: string; value: string }>>(
     []
@@ -493,8 +543,11 @@ const MaterialsManagementPage: React.FC = () => {
       const filtered: DataNode[] = []
       data.forEach(node => {
         // 检查当前节点是否匹配（排除"全部物料"节点）
+        const searchLabel = (node as DataNode & { searchLabel?: string }).searchLabel
         const matches =
-          node.key !== 'all' && node.title?.toString().toLowerCase().includes(keywordLower)
+          node.key !== 'all' &&
+          (String(searchLabel ?? node.title ?? '').toLowerCase().includes(keywordLower) ||
+            String(node.title ?? '').toLowerCase().includes(keywordLower))
 
         // 递归过滤子节点
         const filteredChildren = node.children ? filter(node.children) : []
@@ -556,9 +609,12 @@ const MaterialsManagementPage: React.FC = () => {
    * 将后端树形数据转换为Ant Design Tree组件格式
    */
   const convertToTreeData = useCallback((treeResponse: any[]): DataNode[] => {
-    const convertNode = (node: any): DataNode => {
+    const convertNode = (node: any): DataNode & { searchLabel?: string } => {
+      const label = formatMaterialGroupLabel(node)
+      // rc-tree 将 data.title 写入 node-content-wrapper 的 HTML title（含右侧空白区），须用完整悬停文案
       return {
-        title: `${node.code} - ${node.name}`,
+        title: formatMaterialGroupHoverTitle(node),
+        searchLabel: label,
         key: node.id.toString(),
         isLeaf: !node.children || node.children.length === 0,
         children: node.children ? node.children.map(convertNode) : undefined,
@@ -570,10 +626,46 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.allMaterials'),
         key: 'all',
         isLeaf: false,
-        children: treeResponse.map(convertNode),
+        children: [
+          ...treeResponse.map(convertNode),
+          {
+            title: t('app.master-data.materials.noGroup'),
+            key: 'no-group',
+            isLeaf: true,
+          },
+        ],
       },
     ]
   }, [t])
+
+  /** 批量移动分组：TreeSelect 用树形数据（不含「全部物料」根节点） */
+  const batchMoveGroupTreeData = useMemo(() => {
+    type TreeNode = { value: number; title: string; key: string; children?: TreeNode[] }
+    const toTreeSelectNodes = (nodes: DataNode[] | undefined): TreeNode[] => {
+      if (!nodes?.length) return []
+      const out: TreeNode[] = []
+      for (const node of nodes) {
+        if (node.key === 'all') {
+          out.push(...toTreeSelectNodes(node.children))
+          continue
+        }
+        const id = Number(node.key)
+        if (!Number.isFinite(id)) continue
+        const searchLabel = (node as DataNode & { searchLabel?: string }).searchLabel
+        const title =
+          searchLabel ??
+          (typeof node.title === 'string' ? node.title : String(node.title ?? ''))
+        out.push({
+          value: id,
+          key: String(node.key),
+          title,
+          children: node.children?.length ? toTreeSelectNodes(node.children) : undefined,
+        })
+      }
+      return out
+    }
+    return toTreeSelectNodes(groupTreeData)
+  }, [groupTreeData])
 
   /**
    * 加载物料分组树形结构
@@ -662,6 +754,23 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [contextMenuVisible])
 
+  // 根据菜单实际尺寸调整位置（底部空间不足时向上弹出）
+  useLayoutEffect(() => {
+    if (!contextMenuVisible) return
+    const el = contextMenuRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const adjusted = clampContextMenuPosition(
+      contextMenuPosition.x,
+      contextMenuPosition.y,
+      width,
+      height,
+    )
+    if (adjusted.x !== contextMenuPosition.x || adjusted.y !== contextMenuPosition.y) {
+      setContextMenuPosition(adjusted)
+    }
+  }, [contextMenuVisible, contextMenuGroup, contextMenuPosition.x, contextMenuPosition.y])
+
   // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
   const sourceTypeOptions = useMemo(() => [
     { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
@@ -747,12 +856,26 @@ const MaterialsManagementPage: React.FC = () => {
   }, [expandedKeys, filteredGroupTreeData, groupTreeData, collectAllKeys])
 
   const handleCreateGroup = useCallback(() => {
+    setGroupParentIdPreset(undefined)
     setGroupIsEdit(false)
     setCurrentGroup(null)
     setGroupModalVisible(true)
   }, [])
 
+  const handleCreateSubGroup = useCallback((parent: MaterialGroup) => {
+    setGroupParentIdPreset(parent.id)
+    setGroupIsEdit(false)
+    setCurrentGroup(null)
+    setGroupModalVisible(true)
+  }, [])
+
+  const handleCloseGroupModal = useCallback(() => {
+    setGroupModalVisible(false)
+    setGroupParentIdPreset(undefined)
+  }, [])
+
   const handleEditGroup = useCallback((group: MaterialGroup) => {
+    setGroupParentIdPreset(undefined)
     setGroupIsEdit(true)
     setCurrentGroup(group)
     setGroupModalVisible(true)
@@ -783,7 +906,7 @@ const MaterialsManagementPage: React.FC = () => {
         messageApi.success(t('common.createSuccess'))
       }
 
-      setGroupModalVisible(false)
+      handleCloseGroupModal()
       loadMaterialGroups()
     } catch (error: any) {
       messageApi.error(error.message || (groupIsEdit ? t('common.updateFailed') : t('common.createFailed')))
@@ -813,6 +936,9 @@ const MaterialsManagementPage: React.FC = () => {
       if (key === 'all') {
         selectedGroupIdRef.current = null
         setSelectedGroupId(null)
+      } else if (key === 'no-group') {
+        selectedGroupIdRef.current = -1
+        setSelectedGroupId(-1)
       } else {
         const groupId = parseInt(key)
         selectedGroupIdRef.current = groupId
@@ -952,13 +1078,14 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 批量删除物料（Popconfirm 确认后执行；返回 Promise 时 Ant Design 会为「确定」显示 loading）
    */
-  const executeBatchDelete = useCallback(async () => {
-    if (selectedRowKeys.length === 0) {
+  const executeBatchDelete = useCallback(async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectToDelete'))
       return
     }
     try {
-      const uuids = selectedRowKeys.map((k) => String(k))
+      const uuids = targetKeys.map((k) => String(k))
       const res = await materialApi.batchDelete(uuids)
       const { deleted_count: deletedCount, failed_count: failCount, failed_items: failedItems } = res
 
@@ -983,6 +1110,91 @@ const MaterialsManagementPage: React.FC = () => {
       throw error
     }
   }, [selectedRowKeys, messageApi, t])
+
+  const handleOpenBatchMoveGroup = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchMoveGroupId(undefined)
+    setBatchMoveGroupOpen(true)
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchMoveGroup = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    if (batchMoveGroupId == null) {
+      messageApi.warning(t('app.master-data.materials.batchMoveGroupSelectRequired'))
+      return
+    }
+    setBatchMoveGroupSubmitting(true)
+    try {
+      const uuids = selectedRowKeys.map((k) => String(k))
+      const res = await materialApi.batchMoveGroup(uuids, batchMoveGroupId)
+      if (res.updated_count > 0) {
+        messageApi.success(t('app.master-data.materials.batchMoveGroupSuccess', { count: res.updated_count }))
+      }
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (notFound > 0) {
+        messageApi.warning(t('app.master-data.materials.batchMoveGroupNotFound', { count: notFound }))
+      }
+      setBatchMoveGroupOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.batchMoveGroupFailed'))
+    } finally {
+      setBatchMoveGroupSubmitting(false)
+    }
+  }, [selectedRowKeys, batchMoveGroupId, messageApi, t])
+
+  const handleOpenRewriteMainCodes = useCallback(() => {
+    if (selectedRowKeys.length > 0) {
+      setRewriteMainCodesScope('selected')
+      setRewriteMainCodesOpen(true)
+      return
+    }
+    if (selectedGroupIdRef.current != null && selectedGroupIdRef.current !== -1) {
+      setRewriteMainCodesScope('group')
+      setRewriteMainCodesOpen(true)
+      return
+    }
+    messageApi.warning(t('app.master-data.materials.rewriteMainCodesSelectOrGroup'))
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmRewriteMainCodes = useCallback(async () => {
+    setRewriteMainCodesSubmitting(true)
+    try {
+      const payload =
+        rewriteMainCodesScope === 'selected'
+          ? { material_uuids: selectedRowKeys.map((k) => String(k)), reset_sequence: rewriteResetSequence }
+          : { groupId: selectedGroupIdRef.current!, reset_sequence: rewriteResetSequence }
+      const res = await materialApi.rewriteMainCodes(payload)
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.rewriteMainCodesSuccess', {
+            families: res.updated_count,
+            rows: res.updated_material_count,
+          }),
+        )
+      }
+      if (res.failed_count > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.rewriteMainCodesPartialFail', { count: res.failed_count }),
+        )
+      }
+      setRewriteMainCodesOpen(false)
+      setRewriteResetSequence(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.rewriteMainCodesFailed'))
+    } finally {
+      setRewriteMainCodesSubmitting(false)
+    }
+  }, [rewriteMainCodesScope, rewriteResetSequence, selectedRowKeys, messageApi, t])
 
   const handleMaterialImport = async (data: any[][]) => {
     if (!data || data.length < 2) {
@@ -1194,7 +1406,7 @@ const MaterialsManagementPage: React.FC = () => {
   const getMaterialGroupName = useCallback((groupId?: number): string => {
     if (!groupId) return '-'
     const group = materialGroups.find(g => g.id === groupId)
-    return group ? `${group.code} - ${group.name}` : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
+    return group ? formatMaterialGroupLabel(group) : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
   }, [materialGroups, t])
 
   /** 详情抽屉「基本信息」字段顺序（uni-detail + detailDrawerDescriptionItems） */
@@ -1567,9 +1779,17 @@ const MaterialsManagementPage: React.FC = () => {
             showIcon: true,
             blockNode: true,
             loading: materialGroupsLoading,
+            loadingTip: t('app.master-data.materials.loadingGroups'),
+            titleRender: (node) => {
+              const searchLabel = (node as DataNode & { searchLabel?: string }).searchLabel
+              if (!searchLabel) return node.title
+              return (
+                <span className="material-group-tree-title-text">{searchLabel}</span>
+              )
+            },
             onRightClick: info => {
               const key = info.node.key as string
-              if (key !== 'all') {
+              if (key !== 'all' && key !== 'no-group') {
                 const groupId = parseInt(key)
                 const group = materialGroups.find(g => g.id === groupId)
                 handleGroupContextMenu(info.event as any, group || null)
@@ -1608,6 +1828,7 @@ const MaterialsManagementPage: React.FC = () => {
                     <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
                       {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
                     </Button>
+                    {trialRunMode && (
                     <Button
                       icon={<AppstoreOutlined />}
                       loading={standardPresetLoading}
@@ -1615,25 +1836,35 @@ const MaterialsManagementPage: React.FC = () => {
                     >
                       {t('app.master-data.materials.loadStandardPreset')}
                     </Button>
-                    <Button
-                      icon={<TagsOutlined />}
-                      disabled={selectedRowKeys.length === 0}
-                      onClick={handleOpenBatchSerialModal}
-                    >
-                      {t('app.master-data.materials.batchTrackingToolbar')}
+                    )}
+                    {trialRunMode && (
+                    <Button icon={<RedoOutlined />} onClick={handleOpenRewriteMainCodes}>
+                      {t('app.master-data.materials.rewriteMainCodes')}
                     </Button>
-                    <Popconfirm
-                      title={t('app.master-data.materials.batchDeleteConfirm', {
-                        count: selectedRowKeys.length,
-                      })}
-                      description={t('app.master-data.materials.deleteMaterialDesc')}
-                      onConfirm={executeBatchDelete}
-                      disabled={selectedRowKeys.length === 0}
-                    >
-                      <Button danger disabled={selectedRowKeys.length === 0} icon={<DeleteOutlined />}>
-                        {t('app.master-data.materials.batchDelete')}
-                      </Button>
-                    </Popconfirm>
+                    )}
+                    <UniBatchSplitToolbar
+                      selectedRowKeys={selectedRowKeys}
+                      onDelete={executeBatchDelete}
+                      deleteButtonText={t('app.master-data.materials.batchDelete')}
+                      confirmTitle={(count) =>
+                        t('app.master-data.materials.batchDeleteConfirm', { count })
+                      }
+                      confirmDescription={t('app.master-data.materials.deleteMaterialDesc')}
+                      menuItems={[
+                        {
+                          key: 'moveGroup',
+                          label: t('app.master-data.materials.batchMoveGroup'),
+                          icon: <SwapOutlined />,
+                          onClick: () => handleOpenBatchMoveGroup(),
+                        },
+                        {
+                          key: 'batchTracking',
+                          label: t('app.master-data.materials.batchTrackingToolbar'),
+                          icon: <TagsOutlined />,
+                          onClick: () => handleOpenBatchSerialModal(),
+                        },
+                      ]}
+                    />
                   </Space>
                 }
                 request={async (params, sort, _filter, searchFormValues) => {
@@ -1649,6 +1880,8 @@ const MaterialsManagementPage: React.FC = () => {
                   searchFormValues.groupId !== ''
                 ) {
                   apiParams.groupId = Number(searchFormValues.groupId)
+                } else if (selectedGroupIdRef.current === -1) {
+                  apiParams.noGroup = true
                 } else if (selectedGroupIdRef.current !== null) {
                   // 如果没有搜索表单值，使用左侧树选择（使用 ref，避免 state 异步导致滞后一拍）
                   apiParams.groupId = selectedGroupIdRef.current
@@ -1777,6 +2010,103 @@ const MaterialsManagementPage: React.FC = () => {
           ),
         }}
       />
+
+      <Modal
+        title={
+          <Space>
+            <RedoOutlined style={{ color: token.colorPrimary }} />
+            <span>{t('app.master-data.materials.rewriteMainCodesTitle')}</span>
+          </Space>
+        }
+        open={rewriteMainCodesOpen}
+        onCancel={() => {
+          if (!rewriteMainCodesSubmitting) {
+            setRewriteMainCodesOpen(false)
+            setRewriteResetSequence(false)
+          }
+        }}
+        onOk={handleConfirmRewriteMainCodes}
+        confirmLoading={rewriteMainCodesSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="warning"
+            showIcon
+            message={
+              rewriteMainCodesScope === 'selected'
+                ? t('app.master-data.materials.rewriteMainCodesHintSelected', {
+                    count: selectedRowKeys.length,
+                  })
+                : t('app.master-data.materials.rewriteMainCodesHintGroup')
+            }
+            description={t('app.master-data.materials.rewriteMainCodesDesc')}
+          />
+          <Checkbox
+            checked={rewriteResetSequence}
+            onChange={(e) => setRewriteResetSequence(e.target.checked)}
+          >
+            <Space direction="vertical" size={0}>
+              <span>{t('app.master-data.materials.rewriteResetSequence')}</span>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('app.master-data.materials.rewriteResetSequenceDesc')}
+              </Typography.Text>
+            </Space>
+          </Checkbox>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <SwapOutlined style={{ color: token.colorPrimary }} />
+            <span>{t('app.master-data.materials.batchMoveGroupTitle')}</span>
+          </Space>
+        }
+        open={batchMoveGroupOpen}
+        onCancel={() => {
+          if (!batchMoveGroupSubmitting) setBatchMoveGroupOpen(false)
+        }}
+        onOk={handleConfirmBatchMoveGroup}
+        confirmLoading={batchMoveGroupSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchMoveGroupHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('app.master-data.materials.batchMoveGroupSelect')}
+            </Typography.Text>
+            <TreeSelect
+              showSearch
+              allowClear
+              treeLine
+              treeDefaultExpandAll
+              placeholder={t('app.master-data.materials.batchMoveGroupSelect')}
+              style={{ width: '100%' }}
+              value={batchMoveGroupId}
+              onChange={(v) => setBatchMoveGroupId(v as number | undefined)}
+              treeData={batchMoveGroupTreeData}
+              loading={materialGroupsLoading}
+              treeNodeFilterProp="title"
+              popupMatchSelectWidth={false}
+              styles={{ popup: { root: { maxHeight: 360, overflow: 'auto' } } }}
+            />
+          </div>
+        </Space>
+      </Modal>
 
       <Modal
         title={
@@ -2049,7 +2379,7 @@ const MaterialsManagementPage: React.FC = () => {
                           onChange={(v) => setStandardPresetGroupUuid(v)}
                           options={materialGroups.map((g) => ({
                             value: g.uuid,
-                            label: `${g.code} — ${g.name}`,
+                            label: formatMaterialGroupLabel(g),
                           }))}
                           showSearch
                           optionFilterProp="label"
@@ -2064,7 +2394,7 @@ const MaterialsManagementPage: React.FC = () => {
                           onChange={(v) => setStandardPresetParentGroupUuid((v ?? '') as string)}
                           options={materialGroups.map((g) => ({
                             value: g.uuid,
-                            label: `${g.code} — ${g.name}`,
+                            label: formatMaterialGroupLabel(g),
                           }))}
                           showSearch
                           optionFilterProp="label"
@@ -2223,9 +2553,15 @@ const MaterialsManagementPage: React.FC = () => {
 
       {/* 分组创建/编辑 Modal - 使用 FormModalTemplate 与其它单列 modal 行为一致 */}
       <FormModalTemplate
-        title={groupIsEdit ? t('app.master-data.materials.editGroup') : t('app.master-data.materials.createGroup')}
+        title={
+          groupIsEdit
+            ? t('app.master-data.materials.editGroup')
+            : groupParentIdPreset != null
+              ? t('app.master-data.materials.createSubGroup')
+              : t('app.master-data.materials.createGroup')
+        }
         open={groupModalVisible}
-        onClose={() => setGroupModalVisible(false)}
+        onClose={handleCloseGroupModal}
         onFinish={handleGroupSubmit}
         isEdit={groupIsEdit}
         loading={groupFormLoading}
@@ -2235,12 +2571,16 @@ const MaterialsManagementPage: React.FC = () => {
           groupIsEdit && currentGroup
             ? {
                 code: currentGroup.code,
+                alias: currentGroup.alias,
                 name: currentGroup.name,
                 parentId: currentGroup.parentId,
                 description: currentGroup.description,
                 isActive: currentGroup.isActive,
               }
-            : { isActive: true }
+            : {
+                isActive: true,
+                ...(groupParentIdPreset != null ? { parentId: groupParentIdPreset } : {}),
+              }
         }
       >
         <SafeProFormSelect
@@ -2250,7 +2590,7 @@ const MaterialsManagementPage: React.FC = () => {
           options={materialGroups
             .filter(g => !groupIsEdit || g.id !== currentGroup?.id) // 编辑时排除自己
             .map(g => ({
-              label: `${g.code} - ${g.name}`,
+              label: formatMaterialGroupLabel(g),
               value: g.id,
             }))}
           fieldProps={{
@@ -2265,6 +2605,7 @@ const MaterialsManagementPage: React.FC = () => {
           name="code"
           label={t('app.master-data.materials.groupCode')}
           placeholder={t('app.master-data.materials.groupCodePlaceholder')}
+          extra={t('app.master-data.materials.groupCodeExtra')}
           rules={[
             { required: true, message: t('app.master-data.materials.groupCodeRequired') },
             { max: 50, message: t('app.master-data.materials.groupCodeMax') },
@@ -2280,6 +2621,14 @@ const MaterialsManagementPage: React.FC = () => {
           rules={[
             { required: true, message: t('app.master-data.materials.groupNameRequired') },
             { max: 200, message: t('app.master-data.materials.groupNameMax') },
+          ]}
+        />
+        <ProFormText
+          name="alias"
+          label={t('app.master-data.materials.groupAlias')}
+          placeholder={t('app.master-data.materials.groupAliasPlaceholder')}
+          rules={[
+            { max: 100, message: t('app.master-data.materials.groupAliasMax') },
           ]}
         />
         <ProFormTextArea
@@ -2439,6 +2788,7 @@ const MaterialsManagementPage: React.FC = () => {
       {/* 分组右键菜单 */}
       {contextMenuVisible && (
         <div
+          ref={contextMenuRef}
           style={{
             position: 'fixed',
             left: contextMenuPosition.x,
@@ -2467,10 +2817,20 @@ const MaterialsManagementPage: React.FC = () => {
                 case 'create':
                   handleCreateGroup()
                   break
+                case 'createSub':
+                  if (contextMenuGroup) {
+                    handleCreateSubGroup(contextMenuGroup)
+                  }
+                  break
               }
               setContextMenuVisible(false)
             }}
           >
+            {contextMenuGroup && (
+              <Menu.Item key="createSub" icon={<PlusOutlined />}>
+                {t('app.master-data.materials.createSubGroup')}
+              </Menu.Item>
+            )}
             <Menu.Item key="create" icon={<PlusOutlined />}>
               {t('app.master-data.materials.createGroup')}
             </Menu.Item>

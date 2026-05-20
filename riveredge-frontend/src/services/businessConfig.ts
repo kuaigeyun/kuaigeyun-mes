@@ -55,6 +55,11 @@ export async function getBusinessConfig(): Promise<BusinessConfig> {
   });
 }
 
+/** 是否开启试运营模式（读取 parameters.common.trial_run_mode，默认 false） */
+export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined): boolean {
+  return Boolean(config?.parameters?.common?.trial_run_mode);
+}
+
 export async function updateProcessParameter(
   request: ProcessParameterUpdateRequest
 ): Promise<{ success: boolean; message: string; category: string; parameter_key: string; value: any }> {

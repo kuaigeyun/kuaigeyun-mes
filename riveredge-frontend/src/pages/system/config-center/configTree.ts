@@ -73,6 +73,16 @@ function createCategories(moduleParams: Record<string, ParamMeta[]>): ConfigCate
 
 /** 1. 参数设置（设置业务本身） */
 export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
+  common: [
+    {
+      key: 'common.trial_run_mode',
+      nameKey: 'pages.system.configCenter.param.common_trial_run_mode',
+      descriptionKey: 'pages.system.configCenter.param.common_trial_run_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.trial_run_mode',
+      type: 'boolean',
+    },
+  ],
   planning: [
     { key: 'bom.bom_multi_version_allowed', nameKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed', descriptionKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed_desc', source: 'business_config', sourcePath: 'parameters.bom.bom_multi_version_allowed', type: 'boolean' },
   ],

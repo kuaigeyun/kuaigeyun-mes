@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from apps.master_data.services.process_service import ProcessService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
@@ -30,7 +31,11 @@ from apps.master_data.schemas.process_route_change_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/process", tags=["App · Master Data · Process"])
+router = APIRouter(
+    prefix="/process",
+    tags=["App · Master Data · Process"],
+    dependencies=[Depends(require_module_access("master-data", "process"))],
+)
 
 
 def _http_exception_with_trace(

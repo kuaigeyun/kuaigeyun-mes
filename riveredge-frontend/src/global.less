@@ -645,6 +645,14 @@ code {
   white-space: nowrap !important;
 }
 
+.material-group-tree-title-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 目录辅助线：略深于默认 border，深浅色主题随 token 混合 */
 .left-panel-scroll-container .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-indent-unit::before,
 .two-column-layout-left-tree .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-indent-unit::before {
@@ -807,6 +815,15 @@ code {
 /* 全局：Modal 内表单标题为粗体 */
 .ant-modal .ant-form-item-label > label {
   font-weight: 600;
+}
+
+/* Select / TreeSelect / Cascader 等：去掉聚焦、下拉展开时的外圈光晕（保留边框高亮） */
+.ant-select:not(.ant-select-disabled).ant-select-focused,
+.ant-select:not(.ant-select-disabled).ant-select-open,
+.ant-select:not(.ant-select-disabled).ant-select-focused .ant-select-selector,
+.ant-select:not(.ant-select-disabled).ant-select-open .ant-select-selector {
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* 全局：Modal 标题区高度规范（与打印预览一致，统一标题高度） */
@@ -1306,4 +1323,5 @@ code {
 
 @import './styles/uni-toolbar-chrome.less';
 @import './styles/action-column.less';
+@import './styles/uni-batch-split.less';
 

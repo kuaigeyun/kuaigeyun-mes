@@ -208,7 +208,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "page_name": "物料分组",
         "page_path": "/apps/master-data/materials",
         "code_field": "code",
-        "code_field_label": "分组编码",
+        "code_field_label": "分组编号",
         "module": "主数据管理",
         "module_icon": "database",
         "auto_generate": True,
@@ -228,9 +228,9 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "available_fields": [
             {
                 "field_name": "group_code",
-                "field_label": "物料分组编码",
+                "field_label": "物料分组编号",
                 "field_type": "string",
-                "description": "物料所属分组的编码"
+                "description": "物料所属分组的编号（参与编号生成）"
             },
             {
                 "field_name": "group_name",

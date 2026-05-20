@@ -210,9 +210,19 @@ class CodeRuleComponentService:
         # 按order排序
         sorted_components = sorted(components, key=lambda x: x.get("order", 0))
         
+        from core.services.business.code_generation_service import (
+            _count_group_code_fields_before_counter,
+            _get_form_field_value_for_render,
+        )
+
         parts = []
         now = datetime.now()
-        
+        group_code_field_index = 0
+        group_code_field_total = _count_group_code_fields_before_counter(sorted_components)
+        render_ctx = dict(context) if context else None
+        if render_ctx is not None:
+            render_ctx["_rule_components"] = sorted_components
+
         for comp in sorted_components:
             comp_type = comp.get("type")
             
@@ -256,10 +266,21 @@ class CodeRuleComponentService:
             
             elif comp_type == "form_field":
                 field_name = comp.get("field_name", "")
-                if context and field_name in context:
-                    parts.append(str(context[field_name]))
+                val = (
+                    _get_form_field_value_for_render(
+                        render_ctx,
+                        field_name,
+                        group_code_field_index=group_code_field_index,
+                        group_code_field_total=group_code_field_total,
+                    )
+                    if render_ctx and field_name
+                    else None
+                )
+                if field_name == "group_code":
+                    group_code_field_index += 1
+                if val is not None and str(val).strip():
+                    parts.append(str(val).strip())
                 else:
-                    # 字段不存在，返回占位符
                     parts.append(f"[FIELD:{field_name}]")
         
         return "".join(parts)

@@ -6,7 +6,7 @@
  * 性能优化：系统级/平台级页面按需懒加载，仅首屏核心页面立即加载
  *
  * 约定：URL 路径与渲染组件所在目录一致，避免歧义（如 /system/config-center 对应 config-center 页面）。
- * 旧路径通过 Navigate 重定向到主路径，兼容书签与历史链接。
+ * 旧路径通过 Navigate 重定向到主路径，统一到单一路径入口。
  *
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
@@ -63,11 +63,6 @@ const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.Compon
 
 const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<DelayedFallback />}><LazyComponent /></Suspense>
-);
-
-// 角色权限页专用，骨架屏边距与左右分栏布局一致
-const withRolesPermissionsSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<DelayedFallback variant="rolesPermissions" />}><LazyComponent /></Suspense>
 );
 
 const withPermission = (
@@ -203,7 +198,7 @@ const SystemRoutes: React.FC = () => (
       path="/system/dashboard/analysis"
       element={<SystemDashboardRouteGate>{withDashboardSuspense(DashboardAnalysisPage)}</SystemDashboardRouteGate>}
     />
-    <Route path="/system/roles" element={withPermission(withRolesPermissionsSuspense(RolesPermissionsPage), ['system:role:read', 'system:role:update'])} />
+    <Route path="/system/roles" element={withPermission(withSuspense(RolesPermissionsPage), ['system:role:read', 'system:role:update'])} />
     <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system:permission:read', 'system:permission:update'])} />
     <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system:department:read', 'system:department:update'])} />
     <Route path="/system/positions" element={withPermission(withSuspense(PositionsPage), ['system:position:read', 'system:position:update'])} />
@@ -214,59 +209,59 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/molds" element={withSuspense(MoldsPage)} />
     <Route path="/system/users" element={withPermission(withSuspense(UsersPage), ['system:user:read', 'system:user:update'])} />
     <Route path="/system/user-profile" element={withSuspense(UserProfilePage)} />
-    <Route path="/system/languages" element={withSuspense(LanguagesPage)} />
-    <Route path="/system/site-settings" element={withSuspense(SiteSettingsPage)} />
-    {/* 业务配置：主路径与组件一致（config-center → ConfigCenterPage），旧路径兼容重定向 */}
-    <Route path="/system/config-center" element={withSuspense(ConfigCenterPage)} />
+    <Route path="/system/languages" element={withPermission(withSuspense(LanguagesPage), ['system:language:read'])} />
+    <Route path="/system/site-settings" element={withPermission(withSuspense(SiteSettingsPage), ['system:site-setting:read'])} />
+    {/* 业务配置：主路径与组件一致（config-center → ConfigCenterPage），旧路径统一重定向 */}
+    <Route path="/system/config-center" element={withPermission(withSuspense(ConfigCenterPage), ['system:config-center:read'])} />
     <Route path="/system/business-config" element={<Navigate to="/system/config-center" replace />} />
     <Route path="/system/system-parameters" element={<Navigate to="/system/config-center" replace />} />
-    <Route path="/system/applications" element={withSuspense(ApplicationCenterPage)} />
-    <Route path="/system/plugin-manager" element={withSuspense(PluginManagerPage)} />
-    <Route path="/system/operation-logs" element={withSuspense(OperationLogsPage)} />
-    <Route path="/system/login-logs" element={withSuspense(LoginLogsPage)} />
-    <Route path="/system/online-users" element={withSuspense(OnlineUsersPage)} />
+    <Route path="/system/applications" element={withPermission(withSuspense(ApplicationCenterPage), ['system:application:read'])} />
+    <Route path="/system/plugin-manager" element={withPermission(withSuspense(PluginManagerPage), ['system:plugin-manager:read'])} />
+    <Route path="/system/operation-logs" element={withPermission(withSuspense(OperationLogsPage), ['system:operation-log:read'])} />
+    <Route path="/system/login-logs" element={withPermission(withSuspense(LoginLogsPage), ['system:login-log:read'])} />
+    <Route path="/system/online-users" element={withPermission(withSuspense(OnlineUsersPage), ['system:online-user:read'])} />
 
-    <Route path="/system/print-devices" element={withSuspense(PrintDevicesPage)} />
-    <Route path="/system/print-templates" element={withSuspense(PrintTemplatesPage)} />
-    <Route path="/system/print-templates/design/:uuid" element={withSuspense(PrintTemplateDesignPage)} />
-    <Route path="/system/code-rules" element={withSuspense(CodeRulesPage)} />
-    <Route path="/system/data-dictionaries" element={withSuspense(DataDictionariesPage)} />
-    <Route path="/system/data-sources" element={withSuspense(DataSourcesPage)} />
-    <Route path="/system/application-connections" element={withSuspense(ApplicationConnectionsPage)} />
+    <Route path="/system/print-devices" element={withPermission(withSuspense(PrintDevicesPage), ['system:print-device:read'])} />
+    <Route path="/system/print-templates" element={withPermission(withSuspense(PrintTemplatesPage), ['system:print-template:read'])} />
+    <Route path="/system/print-templates/design/:uuid" element={withPermission(withSuspense(PrintTemplateDesignPage), ['system:print-template:read'])} />
+    <Route path="/system/code-rules" element={withPermission(withSuspense(CodeRulesPage), ['system:code-rule:read'])} />
+    <Route path="/system/data-dictionaries" element={withPermission(withSuspense(DataDictionariesPage), ['system:data-dictionary:read'])} />
+    <Route path="/system/data-sources" element={withPermission(withSuspense(DataSourcesPage), ['system:data-source:read'])} />
+    <Route path="/system/application-connections" element={withPermission(withSuspense(ApplicationConnectionsPage), ['system:application-connection:read'])} />
     <Route
       path="/system/initial-data"
       element={withPermission(withSuspense(InitialDataImportPage), ['kuaizhizao:warehouse-management-initial-data:read'])}
     />
-    <Route path="/system/datasets" element={withSuspense(DatasetsPage)} />
-    <Route path="/system/datasets/designer" element={withSuspense(DatasetDesignerPage)} />
+    <Route path="/system/datasets" element={withPermission(withSuspense(DatasetsPage), ['system:dataset:read'])} />
+    <Route path="/system/datasets/designer" element={withPermission(withSuspense(DatasetDesignerPage), ['system:dataset:read'])} />
 
-    <Route path="/system/data-backups" element={withSuspense(DataBackupsPage)} />
-    <Route path="/system/custom-fields" element={withSuspense(CustomFieldsPage)} />
-    <Route path="/system/api-services" element={withSuspense(ApiServicesPage)} />
-    <Route path="/system/apis" element={withSuspense(ApiServicesPage)} />
+    <Route path="/system/data-backups" element={withPermission(withSuspense(DataBackupsPage), ['system:data-backup:read'])} />
+    <Route path="/system/custom-fields" element={withPermission(withSuspense(CustomFieldsPage), ['system:custom-field:read'])} />
+    <Route path="/system/api-services" element={withPermission(withSuspense(ApiServicesPage), ['system:api:read'])} />
+    <Route path="/system/apis" element={withPermission(withSuspense(ApiServicesPage), ['system:api:read'])} />
     <Route path="/system/integration-configs" element={withSuspense(IntegrationConfigsPage)} />
-    <Route path="/system/message-templates" element={withSuspense(MessageTemplatesPage)} />
-    <Route path="/system/messages/template" element={withSuspense(MessageTemplatesPage)} />
-    <Route path="/system/message-configs" element={withSuspense(MessageConfigsPage)} />
-    <Route path="/system/messages/config" element={withSuspense(MessageConfigsPage)} />
-    <Route path="/system/menus" element={withSuspense(MenusPage)} />
-    <Route path="/system/files" element={withSuspense(FilesPage)} />
-    <Route path="/system/approval-processes" element={withSuspense(ApprovalProcessesPage)} />
-    <Route path="/system/approval-processes/designer" element={withSuspense(ApprovalProcessDesignerPage)} />
-    <Route path="/system/approval-instances" element={withSuspense(ApprovalInstancesPage)} />
-    <Route path="/system/report-templates" element={withSuspense(ReportTemplatesPage)} />
-    <Route path="/system/report-templates/:id/design" element={withSuspense(ReportDesignPage)} />
-    <Route path="/system/role-scenarios" element={withSuspense(RoleScenariosPage)} />
-    <Route path="/system/onboarding-wizard" element={withSuspense(OnboardingWizardPage)} />
-    <Route path="/system/data-quality" element={withSuspense(DataQualityPage)} />
-    <Route path="/system/operation-guide" element={withSuspense(OperationGuidePage)} />
-    <Route path="/system/launch-progress" element={withSuspense(LaunchProgressPage)} />
-    <Route path="/system/usage-analysis" element={withSuspense(UsageAnalysisPage)} />
+    <Route path="/system/message-templates" element={withPermission(withSuspense(MessageTemplatesPage), ['system:message-template:read'])} />
+    <Route path="/system/messages/template" element={withPermission(withSuspense(MessageTemplatesPage), ['system:message-template:read'])} />
+    <Route path="/system/message-configs" element={withPermission(withSuspense(MessageConfigsPage), ['system:message-config:read'])} />
+    <Route path="/system/messages/config" element={withPermission(withSuspense(MessageConfigsPage), ['system:message-config:read'])} />
+    <Route path="/system/menus" element={withPermission(withSuspense(MenusPage), ['system:menu:read'])} />
+    <Route path="/system/files" element={withPermission(withSuspense(FilesPage), ['system:file:read'])} />
+    <Route path="/system/approval-processes" element={withPermission(withSuspense(ApprovalProcessesPage), ['system:approval-process:read'])} />
+    <Route path="/system/approval-processes/designer" element={withPermission(withSuspense(ApprovalProcessDesignerPage), ['system:approval-process:read'])} />
+    <Route path="/system/approval-instances" element={withPermission(withSuspense(ApprovalInstancesPage), ['system:approval-instance:read'])} />
+    <Route path="/system/report-templates" element={withPermission(withSuspense(ReportTemplatesPage), ['system:report-template:read'])} />
+    <Route path="/system/report-templates/:id/design" element={withPermission(withSuspense(ReportDesignPage), ['system:report-template:read'])} />
+    <Route path="/system/role-scenarios" element={withPermission(withSuspense(RoleScenariosPage), ['system:role-scenario:read'])} />
+    <Route path="/system/onboarding-wizard" element={withPermission(withSuspense(OnboardingWizardPage), ['system:onboarding-wizard:read'])} />
+    <Route path="/system/data-quality" element={withPermission(withSuspense(DataQualityPage), ['system:data-quality:read'])} />
+    <Route path="/system/operation-guide" element={withPermission(withSuspense(OperationGuidePage), ['system:operation-guide:read'])} />
+    <Route path="/system/launch-progress" element={withPermission(withSuspense(LaunchProgressPage), ['system:launch-progress:read'])} />
+    <Route path="/system/usage-analysis" element={withPermission(withSuspense(UsageAnalysisPage), ['system:usage-analysis:read'])} />
 
-    <Route path="/personal/profile" element={withSuspense(PersonalProfilePage)} />
-    <Route path="/personal/preferences" element={withSuspense(PersonalPreferencesPage)} />
-    <Route path="/personal/messages" element={withSuspense(PersonalMessagesPage)} />
-    <Route path="/personal/tasks" element={withSuspense(PersonalTasksPage)} />
+    <Route path="/personal/profile" element={withPermission(withSuspense(PersonalProfilePage), ['system:user-profile:read'])} />
+    <Route path="/personal/preferences" element={withPermission(withSuspense(PersonalPreferencesPage), ['system:user-preference:read'])} />
+    <Route path="/personal/messages" element={withPermission(withSuspense(PersonalMessagesPage), ['system:user-message:read'])} />
+    <Route path="/personal/tasks" element={withPermission(withSuspense(PersonalTasksPage), ['system:user-task:read'])} />
 
     <Route path="/infra/admin" element={withSuspense(PlatformAdminPage)} />
     <Route path="/infra/operation" element={withSuspense(PlatformOperationPage)} />

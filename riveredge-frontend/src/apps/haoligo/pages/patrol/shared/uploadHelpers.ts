@@ -1,5 +1,10 @@
 import type { UploadFile } from 'antd/es/upload/interface';
-import { getFileDownloadUrl, getFileDownloadUrlWithToken } from '../../../../../services/file';
+import {
+  buildImageUploadFileUrls,
+  getFileDownloadUrl,
+  getFileDownloadUrlWithToken,
+  FILE_IMAGE_SIZE_UPLOAD_THUMB,
+} from '../../../../../services/file';
 
 export function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -25,25 +30,37 @@ export function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[]
   }));
 }
 
-/** 编辑表单回显：带 token 的缩略图 URL（生产环境 Upload 预览必需） */
+/** 编辑表单回显：带 token 的分级缩略图 URL（生产环境 Upload 预览必需） */
 export async function uuidsToSecureUploadFileList(uuids: string[] | undefined): Promise<UploadFile[]> {
   if (!uuids?.length) return [];
   return Promise.all(
     uuids.map(async (uuid) => {
-      let url = '';
       try {
-        url = await getFileDownloadUrlWithToken(uuid);
+        const { thumbUrl, url } = await buildImageUploadFileUrls(uuid);
+        return {
+          uid: uuid,
+          name: '照片',
+          status: 'done' as const,
+          url,
+          thumbUrl,
+          response: { uuid },
+        };
       } catch {
-        /* 预览失败时仍保留 uid 便于删除/提交 */
+        let fallback = '';
+        try {
+          fallback = await getFileDownloadUrlWithToken(uuid, { size: FILE_IMAGE_SIZE_UPLOAD_THUMB });
+        } catch {
+          /* 预览失败时仍保留 uid 便于删除/提交 */
+        }
+        return {
+          uid: uuid,
+          name: '照片',
+          status: 'done' as const,
+          url: fallback || undefined,
+          thumbUrl: fallback || undefined,
+          response: { uuid },
+        };
       }
-      return {
-        uid: uuid,
-        name: '照片',
-        status: 'done' as const,
-        url: url || undefined,
-        thumbUrl: url || undefined,
-        response: { uuid },
-      };
     }),
   );
 }

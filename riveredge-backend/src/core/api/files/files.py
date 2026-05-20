@@ -19,6 +19,9 @@ from core.schemas.file import (
 from core.services.file.file_service import FileService
 from core.services.file.file_preview_service import FilePreviewService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_access
+from infra.api.deps.deps import get_current_user
+from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -31,6 +34,8 @@ async def upload_file(
     category: Optional[str] = Query(None, description="文件分类（可选）"),
     tags: Optional[str] = Query(None, description="文件标签（JSON数组字符串，可选）"),
     description: Optional[str] = Query(None, description="文件描述（可选）"),
+    _auth: object = Depends(require_access("system.file", "create")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -123,6 +128,8 @@ async def upload_file(
 async def upload_multiple_files(
     files: List[UploadFile] = FastAPIFile(...),
     category: Optional[str] = Query(None, description="文件分类（可选）"),
+    _auth: object = Depends(require_access("system.file", "create")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -195,6 +202,8 @@ async def list_files(
     category: Optional[str] = Query(None, description="文件分类筛选"),
     file_type: Optional[str] = Query(None, description="文件类型筛选"),
     include_preview_url: bool = Query(False, description="是否包含预览URL（缩略图）"),
+    _auth: object = Depends(require_access("system.file", "read")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -248,6 +257,8 @@ async def list_files(
 @router.get("/{uuid}", response_model=FileResponse)
 async def get_file(
     uuid: str,
+    _auth: object = Depends(require_access("system.file", "read")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -506,19 +517,23 @@ async def download_file(
 @router.get("/{uuid}/preview", response_model=FilePreviewResponse)
 async def get_file_preview(
     uuid: str,
+    _auth: object = Depends(require_access("system.file", "read")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    for_avatar: bool = Query(False, description="头像场景：强制返回直接下载URL，便于移动端 Image 组件加载"),
+    for_avatar: bool = Query(False, description="头像场景：返回 128px 缩略图 URL"),
+    size: Optional[int] = Query(None, ge=16, le=512, description="缩略图边长（像素），仅图片有效；不传则原图"),
 ):
     """
     获取文件预览信息
     
     返回带 token 的下载 URL，由浏览器直接预览（图片/PDF/音视频等）。
-    for_avatar=True 时为头像场景附加缩略图参数。
+    for_avatar=True 时为头像场景附加 128px 缩略图；显式 size 优先于 for_avatar。
     
     Args:
         uuid: 文件UUID
         tenant_id: 当前组织ID（依赖注入）
-        for_avatar: 是否用于头像展示（强制直接下载URL）
+        for_avatar: 是否用于头像展示（128px 缩略图）
+        size: 缩略图边长（可选，16–512）
         
     Returns:
         FilePreviewResponse: 预览信息
@@ -531,6 +546,7 @@ async def get_file_preview(
             file_uuid=uuid,
             tenant_id=tenant_id,
             force_simple_for_image=for_avatar,
+            thumbnail_size=size,
         )
         return FilePreviewResponse(**preview_info)
     except NotFoundError as e:
@@ -544,6 +560,8 @@ async def get_file_preview(
 async def update_file(
     uuid: str,
     data: FileUpdate,
+    _auth: object = Depends(require_access("system.file", "update")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -579,6 +597,8 @@ async def update_file(
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_file(
     uuid: str,
+    _auth: object = Depends(require_access("system.file", "delete")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -608,6 +628,8 @@ async def delete_file(
 @router.post("/batch-delete", status_code=status.HTTP_200_OK)
 async def batch_delete_files(
     uuids: List[str],
+    _auth: object = Depends(require_access("system.file", "delete")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """

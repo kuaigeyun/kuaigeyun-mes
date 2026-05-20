@@ -33,6 +33,7 @@ import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '.
 import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -89,6 +90,7 @@ const extractVariables = (content: string): string[] => {
  */
 const PrintTemplateListPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -737,9 +739,11 @@ const PrintTemplateListPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.printTemplates.batchDelete')}
           toolBarRender={() => [
+            trialRunMode && (
             <Button key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
               {t('pages.system.printTemplates.loadPresetButton')}
-            </Button>,
+            </Button>
+            ),
           ]}
           showImportButton
           showExportButton

@@ -31,10 +31,15 @@ from apps.haoligo.models.equipment import (
 )
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
 from apps.haoligo.services.equipment_operational_status_since import operational_status_since_by_equipment
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/equipment", tags=["App · HaoliGO · 设备"])
+router = APIRouter(
+    prefix="/equipment",
+    tags=["App · HaoliGO · 设备"],
+    dependencies=[Depends(require_module_access("haoligo", "equipment"))],
+)
 
 
 def _normalize_equipment_criticality(v: Optional[str]) -> Optional[str]:

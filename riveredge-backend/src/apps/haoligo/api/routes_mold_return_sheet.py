@@ -18,11 +18,16 @@ from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_RETURN_SHE
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/molds/return-sheets", tags=["App · HaoliGO · 还入单"])
+router = APIRouter(
+    prefix="/molds/return-sheets",
+    tags=["App · HaoliGO · 还入单"],
+    dependencies=[Depends(require_module_access("haoligo", "molds-documents-return-in"))],
+)
 
 
 def _strip_opt(v: Optional[str]) -> Optional[str]:

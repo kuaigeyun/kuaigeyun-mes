@@ -5,18 +5,18 @@
  * 与工作台/统计类页面结构对齐，减少「一种路由一种骨架」的割裂感。
  *
  * - content：默认，主内容区标准骨架（绝大多数路由 Suspense）
- * - compact：极轻量，仅用于全屏鉴权等待等不宜铺满内容的场景
- * - rolesPermissions：保留左右分栏轮廓，卡片壳样式与 content 一致
+ * - compact：极轻量占位（全屏鉴权等待已改用 PageLoadingLottie）
  */
 
 import React from 'react';
 import { Skeleton, theme } from 'antd';
+import './index.less';
 import type { GlobalToken } from 'antd/es/theme/interface';
 import { PAGE_SPACING } from '../layout-templates/constants';
 
 const { useToken } = theme;
 
-export type PageSkeletonVariant = 'content' | 'compact' | 'rolesPermissions';
+export type PageSkeletonVariant = 'content' | 'compact';
 
 /** @deprecated 与 content 相同，保留别名便于渐进替换 */
 export type LegacyPageSkeletonVariant = PageSkeletonVariant | 'default' | 'minimal' | 'dashboard';
@@ -36,7 +36,8 @@ function cardShell(token: GlobalToken): React.CSSProperties {
 }
 
 function normalizeVariant(v: PageSkeletonProps['variant']): PageSkeletonVariant {
-  if (v === 'compact' || v === 'rolesPermissions') return v;
+  if (v === 'compact') return v;
+  if (v === 'rolesPermissions') return 'content';
   // default | minimal | dashboard | content | undefined → 统一主内容骨架
   return 'content';
 }
@@ -59,8 +60,7 @@ function UnifiedContentSkeleton({ token }: { token: GlobalToken }) {
     >
       {/* 顶距由 .uni-tabs-content 的 margin-top:16px 承担，此处不再加 margin，避免与标签栏下形成双 16 */}
       <div style={{ marginBottom: gap }}>
-        <Skeleton.Input active size="small" style={{ width: 220, height: 22, marginBottom: 12 }} />
-        <Skeleton active title={false} paragraph={{ rows: 1, width: ['48%'] }} />
+        <Skeleton.Input active size="small" style={{ width: 640, height: 32, marginBottom: 4 }} />
       </div>
 
       {/* 指标卡栅格（仅保留一行仿指标卡，避免双行拥挤） */}
@@ -113,45 +113,12 @@ function CompactSkeleton() {
   );
 }
 
-function RolesPermissionsSkeleton({ token }: { token: GlobalToken }) {
-  const shell = cardShell(token);
-  return (
-    <div
-      style={{
-        display: 'flex',
-        height: '100%',
-        gap: 16,
-        minHeight: 'min(58vh, 480px)',
-        boxSizing: 'border-box',
-        padding: 0,
-        margin: 0,
-      }}
-    >
-      <div style={{ width: 260, flexShrink: 0, ...shell }}>
-        <Skeleton.Input active size="small" style={{ width: '100%', height: 24, marginBottom: 12 }} />
-        <Skeleton active paragraph={{ rows: 6, width: '100%' }} title={false} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0, ...shell }}>
-        <Skeleton.Input active size="small" style={{ width: 140, height: 24, marginBottom: 20 }} />
-        <Skeleton
-          active
-          title={{ width: '38%', style: { marginBottom: 20 } }}
-          paragraph={{ rows: 5, width: ['100%', '100%', '95%', '90%', '52%'] }}
-        />
-      </div>
-    </div>
-  );
-}
-
 const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant: rawVariant }) => {
   const { token } = useToken();
   const variant = normalizeVariant(rawVariant);
 
   if (variant === 'compact') {
     return <CompactSkeleton />;
-  }
-  if (variant === 'rolesPermissions') {
-    return <RolesPermissionsSkeleton token={token} />;
   }
   return <UnifiedContentSkeleton token={token} />;
 };

@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
@@ -40,7 +41,11 @@ sales_order_service = SalesOrderService()
 document_relation_service = DocumentRelationNewService()
 
 # 创建路由
-router = APIRouter(prefix="/sales-orders", tags=["App · Kuaige Zhizao · Sales Order Management"])
+router = APIRouter(
+    prefix="/sales-orders",
+    tags=["App · Kuaige Zhizao · Sales Order Management"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "sales-order"))],
+)
 
 
 def _http_exception_with_trace(

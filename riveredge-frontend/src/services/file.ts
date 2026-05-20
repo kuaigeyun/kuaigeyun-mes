@@ -229,6 +229,33 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
   });
 }
 
+/** 列表/卡片小缩略图边长（与后端 download?size= 对齐） */
+export const FILE_IMAGE_SIZE_THUMB = 64;
+/** 预览弹层中等图边长（后端当前上限 512） */
+export const FILE_IMAGE_SIZE_MEDIUM = 512;
+/** 头像场景缩略图边长 */
+export const FILE_IMAGE_SIZE_AVATAR = 128;
+/** Upload 卡片缩略图边长 */
+export const FILE_IMAGE_SIZE_UPLOAD_THUMB = 128;
+
+export type FilePreviewOptions = {
+  /** @deprecated 请使用 size=FILE_IMAGE_SIZE_AVATAR */
+  forAvatar?: boolean;
+  /** 缩略图边长；不传则原图 URL */
+  size?: number;
+};
+
+function resolvePreviewSize(options?: FilePreviewOptions): number | undefined {
+  if (options?.size != null) return options.size;
+  if (options?.forAvatar) return FILE_IMAGE_SIZE_AVATAR;
+  return undefined;
+}
+
+function previewCacheKey(fileUuid: string, options?: FilePreviewOptions): string {
+  const size = resolvePreviewSize(options);
+  return `${fileUuid}_${size ?? 'original'}`;
+}
+
 // 全局文件预览 URL 缓存，减少重复请求（每会话单次请求即可）
 const previewUrlCache = new Map<string, FilePreviewResponse>();
 
@@ -236,29 +263,32 @@ const previewUrlCache = new Map<string, FilePreviewResponse>();
  * 获取文件预览信息
  *
  * 返回带 token 的下载 URL，供 img/iframe 等直接使用。
- * forAvatar=true 时返回缩略图 URL（128x128），加快头像加载。
- * 
+ * size 或 forAvatar 时返回对应缩略图 URL。
+ *
  * @param fileUuid - 文件 UUID
- * @param options - 可选，forAvatar 为头像场景时请求缩略图
+ * @param options - 可选 size / forAvatar
  * @returns 预览信息
  */
 export async function getFilePreview(
   fileUuid: string,
-  options?: { forAvatar?: boolean }
+  options?: FilePreviewOptions
 ): Promise<FilePreviewResponse> {
-  // 构建缓存 Key（区分头像缩略图和普通预览）
-  const cacheKey = `${fileUuid}${options?.forAvatar ? '_avatar' : ''}`;
+  const cacheKey = previewCacheKey(fileUuid, options);
   const cached = previewUrlCache.get(cacheKey);
   if (cached) return cached;
 
   try {
     const params = new URLSearchParams();
-    if (options?.forAvatar) params.set('for_avatar', 'true');
+    const size = resolvePreviewSize(options);
+    if (size != null) {
+      params.set('size', String(size));
+    } else if (options?.forAvatar) {
+      params.set('for_avatar', 'true');
+    }
     const qs = params.toString();
     const url = qs ? `/core/files/${fileUuid}/preview?${qs}` : `/core/files/${fileUuid}/preview`;
     const result = await apiRequest<FilePreviewResponse>(url);
-    
-    // 缓存结果
+
     previewUrlCache.set(cacheKey, result);
     return result;
   } catch (error) {
@@ -293,9 +323,23 @@ export function getFileDownloadUrl(fileUuid: string): string {
  */
 export async function getFileDownloadUrlWithToken(
   fileUuid: string,
-  options?: { forAvatar?: boolean }
+  options?: FilePreviewOptions
 ): Promise<string> {
   const preview = await getFilePreview(fileUuid, options);
   return preview.preview_url;
+}
+
+/**
+ * 为 Upload picture-card 构建分级 URL：thumbUrl 小图，url 预览中等图。
+ */
+export async function buildImageUploadFileUrls(fileUuid: string): Promise<{
+  thumbUrl: string;
+  url: string;
+}> {
+  const [thumbUrl, url] = await Promise.all([
+    getFileDownloadUrlWithToken(fileUuid, { size: FILE_IMAGE_SIZE_UPLOAD_THUMB }),
+    getFileDownloadUrlWithToken(fileUuid, { size: FILE_IMAGE_SIZE_MEDIUM }),
+  ]);
+  return { thumbUrl, url };
 }
 

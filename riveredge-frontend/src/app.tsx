@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
 import { App as AntdApp, ConfigProvider, message } from 'antd';
 import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
+import PageLoadingLottie from './components/page-loading-lottie';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
@@ -420,8 +421,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   if (shouldShowLoading) {
-    // 根节点加载：使用延迟渲染的极简骨架屏，避免超快速跳转时的闪烁
-    return <DelayedFallback variant="compact" delayMs={200} fullHeight />;
+    // 根节点加载：全屏 Lottie，延迟显示避免极短跳转闪烁
+    return <DelayedFallback delayMs={200} fullHeight />;
   }
 
   if (shouldRedirect) {
@@ -457,18 +458,24 @@ const DelayedFallback: React.FC<{
 
   if (!show) return null;
 
-  return (
-    <div style={fullHeight ? {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100vh',
-      width: '100vw',
-      background: 'transparent'
-    } : undefined}>
-      <PageSkeleton variant={variant} />
-    </div>
-  );
+  if (fullHeight) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          width: '100vw',
+          background: 'transparent',
+        }}
+      >
+        <PageLoadingLottie size={128} />
+      </div>
+    );
+  }
+
+  return <PageSkeleton variant={variant} />;
 };
 
 /**

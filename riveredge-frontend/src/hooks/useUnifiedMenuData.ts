@@ -81,7 +81,12 @@ function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDa
   return items
     .map((item) => {
       const permissionCodes = (item as any).permissionCodes as string[] | undefined;
-      if (permissionCodes && permissionCodes.length > 0) {
+      const isClickableMenu = Boolean(item.path) && !item.hideInMenu;
+      // 强约束：可点击菜单必须声明权限码，且当前用户命中其一；否则菜单不展示。
+      if (isClickableMenu) {
+        if (!permissionCodes || permissionCodes.length === 0) {
+          return null;
+        }
         if (!hasAnyPermission(currentUser, permissionCodes)) {
           return null;
         }

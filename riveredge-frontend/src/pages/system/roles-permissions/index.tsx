@@ -5,7 +5,7 @@
  * 右侧：选中角色的权限编辑界面
  * 
  * 整合了角色管理和权限分配功能，提供更直观的管理体验。
- * 布局参考文件管理页面设计。
+ * 布局壳与自定义字段 / 编号规则一致：外层 height 100%，内层 width 100% + border；水平留白仅 UniTabs 16px。
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -45,6 +45,8 @@ import {
   CopyOutlined,
   NodeCollapseOutlined,
   NodeExpandOutlined,
+  TeamOutlined,
+  ClearOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import {
@@ -71,9 +73,9 @@ import {
 import { refreshCurrentUserInStore } from '../../../services/auth';
 import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
-import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import { PERMISSION_TEMPLATES, getPermissionUuidsByTemplate } from '../../../config/permission-modules';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
+import { useTrialRunMode } from '../../../hooks/useTrialRunMode';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
@@ -81,6 +83,7 @@ import {
   translateMenuName,
 } from '../../../utils/menuTranslation';
 import { KUAIZHIZAO_PRICING_VIEW } from '../../../utils/kuaizhizaoPricingPermission';
+import './roles-permissions.less';
 import {
   FunctionGrantTree,
   collectCodesFromGrantTree,
@@ -144,7 +147,7 @@ function normalizeFunctionPermissionCode(code: string): string {
   if (!code) return '';
   let res = normCache.get(code);
   if (res !== undefined) return res;
-  res = code.trim().toLowerCase().replace(/_/g, '-');
+  res = code.trim().toLowerCase();
   normCache.set(code, res);
   return res;
 }
@@ -221,25 +224,8 @@ function permissionUuidsFromCodes(codes: Iterable<string>, pool: Permission[]): 
   return [...new Set(uuids)];
 }
 
-const RESOURCE_ALIAS_MAP: Record<string, string[]> = {
-  'purchase-request': ['purchase-requisition'],
-  'purchase-requisition': ['purchase-request'],
-  // 快财务：菜单码为 sales-invoice / purchase-invoice，API 与权限真源为 kuaicaiwu:invoice:*
-  'sales-invoice': ['invoice'],
-  'purchase-invoice': ['invoice'],
-  // 主数据：「物料管理」菜单码为 material:read，物料分组权限码为 material-group:*，需归并展示
-  material: ['material-group'],
-  // 批号规则（material-batch-rule）与批号记录 API（material-batch:*）为两套码；合并到批号规则菜单匹配，避免 DB 未同步「批号记录」时出现孤儿
-  'material-batch-rule': ['material-batch'],
-};
-
-function resourceExactAliases(resource: string): string[] {
-  if (!resource) return [];
-  return RESOURCE_ALIAS_MAP[resource] || [];
-}
-
 function normalizeResourceKey(resource: string): string {
-  return resource.trim().toLowerCase().replace(/_/g, '-');
+  return resource.trim().toLowerCase();
 }
 
 /** 分组/占位菜单码（非页面级资源，不得用前缀吞并子菜单权限） */
@@ -253,60 +239,34 @@ function isGenericMenuPermissionCode(norm: string): boolean {
   return false;
 }
 
-/** 从应用路由解析资源段，如 /apps/haoligo/molds/documents/trial → molds-documents-trial */
-function resourceFromMenuPath(path: string): string | null {
-  const normalized = (path || '').replace(/\/$/, '');
-  const match = normalized.match(/^\/apps\/[^/]+\/(.+)$/);
-  if (!match) return null;
-  const segments = match[1].split('/').filter(Boolean);
-  if (segments.length === 0) return null;
-  return segments.join('-');
-}
-
 function appCodeFromMenu(menu: MenuTree): string | null {
   const code = menu.permission_code?.trim();
-  if (code) {
-    const parts = normalizeFunctionPermissionCode(code).split(':').filter(Boolean);
-    if (parts.length >= 1) return parts[0];
-  }
-  const path = menu.path || '';
-  const m = path.match(/^\/apps\/([^/]+)/);
-  return m ? normalizeFunctionPermissionCode(m[1]).split(':')[0] : null;
+  if (!code) return null;
+  const parts = normalizeFunctionPermissionCode(code).split(':').filter(Boolean);
+  if (parts.length < 3) return null;
+  return parts[0];
 }
 
 /**
- * 解析菜单对应的功能资源（唯一绑定依据）。
- * 有具体 permission_code 时用其 resource；仅占位码时用 path 推导页面资源。
+ * 解析菜单对应的功能资源（唯一绑定依据，仅认 permission_code）。
  */
 function resolveMenuTargetResource(menu: MenuTree): string | null {
   const code = menu.permission_code?.trim() || '';
   const norm = normalizeFunctionPermissionCode(code);
   const parsed = code ? parseResourceAndAction(code) : null;
-  if (parsed?.resource && !isGenericMenuPermissionCode(norm)) {
-    return parsed.resource;
-  }
-  const fromPath = resourceFromMenuPath(menu.path || '');
-  if (fromPath) return fromPath;
-  return parsed?.resource ?? null;
-}
-
-function appVariants(app: string): string[] {
-  return [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
+  if (!parsed || isGenericMenuPermissionCode(norm)) return null;
+  return parsed.resource;
 }
 
 /**
- * 菜单节点可勾选权限：仅同一 app + 同一 resource（含显式别名表），禁止前缀/后缀扩展匹配。
+ * 菜单节点可勾选权限：仅同一 app + 同一 resource 精确匹配。
  */
 function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
   const targetResource = resolveMenuTargetResource(menu);
   const app = appCodeFromMenu(menu);
   if (!targetResource || !app) return [];
 
-  const resourceKeys = new Set<string>([
-    normalizeResourceKey(targetResource),
-    ...resourceExactAliases(targetResource).map(normalizeResourceKey),
-  ]);
-  const apps = new Set(appVariants(app));
+  const targetResourceKey = normalizeResourceKey(targetResource);
 
   const seen = new Set<string>();
   const out: Permission[] = [];
@@ -315,10 +275,10 @@ function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
     const pNorm = normalizeFunctionPermissionCode(p.code);
     const parts = pNorm.split(':').filter(Boolean);
     if (parts.length < 3) continue;
-    if (!apps.has(parts[0])) continue;
+    if (parts[0] !== app) continue;
     const pr = parseResourceAndAction(p.code);
     if (!pr) continue;
-    if (!resourceKeys.has(normalizeResourceKey(pr.resource))) continue;
+    if (normalizeResourceKey(pr.resource) !== targetResourceKey) continue;
     if (seen.has(p.uuid)) continue;
     seen.add(p.uuid);
     out.push(p);
@@ -361,8 +321,8 @@ function menuTreeNodeTitle(menu: MenuTree, t: (key: string, opts?: { defaultValu
 
 const REVIEW_ACTIONS = new Set(['approve', 'audit', 'reject']);
 
-const parseCache = new Map<string, { resource: string; action: string } | null>();
-function parseResourceAndAction(code: string): { resource: string; action: string } | null {
+const parseCache = new Map<string, { app: string; resource: string; action: string } | null>();
+function parseResourceAndAction(code: string): { app: string; resource: string; action: string } | null {
   if (!code) return null;
   let res = parseCache.get(code);
   if (res !== undefined) return res;
@@ -372,7 +332,8 @@ function parseResourceAndAction(code: string): { resource: string; action: strin
     return null;
   }
   const computed = {
-    resource: parts.slice(0, -1).join(':'),
+    app: parts[0],
+    resource: parts.slice(1, -1).join(':'),
     action: parts[parts.length - 1].toLowerCase(),
   };
   parseCache.set(code, computed);
@@ -499,6 +460,7 @@ const RolesPermissionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
 
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -662,27 +624,19 @@ const RolesPermissionsPage: React.FC = () => {
   useEffect(() => {
     const treeNodes: DataNode[] = filteredRoles.map(role => ({
       title: (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <Space style={{ display: 'flex', alignItems: 'center', lineHeight: '1.5' }}>
-            {/* 状态指示点 */}
-            <span
+        <div className="role-tree-row" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
+          <Space size={6} style={{ flex: 1, minWidth: 0 }} className="role-tree-row__label">
+            <TeamOutlined
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: role.is_active ? token.colorSuccess : token.colorTextTertiary,
+                color: role.is_active ? token.colorSuccess : token.colorTextTertiary,
                 flexShrink: 0,
-                marginRight: '8px',
               }}
             />
-            <span style={{ display: 'flex', alignItems: 'center', lineHeight: '1.5' }}>{role.name}</span>
+            <span>{role.name}</span>
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
             {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
           </Space>
-          <Space size="small" onClick={(e) => e.stopPropagation()}>
+          <Space size={4} className="role-tree-row__actions" onClick={(e) => e.stopPropagation()}>
             <Tooltip title={t('pages.system.roles.edit')}>
               <Button
                 type="text"
@@ -867,7 +821,7 @@ const RolesPermissionsPage: React.FC = () => {
   }, [menuTree, t]);
 
   const resourceOptions = useMemo(() => {
-    // 数据权限资源以菜单真源为准，避免历史权限池中的脏资源进入第二页配置。
+    // 数据权限资源以菜单真源为准，避免非菜单资源进入第二页配置。
     return Array.from(resourceLabelMap.keys())
       .sort()
       .map((value) => {
@@ -1186,85 +1140,52 @@ const RolesPermissionsPage: React.FC = () => {
   }, [functionBatchApp, allPermissions]);
 
   return (
-    <div
-      className="roles-permissions-page"
-      style={{
-        display: 'flex',
-        height: '100%',
-        margin: 0,
-        padding: '0 16px',
-        boxSizing: 'border-box',
-        borderRadius: token.borderRadiusLG || token.borderRadius,
-        overflow: 'hidden',
-      }}
-    >
-      <style>{`
-        /* 角色权限树特定样式：隐藏树切换器（因为所有节点都是叶子节点） */
-        .roles-permissions-tree .ant-tree-switcher {
-          display: none !important;
-          width: 0 !important;
-          min-width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-        .roles-permissions-tree .ant-tree-switcher-leaf-line {
-          display: none !important;
-          width: 0 !important;
-          min-width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-        /* 隐藏角色树节点图标占位符 */
-        .roles-permissions-tree .ant-tree-iconEle {
-          display: none !important;
-          width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-      `}</style>
-
-      {/* 左侧角色树 */}
+    <>
       <div
+        className="roles-permissions-page"
         style={{
-          width: '300px',
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-          borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: 'none',
-          backgroundColor: token.colorFillAlter || '#fafafa',
           display: 'flex',
-          flexDirection: 'column',
+          width: '100%',
           height: '100%',
-          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
+          border: `1px solid ${token.colorBorder}`,
+          borderRadius: token.borderRadiusLG || token.borderRadius,
+          overflow: 'hidden',
         }}
       >
-        {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Input
-            placeholder={t('pages.system.roles.searchRole')}
-            prefix={<SearchOutlined />}
-            value={roleSearchKeyword}
-            onChange={(e) => setRoleSearchKeyword(e.target.value)}
-            allowClear
-            size="middle"
-          />
-        </div>
-
-        {/* 新建按钮与加载初始 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Space orientation="vertical" style={{ width: '100%' }} size="small">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              block
-              onClick={handleCreateRole}
-            >
-              {t('pages.system.roles.createRole') + NEW_SHORTCUT_HINT}
-            </Button>
-            <Flex gap="small" style={{ width: '100%' }}>
+        {/* 左侧角色列表：固定宽度不参与收缩，由右侧区域伸缩 */}
+        <div
+          style={{
+            width: '300px',
+            minWidth: '300px',
+            flexShrink: 0,
+            borderRight: `1px solid ${token.colorBorder}`,
+            backgroundColor: token.colorFillAlter || '#fafafa',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
+          {/* 搜索栏 */}
+          <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+            <Input
+              placeholder={t('pages.system.roles.searchRole')}
+              prefix={<SearchOutlined />}
+              value={roleSearchKeyword}
+              onChange={(e) => setRoleSearchKeyword(e.target.value)}
+              allowClear
+              size="middle"
+            />
+          </div>
+          {/* 操作按钮 */}
+          <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button type="primary" block onClick={handleCreateRole}>
+                {t('pages.system.roles.createRole')}
+              </Button>
+              {trialRunMode && (
               <Button
-                style={{ flex: 1, minWidth: 0 }}
+                type="primary"
+                block
                 loading={loadPresetLoading}
                 onClick={async () => {
                   try {
@@ -1282,63 +1203,76 @@ const RolesPermissionsPage: React.FC = () => {
               >
                 {t('field.role.loadPreset')}
               </Button>
-              <Button
-                style={{ flex: 1, minWidth: 0 }}
-                loading={cleanupLegacyLoading}
-                onClick={async () => {
-                  try {
-                    setCleanupLegacyLoading(true);
-                    const res = await cleanupLegacyRoles();
-                    messageApi.success(
-                      `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
-                    );
-                    await loadRoles();
-                  } catch (e: any) {
-                    messageApi.error(e?.message || t('common.operationFailed'));
-                  } finally {
-                    setCleanupLegacyLoading(false);
-                  }
-                }}
-              >
-                清理旧角色
-              </Button>
-            </Flex>
-          </Space>
+              )}
+              {trialRunMode && (
+              <Tooltip title="清理旧角色">
+                <Button
+                  icon={<ClearOutlined />}
+                  style={{ width: 32, minWidth: 32, padding: 0, flexShrink: 0 }}
+                  loading={cleanupLegacyLoading}
+                  onClick={async () => {
+                    try {
+                      setCleanupLegacyLoading(true);
+                      const res = await cleanupLegacyRoles();
+                      messageApi.success(
+                        `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
+                      );
+                      await loadRoles();
+                    } catch (e: any) {
+                      messageApi.error(e?.message || t('common.operationFailed'));
+                    } finally {
+                      setCleanupLegacyLoading(false);
+                    }
+                  }}
+                />
+              </Tooltip>
+              )}
+            </div>
+          </div>
+          {/* 角色列表 */}
+          <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
+            {rolesLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
+                  {t('pages.system.roles.loadingRoles', { defaultValue: '加载角色中...' })}
+                </div>
+              </div>
+            ) : (
+              <Tree
+                className="roles-permissions-tree"
+                treeData={
+                  filteredRoleTreeData.length > 0 || !roleSearchKeyword.trim()
+                    ? filteredRoleTreeData
+                    : roleTreeData
+                }
+                selectedKeys={selectedRoleKeys}
+                expandedKeys={expandedRoleKeys}
+                onSelect={handleRoleTreeSelect}
+                onExpand={setExpandedRoleKeys}
+                blockNode
+              />
+            )}
+          </div>
         </div>
 
-        {/* 角色树 */}
-        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          <Spin spinning={rolesLoading}>
-            <Tree
-              className="roles-permissions-tree"
-              treeData={filteredRoleTreeData.length > 0 || !roleSearchKeyword.trim() ? filteredRoleTreeData : roleTreeData}
-              selectedKeys={selectedRoleKeys}
-              expandedKeys={expandedRoleKeys}
-              onSelect={handleRoleTreeSelect}
-              onExpand={setExpandedRoleKeys}
-              blockNode
-            />
-          </Spin>
-        </div>
-      </div>
-
-      {/* 右侧主内容区 */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: token.colorBgContainer,
-        border: `1px solid ${token.colorBorder}`,
-        borderLeft: 'none',
-        borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-        borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
-      }}>
-        {/* 顶部工具栏 - 重新组织的标题容器 */}
+        {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动 */}
+        <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: token.colorBgContainer,
+        }}
+      >
+        {selectedRole ? (
+          <>
+        {/* 顶部工具栏 */}
         <div
           style={{
             backgroundColor: token.colorBgContainer,
             zIndex: 1,
-            borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
           }}
         >
           {/* 第一层：状态、角色身份与全局操作 */}
@@ -1346,25 +1280,18 @@ const RolesPermissionsPage: React.FC = () => {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
-            padding: '8px 16px',
+            padding: '16px 24px',
             borderBottom: `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}`
           }}>
             <Space size="middle" style={{ flex: 1, minWidth: 0 }}>
-              {selectedRole ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-                    <Space size="small">
-                      <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
-                      <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
-                      {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
-                    </Space>
-                  </div>
-                  <Divider orientation="vertical" style={{ height: 24 }} />
-                </>
-              ) : (
-                <span style={{ color: token.colorTextSecondary, marginRight: 8 }}>{t('pages.system.roles.selectRoleHint')}</span>
-              )}
-
+              <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                <Space size="small">
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
+                  <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
+                  {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
+                </Space>
+              </div>
+              <Divider orientation="vertical" style={{ height: 24 }} />
               <Space>
                 <Button
                   icon={<ReloadOutlined />}
@@ -1389,8 +1316,7 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
             </Space>
 
-            {selectedRole && (
-              <Space>
+            <Space>
                 {permissionLayer === 'function' && (
                   <Select
                     placeholder={t('pages.system.roles.applyTemplate')}
@@ -1418,12 +1344,10 @@ const RolesPermissionsPage: React.FC = () => {
                   {t('pages.system.roles.savePermissions')}
                 </Button>
               </Space>
-            )}
           </div>
 
-          {/* 第二层：树操作工具（搜索、批处理、模板、统计与页签） */}
-          {selectedRole && (
-            <div style={{ padding: '16px 16px 0 16px' }}>
+          {/* 权限层 Tab */}
+            <div style={{ padding: '16px 24px 0 24px' }}>
               <Tabs
                 activeKey={permissionLayer}
                 onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
@@ -1436,12 +1360,10 @@ const RolesPermissionsPage: React.FC = () => {
                 tabBarStyle={{ marginBottom: 0 }}
               />
             </div>
-          )}
         </div>
 
         {/* 权限编辑区域 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {selectedRole ? (
+        <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
             <Spin spinning={selectedRoleLoading || permissionsLoading}>
               {permissionLayer === 'function' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
@@ -1747,20 +1669,12 @@ const RolesPermissionsPage: React.FC = () => {
                 </Space>
               )}
             </Spin>
-          ) : (
-            <Empty
-              description={t('pages.system.roles.selectRoleToEdit')}
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          )}
         </div>
 
-        {/* 底部状态栏 */}
-        {selectedRole && (
           <div
             style={{
               borderTop: `1px solid ${token.colorBorder}`,
-              padding: '8px 16px',
+              padding: '8px 24px',
               display: 'flex',
               fontSize: '12px',
               color: token.colorTextSecondary,
@@ -1780,10 +1694,28 @@ const RolesPermissionsPage: React.FC = () => {
                   </span>
                 )}
               </span>
-              <span>角色关联用户：<span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人</span>
+              <span>
+                角色关联用户：
+                <span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人
+              </span>
             </Space>
           </div>
+          </>
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: token.colorTextSecondary,
+              backgroundColor: token.colorFillAlter,
+            }}
+          >
+            {t('pages.system.roles.selectRoleToEdit')}
+          </div>
         )}
+        </div>
       </div>
 
       {/* 角色编辑 Modal - 复用 RoleFormModal（Schema 驱动，代码在名称前） */}
@@ -1906,33 +1838,7 @@ const RolesPermissionsPage: React.FC = () => {
           {t('pages.system.roles.copyWarning')}
         </p>
       </Modal>
-      <style>{`
-        .permission-tree-horizontal .ant-tree-iconEle + span,
-        .permission-tree-horizontal .ant-tree-title {
-          white-space: nowrap;
-        }
-        .permission-tree-horizontal .ant-tree-node-content-wrapper {
-          white-space: nowrap;
-        }
-        .permission-tree-horizontal .permission-menu-title-wrap {
-          display: inline-flex;
-          flex-direction: column;
-          vertical-align: top;
-        }
-        .permission-tree-horizontal .permission-action-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 4px 16px;
-          margin-top: 4px;
-        }
-        .permission-tree-horizontal .permission-action-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          white-space: nowrap;
-        }
-      `}</style>
-    </div>
+    </>
   );
 };
 

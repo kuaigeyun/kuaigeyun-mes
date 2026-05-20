@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from apps.master_data.services.warehouse_service import WarehouseService
 from apps.master_data.schemas.warehouse_schemas import (
@@ -22,7 +23,11 @@ from apps.master_data.schemas.warehouse_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/warehouse", tags=["App · Master Data · Warehouse"])
+router = APIRouter(
+    prefix="/warehouse",
+    tags=["App · Master Data · Warehouse"],
+    dependencies=[Depends(require_module_access("master-data", "warehouse"))],
+)
 
 
 def _http_exception_with_trace(

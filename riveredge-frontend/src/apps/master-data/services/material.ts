@@ -18,6 +18,9 @@ import type {
   MaterialBulkTrackingPayload,
   MaterialBulkTrackingResult,
   MaterialBatchDeleteResult,
+  MaterialBatchMoveGroupResult,
+  MaterialRewriteMainCodesPayload,
+  MaterialRewriteMainCodesResult,
   BOM,
   BOMCreate,
   BOMUpdate,
@@ -269,6 +272,38 @@ export const materialApi = {
    */
   batchDelete: async (material_uuids: string[]): Promise<MaterialBatchDeleteResult> => {
     return api.post('/apps/master-data/materials/batch-delete', { material_uuids });
+  },
+
+  /**
+   * 批量移动物料分组（单请求，后端批量 UPDATE）
+   */
+  batchMoveGroup: async (
+    material_uuids: string[],
+    groupId: number,
+  ): Promise<MaterialBatchMoveGroupResult> => {
+    return api.post('/apps/master-data/materials/batch-move-group', {
+      material_uuids,
+      groupId,
+    });
+  },
+
+  /**
+   * 试运营模式：按所属分组编号重写物料主编码
+   */
+  rewriteMainCodes: async (
+    payload: MaterialRewriteMainCodesPayload,
+  ): Promise<MaterialRewriteMainCodesResult> => {
+    const body: Record<string, unknown> = {};
+    if (payload.material_uuids?.length) {
+      body.material_uuids = payload.material_uuids;
+    }
+    if (payload.groupId != null) {
+      body.groupId = payload.groupId;
+    }
+    if (payload.reset_sequence) {
+      body.reset_sequence = true;
+    }
+    return api.post('/apps/master-data/materials/rewrite-main-codes', body);
   },
 
   /**

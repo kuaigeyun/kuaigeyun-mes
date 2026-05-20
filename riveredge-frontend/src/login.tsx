@@ -57,9 +57,7 @@ function RedirectToApp() {
     window.location.href = target || '/';
   }, [location.pathname, location.search]);
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', color: '#666' }}>
-      正在跳转...
-    </div>
+    <div style={{ minHeight: '100vh', background: '#fff' }} />
   );
 }
 

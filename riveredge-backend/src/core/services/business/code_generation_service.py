@@ -51,6 +51,90 @@ def _get_context_value(context: Dict, field: str) -> Any:
     return None
 
 
+def _count_group_code_fields_before_counter(
+    components: Optional[List[Dict[str, Any]]],
+) -> int:
+    """统计自动序号之前 group_code 表单组件个数。"""
+    if not components:
+        return 0
+    count = 0
+    for comp in sorted(components, key=lambda x: x.get("order", 0)):
+        if comp.get("type") == "auto_counter":
+            break
+        if comp.get("type") == "form_field" and (comp.get("field_name") or "") == "group_code":
+            count += 1
+    return count
+
+
+def _get_form_field_value_for_render(
+    context: Optional[Dict[str, Any]],
+    field_name: str,
+    *,
+    group_code_field_index: int,
+    group_code_field_total: int = 0,
+) -> Any:
+    """
+    渲染表单字段值。物料规则中的 group_code 一律只取物料所属末级分组的编号。
+    """
+    if not context or not field_name:
+        return None
+    if field_name == "group_code":
+        leaf = _get_leaf_group_code(context)
+        return leaf if leaf else None
+    return _get_context_value(context, field_name)
+
+
+def _get_leaf_group_code(context: Optional[Dict[str, Any]]) -> str:
+    """物料所属末级（material.group_id 对应分组）的编号，用于编号前缀与流水隔离。"""
+    if not context:
+        return ""
+    leaf = context.get("leaf_group_code")
+    if leaf is not None and str(leaf).strip():
+        return str(leaf).strip()
+    val = _get_context_value(context, "group_code")
+    return str(val).strip() if val is not None else ""
+
+
+def _get_group_code_levels_joined(context: Optional[Dict[str, Any]]) -> str:
+    """物料编号前缀：仅末级分组编号（不拼接祖先层级）。"""
+    return _get_leaf_group_code(context)
+
+
+def _build_scope_key(scope_fields: List[str], context: Optional[Dict[str, Any]]) -> str:
+    """按隔离字段构建 scope_key；group_code 仅取末级分组编号。"""
+    if not scope_fields or not context:
+        return ""
+    scope_values: List[str] = []
+    for field in scope_fields:
+        f = (field or "").strip()
+        if not f:
+            continue
+        if f == "group_code":
+            val = _get_leaf_group_code(context)
+        else:
+            val = _get_context_value(context, f)
+        if val is not None and str(val).strip():
+            scope_values.append(str(val).strip())
+    return ":".join(scope_values)
+
+
+def _resolve_scan_prefix_for_sequence(
+    components: Optional[List[Dict[str, Any]]],
+    context: Optional[Dict[str, Any]],
+    scope_key: str,
+    static_prefix: str = "",
+) -> str:
+    """
+    解析库内流水校准前缀：与生成规则一致，物料分组编号仅末级（group_id 对应分组的 code）。
+    """
+    dyn_prefix = _render_prefix_before_auto_counter(components, context)
+    leaf_prefix = _get_leaf_group_code(context)
+
+    if dyn_prefix is not None:
+        return dyn_prefix if dyn_prefix else (leaf_prefix or static_prefix)
+    return leaf_prefix or static_prefix
+
+
 def _render_prefix_before_auto_counter(
     components: Optional[List[Dict[str, Any]]],
     context: Optional[Dict[str, Any]],
@@ -63,6 +147,11 @@ def _render_prefix_before_auto_counter(
         return ""
     sorted_components = sorted(components, key=lambda x: x.get("order", 0))
     parts: List[str] = []
+    group_code_field_index = 0
+    group_code_field_total = _count_group_code_fields_before_counter(components)
+    render_ctx = dict(context) if context else None
+    if render_ctx is not None:
+        render_ctx["_rule_components"] = components
     for comp in sorted_components:
         ct = comp.get("type")
         if ct == "auto_counter":
@@ -71,7 +160,18 @@ def _render_prefix_before_auto_counter(
             parts.append(comp.get("text") or "")
         elif ct == "form_field":
             fn = comp.get("field_name") or ""
-            val = _get_context_value(context or {}, fn) if context else None
+            val = (
+                _get_form_field_value_for_render(
+                    render_ctx,
+                    fn,
+                    group_code_field_index=group_code_field_index,
+                    group_code_field_total=group_code_field_total,
+                )
+                if render_ctx
+                else None
+            )
+            if fn == "group_code":
+                group_code_field_index += 1
             if val is None or not str(val).strip():
                 return None
             parts.append(str(val).strip())
@@ -105,6 +205,38 @@ class CodeGenerationService:
     
     提供根据编码规则生成编码的功能。
     """
+
+    @staticmethod
+    async def build_material_code_context_from_group(
+        tenant_id: int,
+        group: Any,
+        *,
+        source_type: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        构建物料编码规则上下文：仅使用物料所属末级分组（group）的 code，不拼接祖先层级。
+        """
+        context: Dict[str, Any] = {}
+        if not group:
+            if source_type:
+                context["source_type"] = source_type
+            if name:
+                context["name"] = name
+            return context
+
+        leaf_code = (getattr(group, "code", None) or "").strip()
+        if leaf_code:
+            context["leaf_group_code"] = leaf_code
+            context["group_code"] = leaf_code
+            context["group_code_path"] = leaf_code
+            context["leaf_group_id"] = getattr(group, "id", None)
+            context["group_name"] = getattr(group, "name", None)
+        if source_type:
+            context["source_type"] = source_type
+        if name:
+            context["name"] = name
+        return context
     
     @staticmethod
     async def generate_code(
@@ -129,7 +261,21 @@ class CodeGenerationService:
         # 获取编码规则
         rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
         if not rule:
-            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
+            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用 MATERIAL_CODE")
+
+        _rc = (rule_code or "").upper()
+        if ("MATERIAL" in _rc or _rc == "MATERIAL_CODE") and context:
+            components_preview = rule.get_rule_components()
+            needs_group = False
+            if components_preview:
+                for comp in components_preview:
+                    if comp.get("type") == "form_field" and (comp.get("field_name") or "") == "group_code":
+                        needs_group = True
+                        break
+            if needs_group and not _get_leaf_group_code(context):
+                raise ValidationError(
+                    "物料主编码规则需要末级物料分组编号，请选择已配置编号的末级分组"
+                )
         
         # 获取规则组件配置（优先使用新格式）
         components = rule.get_rule_components()
@@ -160,13 +306,7 @@ class CodeGenerationService:
                 if "MATERIAL" in _rc or _rc == "MATERIAL_CODE":
                     scope_fields = ["group_code"]
             if scope_fields and context:
-                scope_values = []
-                for field in scope_fields:
-                    val = _get_context_value(context, field)
-                    if val is not None and str(val).strip():
-                        scope_values.append(str(val).strip())
-                if scope_values:
-                    scope_key = ":".join(scope_values)
+                scope_key = _build_scope_key(scope_fields, context)
         else:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
@@ -296,13 +436,7 @@ class CodeGenerationService:
                 if "MATERIAL" in _rc or _rc == "MATERIAL_CODE":
                     scope_fields = ["group_code"]
             if scope_fields and context:
-                scope_values = []
-                for field in scope_fields:
-                    val = _get_context_value(context, field)
-                    if val is not None and str(val).strip():
-                        scope_values.append(str(val).strip())
-                if scope_values:
-                    scope_key = ":".join(scope_values)
+                scope_key = _build_scope_key(scope_fields, context)
         else:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
@@ -323,6 +457,7 @@ class CodeGenerationService:
             request_rule_code=rule_code,
             components=components,
             context=context,
+            scope_key=scope_key,
         )
         if max_from_db is not None:
             test_seq = max_from_db + seq_step
@@ -599,17 +734,21 @@ class CodeGenerationService:
         request_rule_code: str,
         components: Optional[List[Dict[str, Any]]],
         context: Optional[Dict[str, Any]] = None,
+        scope_key: str = "",
     ) -> Optional[int]:
         """
         解析规则对应实体在库中的最大流水序号。
         物料等带分组（form_field）的规则：用与生成编码一致的「序号前完整前缀」（含 group_code）扫库，按分组取 max+1，避免填洞、避免跨分组串号。
+        物料规则下前缀仅含末级分组编号，与 scope_key（末级）一致。
         """
-        dyn_prefix = _render_prefix_before_auto_counter(components, context)
         static_prefix = CodeGenerationService._get_prefix_for_rule(rule, components) or ""
-        if dyn_prefix is None:
-            scan_prefix = static_prefix
-        else:
-            scan_prefix = dyn_prefix if dyn_prefix else static_prefix
+        scan_prefix = _resolve_scan_prefix_for_sequence(
+            components, context, scope_key or "", static_prefix
+        )
+        # 物料规则：禁止空前缀全库扫号（否则会产生 1173 等无分组含义的纯数字编号）
+        _rc = (request_rule_code or getattr(rule, "code", None) or "").upper()
+        if not scan_prefix and "MATERIAL" in _rc and context and _get_leaf_group_code(context):
+            return None
 
         def _entity_config_for(code: Optional[str]) -> Optional[tuple]:
             if not code:
@@ -658,30 +797,34 @@ class CodeGenerationService:
         在能解析出 max_from_db 时，始终令 current_seq = max_from_db（下次 += step 即为 max+1），
         这样删除最大序号后序号会回落；仅曾「只上调、不下调」时会在删除后仍发大号。
         """
-        dyn = _render_prefix_before_auto_counter(components, context)
         static_p = CodeGenerationService._get_prefix_for_rule(rule, components) or ""
-        log_prefix = (dyn if dyn is not None else static_p) or static_p
-
+        log_prefix = _resolve_scan_prefix_for_sequence(
+            components, context, scope_key or "", static_p
+        )
         max_from_db = await CodeGenerationService._resolve_max_sequence_from_db_for_rule(
             tenant_id=tenant_id,
             rule=rule,
             request_rule_code=request_rule_code,
             components=components,
             context=context,
+            scope_key=scope_key,
         )
         if max_from_db is None:
             logger.info(
-                "code_sequence_recalibrate_skip rule_code={} prefix={} reason=max_from_db_is_none",
+                "code_sequence_recalibrate_skip rule_code={} prefix={} scope_key={} reason=max_from_db_is_none",
                 request_rule_code,
                 log_prefix,
+                scope_key,
             )
             return
 
         if sequence.current_seq != max_from_db:
             logger.info(
-                "code_sequence_recalibrate rule_code={} prefix={} max_from_db={} current_seq_before={}",
+                "code_sequence_recalibrate rule_code={} prefix={} effective_prefix={} scope_key={} max_from_db={} current_seq_before={}",
                 request_rule_code,
                 log_prefix,
+                effective_prefix,
+                scope_key,
                 max_from_db,
                 sequence.current_seq,
             )

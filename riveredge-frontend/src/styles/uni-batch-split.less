@@ -1,0 +1,17 @@
+/**
+ * uni-batch 分裂按钮：Popconfirm 包裹会破坏 Compact 边框，需 display:contents 修复
+ */
+.uni-batch-split-toolbar.ant-space-compact {
+  > span {
+    display: contents;
+  }
+
+  .ant-btn-compact-last-item {
+    padding-inline: 8px;
+  }
+
+  .ant-btn-dangerous:not(:disabled):hover,
+  .ant-btn-dangerous:not(:disabled):focus-visible {
+    z-index: 1;
+  }
+}

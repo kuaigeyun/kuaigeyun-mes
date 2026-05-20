@@ -482,12 +482,7 @@ class PermissionSyncService:
 
     @staticmethod
     def normalize_code(code: str) -> str:
-        cleaned = code.strip().lower().replace("_", "-")
-        parts = [p for p in cleaned.split(":") if p]
-        if len(parts) < 2:
-            return cleaned
-        parts[-1] = canonical_action(parts[-1])
-        return ":".join(parts)
+        return code.strip().lower()
 
     @staticmethod
     def _get_auto_purge_days() -> int:

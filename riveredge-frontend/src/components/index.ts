@@ -12,10 +12,12 @@ export { default as UniSearch, UniAdvancedSearch, QuerySearchModal } from './uni
 export type { UniSearchProps, UniAdvancedSearchProps } from './uni-search';
 export { default as UniView } from './uni-view';
 export type { UniViewProps, UniViewCustomItem } from './uni-view';
-export { UniBatchButton, UniBatchDeleteButton } from './uni-batch';
+export { UniBatchButton, UniBatchDeleteButton, UniBatchSplitToolbar } from './uni-batch';
 export type {
   UniBatchButtonProps,
   UniBatchDeleteButtonProps,
+  UniBatchSplitToolbarProps,
+  UniBatchSplitMenuItem,
 } from './uni-batch';
 export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';
 export type { UniTableProps } from './uni-table';

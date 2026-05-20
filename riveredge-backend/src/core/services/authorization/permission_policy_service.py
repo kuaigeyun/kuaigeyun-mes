@@ -78,7 +78,7 @@ class PermissionPolicyService:
 
     @staticmethod
     def _normalize_resource(raw: str) -> str:
-        return (raw or "").strip().lower().replace("_", "-")
+        return (raw or "").strip().lower()
 
     @classmethod
     def canonicalize_field_name(cls, raw: str) -> str:

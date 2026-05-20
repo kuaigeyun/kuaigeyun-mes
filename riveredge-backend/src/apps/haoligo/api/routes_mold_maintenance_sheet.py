@@ -24,6 +24,7 @@ from apps.haoligo.constants.mold_sheet_rule_codes import (
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.department import Department
 from infra.exceptions.exceptions import ValidationError
@@ -32,6 +33,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/maintenance-sheets",
     tags=["App · HaoliGO · 维保单"],
+    dependencies=[Depends(require_module_access("haoligo", "molds-documents-maintenance"))],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]

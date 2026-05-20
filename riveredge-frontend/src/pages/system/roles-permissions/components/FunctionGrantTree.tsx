@@ -2,12 +2,47 @@ import React, { useMemo } from 'react';
 import { Checkbox, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
-import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../services/role';
+import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
 import {
   extractAppCodeFromPath,
   translateAppMenuItemName,
   translateMenuName,
-} from '../../../utils/menuTranslation';
+} from '../../../../utils/menuTranslation';
+
+function simpleActionLabel(
+  action: FunctionGrantAction,
+  t: (key: string, opts?: { defaultValue?: string }) => string
+): string {
+  const raw = (action.action || '').toLowerCase().trim();
+  const map: Record<string, string> = {
+    create: '创建',
+    read: '查看',
+    view: '查看',
+    list: '查看',
+    query: '查看',
+    detail: '查看',
+    update: '编辑',
+    edit: '编辑',
+    delete: '删除',
+    import: '导入',
+    export: '导出',
+    submit: '提交',
+    approve: '审核',
+    audit: '审核',
+    reject: '审核',
+    revoke: '撤销',
+    assign: '分配',
+    execute: '执行',
+    print: '打印',
+  };
+  if (map[raw]) return map[raw];
+
+  const tr = t(`permission.action.${raw}`, { defaultValue: '' });
+  if (tr && tr !== `permission.action.${raw}`) return tr;
+
+  // 默认动作文案，避免直接展示后端原始 label
+  return '权限';
+}
 
 export function codesFromAction(action: FunctionGrantAction): string[] {
   if (action.merged_codes?.length) return action.merged_codes;
@@ -54,6 +89,11 @@ type Props = {
   t: (key: string, opts?: { defaultValue?: string }) => string;
 };
 
+type GrantTreeNode = DataNode & {
+  _grantNode?: FunctionGrantMenuNode;
+  _titleText?: string;
+};
+
 export const FunctionGrantTree: React.FC<Props> = ({
   tree,
   grantedCodes,
@@ -79,7 +119,7 @@ export const FunctionGrantTree: React.FC<Props> = ({
       } as DataNode & { _grantNode: FunctionGrantMenuNode; _titleText: string };
     };
     return tree.map(mapNode);
-  }, [tree, t, grantedCodes]);
+  }, [tree, t]);
 
   return (
     <Tree
@@ -88,19 +128,19 @@ export const FunctionGrantTree: React.FC<Props> = ({
       expandedKeys={expandedKeys}
       onExpand={(keys) => onExpand(keys as React.Key[])}
       showIcon
-      titleRender={(node: any) => {
-        const grantNode = node._grantNode as FunctionGrantMenuNode | undefined;
+      titleRender={(node: GrantTreeNode) => {
+        const grantNode = node._grantNode;
         if (!grantNode?.actions?.length) {
           return (
             <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-              {node._titleText ?? node.title}
+              {node._titleText ?? String(node.title ?? '')}
             </span>
           );
         }
         return (
           <span className="permission-menu-title-wrap">
             <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-              {node._titleText ?? node.title}
+              {node._titleText ?? String(node.title ?? '')}
             </span>
             <div className="permission-action-row">
               {grantNode.actions.map((item) => {
@@ -111,7 +151,7 @@ export const FunctionGrantTree: React.FC<Props> = ({
                       checked={checked}
                       onChange={(e) => onToggle(codesFromAction(item), e.target.checked)}
                     />
-                    <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{simpleActionLabel(item, t)}</span>
                   </label>
                 );
               })}

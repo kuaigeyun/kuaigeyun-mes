@@ -9,6 +9,7 @@ export interface MaterialGroup {
   uuid: string;
   tenantId: number;
   code: string;
+  alias?: string;
   name: string;
   parentId?: number;
   description?: string;
@@ -18,8 +19,27 @@ export interface MaterialGroup {
   deletedAt?: string;
 }
 
+/** 物料分组展示标签：有代号时优先显示英文代号，否则显示编号 */
+export function formatMaterialGroupLabel(
+  group: Pick<MaterialGroup, 'code' | 'name' | 'alias'>,
+): string {
+  const prefix = group.alias?.trim() || group.code;
+  return `${prefix} - ${group.name}`;
+}
+
+/** 物料分组悬停提示：分组编号 - 分组代号 - 分组名称 */
+export function formatMaterialGroupHoverTitle(
+  group: Pick<MaterialGroup, 'code' | 'name' | 'alias'>,
+): string {
+  const code = (group.code ?? '').trim();
+  const alias = (group.alias ?? '').trim() || '-';
+  const name = (group.name ?? '').trim();
+  return `${code} - ${alias} - ${name}`;
+}
+
 export interface MaterialGroupCreate {
   code: string;
+  alias?: string;
   name: string;
   parentId?: number;
   description?: string;
@@ -28,6 +48,7 @@ export interface MaterialGroupCreate {
 
 export interface MaterialGroupUpdate {
   code?: string;
+  alias?: string;
   name?: string;
   parentId?: number;
   description?: string;
@@ -258,6 +279,7 @@ export interface MaterialListParams {
   skip?: number;
   limit?: number;
   groupId?: number;
+  noGroup?: boolean;
   isActive?: boolean;
   keyword?: string;
   code?: string;
@@ -298,6 +320,33 @@ export interface MaterialBatchDeleteResult {
   deleted_count: number;
   failed_count: number;
   failed_items: MaterialBatchDeleteFailedItem[];
+}
+
+/** POST /materials/batch-move-group */
+export interface MaterialBatchMoveGroupResult {
+  updated_count: number;
+  requested_count: number;
+  not_found_uuids?: string[];
+}
+
+/** POST /materials/rewrite-main-codes（试运营模式） */
+export interface MaterialRewriteMainCodesFailedItem {
+  uuid: string;
+  reason: string;
+}
+
+export interface MaterialRewriteMainCodesPayload {
+  material_uuids?: string[];
+  groupId?: number;
+  reset_sequence?: boolean;
+}
+
+export interface MaterialRewriteMainCodesResult {
+  updated_count: number;
+  updated_material_count: number;
+  requested_count: number;
+  failed_count: number;
+  failed_items: MaterialRewriteMainCodesFailedItem[];
 }
 
 /** GET /materials/standard-parts/preset-preview 中单条标准件 */

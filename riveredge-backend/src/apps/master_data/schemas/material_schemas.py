@@ -13,7 +13,8 @@ from decimal import Decimal
 class MaterialGroupBase(BaseModel):
     """物料分组基础 Schema"""
     
-    code: str = Field(..., max_length=50, description="分组编码")
+    code: str = Field(..., max_length=50, description="分组编号（参与物料编号生成）")
+    alias: Optional[str] = Field(None, max_length=100, description="分组代号（英文展示名，可选）")
     name: str = Field(..., max_length=200, description="分组名称")
     parent_id: Optional[int] = Field(None, alias="parentId", description="父分组ID（用于层级结构）")
     description: Optional[str] = Field(None, description="描述")
@@ -25,10 +26,18 @@ class MaterialGroupBase(BaseModel):
     
     @validator("code")
     def validate_code(cls, v):
-        """验证编码格式"""
+        """验证编号格式"""
         if not v or not v.strip():
-            raise ValueError("分组编码不能为空")
+            raise ValueError("分组编号不能为空")
         return v.strip().upper()
+    
+    @validator("alias")
+    def validate_alias(cls, v):
+        """验证代号格式"""
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped if stripped else None
     
     @validator("name")
     def validate_name(cls, v):
@@ -46,7 +55,8 @@ class MaterialGroupCreate(MaterialGroupBase):
 class MaterialGroupUpdate(BaseModel):
     """更新物料分组 Schema"""
     
-    code: Optional[str] = Field(None, max_length=50, description="分组编码")
+    code: Optional[str] = Field(None, max_length=50, description="分组编号")
+    alias: Optional[str] = Field(None, max_length=100, description="分组代号（英文展示名，可选）")
     name: Optional[str] = Field(None, max_length=200, description="分组名称")
     parent_id: Optional[int] = Field(None, alias="parentId", description="父分组ID")
     description: Optional[str] = Field(None, description="描述")
@@ -58,10 +68,18 @@ class MaterialGroupUpdate(BaseModel):
     
     @validator("code")
     def validate_code(cls, v):
-        """验证编码格式"""
+        """验证编号格式"""
         if v is not None and (not v or not v.strip()):
-            raise ValueError("分组编码不能为空")
+            raise ValueError("分组编号不能为空")
         return v.strip().upper() if v else None
+    
+    @validator("alias")
+    def validate_alias(cls, v):
+        """验证代号格式"""
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped if stripped else None
     
     @validator("name")
     def validate_name(cls, v):
@@ -307,6 +325,80 @@ class MaterialBatchDeleteResponse(BaseModel):
     failed_items: List[MaterialBatchDeleteFailedItem] = Field(
         default_factory=list,
         description="失败明细（与请求去重后的 UUID 对齐）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchMoveGroupRequest(BaseModel):
+    """批量移动物料分组"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    group_id: int = Field(..., alias="groupId", description="目标物料分组 ID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchMoveGroupResponse(BaseModel):
+    """批量移动物料分组结果"""
+
+    updated_count: int = Field(..., description="成功更新的物料数量")
+    requested_count: int = Field(..., description="请求中的 UUID 数量（去重后）")
+    not_found_uuids: List[str] = Field(default_factory=list, description="未找到或未匹配的 UUID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialRewriteMainCodesFailedItem(BaseModel):
+    """试运营模式：重写物料主编码单条失败原因"""
+
+    uuid: str = Field(..., description="物料 UUID")
+    reason: str = Field(..., description="失败原因")
+
+
+class MaterialRewriteMainCodesRequest(BaseModel):
+    """按物料所属末级分组编号重写主编码"""
+
+    material_uuids: Optional[List[str]] = Field(
+        None,
+        max_length=2000,
+        description="物料 UUID 列表；与 groupId 二选一或同时提供时优先使用本列表",
+    )
+    group_id: Optional[int] = Field(
+        None,
+        alias="groupId",
+        description="物料分组 ID：重写该分组及子分组下全部物料（无 material_uuids 时生效）",
+    )
+    reset_sequence: bool = Field(
+        False,
+        description="重写前是否按末级分组重置各分组的流水号（从初始值重新计数）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> "MaterialRewriteMainCodesRequest":
+        uuids = [u for u in (self.material_uuids or []) if u and str(u).strip()]
+        if not uuids and self.group_id is None:
+            raise ValueError("请提供 material_uuids 或 groupId")
+        return self
+
+
+class MaterialRewriteMainCodesResponse(BaseModel):
+    """试运营模式：重写物料主编码结果"""
+
+    updated_count: int = Field(..., description="成功重写的主编码族数量（含属性变体族）")
+    updated_material_count: int = Field(..., description="实际更新的物料行数")
+    requested_count: int = Field(..., description="请求范围内待处理的物料数量")
+    failed_count: int = Field(..., description="失败条数")
+    failed_items: List[MaterialRewriteMainCodesFailedItem] = Field(
+        default_factory=list,
+        description="失败明细",
     )
 
     model_config = ConfigDict(populate_by_name=True)

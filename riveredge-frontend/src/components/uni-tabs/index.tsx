@@ -993,8 +993,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return key.includes('production-execution/terminal') || key.includes('/kiosk');
   }, [activeKey]);
 
-  /** 是否为工作台/分析页/角色权限页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁；角色权限页自身有 padding，需去除 UniTabs 的重复 padding） */
-  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/analysis' || location.pathname === '/system/roles';
+  /** 是否为工作台/分析页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁） */
+  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/analysis';
 
   const isBusinessBoardAnalysisPage = location.pathname === '/system/dashboard/analysis';
 

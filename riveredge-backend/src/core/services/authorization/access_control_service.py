@@ -29,7 +29,9 @@ class AccessDecision:
 class AccessControlService:
     @staticmethod
     def build_permission_code(resource: str, action: str) -> str:
-        return f"{resource}:{action}"
+        left = (resource or "").strip().lower()
+        right = (action or "").strip().lower()
+        return f"{left}:{right}" if left and right else f"{left}:{action}"
 
     @staticmethod
     async def check_access(

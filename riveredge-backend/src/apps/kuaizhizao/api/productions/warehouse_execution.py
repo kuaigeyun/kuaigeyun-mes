@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -148,7 +149,10 @@ from apps.kuaizhizao.schemas.batching_order import (
     PullFromWorkOrderRequest,
 )
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Warehouse Execution"])
+router = APIRouter(
+    tags=["App · Kuaige Zhizao · Warehouse Execution"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "warehouse-management-inventory"))],
+)
 
 
 def _http_exception_with_trace(

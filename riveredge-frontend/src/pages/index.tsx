@@ -11,16 +11,27 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getToken } from '../utils/auth';
 import { getDefaultTenantHomePath } from '../stores/configStore';
+import { getTenantBackendHome } from '../services/menu';
 
 export default function IndexPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (getToken()) {
-      navigate(getDefaultTenantHomePath());
-    } else {
+    if (!getToken()) {
       navigate('/login', { replace: true });
+      return;
     }
+
+    const defaultPath = getDefaultTenantHomePath();
+    void getTenantBackendHome()
+      .then((home) => {
+        const customPath = home?.path?.trim();
+        navigate(customPath || defaultPath, { replace: true });
+      })
+      .catch(() => {
+        // 后台首页读取失败时回退到站点默认首页（仪表盘/应用中心）
+        navigate(defaultPath, { replace: true });
+      });
   }, [navigate]);
 
   return null;

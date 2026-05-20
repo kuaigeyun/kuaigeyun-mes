@@ -210,7 +210,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
         fieldName: 'group_code',
         fieldLabel: '物料分组编号',
         fieldType: 'string',
-        description: '物料所属分组的编号',
+        description: '物料所属分组的编号（参与编号生成）',
       },
       {
         fieldName: 'group_name',

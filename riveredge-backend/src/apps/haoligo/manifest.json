@@ -27,7 +27,7 @@
             "title": "app.haoligo.menu.workspace",
             "path": "/apps/haoligo/workspace",
             "icon": "LayoutDashboard",
-            "permission": "haoligo:workspace:read",
+            "permission": "haoligo:equipment-documents:read",
             "sort_order": 0
           }
         ]
@@ -418,6 +418,12 @@
     "haoligo:equipment-documents-upkeep-sheet:delete",
     "haoligo:equipment-documents-upkeep-sheet:import",
     "haoligo:equipment-documents-upkeep-sheet:export",
+    "haoligo:equipment-documents:read",
+    "haoligo:equipment-documents:create",
+    "haoligo:equipment-documents:update",
+    "haoligo:equipment-documents:delete",
+    "haoligo:equipment-documents:import",
+    "haoligo:equipment-documents:export",
     "haoligo:equipment-inspection-param-sets:read",
     "haoligo:equipment-inspection-param-sets:create",
     "haoligo:equipment-inspection-param-sets:update",

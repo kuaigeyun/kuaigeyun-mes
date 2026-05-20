@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 
@@ -53,7 +54,10 @@ from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderListResponse,
 )
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
+router = APIRouter(
+    tags=["App · Kuaige Zhizao · Production Execution"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "work-order"))],
+)
 
 
 # ============ 工单管理 API ============

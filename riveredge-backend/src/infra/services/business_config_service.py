@@ -86,6 +86,10 @@ PROCESS_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
 
 # 参数注册表分类文案
 PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
+    "common": {
+        "labelKey": "pages.system.configCenter.category.common",
+        "descriptionKey": "pages.system.configCenter.category.commonDesc",
+    },
     "work_order": {
         "labelKey": "pages.system.configCenter.category.production",
         "descriptionKey": "pages.system.configCenter.category.productionDesc",
@@ -232,6 +236,7 @@ PROCESS_KEYS = {
 
 # 参数设置：具体业务值（数值、阈值、功能开关）
 PARAMETER_KEYS = {
+    "parameters.common.trial_run_mode",
     "parameters.work_order.allow_production_without_material",
     "parameters.work_order.auto_generate",
     "parameters.work_order.priority",
@@ -272,6 +277,7 @@ PARAMETER_KEYS = {
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
 IMPLEMENTED_PARAMETER_KEYS = {
+    "parameters.common.trial_run_mode",
     "parameters.procurement.require_purchase_requisition",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
@@ -341,6 +347,9 @@ DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES = {
 # 仅保留真实有默认值语义的键；未列出的键由业务 getter 自行定义 fallback。
 # ============================================================
 DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
+    "common": {
+        "trial_run_mode": False,
+    },
     "work_order": {
         "auto_generate": True,
         "priority": True,
@@ -682,6 +691,11 @@ class BusinessConfigService:
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("bom", {}).get("bom_multi_version_allowed", True))
+
+    async def is_trial_run_mode_enabled(self, tenant_id: int) -> bool:
+        """是否开启试运营模式（试运营期间部分业务校验可放宽，具体规则由各领域按需接入）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(config["parameters"].get("common", {}).get("trial_run_mode", False))
 
     async def allow_production_without_material(self, tenant_id: int) -> bool:
         return (await self.get_material_shortage_block_level(tenant_id)) <= 0

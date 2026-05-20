@@ -19,12 +19,17 @@ from apps.kuaizhizao.schemas.cost import (
 )
 from apps.kuaicaiwu.services.cost_service import CostRuleService
 from apps.kuaicaiwu.models.cost_rule import CostRule
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/cost/rules", tags=["App · Kuaicaiwu · Cost Rules"])
+router = APIRouter(
+    prefix="/cost/rules",
+    tags=["App · Kuaicaiwu · Cost Rules"],
+    dependencies=[Depends(require_module_access("kuaicaiwu", "cost-rule"))],
+)
 
 
 def _http_exception_with_trace(

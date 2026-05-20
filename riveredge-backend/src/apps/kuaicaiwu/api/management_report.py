@@ -4,10 +4,15 @@
 
 from fastapi import APIRouter, Depends, Query
 from typing import Dict, Any
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.management_report_service import ManagementReportService
 
-router = APIRouter(prefix="/management-report", tags=["App · Kuaicaiwu · Management Accounting Reports"])
+router = APIRouter(
+    prefix="/management-report",
+    tags=["App · Kuaicaiwu · Management Accounting Reports"],
+    dependencies=[Depends(require_module_access("kuaicaiwu", "cost-report"))],
+)
 service = ManagementReportService()
 
 @router.get("/kpis", summary="Financial KPIs (DSO, sales, gross margin)")

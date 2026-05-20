@@ -114,6 +114,11 @@ type SortOrder = 'ascend' | 'descend' | null;
  */
 type ViewType = 'icons' | 'list' | 'details';
 
+type FileFolderNode = DataNode & {
+  rawCategory?: string;
+  displayTitle?: string;
+};
+
 /**
  * 缩略图渲染组件 - 抽离到外部避免 Parent Re-render 时物理销毁重建组件（解决闪烁根本原因）
  */
@@ -170,6 +175,28 @@ const FileListPage: React.FC = () => {
   const ROOT_PATH_KEY = 'all';
   const [currentPath, setCurrentPath] = useState<string[]>([ROOT_PATH_KEY]);
   const [treeSearchValue, setTreeSearchValue] = useState<string>('');
+
+  const resolveCategoryDisplayName = useCallback((category?: string): string => {
+    const raw = (category || '').trim();
+    if (!raw) return '';
+    if (/[\u4e00-\u9fff]/.test(raw)) return raw;
+
+    const lower = raw.toLowerCase();
+    if (lower.includes('haoligo_equipment_upkeep_com') || lower.includes('haoligo-equipment-upkeep-com')) {
+      return t('app.haoligo.menu.equipment.documents.upkeep-complete', { defaultValue: raw });
+    }
+    if (lower.includes('haoligo_equipment_upkeep') || lower.includes('haoligo-equipment-upkeep')) {
+      return t('app.haoligo.menu.equipment.documents.upkeep-sheet', { defaultValue: raw });
+    }
+    if (lower.includes('haoligo_patrol_hazard') || lower.includes('haoligo-patrol-hazard')) {
+      return t('app.haoligo.menu.patrol.hazards', { defaultValue: raw });
+    }
+    if (lower === 'haoligo_equipment' || lower.includes('haoligo-equipment')) {
+      return t('app.haoligo.menu.equipment.ledger', { defaultValue: raw });
+    }
+
+    return raw;
+  }, [t]);
   
   // Modal 相关状态
   const [uploadVisible, setUploadVisible] = useState(false);
@@ -230,9 +257,11 @@ const FileListPage: React.FC = () => {
       }
     });
 
-    const categoryNodes: DataNode[] = Array.from(categories).map(category => ({
-      title: category,
+    const categoryNodes: FileFolderNode[] = Array.from(categories).map(category => ({
+      title: resolveCategoryDisplayName(category),
       key: category,
+      rawCategory: category,
+      displayTitle: resolveCategoryDisplayName(category),
       icon: <FolderOutlined />,
       isLeaf: false,
     }));
@@ -258,7 +287,7 @@ const FileListPage: React.FC = () => {
     if (categoryNodes.length > 0) {
       setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
     }
-  }, [allFiles, t, selectedTreeKeys.length, treeSearchValue]);
+  }, [allFiles, t, selectedTreeKeys.length, treeSearchValue, resolveCategoryDisplayName]);
 
   /**
    * 过滤文件夹树（根据搜索关键词）：保留「全部文件」根节点，只过滤其子文件夹
@@ -276,10 +305,11 @@ const FileListPage: React.FC = () => {
     }
 
     const root = treeData[0];
-    const children = (root.children || []) as DataNode[];
+    const children = (root.children || []) as FileFolderNode[];
     const filteredChildren = children.filter(node => {
       const title = (node.title as string) || '';
-      return title.toLowerCase().includes(searchLower);
+      const rawCategory = (node.rawCategory || '').toLowerCase();
+      return title.toLowerCase().includes(searchLower) || rawCategory.includes(searchLower);
     });
 
     const filteredRoot: DataNode = {
@@ -786,6 +816,21 @@ const FileListPage: React.FC = () => {
             expandedKeys: expandedKeys,
             onSelect: handleTreeSelect,
             onExpand: setExpandedKeys,
+            titleRender: (node) => (
+              <span
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  verticalAlign: 'bottom',
+                }}
+                title={(node as FileFolderNode).displayTitle || (node.title as string)}
+              >
+                {(node as FileFolderNode).displayTitle || (node.title as string)}
+              </span>
+            ),
             showIcon: true,
             blockNode: true,
             className: 'file-manager-tree',
@@ -804,7 +849,8 @@ const FileListPage: React.FC = () => {
             center: (
               <Breadcrumb
                 items={currentPath.map((path, index) => {
-                  const displayPath = path === ROOT_PATH_KEY ? t('pages.system.files.allFiles') : path;
+                  const displayPath =
+                    path === ROOT_PATH_KEY ? t('pages.system.files.allFiles') : resolveCategoryDisplayName(path);
                   return {
                     title: index === currentPath.length - 1 ? (
                       <span style={{ fontWeight: 500 }}>{displayPath}</span>

@@ -50,9 +50,11 @@ import {
 import { executeDatasetQuery, getDatasetList } from '../../../../services/dataset';
 import { downloadFile } from '../../../../utils';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<any>();
   const departmentDetailReqRef = useRef(0);
@@ -684,6 +686,7 @@ const DepartmentListPage: React.FC = () => {
         deleteConfirmTitle={t('field.department.batchDeleteTitle')}
         deleteConfirmDescription={(c) => t('field.department.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
+          trialRunMode && (
           <Button
             key="loadPreset"
             loading={loadPresetLoading}
@@ -702,7 +705,8 @@ const DepartmentListPage: React.FC = () => {
             }}
           >
             {t('field.department.loadPreset')}
-          </Button>,
+          </Button>
+          ),
           <Button
             key="toggleExpand"
             onClick={() => {

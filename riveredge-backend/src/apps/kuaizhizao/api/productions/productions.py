@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -259,7 +260,10 @@ from .document_relations_legacy import router as document_relations_legacy_route
 
 # 创建路由
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
-router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
+router = APIRouter(
+    tags=["App · Kuaige Zhizao · Production Execution"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "production-execution-reporting"))],
+)
 router.include_router(work_orders_router)
 router.include_router(reporting_router)
 router.include_router(warehouse_execution_router)

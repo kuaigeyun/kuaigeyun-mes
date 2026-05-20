@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
@@ -27,7 +28,11 @@ from apps.kuaizhizao.schemas.initial_data import (
     WizardCountdownPatchRequest,
 )
 
-router = APIRouter(prefix="/initial-data", tags=["App · Kuaige Zhizao · Initial Data Import"])
+router = APIRouter(
+    prefix="/initial-data",
+    tags=["App · Kuaige Zhizao · Initial Data Import"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "warehouse-management-initial-data"))],
+)
 
 # 初始化服务实例
 initial_data_service = InitialDataService()

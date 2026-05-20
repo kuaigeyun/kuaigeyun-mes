@@ -22,7 +22,17 @@ import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton } from '@ant-design/pro-components';
-import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialUnit, MaterialCodeMapping } from '../types/material';
+import {
+  formatMaterialGroupLabel,
+  type Material,
+  type MaterialCreate,
+  type MaterialUpdate,
+  type DepartmentCodeMapping,
+  type CustomerCodeMapping,
+  type SupplierCodeMapping,
+  type MaterialUnit,
+  type MaterialCodeMapping,
+} from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -36,9 +46,10 @@ import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { variantAttributeApi } from '../services/variant-attribute';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { testGenerateCode } from '../../../services/codeRule';
+
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
-import { getFileByUuid, getFileDownloadUrlWithToken, uploadMultipleFiles } from '../../../services/file';
+import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
@@ -322,14 +333,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       return;
     }
 
-    // 构建上下文（用于编号规则，隔离字段 scope_fields 依赖 group_code）
+    // 构建上下文：仅末级分组编号（与 material.groupId 对应分组的 code 一致）
     const context: Record<string, any> = {};
     
-    // 如果提供了物料分组ID，获取分组信息（兼容 id 为 number/string 的类型）
     if (groupId != null && !(typeof groupId === 'string' && groupId === '')) {
       const group = materialGroups.find(g => Number(g.id) === Number(groupId));
       if (group) {
-        context.group_code = group.code;
+        const leafCode = (group.code ?? '').toString().trim();
+        context.leaf_group_code = leafCode;
+        context.group_code = leafCode;
+        context.group_code_path = leafCode;
         context.group_name = group.name;
       }
     }
@@ -482,14 +495,21 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               } catch {
                 /* 元数据失败时仍尝试展示为附件 */
               }
-              const url = await getFileDownloadUrlWithToken(uuid);
               const showAsImage = isImageAttachmentExt(ext);
+              if (showAsImage) {
+                const { thumbUrl, url } = await buildImageUploadFileUrls(uuid);
+                return {
+                  uid: uuid,
+                  name,
+                  status: 'done' as const,
+                  url,
+                  thumbUrl,
+                };
+              }
               return {
                 uid: uuid,
                 name,
                 status: 'done' as const,
-                url: showAsImage ? url : undefined,
-                thumbUrl: showAsImage ? url : undefined,
               };
             })
           ).then((fileList) => {
@@ -1773,7 +1793,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             label={t('app.master-data.materialForm.materialGroup')}
             placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
             options={materialGroups.map(g => ({
-              label: `${g.code} - ${g.name}`,
+              label: formatMaterialGroupLabel(g),
               value: g.id,
             }))}
             fieldProps={{ showSearch: true, allowClear: true, style: { width: '100%' } }}

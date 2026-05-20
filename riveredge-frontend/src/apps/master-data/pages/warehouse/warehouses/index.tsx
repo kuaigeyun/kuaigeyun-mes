@@ -27,6 +27,7 @@ import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -37,6 +38,7 @@ import {
  */
 const WarehousesPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -806,6 +808,7 @@ const WarehousesPage: React.FC = () => {
           >
             {t('app.master-data.warehouses.create') + NEW_SHORTCUT_HINT}
           </Button>,
+          trialRunMode && (
           <Button
             key="loadPreset"
             loading={loadPresetLoading}
@@ -824,7 +827,8 @@ const WarehousesPage: React.FC = () => {
             }}
           >
             {t('field.warehouse.loadPreset')}
-          </Button>,
+          </Button>
+          ),
           <Button
             key="syncLineSide"
             loading={syncLineSideLoading}

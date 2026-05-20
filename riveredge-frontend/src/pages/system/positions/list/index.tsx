@@ -26,6 +26,7 @@ import {
 } from '../../../../services/position';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: string; key: string; children?: any[] }> {
   return items.map((item) => ({
@@ -38,6 +39,7 @@ function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: 
 
 const PositionListPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const positionDetailReqRef = useRef(0);
@@ -311,6 +313,7 @@ const PositionListPage: React.FC = () => {
           createButtonText={t('field.position.createTitle')}
           onCreate={handleCreate}
           toolBarRender={() => [
+            trialRunMode && (
             <Button
               key="loadPreset"
               loading={loadPresetLoading}
@@ -329,7 +332,8 @@ const PositionListPage: React.FC = () => {
               }}
             >
               {t('field.position.loadPreset')}
-            </Button>,
+            </Button>
+            ),
           ]}
           showDeleteButton
           onDelete={handleBatchDelete}

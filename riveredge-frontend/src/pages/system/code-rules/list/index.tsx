@@ -34,6 +34,7 @@ import {
   CodeRuleComponentService,
 } from '../../../../utils/codeRuleComponent';
 import { getCodeRulePageConfigsKey } from '../../../../utils/codeRulePage';
+import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 // 去除未使用的 Text, Paragraph
 
@@ -114,6 +115,7 @@ PageListItem.displayName = 'PageListItem';
  */
 const CodeRuleListPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
 
@@ -606,6 +608,7 @@ const CodeRuleListPage: React.FC = () => {
         {/* 恢复全部、启用全部 按钮 */}
         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
           <div style={{ display: 'flex', gap: 8 }}>
+            {trialRunMode && (
             <Button
               type="primary"
               block
@@ -632,6 +635,7 @@ const CodeRuleListPage: React.FC = () => {
             >
               {t('pages.system.codeRules.restoreAll')}
             </Button>
+            )}
             <Button
               type="primary"
               block
@@ -788,6 +792,7 @@ const CodeRuleListPage: React.FC = () => {
                 </div>
               </div>
               <Space>
+                {trialRunMode && (
                 <Button
                   loading={restoreSingleLoading}
                   onClick={async () => {
@@ -809,6 +814,7 @@ const CodeRuleListPage: React.FC = () => {
                 >
                   {t('pages.system.codeRules.restoreSingle')}
                 </Button>
+                )}
                 <Button
                   type="primary"
                   loading={pageRuleFormLoading}

@@ -35,6 +35,7 @@ import {
 } from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { getDefaultTenantHomePath } from '../../stores/configStore';
+import { getTenantBackendHome } from '../../services/menu';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
@@ -117,6 +118,17 @@ export default function LoginPage() {
         useUserPreferenceStore.getState().rehydrateFromStorage();
       })
       .catch(() => {});
+  }, []);
+
+  const resolvePostLoginHomePath = useCallback(async (): Promise<string> => {
+    const fallbackPath = getDefaultTenantHomePath();
+    try {
+      const backendHome = await getTenantBackendHome();
+      const customPath = backendHome?.path?.trim();
+      return customPath || fallbackPath;
+    } catch {
+      return fallbackPath;
+    }
   }, []);
 
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(() =>
@@ -674,7 +686,9 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success(t('pages.login.success'));
-        navigate(getDefaultTenantHomePath(), { replace: true });
+        void resolvePostLoginHomePath().then((path) => {
+          navigate(path, { replace: true });
+        });
       }, 0);
           }
         } catch (loginError: any) {
@@ -866,7 +880,9 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success(t('pages.login.success'));
-        navigate(getDefaultTenantHomePath());
+        void resolvePostLoginHomePath().then((path) => {
+          navigate(path);
+        });
       }, 0);
       return;
     }
@@ -914,11 +930,14 @@ export default function LoginPage() {
       // 触发用户登录事件，通知布局组件清除菜单缓存
       const urlParams = new URL(window.location.href).searchParams;
       const redirect = urlParams.get('redirect');
-      const targetPath = redirect || getDefaultTenantHomePath();
-
-      // 先立即跳转，避免等待 getInitSteps 导致卡顿
       message.success(t('pages.login.success'));
-      navigate(targetPath, { replace: true });
+      if (redirect) {
+        navigate(redirect, { replace: true });
+      } else {
+        void resolvePostLoginHomePath().then((path) => {
+          navigate(path, { replace: true });
+        });
+      }
 
       // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
       (async () => {
@@ -1334,7 +1353,14 @@ export default function LoginPage() {
           const urlParams = new URL(window.location.href).searchParams;
           setTimeout(() => {
             message.success(t('pages.login.guestSuccess'));
-            navigate(urlParams.get('redirect') || getDefaultTenantHomePath());
+            const redirect = urlParams.get('redirect');
+            if (redirect) {
+              navigate(redirect);
+              return;
+            }
+            void resolvePostLoginHomePath().then((path) => {
+              navigate(path);
+            });
           }, 0);
         } else {
           message.error(t('pages.login.guestFailedNoTenant'));
@@ -1423,11 +1449,13 @@ export default function LoginPage() {
 
         const urlParams = new URL(window.location.href).searchParams;
         const redirect = urlParams.get('redirect');
-        const targetPath = redirect || getDefaultTenantHomePath();
-
-        // 先立即跳转，避免等待 getInitSteps 导致卡顿
         message.success(t('pages.login.tenantSelected'));
-        navigate(targetPath, { replace: true });
+        if (redirect) {
+          navigate(redirect, { replace: true });
+        } else {
+          const homePath = await resolvePostLoginHomePath();
+          navigate(homePath, { replace: true });
+        }
 
         // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
         (async () => {

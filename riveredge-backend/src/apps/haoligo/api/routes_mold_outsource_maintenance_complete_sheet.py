@@ -33,6 +33,7 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -40,6 +41,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/outsource-maintenance-complete-sheets",
     tags=["App · HaoliGO · 外协维保完修单"],
+    dependencies=[Depends(require_module_access("haoligo", "molds-documents-outsource-complete"))],
 )
 
 _COMPLETION_TEXT_MAX = 4000

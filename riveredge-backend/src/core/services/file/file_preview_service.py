@@ -113,16 +113,20 @@ class FilePreviewService:
         file_uuid: str,
         tenant_id: int,
         force_simple_for_image: bool = False,
+        thumbnail_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         from core.services.file.file_service import FileService
 
         file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
 
         avatar_thumbnail_size = 128
+        resolved_size = thumbnail_size
+        if resolved_size is None and force_simple_for_image:
+            resolved_size = avatar_thumbnail_size
         preview_url = await FilePreviewService.generate_simple_preview_url(
             file_uuid=file.uuid,
             tenant_id=file.tenant_id,
-            size=avatar_thumbnail_size if force_simple_for_image else None,
+            size=resolved_size,
         )
         return {
             "preview_mode": "simple",

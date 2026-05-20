@@ -13,11 +13,16 @@ from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_TRIAL_SHEET_NO
 from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/molds/trial-sheets", tags=["App · HaoliGO · 试模单"])
+router = APIRouter(
+    prefix="/molds/trial-sheets",
+    tags=["App · HaoliGO · 试模单"],
+    dependencies=[Depends(require_module_access("haoligo", "molds-documents-trial"))],
+)
 
 TrialResultLiteral = Literal["合格", "不合格"]
 SheetStatusLiteral = Literal["草稿", "已提交", "待审核", "已通过", "已驳回", "已作废"]

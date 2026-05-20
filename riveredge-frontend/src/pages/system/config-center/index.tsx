@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Modal, Descriptions } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, AuditOutlined, ControlOutlined, BellOutlined } from '@ant-design/icons';
 import type { ProFormInstance } from '@ant-design/pro-components';
@@ -38,6 +38,7 @@ import {
   AUTOMATION_CATEGORIES,
   type ConfigCategory,
 } from './configTree';
+import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
 
 import type { Color } from 'antd/es/color-picker';
 
@@ -190,6 +191,7 @@ const ConfigCenterPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const validTabs = useMemo(() => ['parameters', 'audit', 'automation', 'notification'], []);
@@ -412,6 +414,7 @@ const ConfigCenterPage: React.FC = () => {
       }
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
       await refetchBusinessConfig();
+      await queryClient.invalidateQueries({ queryKey: TRIAL_RUN_MODE_QUERY_KEY });
     } catch (error: any) {
       if (!error?.errorFields) messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
     } finally {

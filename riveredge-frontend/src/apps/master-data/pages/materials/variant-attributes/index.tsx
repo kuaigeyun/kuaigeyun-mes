@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, Pr
 import { UniTable } from '../../../../../components/uni-table';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
@@ -19,6 +20,7 @@ import { variantAttributeApi, type PresetAttributeItem } from '../../../services
 
 const VariantAttributesPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -392,6 +394,7 @@ const VariantAttributesPage: React.FC = () => {
               >
                 {'新建属性定义' + NEW_SHORTCUT_HINT}
               </Button>
+              {trialRunMode && (
               <Button
                 key="loadPreset"
                 loading={loadPresetLoading}
@@ -411,6 +414,7 @@ const VariantAttributesPage: React.FC = () => {
               >
                 {t('app.master-data.variantAttributes.loadPreset')}
               </Button>
+              )}
               <Button
                 danger
                 disabled={selectedRowKeys.length === 0}

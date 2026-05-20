@@ -12,6 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
@@ -30,6 +31,7 @@ import { extractProTableSort, mapProcessListSortField } from '../../../../../uti
  */
 const OperationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -637,6 +639,7 @@ const OperationsPage: React.FC = () => {
           >
             {'新建工序' + NEW_SHORTCUT_HINT}
           </Button>,
+          trialRunMode && (
           <Button
             key="loadPreset"
             loading={loadPresetLoading}
@@ -658,7 +661,8 @@ const OperationsPage: React.FC = () => {
             }}
           >
             {t('field.operation.loadPreset')}
-          </Button>,
+          </Button>
+          ),
           <Button
             key="batch-qrcode"
             icon={<QrcodeOutlined />}

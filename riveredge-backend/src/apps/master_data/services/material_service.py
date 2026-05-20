@@ -22,6 +22,9 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
     MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
     MaterialBatchDeleteRequest, MaterialBatchDeleteResponse, MaterialBatchDeleteFailedItem,
+    MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
+    MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
+    MaterialRewriteMainCodesFailedItem,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary,
@@ -392,6 +395,7 @@ class MaterialService:
                         "uuid": str(mg.uuid),
                         "tenant_id": mg.tenant_id,
                         "code": mg.code,
+                        "alias": getattr(mg, "alias", None),
                         "name": mg.name,
                         "parent_id": getattr(mg, 'parent_id', None),
                         "description": getattr(mg, 'description', None),
@@ -573,41 +577,28 @@ class MaterialService:
             )
             
             if material_page_config and material_page_config.get("rule_code"):
-                try:
-                    # 构建上下文变量，包含物料分组编码等字段值
-                    context = {}
-                    
-                    # 如果指定了分组，添加分组信息到上下文
-                    if group:
-                        context["group_code"] = group.code
-                        context["group_name"] = group.name
-                    
-                    # 添加物料来源类型（用于编码规则，可选）
-                    if getattr(data, "source_type", None):
-                        context["source_type"] = data.source_type
-                    
-                    # 添加物料名称（如果需要）
-                    context["name"] = data.name
-                    
-                    # 使用编码规则生成编码
-                    data.main_code = await CodeGenerationService.generate_code(
-                        tenant_id=tenant_id,
-                        rule_code=material_page_config["rule_code"],
-                        context=context
+                if not group:
+                    raise ValidationError(
+                        "创建物料须选择末级物料分组，才能按分组编号生成主编码"
                     )
-                    logger.info(f"使用编码规则生成物料主编码: {data.main_code}")
-                except Exception as e:
-                    # 如果编码规则生成失败，回退到默认生成方式
-                    logger.warning(f"使用编码规则生成物料编码失败: {e}，回退到默认生成方式")
-                    data.main_code = await MaterialCodeService.generate_main_code(
-                        tenant_id=tenant_id,
-                        material_type=_source_type_to_type_code(getattr(data, "source_type", None))
-                    )
+                context = await CodeGenerationService.build_material_code_context_from_group(
+                    tenant_id,
+                    group,
+                    source_type=getattr(data, "source_type", None),
+                    name=data.name,
+                )
+                if not context.get("leaf_group_code"):
+                    raise ValidationError("所选物料分组未配置分组编号，无法生成主编码")
+                data.main_code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code=material_page_config["rule_code"],
+                    context=context,
+                )
+                logger.info(f"使用编码规则生成物料主编码: {data.main_code}")
             else:
-                # 如果没有配置编码规则，使用默认生成方式
                 data.main_code = await MaterialCodeService.generate_main_code(
                     tenant_id=tenant_id,
-                    material_type=_source_type_to_type_code(getattr(data, "source_type", None))
+                    material_type=_source_type_to_type_code(getattr(data, "source_type", None)),
                 )
         else:
             logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
@@ -706,35 +697,22 @@ class MaterialService:
                         None
                     )
                     
-                    context = {}
-                    if group:
-                        context["group_code"] = group.code
-                        context["group_name"] = group.name
-                    if getattr(data, "source_type", None):
-                        context["source_type"] = data.source_type
-                    context["name"] = data.name
-                    
+                    context = await CodeGenerationService.build_material_code_context_from_group(
+                        tenant_id,
+                        group,
+                        source_type=getattr(data, "source_type", None),
+                        name=data.name,
+                    )
                     max_attempts = 20
                     for attempt in range(max_attempts):
-                        if material_page_config and material_page_config.get("rule_code"):
-                            try:
-                                data.main_code = await CodeGenerationService.generate_code(
-                                    tenant_id=tenant_id,
-                                    rule_code=material_page_config["rule_code"],
-                                    context=context
-                                )
-                                logger.info(f"自动重新生成物料主编码(尝试 {attempt + 1}/{max_attempts}): {data.main_code}")
-                            except Exception as e:
-                                logger.warning(f"使用编码规则重新生成物料编码失败: {e}，回退到默认生成方式")
-                                data.main_code = await MaterialCodeService.generate_main_code(
-                                    tenant_id=tenant_id,
-                                    material_type=_source_type_to_type_code(getattr(data, "source_type", None))
-                                )
-                        else:
-                            data.main_code = await MaterialCodeService.generate_main_code(
-                                tenant_id=tenant_id,
-                                material_type=_source_type_to_type_code(getattr(data, "source_type", None))
-                            )
+                        data.main_code = await CodeGenerationService.generate_code(
+                            tenant_id=tenant_id,
+                            rule_code=material_page_config["rule_code"],
+                            context=context,
+                        )
+                        logger.info(
+                            f"自动重新生成物料主编码(尝试 {attempt + 1}/{max_attempts}): {data.main_code}"
+                        )
                         
                         existing_check = await Material.filter(
                             tenant_id=tenant_id,
@@ -1302,6 +1280,7 @@ class MaterialService:
         base_unit: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        no_group: Optional[bool] = None,
     ) -> MaterialListResponse:
         """
         获取物料列表
@@ -1312,7 +1291,7 @@ class MaterialService:
             limit: 限制数量
             group_id: 物料分组ID（可选，用于过滤）
             is_active: 是否启用（可选）
-            keyword: 搜索关键词（物料编码或名称）
+            keyword: 搜索关键词（物料编码、名称或规格）
             code: 物料编码（精确匹配）
             name: 物料名称（模糊匹配）
             source_type: 物料来源类型（可选，用于过滤）
@@ -1329,7 +1308,9 @@ class MaterialService:
             deleted_at__isnull=True
         )
 
-        if group_id is not None:
+        if no_group:
+            query = query.filter(group_id__isnull=True)
+        elif group_id is not None:
             # 递归获取所有子分组ID（包括当前分组本身）
             async def get_all_child_group_ids(parent_group_id: int) -> List[int]:
                 """递归获取所有子分组ID（包括父分组本身）"""
@@ -1364,8 +1345,12 @@ class MaterialService:
 
         # 添加搜索条件（支持主编码和部门编码搜索）
         if keyword:
-            # 首先尝试通过主编码或名称搜索
-            main_code_query = Q(main_code__icontains=keyword) | Q(name__icontains=keyword)
+            # 主编码、名称、规格；部门编码见下方别名表
+            main_code_query = (
+                Q(main_code__icontains=keyword)
+                | Q(name__icontains=keyword)
+                | Q(specification__icontains=keyword)
+            )
             # 如果有关键词，也尝试通过部门编码搜索
             code_aliases = await MaterialCodeAlias.filter(
                 tenant_id=tenant_id,
@@ -1852,6 +1837,514 @@ class MaterialService:
 
         return MaterialBatchDeleteResponse(
             deleted_count=len(to_delete_ids),
+            failed_count=len(failed_items),
+            failed_items=failed_items,
+        )
+
+    @staticmethod
+    async def bulk_move_material_group(
+        tenant_id: int,
+        data: MaterialBatchMoveGroupRequest,
+    ) -> MaterialBatchMoveGroupResponse:
+        """批量将物料移动到指定分组（单次 UPDATE）。"""
+        from tortoise import timezone
+
+        uuids = list(dict.fromkeys(str(u).strip() for u in data.material_uuids if u))
+        if not uuids:
+            return MaterialBatchMoveGroupResponse(
+                updated_count=0,
+                requested_count=0,
+                not_found_uuids=[],
+            )
+
+        group = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            id=data.group_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not group:
+            raise ValidationError(f"物料分组 {data.group_id} 不存在")
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+        ).all()
+        found_uuid_set = {str(m.uuid) for m in materials}
+        not_found = [u for u in uuids if u not in found_uuid_set]
+
+        if not materials:
+            return MaterialBatchMoveGroupResponse(
+                updated_count=0,
+                requested_count=len(uuids),
+                not_found_uuids=not_found,
+            )
+
+        ids = [m.id for m in materials]
+        now = timezone.now()
+        await Material.filter(tenant_id=tenant_id, id__in=ids).update(
+            group_id=data.group_id,
+            updated_at=now,
+        )
+
+        return MaterialBatchMoveGroupResponse(
+            updated_count=len(ids),
+            requested_count=len(uuids),
+            not_found_uuids=not_found,
+        )
+
+    _REWRITE_MAIN_CODES_MAX = 2000
+
+    @staticmethod
+    async def _get_all_child_group_ids(tenant_id: int, parent_group_id: int) -> List[int]:
+        """递归获取分组及其所有子分组 ID。"""
+        group_ids = [parent_group_id]
+        child_groups = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            parent_id=parent_group_id,
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        for child_id in child_groups:
+            group_ids.extend(
+                await MaterialService._get_all_child_group_ids(tenant_id, child_id)
+            )
+        return group_ids
+
+    @staticmethod
+    async def _rewrite_with_reset_sequence(
+        tenant_id: int,
+        materials_sorted: List["Material"],
+        all_rewrite_ids: set,
+        groups: dict,
+        failed_items: list,
+        now: Any,
+    ) -> tuple:
+        """
+        reset_sequence=True 的重写路径。
+
+        绕过 CodeGenerationService.generate_code（其内部的 _recalibrate_sequence_from_db
+        会扫描数据库最大编号，导致重置无效），改为直接调用 render_components 并手动维护
+        每个末级分组的计数器，从 seq_start 从头分配编码。
+
+        处理完每个分组后，将最终使用的计数器值写回 core_code_sequences，
+        使后续手工新建物料能正确接续编号（校准机制会基于新编码重新对齐）。
+        """
+        from core.models.code_sequence import CodeSequence
+        from core.services.business.code_rule_service import CodeRuleService
+        from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
+
+        # 加载编码规则
+        material_page_config = next(
+            (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
+            None,
+        )
+        if not material_page_config or not material_page_config.get("rule_code"):
+            raise ValidationError("未配置物料主编码规则（MATERIAL_CODE），无法重写")
+
+        rule_code = material_page_config["rule_code"]
+        rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        if not rule:
+            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
+
+        components = rule.get_rule_components()
+        if not components:
+            raise ValidationError(f"编码规则 {rule_code} 缺少组件配置，请在编码规则页面重新保存")
+
+        counter_config = CodeRuleComponentService.get_counter_component_config(components)
+        seq_start = counter_config.get("initial_value", 1) if counter_config else (rule.seq_start or 1)
+
+        updated_families = 0
+        updated_material_count = 0
+        processed_material_ids: set = set()
+
+        # 按分组分批处理，每个分组独立计数器
+        current_group_id: Optional[int] = None
+        group_counter: int = seq_start - 1
+        # 本批次已分配的编码（用于批内去重）
+        assigned_in_batch: set = set()
+
+        for material in materials_sorted:
+            if material.id in processed_material_ids:
+                continue
+            if material.variant_managed and material.variant_attributes:
+                continue
+
+            rep_uuid = str(material.uuid)
+
+            if not material.group_id:
+                failed_items.append(
+                    MaterialRewriteMainCodesFailedItem(uuid=rep_uuid, reason="未设置物料分组")
+                )
+                continue
+
+            group = groups.get(material.group_id)
+            if not group:
+                group = await MaterialGroup.filter(
+                    tenant_id=tenant_id,
+                    id=material.group_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if group:
+                    groups[group.id] = group
+            if not group:
+                failed_items.append(
+                    MaterialRewriteMainCodesFailedItem(uuid=rep_uuid, reason="物料末级分组不存在")
+                )
+                continue
+            if not (group.code or "").strip():
+                failed_items.append(
+                    MaterialRewriteMainCodesFailedItem(uuid=rep_uuid, reason="物料末级分组未配置分组编号")
+                )
+                continue
+
+            # 切换到新分组时重置计数器，并将上一分组最终计数写回 core_code_sequences
+            if material.group_id != current_group_id:
+                if current_group_id is not None:
+                    prev_group = groups.get(current_group_id)
+                    if prev_group and (prev_group.code or "").strip():
+                        await MaterialService._save_sequence_for_group(
+                            tenant_id, rule, prev_group.code.strip(), group_counter
+                        )
+                current_group_id = material.group_id
+                group_counter = seq_start - 1
+
+            # 构建编码上下文
+            context = await CodeGenerationService.build_material_code_context_from_group(
+                tenant_id,
+                group,
+                source_type=material.source_type,
+                name=material.name or "",
+            )
+            if not context.get("leaf_group_code"):
+                failed_items.append(
+                    MaterialRewriteMainCodesFailedItem(uuid=rep_uuid, reason="物料末级分组未配置分组编号")
+                )
+                continue
+
+            # 查找同主编码族
+            all_family = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=material.main_code,
+                deleted_at__isnull=True,
+            ).all()
+            family_ids = {m.id for m in all_family}
+            # 不属于本批次的外部物料 ID（冲突检测排除批内）
+            external_ids = all_rewrite_ids - family_ids
+
+            # 手动递增计数，渲染编码，仅对批外物料做冲突检测
+            max_attempts = 200
+            new_code = None
+            for _ in range(max_attempts):
+                group_counter += 1
+                candidate = CodeRuleComponentService.render_components(components, group_counter, context)
+                # 批内已分配 → 跳过
+                if candidate in assigned_in_batch:
+                    continue
+                # 与批外现有编码冲突 → 跳过
+                conflict = await Material.filter(
+                    tenant_id=tenant_id,
+                    main_code=candidate,
+                    deleted_at__isnull=True,
+                ).exclude(id__in=list(external_ids) if external_ids else [-1]).first()
+                if not conflict:
+                    new_code = candidate
+                    break
+
+            if not new_code:
+                failed_items.append(
+                    MaterialRewriteMainCodesFailedItem(
+                        uuid=rep_uuid,
+                        reason=f"连续 {max_attempts} 次均冲突，请检查编码规则配置",
+                    )
+                )
+                continue
+
+            assigned_in_batch.add(new_code)
+            await Material.filter(tenant_id=tenant_id, id__in=list(family_ids)).update(
+                main_code=new_code,
+                code=new_code,
+                updated_at=now,
+            )
+            processed_material_ids.update(family_ids)
+            updated_families += 1
+            updated_material_count += len(all_family)
+
+        # 写回最后一个分组的流水计数
+        if current_group_id is not None:
+            last_group = groups.get(current_group_id)
+            if last_group and (last_group.code or "").strip():
+                await MaterialService._save_sequence_for_group(
+                    tenant_id, rule, last_group.code.strip(), group_counter
+                )
+
+        return updated_families, updated_material_count, processed_material_ids, failed_items
+
+    @staticmethod
+    async def _save_sequence_for_group(
+        tenant_id: int,
+        rule: Any,
+        group_code: str,
+        last_seq: int,
+    ) -> None:
+        """将分组最终使用的流水计数写回 core_code_sequences。"""
+        from core.models.code_sequence import CodeSequence
+
+        seq = await CodeSequence.get_or_none(
+            code_rule_id=rule.id,
+            tenant_id=tenant_id,
+            scope_key=group_code,
+            deleted_at__isnull=True,
+        )
+        if seq:
+            seq.current_seq = last_seq
+            seq.reset_date = None
+            await seq.save()
+        else:
+            await CodeSequence.create(
+                code_rule_id=rule.id,
+                tenant_id=tenant_id,
+                scope_key=group_code,
+                current_seq=last_seq,
+            )
+
+    @staticmethod
+    async def _generate_rewrite_main_code(
+        tenant_id: int,
+        *,
+        group: Optional[MaterialGroup],
+        source_type: Optional[str],
+        name: str,
+        exclude_ids: set,
+    ) -> str:
+        """按编码规则 MATERIAL_CODE 与末级分组编号生成新主编码（禁止回退 MAT-RAW）。"""
+        material_page_config = next(
+            (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
+            None,
+        )
+        if not material_page_config or not material_page_config.get("rule_code"):
+            raise ValidationError("未配置物料主编码规则（MATERIAL_CODE），无法重写")
+        if not group:
+            raise ValidationError("物料未设置末级分组")
+        context = await CodeGenerationService.build_material_code_context_from_group(
+            tenant_id,
+            group,
+            source_type=source_type,
+            name=name,
+        )
+        if not context.get("leaf_group_code"):
+            raise ValidationError("物料末级分组未配置分组编号")
+
+        rule_code = material_page_config["rule_code"]
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            new_code = await CodeGenerationService.generate_code(
+                tenant_id=tenant_id,
+                rule_code=rule_code,
+                context=context,
+            )
+
+            conflict = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=new_code,
+                deleted_at__isnull=True,
+            ).exclude(id__in=exclude_ids).first()
+            if not conflict:
+                return new_code
+            logger.warning(
+                f"重写物料编码：{new_code} 已被占用，重试 {attempt + 1}/{max_attempts}"
+            )
+
+        raise ValidationError(
+            f"连续 {max_attempts} 次生成的编码均已存在，请检查编码规则配置"
+        )
+
+    @staticmethod
+    async def bulk_rewrite_main_codes(
+        tenant_id: int,
+        data: MaterialRewriteMainCodesRequest,
+    ) -> MaterialRewriteMainCodesResponse:
+        """
+        试运营模式：按各物料所属末级分组的编号（group.code）重新生成主编码。
+
+        同一主编码族（主物料 + 属性变体）一并更新。
+        支持 reset_sequence=True 时在重写前按末级分组重置流水号。
+        """
+        from infra.services.business_config_service import BusinessConfigService
+        from tortoise import timezone
+
+        if not await BusinessConfigService().is_trial_run_mode_enabled(tenant_id):
+            raise ValidationError("试运营模式未开启，无法使用重写物料编号")
+
+        uuids = list(dict.fromkeys(str(u).strip() for u in (data.material_uuids or []) if u))
+        materials: List[Material] = []
+
+        if uuids:
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).all()
+            found = {str(m.uuid) for m in materials}
+            not_found = [u for u in uuids if u not in found]
+            failed_items = [
+                MaterialRewriteMainCodesFailedItem(uuid=u, reason="物料不存在")
+                for u in not_found
+            ]
+        else:
+            failed_items = []
+            group = await MaterialGroup.filter(
+                tenant_id=tenant_id,
+                id=data.group_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not group:
+                raise ValidationError(f"物料分组 {data.group_id} 不存在")
+            all_group_ids = await MaterialService._get_all_child_group_ids(
+                tenant_id, data.group_id
+            )
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                group_id__in=all_group_ids,
+                deleted_at__isnull=True,
+            ).all()
+
+        requested_count = len(materials)
+        if requested_count > MaterialService._REWRITE_MAIN_CODES_MAX:
+            raise ValidationError(
+                f"单次最多重写 {MaterialService._REWRITE_MAIN_CODES_MAX} 条物料，"
+                f"当前范围共 {requested_count} 条，请缩小选择范围"
+            )
+
+        if not materials:
+            return MaterialRewriteMainCodesResponse(
+                updated_count=0,
+                updated_material_count=0,
+                requested_count=requested_count,
+                failed_count=len(failed_items),
+                failed_items=failed_items,
+            )
+
+        group_ids = {m.group_id for m in materials if m.group_id}
+        groups = {
+            g.id: g
+            for g in await MaterialGroup.filter(
+                tenant_id=tenant_id,
+                id__in=list(group_ids),
+                deleted_at__isnull=True,
+            ).all()
+        }
+
+        # 按末级分组 + 稳定顺序逐条重写（每条物料按其 group_id 对应叶分组编号生成）
+        materials_sorted = sorted(
+            materials,
+            key=lambda m: (m.group_id or 0, m.id),
+        )
+        updated_families = 0
+        updated_material_count = 0
+        processed_material_ids: set = set()
+        now = timezone.now()
+
+        if data.reset_sequence:
+            # 重置流水号路径：绕过 generate_code 的 DB 校准，手动维护每分组计数器，
+            # 从初始值开始分配编码，处理完各分组后将最终计数写回 core_code_sequences。
+            updated_families, updated_material_count, processed_material_ids, failed_items = (
+                await MaterialService._rewrite_with_reset_sequence(
+                    tenant_id=tenant_id,
+                    materials_sorted=materials_sorted,
+                    all_rewrite_ids={m.id for m in materials},
+                    groups=groups,
+                    failed_items=failed_items,
+                    now=now,
+                )
+            )
+        else:
+            for material in materials_sorted:
+                if material.id in processed_material_ids:
+                    continue
+
+                rep_uuid = str(material.uuid)
+
+                if material.variant_managed and material.variant_attributes:
+                    continue
+
+                if not material.group_id:
+                    failed_items.append(
+                        MaterialRewriteMainCodesFailedItem(
+                            uuid=rep_uuid,
+                            reason="未设置物料分组",
+                        )
+                    )
+                    continue
+
+                group = groups.get(material.group_id)
+                if not group:
+                    group = await MaterialGroup.filter(
+                        tenant_id=tenant_id,
+                        id=material.group_id,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if group:
+                        groups[group.id] = group
+                if not group:
+                    failed_items.append(
+                        MaterialRewriteMainCodesFailedItem(
+                            uuid=rep_uuid,
+                            reason="物料末级分组不存在",
+                        )
+                    )
+                    continue
+                if not (group.code or "").strip():
+                    failed_items.append(
+                        MaterialRewriteMainCodesFailedItem(
+                            uuid=rep_uuid,
+                            reason="物料末级分组未配置分组编号",
+                        )
+                    )
+                    continue
+
+                all_family = await Material.filter(
+                    tenant_id=tenant_id,
+                    main_code=material.main_code,
+                    deleted_at__isnull=True,
+                ).all()
+                family_ids = {m.id for m in all_family}
+
+                try:
+                    new_code = await MaterialService._generate_rewrite_main_code(
+                        tenant_id,
+                        group=group,
+                        source_type=material.source_type,
+                        name=material.name or "",
+                        exclude_ids=family_ids,
+                    )
+                except ValidationError as e:
+                    failed_items.append(
+                        MaterialRewriteMainCodesFailedItem(uuid=rep_uuid, reason=str(e))
+                    )
+                    continue
+                except Exception as e:
+                    logger.exception(f"重写物料主编码失败: {material.main_code}")
+                    failed_items.append(
+                        MaterialRewriteMainCodesFailedItem(
+                            uuid=rep_uuid,
+                            reason=f"生成编码失败: {e}",
+                        )
+                    )
+                    continue
+
+                await Material.filter(tenant_id=tenant_id, id__in=list(family_ids)).update(
+                    main_code=new_code,
+                    code=new_code,
+                    updated_at=now,
+                )
+                processed_material_ids.update(family_ids)
+                updated_families += 1
+                updated_material_count += len(all_family)
+
+        return MaterialRewriteMainCodesResponse(
+            updated_count=updated_families,
+            updated_material_count=updated_material_count,
+            requested_count=requested_count,
             failed_count=len(failed_items),
             failed_items=failed_items,
         )
@@ -2920,6 +3413,7 @@ class MaterialService:
                 "uuid": group.uuid,
                 "tenant_id": group.tenant_id,
                 "code": group.code,
+                "alias": group.alias,
                 "name": group.name,
                 "parent_id": group.parent_id,
                 "description": group.description,

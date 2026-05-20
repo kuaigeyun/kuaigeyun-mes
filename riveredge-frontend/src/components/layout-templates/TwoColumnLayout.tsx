@@ -114,6 +114,10 @@ export interface LeftPanelConfig {
      */
     loading?: boolean;
     /**
+     * 加载提示文案（与编号规则左侧列表一致：居中 Spin + 文案）
+     */
+    loadingTip?: string;
+    /**
      * 其他 Tree 属性
      */
     [key: string]: any;
@@ -165,6 +169,10 @@ export interface RightPanelConfig {
    * 内容区背景色（默认：浅色填充）
    */
   contentBackgroundColor?: string;
+  /**
+   * 内容区内边距（默认 16；复杂页可设为 0 由内部自行留白）
+   */
+  contentPadding?: number | string;
 }
 
 /**
@@ -215,6 +223,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     content,
     footer,
     contentBackgroundColor = token.colorFillAlter || '#fafafa',
+    contentPadding = 16,
   } = rightPanel;
 
   // 提取树组件的属性
@@ -229,6 +238,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     onRightClick,
     className: treeClassName,
     loading = false,
+    loadingTip,
     height: _treeHeightIgnored,
     virtual: _treeVirtualIgnored,
     ...treeRestProps
@@ -240,6 +250,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       style={{
         display: 'flex',
         flex: 1,
+        width: '100%',
         minHeight: TWO_COLUMN_LAYOUT.MIN_HEIGHT,
         height: '100%',
         padding: 0,
@@ -313,7 +324,14 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           className="two-column-layout-left-tree scrollbar-like-modal"
           style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
         >
-          <Spin spinning={loading}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Spin size="large" />
+              {loadingTip ? (
+                <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>{loadingTip}</div>
+              ) : null}
+            </div>
+          ) : (
             <Tree
               motion={null}
               className={treeClassName}
@@ -328,7 +346,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               {...treeRestProps}
               virtual={false}
             />
-          </Spin>
+          )}
         </div>
       </div>
 
@@ -377,7 +395,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
             minHeight: 0,
             overflowX: 'hidden',
             overflowY: 'auto',
-            padding: '16px',
+            padding: contentPadding,
             backgroundColor: contentBackgroundColor,
             display: 'flex',
             flexDirection: 'column',

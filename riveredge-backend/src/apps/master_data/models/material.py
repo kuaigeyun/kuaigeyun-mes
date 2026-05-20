@@ -20,7 +20,8 @@ class MaterialGroup(BaseModel):
         id: 主键ID（自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
-        code: 分组编码（组织内唯一）
+        code: 分组编号（组织内唯一，参与物料编号生成）
+        alias: 分组代号（英文展示名，可选）
         name: 分组名称
         parent_id: 父分组ID（可选，用于层级结构）
         description: 描述
@@ -51,7 +52,8 @@ class MaterialGroup(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
-    code = fields.CharField(max_length=50, description="分组编码（组织内唯一）")
+    code = fields.CharField(max_length=50, description="分组编号（组织内唯一，参与物料编号生成）")
+    alias = fields.CharField(max_length=100, null=True, description="分组代号（英文展示名，可选）")
     name = fields.CharField(max_length=200, description="分组名称")
     description = fields.TextField(null=True, description="描述")
     

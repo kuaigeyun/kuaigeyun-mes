@@ -533,6 +533,7 @@ async def reset_user_password(
 @router.post("/import/preview", response_model=UserImportPreviewResponse)
 async def preview_user_import(
     request: UserImportRequest,
+    _auth: object = Depends(require_access("system.user", "import")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -551,6 +552,7 @@ async def preview_user_import(
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_users(
     request: UserImportRequest,
+    _auth: object = Depends(require_access("system.user", "import")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -603,6 +605,7 @@ async def export_users(
     position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否激活筛选"),
     is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
+    _auth: object = Depends(require_access("system.user", "export")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

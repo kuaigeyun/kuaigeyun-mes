@@ -28,6 +28,10 @@ class UserPermissionService:
 
     ADMIN_ROLE_CODES = {"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"}
     ADMIN_ROLE_NAME = "系统管理员"
+
+    @staticmethod
+    def _normalize_permission_code(code: str) -> str:
+        return (code or "").strip().lower()
     
     @staticmethod
     async def get_user_permissions(
@@ -74,7 +78,9 @@ class UserPermissionService:
         permission_codes = set()
         for rp in role_permissions:
             if rp.permission and rp.permission.deleted_at is None:
-                permission_codes.add(rp.permission.code)
+                normalized = UserPermissionService._normalize_permission_code(rp.permission.code or "")
+                if normalized:
+                    permission_codes.add(normalized)
 
         # 拥有「系统管理员」角色时始终合并租户下全部权限，与组织管理员行为一致，保证应用级菜单等全部可见
         has_admin_role = any(
@@ -90,7 +96,15 @@ class UserPermissionService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).all()
-            permission_codes |= {p.code for p in all_permissions if p.code}
+            permission_codes |= {
+                n
+                for n in (
+                    UserPermissionService._normalize_permission_code(p.code or "")
+                    for p in all_permissions
+                    if p.code
+                )
+                if n
+            }
 
         await cache_manager.set("permissions", cache_key, sorted(permission_codes), ttl=1800)
         return permission_codes
@@ -128,7 +142,7 @@ class UserPermissionService:
         )
         
         # 检查是否具有指定权限
-        return permission_code in user_permissions
+        return UserPermissionService._normalize_permission_code(permission_code) in user_permissions
     
     @staticmethod
     async def has_any_permission(
@@ -163,7 +177,12 @@ class UserPermissionService:
         )
         
         # 检查是否具有任意一个权限
-        return bool(user_permissions & set(permission_codes))
+        normalized_codes = {
+            UserPermissionService._normalize_permission_code(c)
+            for c in permission_codes
+            if c and str(c).strip()
+        }
+        return bool(user_permissions & normalized_codes)
     
     @staticmethod
     async def has_all_permissions(
@@ -198,7 +217,12 @@ class UserPermissionService:
         )
         
         # 检查是否具有所有权限
-        return set(permission_codes).issubset(user_permissions)
+        normalized_codes = {
+            UserPermissionService._normalize_permission_code(c)
+            for c in permission_codes
+            if c and str(c).strip()
+        }
+        return normalized_codes.issubset(user_permissions)
     
     @staticmethod
     async def get_user_roles(

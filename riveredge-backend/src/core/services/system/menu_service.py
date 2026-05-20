@@ -12,6 +12,7 @@ import json
 
 from core.models.menu import Menu
 from core.models.permission import Permission
+from core.config.system_menu_config import SYSTEM_MENU_CONFIG
 from core.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
 from core.services.application.application_service import ApplicationService
@@ -21,6 +22,95 @@ from infra.infrastructure.cache.cache_manager import cache_manager
 
 
 class MenuService:
+    @staticmethod
+    async def _sync_builtin_system_menu_tree(tenant_id: int) -> int:
+        """同步系统级菜单真源到 core_menus。"""
+
+        async def _upsert_node(node: Dict[str, Any], parent_id: Optional[int]) -> int:
+            title = str(node.get("title") or "").strip()
+            path = str(node.get("path") or "").strip() or None
+            icon = node.get("icon")
+            component = node.get("component")
+            permission_raw = node.get("permission")
+            permission_code = (
+                str(permission_raw).strip()
+                if isinstance(permission_raw, str) and str(permission_raw).strip()
+                else None
+            )
+            sort_order = int(node.get("sort_order") or 0)
+            is_external = bool(node.get("is_external", False))
+            external_url = node.get("external_url")
+            meta = node.get("meta")
+            children = node.get("children") if isinstance(node.get("children"), list) else []
+            has_children = len(children) > 0
+            is_clickable_leaf = bool(path) and (not is_external) and (not has_children)
+            if is_clickable_leaf and not permission_code:
+                raise ValidationError(
+                    f"系统菜单 {title or path} 缺少 permission：叶子页面必须显式声明权限"
+                )
+
+            existing_menu = None
+            if path:
+                existing_menu = await Menu.filter(
+                    tenant_id=tenant_id,
+                    path=path,
+                    deleted_at__isnull=True,
+                ).first()
+            if not existing_menu:
+                filter_kw: Dict[str, Any] = dict(
+                    tenant_id=tenant_id,
+                    name=title,
+                    application_uuid__isnull=True,
+                    deleted_at__isnull=True,
+                )
+                if parent_id is None:
+                    filter_kw["parent_id__isnull"] = True
+                else:
+                    filter_kw["parent_id"] = parent_id
+                existing_menu = await Menu.filter(**filter_kw).first()
+
+            if existing_menu:
+                existing_menu.name = title
+                existing_menu.path = path
+                existing_menu.icon = icon
+                existing_menu.component = component
+                existing_menu.permission_code = permission_code
+                existing_menu.application_uuid = None
+                existing_menu.parent_id = parent_id
+                existing_menu.sort_order = sort_order
+                existing_menu.is_external = is_external
+                existing_menu.external_url = external_url
+                existing_menu.meta = meta
+                existing_menu.is_active = True
+                await existing_menu.save()
+                menu_obj = existing_menu
+            else:
+                menu_obj = await Menu.create(
+                    tenant_id=tenant_id,
+                    name=title,
+                    path=path,
+                    icon=icon,
+                    component=component,
+                    permission_code=permission_code,
+                    application_uuid=None,
+                    parent_id=parent_id,
+                    sort_order=sort_order,
+                    is_active=True,
+                    is_external=is_external,
+                    external_url=external_url,
+                    meta=meta,
+                )
+
+            processed = 1
+            for child in children:
+                if isinstance(child, dict):
+                    processed += await _upsert_node(child, menu_obj.id)
+            return processed
+
+        if not isinstance(SYSTEM_MENU_CONFIG, dict):
+            return 0
+        return await _upsert_node(SYSTEM_MENU_CONFIG, None)
+
     """
     菜单服务类
     
@@ -114,6 +204,10 @@ class MenuService:
             
             parent_id = parent.id
         
+        # 可点击页面必须显式绑定权限码，禁止空值入库
+        if data.path and (not data.is_external) and (not data.permission_code):
+            raise ValidationError("可点击页面菜单必须配置 permission_code，禁止为空")
+
         # 验证权限代码（如果提供）
         if data.permission_code:
             permission = await Permission.filter(
@@ -310,7 +404,7 @@ class MenuService:
                             result.append(menu_tree)
                         return result
                     cached_tree = rebuild_tree(cached)
-                    # 对缓存命中结果也做孤儿菜单过滤，避免历史缓存显示已卸载应用菜单
+                    # 对缓存命中结果做孤儿菜单过滤，确保仅展示当前已安装应用菜单
                     try:
                         visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
                         visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
@@ -486,6 +580,13 @@ class MenuService:
         for _optional in ("sort_order", "meta"):
             if _optional in update_data and update_data[_optional] is None:
                 update_data.pop(_optional, None)
+
+        # 可点击页面必须显式绑定权限码，禁止空值入库
+        next_path = update_data.get("path", menu.path)
+        next_is_external = update_data.get("is_external", menu.is_external)
+        next_permission_code = update_data.get("permission_code", menu.permission_code)
+        if next_path and (not next_is_external) and (not next_permission_code):
+            raise ValidationError("可点击页面菜单必须配置 permission_code，禁止为空")
         
         # 验证权限代码（如果提供）
         if "permission_code" in update_data and update_data["permission_code"]:
@@ -845,8 +946,7 @@ class MenuService:
             """
             # 提取菜单项信息
             menu_uuid = menu_item.get("uuid")  # 如果配置中有UUID，使用它
-            # 兼容 title 和 name 字段（manifest.json 使用 title，优先使用 title）
-            menu_name = menu_item.get("title") or menu_item.get("name", "")
+            menu_name = menu_item.get("title", "")
             
             if parent_id is None and app_name:
                 menu_name = app_name
@@ -854,8 +954,12 @@ class MenuService:
             menu_path = menu_item.get("path")
             menu_icon = menu_item.get("icon")
             menu_component = menu_item.get("component")
-            # 兼容 permission 和 permission_code 字段（manifest.json 使用 permission）
-            menu_permission_code = menu_item.get("permission_code") or menu_item.get("permission")
+            menu_permission_code_raw = menu_item.get("permission")
+            menu_permission_code = (
+                str(menu_permission_code_raw).strip()
+                if isinstance(menu_permission_code_raw, str) and str(menu_permission_code_raw).strip()
+                else None
+            )
             # 数据库为 IntField，仅支持整数；小数会被截断导致排序错乱，此处统一转为 int
             _so = menu_item.get("sort_order", 0)
             menu_sort_order = int(_so) if _so is not None else 0
@@ -863,6 +967,12 @@ class MenuService:
             menu_external_url = menu_item.get("external_url")
             menu_meta = menu_item.get("meta")
             children = menu_item.get("children", [])
+            has_children = isinstance(children, list) and len(children) > 0
+            is_clickable_leaf = bool(menu_path and str(menu_path).strip()) and (not menu_is_external) and (not has_children)
+            if is_clickable_leaf and not menu_permission_code:
+                raise ValidationError(
+                    f"manifest 菜单 {menu_name or menu_path} 缺少 permission：叶子页面必须显式声明权限"
+                )
             
             # 检查菜单是否已存在（按优先级：uuid > path > parent+name）
             # 无 path 的父级菜单必须按 parent_id+name 匹配，否则每次同步都会新建导致重复
@@ -1009,7 +1119,7 @@ class MenuService:
             is_installed=True,
             is_active=True,
         )
-        total = 0
+        total = await MenuService._sync_builtin_system_menu_tree(tenant_id=tenant_id)
         for app in apps:
             menu_config = app.get("menu_config")
             app_uuid = app.get("uuid")

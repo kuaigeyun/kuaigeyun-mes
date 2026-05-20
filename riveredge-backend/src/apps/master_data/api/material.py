@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
@@ -26,6 +27,8 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
     MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
     MaterialBatchDeleteRequest, MaterialBatchDeleteResponse,
+    MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
+    MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary, BOMBatchItemsRequest,
@@ -45,7 +48,11 @@ from apps.master_data.schemas.bom_change_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/materials", tags=["App · Master Data · Materials"])
+router = APIRouter(
+    prefix="/materials",
+    tags=["App · Master Data · Materials"],
+    dependencies=[Depends(require_module_access("master-data", "material"))],
+)
 
 
 def _http_error(
@@ -1443,8 +1450,9 @@ async def list_materials(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=2000, description="限制数量"),
     group_id: Optional[int] = Query(None, alias="groupId", description="物料分组ID（过滤）"),
+    no_group: Optional[bool] = Query(None, alias="noGroup", description="仅查询未设置分组的物料"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
-    keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（物料编码、名称或规格）"),
     code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
     name: Optional[str] = Query(None, description="物料名称（模糊匹配）"),
     source_type: Optional[str] = Query(None, alias="sourceType", description="物料来源类型（过滤）"),
@@ -1472,7 +1480,7 @@ async def list_materials(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **group_id**: 物料分组ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
-    - **keyword**: 搜索关键词（物料编码或名称）
+    - **keyword**: 搜索关键词（物料编码、名称或规格）
     - **code**: 物料编码（精确匹配）
     - **name**: 物料名称（模糊匹配）
     - **source_type**: 物料来源类型（可选，用于过滤）
@@ -1497,6 +1505,7 @@ async def list_materials(
         base_unit,
         sort_by,
         sort_order,
+        no_group,
     )
 
 
@@ -1539,6 +1548,48 @@ async def bulk_delete_materials(
     - 仍被 BOM 引用（父件或子件）的物料无法删除，计入 **failed_items**。
     """
     return await MaterialService.bulk_delete_materials(tenant_id, data)
+
+
+@router.post(
+    "/batch-move-group",
+    response_model=MaterialBatchMoveGroupResponse,
+    summary="Batch move materials to group",
+)
+async def bulk_move_materials_group(
+    data: MaterialBatchMoveGroupRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量将物料移动到指定物料分组（单次 SQL UPDATE）。
+    """
+    try:
+        return await MaterialService.bulk_move_material_group(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/rewrite-main-codes",
+    response_model=MaterialRewriteMainCodesResponse,
+    summary="Rewrite material main codes (trial run only)",
+)
+async def rewrite_material_main_codes(
+    data: MaterialRewriteMainCodesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    试运营模式专属：按各物料所属分组的**分组编号**（group.code）及编码规则重新生成主编码。
+
+    - 试运营关闭时返回 400。
+    - 可传 **material_uuids**（选中物料）或 **groupId**（当前分组及子分组下全部物料）。
+    - 同一主编码族（主物料 + 属性变体）一并更新。
+    """
+    try:
+        return await MaterialService.bulk_rewrite_main_codes(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 class LoadStandardPartsPresetRequest(BaseModel):
