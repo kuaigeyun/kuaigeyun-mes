@@ -12,6 +12,7 @@
     "title": "app.kuaimes.name",
     "icon": "production",
     "path": "/apps/kuaimes",
+    "permission": "kuaimes:entry:read",
     "children": [
       {
         "title": "app.kuaizhizao.menu.plan-management",

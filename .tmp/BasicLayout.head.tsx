@@ -96,7 +96,6 @@ import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import compassAnimation from '../../static/lottie/compass.json';
 import OnboardingGuide from '../components/onboarding-guide';
-import { HeaderQuickEntryPopover } from '../components/quick-entry';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -4151,10 +4150,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 32px !important;
           border-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)'} !important;
         }
-        /* 顶栏快捷入口触发按钮 hover */
-        .riveredge-header-quick-entry-trigger:hover {
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.12)'} !important;
-        }
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
@@ -4170,22 +4165,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           min-width: 0 !important;
           max-width: none !important;
         }
-        /* 面包屑内部容器防止换行；宽度不足时横向滚动 */
+        /* 面包屑内部容器防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb ul {
           display: flex !important;
           flex-wrap: nowrap !important;
           white-space: nowrap !important;
-          overflow-x: auto !important;
-          overflow-y: visible !important;
-          max-width: 100% !important;
+          overflow: visible !important;
         }
-        /* 面包屑项不收缩，避免只剩最后一级可见 */
+        /* 面包屑项防止换行，允许收缩但优先显示最后一项 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item {
           white-space: nowrap !important;
-          flex-shrink: 0 !important;
+          flex-shrink: 1 !important;
           display: inline-flex !important;
           align-items: center !important;
+          min-width: 0;
+          max-width: 100%;
           overflow: visible !important;
           padding: 0 4px !important;
           line-height: 1.5 !important;
@@ -4256,11 +4251,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-        }
-        /* 末级面包屑（激活项）：主题色覆盖全局颜色强制 */
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .riveredge-breadcrumb-active,
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .riveredge-breadcrumb-active {
-          color: ${token.colorPrimary} !important;
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
@@ -4652,25 +4642,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }}
               />
             )}
-            {!isMobileOrTablet && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: -8 }}>
-                <HeaderQuickEntryPopover isLightModeLightBg={isLightModeLightBg} />
-              </span>
-            )}
-            <div ref={breadcrumbRef} style={{ flex: 1, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+            {/* 面包屑 */}
+            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 10 }}>
               <Breadcrumb
                 style={{
                   display: breadcrumbVisible ? 'flex' : 'none',
                   alignItems: 'center',
-                  maxHeight: '100%',
+                  height: '100%',
                   whiteSpace: 'nowrap',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                 }}
                 items={generateBreadcrumb.map((item, index) => ({
                   title: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
                       {index === generateBreadcrumb.length - 1 || index === 0 ? (
-                        <span className={index === generateBreadcrumb.length - 1 ? 'riveredge-breadcrumb-active' : undefined} style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                        <span style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: index === generateBreadcrumb.length - 1 ? 500 : 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                       ) : (
                         <a
                           onClick={() => {

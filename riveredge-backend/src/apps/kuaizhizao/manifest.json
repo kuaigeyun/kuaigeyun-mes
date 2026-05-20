@@ -12,6 +12,7 @@
     "title": "app.kuaizhizao.name",
     "icon": "production",
     "path": "/apps/kuaizhizao",
+    "permission": "kuaizhizao:entry:read",
     "children": [
       {
         "title": "app.kuaizhizao.menu.sales-management",

@@ -8,6 +8,7 @@ from typing import Any, Dict
 SYSTEM_MENU_CONFIG: Dict[str, Any] = {
     "title": "menu.system",
     "path": "/system",
+    "permission": "system:entry:read",
     "icon": "Setting",
     "sort_order": 10,
     "children": [

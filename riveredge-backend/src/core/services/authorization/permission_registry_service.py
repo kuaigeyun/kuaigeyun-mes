@@ -21,6 +21,7 @@ class PermissionRegistryService:
     """统一聚合权限定义真源（核心常量 + 应用 manifest）。"""
 
     CORE_PERMISSION_CODES: set[str] = {
+        "system:entry:read",
         "system:application:read",
         "system:application:update",
         "system:application:delete",

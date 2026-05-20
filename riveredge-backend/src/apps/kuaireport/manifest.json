@@ -13,6 +13,7 @@
     "title": "app.kuaireport.name",
     "icon": "fileBarChart",
     "path": "/apps/kuaireport",
+    "permission": "kuaireport:entry:read",
     "children": [
       {
         "title": "app.kuaireport.menu.selfMadeReports",

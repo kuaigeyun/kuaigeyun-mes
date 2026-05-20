@@ -13,6 +13,7 @@
         "title": "app.kuaiiot.name",
         "icon": "cpu",
         "path": "/apps/kuaiiot",
+        "permission": "kuaiiot:entry:read",
         "children": [{
                 "title": "app.kuaiiot.menu.dashboard",
                 "path": "/apps/kuaiiot/dashboard",

@@ -12,6 +12,7 @@
     "title": "app.kuaierp.name",
     "icon": "shop",
     "path": "/apps/kuaierp",
+    "permission": "kuaierp:entry:read",
     "children": [
       {
         "title": "app.kuaizhizao.menu.sales-management",

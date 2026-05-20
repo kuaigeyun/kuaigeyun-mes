@@ -23,7 +23,7 @@
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-list-holder-inner {
-    padding-inline: 4px;
+    padding: 8px;
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-node-content-wrapper {
@@ -47,18 +47,7 @@
 
   .role-tree-row__actions {
     flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-
-  .roles-permissions-tree.ant-tree .ant-tree-node-content-wrapper:hover .role-tree-row__actions {
     opacity: 1;
-  }
-
-  @media (hover: none) {
-    .role-tree-row__actions {
-      opacity: 1;
-    }
   }
 }
 

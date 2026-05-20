@@ -12,6 +12,7 @@
     "title": "app.master-data.name",
     "icon": "database",
     "path": "/apps/master-data",
+    "permission": "master-data:entry:read",
     "children": [
       {
         "title": "app.master-data.menu.factory",

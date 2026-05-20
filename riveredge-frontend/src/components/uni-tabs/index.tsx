@@ -7,8 +7,8 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message } from 'antd';
-import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled } from '@ant-design/icons';
+import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message, Popover, Menu } from 'antd';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled, MenuOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
@@ -1768,6 +1768,52 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           box-sizing: border-box;
           width: calc(100% - 32px) !important;
         }
+        /* 全屏模式主菜单按钮容器 */
+        .uni-tabs-menu-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          position: relative;
+          z-index: 2;
+          pointer-events: auto;
+        }
+        /* 全屏主菜单按钮样式 */
+        .uni-tabs-menu-button {
+          width: 32px !important;
+          height: 32px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255,255,255,0.85)' : token.colorText} !important;
+          font-size: 16px !important;
+          border-radius: 50% !important;
+          transition: background 0.2s ease !important;
+        }
+        .uni-tabs-menu-button:hover {
+          color: ${tabsTextColor === '#ffffff' ? '#ffffff' : token.colorText} !important;
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255,255,255,0.15)' : token.colorFillSecondary} !important;
+        }
+        /* 全屏菜单 Popover 内的 antd Menu 样式紧凑化 */
+        .uni-tabs-nav-popover-menu .ant-menu {
+          border: none !important;
+          box-shadow: none !important;
+          max-height: calc(100vh - 80px);
+          overflow-y: auto;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .uni-tabs-nav-popover-menu .ant-menu::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
       `}</style>
       <div 
         className="uni-tabs-wrapper"
@@ -1783,6 +1829,47 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             className={`uni-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
             ref={tabsNavRef}
           >
+            {/* 全屏模式：最左侧主菜单入口 */}
+            {isFullscreen && (
+              <div className="uni-tabs-menu-button-wrapper">
+                <Popover
+                  placement="bottomLeft"
+                  trigger="hover"
+                  arrow={false}
+                  overlayClassName="uni-tabs-nav-popover-menu"
+                  overlayStyle={{ width: 240, padding: 0 }}
+                  content={
+                    <Menu
+                      mode="inline"
+                      selectedKeys={[activeKey.split('?')[0]]}
+                      defaultOpenKeys={[]}
+                      style={{ border: 'none', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
+                      items={(menuConfig as any[]).map(function buildItem(item: any): any {
+                        const children = item.children || item.routes;
+                        return {
+                          key: item.path || item.key || item.name,
+                          icon: item.icon ? <span className="anticon">{item.icon}</span> : undefined,
+                          label: item.name || item.title || '',
+                          children: children?.length
+                            ? children.map(buildItem)
+                            : undefined,
+                          onClick: children?.length ? undefined : () => {
+                            if (item.path) navigate(item.path);
+                          },
+                        };
+                      })}
+                    />
+                  }
+                >
+                  <Button
+                    type="text"
+                    className="uni-tabs-menu-button"
+                    icon={<MenuOutlined />}
+                    title="主菜单"
+                  />
+                </Popover>
+              </div>
+            )}
             {/* 左侧滚动箭头 - 仅在需要时显示 */}
             {canScrollLeft && (
               <div className="uni-tabs-scroll-button-wrapper">

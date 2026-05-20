@@ -12,6 +12,7 @@
     "title": "app.kuaicaiwu.name",
     "icon": "wallet",
     "path": "/apps/kuaicaiwu",
+    "permission": "kuaicaiwu:entry:read",
     "children": [
       {
         "title": "app.kuaicaiwu.menu.finance-management",

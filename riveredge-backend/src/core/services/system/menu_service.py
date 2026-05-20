@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 from tortoise.exceptions import IntegrityError
 import json
+import re
 
 from core.models.menu import Menu
 from core.models.permission import Permission
@@ -22,6 +23,21 @@ from infra.infrastructure.cache.cache_manager import cache_manager
 
 
 class MenuService:
+    @staticmethod
+    def _infer_root_entry_permission(path: Optional[str], parent_id: Optional[int]) -> Optional[str]:
+        """为根入口兜底推导 permission_code（仅根节点）。"""
+        if parent_id is not None or not path:
+            return None
+        normalized = str(path).strip()
+        if not normalized:
+            return None
+        if normalized == "/system":
+            return "system:entry:read"
+        matched = re.fullmatch(r"/apps/([^/]+)", normalized)
+        if matched:
+            return f"{matched.group(1).lower()}:entry:read"
+        return None
+
     @staticmethod
     async def _sync_builtin_system_menu_tree(tenant_id: int) -> int:
         """同步系统级菜单真源到 core_menus。"""
@@ -37,6 +53,7 @@ class MenuService:
                 if isinstance(permission_raw, str) and str(permission_raw).strip()
                 else None
             )
+            permission_code = permission_code or MenuService._infer_root_entry_permission(path, parent_id)
             sort_order = int(node.get("sort_order") or 0)
             is_external = bool(node.get("is_external", False))
             external_url = node.get("external_url")
@@ -959,6 +976,10 @@ class MenuService:
                 str(menu_permission_code_raw).strip()
                 if isinstance(menu_permission_code_raw, str) and str(menu_permission_code_raw).strip()
                 else None
+            )
+            menu_permission_code = (
+                menu_permission_code
+                or MenuService._infer_root_entry_permission(menu_path, parent_id)
             )
             # 数据库为 IntField，仅支持整数；小数会被截断导致排序错乱，此处统一转为 int
             _so = menu_item.get("sort_order", 0)

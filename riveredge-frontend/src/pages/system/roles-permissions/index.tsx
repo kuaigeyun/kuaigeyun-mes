@@ -628,7 +628,7 @@ const RolesPermissionsPage: React.FC = () => {
           <Space size={6} style={{ flex: 1, minWidth: 0 }} className="role-tree-row__label">
             <TeamOutlined
               style={{
-                color: role.is_active ? token.colorSuccess : token.colorTextTertiary,
+                color: token.colorPrimary,
                 flexShrink: 0,
               }}
             />

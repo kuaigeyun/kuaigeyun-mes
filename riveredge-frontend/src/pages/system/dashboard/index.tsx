@@ -44,6 +44,15 @@ import dayjs from 'dayjs';
 import { DashboardTemplate } from '../../../components/layout-templates';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import { QuickEntryGrid, type QuickEntryItem } from '../../../components/quick-entry/QuickEntryGrid';
+import {
+  buildQuickEntriesFromMenuTree,
+  findMenuInTree,
+  getTranslatedMenuTitle,
+} from '../../../components/quick-entry/quickEntryItems';
+import {
+  getQuickEntryIconByPath,
+  renderQuickEntryMenuIcon,
+} from '../../../components/quick-entry/renderQuickEntryMenuIcon';
 import { 
   getTodos, 
   getStatistics, 
@@ -62,7 +71,6 @@ import {
 } from '../../../utils/menuTranslation';
 import type { UserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
-import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText, getCachedAvatarUrl } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
 import { useThemeStore } from '../../../stores/themeStore';
@@ -75,7 +83,6 @@ import { formatLunarDate } from '../../../utils/lunarDate';
 import { formatTimeInTimezone } from '../../../utils/formatTimeInTimezone';
 import { getPlatformVersion } from '../../../services/platformSettings';
 import { useConfigStore } from '../../../stores/configStore';
-import * as LucideIcons from 'lucide-react';
 import { getUserTaskStats, getUserTasks, type UserTask } from '../../../services/userTask';
 import WorkplaceToolkit from './WorkplaceToolkit';
 import {
@@ -95,201 +102,6 @@ const { useToken } = theme;
 const { useBreakpoint } = Grid;
 
 
-/**
- * 渲染菜单图标
- */
-const renderMenuIcon = (menu: MenuTree): React.ReactNode => {
-  const resolveIconByPath = (path?: string): React.ComponentType<any> | null => {
-    if (!path) return null;
-    const p = path.toLowerCase();
-    const segments = p.split('/').filter(Boolean);
-    const appCode = segments[1] || '';
-    const moduleCode = segments[2] || '';
-
-    // 1) 先按业务关键词精确匹配（单据优先）
-    if (p.includes('work-order')) return LucideIcons.FileText;
-    if (p.includes('reporting') || p.includes('report')) return LucideIcons.FileBarChart2;
-    if (p.includes('inventory')) return LucideIcons.Boxes;
-    if (p.includes('inbound') || p.includes('receipt') || p.includes('putaway')) return LucideIcons.ArrowDownToLine;
-    if (p.includes('outbound') || p.includes('shipment') || p.includes('picking')) return LucideIcons.ArrowUpFromLine;
-    if (p.includes('transfer') || p.includes('allocation')) return LucideIcons.ArrowLeftRight;
-    if (p.includes('warning') || p.includes('alert')) return LucideIcons.AlertTriangle;
-    if (p.includes('quality') || p.includes('inspection') || p.includes('iqc') || p.includes('oqc')) return LucideIcons.ClipboardCheck;
-    if (p.includes('purchase')) return LucideIcons.ShoppingCart;
-    if (p.includes('sales')) return LucideIcons.ReceiptText;
-    if (p.includes('plan') || p.includes('scheduling')) return LucideIcons.CalendarClock;
-    if (p.includes('equipment') || p.includes('maintenance')) return LucideIcons.Wrench;
-    if (p.includes('master-data') || p.includes('base-data')) return LucideIcons.Database;
-
-    // 2) 按模块匹配（保证全量菜单都能落到主题一致图标）
-    const moduleIconMap: Record<string, React.ComponentType<any>> = {
-      'sales-management': LucideIcons.ReceiptText,
-      'purchase-management': LucideIcons.ShoppingCart,
-      'warehouse-management': LucideIcons.Boxes,
-      'production-execution': LucideIcons.FileText,
-      'quality-management': LucideIcons.ClipboardCheck,
-      'equipment-management': LucideIcons.Wrench,
-      'plan-management': LucideIcons.CalendarClock,
-      'performance-management': LucideIcons.Target,
-      reports: LucideIcons.BarChart3,
-      analytics: LucideIcons.BarChart3,
-      'analysis-center': LucideIcons.BarChart3,
-      'master-data': LucideIcons.Database,
-    };
-    if (moduleCode && moduleIconMap[moduleCode]) {
-      return moduleIconMap[moduleCode];
-    }
-
-    // 3) 按应用匹配（最终兜底）
-    const appIconMap: Record<string, React.ComponentType<any>> = {
-      kuaizhizao: LucideIcons.Factory,
-      kuaicaiwu: LucideIcons.Calculator,
-      kuaireport: LucideIcons.BarChart3,
-      'master-data': LucideIcons.Database,
-      kuaiai: LucideIcons.Sparkles,
-    };
-    return appIconMap[appCode] || null;
-  };
-
-  // 尝试从 Lucide Icons 获取
-  const lucideIconMap: Record<string, React.ComponentType<any>> = {
-    'AppstoreOutlined': ManufacturingIcons.appstore,
-    'ControlOutlined': ManufacturingIcons.control,
-    'ShopOutlined': ManufacturingIcons.shop,
-    'FileTextOutlined': ManufacturingIcons.fileCode,
-    'DatabaseOutlined': ManufacturingIcons.database,
-    'MonitorOutlined': ManufacturingIcons.monitor,
-    'GlobalOutlined': ManufacturingIcons.global,
-    'ApiOutlined': ManufacturingIcons.api,
-    'CodeOutlined': ManufacturingIcons.code,
-    'PrinterOutlined': ManufacturingIcons.printer,
-    'HistoryOutlined': ManufacturingIcons.history,
-    'UnorderedListOutlined': ManufacturingIcons.list,
-    'CalendarOutlined': ManufacturingIcons.calendar,
-    'PlayCircleOutlined': ManufacturingIcons.playCircle,
-    'InboxOutlined': ManufacturingIcons.inbox,
-    'SafetyOutlined': ManufacturingIcons.safety,
-    'ShoppingOutlined': ManufacturingIcons.shop,
-    'UserSwitchOutlined': ManufacturingIcons.userSwitch,
-    'SettingOutlined': ManufacturingIcons.mdSettings,
-    'BellOutlined': ManufacturingIcons.bell,
-    'LoginOutlined': ManufacturingIcons.login,
-    'UserOutlined': ManufacturingIcons.user,
-    'TeamOutlined': ManufacturingIcons.team,
-    // 业务单据相关（补全快捷入口常见场景）
-    'FileSearchOutlined': LucideIcons.FileSearch,
-    'FileDoneOutlined': LucideIcons.FileCheck,
-    'FileAddOutlined': LucideIcons.FilePlus2,
-    'FileProtectOutlined': LucideIcons.FileLock2,
-    'FileExclamationOutlined': LucideIcons.FileWarning,
-    'FileSyncOutlined': LucideIcons.FileClock,
-    'ReconciliationOutlined': LucideIcons.ClipboardCheck,
-    'AuditOutlined': LucideIcons.ClipboardCheck,
-    'ContainerOutlined': LucideIcons.Boxes,
-    'WarningOutlined': LucideIcons.AlertTriangle,
-    'AlertOutlined': LucideIcons.AlertTriangle,
-    'SwapOutlined': LucideIcons.ArrowLeftRight,
-    'ImportOutlined': LucideIcons.ArrowDownToLine,
-    'ExportOutlined': LucideIcons.ArrowUpFromLine,
-  };
-  const lowerCaseIconMap: Record<string, React.ComponentType<any>> = {
-    order: LucideIcons.FileText,
-    workorder: LucideIcons.FileText,
-    work_order: LucideIcons.FileText,
-    report: LucideIcons.FileBarChart2,
-    reporting: LucideIcons.FileBarChart2,
-    inventory: LucideIcons.Boxes,
-    inbound: LucideIcons.ArrowDownToLine,
-    outbound: LucideIcons.ArrowUpFromLine,
-    transfer: LucideIcons.ArrowLeftRight,
-    warning: LucideIcons.AlertTriangle,
-    quality: LucideIcons.ClipboardCheck,
-    inspection: LucideIcons.ClipboardCheck,
-    purchase: LucideIcons.ShoppingCart,
-    sales: LucideIcons.ReceiptText,
-    plan: LucideIcons.CalendarClock,
-    equipment: LucideIcons.Wrench,
-    warehouse: LucideIcons.Boxes,
-    production: LucideIcons.Factory,
-    masterdata: LucideIcons.Database,
-    'master-data': LucideIcons.Database,
-  };
-
-  // 先检查预定义映射
-  if (menu.icon && lucideIconMap[menu.icon]) {
-    const IconComponent = lucideIconMap[menu.icon];
-    return React.createElement(IconComponent, { size: 24 });
-  }
-
-  // 尝试直接从 Lucide Icons 中获取
-  if (menu.icon) {
-    const iconName = menu.icon as string;
-    let DirectIcon = (LucideIcons as any)[iconName];
-
-    if (!DirectIcon) {
-      const pascalCaseName = iconName
-        .split(/[-_]/)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join('');
-      DirectIcon = (LucideIcons as any)[pascalCaseName];
-    }
-
-    if (DirectIcon) {
-      return React.createElement(DirectIcon, { size: 24 });
-    }
-
-    const normalizedIconName = iconName.toLowerCase().replace(/[\s-_]/g, '');
-    if (lowerCaseIconMap[normalizedIconName]) {
-      const IconComponent = lowerCaseIconMap[normalizedIconName];
-      return React.createElement(IconComponent, { size: 24 });
-    }
-  }
-
-  const pathIcon = resolveIconByPath(menu.path);
-  if (pathIcon) {
-    return React.createElement(pathIcon, { size: 24 });
-  }
-
-  // 最终兜底图标（主题一致）
-  return React.createElement(LucideIcons.LayoutGrid, { size: 24 });
-};
-
-/**
- * 将菜单树转换为树形数据
- */
-const getTranslatedMenuTitle = (
-  menu: MenuTree,
-  t: (key: string, options?: any) => string,
-): string => {
-  const findFirstPath = (children?: MenuTree[]): string | undefined => {
-    if (!children?.length) return undefined;
-    for (const child of children) {
-      if (child.path) return child.path;
-      const nested = findFirstPath(child.children);
-      if (nested) return nested;
-    }
-    return undefined;
-  };
-
-  const effectivePath = menu.path || findFirstPath(menu.children);
-  const appCode = extractAppCodeFromPath(effectivePath);
-
-  if (effectivePath?.startsWith('/apps/')) {
-    const translated = translateAppMenuItemName(menu.name, effectivePath, t, menu.children);
-    // 仅应用根节点使用统一应用名，避免覆盖二/三级菜单真实翻译
-    const isAppRootByPath = !!appCode && (menu.path || '').replace(/\/$/, '') === `/apps/${appCode}`;
-    const isAppRootByNameKey = typeof menu.name === 'string' && /^app\.[a-z0-9-]+\.name$/i.test(menu.name);
-    if (appCode && (isAppRootByPath || isAppRootByNameKey)) {
-      const appDisplayName = getAppDisplayName(appCode, t, translated || menu.name);
-      if (appDisplayName && appDisplayName.trim() !== '') {
-        return appDisplayName;
-      }
-    }
-    return translated;
-  }
-  return translateMenuName(menu.name, t, effectivePath);
-};
-
 const convertMenuTreeToTreeData = (
   menus: MenuTree[],
   t: (key: string, options?: any) => string,
@@ -308,7 +120,7 @@ const convertMenuTreeToTreeData = (
     return {
       title: getTranslatedMenuTitle(menu, t),
       key: menu.uuid,
-      icon: renderMenuIcon(menu),
+      icon: renderQuickEntryMenuIcon(menu),
       path: menu.path, // 添加 path 信息，供 QuickEntryGrid 保存时校验
       children: children.length > 0 ? children : undefined,
       isLeaf: children.length === 0,
@@ -321,69 +133,6 @@ const convertMenuTreeToTreeData = (
     .map(convertNode)
     .filter((item): item is DataNode => item !== null);
 };
-
-/**
- * 从真实菜单树提取快捷入口候选（优先业务系统 /apps 路由）
- */
-const buildQuickEntriesFromMenuTree = (
-  menus: MenuTree[],
-  renderIcon: (menu: MenuTree) => React.ReactNode,
-  t: (key: string, options?: any) => string,
-  limit = 10,
-): QuickEntryItem[] => {
-  const allPathMenus: MenuTree[] = [];
-
-  const walk = (nodes: MenuTree[]) => {
-    nodes.forEach((menu) => {
-      if (menu.children?.length) {
-        walk(menu.children);
-      }
-      if (menu.path && !menu.is_external && menu.path !== '/system/dashboard/workplace') {
-        allPathMenus.push(menu);
-      }
-    });
-  };
-
-  walk(menus);
-
-  const uniqueMenus = Array.from(
-    new Map(allPathMenus.map((menu) => [menu.uuid, menu])).values(),
-  );
-  const businessMenus = uniqueMenus.filter((menu) => menu.path?.startsWith('/apps/'));
-  const sourceMenus = businessMenus.length > 0 ? businessMenus : uniqueMenus;
-  const priorityPatterns = [
-    '/production-execution/work-orders',
-    '/production-execution/reporting',
-    '/warehouse-management/inventory',
-    '/warehouse-management/inbound',
-    '/warehouse-management/outbound',
-    '/quality-management',
-    '/equipment-management/equipment',
-    '/equipment-management/maintenance',
-    '/plan-management',
-    '/master-data',
-  ];
-
-  const sortedMenus = [...sourceMenus].sort((a, b) => {
-    const aPath = a.path || '';
-    const bPath = b.path || '';
-    const aPriority = priorityPatterns.findIndex((pattern) => aPath.includes(pattern));
-    const bPriority = priorityPatterns.findIndex((pattern) => bPath.includes(pattern));
-    const aRank = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
-    const bRank = bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority;
-    if (aRank !== bRank) return aRank - bRank;
-    return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-  });
-
-  return sortedMenus.slice(0, limit).map((menu, index) => ({
-    menu_uuid: menu.uuid,
-    menu_name: getTranslatedMenuTitle(menu, t),
-    menu_path: menu.path || '',
-    menu_icon: renderIcon(menu),
-    sort_order: index,
-  }));
-};
-
 
 /**
  * 获取问候语 i18n 键（精细时间段划分，按北京时间）
@@ -1297,35 +1046,6 @@ export default function DashboardPage() {
 
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
-  // 从菜单树中查找菜单项
-  const findMenuInTree = (menus: MenuTree[], uuid: string): MenuTree | null => {
-    for (const menu of menus) {
-      if (menu.uuid === uuid) {
-        return menu;
-      }
-      if (menu.children) {
-        const found = findMenuInTree(menu.children, uuid);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-  const getMenuIconByPath = (menuPath: string, menuName?: string): React.ReactNode => {
-    const pseudoMenu = {
-      uuid: menuPath || 'quick-entry',
-      tenant_id: 0,
-      name: menuName || menuPath || '',
-      path: menuPath,
-      sort_order: 0,
-      is_active: true,
-      is_external: false,
-      created_at: '',
-      updated_at: '',
-      children: [],
-    } as MenuTree;
-    return renderMenuIcon(pseudoMenu);
-  };
-
   // 处理待办事项
   const handleTodoMutation = useMutation({
     mutationFn: ({ todoId, action }: { todoId: string; action: string }) => handleTodo(todoId, action),
@@ -1365,7 +1085,7 @@ export default function DashboardPage() {
             ...entry,
             menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
             menu_path: resolvedPath,
-            menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
+            menu_icon: menu ? renderQuickEntryMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
           };
         })
         .filter((item): item is any => item !== null);
@@ -1375,7 +1095,7 @@ export default function DashboardPage() {
       return [];
     }
 
-    return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
+    return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderQuickEntryMenuIcon, t, 10);
   }, [quickEntryLoading, userPreference, quickEntryMenuTree, t]);
 
   // 优先级文本映射（i18n）
@@ -2533,7 +2253,7 @@ export default function DashboardPage() {
                 renderMenuIcon={(menuUuid: string) => {
                   if (!quickEntryMenuTree.length) return <ShopOutlined />;
                   const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
-                  return menu ? renderMenuIcon(menu) : <ShopOutlined />;
+                  return menu ? renderQuickEntryMenuIcon(menu) : <ShopOutlined />;
                 }}
               />
             </div>

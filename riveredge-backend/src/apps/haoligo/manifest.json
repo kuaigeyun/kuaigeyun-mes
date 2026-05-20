@@ -15,7 +15,7 @@
     "title": "app.haoligo.name",
     "icon": "Box",
     "path": "/apps/haoligo",
-    "permission": "haoligo:haoligo:read",
+    "permission": "haoligo:entry:read",
     "children": [
       {
         "title": "app.haoligo.menu.dashboard",

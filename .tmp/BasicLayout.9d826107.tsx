@@ -6,52 +6,64 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
-  LogoutOutlined,
+  DashboardOutlined,
   UserOutlined,
+  TeamOutlined,
+  ApartmentOutlined,
+  CrownOutlined,
+  LogoutOutlined,
+  UserSwitchOutlined,
+  SettingOutlined,
+  MonitorOutlined,
+  AppstoreOutlined,
+  ControlOutlined,
+  ShopOutlined,
   FileTextOutlined,
+  DatabaseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  MenuOutlined,
-  AppstoreOutlined,
+  GlobalOutlined,
   TranslationOutlined,
   BgColorsOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
-  CloseOutlined,
   LockOutlined,
+  SearchOutlined,
   BellOutlined,
-  DeleteOutlined,
+  ApiOutlined,
+  CheckCircleOutlined,
+  CodeOutlined,
+  PrinterOutlined,
+  HistoryOutlined,
+  LoginOutlined,
+  UnorderedListOutlined,
+  CalendarOutlined,
   PlayCircleOutlined,
-  SendOutlined,
+  InboxOutlined,
+  SafetyOutlined,
+  ShoppingOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RightOutlined } from '@ant-design/icons';
-import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
-import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
-import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
-import { prefetchPlugin } from '../utils/pluginLoader';
-import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
-import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
+import { RightOutlined, CheckOutlined } from '@ant-design/icons';
+import { translateMenuName, translatePathTitle, translateAppMenuName, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation } from '../utils/menuTranslation';
 import dayjs from 'dayjs';
-import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
-
-addCollection(fluentColorIcons);
 
 // 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
 const useSafeTranslation = () => {
   try {
     return useTranslation();
   } catch (error) {
-    console.warn('i18n initialization failed:', error);
-    // 返回最小可用翻译函数，保证页面可渲染
+    console.warn('i18n initialization failed, using fallback:', error);
+    // 返回一个基本的翻译函数作为后备
     return {
       t: (key: string, options?: any) => {
         // 如果是中文 key，直接返回
@@ -68,174 +80,53 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
-import AiAssistant from '../components/ai-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
 import ThemeEditor from '../components/theme-editor';
-import IterationFloatButton from '../components/iteration-float-button';
-import { RouteTransition } from '../components/route-transition';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
+import { updateUserPreference } from '../services/userPreference';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
-import { MenuTree, getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../services/menu';
-import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
+import { getMenuTree, MenuTree } from '../services/menu';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
-import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
-import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
-import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
-import { CODE_FONT_FAMILY } from '../constants/fonts';
-import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
+import { getSiteSetting } from '../services/siteSetting';
 import { getFilePreview } from '../services/file';
-import Lottie from 'lottie-react';
-import assistAnimation from '../../static/lottie/assist.json';
-import compassAnimation from '../../static/lottie/compass.json';
-import OnboardingGuide from '../components/onboarding-guide';
-import { HeaderQuickEntryPopover } from '../components/quick-entry';
-
-/** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
-const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
-
-function getCachedSiteLogoUrl(logoUuid: string): string | undefined {
-  try {
-    const raw = localStorage.getItem(`siteLogoUrlCache_${logoUuid}`);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    const { url, ts } = typeof parsed === 'object' ? parsed : { url: raw, ts: 0 };
-    if (!url || typeof url !== 'string') return undefined;
-    if (typeof ts === 'number' && Date.now() - ts > SITE_LOGO_CACHE_TTL_MS) return undefined;
-    return toRelativeIfLocalhost(url);
-  } catch {
-    return undefined;
-  }
-}
-
-function setCachedSiteLogoUrl(logoUuid: string, url: string): void {
-  try {
-    localStorage.setItem(`siteLogoUrlCache_${logoUuid}`, JSON.stringify({ url, ts: Date.now() }));
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearCachedSiteLogoUrl(logoUuid: string): void {
-  try {
-    localStorage.removeItem(`siteLogoUrlCache_${logoUuid}`);
-  } catch {
-    /* ignore */
-  }
-}
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore, getDefaultTenantHomePath } from '../stores/configStore';
-import { useThemeStore } from '../stores/themeStore';
-import { getMenuBadgeCounts } from '../services/dashboard';
-import { verifyCopyright } from '../utils/copyrightIntegrity';
-import { useTouchScreen } from '../hooks/useTouchScreen';
-
-/**
- * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
- * 销售式三态：逾期(红) > 待审核(橙) > 进行中(绿)，见 menuItemRender
- */
-const MENU_BADGE_PATH_KEY: Record<string, string> = {
-  '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
-  '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
-  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'exception',
-  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'exception',
-  '/apps/kuaizhizao/production-execution/quality-exceptions': 'exception',
-  '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
-  '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
-  '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
-  '/apps/kuaizhizao/purchase-management/purchase-requisitions': 'purchase_requisition',
-  '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
-  '/apps/kuaizhizao/purchase-management/logistics-tracking': 'purchase_logistics',
-  '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
-  '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
-  '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
-  '/apps/kuaizhizao/sales-management/quotations': 'quotation',
-  '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
-  '/apps/kuaizhizao/sales-management/sample-trials': 'sample_trial',
-  '/apps/kuaizhizao/sales-management/shipment-notices': 'shipment_notice',
-  '/apps/kuaizhizao/sales-management/sales-returns': 'sales_return',
-  '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
-  '/apps/kuaizhizao/warehouse-management/other-inbound': 'other_inbound',
-  '/apps/kuaizhizao/warehouse-management/material-returns': 'material_return',
-  '/apps/kuaizhizao/warehouse-management/outbound': 'sales_outbound',
-  '/apps/kuaizhizao/warehouse-management/other-outbound': 'other_outbound',
-  '/apps/kuaizhizao/warehouse-management/material-borrows': 'material_borrow',
-  '/apps/kuaizhizao/warehouse-management/delivery-notes': 'delivery_notice',
-  '/apps/kuaizhizao/warehouse-management/batching-center': 'batching_order',
-  '/apps/kuaizhizao/warehouse-management/material-calls': 'material_call',
-  '/apps/kuaizhizao/warehouse-management/stocktaking': 'stocktaking',
-  '/apps/kuaizhizao/warehouse-management/inventory-transfer': 'inventory_transfer',
-  '/apps/kuaizhizao/warehouse-management/assembly-orders': 'assembly_order',
-  '/apps/kuaizhizao/warehouse-management/disassembly-orders': 'disassembly_order',
-  '/apps/kuaizhizao/warehouse-management/customer-material-registration': 'customer_material_registration',
-  '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
-  '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
-  '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
-  '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
-  '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
-  '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
-  '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
-  '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
-  '/apps/kuaizhizao/equipment-management/molds': 'mold',
-  '/apps/kuaizhizao/equipment-management/inspection': 'equipment_inspection',
-  '/apps/kuaizhizao/equipment-management/spare-parts': 'spare_part',
-  '/apps/kuaizhizao/equipment-management/equipment-faults': 'equipment_fault',
-  '/apps/kuaizhizao/equipment-management/maintenance-plans': 'maintenance_plan',
-  '/apps/kuaizhizao/equipment-management/maintenance-reminders': 'maintenance_reminder',
-  '/apps/kuaicaiwu/finance-management/settlement': 'finance_settlement',
-};
-
-// 聚焦“搜索框”未输入时展示的固定常用菜单（制造业日常最常用单据 Top8）
-// 说明：使用系统内已存在的 menu `path`，避免依赖“菜单扁平前 N 项”带来的不可控变化
-const TOPBAR_SEARCH_HOT_MENU_PATHS: string[] = [
-  '/apps/kuaizhizao/production-execution/work-orders', // 工单
-  '/apps/kuaizhizao/purchase-management/purchase-orders', // 采购订单
-  '/apps/kuaizhizao/sales-management/sales-forecasts', // 销售预测
-  '/apps/kuaizhizao/sales-management/sales-orders', // 销售订单
-  '/apps/kuaizhizao/warehouse-management/inbound', // 入库单
-  '/apps/kuaizhizao/plan-management/production-plans', // 生产计划
-  '/apps/kuaizhizao/quality-management/incoming-inspection', // 来料检验
-  '/apps/kuaizhizao/quality-management/process-inspection', // 过程检验
-  '/apps/kuaizhizao/quality-management/finished-goods-inspection', // 成品检验
-];
-
-/** 根据菜单 path 获取徽章 key（统一去除尾斜杠与查询参数） */
-function getMenuBadgeKey(path: string | undefined): string | undefined {
-  if (!path || typeof path !== 'string') return undefined;
-  const normalized = path.replace(/\/$/, '').split('?')[0];
-  return MENU_BADGE_PATH_KEY[path] ?? MENU_BADGE_PATH_KEY[normalized];
-}
+import { useConfigStore } from '../stores/configStore';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const currentUser = useGlobalStore((s) => s.currentUser);
-  const loading = useGlobalStore((s) => s.loading);
-  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
-  const setLoading = useGlobalStore((s) => s.setLoading);
+  const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
   const { t } = useSafeTranslation(); // 使用安全的翻译 hook
 
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
   const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
 
-  // 获取组织 ID
+  // 检查是否访问系统级页面
+  const isSystemPage = location.pathname.startsWith('/system/');
   const currentTenantId = getTenantId();
 
+  // 如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
+  if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
+    message.warning(t('common.selectOrganizationFirst', { defaultValue: '请先选择要管理的组织' }));
+    // 重定向到infra登录页
+    return <Navigate to="/infra/login" replace />;
+  }
 
   // 如果 currentUser 已存在且信息完整，不需要重新获取
   // 只有在以下情况才需要获取用户信息：
   // 1. 有 token 但没有 currentUser
   // 注意：避免在 currentUser 已存在时重复获取，防止无限循环
-  // 租户用户由 App AuthGuard 定期拉取 /auth/me；此处仅平台超管在无 currentUser 时补拉
-  const shouldFetchUser = !!getToken() && !currentUser && isInfraSuperAdmin;
+  const shouldFetchUser = !!getToken() && !currentUser;
 
   // 根据用户类型调用不同的接口
   const { data: userData, isLoading, error } = useQuery({
@@ -280,12 +171,6 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
-          tenant_name: savedUserInfo.tenant_name,
-          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
-          permission_version: savedUserInfo.permission_version || 1,
-          department: savedUserInfo.department,
-          position: savedUserInfo.position,
-          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
         };
         setCurrentUser(restoredUser);
 
@@ -331,17 +216,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const publicPaths = ['/login', '/debug/'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isInfraLoginPage = location.pathname === '/infra/login';
-  // 报表/大屏分享页（通过 token 公开访问，无需登录）
-  const isSharedReportOrDashboard = location.pathname === '/apps/kuaireport/dashboards/shared' || location.pathname === '/apps/kuaireport/reports/shared';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage || isSharedReportOrDashboard;
-
-  // ⚠️ 关键修复：如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
-  // 必须放在所有 Hook 之后，避免 Hook 顺序问题
-  const isSystemPage = location.pathname.startsWith('/system/');
-  if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
-    message.warning(t('common.selectOrganizationFirst', { defaultValue: '请先选择要管理的组织' }));
-    return <Navigate to="/infra/login" replace />;
-  }
+  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
 
   // ⚠️ 关键修复：如果是调试页面，直接渲染内容，不受加载状态影响
   if (location.pathname.startsWith('/debug/')) {
@@ -383,23 +258,20 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台（关闭系统级仪表盘时落地应用中心）
+    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <Navigate to={getDefaultTenantHomePath()} replace />;
+      return <Navigate to="/system/dashboard/workplace" replace />;
     }
   }
 
   // 如果不是公开页面且未登录，自动重定向到登录页
   if (!isPublicPath && !currentUser && !getToken()) {
-    // infra 级路由重定向到 infra 登录页（仍是 SPA 内部 /infra/login）
+    // infra级路由重定向到infra登录页
     if (location.pathname.startsWith('/infra')) {
       return <Navigate to="/infra/login" replace />;
     }
-    // 系统级路由：必须用浏览器真实导航跳到 /login（独立 MPA login.html）
-    // 而非 React Router 内部 navigate，否则会让用户停留在主应用 bundle 中渲染 /login，
-    // 一旦刷新就会切到 MPA bundle 造成"首次正常 刷新异常"的双轨制问题。
-    window.location.replace('/login');
-    return null;
+    // 系统级路由重定向到用户登录页
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
@@ -416,7 +288,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
   // 根据菜单路径和名称映射到制造业图标
   // 优先使用路径匹配（路径是固定的，不受翻译影响）
-  // 先按路径映射；未命中时再按名称映射
+  // 路径映射作为主要方式，名称映射作为后备方案（为了向后兼容）
 
   // 路径映射（优先使用，因为路径是固定的，不受翻译影响）
   if (menuPath) {
@@ -428,35 +300,33 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/roles': ManufacturingIcons.shield, // 角色权限管理 - 使用盾牌图标
       '/system/departments': ManufacturingIcons.building, // 部门管理 - 使用建筑图标
       '/system/positions': ManufacturingIcons.userCog, // 职位管理 - 使用用户配置图标
-      '/system/users': ManufacturingIcons.user, // 账户管理 - 使用单用户图标，和在线用户区分
-      '/system/applications': ManufacturingIcons.layout, // 应用中心 - 使用应用入口/布局图标
-      '/system/menus': ManufacturingIcons.menu, // 菜单管理 - 使用菜单图标
+      '/system/users': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
+      '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
+      '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
-      '/system/config-center': ManufacturingIcons.mdConfiguration, // 业务配置 - 使用设置2图标，区别于站点设置
-      '/system/business-config': ManufacturingIcons.mdConfiguration, // 重定向到 config-center
-      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 重定向到 config-center
+      '/system/config-center': ManufacturingIcons.systemConfig, // 配置中心
+      '/system/business-config': ManufacturingIcons.systemConfig, // 业务配置 - 保留兼容
+      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 保留兼容
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
-      '/system/code-rules': ManufacturingIcons.code, // 编号规则 - 使用代码图标
+      '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
       '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
       '/system/languages': ManufacturingIcons.languages, // 语言管理 - 使用语言图标
       '/system/custom-fields': ManufacturingIcons.toolbox, // 自定义字段 - 使用工具箱图标
       '/system/files': ManufacturingIcons.folder, // 文件管理 - 使用文件夹图标
       '/system/apis': ManufacturingIcons.api, // API管理 - 使用API图标
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
-      '/system/application-connections': ManufacturingIcons.gitBranch, // 应用连接器 - 使用分支连接图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
-      '/system/initial-data': ManufacturingIcons['arrow-down-to-line'], // 期初数据导入（导入入库）
-      '/system/onboarding-wizard': ManufacturingIcons.compass, // 上线向导 - 指引/向导
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
+      '/system/scheduled-tasks': ManufacturingIcons.clock, // 定时任务 - 使用时钟图标
       '/system/approval-processes': ManufacturingIcons.workflow, // 审批流程 - 使用工作流图标
       '/system/approval-instances': ManufacturingIcons.checkCircle, // 审批实例 - 使用检查圆圈图标
-      '/system/print-templates': ManufacturingIcons.fileSpreadsheet, // 打印模板 - 使用模板文档图标
-      '/system/report-templates': ManufacturingIcons.chartBar, // 报表模板 - 使用柱状图图标
+      '/system/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
+      '/system/print-templates': ManufacturingIcons.fileText, // 打印模板 - 使用文件文本图标
       '/system/print-devices': ManufacturingIcons.printer, // 打印设备 - 使用打印机图标
       '/personal': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
       '/personal/profile': ManufacturingIcons.user, // 个人资料 - 使用用户图标
-      '/personal/preferences': ManufacturingIcons.pencil, // 偏好设置 - 使用编辑图标，区别系统设置
+      '/personal/preferences': ManufacturingIcons.mdSettings, // 偏好设置 - 使用设置图标
       '/personal/messages': ManufacturingIcons.bell, // 我的消息 - 使用铃铛图标
       '/personal/tasks': ManufacturingIcons.checklist, // 我的任务 - 使用清单图标
       '/system/operation-logs': ManufacturingIcons.history, // 操作日志 - 使用历史图标
@@ -466,8 +336,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/operation': ManufacturingIcons.analytics, // 运营中心 - 使用分析图标
       '/infra/tenants': ManufacturingIcons.building, // 租户管理 - 使用建筑图标（保持）
       '/infra/packages': ManufacturingIcons.package, // 应用包管理 - 使用包裹图标
-      '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理
-      '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务
+      '/infra/monitoring': ManufacturingIcons.monitor, // 系统监控 - 使用显示器图标
+      '/infra/inngest': ManufacturingIcons.workflow, // Inngest工作流 - 使用工作流图标
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
 
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
@@ -478,27 +348,11 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/warehouse-management': ManufacturingIcons.warehouse, // 仓储管理 - 使用仓库图标
       '/apps/kuaizhizao/quality-management': ManufacturingIcons.quality, // 质量管理 - 使用质量图标
       '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
-      '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
+      '/apps/kuaizhizao/equipment-management': ManufacturingIcons.machine, // 设备管理 - 使用机器图标
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
-      '/apps/kuaireport/analysis-center': ManufacturingIcons.chartBar, // 分析中心（已迁至快报表）- 柱状图
-      '/apps/kuaicrm': ManufacturingIcons.users, // 快客户
-      '/apps/kuaipdm': ManufacturingIcons.layers, // 快研发
-      '/apps/kuaicaiwu': ManufacturingIcons.wallet, // 快财务
-      '/apps/kuaichain': ManufacturingIcons.gitBranch, // 快协同
-      '/apps/kuaicaiwu/finance-management': ManufacturingIcons.wallet, // 财务管理
-      '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
-      '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
-      '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
-      '/apps/master-data/warehouse': ManufacturingIcons.archive, // 主数据-仓库数据 - 使用归档图标（区别于仓储管理）
-      '/apps/master-data/supply-chain': ManufacturingIcons.handshake, // 主数据-业务伙伴（客户+供应商）- 握手/合作图标
-      '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
-      '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
-      '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
-      '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 智能建议
-      '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台（仪表板分组下）
-      '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
-      '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
-      '/apps/haoligo/patrol': ManufacturingIcons.clipboardCheck, // 好力 GO 现场巡查（点检/记录）
+      '/apps/kuaizhizao/reports': ManufacturingIcons.analytics, // 报表分析 - 使用分析图标
+      '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
+      '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
     };
 
     // 精确路径匹配
@@ -515,10 +369,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     }
   }
 
-  // 名称映射（路径未命中时使用，支持中英文）
-  // 注意：菜单名称可能已翻译，路径匹配始终优先
+  // 名称映射（后备方案，为了向后兼容，支持中英文）
+  // 注意：由于菜单名称可能已翻译，这里作为最后的后备方案
   const nameMap: Record<string, React.ComponentType<any>> = {
-    // 常见的中文和英文名称映射
+    // 常见的中文和英文名称映射（保留作为后备）
     'Dashboard': ManufacturingIcons.industrialDashboard,
     'Workplace': ManufacturingIcons.production,
     'Analysis': ManufacturingIcons.chartLine,
@@ -527,7 +381,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'User Management': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
     'System Configuration': ManufacturingIcons.systemConfig,
     'Personal Center': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
-    // 应用菜单名称映射
+    // 应用菜单名称映射（后备方案）
     'Plan Management': ManufacturingIcons.calendar,
     'Production Execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
     'Purchase Management': ManufacturingIcons.shoppingBag,
@@ -535,19 +389,11 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Warehouse Management': ManufacturingIcons.warehouse,
     'Quality Management': ManufacturingIcons.quality,
     'Cost Management': ManufacturingIcons.calculator,
-    'Equipment Management': ManufacturingIcons.wrench,
+    'Equipment Management': ManufacturingIcons.machine,
     'Finance Management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
     // 基础数据管理相关
     '仓库数据': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标
     'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
-    'Report Center': ManufacturingIcons.fileBarChart, // 报表中心
-    'Dashboard Center': ManufacturingIcons.layoutDashboard, // 大屏中心
-    '报表中心': ManufacturingIcons.fileBarChart,
-    '大屏中心': ManufacturingIcons.layoutDashboard,
-    // 自制报表（与仪表盘 Gauge 区分，避免重复）
-    '自制报表': ManufacturingIcons.fileBarChart,
-    'Reports & Dashboards': ManufacturingIcons.fileBarChart,
-    'app.kuaireport.name': ManufacturingIcons.fileBarChart,
     // ... 其他常见的英文名称可以在这里添加
   };
 
@@ -561,158 +407,322 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
 };
 
 /**
- * 平台级 + 系统级菜单配置（原有写法，硬编号）
- * 仅应用级 APP 使用数据库统一源（manifest 同步 → core_menus）
+ * 菜单配置函数
+ *
+ * 按照菜单分组架构设计：
+ * 【第一组】固定仪表盘 - 平台级、系统级、应用级都可见
+ * 【第二组】应用菜单（插件式加载）- 根据用户权限和已安装插件动态加载
+ * 【第三组】系统配置 - 平台级、系统级、应用级可见
+ *   └─ 用户管理（分组标题，不可点击）
+ *      ├─ 部门管理（第1优先级）
+ *      ├─ 职位管理（第2优先级）
+ *      ├─ 角色权限管理（第3优先级，包含角色和权限管理）
+ *      └─ 账户管理（第4优先级）
+ * 【第四组】运营中心 - 仅平台级管理员可见
+ * 
+ * @param t - i18n 翻译函数
+ * @returns 菜单配置数组
  */
-type PermissionMenuDataItem = MenuDataItem & {
-  permissionCodes?: string[];
-};
-
-const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => [
+const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
+  // ==================== 【第一组】固定仪表盘 ====================
+  // 可见范围：平台级、系统级、应用级 都可见
   {
     path: '/system/dashboard',
     name: t('menu.dashboard'),
     icon: getMenuIcon(t('menu.dashboard'), '/system/dashboard'),
-    permissionCodes: ['system:application:read', 'system:menu:read'],
     children: [
       {
         path: '/system/dashboard/workplace',
         name: t('menu.dashboard.workplace'),
         icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace'),
-        permissionCodes: ['system:application:read', 'system:menu:read'],
       },
       {
         path: '/system/dashboard/analysis',
         name: t('menu.dashboard.analysis'),
         icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis'),
-        permissionCodes: ['system:application:read', 'system:menu:read'],
       },
     ],
   },
+
+  // ==================== 【第二组】应用菜单（插件式加载） ====================
+  // 可见范围：根据用户权限和已安装插件动态加载
+  // 注意：插件式的菜单按分组菜单设计，应用的名称作为分组名，不可点击，只显示
+  // 插件里的菜单直接显示到左侧菜单
+  // TODO: 后续从插件系统动态加载应用菜单
+  // 占位的 MES 菜单已移除
+
+  // ==================== 【第三组】系统菜单 ====================
+  // 可见范围：平台级、系统级、应用级 可见
+  // 注意：组织管理已移除，组织管理在平台级运营中心进行管理
   {
     path: '/system',
     name: t('menu.system'),
     icon: getMenuIcon(t('menu.system'), '/system'),
-    permissionCodes: [
-      'system:application:read',
-      'system:menu:read',
-      'system:site-setting:read',
-      'system:config-center:read',
-      'system:data-dictionary:read',
-      'system:language:read',
-      'system:code-rule:read',
-      'system:custom-field:read',
-      'system:department:read',
-      'system:position:read',
-      'system:role:read',
-      'system:user:read',
-      'system:file:read',
-      'system:api:read',
-      'system:data-source:read',
-      'system:application-connection:read',
-      'system:dataset:read',
-      'system:approval-process:read',
-      'system:approval-instance:read',
-      'system:message-template:read',
-      'system:message-config:read',
-      'system:print-device:read',
-      'system:print-template:read',
-      'system:operation-log:read',
-      'system:login-log:read',
-      'system:online-user:read',
-      'system:data-backup:read',
-      'kuaizhizao:warehouse-management-initial-data:read',
-      'system:user-profile:read',
-      'system:user-preference:read',
-      'system:user-message:read',
-      'system:user-task:read',
-    ],
     children: [
-      { key: 'core-config-group', type: 'group', name: t('menu.group.core-config'), label: t('menu.group.core-config'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/applications', name: t('menu.system.applications'), icon: getMenuIcon(t('menu.system.applications'), '/system/applications'), permissionCodes: ['system:application:create', 'system:application:read', 'system:application:update', 'system:application:delete'] },
-        { path: '/system/menus', name: t('menu.system.menus'), icon: getMenuIcon(t('menu.system.menus'), '/system/menus'), permissionCodes: ['system:menu:create', 'system:menu:read', 'system:menu:update', 'system:menu:delete'] },
-        { path: '/system/site-settings', name: t('menu.system.site-settings'), icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'), permissionCodes: ['system:site-setting:read', 'system:site-setting:update'] },
-        { path: '/system/config-center', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/config-center'), permissionCodes: ['system:config-center:read', 'system:config-center:update'] },
-        { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'), permissionCodes: ['system:data-dictionary:create', 'system:data-dictionary:read', 'system:data-dictionary:update', 'system:data-dictionary:delete'] },
-        { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages'), permissionCodes: ['system:language:create', 'system:language:read', 'system:language:update', 'system:language:delete'] },
-        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'), permissionCodes: ['system:code-rule:create', 'system:code-rule:read', 'system:code-rule:update', 'system:code-rule:delete'] },
-        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'), permissionCodes: ['system:custom-field:create', 'system:custom-field:read', 'system:custom-field:update', 'system:custom-field:delete'] },
-        { path: '/system/onboarding-wizard', name: t('menu.system.onboarding-wizard'), icon: getMenuIcon(t('menu.system.onboarding-wizard'), '/system/onboarding-wizard'), permissionCodes: ['system:onboarding-wizard:read', 'system:onboarding-wizard:update'] },
-      ]},
-      { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments'), permissionCodes: ['system:department:create', 'system:department:read', 'system:department:update', 'system:department:delete'] },
-        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions'), permissionCodes: ['system:position:create', 'system:position:read', 'system:position:update', 'system:position:delete'] },
-        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'), permissionCodes: ['system:role:create', 'system:role:read', 'system:role:update', 'system:role:delete', 'system:role:assign'] },
-        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system:user:create', 'system:user:read', 'system:user:update', 'system:user:delete'] },
-      ]},
-      { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
-        {
-          path: '/system/initial-data',
-          name: t('menu.system.initial-data'),
-          icon: getMenuIcon(t('menu.system.initial-data'), '/system/initial-data'),
-          permissionCodes: ['kuaizhizao:warehouse-management-initial-data:read'],
-        },
-        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files'), permissionCodes: ['system:file:create', 'system:file:read', 'system:file:update', 'system:file:delete', 'system:file:export'] },
-        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis'), permissionCodes: ['system:api:create', 'system:api:read', 'system:api:update', 'system:api:delete'] },
-        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'), permissionCodes: ['system:data-source:create', 'system:data-source:read', 'system:data-source:update', 'system:data-source:delete'] },
-        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'), permissionCodes: ['system:application-connection:create', 'system:application-connection:read', 'system:application-connection:update', 'system:application-connection:delete'] },
-        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'), permissionCodes: ['system:dataset:create', 'system:dataset:read', 'system:dataset:update', 'system:dataset:delete'] },
-      ]},
-      { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
-        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'), permissionCodes: ['system:approval-instance:read', 'system:approval-instance:update'] },
-        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'), permissionCodes: ['system:message-template:create', 'system:message-template:read', 'system:message-template:update', 'system:message-template:delete'] },
-        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'), permissionCodes: ['system:message-config:create', 'system:message-config:read', 'system:message-config:update', 'system:message-config:delete'] },
-        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'), permissionCodes: ['system:print-device:create', 'system:print-device:read', 'system:print-device:update', 'system:print-device:delete'] },
-        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
-      ]},
-      { key: 'monitoring-ops-group', type: 'group', name: t('menu.group.monitoring-ops'), label: t('menu.group.monitoring-ops'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'), permissionCodes: ['system:operation-log:read'] },
-        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'), permissionCodes: ['system:login-log:read'] },
-        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'), permissionCodes: ['system:online-user:read'] },
-        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'), permissionCodes: ['system:data-backup:read'] },
-      ]},
-      { key: 'personal-center-group', type: 'group', name: t('menu.personal'), label: t('menu.personal'), className: 'riveredge-menu-group-title', children: [
-        {
-          path: '/personal/profile',
-          name: t('menu.personal.profile'),
-          icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile'),
-          permissionCodes: ['system:user-profile:read', 'system:user-profile:update'],
-        },
-        {
-          path: '/personal/preferences',
-          name: t('menu.personal.preferences'),
-          icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences'),
-          permissionCodes: ['system:user-preference:read', 'system:user-preference:update'],
-        },
-        {
-          path: '/personal/messages',
-          name: t('menu.personal.messages'),
-          icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages'),
-          permissionCodes: ['system:user-message:read', 'system:user-message:update'],
-        },
-        {
-          path: '/personal/tasks',
-          name: t('menu.personal.tasks'),
-          icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
-          permissionCodes: ['system:user-task:read', 'system:user-task:update'],
-        },
-      ]},
+      // 核心配置分组标题
+      {
+        key: 'core-config-group',
+        type: 'group',
+        name: t('menu.group.core-config'),
+        label: t('menu.group.core-config'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/applications',
+            name: t('menu.system.applications'),
+            icon: getMenuIcon(t('menu.system.applications'), '/system/applications'),
+          },
+          {
+            path: '/system/menus',
+            name: t('menu.system.menus'),
+            icon: getMenuIcon(t('menu.system.menus'), '/system/menus'),
+          },
+          {
+            path: '/system/site-settings',
+            name: t('menu.system.site-settings'),
+            icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
+          },
+          {
+            path: '/system/config-center',
+            name: t('menu.system.config-center'),
+            icon: getMenuIcon(t('menu.system.config-center'), '/system/config-center'),
+          },
+          {
+            path: '/system/data-dictionaries',
+            name: t('menu.system.data-dictionaries'),
+            icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'),
+          },
+          {
+            path: '/system/languages',
+            name: t('menu.system.languages'),
+            icon: getMenuIcon(t('menu.system.languages'), '/system/languages'),
+          },
+          {
+            path: '/system/code-rules',
+            name: t('menu.system.code-rules'),
+            icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
+          },
+          {
+            path: '/system/custom-fields',
+            name: t('menu.system.custom-fields'),
+            icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'),
+          },
+        ],
+      },
+      // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
+      {
+        key: 'user-management-group',
+        type: 'group',
+        name: t('menu.group.user-management'),
+        label: t('menu.group.user-management'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/departments',
+            name: t('menu.system.departments'),
+            icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
+          },
+          {
+            path: '/system/positions',
+            name: t('menu.system.positions'),
+            icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
+          },
+          {
+            path: '/system/roles',
+            name: t('menu.system.roles-permissions'),
+            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
+          },
+          {
+            path: '/system/users',
+            name: t('menu.system.users'),
+            icon: getMenuIcon(t('menu.system.users'), '/system/users'),
+          },
+        ],
+      },
+      // 数据中心分组标题
+      {
+        key: 'data-center-group',
+        type: 'group',
+        name: t('menu.group.data-center'),
+        label: t('menu.group.data-center'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/files',
+            name: t('menu.system.files'),
+            icon: getMenuIcon(t('menu.system.files'), '/system/files'),
+          },
+          {
+            path: '/system/apis',
+            name: t('menu.system.apis'),
+            icon: getMenuIcon(t('menu.system.apis'), '/system/apis'),
+          },
+          {
+            path: '/system/data-sources',
+            name: t('menu.system.data-sources'),
+            icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'),
+          },
+          {
+            path: '/system/datasets',
+            name: t('menu.system.datasets'),
+            icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'),
+          },
+        ],
+      },
+      // 流程管理分组标题
+      {
+        key: 'process-management-group',
+        type: 'group',
+        name: t('menu.group.process-management'),
+        label: t('menu.group.process-management'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/approval-processes',
+            name: t('menu.system.approval-processes'),
+            icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'),
+          },
+          {
+            path: '/system/approval-instances',
+            name: t('menu.system.approval-instances'),
+            icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'),
+          },
+          {
+            path: '/system/messages/template',
+            name: t('menu.system.messages.template'),
+            icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'),
+          },
+          {
+            path: '/system/messages/config',
+            name: t('menu.system.messages.config'),
+            icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'),
+          },
+          {
+            path: '/system/scripts',
+            name: t('menu.system.scripts'),
+            icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts'),
+          },
+          {
+            path: '/system/scheduled-tasks',
+            name: t('menu.system.scheduled-tasks'),
+            icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks'),
+          },
+          {
+            path: '/system/print-devices',
+            name: t('menu.system.print-devices'),
+            icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'),
+          },
+          {
+            path: '/system/print-templates',
+            name: t('menu.system.print-templates'),
+            icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
+          },
+        ],
+      },
+      {
+        path: '/personal',
+        name: t('menu.personal'),
+        icon: getMenuIcon(t('menu.personal'), '/personal'),
+        children: [
+          {
+            path: '/personal/profile',
+            name: t('menu.personal.profile'),
+            icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile'),
+          },
+          {
+            path: '/personal/preferences',
+            name: t('menu.personal.preferences'),
+            icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences'),
+          },
+          {
+            path: '/personal/messages',
+            name: t('menu.personal.messages'),
+            icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages'),
+          },
+          {
+            path: '/personal/tasks',
+            name: t('menu.personal.tasks'),
+            icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
+          },
+        ],
+      },
+      // 监控运维分组标题
+      {
+        key: 'monitoring-ops-group',
+        type: 'group',
+        name: t('menu.group.monitoring-ops'),
+        label: t('menu.group.monitoring-ops'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/operation-logs',
+            name: t('menu.system.operation-logs'),
+            icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'),
+          },
+          {
+            path: '/system/login-logs',
+            name: t('menu.system.login-logs'),
+            icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'),
+          },
+          {
+            path: '/system/online-users',
+            name: t('menu.system.online-users'),
+            icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'),
+          },
+          {
+            path: '/system/data-backups',
+            name: t('menu.system.data-backups'),
+            icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'),
+          },
+        ],
+      },
     ],
   },
+
+  // ==================== 【第四组】运营中心 ====================
+  // 可见范围：仅平台级管理员可见
   {
+    // 父菜单不设置 path，避免与子菜单路径冲突
     name: t('menu.infra'),
     icon: getMenuIcon(t('menu.infra'), '/infra/operation'),
     children: [
-      { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
-      { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
-      { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
-      { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
-      { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
-      { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
+      {
+        path: '/infra/operation',
+        name: t('menu.infra.operation'),
+        icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation'),
+      },
+      {
+        path: '/infra/tenants',
+        name: t('menu.infra.tenants'),
+        icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants'),
+      },
+      {
+        path: '/infra/packages',
+        name: t('menu.infra.packages'),
+        icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages'),
+      },
+      {
+        path: '/infra/monitoring',
+        name: t('menu.infra.monitoring'),
+        icon: getMenuIcon(t('menu.infra.monitoring'), '/infra/monitoring'),
+      },
+      {
+        path: '/infra/inngest',
+        name: t('menu.infra.inngest'),
+        icon: getMenuIcon(t('menu.infra.inngest'), '/infra/inngest'),
+      },
+      {
+        path: '/infra/admin',
+        name: t('menu.infra.admin'),
+        icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin'),
+      },
     ],
   },
 ];
+
+/**
+ * 用户菜单项
+ */
 
 /**
  * 基础布局组件
@@ -723,18 +733,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const { token } = theme.useToken(); // 获取主题 token
   const { i18n: i18nInstance, t } = useSafeTranslation(); // 获取 i18n 实例和翻译函数（安全的）
   
-  // 精确订阅：只读取 BasicLayout 需要的 sidebar_collapsed 字段
-  // 避免订阅整个 preferences 对象，防止无关偏好更新导致整个布局重渲染
-  const sidebarCollapsedPref = useUserPreferenceStore((s) => {
-    const prefs = s.preferences;
-    if (prefs?.ui?.sidebar_collapsed !== undefined) return prefs.ui.sidebar_collapsed;
-    if (prefs?.['ui.sidebar_collapsed'] !== undefined) return prefs['ui.sidebar_collapsed'];
-    return undefined;
-  });
-  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+  // 引入用户偏好 Store
+  const { preferences, fetchPreferences, initialized, updatePreferences } = useUserPreferenceStore();
+
+  // 初始化用户偏好
+  useEffect(() => {
+    if (!initialized) {
+      fetchPreferences();
+    }
+  }, [initialized, fetchPreferences]);
 
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  // 监听偏好设置变化，同步侧边栏状态
+  // 使用 useMemo 提取偏好值，避免依赖整个 preferences 对象
+  const sidebarCollapsedPref = useMemo(() => {
+    // 尝试从嵌套结构获取 { ui: { sidebar_collapsed: true } }
+    if (preferences?.ui?.sidebar_collapsed !== undefined) {
+      return preferences.ui.sidebar_collapsed;
+    }
+    // 尝试从扁平结构获取 'ui.sidebar_collapsed'
+    if (preferences?.['ui.sidebar_collapsed'] !== undefined) {
+      return preferences['ui.sidebar_collapsed'];
+    }
+    return undefined;
+  }, [preferences]);
 
   useEffect(() => {
     if (sidebarCollapsedPref !== undefined) {
@@ -749,87 +773,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     updatePreferences({ 'ui.sidebar_collapsed': payload });
   };
 
-  const screens = Grid.useBreakpoint?.() ?? {};
-  const touchScreen = useTouchScreen();
-  
-  // 决定是否使用移动端/平板布局
-  // 如果开启了触屏模式且是竖屏，强制使用移动端布局
-  // 否则，根据分辨率判断（lg = 992px）
-  const isMobileOrTablet = touchScreen.isTouchScreenMode 
-    ? touchScreen.isPortrait 
-    : (screens.lg === false);
-
-  // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // 浏览器全屏模式 (由顶栏控制)
-  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
-  /**
-   * 侧栏收起时，antd 会把 `display: inline-flex` 等写进 `span.ant-menu-title-content` 的 **style**（与 Pro 的 CSS 叠加），
-   * 在 DevTools 里「圈掉」的就是这一段。仅选子 `span` 无法命中，因为 Pro 的标题包装是 `div...-item-title`。
-   * 在 Menu 的语义 styles 里覆盖，等价于删掉那段 inline。展开侧栏不传入，避免影响非收起态。
-   */
-  const collapsedSiderMenuStyles = useMemo<MenuProps['styles'] | undefined>(
-    () =>
-      !isFullscreen && collapsed
-        ? {
-            itemContent: { display: 'block' },
-            subMenu: { itemContent: { display: 'block' } },
-          }
-        : undefined,
-    [collapsed, isFullscreen]
-  );
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
-  /** 开始面板：挂载与退场动画（仿 Win11 自左下上浮/下沉） */
-  const [systemSettingsPanelMounted, setSystemSettingsPanelMounted] = useState(false);
-  const [systemSettingsPanelExiting, setSystemSettingsPanelExiting] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
-  const [onboardingHovered, setOnboardingHovered] = useState(false);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
-  const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
-  const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
-
-  const closeSystemSettingsPanelAnimated = useCallback(() => {
-    if (!systemSettingsPanelMounted || systemSettingsPanelExiting) return;
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setSystemSettingsPanelMounted(false);
-      setSystemSettingsPanelExiting(false);
-      return;
-    }
-    setSystemSettingsPanelExiting(true);
-  }, [systemSettingsPanelMounted, systemSettingsPanelExiting]);
-
-  const openSystemSettingsPanel = useCallback(() => {
-    if (systemSettingsPanelExiting) return;
-    setSystemSettingsPanelExiting(false);
-    setSystemSettingsPanelMounted(true);
-  }, [systemSettingsPanelExiting]);
-
-  const unmountSystemSettingsPanel = useCallback(() => {
-    setSystemSettingsPanelExiting(false);
-    setSystemSettingsPanelMounted(false);
-  }, []);
-
-  const handleSystemSettingsPanelAnimationEnd = useCallback((e: React.AnimationEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return;
-    if (e.animationName !== 'riveredgeSystemPanelOut') return;
-    setSystemSettingsPanelMounted(false);
-    setSystemSettingsPanelExiting(false);
-  }, []);
-  const currentUser = useGlobalStore((s) => s.currentUser);
-  const logout = useGlobalStore((s) => s.logout);
-  const isLocked = useGlobalStore((s) => s.isLocked);
-  const lockScreen = useGlobalStore((s) => s.lockScreen);
-  // 头像 URL：优先从缓存读取以消除首屏闪烁，再异步拉取最新
+  const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-
-  // 版权声明关键字段校验（Layout 挂载时执行一次）
-  useEffect(() => {
-    verifyCopyright();
-  }, []);
 
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
@@ -838,9 +791,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
 
       if (avatarUuid) {
-        const cached = getCachedAvatarUrl(avatarUuid);
-        if (cached) setAvatarUrl(cached);
-
         try {
           const url = await getAvatarUrl(avatarUuid);
           if (url) {
@@ -849,18 +799,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             setAvatarUrl(undefined);
           }
         } catch (error) {
-          console.error(t('ui.error.loadAvatar'), error);
+          console.error('加载头像 URL 失败:', error);
           setAvatarUrl(undefined);
         }
       } else {
+        // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
         let foundAvatar = false;
         if (currentUser) {
           try {
             const { getUserProfile } = await import('../services/userProfile');
             const profile = await getUserProfile();
             if (profile.avatar) {
-              const cached = getCachedAvatarUrl(profile.avatar);
-              if (cached) setAvatarUrl(cached);
               const url = await getAvatarUrl(profile.avatar);
               if (url) {
                 setAvatarUrl(url);
@@ -868,11 +817,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
           } catch (error) {
-            // 静默失败
+            // 静默失败，不影响其他功能
           }
         }
 
-        if (!foundAvatar) setAvatarUrl(undefined);
+        // 只有在确实没有找到头像时才清空
+        if (!foundAvatar) {
+          setAvatarUrl(undefined);
+        }
       }
     };
 
@@ -888,47 +840,50 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
 
-  // 组织初始化提醒已移至上线助手中，不再全局展示
-
 
 
 
   const queryClient = useQueryClient();
 
-  /** 登出前清理租户相关 Query 缓存，避免重新登录后仍显示旧侧边栏菜单（applicationMenus staleTime 内不 refetch） */
-  const performLogout = useCallback(() => {
-    clearSessionScopedQueries(queryClient);
-    logout();
-    // 使用浏览器真实导航跳转到 /login（独立 MPA login.html），与 IndexPage、AuthGuard 保持一致；
-    // 否则 SPA 内部 navigate 会让登录页跑在主应用 bundle 中，刷新后切换到 MPA bundle 行为不一致。
-    window.location.replace('/login');
-  }, [queryClient, logout]);
-
-  // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
-  const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
-  const siteLogoValue = (useConfigStore((s) => (s.getConfig('site_logo', '') as string)?.trim()) || '') || '';
-  const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
-  const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
-  const systemHomePath = systemDashboardEnabled ? '/system/dashboard/workplace' : '/system/applications';
-
-  const tenantIdStrForHome = getTenantId()?.toString() ?? null;
-  const { data: tenantBackendHome } = useQuery({
-    queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStrForHome],
-    queryFn: getTenantBackendHome,
-    enabled: !!(getToken() && tenantIdStrForHome && currentUser),
-    staleTime: 60 * 1000,
+  // 获取站点设置
+  // 获取站点设置
+  // 优化：使用 localStorage 缓存，实现同步初始化，避免 LOGO 闪烁
+  const { data: siteSetting } = useQuery({
+    queryKey: ['siteSetting'],
+    queryFn: async () => {
+      const data = await getSiteSetting();
+      // 缓存到 localStorage
+      try {
+        localStorage.setItem('siteSettingCache', JSON.stringify({
+          data,
+          timestamp: Date.now(),
+        }));
+      } catch (e) {
+        console.warn('Failed to cache site settings', e);
+      }
+      return data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 分钟缓存
+    enabled: !!currentUser, // 只在用户登录后获取
+    placeholderData: () => {
+      // 尝试从缓存读取，实现同步渲染
+      try {
+        const cachedStr = localStorage.getItem('siteSettingCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 检查有效期（例如 24 小时，或者更短，视需求而定，这里主要为了首屏不闪烁，数据新鲜度由 useQuery 保证）
+          // 这里不做严格过期检查，优先展示缓存，useQuery 会在后台更新
+          return cached.data;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return undefined;
+    }
   });
-
-  const effectiveSystemHomePath = useMemo(() => {
-    const custom = tenantBackendHome?.path?.trim();
-    if (custom) return custom;
-    return systemHomePath;
-  }, [tenantBackendHome?.path, systemHomePath]);
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
-  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   // 获取消息统计
   const { data: messageStats, refetch: refetchMessageStats } = useQuery({
@@ -956,45 +911,88 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return uuidRegex.test(str);
   };
 
-  // 获取站点LOGO（支持UUID和URL格式），同步从 configStore 读取（有 persist 缓存）
-  const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
-    const logoValue = (useConfigStore.getState().getConfig('site_logo', '') as string)?.trim() || '';
+  // 获取站点名称（如果未配置或为空字符串则使用默认值）
+  const siteName = (siteSetting?.settings?.site_name?.trim() || '') || 'RiverEdge SaaS';
 
-    if (logoValue) {
-      if (isUUID(logoValue)) {
-        const cached = getCachedSiteLogoUrl(logoValue);
-        if (cached) return cached;
-        // 预览 URL 未就绪时先用极小 SVG，避免先拉 34KB 默认 PNG 再切换
-        return SITE_LOGO_FALLBACK_SVG_URL;
+  // 获取站点LOGO（支持UUID和URL格式）
+  // 获取站点LOGO（支持UUID和URL格式）
+  // 优化：同步初始化 LOGO URL
+  const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
+    // 1. 尝试从站点设置缓存中获取 logo 配置
+    let logoValue = '';
+    try {
+      // 优先看当前内存中的 siteSetting (如果已经被 placeholderData 同步初始化)
+      // 如果 siteSetting 还没来得及初始化（极少情况），尝试直接读 localStorage
+      if (siteSetting?.settings?.site_logo) {
+        logoValue = siteSetting.settings.site_logo.trim();
       } else {
+        const cachedStr = localStorage.getItem('siteSettingCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (cached.data?.settings?.site_logo) {
+            logoValue = cached.data.settings.site_logo.trim();
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 2. 如果有 logo 配置
+    if (logoValue) {
+      // 如果是 UUID，尝试从专门的 logo URL 缓存中读取
+      if (isUUID(logoValue)) {
+        try {
+          const cachedLogoUrl = localStorage.getItem(`siteLogoUrlCache_${logoValue}`);
+          if (cachedLogoUrl) {
+            return cachedLogoUrl;
+          }
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        // 如果是 URL，直接返回
         return logoValue;
       }
     }
 
-    return DEFAULT_SITE_LOGO_URL;
+    return '/img/logo.png';
   });
+  const siteLogoValue = siteSetting?.settings?.site_logo?.trim() || '';
 
-  // 处理LOGO URL（UUID 需通过 getFilePreview 获取，带 TTL 缓存并转为相对路径）
+  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
+  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
   useEffect(() => {
     const loadSiteLogo = async () => {
       if (!siteLogoValue) {
-        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
+        setSiteLogoUrl('/img/logo.png');
         return;
       }
 
+      // 如果是UUID格式，获取文件预览URL
       if (isUUID(siteLogoValue)) {
+        // 先检查缓存，避免重复请求导致的闪烁
+        const cacheKey = `siteLogoUrlCache_${siteLogoValue}`;
+        const cachedUrl = localStorage.getItem(cacheKey);
+
+        // 如果当前显示的已经是缓存的 URL，且没有强制刷新，可以暂不更新
+        // 但为了确保 URL 有效性（例如签名过期），还是建议请求，但不要先重置为默认 logo
+        
         try {
-          const previewInfo = await getFilePreview(siteLogoValue, { forAvatar: true });
-          const rawUrl = previewInfo.preview_url;
-          const newUrl = toRelativeIfLocalhost(rawUrl);
+          const previewInfo = await getFilePreview(siteLogoValue);
+          const newUrl = previewInfo.preview_url;
           setSiteLogoUrl(newUrl);
-          setCachedSiteLogoUrl(siteLogoValue, newUrl);
+          // 缓存解析后的 URL
+          localStorage.setItem(cacheKey, newUrl);
         } catch (error) {
-          console.error(t('ui.error.loadLogo'), error);
-          clearCachedSiteLogoUrl(siteLogoValue);
-          setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
+          console.error('获取站点LOGO预览URL失败:', error);
+          // 只有在没有缓存的情况下降级，避免将正确的缓存覆盖为默认图
+          if (!cachedUrl) {
+            setSiteLogoUrl('/img/logo.png');
+          }
         }
       } else {
+        // 如果是URL格式，直接使用
         setSiteLogoUrl(siteLogoValue);
       }
     };
@@ -1002,46 +1000,215 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     loadSiteLogo();
   }, [siteLogoValue]);
 
-  // 传入 ReactNode，避免 ProLayout 对 string 固定渲染 alt="logo"；加载失败：自定义 → /img/logo.png → /favicon.svg → 内置 data URI
-  const siteLogo = useMemo(
-    () => (
-      <img
-        src={siteLogoUrl}
-        alt=""
-        width="auto"
-        height={22}
-        fetchpriority="high"
-        decoding="async"
-        onError={() => {
-          setSiteLogoUrl((prev) => nextSiteLogoUrlAfterImageError(prev));
-        }}
-      />
-    ),
-    [siteLogoUrl],
-  );
+  const siteLogo = siteLogoUrl;
 
-  // 站点设置更新由 site-settings 等页面保存时直接 invalidateQueries，不再依赖 siteThemeUpdated
+  // 监听站点设置更新事件，刷新站点设置查询
+  useEffect(() => {
+    const handleSiteSettingUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
+    };
+
+    window.addEventListener('siteThemeUpdated', handleSiteSettingUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleSiteSettingUpdate);
+    };
+  }, [queryClient]);
+
+  // 获取应用菜单（仅获取已安装且启用的应用的菜单）
+  // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
+  const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
+    queryKey: ['applicationMenus'],
+    queryFn: async () => {
+      // 获取菜单数据
+      const menuData = await getMenuTree({ is_active: true });
+      // 只返回应用菜单（application_uuid 不为空）
+      const appMenusRaw = menuData.filter(menu => menu.application_uuid);
+      // 按 application_uuid 去重，避免同一应用出现多次（清除缓存后可能出现的异常）
+      const seenAppUuids = new Set<string>();
+      const appMenus = appMenusRaw.filter(menu => {
+        const uuid = menu.application_uuid;
+        if (!uuid) return false;
+        if (seenAppUuids.has(uuid)) return false;
+        seenAppUuids.add(uuid);
+        return true;
+      });
+
+      // 更新 localStorage 缓存（包含时间戳，用于判断是否过期）
+      try {
+        const cacheData = {
+          data: appMenus,
+          timestamp: Date.now(),
+          tenantId: currentUser?.tenant_id, // 添加租户ID，确保不同租户的缓存不冲突
+        };
+        localStorage.setItem('applicationMenusCache_v3', JSON.stringify(cacheData));
+        localStorage.removeItem('applicationMenusCache_v2'); // 清除旧版本缓存
+        localStorage.removeItem('applicationMenusCache');
+      } catch (error) {
+        // 忽略存储错误（localStorage 可能已满或被禁用）
+        console.warn('保存应用菜单缓存失败:', error);
+      }
+
+      return appMenus;
+    },
+    enabled: !!currentUser, // 只在用户登录后加载
+    staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000, // 开发环境30秒缓存，生产环境5分钟缓存
+    gcTime: 10 * 60 * 1000, // 缓存保留时间10分钟
+    placeholderData: () => {
+      // 使用缓存数据作为占位符，避免闪烁（优先 v3，兼容 v2）
+      try {
+        const cachedStr = localStorage.getItem('applicationMenusCache_v3') ?? localStorage.getItem('applicationMenusCache_v2');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 检查缓存是否过期（超过5分钟视为过期）和租户是否匹配
+          const cacheAge = Date.now() - (cached.timestamp || 0);
+          const isExpired = cacheAge > 5 * 60 * 1000;
+          const isTenantMatch = cached.tenantId === currentUser?.tenant_id;
+
+          if (!isExpired && isTenantMatch && cached.data) {
+            return cached.data;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      return []; // Return empty array instead of undefined to match expected type
+    },
+    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
+    refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新（避免频繁刷新）
+    refetchOnMount: (query) => {
+      // 智能刷新策略：
+      // 1. 如果查询从未执行过（首次启用），总是刷新
+      // 2. 如果数据过期，刷新
+      if (!query.state.data || query.isStale()) {
+        return true;
+      }
+
+      // 如果有缓存数据且未过期，不刷新
+      // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
+      return false;
+    },
+    refetchOnReconnect: true, // 网络重连时刷新
+  });
+
+
+  // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
+  useEffect(() => {
+    const handleUserLogin = () => {
+      console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
+      // 清除 localStorage 缓存
+      try {
+        localStorage.removeItem('applicationMenusCache_v2');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 清除 React Query 缓存
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      // 使用 requestAnimationFrame 替代 setTimeout，减少延迟（约 16ms 而非 100ms）
+      // 这样可以在下一个渲染帧执行，此时 currentUser 应该已经更新
+      requestAnimationFrame(() => {
+        // 使用 setTimeout 0 确保在 React 状态更新后执行
+        setTimeout(() => {
+          refetchApplicationMenus();
+        }, 0);
+      });
+    };
+
+    // 监听自定义事件（在登录页面触发）
+    window.addEventListener('user-logged-in', handleUserLogin);
+
+    return () => {
+      window.removeEventListener('user-logged-in', handleUserLogin);
+    };
+  }, [queryClient, refetchApplicationMenus]);
+
+  // 使用 ref 记录 previous currentUser，用于检测用户从无到有的变化
+  const prevCurrentUserRef = useRef(currentUser);
+
+  // 监听 currentUser 变化，当用户从无到有时主动触发菜单查询
+  // 这解决了登录后菜单不显示的问题
+  useEffect(() => {
+    const prevUser = prevCurrentUserRef.current;
+
+    // 检测用户从无到有的变化（登录场景）
+    const userJustLoggedIn = !prevUser && currentUser;
+
+    // 更新 ref
+    prevCurrentUserRef.current = currentUser;
+
+    if (userJustLoggedIn) {
+      console.log('🔄 检测到用户登录（从无到有），主动触发菜单加载...');
+      // 清除可能存在的旧缓存
+      try {
+        localStorage.removeItem('applicationMenusCache_v2');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 由于 currentUser 已经更新，查询应该已经启用（enabled: !!currentUser）
+      // 使用 requestAnimationFrame + setTimeout 0 确保在 React 渲染周期后执行，最小化延迟
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          refetchApplicationMenus();
+        }, 0);
+      });
+    }
+  }, [currentUser, applicationMenus, applicationMenusLoading, refetchApplicationMenus]);
+
+  // 监听租户ID变化，清除菜单缓存（确保切换组织时获取最新菜单）
+  useEffect(() => {
+    if (currentUser?.tenant_id) {
+      // 检查缓存中的租户ID是否与当前租户ID匹配
+      try {
+        const cachedStr = localStorage.getItem('applicationMenusCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 如果租户ID不匹配，清除缓存并重新加载
+          if (cached.tenantId !== currentUser.tenant_id) {
+            console.log('🔄 检测到租户ID变化，清除菜单缓存并重新加载...');
+            localStorage.removeItem('applicationMenusCache_v2');
+            queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+            // 主动触发菜单查询
+            refetchApplicationMenus();
+          }
+        }
+      } catch (error) {
+        // 忽略解析错误
+      }
+    }
+  }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
+
+  // 监听应用状态变更事件，主动刷新菜单
+  useEffect(() => {
+    const handleApplicationStatusChange = () => {
+      console.log('🔄 检测到应用状态变更，刷新菜单...');
+      // 清除 localStorage 缓存
+      try {
+        localStorage.removeItem('applicationMenusCache');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 重新获取菜单
+      refetchApplicationMenus();
+    };
+
+    // 监听自定义事件
+    window.addEventListener('application-status-changed', handleApplicationStatusChange);
+
+    return () => {
+      window.removeEventListener('application-status-changed', handleApplicationStatusChange);
+    };
+  }, [refetchApplicationMenus]);
 
   /**
    * 将 MenuTree 转换为 MenuDataItem
    * 支持应用菜单的国际化翻译
    */
-  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false, depth: number = 0): MenuDataItem => {
-    // 处理图标：一级菜单必显图标，有 icon 的二级菜单（如主数据-业务伙伴）也显示
+  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false): MenuDataItem => {
+    // 处理图标：左侧菜单全部使用 Lucide 图标
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
 
-    // 同等级菜单：优先使用固定的 path 映射（避免 menu.icon 数据不一致）
-    if (depth === 0 && menu.path) {
-      const normalizedMenuPath = typeof menu.path === 'string' ? menu.path.replace(/\/$/, '') : menu.path;
-      const iconFromPath = getMenuIcon(menu.name ?? '', normalizedMenuPath as string);
-      // getMenuIcon 找不到匹配时会返回 dashboard 默认图标，这里用它来判断是否命中映射
-      if (React.isValidElement(iconFromPath) && (iconFromPath as any).type !== ManufacturingIcons.dashboard) {
-        iconElement = iconFromPath;
-      }
-    }
-
-    if (!iconElement && menu.icon) {
+    // 优先使用 menu.icon 字段（如果存在）
+    if (menu.icon) {
       // 首先尝试从预定义的 ManufacturingIcons 中获取
       const iconKey = menu.icon as keyof typeof ManufacturingIcons;
       const IconComponent = ManufacturingIcons[iconKey];
@@ -1088,13 +1255,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 快格轻制造应用图标映射
           'planning': ManufacturingIcons.calendar, // 计划管理使用日历图标
           'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
-          'bar-chart': ManufacturingIcons.chartBar, // 分析中心 - 柱状图
-          'chartBar': ManufacturingIcons.chartBar,
-          'analytics': ManufacturingIcons.chartBar, // 分析入口图标
-          'trophy': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标
-          'fileSpreadsheet': ManufacturingIcons.fileSpreadsheet, // 报表中心 - 表格图标
-          'fileBarChart': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标
-          'layoutDashboard': ManufacturingIcons.layoutDashboard, // 大屏中心
         };
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
@@ -1119,22 +1279,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           if (DirectIcon && DirectIcon !== React.Fragment && typeof DirectIcon === 'function') {
             iconElement = React.createElement(DirectIcon, { size: 16 });
           } else if (process.env.NODE_ENV === 'development') {
-            console.warn(`Icon not found: ${menu.icon} for menu: ${menu.name || menu.path}. Tip: You can use Lucide icon names (PascalCase) directly, such as "Factory", "Home", etc.`);
+            console.warn(`图标未找到: ${menu.icon}，菜单: ${menu.name || menu.path}。提示：可以直接使用 Lucide 图标名（PascalCase），如 "Factory", "Home" 等`);
           }
         }
       }
     }
 
-    // 一级菜单：若 icon 未匹配，再尝试根据名称和路径获取
-    if (depth === 0 && !iconElement) {
+    // 如果 menu.icon 不存在或未匹配到图标，再尝试根据菜单名称和路径获取图标
+    if (!iconElement) {
       if (menu.name) {
         iconElement = getMenuIcon(menu.name, menu.path);
       } else if (menu.path) {
         iconElement = getMenuIcon('', menu.path);
       }
-      if (!iconElement) {
-        iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
-      }
+    }
+
+    // 如果还是没有图标，使用默认的 Lucide 图标
+    if (!iconElement) {
+      iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
     }
 
     // 处理菜单名称翻译
@@ -1155,12 +1317,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要
       // 如果菜单有子项，确保子项也有 key（应用菜单的子项也是应用菜单）
       children: menu.children && menu.children.length > 0
-        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu, depth + 1))
+        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu))
         : undefined,
     };
-    if (menu.permission_code) {
-      (menuItem as any).permissionCodes = [menu.permission_code];
-    }
 
     // 如果菜单没有 path，说明是分组标题，需要特殊处理
     if (!menu.path && menu.children && menu.children.length > 0) {
@@ -1169,252 +1328,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menuItem.path = undefined; // 明确设置为 undefined
     }
 
-    // 从 meta 同步 type、className、hideInMenu（数据库系统菜单入库后使用）
-    const meta = (menu as { meta?: Record<string, any> }).meta;
-    if (meta) {
-      if (meta.type === 'group') menuItem.type = 'group';
-      if (meta.className) menuItem.className = meta.className;
-      if (meta.hideInMenu === true) menuItem.hideInMenu = true;
-    }
-
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
-
-  // 稳定引用：避免每次渲染创建新函数导致 useUnifiedMenuData 重复计算
-  const getSystemMenuConfig = React.useCallback(() => getMenuConfig(t), [t]);
-
-  const {
-    sidebarMenuData: filteredMenuData,
-    breadcrumbMenuData,
-  } = useUnifiedMenuData({
-    getSystemMenuConfig,
-    convertMenuTreeToMenuDataItem,
-    t,
-    collapsed,
-  });
-
-  const systemMenuEntry = useMemo(
-    () => filteredMenuData.find((item) => item.path === '/system'),
-    [filteredMenuData]
-  );
-  const systemSettingsGroups = useMemo(() => {
-    const preferredOrder = [
-      'core-config-group',
-      'user-management-group',
-      'personal-center-group',
-      'data-center-group',
-      'process-management-group',
-      'monitoring-ops-group',
-    ];
-    const spanByKey: Record<string, number> = {
-      // 按 24 栅格布局：
-      // 第一行：核心配置(12) + 用户管理(6) + 个人中心(6) = 24
-      'core-config-group': 12,
-      'user-management-group': 6,
-      'personal-center-group': 6,
-      // 第二行：数据中心(9) + 流程管理(9) + 监控运维(6) = 24
-      'data-center-group': 9,
-      'process-management-group': 9,
-      'monitoring-ops-group': 6,
-    };
-    const groups = (systemMenuEntry?.children ?? []) as MenuDataItem[];
-    const visibleGroups = groups
-      .filter((group) => !group?.hideInMenu)
-      .map((group, index) => {
-        const items = (group.children ?? []).filter(
-          (child) =>
-            !child?.hideInMenu &&
-            !!child?.path &&
-            // 顶栏已有入口，不在系统配置浮层里重复展示
-            child.path !== '/system/onboarding-wizard' &&
-            child.path !== '/system/launch-progress'
-        );
-        const itemCount = items.length;
-        // 每个分组固定显示为两行：列数按数量自动计算
-        const itemCols = Math.max(2, Math.ceil(itemCount / 2));
-        // 组宽度按设计占位，确保每行总占位凑满 12，避免右侧空白列
-        const rawKey = String(group.key || group.name || `system-group-${index}`);
-        const groupSpan = spanByKey[rawKey] ?? Math.min(6, Math.max(3, itemCols + 1));
-        return {
-          key: rawKey,
-          name: group.name,
-          items,
-          itemCount,
-          itemCols,
-          groupSpan,
-        };
-      })
-      .filter((group) => group.itemCount > 0)
-      .sort((a, b) => {
-        const aOrder = preferredOrder.indexOf(a.key);
-        const bOrder = preferredOrder.indexOf(b.key);
-        if (aOrder === -1 && bOrder === -1) return 0;
-        if (aOrder === -1) return 1;
-        if (bOrder === -1) return -1;
-        return aOrder - bOrder;
-      });
-    return visibleGroups;
-  }, [systemMenuEntry]);
-
-  const systemSettingsPanelGridColumns = useMemo(() => {
-    if (!systemSettingsGroups.length) return 6;
-    let currentRowSpan = 0;
-    let maxRowSpan = 0;
-    systemSettingsGroups.forEach((group) => {
-      const span = Math.max(3, Math.min(24, Number(group.groupSpan) || 6));
-      if (currentRowSpan + span > 24) {
-        maxRowSpan = Math.max(maxRowSpan, currentRowSpan);
-        currentRowSpan = 0;
-      }
-      currentRowSpan += span;
-      maxRowSpan = Math.max(maxRowSpan, currentRowSpan);
-    });
-    return Math.max(6, Math.min(24, maxRowSpan));
-  }, [systemSettingsGroups]);
-
-  const systemSettingsPanelWidth = useMemo(() => {
-    // 与现有 24 栅格视觉密度保持一致：按列数线性缩放面板宽度
-    const columns = systemSettingsPanelGridColumns;
-    const trackWidth = 26;
-    const columnGap = 12;
-    const bodyHorizontalPadding = 28;
-    const borderWidth = 2;
-    return (
-      columns * trackWidth +
-      (columns - 1) * columnGap +
-      bodyHorizontalPadding +
-      borderWidth
-    );
-  }, [systemSettingsPanelGridColumns]);
-
-  const handleSystemSettingsNavigate = useCallback((path?: string) => {
-    if (!path) return;
-    unmountSystemSettingsPanel();
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      window.open(path, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    navigate(path);
-  }, [navigate, unmountSystemSettingsPanel]);
-
-  const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
-    if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
-    const iconMap: Record<string, string> = {
-      '/system/applications': 'fluent-color:apps-24',
-      '/system/menus': 'fluent-color:apps-list-detail-24',
-      '/system/site-settings': 'fluent-color:settings-24',
-      '/system/config-center': 'fluent-color:briefcase-24',
-      '/system/data-dictionaries': 'fluent-color:book-open-24',
-      '/system/languages': 'fluent-color:globe-24',
-      '/system/code-rules': 'fluent-color:code-24',
-      '/system/custom-fields': 'fluent-color:form-24',
-      '/system/departments': 'fluent-color:building-24',
-      '/system/positions': 'fluent-color:people-list-24',
-      '/system/roles': 'fluent-color:shield-24',
-      '/system/users': 'fluent-color:people-24',
-      '/system/files': 'fluent-color:document-folder-24',
-      '/system/initial-data': 'fluent-color:text-bullet-list-square-sparkle-16',
-      '/system/apis': 'fluent-color:puzzle-piece-16',
-      '/system/data-sources': 'fluent-color:database-24',
-      '/system/application-connections': 'fluent-color:data-pie-24',
-      '/system/datasets': 'fluent-color:table-24',
-      '/system/approval-processes': 'fluent-color:clipboard-task-24',
-      '/system/approval-instances': 'fluent-color:checkmark-circle-24',
-      '/system/messages/template': 'fluent-color:drafts-24',
-      '/system/messages/config': 'fluent-color:chat-24',
-      '/system/print-devices': 'fluent-color:phone-laptop-16',
-      '/system/print-templates': 'fluent-color:document-24',
-      '/system/operation-logs': 'fluent-color:history-24',
-      '/system/login-logs': 'fluent-color:clock-24',
-      '/system/online-users': 'fluent-color:people-team-24',
-      '/system/data-backups': 'fluent-color:arrow-clockwise-dashes-24',
-      '/personal/profile': 'fluent-color:person-24',
-      '/personal/preferences': 'fluent-color:options-24',
-      '/personal/messages': 'fluent-color:chat-24',
-      '/personal/tasks': 'fluent-color:clipboard-24',
-    };
-    const iconName = iconMap[path];
-    if (iconName) return <IconifyIcon icon={iconName} />;
-    const matchedPrefix = Object.keys(iconMap).find((key) => path.startsWith(key));
-    if (matchedPrefix) {
-      return <IconifyIcon icon={iconMap[matchedPrefix]} />;
-    }
-    return <IconifyIcon icon="fluent-color:apps-24" />;
-  }, []);
-
-  const hasAiAssistantEntry = useMemo(() => {
-    const stack: MenuDataItem[] = [...filteredMenuData];
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (!current) continue;
-      if (typeof current.path === 'string' && current.path.startsWith('/apps/kuaiai')) {
-        return true;
-      }
-      if (Array.isArray(current.children) && current.children.length > 0) {
-        stack.push(...(current.children as MenuDataItem[]));
-      }
-    }
-    return false;
-  }, [filteredMenuData]);
-
-  useEffect(() => {
-    unmountSystemSettingsPanel();
-  }, [location.pathname, unmountSystemSettingsPanel]);
-
-  useEffect(() => {
-    if (!systemSettingsPanelMounted) return;
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        systemSettingsPanelRef.current?.contains(target) ||
-        systemSettingsTriggerRef.current?.contains(target)
-      ) {
-        return;
-      }
-      closeSystemSettingsPanelAnimated();
-    };
-    const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeSystemSettingsPanelAnimated();
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleEsc);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleEsc);
-    };
-  }, [systemSettingsPanelMounted, closeSystemSettingsPanelAnimated]);
-
-  const { data: menuBadgeCounts = {} } = useQuery({
-    queryKey: ['menuBadgeCounts'],
-    queryFn: getMenuBadgeCounts,
-    enabled: !!currentUser?.id,
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
-  });
-
-  // 用户登录后清除菜单缓存（invalidate 会自动触发 refetch，避免重复调用导致竞态）
-  const prevUserIdRef = useRef<number | undefined>();
-  useEffect(() => {
-    const userId = currentUser?.id;
-    const justLoggedIn = userId !== undefined && prevUserIdRef.current === undefined;
-    prevUserIdRef.current = userId;
-    if (!justLoggedIn) return;
-    queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
-    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-  }, [currentUser?.id, queryClient]);
-
-  // 监听租户ID变化，刷新菜单（invalidate 会自动触发 refetch）
-  const prevTenantIdRef = useRef<number | undefined>();
-  useEffect(() => {
-    const tid = currentUser?.tenant_id;
-    if (tid !== undefined && prevTenantIdRef.current !== undefined && prevTenantIdRef.current !== tid) {
-      queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-    }
-    prevTenantIdRef.current = tid;
-  }, [currentUser?.tenant_id, queryClient]);
 
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
@@ -1455,35 +1370,78 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return 255; // 默认返回浅色
   };
 
-  // 从 themeStore 订阅主题相关状态（单一数据源，无需事件监听）
-  // 注意：必须分别订阅，避免选择器返回新对象导致无限重渲染
-  const storeSiderBg = useThemeStore((s) => s.resolved.siderBgColor);
-  const storeHeaderBg = useThemeStore((s) => s.resolved.headerBgColor);
-  const isDarkMode = useThemeStore((s) => s.resolved.isDark);
+  // 使用 Ant Design 原生方式判断是否为深色模式
+  // 通过检查 token 中的背景色值来判断（深色模式下 colorBgContainer 通常是深色）
+  // 更可靠的方法：检查 colorBgContainer 的亮度值
+  const isDarkMode = React.useMemo(() => {
+    const bgColor = token.colorBgContainer;
+    const brightness = calculateColorBrightness(bgColor);
+    // 如果亮度小于 128，认为是深色模式
+    return brightness < 128;
+  }, [token.colorBgContainer]);
 
+  // 菜单栏背景色状态（用于响应主题更新）
+  const [siderBgColorState, setSiderBgColorState] = useState<string | undefined>(() => {
+    return (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+  });
+
+  // 顶栏背景色状态（用于响应主题更新）
+  const [headerBgColorState, setHeaderBgColorState] = useState<string | undefined>(() => {
+    return (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+  });
+
+  // 监听主题更新事件，实时更新菜单栏和顶栏背景色
   useEffect(() => {
-    (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
+    const handleThemeUpdate = (event?: any) => {
+      // 延迟一下，确保全局变量已经更新
+      setTimeout(() => {
+        const customSiderBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+        const customHeaderBgColor = (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+        setSiderBgColorState(customSiderBgColor);
+        setHeaderBgColorState(customHeaderBgColor);
+
+        // 固定使用 MIX 布局模式
+        (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
+      }, 0);
+    };
+
+    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
+    };
   }, []);
 
   // 计算菜单栏背景色和对应的文字颜色
   const siderBgColor = React.useMemo(() => {
-    if (isDarkMode) return token.colorBgContainer;
-    return storeSiderBg || token.colorBgContainer;
-  }, [storeSiderBg, token.colorBgContainer, isDarkMode]);
+    // 深色模式下，不使用自定义背景色，使用默认背景色
+    if (isDarkMode) {
+      return token.colorBgContainer;
+    }
+    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
+    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+    return customBgColor || token.colorBgContainer;
+  }, [siderBgColorState, token.colorBgContainer, isDarkMode]);
 
   // 计算顶栏背景色（支持透明度）
   const headerBgColor = React.useMemo(() => {
-    if (isDarkMode) return token.colorBgContainer;
-    return storeHeaderBg || token.colorBgContainer;
-  }, [storeHeaderBg, token.colorBgContainer, isDarkMode]);
+    // 深色模式下，不使用自定义背景色，使用默认背景色
+    if (isDarkMode) {
+      return token.colorBgContainer;
+    }
+    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
+    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+    return customBgColor || token.colorBgContainer;
+  }, [headerBgColorState, token.colorBgContainer, isDarkMode]);
 
   // 根据顶栏背景色计算文字颜色（参考左侧菜单栏的实现）
   const headerTextColor = React.useMemo(() => {
+    // 深色模式下，使用深色模式的默认文字颜色
     if (isDarkMode) {
       return 'var(--ant-colorText)';
     }
 
-    const customBgColor = storeHeaderBg;
+    // 浅色模式下，检查是否有自定义背景色
+    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
 
     if (customBgColor) {
       // 如果有自定义背景色，根据背景色亮度计算文字颜色
@@ -1494,7 +1452,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 如果没有自定义背景色（使用默认背景色），使用默认文字颜色
       return 'var(--ant-colorText)';
     }
-  }, [storeHeaderBg, isDarkMode]);
+  }, [headerBgColorState, isDarkMode]);
 
   // 判断显示模式：浅色模式浅色背景
   const isLightModeLightBg = React.useMemo(() => {
@@ -1509,29 +1467,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 浅色模式下，检查是否有自定义背景色
-    const customBgColor = storeSiderBg;
+    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
 
     if (customBgColor) {
+      // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
+      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
       return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
+    } else {
+      // 如果没有自定义背景色（使用默认背景色），按浅色背景处理，使用深色文字
+      return 'var(--ant-colorText)';
     }
-    return 'var(--ant-colorText)';
-  }, [storeSiderBg, isDarkMode]);
-
-  /** 底栏统一判定：深色模式或深色侧栏（白字） */
-  const isDarkSiderFooter = React.useMemo(
-    () => isDarkMode || siderTextColor === '#ffffff',
-    [isDarkMode, siderTextColor],
-  );
-  /** 底栏按钮统一 token：只维护这一套 */
-  const siderFooterToken = React.useMemo(
-    () =>
-      theme.getDesignToken({
-        algorithm: isDarkSiderFooter ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: token.colorPrimary },
-      }),
-    [isDarkSiderFooter, token.colorPrimary],
-  );
+  }, [siderBgColorState, isDarkMode]);
 
   /**
    * 检查锁屏状态，如果已锁定则重定向到锁屏页
@@ -1548,78 +1495,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   /**
-   * 键盘快捷键：/ 聚焦侧栏搜索；Ctrl+K 同上；Alt+N 新建；Ctrl+Enter/Ctrl+S 提交弹窗；? 显示快捷键帮助
-   * 使用捕获阶段并阻止默认，避免 Alt 被系统/浏览器抢走（如 Windows 菜单栏）
+   * 键盘快捷键：Ctrl+K / Cmd+K 聚焦搜索框
    */
   useEffect(() => {
-    const isInputLike = (target: EventTarget | null) => {
-      if (!target || !(target instanceof HTMLElement)) return false;
-      const el = target as HTMLElement;
-      const tag = el.tagName?.toLowerCase();
-      const role = el.getAttribute?.('role');
-      const editable = el.isContentEditable;
-      return tag === 'input' || tag === 'textarea' || tag === 'select' || role === 'textbox' || editable;
-    };
-
-    const focusSearchInput = () => {
-      const sidebarSearch = document.querySelector('.riveredge-sidebar-search-wrapper .ant-input') as HTMLInputElement;
-      if (sidebarSearch) {
-        sidebarSearch.focus();
-        return true;
-      }
-      return false;
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 接管 F1 控制，开启 AI 助手（仅在 AI 应用已启用时）
-      if (e.key === 'F1' && hasAiAssistantEntry) {
-        e.preventDefault();
-        e.stopPropagation();
-        setAiAssistantOpen(true);
-        return;
-      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        focusSearchInput();
-        return;
-      }
-      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isInputLike(e.target)) {
-        e.preventDefault();
-        focusSearchInput();
-        return;
-      }
-      if (e.shiftKey && e.key === '?') {
-        e.preventDefault();
-        setShortcutHelpOpen((open) => !open);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        if (hasSubmitHandler()) {
-          e.preventDefault();
-          e.stopPropagation();
-          triggerSubmit();
-        }
-        return;
-      }
-      if (e.ctrlKey && e.key === 'Enter') {
-        if (hasSubmitHandler()) {
-          e.preventDefault();
-          e.stopPropagation();
-          triggerSubmit();
-        }
-      }
-      if (e.altKey && e.key.toLowerCase() === 'n') {
-        if (hasNewHandler()) {
-          e.preventDefault();
-          e.stopPropagation();
-          triggerNew();
+        // 聚焦搜索框
+        const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [hasAiAssistantEntry]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏
@@ -1655,23 +1549,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 延迟检测，确保 DOM 已完全渲染
     const timer = setTimeout(checkBreadcrumbWrap, 100);
 
-    let resizeThrottle: ReturnType<typeof setTimeout> | undefined;
-    const onResize = () => {
-      if (resizeThrottle) return;
-      resizeThrottle = setTimeout(() => {
-        resizeThrottle = undefined;
-        checkBreadcrumbWrap();
-      }, 120);
-    };
-    window.addEventListener('resize', onResize, { passive: true });
+    // 监听窗口大小变化
+    window.addEventListener('resize', checkBreadcrumbWrap);
 
-    let moRaf = 0;
+    // 使用 MutationObserver 监听 DOM 变化
     const observer = new MutationObserver(() => {
-      if (moRaf) return;
-      moRaf = window.requestAnimationFrame(() => {
-        moRaf = 0;
-        checkBreadcrumbWrap();
-      });
+      setTimeout(checkBreadcrumbWrap, 50);
     });
     if (breadcrumbRef.current) {
       observer.observe(breadcrumbRef.current, {
@@ -1684,9 +1567,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     return () => {
       clearTimeout(timer);
-      if (resizeThrottle) clearTimeout(resizeThrottle);
-      window.removeEventListener('resize', onResize);
-      if (moRaf) cancelAnimationFrame(moRaf);
+      window.removeEventListener('resize', checkBreadcrumbWrap);
       observer.disconnect();
     };
   }, [location.pathname]);
@@ -1710,14 +1591,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 初始添加
     addGroupTitleClassName();
 
-    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className（合并到 rAF，避免菜单动画/重排时连发同步回调）
-    let groupMoRaf = 0;
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className
     const observer = new MutationObserver(() => {
-      if (groupMoRaf) return;
-      groupMoRaf = window.requestAnimationFrame(() => {
-        groupMoRaf = 0;
-        addGroupTitleClassName();
-      });
+      addGroupTitleClassName();
     });
 
     // 观察菜单容器
@@ -1730,10 +1606,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return () => {
-      if (groupMoRaf) cancelAnimationFrame(groupMoRaf);
       observer.disconnect();
     };
-  }, [currentUser?.id, currentUser?.tenant_id]); // 用户/租户切换时重建；避免无关字段刷新导致反复挂载 Observer
+  }, [currentUser]); // 当用户或菜单数据变化时重新添加 className
 
   /**
    * 动态设置 LOGO 后标题文字颜色（H1元素）- 确保在浅色模式深色背景时与深色模式文字颜色一致
@@ -1742,7 +1617,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const updateLogoTitleColor = () => {
       // 计算应该使用的文字颜色
       const logoTitleColor = isDarkMode
-        ? '#ffffff'
+        ? 'var(--ant-colorText)'
         : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)');
 
       // 直接查找 h1 元素（LOGO 后的标题文字）
@@ -1768,14 +1643,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 初始设置
     updateLogoTitleColor();
 
-    // 使用 MutationObserver 监听 DOM 变化，确保新增的元素也能应用颜色（rAF 合并，避免顶栏频繁 attribute 变动时同步重查 DOM）
-    let logoMoRaf = 0;
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的元素也能应用颜色
     const observer = new MutationObserver(() => {
-      if (logoMoRaf) return;
-      logoMoRaf = window.requestAnimationFrame(() => {
-        logoMoRaf = 0;
-        updateLogoTitleColor();
-      });
+      updateLogoTitleColor();
     });
 
     // 观察顶栏容器
@@ -1790,10 +1660,130 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return () => {
-      if (logoMoRaf) cancelAnimationFrame(logoMoRaf);
       observer.disconnect();
     };
   }, [isDarkMode, isLightModeLightBg]); // 当主题或背景色变化时重新设置
+
+  // 获取翻译后的菜单配置（与 applicationMenus 合并后由 filteredMenuData 提供给面包屑、标题、UniTabs）
+  const menuConfig = useMemo(() => getMenuConfig(t), [t]);
+
+  const filteredMenuData = useMemo(() => {
+    if (!currentUser) return [];
+
+    let menuItems = [...menuConfig];
+
+    // 【第二组】应用菜单：从后端动态加载
+    // 应用菜单处理逻辑：
+    // 1. 应用的名称作为分组标题（不可点击，灰色，小字号）
+    // 2. 应用的子菜单提升到主菜单一级（和"仪表盘"、"系统配置"等同一级别）
+    if (applicationMenus && applicationMenus.length > 0) {
+      // 收集所有应用菜单项（分组标题 + 子菜单）
+      const appMenuItems: MenuDataItem[] = [];
+
+      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序）
+      const sortedApplicationMenus = applicationMenus;
+
+      // 遍历每个应用，将应用的子菜单提升到主菜单级别
+      sortedApplicationMenus.forEach(appMenu => {
+        if (appMenu.children && appMenu.children.length > 0) {
+          // 1. 先添加应用名称作为分组标题（仅在菜单展开时显示）
+          // 使用 Ant Design 原生的 type: 'group' 来创建分组标题（与系统级菜单保持一致）
+          // 注意：即使子菜单已经提升到主菜单级别，group 仍然需要 children 才能被渲染
+          // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
+          // 菜单收起时不显示分组标题
+          if (!collapsed) {
+            // 翻译应用名称（直接从路径提取应用 code，不依赖数据库中存储的名称）
+            // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
+            const firstChildPath = appMenu.children[0]?.path;
+            let translatedAppName = appMenu.name; // 默认使用数据库中的名称
+
+            // 优先从路径提取应用 code 并使用翻译 key
+            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+              const appCode = extractAppCodeFromPath(firstChildPath);
+              if (appCode) {
+                // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
+                const appNameKey = `app.${appCode}.name`;
+                const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
+                // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
+                if (appNameTranslated && appNameTranslated !== appNameKey) {
+                  translatedAppName = appNameTranslated;
+                }
+              }
+            }
+
+            // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
+            if (translatedAppName === appMenu.name) {
+              translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
+            }
+
+            const groupTitle: MenuDataItem = {
+              name: translatedAppName,
+              label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
+              key: `app-group-${appMenu.uuid}`,
+              type: 'group', // 使用原生 group 类型
+              className: 'menu-group-title-app app-menu-container-start', // 用于样式识别和容器开始标记
+              icon: undefined,
+              children: [
+                // 创建一个隐藏的占位子菜单项，确保 group 能被渲染
+                {
+                  key: `app-group-placeholder-${appMenu.uuid}`,
+                  name: '', // 空名称，不显示
+                  path: undefined,
+                  style: { display: 'none' },
+                },
+              ],
+            };
+            appMenuItems.push(groupTitle);
+          }
+
+          // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
+          appMenu.children.forEach(childMenu => {
+            // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
+            // 注意：应用菜单的子菜单也需要使用应用菜单翻译逻辑，递归处理子菜单时也会传递 isAppMenu=true
+            const converted = convertMenuTreeToMenuDataItem(childMenu, true);
+            // 为应用菜单项添加特殊的 className，用于 CSS 容器样式
+            if (converted.className) {
+              converted.className = `${converted.className} app-menu-item`;
+            } else {
+              converted.className = 'app-menu-item';
+            }
+            appMenuItems.push(converted);
+          });
+        }
+      });
+
+      // 插入到第二组位置（在仪表盘之后，系统菜单之前）
+      // 注意：分割线通过 CSS 添加，不通过菜单项
+      menuItems.splice(1, 0, ...appMenuItems);
+    }
+
+    // 【第四组】运营中心：仅平台级管理员可见
+    // 根据路径过滤，而不是名称（因为名称可能已翻译）
+    if (!currentUser.is_infra_admin) {
+      // 过滤掉运营中心菜单（通过检查是否有 /infra/operation 路径的子菜单来判断）
+      menuItems = menuItems.filter(item => {
+        // 如果菜单有子菜单，检查是否包含运营中心相关的路径
+        if (item.children) {
+          const hasInfraOperation = item.children.some(child =>
+            child.path?.startsWith('/infra/operation') ||
+            child.path?.startsWith('/infra/tenants') ||
+            child.path?.startsWith('/infra/packages') ||
+            child.path?.startsWith('/infra/monitoring') ||
+            child.path?.startsWith('/infra/inngest') ||
+            child.path?.startsWith('/infra/admin')
+          );
+          return !hasInfraOperation;
+        }
+        // 如果菜单没有子菜单，保留它（不是运营中心菜单）
+        return true;
+      });
+    }
+
+    // 注意：组织管理已从第三组移除，移至运营中心（第四组）
+    // 因此不再需要过滤第三组的组织管理菜单
+
+    return menuItems;
+  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
 
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
@@ -1804,19 +1794,96 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // 获取当前页面的标题（使用 breadcrumbMenuData，保留完整层级结构）
-    const pageTitle = findMenuTitleWithTranslation(location.pathname, breadcrumbMenuData, t);
+    // 获取当前页面的标题（使用统一菜单数据 filteredMenuData，含应用菜单）
+    const pageTitle = findMenuTitleWithTranslation(location.pathname, filteredMenuData, t);
 
-    // 站点名称统一从 configStore 获取
-    const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
+    // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
+    let currentSiteName = 'RiverEdge SaaS';
 
-    // 设置文档标题，使用站点名称作为后缀
+    if (siteSetting?.settings?.site_name?.trim()) {
+      // 如果 siteSetting 已加载且有站点名称，使用它并缓存
+      currentSiteName = siteSetting.settings.site_name.trim();
+      try {
+        localStorage.setItem('cachedSiteName', currentSiteName);
+      } catch (error) {
+        // 忽略存储错误
+      }
+    } else {
+      // 如果 siteSetting 未加载或没有站点名称，尝试从缓存读取
+      try {
+        const cachedSiteName = localStorage.getItem('cachedSiteName');
+        if (cachedSiteName) {
+          currentSiteName = cachedSiteName;
+        }
+      } catch (error) {
+        // 忽略读取错误
+      }
+    }
+
+    // 设置文档标题
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
       document.title = `${pageTitle} - ${currentSiteName}`;
     } else {
-      document.title = `${currentSiteName} - ${t('common.docTitleSuffix')}`;
+      document.title = `${currentSiteName} - 多组织管理框架`;
     }
-  }, [location.pathname, breadcrumbMenuData, t, siteName, currentUser]);
+  }, [location.pathname, filteredMenuData, t, siteSetting]);
+
+  /**
+   * 检测面包屑是否换行，如果换行则隐藏
+   */
+  useEffect(() => {
+    const checkBreadcrumbWrap = () => {
+      if (!breadcrumbRef.current) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+
+      const breadcrumbElement = breadcrumbRef.current;
+      const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
+      if (!olElement) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+
+      // 检测第一个和最后一个元素是否在同一行
+      const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
+      const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
+      if (firstItem && lastItem) {
+        const firstRect = firstItem.getBoundingClientRect();
+        const lastRect = lastItem.getBoundingClientRect();
+        // 如果最后一个元素在第一个元素下方（允许5px误差），说明换行了
+        const isWrapped = lastRect.top > firstRect.top + 5;
+        setBreadcrumbVisible(!isWrapped);
+      } else {
+        setBreadcrumbVisible(true);
+      }
+    };
+
+    // 延迟检测，确保 DOM 已完全渲染
+    const timer = setTimeout(checkBreadcrumbWrap, 100);
+
+    // 监听窗口大小变化
+    window.addEventListener('resize', checkBreadcrumbWrap);
+
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(() => {
+      setTimeout(checkBreadcrumbWrap, 50);
+    });
+    if (breadcrumbRef.current) {
+      observer.observe(breadcrumbRef.current, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkBreadcrumbWrap);
+      observer.disconnect();
+    };
+  }, [location.pathname]);
 
   /**
    * 根据用户权限过滤菜单
@@ -1829,11 +1896,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /**
    * 用户菜单项
    */
-  const getUserMenuItems = (t: (key: string) => string): MenuProps['items'] => [
+  const getUserMenuItems = (logout: () => void, t: (key: string) => string): MenuProps['items'] => [
     {
       key: 'profile',
       icon: <UserOutlined />,
       label: t('ui.user.profile'),
+    },
+    {
+      type: 'divider',
     },
     {
       key: 'copyright',
@@ -1841,20 +1911,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       label: t('ui.copyright'),
     },
     {
+      type: 'divider',
+    },
+    {
       key: 'clear-menu-cache',
       icon: <DeleteOutlined />,
       label: t('ui.clearCache'),
     },
     {
-      key: 'lock-screen',
-      icon: <LockOutlined />,
-      label: t('ui.lock.screen'),
-      onClick: handleLockScreen,
+      type: 'divider',
     },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('ui.logout'),
+      onClick: logout,
     },
   ];
 
@@ -1866,20 +1937,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         navigate('/personal/profile');
         break;
       case 'copyright':
-        verifyCopyright();
         setTechStackModalOpen(true);
         break;
       case 'clear-menu-cache':
-        queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
-        queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
-        message.success(t('ui.clearCacheSuccess'));
-        break;
-      case 'lock-screen':
-        handleLockScreen();
+        // 清除菜单缓存：localStorage + React Query，并重新拉取
+        try {
+          localStorage.removeItem('applicationMenusCache_v3');
+          localStorage.removeItem('applicationMenusCache_v2');
+          localStorage.removeItem('applicationMenusCache');
+          // 先移除查询缓存，再拉取，避免旧数据与新数据混合导致菜单重复
+          queryClient.removeQueries({ queryKey: ['applicationMenus'] });
+          refetchApplicationMenus();
+          message.success(t('ui.clearCacheSuccess'));
+        } catch (e) {
+          message.error(t('ui.clearCacheError'));
+        }
         break;
       case 'logout':
-        performLogout();
+        logout();
+        // ⚠️ 关键修复：退出登录后使用 navigate 跳转，避免页面刷新
+        navigate('/login', { replace: true });
         break;
     }
   };
@@ -1962,24 +2039,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return null;
     };
 
-    // 统一的面包屑生成逻辑：使用 breadcrumbMenuData（保留完整层级），优先匹配菜单树，匹配不到时向上寻找最近的父级菜单
-    let menuPath = findMenuPath(breadcrumbMenuData, location.pathname);
-    
-    // 如果直接匹配不到（不在菜单里的详情页/设计器），尝试向上寻找父级路径
-    if (!menuPath) {
-      let tempPath = location.pathname;
-      while (tempPath.includes('/') && !menuPath) {
-        tempPath = tempPath.substring(0, tempPath.lastIndexOf('/'));
-        if (tempPath) {
-          const parentPath = findMenuPath(breadcrumbMenuData, tempPath);
-          if (parentPath) {
-            // 找到了最近的菜单父级，构造一个虚拟的菜单路径，包含当前页面
-            const currentTitle = translatePathTitle(location.pathname, t);
-            menuPath = [...parentPath, { path: location.pathname, name: currentTitle }];
-          }
+    const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
+      for (const item of items) {
+        if (item.path === targetPath) {
+          return { item, parent };
+        }
+        if (item.children) {
+          const found = findParentMenu(item.children, targetPath, item);
+          if (found) return found;
         }
       }
-    }
+      return null;
+    };
+
+    const menuPath = findMenuPath(filteredMenuData, location.pathname);
 
     const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
       if (!items || !Array.isArray(items) || items.length === 0) return null;
@@ -1998,102 +2071,159 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     if (menuPath) {
       menuPath.forEach((item, index) => {
-        // 跳过没有名称的占位节点
-        if (!item.name) return;
-        // 跳过 UUID 名称（不应显示在面包屑中）
-        if (isUUID(item.name as string)) return;
-
-        let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-        
-        // 确定面包屑项的跳转路径：
-        // 1. 如果节点有 path，直接使用
-        // 2. 如果节点没有 path（中间分组节点，如"销售管理"），找第一个有 path 的子孙节点
-        let actualPath = item.path;
-        if (!actualPath && item.children && item.children.length > 0) {
-          const firstLeaf = findFirstActualMenuItem(item.children);
-          if (firstLeaf?.path) {
-            actualPath = firstLeaf.path;
-          }
-        }
-        
-        // 如果是第一级且有子项，尝试找到第一个实际的菜单项作为链接跳转路径
-        if (index === 0 && item.children && item.children.length > 0) {
-          const firstChild = item.children[0];
-          if (firstChild.type === 'group' && firstChild.children) {
-            const firstMenuItem = findFirstActualMenuItem(firstChild.children);
-            if (firstMenuItem && firstMenuItem.path) {
-              actualPath = firstMenuItem.path;
+        if (item.name && item.path) {
+          let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+          let actualPath = item.path;
+          if (index === 0 && item.children && item.children.length > 0) {
+            const firstChild = item.children[0];
+            if (firstChild.type === 'group' && firstChild.children) {
+              const firstMenuItem = findFirstActualMenuItem(firstChild.children);
+              if (firstMenuItem && firstMenuItem.path) {
+                actualPath = firstMenuItem.path;
+              }
             }
           }
-        }
 
-        // 处理下拉菜单（如果有多个同级子项）
-        if (index > 0) {
-          const parentItem = menuPath![index - 1];
-          if (parentItem.children && parentItem.children.length > 1) {
-            menu = {
-              items: parentItem.children
-                .filter(child => child.name && !child.hideInMenu && !isUUID(child.name as string))
-                .map(child => {
-                  // 子节点的跳转路径：有 path 用 path，没有则找第一个叶子
-                  const childPath = child.path || findFirstActualMenuItem(child.children)?.path;
-                  if (!childPath) return null;
-                  const isAppMenu = childPath.startsWith('/apps/');
-                  const label = isAppMenu
-                    ? translateAppMenuItemName(child.name as string, child.path, t)
-                    : translateMenuName(child.name as string, t);
-                  return {
-                    key: childPath,
-                    label: label,
-                    onClick: () => { navigate(childPath); }
-                  };
-                })
-                .filter(Boolean) as Array<{ key: string; label: string; onClick: () => void }>
-            };
+          if (index > 0) {
+            const parentItem = menuPath[index - 1];
+            if (parentItem.children && parentItem.children.length > 1) {
+              menu = {
+                items: parentItem.children
+                  .filter(child => child.name && child.path)
+                  .map(child => {
+                    const isAppMenu = child.path?.startsWith('/apps/');
+                    const label = isAppMenu
+                      ? translateAppMenuItemName(child.name as string, child.path, t)
+                      : translateMenuName(child.name as string, t);
+                    return {
+                      key: child.path!,
+                      label: label,
+                      onClick: () => { navigate(child.path!); },
+                    };
+                  }),
+              };
+            }
           }
-        }
 
-        // 翻译标题
-        // 判断是否为 APP 根节点（面包屑中的 APP 名称）：
-        // 1. key 以 breadcrumb-app- 开头（useUnifiedMenuData 注入的标识）
-        // 2. 或者带有 isAppRoot 标记（最可靠的识别方式）
-        // 3. 或者 item.path 为空或只有 /apps/{code} 两段（无子菜单路径）
-        // 这类节点的 name 已由 useUnifiedMenuData 通过 getAppDisplayName+locale 翻译，直接使用
-        const isAppMenu = (actualPath || '')?.startsWith('/apps/');
-        const nodeKey = typeof item.key === 'string' ? item.key : '';
-        const isAppRootNode = isAppMenu && (
-          (item as any).isAppRoot === true ||
-          nodeKey.startsWith('breadcrumb-app-') ||
-          (!item.path || (item.path as string).match(/^\/apps\/[^/]+$/) !== null)
-        );
-        const breadcrumbTitle = isAppRootNode
-          ? (item.name as string)  // APP 根节点直接用已翻译的 name，与菜单显示保持一致
-          : isAppMenu
+          const isAppMenu = item.path?.startsWith('/apps/');
+          const breadcrumbTitle = isAppMenu
             ? translateAppMenuItemName(item.name as string, item.path, t)
             : translateMenuName(item.name as string, t);
 
+          breadcrumbItems.push({
+            title: breadcrumbTitle,
+            path: actualPath,
+            icon: item.icon,
+            menu: menu,
+          });
+        } else if (item.name && item.type === 'group') {
+          const firstMenuItem = findFirstActualMenuItem(item.children);
+          if (firstMenuItem && firstMenuItem.path) {
+            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+
+            if (index > 0) {
+              const parentItem = menuPath[index - 1];
+              if (parentItem.children && parentItem.children.length > 1) {
+                menu = {
+                  items: parentItem.children
+                    .filter(child => child.name)
+                    .map(child => {
+                      if (child.type === 'group') {
+                        const firstItem = findFirstActualMenuItem(child.children);
+                        if (firstItem && firstItem.path) {
+                          const isAppMenu = firstItem.path.startsWith('/apps/');
+                          const label = isAppMenu
+                            ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
+                            : translateMenuName(child.name as string, t);
+                          return {
+                            key: firstItem.path,
+                            label: label,
+                            onClick: () => { navigate(firstItem.path!); },
+                          };
+                        }
+                      } else if (child.path) {
+                        const isAppMenu = child.path.startsWith('/apps/');
+                        const label = isAppMenu
+                          ? translateAppMenuItemName(child.name as string, child.path, t)
+                          : translateMenuName(child.name as string, t);
+                        return {
+                          key: child.path,
+                          label: label,
+                          onClick: () => { navigate(child.path!); },
+                        };
+                      }
+                      return null;
+                    })
+                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
+                };
+              }
+            }
+
+            const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
+            // 分组菜单：传 children 而非 path，让 translateAppMenuItemName 从子路径推断分组 key（如 process），避免误用子项 path 导致翻译成子项名称
+            const breadcrumbTitle = isAppMenu
+              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
+              : translateMenuName(item.name as string, t);
+            breadcrumbItems.push({
+              title: breadcrumbTitle,
+              path: firstMenuItem.path,
+              icon: item.icon,
+              menu: menu,
+            });
+          }
+        } else if (item.name && !item.path && item.children && item.children.length > 0) {
+          // 应用内父级分组（有 name 和 children 但无 path，如「工艺数据」「工厂数据」）
+          const firstMenuItem = findFirstActualMenuItem(item.children);
+          const linkPath = firstMenuItem?.path;
+          if (linkPath) {
+            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+            if (index > 0) {
+              const parentItem = menuPath[index - 1];
+              if (parentItem.children && parentItem.children.length > 1) {
+                menu = {
+                  items: parentItem.children
+                    .filter(child => child.name && (child.path || findFirstActualMenuItem(child.children)?.path))
+                    .map(child => {
+                      const childPath = child.path || findFirstActualMenuItem(child.children)?.path;
+                      if (!childPath) return null;
+                      const isAppMenu = childPath.startsWith('/apps/');
+                      const label = isAppMenu
+                        ? (child.path ? translateAppMenuItemName(child.name as string, child.path, t) : translateAppMenuItemName(child.name as string, undefined, t, child.children))
+                        : translateMenuName(child.name as string, t);
+                      return { key: childPath, label: label, onClick: () => { navigate(childPath); } };
+                    })
+                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
+                };
+              }
+            }
+            // 分组菜单：传 children 而非 path，避免翻译成第一个子项名称
+            const isAppMenu = linkPath.startsWith('/apps/');
+            const breadcrumbTitle = isAppMenu
+              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
+              : translateMenuName(item.name as string, t);
+            breadcrumbItems.push({
+              title: breadcrumbTitle,
+              path: linkPath,
+              icon: item.icon,
+              menu: menu,
+            });
+          }
+        }
+      });
+    } else {
+      const pathSegments = location.pathname.split('/').filter(Boolean);
+      pathSegments.forEach((segment, index) => {
+        const path = '/' + pathSegments.slice(0, index + 1).join('/');
+        const translatedTitle = translatePathTitle(path, t);
         breadcrumbItems.push({
-          title: breadcrumbTitle,
-          path: actualPath,
-          icon: item.icon,
-          menu: menu?.items && menu.items.length > 0 ? menu : undefined,
+          title: translatedTitle,
+          path: path,
         });
       });
     }
 
-    // 若未命中任何菜单节点，则直接显示当前路径翻译
-    if (breadcrumbItems.length === 0) {
-      const translatedTitle = translatePathTitle(location.pathname, t);
-      if (translatedTitle) {
-        breadcrumbItems.push({
-          title: translatedTitle,
-          path: location.pathname,
-        });
-      }
-    }
-
-    return breadcrumbItems.filter(item => item.title);
-  }, [location.pathname, breadcrumbMenuData, navigate, t]);
+    return breadcrumbItems;
+  }, [location.pathname, filteredMenuData, navigate, t]);
 
   // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
   const requiredOpenKeys = useMemo(() => {
@@ -2158,35 +2288,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return calculateSelectedKeys(filteredMenuData, location.pathname);
   }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
 
-  // 仅当「路径」变化时，为新路径的父级菜单清除收起状态，使新页面所在分组能自动展开。
-  // 不依赖 requiredOpenKeys，避免其引用变化时误执行、把用户刚收起的上级菜单重新展开（标准行为：任意菜单都可收起）。
+  // 当路径变化时，如果新路径需要展开之前手动收起的菜单，则清除这些菜单的收起状态
+  // 这样可以确保当用户导航到新页面时，相关的菜单会自动展开
   useEffect(() => {
+    // 如果当前路径需要展开的菜单中有被用户手动收起的，则清除这些菜单的收起状态
     const shouldReopenKeys = requiredOpenKeys.filter(key => userClosedKeys.includes(key));
     if (shouldReopenKeys.length > 0) {
       setUserClosedKeys(prev => prev.filter(key => !shouldReopenKeys.includes(key)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅路径变化时执行；requiredOpenKeys 同帧已更新
-  }, [location.pathname]);
+  }, [location.pathname, requiredOpenKeys]); // 只在路径变化时执行
 
 
   /**
-   * 处理全屏切换 (浏览器级别，顶栏触发)
+   * 处理全屏切换
    */
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      });
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      });
     }
   };
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsBrowserFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
 
 
   /**
@@ -2202,19 +2328,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 从后端加载翻译内容
       await refreshTranslations();
 
-      // 通过 store 更新用户偏好，保持与 userPreferenceStore 同步
+      // 更新用户偏好设置
       try {
-        await updatePreferences({ language: languageCode });
+        await updateUserPreference({
+          preferences: {
+            language: languageCode,
+          },
+        });
       } catch (error) {
-        console.warn(t('ui.error.updatePreferences'), error);
+        // 如果更新偏好设置失败，不影响语言切换
+        console.warn('更新用户偏好设置失败:', error);
       }
 
-      message.success(t('common.switchLanguageSuccess', { language: LANGUAGE_MAP[languageCode] || languageCode }));
+      message.success(`已切换到${LANGUAGE_MAP[languageCode] || languageCode}`);
     } catch (error: any) {
-      console.error(t('common.switchLanguageFailed'), error);
+      console.error('切换语言失败:', error);
       message.error(error?.message || t('common.switchLanguageFailed'));
     }
-  }, [updatePreferences]);
+  }, []);
 
   /**
    * 构建语言切换下拉菜单
@@ -2359,19 +2490,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           transition: none !important;
         }
-        /* 主题切换：仅掐断布局壳常见层的过渡。避免使用全文档星号通配选择器及 ant-layout 下全后代通配，否则样式引擎需遍历巨量节点，易严重掉帧 */
+        /* 禁用主题切换时的过渡动画，让切换更干脆 */
+        * {
+          transition: background-color 0s !important;
+          transition: color 0s !important;
+          transition: border-color 0s !important;
+        }
+        /* 确保 Ant Design 组件也立即切换，无过渡 */
         .ant-pro-layout,
+        .ant-pro-layout *,
         .ant-layout,
-        .ant-layout-header,
-        .ant-layout-content,
-        .ant-layout-footer,
-        .ant-pro-sider,
-        .ant-pro-sider-menu,
-        .ant-pro-global-header,
-        .ant-pro-global-header-logo,
-        .ant-menu,
-        .ant-menu-submenu,
-        .ant-menu-item {
+        .ant-layout * {
           transition: background-color 0s !important;
           transition: color 0s !important;
           transition: border-color 0s !important;
@@ -2620,13 +2749,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           left: 0 !important;
           right: 0 !important;
         }
+        /* 内容区域占据剩余空间 */
         html.riveredge-fullscreen-mode .uni-tabs-content,
         body.riveredge-fullscreen-mode .uni-tabs-content {
           flex: 1 !important;
-          min-height: 0 !important;
           overflow: auto !important;
-          height: auto !important;
-          max-height: none !important;
+          height: calc(100vh - 40px) !important;
+          min-height: calc(100vh - 40px) !important;
+          max-height: calc(100vh - 40px) !important;
           width: 100% !important;
           max-width: 100% !important;
           margin-left: 0 !important;
@@ -2725,16 +2855,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           justify-content: space-between;
           align-items: center;
         }
-        /* 列表搜索条「重置」：hover / 键盘聚焦时强调为 warning，避免与主色蓝混淆 */
-        .uni-search-reset-btn.ant-btn:hover,
-        .uni-search-reset-btn.ant-btn:focus-visible {
-          color: var(--ant-color-warning, #faad14) !important;
-          border-color: var(--ant-color-warning, #faad14) !important;
-        }
-        .uni-search-reset-btn.ant-btn:hover .anticon,
-        .uni-search-reset-btn.ant-btn:focus-visible .anticon {
-          color: var(--ant-color-warning, #faad14) !important;
-        }
         /* 全局滚动条样式 - 只对主要内容区域隐藏滚动条，保持菜单滚动条可见 */
         /* ==================== 菜单分组标题样式 ==================== */
         /* 参考：https://ant-design.antgroup.com/components/menu-cn
@@ -2771,6 +2891,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important;
           margin: 0 !important;
         }
+          font-weight: normal !important;
+          padding: 12px 16px 12px 0 !important;
+          margin: 0 0 8px 0 !important;
+          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          background: transparent !important;
+          cursor: default !important;
+          user-select: none !important;
+          pointer-events: none !important;
+          text-transform: none !important;
+          letter-spacing: 0 !important;
+        }
         /* 浅色模式下，菜单收起时弹出的二级菜单中的分组标题 - 使用深色文字 */
         /* 弹出菜单通常在 body 下，不在 .ant-pro-layout 内，所以使用全局选择器 */
         /* 只在浅色模式下应用（非深色模式），确保优先级足够高，放在最后以覆盖其他规则 */
@@ -2785,7 +2916,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         body .ant-menu-popup .ant-menu-item-group-title:active,
         body .ant-menu-popup .ant-menu-item-group-title:focus {
           color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid var(--river-divider-color) !important;
+          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
         }
         ` : ''}
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
@@ -2803,13 +2934,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* ==================== 一级菜单项 - 完全遵循 Ant Design 原生样式 ==================== */
         /* 不做任何修改，完全使用 Ant Design 的原生样式和垂直居中 */
         /* 统一所有一级菜单项的图标样式 */
-        /* 统一所有菜单图标大小：16px，背景容器：20x20（仅展开态；收起态见文末，避免 margin-right 压过 antd 居中） */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .anticon {
+        /* 统一所有菜单图标大小：16px，背景容器：20x20 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .anticon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .anticon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .anticon {
           font-size: 16px !important;
           width: 16px !important;
           height: 16px !important;
@@ -2828,10 +2959,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           vertical-align: middle !important;
         }
         /* 为图标添加统一的 20x20 背景容器（使用伪元素，配合主题色但更淡） */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon::before {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon::before,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .anticon::before,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-item-icon::before,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .anticon::before {
           content: '' !important;
           position: absolute !important;
           left: 50% !important;
@@ -3005,42 +3136,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           margin: 0 !important;
           line-height: 1.2 !important;
         }
-        /* 左侧菜单小徽标：报表 / 大屏 / 业务未完成数量 */
-        .menu-item-badge {
-          flex-shrink: 0;
-          font-size: 10px;
-          line-height: 1.2;
-          padding: 0 4px;
-          border-radius: 2px;
-          font-weight: 500;
-        }
-        .menu-item-badge-report {
-          background: var(--ant-colorPrimaryBg);
-          color: var(--ant-colorPrimary);
-        }
-        .menu-item-badge-dashboard {
-          background: var(--ant-colorInfoBg);
-          color: var(--ant-colorInfo);
-        }
-        .menu-item-badge-count.ant-badge .ant-badge-count {
-          font-size: 10px;
-          line-height: 14px;
-          min-width: 14px;
-          height: 14px;
-          padding: 0 2px;
-        }
-        .menu-item-badge-count {
-          flex-shrink: 0;
-          margin-right: 4px;
-        }
-        /* 菜单项含数字徽标时：增加右侧留白，避免徽标右边被遮挡 */
-        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) {
-          padding-right: 22px !important;
-          overflow: visible !important;
-        }
-        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content {
-          overflow: visible !important;
-        }
         /* 使用 ProLayout 原生收起按钮，保持原生行为 */
         /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */
         /* 隐藏 ant-pro-layout-container 里的 footer */
@@ -3077,226 +3172,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 覆盖 collapsedButtonRender 返回的 div */
         .ant-pro-layout .ant-pro-sider-footer > div,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div {
-          border-top: 1px solid var(--river-divider-color) !important;
+          border-top: 1px solid ${siderTextColor === '#ffffff'
+          ? 'rgba(255, 255, 255, 0.15)'
+          : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)')} !important;
         }
         /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn {
-          color: ${siderTextColor} !important;
-        }
-        /* 盖过上一段：设置钮文字/图标用主题主色 */
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
-        .riveredge-footer-settings-btn,
-        .riveredge-footer-collapse-btn {
           width: 100% !important;
-          border-radius: ${Number(token.borderRadius || 6)}px !important;
-        }
-        /* 系统设置：始终用主题色 token，勿写死蓝 */
-        .riveredge-footer-settings-btn {
-          background: ${siderFooterToken.colorPrimaryBg} !important;
-          border-color: ${siderFooterToken.colorPrimaryBorder} !important;
-          box-shadow: inset 0 0 0 1px color-mix(in srgb, ${siderFooterToken.colorPrimaryBorder} 35%, transparent) !important;
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
-        .riveredge-footer-settings-btn .anticon,
-        .riveredge-footer-settings-btn svg {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
-        .riveredge-footer-settings-btn:hover {
-          background: ${siderFooterToken.colorPrimaryBgHover} !important;
-          border-color: ${siderFooterToken.colorPrimaryBorderHover ?? siderFooterToken.colorPrimaryBorder} !important;
-        }
-        .riveredge-footer-settings-btn:active {
-          background: ${siderFooterToken.colorPrimaryBorder} !important;
-        }
-        /* 折叠钮统一中性底 token */
-        .riveredge-footer-collapse-btn {
-          background: ${siderFooterToken.colorFillSecondary} !important;
-          border-color: ${siderFooterToken.colorSplit} !important;
-          box-shadow: none !important;
-        }
-        .riveredge-footer-collapse-btn:hover {
-          background: ${siderFooterToken.colorFillTertiary} !important;
-        }
-        .riveredge-footer-collapse-btn:active {
-          background: ${siderFooterToken.colorFillQuaternary} !important;
-        }
-        @keyframes riveredgeSystemPanelIn {
-          from {
-            opacity: 0;
-            transform: translate3d(0, 14px, 0) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translate3d(0, 0, 0) scale(1);
-          }
-        }
-        @keyframes riveredgeSystemPanelOut {
-          from {
-            opacity: 1;
-            transform: translate3d(0, 0, 0) scale(1);
-          }
-          to {
-            opacity: 0;
-            transform: translate3d(0, 16px, 0) scale(0.97);
-          }
-        }
-        .riveredge-system-settings-panel {
-          position: fixed;
-          left: 8px;
-          bottom: 52px;
-          width: min(var(--riveredge-system-panel-width, 940px), calc(100vw - 24px));
-          max-height: min(86vh, 860px);
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          background: rgba(20, 22, 28, 0.86);
-          backdrop-filter: blur(24px) saturate(125%);
-          -webkit-backdrop-filter: blur(24px) saturate(125%);
-          box-shadow: 0 26px 56px rgba(0, 0, 0, 0.58);
-          z-index: 1200;
-          overflow: hidden;
-          transform-origin: left bottom;
-          animation: riveredgeSystemPanelIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
-          will-change: transform, opacity;
-        }
-        .riveredge-system-settings-panel.riveredge-system-settings-panel--exiting {
-          animation: riveredgeSystemPanelOut 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
-          pointer-events: none;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .riveredge-system-settings-panel {
-            animation: none;
-          }
-        }
-        .riveredge-system-settings-panel-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 18px 12px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-        }
-        .riveredge-system-settings-panel-title {
-          font-size: 16px;
-          font-weight: 700;
-          color: rgba(255, 255, 255, 0.94);
-        }
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon {
-          color: rgba(255, 255, 255, 0.94) !important;
-        }
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover {
-          color: #ffffff !important;
-          background: rgba(255, 255, 255, 0.1) !important;
-        }
-        .riveredge-system-settings-panel-body {
-          padding: 14px;
-          overflow-y: auto;
-          max-height: min(78vh, 760px);
-          display: grid;
-          grid-template-columns: repeat(var(--riveredge-system-panel-columns, 24), minmax(0, 1fr));
-          align-content: start;
-          gap: 12px;
-        }
-        .riveredge-system-settings-group {
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
-          padding: 12px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .riveredge-system-settings-group-title {
-          font-size: 13px;
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.86);
-          margin-bottom: 10px;
-        }
-        .riveredge-system-settings-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
-        }
-        .riveredge-system-settings-item {
-          width: 100%;
-          border: none;
-          background: rgba(255, 255, 255, 0.02);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          color: rgba(255, 255, 255, 0.92);
-          padding: 10px 8px;
-          border-radius: ${Number(token.borderRadius || 6)}px;
-          min-height: 76px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .riveredge-system-settings-item:hover {
-          background: rgba(255, 255, 255, 0.07);
-          transform: translateY(-1px);
-          box-shadow: none;
-        }
-        .riveredge-system-settings-item:focus-visible {
-          outline: 2px solid var(--ant-colorPrimary);
-          outline-offset: 1px;
-        }
-        .riveredge-system-settings-item-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          background: transparent;
-          border: none;
-          box-shadow: none;
-          padding: 0;
-          line-height: 1;
-          transition: transform 0.18s ease;
-        }
-        .riveredge-system-settings-item-icon .anticon,
-        .riveredge-system-settings-item-icon svg {
-          font-size: 42px;
-          width: 42px;
-          height: 42px;
-          color: currentColor;
-        }
-        .riveredge-system-settings-item:hover .riveredge-system-settings-item-icon {
-          transform: translateY(-1px);
-        }
-        .riveredge-system-settings-item-label {
-          font-size: 13px;
-          line-height: 1.2;
-          font-weight: 500;
-          text-align: center;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          width: 100%;
-        }
-        @media (max-width: 900px) {
-          .riveredge-system-settings-panel {
-            left: 8px;
-            right: 8px;
-            width: auto;
-          }
-          .riveredge-system-settings-panel-body {
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-          }
-          .riveredge-system-settings-group {
-            grid-column: span 6 !important;
-          }
-        }
-        @supports not ((backdrop-filter: blur(2px))) {
-          .riveredge-system-settings-panel {
-            background: rgba(14, 18, 26, 0.96);
-          }
+          color: ${siderTextColor} !important;
         }
         /* 侧边栏底部收起按钮图标样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn .anticon,
@@ -3316,12 +3202,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:hover {
           color: ${siderTextColor} !important;
         }
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover .anticon,
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover svg,
@@ -3339,12 +3219,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active {
           color: ${siderTextColor} !important;
         }
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:active .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active .anticon,
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:active svg,
@@ -3354,37 +3228,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:active svg,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active svg {
           color: ${siderTextColor} !important;
-        }
-        /* 设置钮图标：跟主题主色（盖过上面「全体侧栏底栏图标 = siderTextColor」） */
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn .anticon,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn .anticon,
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn svg,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover .anticon,
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover svg,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg {
-          color: ${siderFooterToken.colorPrimary} !important;
-        }
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active .anticon,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active .anticon,
-        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active svg,
-        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg {
-          color: ${siderFooterToken.colorPrimary} !important;
         }
         /* ==================== 左侧菜单栏滚动条样式 ==================== */
         /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
@@ -3403,15 +3246,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu {
           scrollbar-width: none !important;
         }
-        /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量；Modal 内容区/footer 使用 colorBgElevated */
+        /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量 */
         :root {
           --ant-colorBgContainer: ${token.colorBgContainer};
-          --ant-colorBgElevated: ${token.colorBgElevated};
         }
         /* 顶栏背景色（支持透明度） */
         .ant-pro-layout .ant-pro-layout-header,
         .ant-pro-layout .ant-layout-header {
           background: ${headerBgColor} !important;
+          backdrop-filter: blur(8px) !important;
+          -webkit-backdrop-filter: blur(8px) !important;
           border-bottom: 1px solid ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)'} !important;
         }
         /* ==================== 顶栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
@@ -3647,30 +3491,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* ==================== 菜单动画 - 使用 Ant Design 默认 ==================== */
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
-        .ant-pro-layout .ant-pro-layout-header .ant-space,
-        .ant-pro-layout .ant-layout-header .ant-space {
+        .ant-pro-layout .ant-pro-layout-header .ant-space {
           gap: 8px !important;
-          align-items: center !important;
-        }
-        /* AI 助手 Lottie 按钮与搜索框等垂直对齐 */
-        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.ai-assistant-lottie-btn-wrapper),
-        .ant-pro-layout .ant-layout-header .ant-space-item:has(.ai-assistant-lottie-btn-wrapper),
-        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.header-search-wrapper),
-        .ant-pro-layout .ant-layout-header .ant-space-item:has(.header-search-wrapper) {
-          display: flex !important;
-          align-items: center !important;
-        }
-        /* 搜索框与顶栏其他元素垂直居中，修正 Input 内部 baseline 导致的视觉偏低 */
-        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper,
-        .ant-pro-layout .ant-layout-header .header-search-wrapper {
-          display: inline-flex !important;
-          align-items: center !important;
-          align-self: center !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper .ant-input-affix-wrapper,
-        .ant-pro-layout .ant-layout-header .header-search-wrapper .ant-input-affix-wrapper {
-          display: inline-flex !important;
-          align-items: center !important;
         }
         /* 统一按钮样式 - 保留圆形背景，浅色背景时图标颜色统一为黑色 */
         /* 注意：这些样式会被之前的通用顶栏按钮样式覆盖，但保留这里作为备用和补充 */
@@ -3678,7 +3500,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .ant-btn {
           width: 32px !important;
           height: 32px !important;
-          flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
           display: flex !important;
           align-items: center !important;
@@ -3699,7 +3520,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
           width: 32px !important;
           height: 32px !important;
-          flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
           border-radius: 50% !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
@@ -3758,60 +3578,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border: none;
         }
         /* 租户选择器样式 - 胶囊型，与搜索框一致 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper {
           padding: 0;
           transition: none !important;
         }
-        /* 顶栏胶囊型按钮统一样式（租户选择器 - 与组织选择器完全一致），文字跟随系统 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper > span {
-          display: flex !important;
-          align-items: center !important;
-          vertical-align: middle !important;
-          gap: 6px !important;
-          padding: 4px 12px !important;
+        /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span {
+          display: inline-block;
+          padding: 4px 12px;
           border-radius: 16px !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: ${token.fontSize}px !important;
-          font-weight: 500 !important;
-          height: 32px !important;
-          line-height: 24px !important;
-        }
-        /* AI 助手 Lottie 按钮：仅图标 48x48，无背景、无动效 */
-        .ai-assistant-lottie-btn-wrapper {
-          display: inline-flex;
-          align-items: center;
-          align-self: center;
-        }
-        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn,
-        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn {
-          display: block !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          background: none !important;
-          border: none !important;
-          cursor: pointer !important;
-          line-height: 0 !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn:hover,
-        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn:hover {
-          background: none !important;
-        }
-        /* 上线向导：图标与文案间距 4px，!important 避免被 Space/主题覆盖 */
-        .ant-pro-layout .ant-pro-layout-header .riveredge-header-onboarding-space.ant-space,
-        .ant-pro-layout .ant-layout-header .riveredge-header-onboarding-space.ant-space {
-          gap: 4px !important;
-          column-gap: 4px !important;
+          font-size: 14px;
+          font-weight: 500;
+          height: 32px;
+          line-height: 24px;
         }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-selector {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector {
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
@@ -3819,85 +3605,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           height: 32px !important;
         }
-        /* 租户选择器文字颜色与字号 - 根据显示模式统一，深色背景时强制浅色，文字跟随系统 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,
+        /* 租户选择器文字颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
-          font-size: ${token.fontSize}px !important;
-          font-weight: 500 !important;
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-content-value,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-content-value,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-content,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-content {
-          font-size: ${token.fontSize}px !important;
-          font-weight: 500 !important;
-        }
-        /* 深色顶栏下组织选择器强制浅色文字（通过 data-header-light-text 标记，覆盖 Ant Design 默认） */
-        /* Ant Design 6 使用 --select-color 控制文字颜色，需覆盖该变量 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
-        .ant-pro-global-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
-        .tenant-selector-select-light-text .ant-select {
-          --select-color: rgba(255, 255, 255, 0.85) !important;
-          color: rgba(255, 255, 255, 0.85) !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-item,
-        /* Ant Design 6 新结构：content-value、content、placeholder */
-        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-content-value,
-        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-content,
-        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-placeholder,
-        .tenant-selector-select-light-text .ant-select .ant-select-content-value,
-        .tenant-selector-select-light-text .ant-select .ant-select-content,
-        .tenant-selector-select-light-text .ant-select .ant-select-placeholder,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-placeholder,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-placeholder,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
-        /* 覆盖 Select 内部文字元素；或通过组件内 className 标记 */
-        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
-        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector *,
-        .tenant-selector-select-light-text .ant-select .ant-select-selector,
-        .tenant-selector-select-light-text .ant-select .ant-select-selector * {
-          color: rgba(255, 255, 255, 0.85) !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-arrow,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-arrow,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix .anticon,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix .anticon,
-        .tenant-selector-select-light-text .ant-select .ant-select-suffix,
-        .tenant-selector-select-light-text .ant-select .ant-select-suffix .anticon {
-          color: rgba(255, 255, 255, 0.65) !important;
-        }
         /* 租户选择器箭头图标颜色 - 根据显示模式统一 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)'} !important;
         }
         /* 租户选择器所有状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
           background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
@@ -3905,33 +3627,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 租户选择器 hover 和 focused 状态下的文字颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selection-item,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         /* 租户选择器内部输入框样式 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
           background: transparent !important;
         }
         /* 租户选择器文字左右边距 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
           padding-left: 6px !important;
           padding-right: 18px !important;
         }
         /* 租户选择器切换图标样式 - 确保在右侧 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
           right: 8px !important;
         }
         /* 禁用租户选择器 wrapper 的 hover 效果 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover,
-        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper:hover {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
         }
         /* 搜索框样式 - 根据显示模式统一 */
@@ -3959,28 +3673,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
         }
         /* 搜索框 hover 状态 - 浅色模式浅色背景无hover */
-        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover {
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
           border: none !important;
           box-shadow: none !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
-        }
-        /* 搜索框聚焦时外侧框线强调，使用户意识到处于搜索状态 */
-        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper .ant-input-affix-wrapper-focused {
-          border: none !important;
-          box-shadow: 0 0 0 2px ${isLightModeLightBg ? token.colorPrimaryBorder : 'rgba(255, 255, 255, 0.5)'} !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.15)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input {
           background-color: transparent !important;
           border: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-        }
-        /* 顶栏消息、手机预览等下拉框：统一无箭头、对齐 */
-        .header-actions-dropdown.ant-dropdown {
-          padding: 0 !important;
-        }
-        .header-actions-dropdown .ant-dropdown-arrow {
-          display: none !important;
         }
         .ant-pro-global-header{
           margin-inline: 0 !important;
@@ -3988,71 +3690,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-layout-sider-children{
           padding-inline: 0 !important;
         }
-        /* 侧栏顶部搜索框：固定高度 38px 与 unitabs 等高，宽度填满，无胶囊背景、聚焦无光晕 */
-        .ant-layout-sider .riveredge-sidebar-search-wrapper {
-          width: 100% !important;
-          box-sizing: border-box;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper,
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
-          width: 100% !important;
-          max-width: 100% !important;
-          box-sizing: border-box;
-          background: transparent !important;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper {
-          padding-inline: 4px !important;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
-          padding-left: 4px !important;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper:hover {
-          background: transparent !important;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper-focused,
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper:focus-within {
-          box-shadow: none !important;
-          outline: none !important;
-        }
-        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon {
-          color: ${isDarkMode ? 'rgba(255,255,255,0.65)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)')} !important;
-        }
-        /* 侧栏搜索框占位字符颜色：适配“明亮模式 + 深色背景” */
-        .riveredge-sidebar-search-wrapper input::placeholder,
-        .riveredge-sidebar-search-wrapper .ant-input::placeholder {
-          color: ${isDarkMode ? 'rgba(255, 255, 255, 0.45)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.58)' : 'rgba(0, 0, 0, 0.25)')} !important;
-        }
-        /* 侧栏搜索框快捷键（拟物按键）：框线/底影与搜索条底边一致，不用浅色主题的 --river-border-color */
-        .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
-          color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
-          background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
-          border: 1px solid ${
-            siderTextColor === '#ffffff'
-              ? 'rgba(255, 255, 255, 0.15)'
-              : isDarkMode
-                ? 'rgba(255, 255, 255, 0.12)'
-                : (token?.colorBorder ?? 'rgba(0, 0, 0, 0.15)')
-          } !important;
-          box-shadow: 0 1px 0 ${
-            siderTextColor === '#ffffff'
-              ? 'rgba(255, 255, 255, 0.12)'
-              : isDarkMode
-                ? 'rgba(255, 255, 255, 0.10)'
-                : (token?.colorBorder ?? '#d9d9d9')
-          } !important;
-          font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace !important;
-          font-size: 12px !important;
-        }
         /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
-          min-width: 181px !important;
+          min-width: 167px !important;
           display: flex !important;
           align-items: center !important;
           height: 100% !important;
-          /* 手机端移除 min-width 限制 */
-          @media (max-width: 1024px) {
-            min-width: 0 !important;
-          }
         }
         /* LOGO 图片垂直对齐 */
         .ant-pro-global-header-logo img {
@@ -4091,12 +3734,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           vertical-align: middle !important;
           line-height: 1.5 !important;
-          flex-shrink: 0 !important; // ⚠️ 防止 LOGO 组被挤压
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
-        }
-        .ant-pro-global-header-logo img {
-          flex-shrink: 0 !important; // ⚠️ 防止图片变成椭圆
-          object-fit: contain !important;
         }
         /* LOGO 后标题文字（H1元素）颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
         .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo h1,
@@ -4110,9 +3748,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-global-header-logo h1,
         .ant-pro-global-header-logo a h1 {
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
-        }
-        .ant-pro-global-header-logo h1{
-        line-height: 31px !important;
         }
         /* ==================== 顶栏布局调整 ==================== */
         /* 顶栏主容器：左侧 LOGO组 + 分割线 + 面包屑，右侧 操作按钮组 */
@@ -4151,14 +3786,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 32px !important;
           border-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)'} !important;
         }
-        /* 顶栏快捷入口触发按钮 hover */
-        .riveredge-header-quick-entry-trigger:hover {
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.12)'} !important;
-        }
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
-          font-size: 1em !important;
+          font-size: 14px !important;
           line-height: 1.5 !important;
           display: flex !important;
           align-items: center !important;
@@ -4170,22 +3801,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           min-width: 0 !important;
           max-width: none !important;
         }
-        /* 面包屑内部容器防止换行；宽度不足时横向滚动 */
+        /* 面包屑内部容器防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb ul {
           display: flex !important;
           flex-wrap: nowrap !important;
           white-space: nowrap !important;
-          overflow-x: auto !important;
-          overflow-y: visible !important;
-          max-width: 100% !important;
+          overflow: visible !important;
         }
-        /* 面包屑项不收缩，避免只剩最后一级可见 */
+        /* 面包屑项防止换行，允许收缩但优先显示最后一项 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item {
           white-space: nowrap !important;
-          flex-shrink: 0 !important;
+          flex-shrink: 1 !important;
           display: inline-flex !important;
           align-items: center !important;
+          min-width: 0;
+          max-width: 100%;
           overflow: visible !important;
           padding: 0 4px !important;
           line-height: 1.5 !important;
@@ -4257,11 +3888,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        /* 末级面包屑（激活项）：主题色覆盖全局颜色强制 */
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .riveredge-breadcrumb-active,
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .riveredge-breadcrumb-active {
-          color: ${token.colorPrimary} !important;
-        }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
@@ -4330,44 +3956,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ul {
           overflow: visible !important;
         }
-        /* 平板和手机模式下顶栏圆形按键/头像保持正圆，防止被 flex 拉伸变形 */
-        @media (max-width: 991.98px) {
-          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions,
-          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions {
-            align-items: center !important;
-          }
-          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-space-item,
-          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-space-item {
-            align-self: center !important;
-            flex-shrink: 0 !important;
-          }
-          .ant-pro-layout .ant-pro-layout-header .ant-btn,
-          .ant-pro-layout .ant-layout-header .ant-btn {
-            min-height: 32px !important;
-            max-height: 32px !important;
-            flex-shrink: 0 !important;
-            align-self: center !important;
-          }
-          .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn,
-          .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
-            min-width: 32px !important;
-            max-width: 32px !important;
-            min-height: 32px !important;
-            max-height: 32px !important;
-            flex-shrink: 0 !important;
-          }
-          .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar,
-          .ant-pro-layout .ant-layout-header .ant-btn .ant-avatar,
-          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar,
-          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-avatar {
-            flex-shrink: 0 !important;
-          }
-          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-dropdown-trigger,
-          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-dropdown-trigger {
-            align-self: center !important;
-            height: auto !important;
-          }
-        }
         /* 平板和手机模式下隐藏面包屑 - 放在最后，确保最高优先级 */
         @media (max-width: 1024px) {
           .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
@@ -4411,95 +3999,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: var(--ant-colorText) !important;
         }
         ` : ''}
-        /* ========== 侧栏收起（inline-collapsed）图标居中：根因修复 ========== */
-        /* 1) 曾用 margin-right:12px !important 未排除收起态，覆盖 antd 对图标的 margin:0，视觉整体偏左。已在上方改为仅 :not(.ant-menu-inline-collapsed)。 */
-        /* 2) Pro BaseMenu 令一级项 padding-inline:0 且 .ant-menu-title-content 仍 flex 占位时，用主轴居中 + 收标题宽。 */
-        /* 3) ant-pro-sider-menu 与 ant-menu 在同一 ul 上，禁止使用中间带空格的 .ant-pro-sider-menu .ant-menu 误选子代。 */
-        .ant-layout-sider-collapsed .ant-layout-sider-children {
-          padding-inline: 0 !important;
-        }
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-item,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title {
-          justify-content: center !important;
-        }
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-item
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title
-          .ant-menu-title-content {
-          /* 与 menuProps.styles.itemContent 一致，盖过 Pro/Token 的 inline-flex，避免在 DevTools 里「删不掉」的观感 */
-          display: block !important;
-          flex: 0 0 0 !important;
-          min-width: 0 !important;
-          max-width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: hidden !important;
-        }
-        .ant-layout-sider-collapsed .ant-pro-sider-footer,
-        .ant-layout-sider-collapsed .ant-pro-sider-footer > div {
-          width: 100% !important;
-          max-width: 100% !important;
-          box-sizing: border-box !important;
-        }
       `}</style>
       <ProLayout
         title={siteName}
         logo={siteLogo}
-        headerTitleRender={isMobileOrTablet ? (logo) => (
-          <div 
-            style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => navigate(effectiveSystemHomePath)}
-          >
-            {logo}
-          </div>
-        ) : undefined}
-        menuHeaderRender={isMobileOrTablet ? undefined : undefined} // 保持 PC 端默认，手机端由 headerTitleRender 处理
         layout="mix" // 固定使用 MIX 布局模式
         navTheme={isDarkMode ? "realDark" : "light"}
         collapsedButtonRender={(collapsed) => {
-          const dividerColor = isDarkSiderFooter
+          // 根据菜单栏文字颜色计算分割线颜色
+          // 如果是浅色文字（深色背景），使用浅色分割线；否则使用深色分割线
+          const dividerColor = siderTextColor === '#ffffff'
             ? 'rgba(255, 255, 255, 0.15)'
-            : 'rgba(0, 0, 0, 0.12)';
-          const settingsBtnBg = String(siderFooterToken.colorPrimaryBg);
-          const settingsBtnBorder = String(siderFooterToken.colorPrimaryBorder);
-          const settingsAccentColor = String(siderFooterToken.colorPrimary);
-          const collapseBtnBg = String(siderFooterToken.colorFillSecondary);
-          const collapseBtnBorder = String(siderFooterToken.colorSplit);
-          const collapseChromeColor = siderTextColor;
+            : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
 
           return (
             <div
@@ -4508,71 +4019,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 borderTop: `1px solid ${dividerColor}`,
               }}
             >
-              <div
-                className="riveredge-footer-btns"
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
+                onClick={() => handleSetCollapsed(!collapsed)}
                 style={{
-                  display: 'flex',
-                  gap: 8,
-                  flexDirection: collapsed ? 'column' : 'row',
+                  width: '100%',
+                  color: siderTextColor,
                 }}
-              >
-                <div style={{ flex: 3 }}>
-                  <Button
-                    ref={systemSettingsTriggerRef}
-                    className="riveredge-footer-settings-btn"
-                    type="default"
-                    icon={<AppstoreOutlined style={{ color: settingsAccentColor }} />}
-                    onClick={() => {
-                      if (systemSettingsPanelExiting) return;
-                      if (systemSettingsPanelMounted) {
-                        closeSystemSettingsPanelAnimated();
-                      } else {
-                        openSystemSettingsPanel();
-                      }
-                    }}
-                    style={{
-                      color: settingsAccentColor,
-                      backgroundColor: settingsBtnBg,
-                      border: `1px solid ${settingsBtnBorder}`,
-                      minHeight: 34,
-                    }}
-                    title={t('ui.sidebar.systemSettings')}
-                    aria-expanded={!!systemSettingsPanelMounted && !systemSettingsPanelExiting}
-                    aria-label={t('ui.sidebar.systemSettings')}
-                  >
-                    {!collapsed ? '系统配置' : null}
-                  </Button>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Button
-                    className="riveredge-footer-collapse-btn"
-                    type="default"
-                    icon={
-                      collapsed ? (
-                        <MenuUnfoldOutlined style={{ color: collapseChromeColor }} />
-                      ) : (
-                        <MenuFoldOutlined style={{ color: collapseChromeColor }} />
-                      )
-                    }
-                    onClick={() => handleSetCollapsed(!collapsed)}
-                    style={{
-                      color: collapseChromeColor,
-                      backgroundColor: collapseBtnBg,
-                      border: `1px solid ${collapseBtnBorder}`,
-                      minHeight: 34,
-                    }}
-                    title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
-                  />
-                </div>
-              </div>
+                title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
+              />
             </div>
           );
         }}
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar
-        breadcrumbRender={isMobileOrTablet ? () => [] : undefined}
-        breadcrumbProps={isMobileOrTablet ? { style: { display: 'none' } } : undefined}
         // 验证方案3：同时使用 collapsed + siderWidth + menuRender
         // 全屏时：collapsed={true} + siderWidth={0} + menuRender={() => null} 完全隐藏侧边栏
         // 退出全屏时：恢复所有 props，确保 ProLayout 重新计算布局
@@ -4582,39 +4044,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         siderWidth={isFullscreen ? 0 : undefined}
         // 全屏时：不渲染菜单，确保折叠的侧边栏也不占据空间
         menuRender={isFullscreen ? () => null : undefined}
-        // 侧栏顶部固定搜索框：总高 38px，输入框 34px、上下各 2px，胶囊圆角 50%，简短文案，拟物按键提示
-        menuExtraRender={isFullscreen || collapsed ? undefined : () => {
-          // 与侧栏底部分割线一致（深色底栏统一用 isDarkSiderFooter）
-          const sidebarSearchBottomBorder = isDarkSiderFooter
-            ? 'rgba(255, 255, 255, 0.15)'
-            : 'rgba(0, 0, 0, 0.12)';
-          return (
-          <div
-            className="riveredge-sidebar-search-wrapper"
-            style={{
-              flexShrink: 0,
-              height: 38,
-              display: 'flex',
-              alignItems: 'center',
-              margin: '-13px 0 0 0',
-              padding: '2px 0 4px 0',
-              borderBottom: `1px solid ${sidebarSearchBottomBorder}`,
-            }}
-          >
-            <TopBarSearch
-              menuData={filteredMenuData}
-              hotMenuPaths={TOPBAR_SEARCH_HOT_MENU_PATHS}
-              isLightModeLightBg={siderTextColor !== '#ffffff'}
-              token={token}
-              placeholder={t('common.searchPlaceholderShort')}
-              inputHeight={34}
-              borderRadius={17}
-              shortcutKey="/"
-              transparentBg
-            />
-          </div>
-          );
-        }}
         // 退出全屏时，强制 ProLayout 重新计算布局
         // 使用 location 作为 key 的一部分，确保路由变化时重新渲染
         // 但这里不使用 key，因为会导致标签丢失
@@ -4636,41 +4065,34 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             // 退出全屏时：保持统一的padding设置
           }),
         }}
-        headerContentRender={() => {
-          return (
+        headerContentRender={() => (
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
-            {/* 分割线 - 仅在 PC 端显示 */}
-            {!isMobileOrTablet && (
-              <Divider
-                orientation="vertical"
-                style={{
-                  height: '20px',
-                  margin: '4px 0 0 2px',
-                  borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
-                  alignSelf: 'center',
-                  verticalAlign: 'middle',
-                }}
-              />
-            )}
-            {!isMobileOrTablet && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: -8 }}>
-                <HeaderQuickEntryPopover isLightModeLightBg={isLightModeLightBg} />
-              </span>
-            )}
-            <div ref={breadcrumbRef} style={{ flex: 1, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+            {/* 分割线 */}
+            <Divider
+              orientation="vertical"
+              style={{
+                height: '20px',
+                margin: '4px 0 0 2px',
+                borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
+                alignSelf: 'center',
+                verticalAlign: 'middle',
+              }}
+            />
+            {/* 面包屑 */}
+            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 8 }}>
               <Breadcrumb
                 style={{
                   display: breadcrumbVisible ? 'flex' : 'none',
                   alignItems: 'center',
-                  maxHeight: '100%',
+                  height: '100%',
                   whiteSpace: 'nowrap',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                 }}
                 items={generateBreadcrumb.map((item, index) => ({
                   title: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
-                      {index === generateBreadcrumb.length - 1 || index === 0 ? (
-                        <span className={index === generateBreadcrumb.length - 1 ? 'riveredge-breadcrumb-active' : undefined} style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                      {index === generateBreadcrumb.length - 1 ? (
+                        <span style={{ color: 'var(--ant-colorText)', fontWeight: 500, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                       ) : (
                         <a
                           onClick={() => {
@@ -4690,124 +4112,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               />
             </div>
           </div>
-          );
-        }}
+        )}
         actionsRender={() => {
-          const actions: React.ReactNode[] = [];
+          const actions = [];
 
-          if (!isMobileOrTablet && hasAiAssistantEntry) {
-          // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
+          // 搜索框（始终展开）
           actions.push(
-            <span key="aiAssistant" className="ai-assistant-lottie-btn-wrapper">
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => setAiAssistantOpen(true)}
-                onKeyDown={(e) => e.key === 'Enter' && setAiAssistantOpen(true)}
-                className="ai-assistant-lottie-btn"
-              >
-                <Lottie
-                  animationData={assistAnimation}
-                  loop
-                  autoplay
-                  style={{
-                    width: 52,
-                    height: 52,
-                    display: 'block',
-                    ...( !isLightModeLightBg ? {
-                      filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
-                    } : {})
-                  }}
-                />
-              </span>
-            </span>
+            <TopBarSearch
+              key="search"
+              menuData={filteredMenuData}
+              isLightModeLightBg={isLightModeLightBg}
+              token={token}
+              placeholder={t('common.searchPlaceholder', '搜索菜单、功能...')}
+            />
           );
-          }
 
-          // 上线向导：与站点设置「上线向导是否开启」联动；关闭时不展示顶栏入口
-          if (launchWizardEnabled) {
-            actions.push(
-              <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
-                <Space
-                  className="riveredge-header-onboarding-space"
-                  size={4}
-                  onClick={() => navigate('/system/onboarding-wizard')}
-                  style={{
-                    cursor: 'pointer',
-                    padding: '0 12px 0 0',
-                    height: 32,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '16px',
-                    background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
-                    setOnboardingHovered(true);
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
-                    setOnboardingHovered(false);
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 32,
-                      height: 32,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      lineHeight: 0,
-                    }}
-                  >
-                    <Lottie
-                      animationData={compassAnimation}
-                      loop={onboardingHovered}
-                      autoplay={onboardingHovered}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        display: 'block',
-                        ...(!isLightModeLightBg
-                          ? {
-                              filter: 'brightness(1.2) contrast(1.08)',
-                            }
-                          : {}),
-                      }}
-                    />
-                  </span>
-                  {!isMobileOrTablet && (
-                    <span
-                      style={{
-                        fontSize: token.fontSize,
-                        fontWeight: 500,
-                        color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-                        lineHeight: '32px',
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {t('menu.system.onboarding-wizard')}
-                    </span>
-                  )}
-                </Space>
-              </Tooltip>
-            );
-          }
-
-          // 消息提醒（带数量徽标）- 平板/手机也显示
+          // 消息提醒（带数量徽标）
           actions.push(
             <Dropdown
               key="notifications"
               placement="bottomRight"
               trigger={['click']}
-              arrow={false}
-              classNames={{ root: 'header-actions-dropdown' }}
               open={messageDropdownOpen}
               onOpenChange={(open) => {
                 setMessageDropdownOpen(open);
@@ -4842,17 +4167,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         alignItems: 'center',
                       }}
                     >
-                      <Space size={8} align="center">
-                        <Typography.Text strong style={{ fontSize: 16 }}>
-                          {t('ui.message.notification')}
-                        </Typography.Text>
+                      <Typography.Text strong style={{ fontSize: 16 }}>
+                        消息通知
                         {unreadCount > 0 && (
                           <Badge
                             count={unreadCount}
                             size="small"
+                            style={{ marginLeft: 8 }}
                           />
                         )}
-                      </Space>
+                      </Typography.Text>
                       <Button
                         type="link"
                         size="small"
@@ -4861,7 +4185,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                           navigate('/personal/messages');
                         }}
                       >
-                        {t('pages.dashboard.viewAll')} <RightOutlined />
+                        查看全部 <RightOutlined />
                       </Button>
                     </div>
 
@@ -4935,7 +4259,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                           marginBottom: 4,
                                           fontSize: 12,
                                           color: token.colorTextSecondary,
-                                          whiteSpace: 'pre-wrap',
                                         }}
                                       >
                                         {item.content}
@@ -4981,12 +4304,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </Badge>
             </Dropdown>
           );
-          
 
-
-          if (!isMobileOrTablet) {
-          // 手机端扫码按钮 (临时不展示)
-          // actions.push(<MobileQRCode key="mobile-qr" />);
+          // 手机端扫码按钮
+          actions.push(<MobileQRCode key="mobile-qr" />);
 
           // 语言切换下拉菜单
           actions.push(
@@ -5049,31 +4369,30 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Tooltip>
           );
 
-          // 租户切换选择框 - 优化样式，不显示图标（仅桌面）
-          if (currentUser && !isMobileOrTablet) {
+          // 租户切换选择框 - 优化样式，不显示图标
+          if (currentUser) {
             actions.push(
               <div
                 key="tenant"
                 className="tenant-selector-wrapper"
-                data-header-light-text={!isLightModeLightBg}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  marginLeft: 4,
                 }}
               >
-                <TenantSelector headerLightText={!isLightModeLightBg} />
+                <TenantSelector />
               </div>
             );
           }
-          }
 
-          // 用户头像和下拉菜单 - 平板/手机也显示
+          // 用户头像和下拉菜单
           if (currentUser) {
             actions.push(
               <Dropdown
                 key="user"
                 menu={{
-                  items: getUserMenuItems(t),
+                  items: getUserMenuItems(logout, t),
                   onClick: handleUserMenuClick,
                 }}
                 placement="bottomRight"
@@ -5082,7 +4401,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   size={8}
                   style={{
                     cursor: 'pointer',
-                    padding: '0 12px 0 4px',
+                    padding: '0 8px 0 4px',
                     height: 32,
                     display: 'flex',
                     alignItems: 'center',
@@ -5091,37 +4410,45 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  <Avatar
-                    size={24}
-                    src={avatarUrl}
-                    style={{
-                      backgroundColor: token.colorPrimary,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: getAvatarFontSize(24),
-                      fontWeight: 500,
-                    }}
-                  >
-                    {getAvatarText(currentUser.full_name, currentUser.username)}
-                  </Avatar>
+                  {avatarUrl ? (
+                    <Avatar
+                      size={24}
+                      src={avatarUrl}
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    />
+                  ) : (
+                    <Avatar
+                      size={24}
+                      style={{
+                        backgroundColor: token.colorPrimary,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: getAvatarFontSize(24),
+                        fontWeight: 500,
+                      }}
+                    >
+                      {/* 显示首字母（优先全名，否则用户名） */}
+                      {getAvatarText(currentUser.full_name, currentUser.username)}
+                    </Avatar>
+                  )}
                   <span
                     style={{
-                      fontSize: token.fontSize,
-                      fontWeight: 500,
+                      fontSize: 14,
                       color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
                       lineHeight: '32px',
                       height: '32px',
                       display: 'flex',
                       alignItems: 'center',
-                      maxWidth: 120, // ⚠️ 防止姓名过长挤压顶栏
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
                     }}
                   >
-                    {/* 优先显示全名，如果全名为空则显示用户名，文字跟随系统 */}
+                    {/* 优先显示全名，如果全名为空则显示用户名 */}
                     {(currentUser.full_name && currentUser.full_name.trim() !== '') ? currentUser.full_name : currentUser.username}
                   </span>
                 </Space>
@@ -5141,30 +4468,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Tooltip>
           );
 
-          return <Space size={8} align="center" style={{ flexShrink: 0 }}>{actions}</Space>;
+          return actions;
         }}
         menuDataRender={() => {
-          return filteredMenuData.filter((item) => item.path !== '/system');
+          return filteredMenuData;
         }}
         menuProps={{
           mode: 'inline',
-          /** 显式与侧栏收起同步。Pro BaseMenu 在未传时仅依赖 Sider 上下文，混排/时序下偶发与 props 不一致。 */
-          inlineCollapsed: !isFullscreen && collapsed,
-          /** 见 `collapsedSiderMenuStyles`：覆盖 title-content 上 antd/Pro 注入的 display，避免仅靠 CSS 选错节点无效。 */
-          styles: collapsedSiderMenuStyles,
           openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
           selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
           // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
           // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
           onClick: (info) => {
             // 如果菜单项有 path，阻止默认的链接跳转行为
-            // 使用 type assertion 绕过 ReactInstance 类型限制
-            const menuItem = info.item as any;
+            const menuItem = info.item;
             if (menuItem && menuItem.props && menuItem.props.path) {
               const path = menuItem.props.path;
               // 外部链接已经在 menuItemRender 中处理，这里只阻止内部路由的默认行为
               if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
                 // 完全阻止默认行为，让 Link 组件处理路由
+                // React Router 的 Link 组件会阻止默认行为并使用 navigate() 进行路由跳转
                 info.domEvent.preventDefault();
                 info.domEvent.stopPropagation();
               }
@@ -5190,53 +4513,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             }
           },
         }}
-        onMenuHeaderClick={() => navigate(effectiveSystemHomePath)}
-        subMenuItemRender={(item: any, defaultDom) => {
-          // 父分组悬停：一次性预取其下全部子项 chunk，展开即可见、点击即渲染
-          const collectLeafPaths = (node: any, acc: string[]): string[] => {
-            if (!node) return acc;
-            if (Array.isArray(node.children) && node.children.length > 0) {
-              for (const child of node.children) collectLeafPaths(child, acc);
-            } else if (typeof node.path === 'string') {
-              acc.push(node.path);
-            }
-            return acc;
-          };
-          const paths = collectLeafPaths(item, []);
-          const handleEnter = () => {
-            if (paths.length === 0) return;
-            const systemPaths: string[] = [];
-            const pluginCodes = new Set<string>();
-            const kuaiPaths: string[] = [];
-            for (const p of paths) {
-              if (p.startsWith('/apps/')) {
-                const code = extractAppCodeFromPath(p);
-                if (code) pluginCodes.add(code);
-                if (p.startsWith('/apps/kuaizhizao')) kuaiPaths.push(p);
-              } else {
-                systemPaths.push(p);
-              }
-            }
-            pluginCodes.forEach((code) => prefetchPlugin(code));
-            kuaiPaths.forEach((p) => prefetchKuaizhizaoRoute(p));
-            if (systemPaths.length > 0) prefetchSystemRoutes(systemPaths);
-          };
-          /* 侧栏收起时不要写 display:inline-flex + width:100%：会套在 .ant-menu-title-content 与 Pro 的 item-title 之间，
-           * 在 DevTools 里看到的就是这一层，挤压图标。展开态保留 flex 以便父级子菜单标题与预取热区排布。 */
-          const siderForMenuCollapsed = !isFullscreen && collapsed;
-          return (
-            <span
-              onMouseEnter={handleEnter}
-              style={
-                siderForMenuCollapsed
-                  ? { display: 'block', width: '100%' }
-                  : { display: 'inline-flex', alignItems: 'center', width: '100%' }
-              }
-            >
-              {defaultDom}
-            </span>
-          );
-        }}
+        onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
         menuItemRender={(item: any, dom) => {
           // 处理外部链接
           if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
@@ -5250,11 +4527,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
           // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
           if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
-            // 应用名唯一来源：仅用 locale 的 app.${appCode}.name，与 useUnifiedMenuData 一致
+            // 确保应用菜单分组标题使用最新的翻译（在渲染时重新翻译，确保语言切换后能正确显示）
+            // 从第一个子菜单的路径中提取应用 code，然后直接使用翻译 key
             const firstChildPath = item.children?.[0]?.path;
-            const fallback = item.name || item.label || '';
-            const appCode = firstChildPath ? extractAppCodeFromPath(firstChildPath) : null;
-            const groupTitle = appCode ? getAppDisplayName(appCode, t, fallback) : fallback;
+            let groupTitle = item.name || item.label || '';
+
+            // 如果第一个子菜单路径存在且是应用菜单路径，直接从路径提取应用 code 并使用翻译 key
+            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+              const appCode = extractAppCodeFromPath(firstChildPath);
+              if (appCode) {
+                // 直接使用翻译 key app.{app-code}.name 进行翻译，不依赖 item.name 的值
+                // 这样可以确保无论 item.name 是什么值（中文或英文），都能根据当前语言正确翻译
+                const appNameKey = `app.${appCode}.name`;
+                const appNameTranslated = t(appNameKey, { defaultValue: groupTitle });
+                if (appNameTranslated && appNameTranslated !== appNameKey) {
+                  groupTitle = appNameTranslated;
+                }
+              }
+            }
 
             return (
               <div
@@ -5303,8 +4593,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const firstChildPath = item.children?.[0]?.path;
             const isAppMenu = firstChildPath?.startsWith('/apps/');
             const translatedName = isAppMenu
-              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
-              : translateMenuName(item.name as string, t, firstChildPath);
+              ? translateAppMenuName(item.name as string, firstChildPath, undefined, t)
+              : translateMenuName(item.name as string, t);
             // 如果翻译后的名称与 dom 不一致，返回翻译后的名称
             // 否则直接返回 dom（因为 dom 可能已经是翻译后的）
             if (translatedName !== item.name && translatedName !== dom) {
@@ -5327,94 +4617,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             if (item.path.startsWith('/apps/') && item.name) {
               // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
               const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
-              // 仅用纯文本替换 dom 会丢掉标题里的图标。不要再用 class ant-menu-item-icon：
-              // BasicLayout 全局样式会给 .ant-menu-item-icon 加 ::before 圆角底 + margin-right，叠在自定义 dom 里会只坑叶子项且间距加倍。
+              // ⚠️ 关键修复：直接强制使用翻译后的名称，不再依赖 dom 参数的内容
+              // 因为 ProLayout 内部可能缓存了旧的 dom 结构
               if (translatedName) {
-                finalDom = (
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      columnGap: 0,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                    }}
-                  >
-                    {item.icon ? (
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                          width: 16,
-                          height: 16,
-                          marginInlineEnd: 12,
-                        }}
-                      >
-                        {item.icon}
-                      </span>
-                    ) : null}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                      {translatedName}
-                    </span>
-                  </span>
-                );
+                finalDom = <span>{translatedName}</span>;
               }
             }
 
-            // 左侧菜单小徽标：仅业务单据显示未完成数量
-            const path = item.path as string;
-            const badgeKey = getMenuBadgeKey(path);
-            const badgeData = (badgeKey ? menuBadgeCounts[badgeKey] : null) as any;
-
-            let badgeEl: React.ReactNode = null;
-            if (badgeData) {
-              if (typeof badgeData === 'number' && badgeData > 0) {
-                // 传统形式：仅数字，默认红色（antd Badge 默认）
-                badgeEl = <Badge count={badgeData} size="small" className="menu-item-badge-count" />;
-              } else if (typeof badgeData === 'object') {
-                // 拟物化分类徽标，优先级：逾期 (red) > 待审核 (orange) > 进行中 (green)
-                if (badgeData.overdue > 0) {
-                  badgeEl = <Badge count={badgeData.overdue} size="small" color="#f5222d" className="menu-item-badge-count" />;
-                } else if (badgeData.pending > 0) {
-                  badgeEl = <Badge count={badgeData.pending} size="small" color="#fa8c16" className="menu-item-badge-count" />;
-                } else if (badgeData.in_progress > 0) {
-                  badgeEl = <Badge count={badgeData.in_progress} size="small" color="#52c41a" className="menu-item-badge-count" />;
-                }
-              }
-            }
-
+            // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
             return (
               <div
                 onClick={(e) => {
+                  // 阻止事件冒泡到 Menu，防止 Menu 的默认链接行为
                   e.stopPropagation();
-                }}
-                onMouseEnter={() => {
-                  if (path.startsWith('/apps/')) {
-                    const appCode = extractAppCodeFromPath(path);
-                    if (appCode) prefetchPlugin(appCode);
-                    if (path.startsWith('/apps/kuaizhizao')) prefetchKuaizhizaoRoute(path);
-                    const menuPath = path.split('?')[0];
-                    if (
-                      menuPath.includes('/apps/kuaizhizao/') &&
-                      menuPath.includes('production-execution/work-orders') &&
-                      !menuPath.includes('/kiosk')
-                    ) {
-                      void import('../apps/kuaizhizao/pages/production-execution/work-orders/workOrderListTable').then(
-                        (m) => m.prefetchDefaultWorkOrderList(queryClient, 20)
-                      );
-                    }
-                  } else {
-                    // 系统级/平台级/个人中心路由：悬停即预取目标 chunk，点击即渲染
-                    prefetchSystemRoute(path);
-                  }
                 }}
                 style={{ display: 'block', width: '100%' }}
               >
-                <Link to={item.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 6 }}>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{finalDom}</span>
-                  {badgeEl}
+                <Link to={item.path} style={{ display: 'block', width: '100%' }}>
+                  {finalDom}
                 </Link>
               </div>
             );
@@ -5423,85 +4643,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           return dom;
         }}
       >
-        {isMobileOrTablet ? (
-          <RouteTransition>{children}</RouteTransition>
-        ) : (
         <UniTabs
           menuConfig={filteredMenuData}
           isFullscreen={isFullscreen}
           onToggleFullscreen={handleToggleFullscreen}
         >
-          <>
-            {children}
-          </>
+          {children}
         </UniTabs>
-        )}
       </ProLayout >
-      {systemSettingsPanelMounted && (
-        <div
-          ref={systemSettingsPanelRef}
-          className={`riveredge-system-settings-panel${systemSettingsPanelExiting ? ' riveredge-system-settings-panel--exiting' : ''}`}
-          style={
-            {
-              '--riveredge-system-panel-columns': systemSettingsPanelGridColumns,
-              '--riveredge-system-panel-width': `${systemSettingsPanelWidth}px`,
-            } as React.CSSProperties
-          }
-          role="dialog"
-          aria-modal="false"
-          aria-label={t('menu.system')}
-          onAnimationEnd={handleSystemSettingsPanelAnimationEnd}
-        >
-          <div className="riveredge-system-settings-panel-header">
-            <span className="riveredge-system-settings-panel-title">{t('menu.system')}</span>
-            <Button
-              type="text"
-              size="small"
-              className="riveredge-system-settings-panel-close"
-              onClick={closeSystemSettingsPanelAnimated}
-              title={t('common.close')}
-              aria-label={t('common.close')}
-              icon={<CloseOutlined />}
-            />
-          </div>
-          <div className="riveredge-system-settings-panel-body">
-            {systemSettingsGroups.map((group) => {
-              return (
-                <section
-                  key={group.key}
-                  className="riveredge-system-settings-group"
-                  style={{ gridColumn: `span ${group.groupSpan}` }}
-                >
-                  <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
-                  <div
-                    className="riveredge-system-settings-grid"
-                    style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
-                  >
-                    {group.items.map((child) => {
-                      return (
-                        <button
-                          key={String(child.key || child.path)}
-                          type="button"
-                          className="riveredge-system-settings-item"
-                          onClick={() => handleSystemSettingsNavigate(child.path)}
-                          title={typeof child.name === 'string' ? child.name : undefined}
-                        >
-                          <span
-                            className="riveredge-system-settings-item-icon"
-                          >
-                            {getSystemPanelIcon(child.path)}
-                          </span>
-                          <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* 技术栈信息弹窗 */}
       < TechStackModal
@@ -5518,76 +4667,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 主题更新回调（可选）
         }}
       />
-
-      {/* AI 助手 */}
-      <AiAssistant
-        open={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-      />
-
-      {/* 新手引导 */}
-      {/* <OnboardingGuide /> */}
-
-      {/* 键盘快捷键帮助 */}
-      <Modal
-        title={t('common.shortcutHelpTitle')}
-        open={shortcutHelpOpen}
-        onCancel={() => setShortcutHelpOpen(false)}
-        footer={null}
-        width={420}
-        centered
-      >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          {t('common.shortcutHelpIntro')}
-        </Typography.Paragraph>
-        <List
-          size="small"
-          dataSource={[
-            { keys: '/', desc: t('common.shortcutSearch') },
-            { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
-            { keys: 'Alt + N', desc: t('common.shortcutNew') },
-            { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
-            { keys: '?', desc: t('common.shortcutHelp') },
-          ]}
-          renderItem={({ keys, desc }) => {
-            const keyParts = keys.split(/\s*\+\s*/).map((s: string) => s.trim());
-            const keyStyle: React.CSSProperties = {
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '5px 10px',
-              borderRadius: 6,
-              background: 'var(--river-divider-color)',
-              border: '1px solid var(--river-border-color)',
-              boxShadow: isDarkMode ? '0 2px 4px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.08)',
-              fontSize: 12,
-              fontFamily: CODE_FONT_FAMILY,
-              fontWeight: 500,
-              color: isDarkMode ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.65)',
-            };
-            return (
-              <List.Item>
-                <Space align="center">
-                  <Space size={4}>
-                    {keyParts.map((part, i) => (
-                      <kbd key={i} style={keyStyle}>
-                        {part}
-                      </kbd>
-                    ))}
-                  </Space>
-                  <span>{desc}</span>
-                </Space>
-              </List.Item>
-            );
-          }}
-        />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t('common.shortcutHelpHint')}
-        </Typography.Text>
-      </Modal>
-
-      {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
-      <IterationFloatButton />
     </>
   );
 }
+

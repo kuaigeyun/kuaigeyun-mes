@@ -14,7 +14,7 @@
     "title": "app.kuaiai.name",
     "icon": "sparkles",
     "path": "/apps/kuaiai",
-    "permission": "kuaiai:workspace:read",
+    "permission": "kuaiai:entry:read",
     "children": []
   },
   "permissions": [

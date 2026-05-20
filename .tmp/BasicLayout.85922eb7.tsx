@@ -50,8 +50,8 @@ const useSafeTranslation = () => {
   try {
     return useTranslation();
   } catch (error) {
-    console.warn('i18n initialization failed:', error);
-    // 返回最小可用翻译函数，保证页面可渲染
+    console.warn('i18n initialization failed, using fallback:', error);
+    // 返回一个基本的翻译函数作为后备
     return {
       t: (key: string, options?: any) => {
         // 如果是中文 key，直接返回
@@ -96,7 +96,6 @@ import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import compassAnimation from '../../static/lottie/compass.json';
 import OnboardingGuide from '../components/onboarding-guide';
-import { HeaderQuickEntryPopover } from '../components/quick-entry';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -206,7 +205,7 @@ const TOPBAR_SEARCH_HOT_MENU_PATHS: string[] = [
   '/apps/kuaizhizao/quality-management/finished-goods-inspection', // 成品检验
 ];
 
-/** 根据菜单 path 获取徽章 key（统一去除尾斜杠与查询参数） */
+/** 根据菜单 path 获取徽章 key（兼容尾部斜杠、查询参数等格式差异） */
 function getMenuBadgeKey(path: string | undefined): string | undefined {
   if (!path || typeof path !== 'string') return undefined;
   const normalized = path.replace(/\/$/, '').split('?')[0];
@@ -416,7 +415,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
   // 根据菜单路径和名称映射到制造业图标
   // 优先使用路径匹配（路径是固定的，不受翻译影响）
-  // 先按路径映射；未命中时再按名称映射
+  // 路径映射作为主要方式，名称映射作为后备方案（为了向后兼容）
 
   // 路径映射（优先使用，因为路径是固定的，不受翻译影响）
   if (menuPath) {
@@ -433,8 +432,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/menus': ManufacturingIcons.menu, // 菜单管理 - 使用菜单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
       '/system/config-center': ManufacturingIcons.mdConfiguration, // 业务配置 - 使用设置2图标，区别于站点设置
-      '/system/business-config': ManufacturingIcons.mdConfiguration, // 重定向到 config-center
-      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 重定向到 config-center
+      '/system/business-config': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
+      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编号规则 - 使用代码图标
       '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
@@ -515,10 +514,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     }
   }
 
-  // 名称映射（路径未命中时使用，支持中英文）
-  // 注意：菜单名称可能已翻译，路径匹配始终优先
+  // 名称映射（后备方案，为了向后兼容，支持中英文）
+  // 注意：由于菜单名称可能已翻译，这里作为最后的后备方案
   const nameMap: Record<string, React.ComponentType<any>> = {
-    // 常见的中文和英文名称映射
+    // 常见的中文和英文名称映射（保留作为后备）
     'Dashboard': ManufacturingIcons.industrialDashboard,
     'Workplace': ManufacturingIcons.production,
     'Analysis': ManufacturingIcons.chartLine,
@@ -527,7 +526,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'User Management': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
     'System Configuration': ManufacturingIcons.systemConfig,
     'Personal Center': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
-    // 应用菜单名称映射
+    // 应用菜单名称映射（后备方案）
     'Plan Management': ManufacturingIcons.calendar,
     'Production Execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
     'Purchase Management': ManufacturingIcons.shoppingBag,
@@ -573,77 +572,32 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
     path: '/system/dashboard',
     name: t('menu.dashboard'),
     icon: getMenuIcon(t('menu.dashboard'), '/system/dashboard'),
-    permissionCodes: ['system:application:read', 'system:menu:read'],
     children: [
-      {
-        path: '/system/dashboard/workplace',
-        name: t('menu.dashboard.workplace'),
-        icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace'),
-        permissionCodes: ['system:application:read', 'system:menu:read'],
-      },
-      {
-        path: '/system/dashboard/analysis',
-        name: t('menu.dashboard.analysis'),
-        icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis'),
-        permissionCodes: ['system:application:read', 'system:menu:read'],
-      },
+      { path: '/system/dashboard/workplace', name: t('menu.dashboard.workplace'), icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace') },
+      { path: '/system/dashboard/analysis', name: t('menu.dashboard.analysis'), icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis') },
     ],
   },
   {
     path: '/system',
     name: t('menu.system'),
     icon: getMenuIcon(t('menu.system'), '/system'),
-    permissionCodes: [
-      'system:application:read',
-      'system:menu:read',
-      'system:site-setting:read',
-      'system:config-center:read',
-      'system:data-dictionary:read',
-      'system:language:read',
-      'system:code-rule:read',
-      'system:custom-field:read',
-      'system:department:read',
-      'system:position:read',
-      'system:role:read',
-      'system:user:read',
-      'system:file:read',
-      'system:api:read',
-      'system:data-source:read',
-      'system:application-connection:read',
-      'system:dataset:read',
-      'system:approval-process:read',
-      'system:approval-instance:read',
-      'system:message-template:read',
-      'system:message-config:read',
-      'system:print-device:read',
-      'system:print-template:read',
-      'system:operation-log:read',
-      'system:login-log:read',
-      'system:online-user:read',
-      'system:data-backup:read',
-      'kuaizhizao:warehouse-management-initial-data:read',
-      'system:user-profile:read',
-      'system:user-preference:read',
-      'system:user-message:read',
-      'system:user-task:read',
-    ],
     children: [
       { key: 'core-config-group', type: 'group', name: t('menu.group.core-config'), label: t('menu.group.core-config'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/applications', name: t('menu.system.applications'), icon: getMenuIcon(t('menu.system.applications'), '/system/applications'), permissionCodes: ['system:application:create', 'system:application:read', 'system:application:update', 'system:application:delete'] },
-        { path: '/system/menus', name: t('menu.system.menus'), icon: getMenuIcon(t('menu.system.menus'), '/system/menus'), permissionCodes: ['system:menu:create', 'system:menu:read', 'system:menu:update', 'system:menu:delete'] },
-        { path: '/system/site-settings', name: t('menu.system.site-settings'), icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'), permissionCodes: ['system:site-setting:read', 'system:site-setting:update'] },
-        { path: '/system/config-center', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/config-center'), permissionCodes: ['system:config-center:read', 'system:config-center:update'] },
-        { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'), permissionCodes: ['system:data-dictionary:create', 'system:data-dictionary:read', 'system:data-dictionary:update', 'system:data-dictionary:delete'] },
-        { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages'), permissionCodes: ['system:language:create', 'system:language:read', 'system:language:update', 'system:language:delete'] },
-        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'), permissionCodes: ['system:code-rule:create', 'system:code-rule:read', 'system:code-rule:update', 'system:code-rule:delete'] },
-        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'), permissionCodes: ['system:custom-field:create', 'system:custom-field:read', 'system:custom-field:update', 'system:custom-field:delete'] },
-        { path: '/system/onboarding-wizard', name: t('menu.system.onboarding-wizard'), icon: getMenuIcon(t('menu.system.onboarding-wizard'), '/system/onboarding-wizard'), permissionCodes: ['system:onboarding-wizard:read', 'system:onboarding-wizard:update'] },
+        { path: '/system/applications', name: t('menu.system.applications'), icon: getMenuIcon(t('menu.system.applications'), '/system/applications') },
+        { path: '/system/menus', name: t('menu.system.menus'), icon: getMenuIcon(t('menu.system.menus'), '/system/menus') },
+        { path: '/system/site-settings', name: t('menu.system.site-settings'), icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings') },
+        { path: '/system/config-center', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/config-center') },
+        { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries') },
+        { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages') },
+        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules') },
+        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields') },
+        { path: '/system/onboarding-wizard', name: t('menu.system.onboarding-wizard'), icon: getMenuIcon(t('menu.system.onboarding-wizard'), '/system/onboarding-wizard') },
       ]},
       { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments'), permissionCodes: ['system:department:create', 'system:department:read', 'system:department:update', 'system:department:delete'] },
-        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions'), permissionCodes: ['system:position:create', 'system:position:read', 'system:position:update', 'system:position:delete'] },
-        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'), permissionCodes: ['system:role:create', 'system:role:read', 'system:role:update', 'system:role:delete', 'system:role:assign'] },
-        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system:user:create', 'system:user:read', 'system:user:update', 'system:user:delete'] },
+        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments'), permissionCodes: ['system:department:read', 'system:department:update'] },
+        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions'), permissionCodes: ['system:position:read', 'system:position:update'] },
+        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'), permissionCodes: ['system:role:read', 'system:role:update'] },
+        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system:user:read', 'system:user:update'] },
       ]},
       { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
         {
@@ -652,51 +606,31 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
           icon: getMenuIcon(t('menu.system.initial-data'), '/system/initial-data'),
           permissionCodes: ['kuaizhizao:warehouse-management-initial-data:read'],
         },
-        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files'), permissionCodes: ['system:file:create', 'system:file:read', 'system:file:update', 'system:file:delete', 'system:file:export'] },
-        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis'), permissionCodes: ['system:api:create', 'system:api:read', 'system:api:update', 'system:api:delete'] },
-        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'), permissionCodes: ['system:data-source:create', 'system:data-source:read', 'system:data-source:update', 'system:data-source:delete'] },
-        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'), permissionCodes: ['system:application-connection:create', 'system:application-connection:read', 'system:application-connection:update', 'system:application-connection:delete'] },
-        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'), permissionCodes: ['system:dataset:create', 'system:dataset:read', 'system:dataset:update', 'system:dataset:delete'] },
+        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files') },
+        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis') },
+        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
+        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections') },
+        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets') },
       ]},
       { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
-        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'), permissionCodes: ['system:approval-instance:read', 'system:approval-instance:update'] },
-        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'), permissionCodes: ['system:message-template:create', 'system:message-template:read', 'system:message-template:update', 'system:message-template:delete'] },
-        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'), permissionCodes: ['system:message-config:create', 'system:message-config:read', 'system:message-config:update', 'system:message-config:delete'] },
-        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'), permissionCodes: ['system:print-device:create', 'system:print-device:read', 'system:print-device:update', 'system:print-device:delete'] },
-        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
+        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
+        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances') },
+        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template') },
+        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config') },
+        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices') },
+        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
       ]},
       { key: 'monitoring-ops-group', type: 'group', name: t('menu.group.monitoring-ops'), label: t('menu.group.monitoring-ops'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'), permissionCodes: ['system:operation-log:read'] },
-        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'), permissionCodes: ['system:login-log:read'] },
-        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'), permissionCodes: ['system:online-user:read'] },
-        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'), permissionCodes: ['system:data-backup:read'] },
+        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs') },
+        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs') },
+        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users') },
+        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups') },
       ]},
       { key: 'personal-center-group', type: 'group', name: t('menu.personal'), label: t('menu.personal'), className: 'riveredge-menu-group-title', children: [
-        {
-          path: '/personal/profile',
-          name: t('menu.personal.profile'),
-          icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile'),
-          permissionCodes: ['system:user-profile:read', 'system:user-profile:update'],
-        },
-        {
-          path: '/personal/preferences',
-          name: t('menu.personal.preferences'),
-          icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences'),
-          permissionCodes: ['system:user-preference:read', 'system:user-preference:update'],
-        },
-        {
-          path: '/personal/messages',
-          name: t('menu.personal.messages'),
-          icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages'),
-          permissionCodes: ['system:user-message:read', 'system:user-message:update'],
-        },
-        {
-          path: '/personal/tasks',
-          name: t('menu.personal.tasks'),
-          icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
-          permissionCodes: ['system:user-task:read', 'system:user-task:update'],
-        },
+        { path: '/personal/profile', name: t('menu.personal.profile'), icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile') },
+        { path: '/personal/preferences', name: t('menu.personal.preferences'), icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences') },
+        { path: '/personal/messages', name: t('menu.personal.messages'), icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages') },
+        { path: '/personal/tasks', name: t('menu.personal.tasks'), icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks') },
       ]},
     ],
   },
@@ -1090,7 +1024,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
           'bar-chart': ManufacturingIcons.chartBar, // 分析中心 - 柱状图
           'chartBar': ManufacturingIcons.chartBar,
-          'analytics': ManufacturingIcons.chartBar, // 分析入口图标
+          'analytics': ManufacturingIcons.chartBar, // 兼容旧数据
           'trophy': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标
           'fileSpreadsheet': ManufacturingIcons.fileSpreadsheet, // 报表中心 - 表格图标
           'fileBarChart': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标
@@ -1255,37 +1189,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       });
     return visibleGroups;
   }, [systemMenuEntry]);
-
-  const systemSettingsPanelGridColumns = useMemo(() => {
-    if (!systemSettingsGroups.length) return 6;
-    let currentRowSpan = 0;
-    let maxRowSpan = 0;
-    systemSettingsGroups.forEach((group) => {
-      const span = Math.max(3, Math.min(24, Number(group.groupSpan) || 6));
-      if (currentRowSpan + span > 24) {
-        maxRowSpan = Math.max(maxRowSpan, currentRowSpan);
-        currentRowSpan = 0;
-      }
-      currentRowSpan += span;
-      maxRowSpan = Math.max(maxRowSpan, currentRowSpan);
-    });
-    return Math.max(6, Math.min(24, maxRowSpan));
-  }, [systemSettingsGroups]);
-
-  const systemSettingsPanelWidth = useMemo(() => {
-    // 与现有 24 栅格视觉密度保持一致：按列数线性缩放面板宽度
-    const columns = systemSettingsPanelGridColumns;
-    const trackWidth = 26;
-    const columnGap = 12;
-    const bodyHorizontalPadding = 28;
-    const borderWidth = 2;
-    return (
-      columns * trackWidth +
-      (columns - 1) * columnGap +
-      bodyHorizontalPadding +
-      borderWidth
-    );
-  }, [systemSettingsPanelGridColumns]);
 
   const handleSystemSettingsNavigate = useCallback((path?: string) => {
     if (!path) return;
@@ -2081,7 +1984,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       });
     }
 
-    // 若未命中任何菜单节点，则直接显示当前路径翻译
+    // 最终兜底：如果还是没找到，仅显示当前页面的翻译
     if (breadcrumbItems.length === 0) {
       const translatedTitle = translatePathTitle(location.pathname, t);
       if (translatedTitle) {
@@ -3152,7 +3055,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           position: fixed;
           left: 8px;
           bottom: 52px;
-          width: min(var(--riveredge-system-panel-width, 940px), calc(100vw - 24px));
+          width: min(940px, calc(100vw - 24px));
           max-height: min(86vh, 860px);
           border-radius: ${Number(token.borderRadiusLG || 8)}px;
           border: 1px solid rgba(255, 255, 255, 0.16);
@@ -3200,7 +3103,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           overflow-y: auto;
           max-height: min(78vh, 760px);
           display: grid;
-          grid-template-columns: repeat(var(--riveredge-system-panel-columns, 24), minmax(0, 1fr));
+          grid-template-columns: repeat(24, minmax(0, 1fr));
           align-content: start;
           gap: 12px;
         }
@@ -3279,6 +3182,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           overflow: hidden;
           text-overflow: ellipsis;
           width: 100%;
+        }
+        @media (max-width: 1440px) {
+          .riveredge-system-settings-panel-body {
+            grid-template-columns: repeat(18, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 1180px) {
+          .riveredge-system-settings-panel {
+            width: min(820px, calc(100vw - 16px));
+          }
+          .riveredge-system-settings-panel-body {
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+          }
+          .riveredge-system-settings-group {
+            grid-column: span 6 !important;
+          }
         }
         @media (max-width: 900px) {
           .riveredge-system-settings-panel {
@@ -3867,7 +3786,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
-        /* 覆盖 Select 内部文字元素；或通过组件内 className 标记 */
+        /* 兜底：Select 内部所有文字元素；或通过组件内 className 标记 */
         .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
         .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector *,
         .tenant-selector-select-light-text .ant-select .ant-select-selector,
@@ -4151,10 +4070,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 32px !important;
           border-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)'} !important;
         }
-        /* 顶栏快捷入口触发按钮 hover */
-        .riveredge-header-quick-entry-trigger:hover {
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.12)'} !important;
-        }
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
@@ -4170,22 +4085,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           min-width: 0 !important;
           max-width: none !important;
         }
-        /* 面包屑内部容器防止换行；宽度不足时横向滚动 */
+        /* 面包屑内部容器防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb ul {
           display: flex !important;
           flex-wrap: nowrap !important;
           white-space: nowrap !important;
-          overflow-x: auto !important;
-          overflow-y: visible !important;
-          max-width: 100% !important;
+          overflow: visible !important;
         }
-        /* 面包屑项不收缩，避免只剩最后一级可见 */
+        /* 面包屑项防止换行，允许收缩但优先显示最后一项 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item {
           white-space: nowrap !important;
-          flex-shrink: 0 !important;
+          flex-shrink: 1 !important;
           display: inline-flex !important;
           align-items: center !important;
+          min-width: 0;
+          max-width: 100%;
           overflow: visible !important;
           padding: 0 4px !important;
           line-height: 1.5 !important;
@@ -4256,11 +4171,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-        }
-        /* 末级面包屑（激活项）：主题色覆盖全局颜色强制 */
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .riveredge-breadcrumb-active,
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .riveredge-breadcrumb-active {
-          color: ${token.colorPrimary} !important;
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
@@ -4652,25 +4562,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }}
               />
             )}
-            {!isMobileOrTablet && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: -8 }}>
-                <HeaderQuickEntryPopover isLightModeLightBg={isLightModeLightBg} />
-              </span>
-            )}
-            <div ref={breadcrumbRef} style={{ flex: 1, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+            {/* 面包屑 */}
+            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 10 }}>
               <Breadcrumb
                 style={{
                   display: breadcrumbVisible ? 'flex' : 'none',
                   alignItems: 'center',
-                  maxHeight: '100%',
+                  height: '100%',
                   whiteSpace: 'nowrap',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                 }}
                 items={generateBreadcrumb.map((item, index) => ({
                   title: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
                       {index === generateBreadcrumb.length - 1 || index === 0 ? (
-                        <span className={index === generateBreadcrumb.length - 1 ? 'riveredge-breadcrumb-active' : undefined} style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                        <span style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: index === generateBreadcrumb.length - 1 ? 500 : 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                       ) : (
                         <a
                           onClick={() => {
@@ -5441,12 +5347,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         <div
           ref={systemSettingsPanelRef}
           className={`riveredge-system-settings-panel${systemSettingsPanelExiting ? ' riveredge-system-settings-panel--exiting' : ''}`}
-          style={
-            {
-              '--riveredge-system-panel-columns': systemSettingsPanelGridColumns,
-              '--riveredge-system-panel-width': `${systemSettingsPanelWidth}px`,
-            } as React.CSSProperties
-          }
           role="dialog"
           aria-modal="false"
           aria-label={t('menu.system')}
