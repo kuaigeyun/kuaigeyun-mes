@@ -5,9 +5,20 @@
  * 已从 Luckysheet 迁移到 Univer Sheet
  */
 
-import React, { useLayoutEffect, useEffect, useRef, useState } from 'react';
-import { Modal, Button, Space, App, theme, Spin } from 'antd';
-import { CheckOutlined, CloseOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
+import React, { useLayoutEffect, useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Modal, Button, Space, App, theme, Spin, Upload } from 'antd';
+import type { UploadProps } from 'antd';
+import {
+  CheckOutlined,
+  CloseOutlined,
+  DownloadOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
+  SwapOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 // 引入 Univer Sheet 样式
 import '@univerjs/design/lib/index.css';
@@ -24,6 +35,16 @@ import {
   getViewportHeightExpr,
 } from '../layout-templates/constants';
 import './uni-import-fullscreen.less';
+import { buildImportCellData } from './build-import-cell-data';
+import { buildImportTemplateFileName } from './build-import-template-file-name';
+import { downloadImportTemplateXlsx, parseImportXlsxFile } from './uni-import-xlsx';
+import { UniImportMappingModal } from './uni-import-mapping-modal';
+import {
+  UniImportPreviewModal,
+  type ImportPrecheckResult,
+} from './uni-import-preview-modal';
+import { getImportDataRows } from './import-preview-utils';
+import { translatePathTitle } from '../../utils/menuTranslation';
 
 /**
  * Univer Import 导入弹窗组件属性
@@ -55,7 +76,7 @@ export interface UniImportProps {
    */
   width?: string | number;
   /**
-   * 表格容器高度（默认：600）
+   * 弹窗内容区高度（默认：620；表格可视区域约为 height - 32，即 588px）
    */
   height?: number;
   /**
@@ -82,6 +103,42 @@ export interface UniImportProps {
    * 示例数据（可选，如果提供则自动填充第二行作为示例）
    */
   exampleRow?: string[];
+  /**
+   * 当前单据/页面名称，用于生成下载文件名（如「账户管理 - 导入模板.xlsx」）
+   */
+  templateDocumentName?: string;
+  /**
+   * 下载的 xlsx 模板完整文件名（传入时优先于 templateDocumentName）
+   */
+  templateFileName?: string;
+  /**
+   * 是否显示「下载模板 / 上传 Excel」（默认：有 headers 时开启）
+   */
+  enableXlsxTemplate?: boolean;
+  /**
+   * 表头名称 → 字段名，用于映射导入时同名字段自动匹配
+   */
+  importFieldMap?: Record<string, string>;
+  /**
+   * 是否显示「映射导入」（默认：有 headers 时开启）
+   */
+  enableMappingImport?: boolean;
+  /**
+   * 确认入库前是否展示预检预览（默认：true）
+   */
+  enableImportPreview?: boolean;
+  /**
+   * 预检预览最多展示的数据行数（默认：10）
+   */
+  importPreviewMaxRows?: number;
+  /**
+   * 数据行起始下标（默认：2，即跳过表头与示例行，与业务 slice(2) 一致）
+   */
+  importDataStartRow?: number;
+  /**
+   * 入库前服务端/业务预检（返回 errors 时将阻止确认入库）
+   */
+  onImportPrecheck?: (data: any[][]) => Promise<ImportPrecheckResult | void>;
 }
 
 /**
@@ -94,40 +151,104 @@ export const UniImport: React.FC<UniImportProps> = ({
   onConfirm,
   title = '导入数据',
   width = 1200,
-  height = 600,
+  height = 620,
   showConfirmButton = true,
   showCancelButton = true,
   confirmText = '确认导入',
   cancelText = '取消',
   headers,
   exampleRow,
+  templateDocumentName,
+  templateFileName,
+  enableXlsxTemplate,
+  importFieldMap,
+  enableMappingImport,
+  enableImportPreview = true,
+  importPreviewMaxRows = 10,
+  importDataStartRow = 2,
+  onImportPrecheck,
 }) => {
+  const { t } = useTranslation();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  const [xlsxBusy, setXlsxBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [sheetGeneration, setSheetGeneration] = useState(0);
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+  const [mappingRawRows, setMappingRawRows] = useState<string[][]>([]);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any[][]>([]);
+  const [precheckLoading, setPrecheckLoading] = useState(false);
+  const [precheckResult, setPrecheckResult] = useState<ImportPrecheckResult | null>(null);
   const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
   const containerIdRef = useRef<string>('');
   const headersRef = useRef(headers);
   const exampleRowRef = useRef(exampleRow);
+  const importFieldMapRef = useRef(importFieldMap);
+  const uploadedSheetRowsRef = useRef<string[][] | null>(null);
+  const lastInitGenerationRef = useRef(-1);
   headersRef.current = headers;
   exampleRowRef.current = exampleRow;
+  importFieldMapRef.current = importFieldMap;
+
+  const resolvedTemplateFileName = useMemo(() => {
+    if (templateFileName?.trim()) {
+      const name = templateFileName.trim();
+      return name.endsWith('.xlsx') ? name : `${name}.xlsx`;
+    }
+    const docName =
+      templateDocumentName?.trim() ||
+      translatePathTitle(location.pathname, t)?.trim() ||
+      '';
+    if (docName) {
+      return buildImportTemplateFileName(docName, t('components.uniImport.templateSuffix'));
+    }
+    return buildImportTemplateFileName('', t('components.uniImport.templateSuffix'));
+  }, [templateFileName, templateDocumentName, location.pathname, t]);
+
+  const showXlsxTools = enableXlsxTemplate ?? Boolean(headers?.length);
+  const showMappingImport = enableMappingImport ?? Boolean(headers?.length);
   // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
   const colorScheme = document.documentElement.style.colorScheme;
   const isDark = colorScheme === 'dark'
     || (colorScheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  // 切换全屏状态
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
 
-  useEffect(() => {
-    if (!(open ?? visible)) {
-      setIsFullscreen(false);
+  const disposeUniverInstance = useCallback(() => {
+    try {
+      const instance = univerInstanceRef.current;
+      if (!instance) return;
+      const keyDownHandler = (instance as { _keyDownHandler?: (e: KeyboardEvent) => void })._keyDownHandler;
+      if (keyDownHandler) {
+        document.removeEventListener('keydown', keyDownHandler, true);
+      }
+      instance.univer.dispose();
+      univerInstanceRef.current = null;
+    } catch {
+      // ignore
     }
-  }, [open, visible]);
+  }, []);
+
+  useEffect(() => {
+    if (open ?? visible) return;
+    setIsFullscreen(false);
+    uploadedSheetRowsRef.current = null;
+    setSheetGeneration(0);
+    setMappingModalOpen(false);
+    setMappingRawRows([]);
+    setPreviewModalOpen(false);
+    setPreviewData([]);
+    setPrecheckResult(null);
+    setPrecheckLoading(false);
+    lastInitGenerationRef.current = -1;
+    disposeUniverInstance();
+  }, [open, visible, disposeUniverInstance]);
 
   useEffect(() => {
     if ((open ?? visible) && isFullscreen) {
@@ -155,13 +276,16 @@ export const UniImport: React.FC<UniImportProps> = ({
       return undefined;
     }
 
-    // 避免把 message/headers 放进依赖导致父组件重渲染时反复销毁重建
-    if (univerInstanceRef.current) {
+    if (univerInstanceRef.current && lastInitGenerationRef.current === sheetGeneration) {
       return undefined;
+    }
+    if (univerInstanceRef.current) {
+      disposeUniverInstance();
     }
 
     const importHeaders = headersRef.current;
     const importExampleRow = exampleRowRef.current;
+    const sheetRows = uploadedSheetRowsRef.current ?? undefined;
     let cancelled = false;
 
     const initUniver = async () => {
@@ -217,96 +341,12 @@ export const UniImport: React.FC<UniImportProps> = ({
             return;
           }
 
-          // 准备单元格数据（如果有表头，填充第一行；如果有示例数据，填充第二行）
-          const cellData: Record<string, Record<string, { v: any; m?: string; s?: any }>> = {};
-          const columnCount = importHeaders ? importHeaders.length : 20;
-          const dataRowCount = 100; // 数据区域行数
+          const { cellData, columnCount, rowCount, sheetStyles } = buildImportCellData({
+            headers: importHeaders,
+            exampleRow: importExampleRow,
+            sheetRows,
+          });
 
-          // 准备样式对象
-          const styles: Record<string, any> = {};
-
-          // 表头样式（浅蓝色背景，加粗字体）
-          const headerStyleId = 'headerStyle';
-          styles[headerStyleId] = {
-            bg: { rgb: 'E3F2FD' }, // 浅蓝色背景 #E3F2FD
-            cl: { rgb: '000000' }, // 黑色文字
-            fs: 12, // 字体大小
-            bl: 1, // 加粗
-            bd: {
-              t: { s: 1, cl: { rgb: 'BBDEFB' } }, // 上边框
-              b: { s: 1, cl: { rgb: 'BBDEFB' } }, // 下边框
-              l: { s: 1, cl: { rgb: 'BBDEFB' } }, // 左边框
-              r: { s: 1, cl: { rgb: 'BBDEFB' } }, // 右边框
-            },
-          };
-
-          // 示例数据样式（浅灰色背景）
-          const exampleStyleId = 'exampleStyle';
-          styles[exampleStyleId] = {
-            bg: { rgb: 'F5F5F5' }, // 浅灰色背景 #F5F5F5
-            cl: { rgb: '000000' }, // 黑色文字
-            fs: 12,
-            bd: {
-              t: { s: 1, cl: { rgb: 'E0E0E0' } },
-              b: { s: 1, cl: { rgb: 'E0E0E0' } },
-              l: { s: 1, cl: { rgb: 'E0E0E0' } },
-              r: { s: 1, cl: { rgb: 'E0E0E0' } },
-            },
-          };
-
-          // 数据区域边框样式
-          const dataBorderStyleId = 'dataBorderStyle';
-          styles[dataBorderStyleId] = {
-            bd: {
-              t: { s: 1, cl: { rgb: 'D0D0D0' } },
-              b: { s: 1, cl: { rgb: 'D0D0D0' } },
-              l: { s: 1, cl: { rgb: 'D0D0D0' } },
-              r: { s: 1, cl: { rgb: 'D0D0D0' } },
-            },
-          };
-
-          if (importHeaders && importHeaders.length > 0) {
-            const headerRow: Record<string, { v: any; m?: string; s?: any }> = {};
-            importHeaders.forEach((header, colIndex) => {
-              if (header) {
-                headerRow[colIndex.toString()] = {
-                  v: header,
-                  m: header, // 显示值
-                  s: headerStyleId, // 应用表头样式
-                };
-              }
-            });
-            cellData['0'] = headerRow; // 第一行（索引从 0 开始）
-          }
-
-          // 如果有示例数据，填充第二行
-          if (importExampleRow && importExampleRow.length > 0) {
-            const exampleDataRow: Record<string, { v: any; m?: string; s?: any }> = {};
-            importExampleRow.forEach((value, colIndex) => {
-              if (value !== undefined && value !== null) {
-                exampleDataRow[colIndex.toString()] = {
-                  v: value,
-                  m: String(value), // 显示值
-                  s: exampleStyleId, // 应用示例数据样式
-                };
-              }
-            });
-            cellData['1'] = exampleDataRow; // 第二行（索引从 1 开始）
-          }
-
-          // 为数据区域（第3行到第100行）的所有单元格设置边框
-          for (let r = 2; r < dataRowCount; r++) {
-            const dataRow: Record<string, { v: any; s?: any }> = {};
-            for (let c = 0; c < columnCount; c++) {
-              dataRow[c.toString()] = {
-                v: '', // 空值
-                s: dataBorderStyleId, // 应用边框样式
-              };
-            }
-            cellData[r.toString()] = dataRow;
-          }
-
-          // 创建工作簿（如果提供了表头，自动填充第一行）
           univerAPI.createWorkbook({
             name: '导入数据',
             sheets: {
@@ -314,18 +354,17 @@ export const UniImport: React.FC<UniImportProps> = ({
                 id: 'sheet-1',
                 name: 'Sheet1',
                 cellData: cellData,
-                styles: styles, // 添加样式对象
-                rowCount: dataRowCount,
+                styles: sheetStyles.styles,
+                rowCount: rowCount,
                 columnCount: columnCount,
                 defaultColumnWidth: 120, // 设置默认列宽为 120 像素
               } as any, // 使用类型断言绕过类型检查
             },
           });
 
-          // 保存实例引用
           univerInstanceRef.current = { univer, univerAPI };
+          lastInitGenerationRef.current = sheetGeneration;
 
-          // 等待工作簿创建完成后，自动调整列宽以适应内容
           await new Promise(resolve => setTimeout(resolve, 200));
 
           if (cancelled) return;
@@ -415,14 +454,16 @@ export const UniImport: React.FC<UniImportProps> = ({
 
           if (cancelled) return;
 
-          if (importHeaders && importHeaders.length > 0) {
-            if (importExampleRow && importExampleRow.length > 0) {
-              messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
+          if (!sheetRows) {
+            if (importHeaders && importHeaders.length > 0) {
+              if (importExampleRow && importExampleRow.length > 0) {
+                messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
+              } else {
+                messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
+              }
             } else {
-              messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
+              messageApi.success('表格已加载，可以开始编辑数据');
             }
-          } else {
-            messageApi.success('表格已加载，可以开始编辑数据');
           }
         } catch (error: any) {
           if (!cancelled) {
@@ -440,22 +481,132 @@ export const UniImport: React.FC<UniImportProps> = ({
     return () => {
       cancelled = true;
       setLoading(false);
-      try {
-        const instance = univerInstanceRef.current;
-        if (instance) {
-          const keyDownHandler = (instance as any)._keyDownHandler;
-          if (keyDownHandler) {
-            document.removeEventListener('keydown', keyDownHandler, true);
-            delete (instance as any)._keyDownHandler;
-          }
-          instance.univer.dispose();
-          univerInstanceRef.current = null;
-        }
-      } catch {
-        // 忽略清理错误
-      }
+      disposeUniverInstance();
     };
-  }, [open, visible, isDark]);
+  }, [open, visible, isDark, sheetGeneration, disposeUniverInstance]);
+
+  const handleDownloadTemplate = async () => {
+    const importHeaders = headersRef.current;
+    if (!importHeaders?.length) {
+      messageApi.warning(t('components.uniImport.noHeadersForTemplate'));
+      return;
+    }
+    try {
+      setXlsxBusy(true);
+      await downloadImportTemplateXlsx(
+        importHeaders,
+        exampleRowRef.current,
+        resolvedTemplateFileName,
+      );
+      messageApi.success(t('components.uniImport.templateDownloaded'));
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      messageApi.error(t('components.uniImport.templateDownloadFailed', { message: msg }));
+    } finally {
+      setXlsxBusy(false);
+    }
+  };
+
+  const handleUploadXlsx: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      setXlsxBusy(true);
+      const rows = await parseImportXlsxFile(file as File);
+      uploadedSheetRowsRef.current = rows;
+      disposeUniverInstance();
+      lastInitGenerationRef.current = -1;
+      setSheetGeneration(gen => gen + 1);
+      messageApi.success(t('components.uniImport.uploadSuccess'));
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      messageApi.error(t('components.uniImport.uploadFailed', { message: msg }));
+    } finally {
+      setXlsxBusy(false);
+    }
+    return false;
+  };
+
+  const applyMappedRowsToSheet = (mappedRows: string[][]) => {
+    uploadedSheetRowsRef.current = mappedRows;
+    disposeUniverInstance();
+    lastInitGenerationRef.current = -1;
+    setSheetGeneration(gen => gen + 1);
+  };
+
+  const handleMappingUpload: UploadProps['beforeUpload'] = async (file) => {
+    const importHeaders = headersRef.current;
+    if (!importHeaders?.length) {
+      messageApi.warning(t('components.uniImport.noHeadersForTemplate'));
+      return false;
+    }
+    try {
+      setXlsxBusy(true);
+      const rows = await parseImportXlsxFile(file as File);
+      setMappingRawRows(rows);
+      setMappingModalOpen(true);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      messageApi.error(t('components.uniImport.uploadFailed', { message: msg }));
+    } finally {
+      setXlsxBusy(false);
+    }
+    return false;
+  };
+
+  const handleMappingApply = (mappedRows: string[][]) => {
+    applyMappedRowsToSheet(mappedRows);
+    setMappingModalOpen(false);
+    messageApi.success(t('components.uniImport.mappingApplySuccess'));
+  };
+
+  const runImportPrecheck = useCallback(
+    async (data: any[][]) => {
+      if (!onImportPrecheck) {
+        setPrecheckResult(null);
+        setPrecheckLoading(false);
+        return;
+      }
+      setPrecheckLoading(true);
+      setPrecheckResult(null);
+      try {
+        const result = await onImportPrecheck(data);
+        setPrecheckResult(result ?? null);
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        setPrecheckResult({
+          canImport: false,
+          errors: [t('components.uniImport.previewPrecheckFailed', { message: msg })],
+        });
+      } finally {
+        setPrecheckLoading(false);
+      }
+    },
+    [onImportPrecheck, t],
+  );
+
+  const openImportPreview = (data: any[][]) => {
+    const dataRows = getImportDataRows(data, importDataStartRow);
+    if (dataRows.length === 0) {
+      messageApi.warning(t('components.uniImport.previewNoDataRows'));
+      return;
+    }
+    setPreviewData(data);
+    setPrecheckResult(null);
+    setPreviewModalOpen(true);
+    void runImportPrecheck(data);
+  };
+
+  const commitImport = (data: any[][]) => {
+    onConfirm(data);
+    setPreviewModalOpen(false);
+    onCancel();
+  };
+
+  const handlePreviewConfirmImport = () => {
+    if (precheckResult?.errors?.length) {
+      return;
+    }
+    commitImport(previewData);
+  };
 
   /**
    * 处理确认导入
@@ -827,10 +978,12 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
-      // 传递完整数据（含表头、示例行、数据行），由业务方按约定取 data.slice(2) 等
-      onConfirm(data);
+      if (enableImportPreview) {
+        openImportPreview(data);
+        return;
+      }
 
-      // 关闭弹窗
+      onConfirm(data);
       onCancel();
     } catch (error: any) {
       messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
@@ -890,23 +1043,77 @@ export const UniImport: React.FC<UniImportProps> = ({
         onCancel={onCancel}
         width={isFullscreen ? '100vw' : width}
         footer={
-          <Space>
-            {showCancelButton && (
-              <Button icon={<CloseOutlined />} onClick={onCancel}>
-                {cancelText}
-              </Button>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            {showXlsxTools || showMappingImport ? (
+              <Space wrap>
+                {showMappingImport && (
+                  <Upload
+                    accept=".xlsx,.xls"
+                    showUploadList={false}
+                    beforeUpload={handleMappingUpload}
+                    disabled={loading || xlsxBusy}
+                  >
+                    <Button icon={<SwapOutlined />} loading={xlsxBusy} disabled={loading}>
+                      {t('components.uniImport.mappingImport')}
+                    </Button>
+                  </Upload>
+                )}
+                {showXlsxTools && (
+                  <>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={handleDownloadTemplate}
+                      loading={xlsxBusy}
+                      disabled={loading}
+                    >
+                      {t('components.uniImport.downloadTemplate')}
+                    </Button>
+                    <Upload
+                      accept=".xlsx,.xls"
+                      showUploadList={false}
+                      beforeUpload={handleUploadXlsx}
+                      disabled={loading || xlsxBusy}
+                    >
+                      <Button icon={<UploadOutlined />} loading={xlsxBusy} disabled={loading}>
+                        {t('components.uniImport.uploadExcel')}
+                      </Button>
+                    </Upload>
+                  </>
+                )}
+              </Space>
+            ) : (
+              <span />
             )}
-            {showConfirmButton && (
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={handleConfirm}
-                loading={loading}
-              >
-                {confirmText}
-              </Button>
-            )}
-          </Space>
+            <Space>
+              {showCancelButton && (
+                <Button icon={<CloseOutlined />} onClick={onCancel} disabled={loading || xlsxBusy}>
+                  {cancelText}
+                </Button>
+              )}
+              {showConfirmButton && (
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleConfirm}
+                  loading={loading}
+                  disabled={xlsxBusy}
+                >
+                  {enableImportPreview
+                    ? t('components.uniImport.previewNextStep')
+                    : confirmText}
+                </Button>
+              )}
+            </Space>
+          </div>
         }
         destroyOnHidden={true}
         centered={!isFullscreen}
@@ -933,10 +1140,10 @@ export const UniImport: React.FC<UniImportProps> = ({
           ref={containerRef}
           style={{
             width: '100%',
-            height: isFullscreen ? '100%' : `${height - 32}px`,
+            height: isFullscreen ? '100%' : `${height - 12}px`,
             minHeight: isFullscreen
               ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_CONTAINER_PX)
-              : `${height - 32}px`,
+              : `${height - 12}px`,
             border: `1px solid ${token.colorBorder}`,
           }}
         />
@@ -957,6 +1164,27 @@ export const UniImport: React.FC<UniImportProps> = ({
           </div>
         )}
       </Modal>
+      {showMappingImport && headers && headers.length > 0 && (
+        <UniImportMappingModal
+          open={mappingModalOpen}
+          systemHeaders={headers}
+          exampleRow={exampleRow}
+          fieldMap={importFieldMapRef.current}
+          rawRows={mappingRawRows}
+          onCancel={() => setMappingModalOpen(false)}
+          onApply={handleMappingApply}
+        />
+      )}
+      <UniImportPreviewModal
+        open={previewModalOpen}
+        data={previewData}
+        dataStartRow={importDataStartRow}
+        maxPreviewRows={importPreviewMaxRows}
+        precheckLoading={precheckLoading}
+        precheckResult={precheckResult}
+        onCancel={() => setPreviewModalOpen(false)}
+        onConfirmImport={handlePreviewConfirmImport}
+      />
     </>
   );
 };

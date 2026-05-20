@@ -31,6 +31,8 @@ import React, {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
+import { translatePathTitle } from '../../utils/menuTranslation'
 import {
   ProTable,
   ProCard,
@@ -501,6 +503,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onImport?: (data: any[][]) => void
   /**
+   * 导入入库前预检（UniImport 预览弹窗内调用；返回 errors 时禁止确认入库）
+   */
+  onImportPrecheck?: (data: any[][]) => Promise<{
+    canImport?: boolean
+    errors?: string[]
+    warnings?: string[]
+  } | void>
+  /**
    * 导入表头（可选，如果提供则自动填充第一行）
    * 如果不提供，将自动从 columns 中提取可导入的字段生成表头
    */
@@ -510,6 +520,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 如果不提供，将自动从 columns 中提取字段生成示例数据
    */
   importExampleRow?: string[]
+  /**
+   * 导入模板文件名中的单据/页面名称（默认：headerTitle 或当前路由菜单标题）
+   */
+  importTemplateName?: string
   /**
    * 导入字段映射配置（可选）
    * 用于将表头名称映射到字段名，如果不提供，将自动从 columns 中提取
@@ -888,8 +902,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   toolBarActionsAfterBatch = [],
   showImportButton = true,
   onImport,
+  onImportPrecheck,
   importHeaders,
   importExampleRow,
+  importTemplateName,
   importFieldMap,
   importFieldRules,
   autoGenerateImportConfig = true,
@@ -946,6 +962,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   ...restProps
 }: UniTableProps<T>) {
   const { t } = useTranslation()
+  const location = useLocation()
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -1293,14 +1310,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
   const effectiveImportConfig = React.useMemo(() => {
     if (importHeaders && importHeaders.length > 0) {
-      return { headers: importHeaders, exampleRow: importExampleRow }
+      return {
+        headers: importHeaders,
+        exampleRow: importExampleRow,
+        fieldMap: importFieldMap ?? {},
+      }
     }
     if (autoGenerateImportConfig && processedColumns) {
-      const { headers, exampleRow } = generateImportConfigFromColumns(processedColumns, { t })
-      return { headers, exampleRow }
+      const generated = generateImportConfigFromColumns(processedColumns, { t })
+      return {
+        headers: generated.headers,
+        exampleRow: generated.exampleRow,
+        fieldMap: { ...generated.fieldMap, ...(importFieldMap ?? {}) },
+      }
     }
-    return { headers: undefined, exampleRow: undefined }
-  }, [importHeaders, importExampleRow, autoGenerateImportConfig, processedColumns, t])
+    return { headers: undefined, exampleRow: undefined, fieldMap: importFieldMap }
+  }, [importHeaders, importExampleRow, importFieldMap, autoGenerateImportConfig, processedColumns, t])
+
+  const importTemplateDocumentName = useMemo(() => {
+    if (importTemplateName?.trim()) return importTemplateName.trim()
+    if (typeof headerTitle === 'string' && headerTitle.trim()) return headerTitle.trim()
+    return translatePathTitle(location.pathname, t)?.trim() || undefined
+  }, [importTemplateName, headerTitle, location.pathname, t])
 
   /** 仅列拖拽开启时使用 hook 算出的 tableWidth；否则不注入数值 scroll.x，交给 antd 默认策略 */
   const effectiveTableWidth: number | string | undefined =
@@ -2837,6 +2868,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             }}
             headers={effectiveImportConfig.headers}
             exampleRow={effectiveImportConfig.exampleRow}
+            importFieldMap={effectiveImportConfig.fieldMap}
+            templateDocumentName={importTemplateDocumentName}
+            onImportPrecheck={onImportPrecheck}
           />
         </Suspense>
       )}

@@ -427,6 +427,28 @@ const UserListPage: React.FC = () => {
     </div>
   );
 
+  const handleImportPrecheck = useCallback(async (data: any[][]) => {
+    const preview = await previewUserImport(data);
+    const warnings: string[] = [];
+    if (preview.missing_departments.length > 0) {
+      warnings.push(
+        t('field.user.importMissingDepartments', { names: preview.missing_departments.join('、') }),
+      );
+    }
+    if (preview.missing_positions.length > 0) {
+      warnings.push(
+        t('field.user.importMissingPositions', { names: preview.missing_positions.join('、') }),
+      );
+    }
+    if (preview.missing_roles.length > 0) {
+      warnings.push(t('field.user.importMissingRoles', { names: preview.missing_roles.join('、') }));
+    }
+    if (preview.has_missing) {
+      warnings.push(t('field.user.importMissingRefsHint'));
+    }
+    return { canImport: true, warnings: warnings.length ? warnings : undefined };
+  }, [t]);
+
   const runUserImport = async (data: any[][], autoCreateReferences: boolean) => {
     const result = await importUsers(data, { autoCreateReferences });
     showImportResult(result);
@@ -756,6 +778,7 @@ const UserListPage: React.FC = () => {
         onDelete={handleBatchDelete}
         showImportButton={true}
         onImport={handleImport}
+        onImportPrecheck={handleImportPrecheck}
         importHeaders={[
           `*${t('field.user.username')}`,
           `*${t('field.user.password')}`,
