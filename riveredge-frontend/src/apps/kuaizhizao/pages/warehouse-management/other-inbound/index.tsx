@@ -16,7 +16,7 @@ import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, In
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import type { Material } from '../../../../master-data/types/material';
@@ -801,7 +801,7 @@ const OtherInboundPage: React.FC = () => {
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendOtherInboundItemsFromMaterials}

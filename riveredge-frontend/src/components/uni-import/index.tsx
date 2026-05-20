@@ -23,6 +23,7 @@ import {
   SYSTEM_VIEWPORT_OFFSETS,
   getViewportHeightExpr,
 } from '../layout-templates/constants';
+import './uni-import-fullscreen.less';
 
 /**
  * Univer Import 导入弹窗组件属性
@@ -101,13 +102,17 @@ export const UniImport: React.FC<UniImportProps> = ({
   headers,
   exampleRow,
 }) => {
-  const { message } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false); // 全屏状态
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
   const containerIdRef = useRef<string>('');
+  const headersRef = useRef(headers);
+  const exampleRowRef = useRef(exampleRow);
+  headersRef.current = headers;
+  exampleRowRef.current = exampleRow;
   // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
   const colorScheme = document.documentElement.style.colorScheme;
   const isDark = colorScheme === 'dark'
@@ -118,7 +123,12 @@ export const UniImport: React.FC<UniImportProps> = ({
     setIsFullscreen(!isFullscreen);
   };
 
-  // 全屏时禁止 body 滚动，避免出现滚动条
+  useEffect(() => {
+    if (!(open ?? visible)) {
+      setIsFullscreen(false);
+    }
+  }, [open, visible]);
+
   useEffect(() => {
     if ((open ?? visible) && isFullscreen) {
       const prevOverflow = document.body.style.overflow;
@@ -127,23 +137,44 @@ export const UniImport: React.FC<UniImportProps> = ({
         document.body.style.overflow = prevOverflow;
       };
     }
-  }, [visible, isFullscreen]);
+  }, [open, visible, isFullscreen]);
+
+  // 全屏布局变化后通知 Univer 重算尺寸（不重建实例）
+  useEffect(() => {
+    if (!(open ?? visible) || !isFullscreen) return;
+    const timer = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+    return () => window.clearTimeout(timer);
+  }, [open, visible, isFullscreen]);
 
   /**
-   * 初始化 Univer Sheet
+   * 初始化 Univer Sheet（弹窗打开时一次；关闭/主题切换时销毁）
    */
   useLayoutEffect(() => {
-    if (open ?? visible) {
-      const initUniver = async () => {
-        // 等待 DOM 更新
+    if (!(open ?? visible)) {
+      setLoading(false);
+      return undefined;
+    }
+
+    // 避免把 message/headers 放进依赖导致父组件重渲染时反复销毁重建
+    if (univerInstanceRef.current) {
+      return undefined;
+    }
+
+    const importHeaders = headersRef.current;
+    const importExampleRow = exampleRowRef.current;
+    let cancelled = false;
+
+    const initUniver = async () => {
         await new Promise(resolve => setTimeout(resolve, 50));
 
         if (!containerRef.current) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        if (!containerRef.current) {
-          message.error('容器元素不存在，请刷新页面重试');
+        if (cancelled || !containerRef.current) {
+          if (!cancelled && !containerRef.current) {
+            messageApi.error('容器元素不存在，请刷新页面重试');
+          }
           return;
         }
 
@@ -161,7 +192,8 @@ export const UniImport: React.FC<UniImportProps> = ({
           // 等待 DOM 更新完成
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          // 使用预设方式创建 Univer 实例（isDark 随主题编辑切换，见 useLayoutEffect 依赖）
+          if (cancelled) return;
+
           const { univer, univerAPI } = createUniver({
             locale: LocaleType.ZH_CN,
             locales: {
@@ -176,9 +208,18 @@ export const UniImport: React.FC<UniImportProps> = ({
             ],
           });
 
+          if (cancelled) {
+            try {
+              univer.dispose();
+            } catch {
+              // ignore
+            }
+            return;
+          }
+
           // 准备单元格数据（如果有表头，填充第一行；如果有示例数据，填充第二行）
           const cellData: Record<string, Record<string, { v: any; m?: string; s?: any }>> = {};
-          const columnCount = headers ? headers.length : 20;
+          const columnCount = importHeaders ? importHeaders.length : 20;
           const dataRowCount = 100; // 数据区域行数
 
           // 准备样式对象
@@ -224,9 +265,9 @@ export const UniImport: React.FC<UniImportProps> = ({
             },
           };
 
-          if (headers && headers.length > 0) {
+          if (importHeaders && importHeaders.length > 0) {
             const headerRow: Record<string, { v: any; m?: string; s?: any }> = {};
-            headers.forEach((header, colIndex) => {
+            importHeaders.forEach((header, colIndex) => {
               if (header) {
                 headerRow[colIndex.toString()] = {
                   v: header,
@@ -239,9 +280,9 @@ export const UniImport: React.FC<UniImportProps> = ({
           }
 
           // 如果有示例数据，填充第二行
-          if (exampleRow && exampleRow.length > 0) {
+          if (importExampleRow && importExampleRow.length > 0) {
             const exampleDataRow: Record<string, { v: any; m?: string; s?: any }> = {};
-            exampleRow.forEach((value, colIndex) => {
+            importExampleRow.forEach((value, colIndex) => {
               if (value !== undefined && value !== null) {
                 exampleDataRow[colIndex.toString()] = {
                   v: value,
@@ -286,6 +327,8 @@ export const UniImport: React.FC<UniImportProps> = ({
 
           // 等待工作簿创建完成后，自动调整列宽以适应内容
           await new Promise(resolve => setTimeout(resolve, 200));
+
+          if (cancelled) return;
 
           try {
             // 获取活动工作表
@@ -362,49 +405,57 @@ export const UniImport: React.FC<UniImportProps> = ({
           // 添加事件监听器（使用 capture 阶段，确保优先捕获）
           document.addEventListener('keydown', handleKeyDown, true);
 
-          // 保存事件处理器引用，以便清理时移除
+          if (cancelled || !univerInstanceRef.current) {
+            document.removeEventListener('keydown', handleKeyDown, true);
+            return;
+          }
           (univerInstanceRef.current as any)._keyDownHandler = handleKeyDown;
 
-          // 等待渲染完成
           await new Promise(resolve => setTimeout(resolve, 500));
 
-          setLoading(false);
-          if (headers && headers.length > 0) {
-            if (exampleRow && exampleRow.length > 0) {
-              message.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
+          if (cancelled) return;
+
+          if (importHeaders && importHeaders.length > 0) {
+            if (importExampleRow && importExampleRow.length > 0) {
+              messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
             } else {
-              message.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
+              messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
             }
           } else {
-            message.success('表格已加载，可以开始编辑数据');
+            messageApi.success('表格已加载，可以开始编辑数据');
           }
         } catch (error: any) {
-          setLoading(false);
-          message.error('表格加载失败：' + (error.message || '未知错误'));
+          if (!cancelled) {
+            messageApi.error('表格加载失败：' + (error.message || '未知错误'));
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
       };
 
-      initUniver();
-    }
+    initUniver();
 
-    // 主题切换或弹窗关闭时销毁实例，以便下次打开或主题切回时用新主题重新创建
-    const cleanup = () => {
+    return () => {
+      cancelled = true;
+      setLoading(false);
       try {
-        if (univerInstanceRef.current) {
-          const keyDownHandler = (univerInstanceRef.current as any)._keyDownHandler;
+        const instance = univerInstanceRef.current;
+        if (instance) {
+          const keyDownHandler = (instance as any)._keyDownHandler;
           if (keyDownHandler) {
             document.removeEventListener('keydown', keyDownHandler, true);
-            delete (univerInstanceRef.current as any)._keyDownHandler;
+            delete (instance as any)._keyDownHandler;
           }
-          univerInstanceRef.current.univer.dispose();
+          instance.univer.dispose();
           univerInstanceRef.current = null;
         }
       } catch {
         // 忽略清理错误
       }
     };
-    return cleanup;
-  }, [open, visible, isDark, message]);
+  }, [open, visible, isDark]);
 
   /**
    * 处理确认导入
@@ -414,7 +465,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       const instance = univerInstanceRef.current;
 
       if (!instance) {
-        message.error('表格未加载完成，请稍候再试');
+        messageApi.error('表格未加载完成，请稍候再试');
         return;
       }
 
@@ -642,13 +693,13 @@ export const UniImport: React.FC<UniImportProps> = ({
 
         // 如果仍然没有数据，显示错误信息
         if (data.length === 0) {
-          message.warning('无法获取表格数据。请确保表格中有数据，或刷新页面重试');
+          messageApi.warning('无法获取表格数据。请确保表格中有数据，或刷新页面重试');
           console.error('无法获取数据，worksheet:', worksheet);
           console.error('univerAPI:', univerAPI);
           return;
         }
       } catch (error: any) {
-        message.error('获取表格数据失败：' + (error.message || '未知错误'));
+        messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
         console.error('获取表格数据错误详情：', error);
         return;
       }
@@ -760,7 +811,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       }
 
       if (data.length === 0) {
-        message.warning('表格中没有有效数据，请先输入数据');
+        messageApi.warning('表格中没有有效数据，请先输入数据');
         return;
       }
 
@@ -772,7 +823,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         })
       );
       if (!hasDataRow) {
-        message.warning('表格中没有有效数据（所有行都为空），请先输入数据');
+        messageApi.warning('表格中没有有效数据（所有行都为空），请先输入数据');
         return;
       }
 
@@ -782,7 +833,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       // 关闭弹窗
       onCancel();
     } catch (error: any) {
-      message.error('获取表格数据失败：' + (error.message || '未知错误'));
+      messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
     }
   };
 
@@ -798,38 +849,19 @@ export const UniImport: React.FC<UniImportProps> = ({
             width: 100% !important;
             padding-right: 0px !important; /* 避开右侧的关闭按钮 */
           }
-          .ant-modal-body {
+          .uni-import-modal .ant-modal-body {
             padding: 8px 0 !important;
           }
           #${containerIdRef.current} {
             width: 100%;
             height: 100%;
-            border-radius: 0px;
-          }
-          /* 全屏时禁止 modal 产生滚动条 */
-          .uni-import-modal-fullscreen.ant-modal-wrap {
-            overflow: hidden !important;
-          }
-          .uni-import-modal-fullscreen.ant-modal {
-            max-height: 100vh !important;
-            overflow: hidden !important;
-            padding-bottom: 0 !important;
-          }
-          .uni-import-modal-fullscreen .ant-modal-content {
-            max-height: 100vh !important;
-            overflow: hidden !important;
-            display: flex !important;
-            flex-direction: column !important;
-          }
-          .uni-import-modal-fullscreen .ant-modal-body {
-            overflow: hidden !important;
-            flex: 1 !important;
-            min-height: 0 !important;
+            border-radius: 0;
           }
         `}</style>
       )}
       <Modal
-        className={`uni-import-modal${isFullscreen ? ' uni-import-modal-fullscreen' : ''}`}
+        className="uni-import-modal"
+        wrapClassName={isFullscreen ? 'uni-import-modal-fullscreen' : undefined}
         title={
           <>
             <span>{title}</span>
@@ -878,18 +910,21 @@ export const UniImport: React.FC<UniImportProps> = ({
         }
         destroyOnHidden={true}
         centered={!isFullscreen}
-        style={isFullscreen ? {
-          top: 0,
-          maxWidth: '100vw',
-          margin: 0,
-          paddingBottom: 0,
-        } : {}}
+        style={
+          isFullscreen
+            ? {
+                top: 0,
+                maxWidth: '100vw',
+                margin: 0,
+                paddingBottom: 0,
+              }
+            : undefined
+        }
         styles={{
           body: {
             padding: '16px',
-            height: isFullscreen
-              ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_BODY_PX)
-              : `${height}px`,
+            height: isFullscreen ? undefined : `${height}px`,
+            maxHeight: isFullscreen ? 'none' : undefined,
             overflow: 'hidden',
           },
         }}
@@ -898,7 +933,7 @@ export const UniImport: React.FC<UniImportProps> = ({
           ref={containerRef}
           style={{
             width: '100%',
-            height: '100%',
+            height: isFullscreen ? '100%' : `${height - 32}px`,
             minHeight: isFullscreen
               ? getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.UNIVER_IMPORT_FULLSCREEN_CONTAINER_PX)
               : `${height - 32}px`,

@@ -15,7 +15,7 @@ import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, Printer
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
@@ -687,7 +687,7 @@ const MaterialBorrowsPage: React.FC = () => {
         title="从数据集同步借料单"
       />
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendBorrowItemsFromMaterials}

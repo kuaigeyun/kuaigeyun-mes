@@ -1,0 +1,44 @@
+/* 导入弹窗全屏：样式仅作用于 wrapClassName，Ant Design 6 使用 .ant-modal-container */
+.uni-import-modal-fullscreen.ant-modal-wrap {
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.uni-import-modal-fullscreen.ant-modal-wrap .ant-modal {
+  top: 0 !important;
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+}
+
+.uni-import-modal-fullscreen .ant-modal-container {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  border-radius: 0 !important;
+}
+
+.uni-import-modal-fullscreen .ant-modal-header,
+.uni-import-modal-fullscreen .ant-modal-footer {
+  flex: 0 0 auto;
+}
+
+.uni-import-modal-fullscreen .ant-modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.uni-import-modal-fullscreen .ant-modal-body > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}

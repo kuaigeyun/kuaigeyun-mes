@@ -22,7 +22,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { warehouseApi } from '../../../services/production';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -864,7 +864,7 @@ const SalesReturnsPage: React.FC = () => {
         <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendItemsFromMaterials}

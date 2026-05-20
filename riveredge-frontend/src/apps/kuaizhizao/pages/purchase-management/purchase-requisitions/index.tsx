@@ -24,7 +24,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDraw
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -1475,7 +1475,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           </AntForm.Item>
         </div>
         <ProFormTextArea name="notes" label="备注" placeholder="备注" />
-        <MaterialBatchPickerModal
+        <UniMaterialBatchPicker
           open={materialPickerOpen}
           onCancel={() => setMaterialPickerOpen(false)}
           onConfirm={appendRequisitionItemsFromMaterials}

@@ -194,27 +194,67 @@ export async function resetUserPassword(userUuid: string, newPassword?: string):
   });
 }
 
+export interface UserImportPreviewResult {
+  missing_departments: string[];
+  missing_positions: string[];
+  missing_roles: string[];
+  has_missing: boolean;
+}
+
+export interface UserImportResult {
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; message: string }>;
+}
+
+function normalizeUserImportErrors(
+  errors: Array<{ row: number; message?: string; error?: string }>
+): Array<{ row: number; message: string }> {
+  return errors.map(item => ({
+    row: item.row,
+    message: item.message ?? item.error ?? '',
+  }));
+}
+
+/**
+ * 预览用户导入：返回系统中不存在的部门、职位、角色
+ */
+export async function previewUserImport(data: any[][]): Promise<UserImportPreviewResult> {
+  return apiRequest<UserImportPreviewResult>('/core/users/import/preview', {
+    method: 'POST',
+    data: { data },
+  });
+}
+
 /**
  * 批量导入用户
  *
  * 接收 uni_import 组件传递的二维数组数据，批量创建用户。
  *
  * @param data - 二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）
+ * @param options.autoCreateReferences - 为 true 时自动创建不存在的部门/职位/角色
  * @returns 导入结果（成功数、失败数、错误列表）
  */
-export async function importUsers(data: any[][]): Promise<{
-  success_count: number;
-  failure_count: number;
-  errors: Array<{ row: number; message: string }>;
-}> {
-  return apiRequest<{
+export async function importUsers(
+  data: any[][],
+  options?: { autoCreateReferences?: boolean }
+): Promise<UserImportResult> {
+  const result = await apiRequest<{
     success_count: number;
     failure_count: number;
-    errors: Array<{ row: number; message: string }>;
+    errors: Array<{ row: number; message?: string; error?: string }>;
   }>('/core/users/import', {
     method: 'POST',
-    data: { data },
+    data: {
+      data,
+      auto_create_references: options?.autoCreateReferences ?? false,
+    },
   });
+  return {
+    success_count: result.success_count,
+    failure_count: result.failure_count,
+    errors: normalizeUserImportErrors(result.errors ?? []),
+  };
 }
 
 /**
@@ -300,7 +340,7 @@ export async function batchDeleteUsers(userUuids: string[]): Promise<{
     success_count: number;
     failure_count: number;
     errors: Array<{ uuid: string; message: string }>;
-  }>('/core/users/batch/delete', {
+  }>('/core/users/batch-delete', {
     method: 'POST',
     data: {
       user_uuids: userUuids,

@@ -22,7 +22,7 @@ import {
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect, materialCache } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
@@ -1980,7 +1980,7 @@ const InboundPage: React.FC = () => {
         )}
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendPurchaseInboundItemsFromMaterials}

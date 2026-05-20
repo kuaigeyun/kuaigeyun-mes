@@ -1,73 +1,47 @@
 /**
- * 物料批量选择弹窗：关键词搜索、物料分组树筛选、表格多选（跨页缓存）
+ * UniMaterialBatchPicker — 统一多选物料弹窗
+ *
+ * 标题行集成搜索 / 分类 / 来源筛选；表格跨页多选；请求序号防竞态。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Input, Modal, Space, Table, TreeSelect } from 'antd';
+import { App, Flex, Input, Modal, Select, Table, TreeSelect } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { materialApi, materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
-import { Select } from 'antd';
+import type { UniMaterialBatchPickerProps } from './types';
+import { getMaterialField, mapMaterialGroupTree, type MaterialGroupTreeNode } from './utils';
 
-function getMaterialField(m: Record<string, unknown>, field: string): unknown {
-  let v = m[field];
-  if (v !== undefined && v !== null) return v;
-  const snake = field.replace(/([A-Z])/g, '_$1').toLowerCase();
-  return m[snake];
-}
-
-type TreeNode = { title: string; value: number; key: string; children?: TreeNode[] };
-
-function mapGroupTree(nodes: unknown[]): TreeNode[] {
-  if (!Array.isArray(nodes)) return [];
-  return nodes.map((raw, idx) => {
-    const n = raw as Record<string, unknown>;
-    const id = (n.id as number) ?? 0;
-    const code = String(n.code ?? '');
-    const name = String(n.name ?? '');
-    const childrenRaw = n.children as unknown[] | undefined;
-    const node: TreeNode = {
-      value: id,
-      key: `g-${id}-${idx}`,
-      title: [code, name].filter(Boolean).join(' ') || String(id),
-      children: childrenRaw?.length ? mapGroupTree(childrenRaw) : undefined,
-    };
-    return node;
-  });
-}
-
-export interface MaterialBatchPickerModalProps {
-  open: boolean;
-  onCancel: () => void;
-  /** 确认返回已选物料（顺序为选择顺序近似：按确认时 Map 迭代顺序） */
-  onConfirm: (materials: Material[]) => void;
-  /** 表单 Modal 已抬高时需高于父级 Modal */
-  zIndex?: number;
-}
+export type { UniMaterialBatchPickerProps } from './types';
 
 const PAGE_SIZE = 20;
+const DEFAULT_WIDTH = 1000;
+/** 标题行筛选项宽度（与 common 占位文案匹配，避免省略号截断） */
+const FILTER_SEARCH_WIDTH = 236;
+const FILTER_GROUP_WIDTH = 136;
+const FILTER_SOURCE_WIDTH = 116;
 
-export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> = ({
+export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   open,
   onCancel,
   onConfirm,
   zIndex,
+  width = DEFAULT_WIDTH,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [searchText, setSearchText] = useState('');
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
   const [sourceType, setSourceType] = useState<string | undefined>(undefined);
-  const [groupTree, setGroupTree] = useState<TreeNode[]>([]);
+  const [groupTree, setGroupTree] = useState<MaterialGroupTreeNode[]>([]);
   const [unitsMap, setUnitsMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<Material[]>([]);
   const [page, setPage] = useState(1);
   const [totalHint, setTotalHint] = useState(0);
-  /** 跨页选中缓存 */
   const [selectedMap, setSelectedMap] = useState<Map<number, Material>>(() => new Map());
 
   const loadUnits = useCallback(async () => {
@@ -75,7 +49,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
       const dict = await getDataDictionaryByCode('MATERIAL_UNIT');
       const items = await getDictionaryItemList(dict.uuid, true);
       const map: Record<string, string> = {};
-      items.forEach(item => {
+      items.forEach((item) => {
         map[item.value] = item.label;
       });
       setUnitsMap(map);
@@ -87,15 +61,18 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   const loadTree = useCallback(async () => {
     try {
       const tree = await materialGroupApi.tree();
-      setGroupTree(mapGroupTree(Array.isArray(tree) ? tree : []));
+      setGroupTree(mapMaterialGroupTree(Array.isArray(tree) ? tree : []));
     } catch {
       setGroupTree([]);
       message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadGroupFailed'));
     }
   }, [message, t]);
 
+  const fetchSeqRef = useRef(0);
+
   const fetchList = useCallback(
     async (kw: string, gid: number | undefined, st: string | undefined, p: number) => {
+      const seq = ++fetchSeqRef.current;
       setLoading(true);
       try {
         const skip = (p - 1) * PAGE_SIZE;
@@ -107,7 +84,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
           skip,
           limit: PAGE_SIZE,
         });
-        /** materialApi.list 固定返回 { items, total }；兼容历史 { data } 或裸数组 */
+        if (seq !== fetchSeqRef.current) return;
         let arr: Material[] = [];
         let totalFromApi: number | undefined;
         if (Array.isArray(response)) {
@@ -125,14 +102,17 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
           setTotalHint(arr.length < PAGE_SIZE ? skip + arr.length : skip + arr.length + 1);
         }
       } catch {
+        if (seq !== fetchSeqRef.current) return;
         setList([]);
         setTotalHint(0);
         message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadListFailed'));
       } finally {
-        setLoading(false);
+        if (seq === fetchSeqRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [message, t]
+    [message, t],
   );
 
   const skipNextFilterFetchRef = useRef(false);
@@ -146,7 +126,10 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   }, [open, loadTree, loadUnits]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      fetchSeqRef.current += 1;
+      return;
+    }
     setSearchText((s) => (s ? '' : s));
     setGroupId(undefined);
     setSourceType(undefined);
@@ -162,15 +145,14 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
       skipNextFilterFetchRef.current = false;
       return;
     }
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (!openRef.current) return;
       void fetchList(searchText, groupId, sourceType, page);
     }, 300);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [searchText, groupId, sourceType, page, fetchList]);
 
   const selectedCount = selectedMap.size;
-
   const selectedRowKeys = useMemo(() => Array.from(selectedMap.keys()), [selectedMap]);
 
   const rowSelection = useMemo(
@@ -188,7 +170,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
         });
       },
     }),
-    [list, selectedRowKeys]
+    [list, selectedRowKeys],
   );
 
   const columns: ColumnsType<Material> = useMemo(
@@ -197,10 +179,15 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
         title: t('app.master-data.materials.productImage'),
         width: 80,
         render: (_, record) => {
-          const images = (record as any).images || [];
+          const images = (record as { images?: Array<{ uid?: string; uuid?: string } | string> }).images || [];
           if (images.length > 0) {
             const firstImage = images[0];
-            const fileUuid = firstImage.uid ?? firstImage.uuid ?? (typeof firstImage === 'string' ? firstImage : null);
+            const fileUuid =
+              typeof firstImage === 'object' && firstImage != null
+                ? (firstImage.uid ?? firstImage.uuid ?? null)
+                : typeof firstImage === 'string'
+                  ? firstImage
+                  : null;
             if (fileUuid) {
               return <SecureImage fileUuid={fileUuid} width={40} height={40} />;
             }
@@ -212,25 +199,25 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
         title: t('app.kuaizhizao.salesOrder.materialCode'),
         width: 120,
         ellipsis: true,
-        render: (_, r) => String(getMaterialField(r as any, 'mainCode') ?? (r as any).code ?? ''),
+        render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'mainCode') ?? (r as { code?: string }).code ?? ''),
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialName'),
         width: 180,
         ellipsis: true,
-        render: (_, r) => String((r as any).name ?? ''),
+        render: (_, r) => String((r as { name?: string }).name ?? ''),
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialSpec'),
         width: 120,
         ellipsis: true,
-        render: (_, r) => String(getMaterialField(r as any, 'specification') ?? ''),
+        render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'specification') ?? ''),
       },
       {
         title: t('app.kuaizhizao.salesOrder.unit'),
         width: 72,
         render: (_, r) => {
-          const val = String(getMaterialField(r as any, 'baseUnit') ?? '');
+          const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');
           return unitsMap[val] || val || '-';
         },
       },
@@ -239,7 +226,8 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
         width: 100,
         ellipsis: true,
         render: (_, r) => {
-          const val = (getMaterialField(r as any, 'sourceType') ?? (r as any).source_type) as string;
+          const rec = r as Record<string, unknown>;
+          const val = (getMaterialField(rec, 'sourceType') ?? rec.source_type) as string;
           const sourceLabels: Record<string, string> = {
             Make: t('app.master-data.materialForm.sourceMake'),
             Buy: t('app.master-data.materialForm.sourceBuy'),
@@ -251,7 +239,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
         },
       },
     ],
-    [t, unitsMap]
+    [t, unitsMap],
   );
 
   const handleOk = () => {
@@ -269,67 +257,83 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
     onCancel();
   };
 
+  const popupContainer = (node: HTMLElement) => node.closest('.ant-modal-wrap') ?? document.body;
+
+  const modalTitle = (
+    <Flex
+      align="center"
+      gap={12}
+      wrap="wrap"
+      style={{ width: '100%', paddingRight: 28, fontWeight: 'normal' }}
+    >
+      <span style={{ fontWeight: 600, flexShrink: 0 }}>
+        {t('app.kuaizhizao.salesOrder.materialPickerTitle')}
+      </span>
+      <Flex gap={8} wrap="wrap" align="center" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+        <Input.Search
+          allowClear
+          placeholder={t('app.kuaizhizao.common.materialBatchSearchPlaceholder')}
+          style={{ width: FILTER_SEARCH_WIDTH }}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onSearch={(v) => {
+            setSearchText(v);
+            setPage(1);
+          }}
+        />
+        <TreeSelect
+          allowClear
+          showSearch
+          treeLine
+          placeholder={t('app.kuaizhizao.common.materialBatchGroupPlaceholder')}
+          style={{ width: FILTER_GROUP_WIDTH }}
+          treeData={groupTree}
+          value={groupId}
+          onChange={(v) => {
+            setGroupId(v as number | undefined);
+            setPage(1);
+          }}
+          treeNodeFilterProp="title"
+          getPopupContainer={popupContainer}
+        />
+        <Select
+          allowClear
+          placeholder={t('app.kuaizhizao.common.materialBatchSourcePlaceholder')}
+          style={{ width: FILTER_SOURCE_WIDTH }}
+          value={sourceType}
+          onChange={(v) => {
+            setSourceType(v);
+            setPage(1);
+          }}
+          getPopupContainer={popupContainer}
+          options={[
+            { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
+            { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
+            { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
+            { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+            { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
+          ]}
+        />
+      </Flex>
+    </Flex>
+  );
+
   return (
     <Modal
-      title={t('app.kuaizhizao.salesOrder.materialPickerTitle')}
+      title={modalTitle}
+      styles={{ header: { marginBottom: 0 }, body: { paddingTop: 12 } }}
       open={open}
       onCancel={handleCancel}
       onOk={handleOk}
       zIndex={zIndex}
-      width={960}
+      width={width}
       destroyOnHidden
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
     >
-      <Space direction="vertical" size="middle" style={{ width: '100%', marginBottom: 12 }}>
-        <Space wrap style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t('app.kuaizhizao.salesOrder.searchMaterialKeyword')}
-            style={{ width: 280 }}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onSearch={(v) => {
-              setSearchText(v);
-              setPage(1);
-            }}
-          />
-          <TreeSelect
-            allowClear
-            showSearch
-            treeLine
-            placeholder={t('app.kuaizhizao.salesOrder.filterByCategory')}
-            style={{ minWidth: 260, flex: 1 }}
-            treeData={groupTree}
-            value={groupId}
-            onChange={(v) => {
-              setGroupId(v as number | undefined);
-              setPage(1);
-            }}
-            treeNodeFilterProp="title"
-          />
-          <Select
-            allowClear
-            placeholder={t('app.master-data.materials.sourceType')}
-            style={{ width: 140 }}
-            value={sourceType}
-            onChange={(v) => {
-              setSourceType(v);
-              setPage(1);
-            }}
-            options={[
-              { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
-              { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
-              { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
-              { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
-              { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
-            ]}
-          />
-        </Space>
-        <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
-          {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
-        </div>
-      </Space>
+      <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13, marginBottom: 12 }}>
+        {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
+      </div>
       <Table<Material>
         size="small"
         rowKey="id"
@@ -351,4 +355,4 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   );
 };
 
-export default MaterialBatchPickerModal;
+export default UniMaterialBatchPicker;

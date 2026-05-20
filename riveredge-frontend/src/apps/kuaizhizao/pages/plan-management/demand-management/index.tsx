@@ -48,7 +48,7 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import {
   EyeOutlined,
@@ -1122,7 +1122,7 @@ const DemandManagementPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendDemandPlanItemsFromMaterials}

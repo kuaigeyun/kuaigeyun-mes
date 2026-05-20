@@ -37,7 +37,7 @@ import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, 
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -1574,7 +1574,7 @@ const ReceiptNoticesPage: React.FC = () => {
         {renderEditForm()}
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendReceiptNoticeItemsFromMaterials}

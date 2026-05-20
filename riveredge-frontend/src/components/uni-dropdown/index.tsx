@@ -7,17 +7,21 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef, forwardRef, useMemo, useImperativeHandle } from 'react';
-import { Select, theme } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Select, Button, theme } from 'antd';
+import { PlusOutlined, SearchOutlined, EditOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
-import type { QuickCreateConfig, AdvancedSearchConfig } from './types';
+import type { QuickCreateConfig, QuickEditConfig, AdvancedSearchConfig } from './types';
 import { AdvancedSearchModal } from './AdvancedSearchModal';
 
-export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender'> {
+export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender' | 'optionRender'> {
   /** 快速新建配置，不传则不显示 */
   quickCreate?: QuickCreateConfig;
+  /** 选项行快速编辑（右侧编辑图标），不传则不显示 */
+  quickEdit?: QuickEditConfig;
   /** 高级搜索配置，不传则不显示 */
   advancedSearch?: AdvancedSearchConfig;
+  /** 自定义选项渲染（与 quickEdit 并存时，编辑按钮在右侧） */
+  optionRender?: SelectProps['optionRender'];
 }
 
 /** 下拉选项左对齐（Modal/居中容器内常继承 text-align:center，需显式覆盖） */
@@ -39,10 +43,12 @@ function mergeSelectPopupStyles(stylesProp: SelectProps['styles'] | undefined): 
 
 export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   quickCreate,
+  quickEdit,
   advancedSearch,
   onChange,
   filterOption,
   optionFilterProp,
+  optionRender: optionRenderProp,
   style,
   styles: stylesProp,
   ...selectProps
@@ -83,6 +89,47 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
           return false;
         };
   const effectiveOptionFilterProp = optionFilterProp ?? 'label';
+
+  const effectiveOptionRender = useMemo(() => {
+    if (!quickEdit) return optionRenderProp;
+    return (option: Parameters<NonNullable<SelectProps['optionRender']>>[0], info: Parameters<NonNullable<SelectProps['optionRender']>>[1]) => {
+      const labelNode = optionRenderProp ? optionRenderProp(option, info) : <span>{option.label}</span>;
+      return (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelNode}</div>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            title={quickEdit.label ?? '快速编辑'}
+            aria-label={quickEdit.label ?? '快速编辑'}
+            style={{ flexShrink: 0, color: token.colorTextSecondary }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              innerSelectRef.current?.blur?.();
+              requestAnimationFrame(() => {
+                quickEdit.onEdit(option.value, option, anchorWrapRef.current ?? undefined);
+              });
+            }}
+          />
+        </div>
+      );
+    };
+  }, [optionRenderProp, quickEdit, token.colorTextSecondary]);
 
   const handleAdvancedSearchSelect = useCallback(
     (value: any, label: string) => {
@@ -186,6 +233,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
           optionFilterProp={effectiveOptionFilterProp}
           onChange={onChange}
           popupRender={popupRender}
+          optionRender={effectiveOptionRender}
           ref={innerSelectRef}
         />
       </div>
@@ -203,6 +251,6 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   );
 });
 
-export type { QuickCreateConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
+export type { QuickCreateConfig, QuickEditConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
 export { AdvancedSearchModal } from './AdvancedSearchModal';
 export { QuickCreateAnchorPopover } from './QuickCreateAnchorPopover';

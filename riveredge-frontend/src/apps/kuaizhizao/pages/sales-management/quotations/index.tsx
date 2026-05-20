@@ -22,7 +22,7 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -179,6 +179,51 @@ function toApiDateString(v: unknown): string | undefined {
   if (dayjs.isDayjs(v)) return v.isValid() ? v.format('YYYY-MM-DD') : undefined;
   const d = dayjs(v as string | Date | number);
   return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+}
+
+/** 有效期快捷选项：以报价日期为基准（未填则取今天） */
+function resolveQuotationDateBase(formRef: React.RefObject<{ getFieldValue?: (name: string) => unknown } | null>) {
+  const qd = formRef.current?.getFieldValue?.('quotation_date');
+  if (dayjs.isDayjs(qd) && qd.isValid()) return qd.startOf('day');
+  if (qd != null && qd !== '') {
+    const d = dayjs(qd as string | Date | number);
+    if (d.isValid()) return d.startOf('day');
+  }
+  return dayjs().startOf('day');
+}
+
+const QUOTATION_DATE_SHORTCUTS: { label: string; resolve: (base: dayjs.Dayjs) => dayjs.Dayjs }[] = [
+  { label: '7天', resolve: (base) => base.add(7, 'day') },
+  { label: '15天', resolve: (base) => base.add(15, 'day') },
+  { label: '一个月', resolve: (base) => base.add(1, 'month') },
+  { label: '月底', resolve: (base) => base.endOf('month') },
+];
+
+function buildQuotationDateShortcutPickerProps(
+  formRef: React.RefObject<{ setFieldsValue?: (v: Record<string, unknown>) => void; getFieldValue?: (name: string) => unknown } | null>,
+  fieldName: 'valid_until' | 'delivery_date',
+) {
+  return {
+    style: { width: '100%' },
+    showToday: false,
+    renderExtraFooter: () => (
+      <Space wrap size={[0, 0]} style={{ padding: '6px 4px', width: '100%', justifyContent: 'center' }}>
+        {QUOTATION_DATE_SHORTCUTS.map(({ label, resolve }) => (
+          <Button
+            key={label}
+            type="link"
+            size="small"
+            onClick={() => {
+              const base = resolveQuotationDateBase(formRef);
+              formRef.current?.setFieldsValue?.({ [fieldName]: resolve(base) });
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </Space>
+    ),
+  };
 }
 
 /** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 detailDrawerDescriptionItems 一致） */
@@ -602,7 +647,8 @@ const QuotationsPage: React.FC = () => {
   const [userList, setUserList] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
-  const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [customerEditUuid, setCustomerEditUuid] = useState<string | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -645,6 +691,50 @@ const QuotationsPage: React.FC = () => {
     };
     load();
   }, []);
+
+  const applyCustomerToQuotationForm = useCallback(
+    (c: Record<string, any>) => {
+      if (!c) return;
+      const sId = c.salesmanId ?? c.salesman_id;
+      const salesman = userList.find((u) => u.id === sId);
+      const sName =
+        c.salesmanName ?? c.salesman_name ?? (salesman ? salesman.full_name || salesman.username : '');
+      formRef.current?.setFieldsValue({
+        customer_id: c.id ?? c.customer_id,
+        customer_name: c.name ?? c.customer_name,
+        customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
+        customer_phone: c.phone ?? c.customer_phone,
+        salesman_id: sId,
+        salesman_name: sName,
+        shipping_address:
+          c.deliveryAddress ??
+          c.delivery_address ??
+          c.address ??
+          c.shipping_address ??
+          '',
+      });
+    },
+    [userList],
+  );
+
+  const openCustomerFormForCreate = useCallback(() => {
+    setCustomerEditUuid(null);
+    setCustomerFormOpen(true);
+  }, []);
+
+  const openCustomerFormForEdit = useCallback(
+    (customerId: unknown) => {
+      const c = customerList.find((x: any) => (x.id ?? x.customer_id) === customerId);
+      const uuid = c?.uuid;
+      if (!uuid) {
+        messageApi.warning('无法编辑该客户，请刷新客户列表后重试');
+        return;
+      }
+      setCustomerEditUuid(String(uuid));
+      setCustomerFormOpen(true);
+    },
+    [customerList, messageApi],
+  );
 
   useEffect(() => {
     const loadShippingMethod = async () => {
@@ -2053,24 +2143,17 @@ const QuotationsPage: React.FC = () => {
                 value: c.id ?? c.customer_id,
                 label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
               }))}
-              onChange={(value, _option: any) => {
+              onChange={(value) => {
                 const c = customerList.find((x: any) => (x.id ?? x.customer_id) === value);
-                if (c) {
-                  const sId = c.salesmanId ?? c.salesman_id;
-                  const salesman = userList.find((u) => u.id === sId);
-                  const sName = c.salesmanName ?? c.salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
-                  formRef.current?.setFieldsValue({
-                    customer_name: c.name ?? c.customer_name,
-                    customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
-                    customer_phone: c.phone ?? c.customer_phone,
-                    salesman_id: sId,
-                    salesman_name: sName,
-                  });
-                }
+                if (c) applyCustomerToQuotationForm(c);
               }}
               quickCreate={{
                 label: '快速新建',
-                onClick: () => setCustomerCreateVisible(true),
+                onClick: openCustomerFormForCreate,
+              }}
+              quickEdit={{
+                label: '编辑客户',
+                onEdit: (value) => openCustomerFormForEdit(value),
               }}
               advancedSearch={{
                 label: '高级搜索',
@@ -2145,14 +2228,14 @@ const QuotationsPage: React.FC = () => {
           <ProFormDatePicker
             name="valid_until"
             label="有效期至"
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'valid_until')}
           />
         </Col>
         <Col flex={1} style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="delivery_date"
             label="预计交货日期"
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'delivery_date')}
           />
         </Col>
         <Col flex={1} style={{ minWidth: 0 }}>
@@ -2616,7 +2699,7 @@ const QuotationsPage: React.FC = () => {
       </div>
       <QuotationFormSummary />
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         zIndex={quotationNestedElevatedPopupZIndex}
         onCancel={() => setMaterialPickerOpen(false)}
@@ -3235,24 +3318,27 @@ const QuotationsPage: React.FC = () => {
       </FormModalTemplate>
 
       <CustomerFormModal
-        open={customerCreateVisible}
+        open={customerFormOpen}
         zIndex={quotationNestedElevatedPopupZIndex}
-        onClose={() => setCustomerCreateVisible(false)}
-        editUuid={null}
+        onClose={() => {
+          setCustomerFormOpen(false);
+          setCustomerEditUuid(null);
+        }}
+        editUuid={customerEditUuid}
         onSuccess={(customer) => {
-          setCustomerList((prev) => [...prev, customer]);
-          const sId = customer.salesmanId ?? (customer as any).salesman_id;
-          const salesman = userList.find((u) => u.id === sId);
-          const sName = customer.salesmanName ?? (customer as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
-          formRef.current?.setFieldsValue({
-            customer_id: customer.id,
-            customer_name: customer.name,
-            customer_contact: customer.contactPerson ?? (customer as any).contact_person,
-            customer_phone: customer.phone ?? (customer as any).customer_phone,
-            salesman_id: sId,
-            salesman_name: sName,
+          setCustomerList((prev) => {
+            const matchKey = customer.uuid ?? customer.id;
+            const idx = prev.findIndex((c) => (c.uuid ?? c.id) === matchKey);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...customer };
+              return next;
+            }
+            return [...prev, customer];
           });
-          setCustomerCreateVisible(false);
+          applyCustomerToQuotationForm(customer as Record<string, any>);
+          setCustomerFormOpen(false);
+          setCustomerEditUuid(null);
         }}
       />
 

@@ -25,7 +25,7 @@ import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../u
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -534,7 +534,7 @@ const BatchingCenterPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendBatchingItemsFromMaterials}

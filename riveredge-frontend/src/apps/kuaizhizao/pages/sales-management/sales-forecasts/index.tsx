@@ -22,7 +22,7 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail'
 import { UniImport } from '../../../../../components/uni-import'
 import type { Material } from '../../../../master-data/types/material'
@@ -1419,7 +1419,7 @@ export default function SalesForecastsPage() {
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder="-" />
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendForecastItemsFromMaterials}

@@ -20,6 +20,7 @@ from core.models.role import Role
 from core.models.user_role import UserRole
 from core.schemas.user import UserCreate, UserUpdate
 from core.services.authorization.permission_version_service import PermissionVersionService
+from core.services.user.user_import_reference_service import UserImportReferenceService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -583,6 +584,45 @@ class UserService:
         )
 
     @staticmethod
+    async def batch_delete_users(
+        tenant_id: int,
+        user_uuids: List[str],
+        current_user_id: int,
+    ) -> Dict[str, Any]:
+        """
+        批量删除用户（软删除）
+
+        逐条调用 delete_user，单条失败不影响其余条目。
+        """
+        success_count = 0
+        failure_count = 0
+        errors: List[Dict[str, str]] = []
+        seen: set[str] = set()
+        for user_uuid in user_uuids:
+            if not user_uuid or user_uuid in seen:
+                continue
+            seen.add(user_uuid)
+            try:
+                await UserService.delete_user(
+                    tenant_id=tenant_id,
+                    user_uuid=user_uuid,
+                    current_user_id=current_user_id,
+                )
+                success_count += 1
+            except (NotFoundError, ValidationError) as e:
+                failure_count += 1
+                errors.append({"uuid": user_uuid, "message": str(e)})
+            except Exception as e:
+                failure_count += 1
+                errors.append({"uuid": user_uuid, "message": str(e)})
+                logger.exception("batch_delete_users failed for %s", user_uuid)
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+        }
+
+    @staticmethod
     async def reset_password(
         tenant_id: int,
         user_uuid: str,
@@ -632,11 +672,130 @@ class UserService:
         
         return user
     
+    _USER_IMPORT_HEADER_MAP = {
+        '用户名': 'username',
+        '*用户名': 'username',
+        'username': 'username',
+        '*username': 'username',
+        'Username': 'username',
+        '*Username': 'username',
+        '邮箱': 'email',
+        'email': 'email',
+        'Email': 'email',
+        '密码': 'password',
+        '*密码': 'password',
+        'password': 'password',
+        '*password': 'password',
+        'Password': 'password',
+        '*Password': 'password',
+        '姓名': 'full_name',
+        'full_name': 'full_name',
+        'Full Name': 'full_name',
+        '手机号': 'phone',
+        'phone': 'phone',
+        'Phone': 'phone',
+        '部门': 'department',
+        'department': 'department',
+        'Department': 'department',
+        '职位': 'position',
+        'position': 'position',
+        'Position': 'position',
+        '角色': 'roles',
+        'roles': 'roles',
+        'Roles': 'roles',
+    }
+
+    @staticmethod
+    def _parse_user_import_rows(
+        data: List[List[Any]],
+    ) -> tuple[Dict[str, int], List[tuple[List[Any], int]]]:
+        """解析导入表头与数据行，返回 (header_index_map, [(row, excel_row_index), ...])。"""
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        header_index_map: Dict[str, int] = {}
+        for idx, header in enumerate(headers):
+            if header and header in UserService._USER_IMPORT_HEADER_MAP:
+                header_index_map[UserService._USER_IMPORT_HEADER_MAP[header]] = idx
+
+        required_fields = ['username', 'password']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+
+        rows = data[2:] if len(data) > 2 else []
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        return header_index_map, non_empty_rows
+
+    @staticmethod
+    def _row_to_user_data(row: List[Any], header_index_map: Dict[str, int]) -> Dict[str, str]:
+        user_data: Dict[str, str] = {}
+        for field, col_idx in header_index_map.items():
+            if col_idx < len(row):
+                value = row[col_idx]
+                if value is not None:
+                    user_data[field] = str(value).strip()
+        return user_data
+
+    @staticmethod
+    async def preview_import_references(
+        tenant_id: int,
+        data: List[List[Any]],
+    ) -> Dict[str, Any]:
+        """扫描导入数据，返回系统中不存在的部门/职位/角色（去重、排序）。"""
+        header_index_map, non_empty_rows = UserService._parse_user_import_rows(data)
+
+        dept_values: set[str] = set()
+        pos_values: set[str] = set()
+        role_values: set[str] = set()
+
+        for row, _row_idx in non_empty_rows:
+            user_data = UserService._row_to_user_data(row, header_index_map)
+            if user_data.get('department'):
+                dept_values.add(user_data['department'])
+            if user_data.get('position'):
+                pos_values.add(user_data['position'])
+            if user_data.get('roles'):
+                for r in user_data['roles'].split(','):
+                    r = r.strip()
+                    if r:
+                        role_values.add(r)
+
+        missing_departments: List[str] = []
+        for v in sorted(dept_values):
+            if not await UserImportReferenceService.lookup_department(tenant_id, v):
+                missing_departments.append(v)
+
+        missing_positions: List[str] = []
+        for v in sorted(pos_values):
+            if not await UserImportReferenceService.lookup_position(tenant_id, v):
+                missing_positions.append(v)
+
+        missing_roles: List[str] = []
+        for v in sorted(role_values):
+            if not await UserImportReferenceService.lookup_role(tenant_id, v):
+                missing_roles.append(v)
+
+        return {
+            "missing_departments": missing_departments,
+            "missing_positions": missing_positions,
+            "missing_roles": missing_roles,
+            "has_missing": bool(missing_departments or missing_positions or missing_roles),
+        }
+
     @staticmethod
     async def import_users_from_data(
         tenant_id: int,
         data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
-        current_user_id: int
+        current_user_id: int,
+        *,
+        auto_create_references: bool = False,
     ) -> Dict[str, Any]:
         """
         从二维数组数据导入用户
@@ -652,84 +811,19 @@ class UserService:
         Returns:
             dict: 导入结果（成功数、失败数、错误列表）
         """
-        if not data or len(data) < 2:
-            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
-        
-        # 解析表头（第一行，索引0）
-        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
-        
-        # 表头字段映射（支持中英文）
-        header_map = {
-            '用户名': 'username',
-            '*用户名': 'username',
-            'username': 'username',
-            '*username': 'username',
-            'Username': 'username',
-            '*Username': 'username',
-            '邮箱': 'email',
-            'email': 'email',
-            'Email': 'email',
-            '密码': 'password',
-            '*密码': 'password',
-            'password': 'password',
-            '*password': 'password',
-            'Password': 'password',
-            '*Password': 'password',
-            '姓名': 'full_name',
-            'full_name': 'full_name',
-            'Full Name': 'full_name',
-            '手机号': 'phone',
-            'phone': 'phone',
-            'Phone': 'phone',
-            '部门': 'department',
-            'department': 'department',
-            'Department': 'department',
-            '职位': 'position',
-            'position': 'position',
-            'Position': 'position',
-            '角色': 'roles',
-            'roles': 'roles',
-            'Roles': 'roles',
-        }
-        
-        # 找到表头索引
-        header_index_map = {}
-        for idx, header in enumerate(headers):
-            if header and header in header_map:
-                header_index_map[header_map[header]] = idx
-        
-        # 验证必填字段
-        required_fields = ['username', 'password']
-        missing_fields = [f for f in required_fields if f not in header_index_map]
-        if missing_fields:
-            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
-        
-        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
-        rows = data[2:] if len(data) > 2 else []
-        
-        # 过滤空行
-        non_empty_rows = [
-            (row, idx + 3) for idx, row in enumerate(rows)
-            if any(cell is not None and str(cell).strip() for cell in row)
-        ]
-        
-        if not non_empty_rows:
-            raise ValidationError("没有可导入的数据行（所有行都为空）")
-        
+        header_index_map, non_empty_rows = UserService._parse_user_import_rows(data)
+
         success_count = 0
         failure_count = 0
         errors = []
+        department_cache: Dict[str, Department] = {}
+        position_cache: Dict[str, Position] = {}
+        role_cache: Dict[str, Role] = {}
         
         for row, row_idx in non_empty_rows:
             try:
-                # 解析行数据
-                user_data = {}
-                for field, col_idx in header_index_map.items():
-                    if col_idx < len(row):
-                        value = row[col_idx]
-                        if value is not None:
-                            user_data[field] = str(value).strip()
-                
+                user_data = UserService._row_to_user_data(row, header_index_map)
+
                 # 验证必填字段
                 if not user_data.get('username') or not user_data.get('password'):
                     errors.append({
@@ -754,66 +848,96 @@ class UserService:
                     failure_count += 1
                     continue
                 
-                # 处理部门（通过名称或代码查找）
                 department_id = None
                 if user_data.get('department'):
-                    department = await Department.filter(
-                        tenant_id=tenant_id,
-                        deleted_at__isnull=True
-                    ).filter(
-                        Q(name=user_data['department']) | Q(code=user_data['department'])
-                    ).first()
-                    
-                    if department:
-                        department_id = department.id
+                    dept_val = user_data['department']
+                    if auto_create_references:
+                        try:
+                            dept = await UserImportReferenceService.ensure_department(
+                                tenant_id,
+                                dept_val,
+                                current_user_id,
+                                department_cache,
+                            )
+                            department_id = dept.id
+                        except ValidationError as e:
+                            errors.append({"row": row_idx, "error": str(e)})
+                            failure_count += 1
+                            continue
                     else:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"部门 {user_data['department']} 不存在"
-                        })
-                        failure_count += 1
-                        continue
-                
-                # 处理职位（通过名称或代码查找）
+                        dept = await UserImportReferenceService.lookup_department(tenant_id, dept_val)
+                        if dept:
+                            department_id = dept.id
+                        else:
+                            errors.append({
+                                "row": row_idx,
+                                "error": f"部门 {dept_val} 不存在",
+                            })
+                            failure_count += 1
+                            continue
+
                 position_id = None
                 if user_data.get('position'):
-                    position = await Position.filter(
-                        tenant_id=tenant_id,
-                        deleted_at__isnull=True
-                    ).filter(
-                        Q(name=user_data['position']) | Q(code=user_data['position'])
-                    ).first()
-                    
-                    if position:
-                        position_id = position.id
+                    pos_val = user_data['position']
+                    if auto_create_references:
+                        try:
+                            pos = await UserImportReferenceService.ensure_position(
+                                tenant_id,
+                                pos_val,
+                                current_user_id,
+                                position_cache,
+                                department_id=department_id,
+                            )
+                            position_id = pos.id
+                        except ValidationError as e:
+                            errors.append({"row": row_idx, "error": str(e)})
+                            failure_count += 1
+                            continue
                     else:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"职位 {user_data['position']} 不存在"
-                        })
-                        failure_count += 1
-                        continue
-                
-                # 处理角色（通过名称或代码查找，支持多个，用逗号分隔）
+                        pos = await UserImportReferenceService.lookup_position(tenant_id, pos_val)
+                        if pos:
+                            position_id = pos.id
+                        else:
+                            errors.append({
+                                "row": row_idx,
+                                "error": f"职位 {pos_val} 不存在",
+                            })
+                            failure_count += 1
+                            continue
+
                 role_ids = []
                 if user_data.get('roles'):
-                    role_names = [r.strip() for r in user_data['roles'].split(',')]
-                    roles = await Role.filter(
-                        tenant_id=tenant_id,
-                        deleted_at__isnull=True
-                    ).filter(
-                        Q(name__in=role_names) | Q(code__in=role_names)
-                    ).all()
-                    
-                    if len(roles) != len(role_names):
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"部分角色不存在: {', '.join(role_names)}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    role_ids = [role.id for role in roles]
+                    role_names = [r.strip() for r in user_data['roles'].split(',') if r.strip()]
+                    if auto_create_references:
+                        try:
+                            for role_name in role_names:
+                                role = await UserImportReferenceService.ensure_role(
+                                    tenant_id,
+                                    role_name,
+                                    current_user_id,
+                                    role_cache,
+                                )
+                                role_ids.append(role.id)
+                        except ValidationError as e:
+                            errors.append({"row": row_idx, "error": str(e)})
+                            failure_count += 1
+                            continue
+                    else:
+                        missing_role_name = None
+                        for role_name in role_names:
+                            role = await UserImportReferenceService.lookup_role(tenant_id, role_name)
+                            if role:
+                                role_ids.append(role.id)
+                            else:
+                                missing_role_name = role_name
+                                break
+                        if missing_role_name:
+                            errors.append({
+                                "row": row_idx,
+                                "error": f"角色 {missing_role_name} 不存在",
+                            })
+                            failure_count += 1
+                            continue
                 
                 # 创建用户
                 password_hash = User.hash_password(user_data['password'])

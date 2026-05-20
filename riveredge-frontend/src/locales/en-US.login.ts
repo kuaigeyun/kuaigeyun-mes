@@ -92,6 +92,7 @@ export default {
   'pages.login.orgAdminNameLen': '1–100 characters',
   'pages.login.usernameLen': 'Username must be 3–50 characters',
   'pages.login.usernamePattern': 'Username may contain letters, numbers, underscore, hyphen',
+  'pages.login.usernameReserved': 'This username is not available. Avoid reserved names such as admin or root.',
   'pages.login.usernamePlaceholderLong': 'Enter username (3–50 characters)',
   'pages.login.usernameExtra': 'Login username; cannot be changed later.',
   'pages.login.phone': 'Phone',

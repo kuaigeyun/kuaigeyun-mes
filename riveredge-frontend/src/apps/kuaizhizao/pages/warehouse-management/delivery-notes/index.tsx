@@ -38,7 +38,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
@@ -1175,7 +1175,7 @@ const DeliveryNotesPage: React.FC = () => {
         {renderForm(handleEditSubmit)}
       </FormModalTemplate>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendDeliveryNoteItemsFromMaterials}

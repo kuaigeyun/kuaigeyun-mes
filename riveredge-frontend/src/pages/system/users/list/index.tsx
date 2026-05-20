@@ -21,6 +21,8 @@ import {
   updateUser,
   deleteUser,
   importUsers,
+  previewUserImport,
+  UserImportPreviewResult,
   exportUsers,
   resetUserPassword,
   batchDeleteUsers,
@@ -152,51 +154,48 @@ const UserListPage: React.FC = () => {
     }
   };
 
-  /**
-   * 加载选项数据
-   */
-  useEffect(() => {
-    const loadOptions = async () => {
-      try {
-        // 并发加载部门、职位、角色选项，减少加载瀑布流延迟
-        const [deptResponse, posResponse, roleResponse] = await Promise.all([
-          getDepartmentTree(),
-          getPositionList({ page_size: 100 }),
-          getRoleList({ page_size: 100 }),
-        ]);
+  const loadReferenceOptions = useCallback(async () => {
+    try {
+      const [deptResponse, posResponse, roleResponse] = await Promise.all([
+        getDepartmentTree(),
+        getPositionList({ page_size: 100 }),
+        getRoleList({ page_size: 100 }),
+      ]);
 
-        const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
-          const options: Array<{ label: string; value: string }> = [];
-          items.forEach(item => {
-            const prefix = '  '.repeat(level);
-            options.push({
-              label: `${prefix}${item.name}`,
-              value: item.uuid,
-            });
-            if (item.children && item.children.length > 0) {
-              options.push(...buildDeptOptions(item.children, level + 1));
-            }
+      const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
+        const options: Array<{ label: string; value: string }> = [];
+        items.forEach(item => {
+          const prefix = '  '.repeat(level);
+          options.push({
+            label: `${prefix}${item.name}`,
+            value: item.uuid,
           });
-          return options;
-        };
-        
-        setDepartmentOptions(buildDeptOptions(deptResponse.items));
-        setPositionOptions(posResponse.items.map(pos => ({
-          label: pos.name,
-          value: pos.uuid,
-        })));
-        setRoleOptions(roleResponse.items.map(role => ({
-          label: role.name,
-          value: role.uuid,
-        })));
-      } catch (error) {
-        if (typeof window !== 'undefined') {
-          window.console.error('加载选项数据失败:', error);
-        }
+          if (item.children && item.children.length > 0) {
+            options.push(...buildDeptOptions(item.children, level + 1));
+          }
+        });
+        return options;
+      };
+
+      setDepartmentOptions(buildDeptOptions(deptResponse.items));
+      setPositionOptions(posResponse.items.map(pos => ({
+        label: pos.name,
+        value: pos.uuid,
+      })));
+      setRoleOptions(roleResponse.items.map(role => ({
+        label: role.name,
+        value: role.uuid,
+      })));
+    } catch (error) {
+      if (typeof window !== 'undefined') {
+        window.console.error('加载选项数据失败:', error);
       }
-    };
-    loadOptions();
+    }
   }, []);
+
+  useEffect(() => {
+    loadReferenceOptions();
+  }, [loadReferenceOptions]);
 
   /**
    * 处理新建用户
@@ -258,10 +257,23 @@ const UserListPage: React.FC = () => {
    * 处理批量删除用户
    */
   const handleBatchDelete = async (uuids: React.Key[]) => {
+    if (!uuids.length) return;
     try {
       const result = await batchDeleteUsers(uuids as string[]);
       if (result.failure_count > 0) {
-        messageApi.warning(t('field.user.batchDeletePartial', { success: result.success_count, fail: result.failure_count }));
+        const reasonHint =
+          result.errors?.length > 0
+            ? `：${result.errors
+                .slice(0, 3)
+                .map((e) => e.message)
+                .join('；')}${result.errors.length > 3 ? '…' : ''}`
+            : '';
+        messageApi.warning(
+          t('field.user.batchDeletePartial', {
+            success: result.success_count,
+            fail: result.failure_count,
+          }) + reasonHint,
+        );
       } else {
         messageApi.success(t('field.user.batchDeleteSuccess', { count: result.success_count }));
       }
@@ -374,6 +386,58 @@ const UserListPage: React.FC = () => {
     return message;
   };
 
+  const showImportResult = (result: Awaited<ReturnType<typeof importUsers>>) => {
+    Modal.info({
+      title: t('field.user.importComplete'),
+      width: 600,
+      content: (
+        <div>
+          <p>{t('field.user.importSuccessCount', { count: result.success_count })}</p>
+          <p>{t('field.user.importFailCount', { count: result.failure_count })}</p>
+          {result.errors.length > 0 && (
+            <List
+              size="small"
+              dataSource={result.errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('field.user.importErrorRow', { row: item.row, message: item.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          )}
+        </div>
+      ),
+    });
+  };
+
+  const renderMissingRefsContent = (preview: UserImportPreviewResult) => (
+    <div>
+      <p>{t('field.user.importMissingRefsHint')}</p>
+      {preview.missing_departments.length > 0 && (
+        <p>{t('field.user.importMissingDepartments', { names: preview.missing_departments.join('、') })}</p>
+      )}
+      {preview.missing_positions.length > 0 && (
+        <p>{t('field.user.importMissingPositions', { names: preview.missing_positions.join('、') })}</p>
+      )}
+      {preview.missing_roles.length > 0 && (
+        <p>{t('field.user.importMissingRoles', { names: preview.missing_roles.join('、') })}</p>
+      )}
+    </div>
+  );
+
+  const runUserImport = async (data: any[][], autoCreateReferences: boolean) => {
+    const result = await importUsers(data, { autoCreateReferences });
+    showImportResult(result);
+    if (result.success_count > 0) {
+      actionRef.current?.reload();
+      if (autoCreateReferences) {
+        await loadReferenceOptions();
+      }
+    }
+  };
+
   /**
    * 处理导入数据
    */
@@ -394,35 +458,19 @@ const UserListPage: React.FC = () => {
     }
 
     try {
-      const result = await importUsers(data);
-      
-      Modal.info({
-        title: t('field.user.importComplete'),
-        width: 600,
-        content: (
-          <div>
-            <p>{t('field.user.importSuccessCount', { count: result.success_count })}</p>
-            <p>{t('field.user.importFailCount', { count: result.failure_count })}</p>
-            {result.errors.length > 0 && (
-              <List
-                size="small"
-                dataSource={result.errors}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Typography.Text type="danger">
-                      {t('field.user.importErrorRow', { row: item.row, message: item.message })}
-                    </Typography.Text>
-                  </List.Item>
-                )}
-              />
-            )}
-          </div>
-        ),
-      });
-
-      if (result.success_count > 0) {
-        actionRef.current?.reload();
+      const preview = await previewUserImport(data);
+      if (preview.has_missing) {
+        Modal.confirm({
+          title: t('field.user.importMissingRefsTitle'),
+          width: 560,
+          content: renderMissingRefsContent(preview),
+          cancelText: t('field.user.importFixTemplate'),
+          okText: t('field.user.importAutoCreate'),
+          onOk: () => runUserImport(data, true),
+        });
+        return;
       }
+      await runUserImport(data, false);
     } catch (error: any) {
       messageApi.error(error.message || t('field.user.importFailed'));
     }

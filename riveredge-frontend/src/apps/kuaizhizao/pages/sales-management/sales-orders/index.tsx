@@ -16,7 +16,7 @@ import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutli
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniImport } from '../../../../../components/uni-import';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -3462,7 +3462,7 @@ const SalesOrdersPage: React.FC = () => {
             label="备注"
             placeholder="请输入备注"
           />
-        <MaterialBatchPickerModal
+        <UniMaterialBatchPicker
           open={materialPickerOpen}
           zIndex={nestedElevatedPopupZIndex}
           onCancel={() => setMaterialPickerOpen(false)}

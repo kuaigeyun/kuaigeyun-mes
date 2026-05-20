@@ -98,14 +98,6 @@ export const customerFormSchemaBasic: FieldConfig[] = [
     allowClear: true,
   },
   {
-    name: 'address',
-    type: 'textarea',
-    labelKey: 'field.customer.address',
-    placeholderKey: 'field.customer.addressPlaceholder',
-    colSpan: 24,
-    fieldProps: { rows: 3, maxLength: 500 },
-  },
-  {
     name: 'isPublic',
     type: 'segmented',
     labelKey: 'field.customer.visibility',

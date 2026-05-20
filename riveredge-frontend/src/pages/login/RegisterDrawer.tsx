@@ -10,6 +10,7 @@ import { UserOutlined, LockOutlined, ApartmentOutlined, MobileOutlined, CheckCir
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { TenantCheckResponse, TenantSearchOption } from '../../services/register';
+import { isReservedUsername } from '../../utils/reservedUsername';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -255,6 +256,12 @@ export default function RegisterDrawer({
                           { required: true, message: t('pages.login.usernameRequired') },
                           { min: 3, max: 50, message: t('pages.login.usernameLen') },
                           { pattern: /^[a-zA-Z0-9_-]+$/, message: t('pages.login.usernamePattern') },
+                          {
+                            validator: async (_, value) => {
+                              if (!value || !isReservedUsername(String(value))) return;
+                              throw new Error(t('pages.login.usernameReserved'));
+                            },
+                          },
                         ]}
                         fieldProps={{ size: 'large', prefix: <UserOutlined />, placeholder: t('pages.login.usernamePlaceholderLong'), autoComplete: 'username', style: { height: 44, borderRadius: 8 } }}
                         extra={<div className="form-item-extra">{t('pages.login.usernameExtra')}</div>}

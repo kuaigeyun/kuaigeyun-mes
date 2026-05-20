@@ -77,6 +77,10 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "haoligo-equipment-documents-upkeep-sheet": "BY",
     "haoligo-equipment-documents-upkeep-repair": "WX",
     "haoligo-equipment-documents-upkeep-complete": "BYWC",
+    # 系统配置 — 组织与权限
+    "system-department": "BM",
+    "system-position": "ZW",
+    "system-role": "JS",
 }
 
 # 页面配置数据结构
@@ -1081,6 +1085,46 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_counter_digits": 3,
         "code_rule_description": "设备状态调整单默认规则：固定字符「ZTTZ」+ 提交日期（YYMMDD）+ 自动计数（3 位数字，每日重置）",
     },
+    # 系统配置 — 用户管理（导入用户时自动创建部门/职位/角色）
+    {
+        "page_code": "system-department",
+        "page_name": "部门管理",
+        "page_path": "/system/departments",
+        "code_field": "code",
+        "code_field_label": "部门代码",
+        "module": "系统配置",
+        "module_icon": "setting",
+        "auto_generate": True,
+        "rule_code": "DEPARTMENT_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "system-position",
+        "page_name": "职位管理",
+        "page_path": "/system/positions",
+        "code_field": "code",
+        "code_field_label": "职位代码",
+        "module": "系统配置",
+        "module_icon": "setting",
+        "auto_generate": True,
+        "rule_code": "POSITION_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "system-role",
+        "page_name": "角色管理",
+        "page_path": "/system/roles",
+        "code_field": "code",
+        "code_field_label": "角色代码",
+        "module": "系统配置",
+        "module_icon": "setting",
+        "auto_generate": True,
+        "rule_code": "ROLE_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
 ]
 
 
@@ -1130,6 +1174,12 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-material": ("apps.master_data.models.material", "Material", "main_code"),
     "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
     "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
+    "DEPARTMENT_CODE": ("core.models.department", "Department", "code"),
+    "system-department": ("core.models.department", "Department", "code"),
+    "POSITION_CODE": ("core.models.position", "Position", "code"),
+    "system-position": ("core.models.position", "Position", "code"),
+    "ROLE_CODE": ("core.models.role", "Role", "code"),
+    "system-role": ("core.models.role", "Role", "code"),
     "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment", "code"),
     "MOLD_CODE": ("apps.kuaizhizao.models.mold", "Mold", "code"),
     "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool", "code"),

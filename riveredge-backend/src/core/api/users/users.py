@@ -109,6 +109,18 @@ class UserImportRequest(BaseModel):
     接收前端 uni_import 组件传递的二维数组数据。
     """
     data: List[List[Any]] = Field(..., description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）")
+    auto_create_references: bool = Field(
+        False,
+        description="为 true 时自动按编码规则创建不存在的部门/职位/角色；为 false 时缺失则该行失败",
+    )
+
+
+class UserImportPreviewResponse(BaseModel):
+    """用户导入预览：缺失的部门/职位/角色"""
+    missing_departments: List[str] = Field(default_factory=list)
+    missing_positions: List[str] = Field(default_factory=list)
+    missing_roles: List[str] = Field(default_factory=list)
+    has_missing: bool = False
 
 
 class UserResetPasswordRequest(BaseModel):
@@ -116,6 +128,46 @@ class UserResetPasswordRequest(BaseModel):
     重置用户密码请求 Schema
     """
     password: Optional[str] = Field(None, description="新密码，如果不提供则使用默认密码")
+
+
+class UserBatchDeleteRequest(BaseModel):
+    """批量删除用户请求"""
+    user_uuids: List[str] = Field(..., min_length=1, description="用户 UUID 列表")
+
+
+class UserBatchDeleteErrorItem(BaseModel):
+    uuid: str
+    message: str
+
+
+class UserBatchDeleteResponse(BaseModel):
+    success_count: int
+    failure_count: int
+    errors: List[UserBatchDeleteErrorItem] = Field(default_factory=list)
+
+
+@router.post("/batch-delete", response_model=UserBatchDeleteResponse)
+async def batch_delete_users(
+    request: UserBatchDeleteRequest,
+    _auth: object = Depends(require_access("system.user", "delete")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量删除用户（软删除）
+
+    平台管理员、当前登录用户等不可删除的条目计入 failure_count 与 errors。
+    """
+    result = await UserService.batch_delete_users(
+        tenant_id=tenant_id,
+        user_uuids=request.user_uuids,
+        current_user_id=current_user.id,
+    )
+    return UserBatchDeleteResponse(
+        success_count=result["success_count"],
+        failure_count=result["failure_count"],
+        errors=[UserBatchDeleteErrorItem(**item) for item in result["errors"]],
+    )
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -478,6 +530,24 @@ async def reset_user_password(
         )
 
 
+@router.post("/import/preview", response_model=UserImportPreviewResponse)
+async def preview_user_import(
+    request: UserImportRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """预览导入数据：返回系统中不存在的部门、职位、角色（去重）。"""
+    del current_user
+    try:
+        result = await UserService.preview_import_references(tenant_id=tenant_id, data=request.data)
+        return UserImportPreviewResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_users(
     request: UserImportRequest,
@@ -508,7 +578,8 @@ async def import_users(
         result = await UserService.import_users_from_data(
             tenant_id=tenant_id,
             data=request.data,
-            current_user_id=current_user.id
+            current_user_id=current_user.id,
+            auto_create_references=request.auto_create_references,
         )
         
         return result

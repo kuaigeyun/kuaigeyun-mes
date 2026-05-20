@@ -28,7 +28,7 @@ import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
@@ -2516,7 +2516,7 @@ const PurchaseOrdersPage: React.FC = () => {
           placeholder="请输入备注信息"
           fieldProps={{ rows: 3 }}
         />
-        <MaterialBatchPickerModal
+        <UniMaterialBatchPicker
           open={materialPickerOpen}
           onCancel={() => setMaterialPickerOpen(false)}
           onConfirm={appendPurchaseItemsFromMaterials}

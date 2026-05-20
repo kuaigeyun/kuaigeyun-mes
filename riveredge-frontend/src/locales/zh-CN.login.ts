@@ -94,6 +94,7 @@ export default {
   'pages.login.orgAdminNameLen': '管理员名称长度 1–100 个字符',
   'pages.login.usernameLen': '用户名长度为 3-50 个字符',
   'pages.login.usernamePattern': '用户名只能包含字母、数字、下划线和连字符',
+  'pages.login.usernameReserved': '该用户名不可用，请更换（不可使用 admin、root 等系统保留名）',
   'pages.login.usernamePlaceholderLong': '请输入用户名（3-50个字符）',
   'pages.login.usernameExtra': '登录用户名，注册后不可修改',
   'pages.login.phone': '手机号',

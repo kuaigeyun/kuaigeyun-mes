@@ -817,26 +817,80 @@ code {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--ant-colorBorder);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  padding-inline-end: 56px !important;
+  padding-inline-end: 42px !important;
 }
 
-/* 全局：Modal 关闭按钮（圆角跟随系统，红色系；颜色随主题切换） */
+/* 全局：Modal 关闭按钮（幽灵圆形，克制中性；非破坏性操作不用 error 色） */
 .ant-modal .ant-modal-close {
-  width: 32px !important;
-  height: 32px !important;
-  background: var(--ant-color-error-bg, #fff1f0) !important;
-  color: var(--ant-color-error, #cf1322) !important;
-  border-radius: var(--ant-borderRadius, 6px) !important;
-  inset-inline-end: 24px !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--ant-color-text-quaternary, rgba(0, 0, 0, 0.25)) !important;
+  box-shadow: none !important;
+  inset-inline-end: 20px !important;
   top: 36px !important;
   transform: translateY(-50%) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  transition:
+    color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.ant-modal .ant-modal-close .ant-modal-close-x {
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ant-modal .ant-modal-close:hover {
-  background: var(--ant-color-error-border, #ffccc7) !important;
-  color: var(--ant-color-error, #a8071a) !important;
+  background: color-mix(
+    in srgb,
+    var(--ant-color-text, #000) 6%,
+    transparent
+  ) !important;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65)) !important;
+}
+
+.ant-modal .ant-modal-close:active {
+  transform: translateY(-50%) scale(0.92) !important;
+  background: color-mix(
+    in srgb,
+    var(--ant-color-text, #000) 10%,
+    transparent
+  ) !important;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88)) !important;
+}
+
+.ant-modal .ant-modal-close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ant-color-primary, #1677ff) 40%, transparent);
+  outline-offset: 2px;
+}
+
+[data-theme='dark'] .ant-modal .ant-modal-close:hover {
+  background: color-mix(
+    in srgb,
+    var(--ant-color-text, #fff) 10%,
+    transparent
+  ) !important;
+}
+
+[data-theme='dark'] .ant-modal .ant-modal-close:active {
+  background: color-mix(
+    in srgb,
+    var(--ant-color-text, #fff) 14%,
+    transparent
+  ) !important;
 }
 
 /* 全局：Modal 标题装饰（竖条药丸形，颜色随主题，略胖） */

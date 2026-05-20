@@ -320,6 +320,10 @@ class AuthService:
         #     # 如果邀请码有效，直接注册成功（免审核）
         #     pass
         
+        from infra.domain.security.reserved_username import assert_username_not_reserved
+
+        assert_username_not_reserved(data.username)
+
         # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
         existing_username = await User.get_or_none(
             tenant_id=tenant_id,

@@ -116,6 +116,13 @@ class PersonalRegisterRequest(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则在指定组织中创建用户，否则在默认组织中创建）")
 
+    @field_validator('username')
+    @classmethod
+    def validate_username_not_reserved(cls, v: str) -> str:
+        from infra.domain.security.reserved_username import assert_username_not_reserved
+
+        return assert_username_not_reserved(v)
+
     @field_validator('email', mode='before')
     @classmethod
     def validate_email(cls, v):

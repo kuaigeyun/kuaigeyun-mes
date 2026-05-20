@@ -44,7 +44,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { apiRequest } from '../../../../../services/api';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -743,7 +743,7 @@ const ProductionPlansPage: React.FC = () => {
         </div>
       </ModalForm>
 
-      <MaterialBatchPickerModal
+      <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendProductionPlanItemsFromMaterials}

@@ -69,6 +69,7 @@ import {
   type DedicatedBindingRow,
 } from '../../../../services/applicationDedicatedBindings';
 import { syncAllMenus } from '../../../../services/menu';
+import { apiRequest } from '../../../../services/api';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
@@ -139,6 +140,8 @@ const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
   kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
+  kuaiiot: '工业物联网设备数采集成平台，敬请期待',
+  kuaiai: '嵌入业务场景的 AI 智能辅助引擎，敬请期待',
 };
 
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';
@@ -1593,16 +1596,6 @@ const ApplicationListPage: React.FC = () => {
                                   undefined,
                                   { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                                 )}
-                              {application.code === 'kuaiiot' &&
-                                renderBadge(
-                                  'IOT',
-                                  { bg: '#e6fffb', color: '#13c2c2' },
-                                  undefined,
-                                  {
-                                    bg: `color-mix(in srgb, #13c2c2 20%, ${themeToken.colorFillTertiary})`,
-                                    color: '#5eead4',
-                                  },
-                                )}
                               {['kuaizhizao'].includes(application.code) &&
                                 renderBadge(
                                   '一体版',
@@ -2381,20 +2374,19 @@ const ApplicationListPage: React.FC = () => {
                     if (resetConfirmText !== '我已知晓重置数据会造成的影响') return;
                     try {
                       setSubmitting(true);
-                      // Call the new API
-                      const response = await fetch(`/api/v1/apps/kuaizhizao/management/reset-data`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                      });
-                      const result = await response.json();
-                      if (result.success) {
+                      const result = await apiRequest<{ success: boolean; message?: string }>(
+                        '/apps/kuaizhizao/management/reset-data',
+                        { method: 'POST' },
+                      );
+                      if (result?.success) {
                         messageApi.success(result.message || '重置成功并已自动备份');
                         setResetModalVisible(false);
+                        actionRef.current?.reload();
                       } else {
-                        messageApi.error(result.message || '重置失败');
+                        messageApi.error(result?.message || '重置失败');
                       }
-                    } catch (error: any) {
-                      messageApi.error('通讯失败: ' + error.message);
+                    } catch (error: unknown) {
+                      messageApi.error((error as Error).message || '重置失败');
                     } finally {
                       setSubmitting(false);
                     }

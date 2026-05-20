@@ -154,11 +154,13 @@ class ResetDataService:
             try:
                 # 检查表是否存在且属于对应的 tenant_id
                 # 注意：大部分表都有 tenant_id 字段
-                sql = f"DELETE FROM {table} WHERE tenant_id = %s"
+                sql = f"DELETE FROM {table} WHERE tenant_id = $1"
                 result = await conn.execute_query(sql, [tenant_id])
-                # result 通常是 (affected_rows, ...)
-                if result and len(result) > 0:
-                    deleted_counts[table] = result[0]
+                # asyncpg: (affected_rows, rows) 或仅 affected_rows
+                if isinstance(result, int):
+                    deleted_counts[table] = result
+                elif result and len(result) > 0:
+                    deleted_counts[table] = int(result[0]) if result[0] is not None else 0
             except Exception as e:
                 # 某些表可能没有 tenant_id 或表名不存在，记录下来但不中断全局
                 logger.warning(f"清理表 {table} 失败: {e}")

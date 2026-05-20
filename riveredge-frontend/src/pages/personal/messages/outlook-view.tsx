@@ -45,11 +45,44 @@ type StatusFilter = 'all' | 'unread' | 'read' | 'failed';
 
 const LIST_WIDTH = 380;
 
+type FilterBadgeVariant = 'all' | 'unread' | 'read' | 'failed';
+
+function filterSegmentBadgeStyle(
+  variant: FilterBadgeVariant,
+  token: ReturnType<typeof theme.useToken>['token'],
+): { backgroundColor: string; color: string } {
+  switch (variant) {
+    case 'unread':
+      return {
+        backgroundColor: token.colorError,
+        color: token.colorTextLightSolid,
+      };
+    case 'read':
+      return {
+        backgroundColor: token.colorSuccessBg,
+        color: token.colorSuccess,
+      };
+    case 'failed':
+      return {
+        backgroundColor: token.colorWarningBg,
+        color: token.colorWarning,
+      };
+    case 'all':
+    default:
+      return {
+        backgroundColor: token.colorPrimaryBg,
+        color: token.colorPrimary,
+      };
+  }
+}
+
 function filterSegmentLabel(
   text: string,
   count: number,
+  variant: FilterBadgeVariant,
   token: ReturnType<typeof theme.useToken>['token'],
 ) {
+  const badgeColors = filterSegmentBadgeStyle(variant, token);
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       {text}
@@ -60,9 +93,10 @@ function filterSegmentLabel(
           overflowCount={999}
           styles={{
             indicator: {
-              backgroundColor: token.colorFillSecondary,
-              color: token.colorTextSecondary,
+              backgroundColor: badgeColors.backgroundColor,
+              color: badgeColors.color,
               boxShadow: 'none',
+              fontWeight: 600,
             },
           }}
         />
@@ -99,6 +133,9 @@ const OutlookMessagesView: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
 
+  /** 与自定义字段管理等双栏页一致，使用 colorBorder 而非更浅的 colorBorderSecondary */
+  const paneBorderColor = token.colorBorder;
+
   /** 左栏 B 端分层：顶栏容器白底，列表区浅灰底，与右侧详情白底区分 */
   const leftPaneHeaderBg = token.colorBgContainer;
   const leftPaneListBg = token.colorFillAlter;
@@ -114,7 +151,7 @@ const OutlookMessagesView: React.FC = () => {
     background: `color-mix(in srgb, ${leftPaneListBg} 55%, ${token.colorBgContainer})`,
     backdropFilter: 'blur(8px)',
     WebkitBackdropFilter: 'blur(8px)',
-    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    borderBottom: `1px solid ${paneBorderColor}`,
   };
 
   const [stats, setStats] = useState<UserMessageStats | null>(null);
@@ -255,19 +292,39 @@ const OutlookMessagesView: React.FC = () => {
   const statusSegmentOptions = useMemo(
     () => [
       {
-        label: filterSegmentLabel(t('pages.personal.messages.filterAll'), stats?.total ?? 0, token),
+        label: filterSegmentLabel(
+          t('pages.personal.messages.filterAll'),
+          stats?.total ?? 0,
+          'all',
+          token,
+        ),
         value: 'all' as const,
       },
       {
-        label: filterSegmentLabel(t('pages.personal.messages.filterUnread'), stats?.unread ?? 0, token),
+        label: filterSegmentLabel(
+          t('pages.personal.messages.filterUnread'),
+          stats?.unread ?? 0,
+          'unread',
+          token,
+        ),
         value: 'unread' as const,
       },
       {
-        label: filterSegmentLabel(t('pages.personal.messages.filterRead'), stats?.read ?? 0, token),
+        label: filterSegmentLabel(
+          t('pages.personal.messages.filterRead'),
+          stats?.read ?? 0,
+          'read',
+          token,
+        ),
         value: 'read' as const,
       },
       {
-        label: filterSegmentLabel(t('pages.personal.messages.filterFailed'), stats?.failed ?? 0, token),
+        label: filterSegmentLabel(
+          t('pages.personal.messages.filterFailed'),
+          stats?.failed ?? 0,
+          'failed',
+          token,
+        ),
         value: 'failed' as const,
       },
     ],
@@ -278,7 +335,7 @@ const OutlookMessagesView: React.FC = () => {
     display: 'flex',
     flex: 1,
     minHeight: 0,
-    border: `1px solid ${token.colorBorderSecondary}`,
+    border: `1px solid ${paneBorderColor}`,
     borderRadius: token.borderRadiusLG,
     overflow: 'hidden',
     background: token.colorBgContainer,
@@ -306,14 +363,14 @@ const OutlookMessagesView: React.FC = () => {
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
-            borderRight: `1px solid ${token.colorBorderSecondary}`,
+            borderRight: `1px solid ${paneBorderColor}`,
             background: leftPaneListBg,
           }}
         >
           <div
             style={{
               padding: '12px 12px 8px',
-              borderBottom: `1px solid ${token.colorBorderSecondary}`,
+              borderBottom: `1px solid ${paneBorderColor}`,
               background: leftPaneHeaderBg,
             }}
           >
@@ -398,7 +455,7 @@ const OutlookMessagesView: React.FC = () => {
                             display: 'flex',
                             alignItems: 'stretch',
                             cursor: 'pointer',
-                            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                            borderBottom: `1px solid ${paneBorderColor}`,
                               background: active ? listItemActiveBg : 'transparent',
                               transition: 'background 0.15s ease',
                             }}
@@ -436,12 +493,12 @@ const OutlookMessagesView: React.FC = () => {
                               }}
                             >
                               <Text
-                                strong={unread}
                                 ellipsis
                                 style={{
                                   flex: 1,
                                   fontSize: 13,
                                   lineHeight: 1.35,
+                                  fontWeight: unread ? 600 : 500,
                                   color: unread ? token.colorText : token.colorTextSecondary,
                                 }}
                               >
@@ -471,8 +528,8 @@ const OutlookMessagesView: React.FC = () => {
           <div
             style={{
               padding: '8px 12px',
-              borderTop: `1px solid ${token.colorBorderSecondary}`,
-              background: leftPaneListBg,
+              borderTop: `1px solid ${paneBorderColor}`,
+              background: leftPaneHeaderBg,
               display: 'flex',
               justifyContent: 'flex-end',
             }}
@@ -521,8 +578,8 @@ const OutlookMessagesView: React.FC = () => {
             <>
               <div
                 style={{
-                  padding: '16px 20px',
-                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  padding: '16px',
+                  borderBottom: `1px solid ${paneBorderColor}`,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -555,13 +612,13 @@ const OutlookMessagesView: React.FC = () => {
                   </Text>
                 </Space>
               </div>
-              <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+              <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
                 <div
                   style={{
                     padding: 16,
                     borderRadius: token.borderRadius,
                     background: token.colorFillAlter,
-                    border: `1px solid ${token.colorBorderSecondary}`,
+                    border: `1px solid ${paneBorderColor}`,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                     lineHeight: 1.65,
