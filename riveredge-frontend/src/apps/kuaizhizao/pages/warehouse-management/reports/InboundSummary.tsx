@@ -20,7 +20,7 @@ const InboundSummary: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inbound-summary')}
       reportType="inbound_outbound"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-inbound-summary"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InboundSummary"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,

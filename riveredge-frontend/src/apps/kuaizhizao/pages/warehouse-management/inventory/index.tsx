@@ -247,7 +247,7 @@ const InventoryPage: React.FC = () => {
       <Card size="small" title="结果区">
         <UniTable<InventoryItem>
           headerTitle="即时库存查询"
-          columnPersistenceId="kuaizhizao-wm-inventory-query"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
           actionRef={actionRef}
           columns={columns}
           request={fetchInventory}

@@ -419,7 +419,7 @@ const MaterialBorrowsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="借料单"
-          columnPersistenceId="kuaizhizao-wm-material-borrows"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

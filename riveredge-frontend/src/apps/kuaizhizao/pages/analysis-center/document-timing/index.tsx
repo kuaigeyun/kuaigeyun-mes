@@ -175,7 +175,7 @@ const DocumentTimingPage: React.FC = () => {
       <UniTable
         headerTitle="单据节点耗时"
         actionRef={actionRef}
-        columnPersistenceId="kuaireport-analysis-document-timing"
+        columnPersistenceId="apps.kuaizhizao.pages.analysis-center.document-timing"
         scroll={{ x: 'max-content' }}
         rowKey="document_code"
         columns={columns}

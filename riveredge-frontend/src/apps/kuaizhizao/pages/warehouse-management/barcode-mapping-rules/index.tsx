@@ -278,7 +278,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="kuaizhizao-wm-barcode-mapping-rules"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
         showCreateButton={true}
         createButtonText="新建条码映射规则"
         onCreate={handleCreate}

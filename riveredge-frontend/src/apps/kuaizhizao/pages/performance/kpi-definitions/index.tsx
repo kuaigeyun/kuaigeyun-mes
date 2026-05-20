@@ -150,7 +150,7 @@ const KpiDefinitionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-kpi-definitions"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions"
           showAdvancedSearch
           request={async (params) => {
             try {

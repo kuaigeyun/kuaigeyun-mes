@@ -581,7 +581,7 @@ const EquipmentFaultsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<EquipmentFault>
           headerTitle="设备故障维修管理"
-          columnPersistenceId="kuaizhizao-em-equipment-faults"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

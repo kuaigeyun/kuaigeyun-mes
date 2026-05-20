@@ -377,7 +377,7 @@ const InventoryTransferPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="库存调拨管理"
-        columnPersistenceId="kuaizhizao-wm-inventory-transfer"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

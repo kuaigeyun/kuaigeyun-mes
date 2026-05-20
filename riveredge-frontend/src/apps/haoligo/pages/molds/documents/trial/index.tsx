@@ -914,7 +914,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldTrialSheetRow>
           headerTitle="模具试模单"
-          columnPersistenceId="apps.haoligo.pages.molds.documents.trial.v2"
+          columnPersistenceId="apps.haoligo.pages.molds.documents.trial"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

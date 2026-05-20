@@ -639,7 +639,7 @@ const PackingBindingPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<PackingBinding>
           headerTitle="装箱绑定"
-          columnPersistenceId="kuaizhizao-packing-binding"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

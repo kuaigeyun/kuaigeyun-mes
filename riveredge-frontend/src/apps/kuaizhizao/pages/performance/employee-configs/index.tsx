@@ -165,7 +165,7 @@ const EmployeeConfigsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-employee-configs"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs"
           showAdvancedSearch
           request={async (params) => {
             try {

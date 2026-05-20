@@ -139,7 +139,7 @@ const DisassemblyOrdersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<DisassemblyOrder>
         headerTitle="拆卸单"
-        columnPersistenceId="kuaizhizao-wm-disassembly-orders"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.disassembly-orders"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

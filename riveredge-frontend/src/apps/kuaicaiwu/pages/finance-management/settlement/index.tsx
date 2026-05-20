@@ -93,7 +93,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="待核销应收单"
             actionRef={receivableActionRef}
             rowKey="id"
-            columnPersistenceId="kuaicaiwu-finance-settlement-receivables"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
             scroll={{ x: 720 }}
@@ -119,7 +119,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="可用收款单"
             actionRef={receiptActionRef}
             rowKey="id"
-            columnPersistenceId="kuaicaiwu-finance-settlement-receipts"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
             search={false}
             scroll={{ x: 560 }}
             request={async (params) => {

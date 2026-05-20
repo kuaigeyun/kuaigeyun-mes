@@ -1476,6 +1476,8 @@ export default {
   'components.uniTable.validatorDate': '{{title}} must be a valid date',
   'components.uniTable.columnReset': 'Reset',
   'components.uniTable.reload': 'Reload',
+  'components.uniTable.hideStatCards': 'Hide stat cards',
+  'components.uniTable.showStatCards': 'Show stat cards',
 
   // Layout templates (platform-level)
   'components.layoutTemplates.formModal.submitCreate': 'Create',

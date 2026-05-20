@@ -418,7 +418,7 @@ const CostRulePage: React.FC = () => {
       <UniTable<CostRule>
         actionRef={actionRef}
         headerActions={ruleToolbarActions}
-        columnPersistenceId="kuaicaiwu-cost-rules"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules"
         scroll={{ x: 'max-content' }}
         request={async (params: any) => {
           // 将 ProTable 的分页参数转换为后端期望的格式

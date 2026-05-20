@@ -246,7 +246,7 @@ const ComputationHistoryTab: React.FC = () => {
         columns={columns}
         request={async (params) => handleRequest(params)}
         rowKey="id"
-        columnPersistenceId="demand-computation-history"
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation.ComputationHistoryTab"
         viewTypes={['table']}
         showFuzzySearch={false}
         showAdvancedSearch={false}

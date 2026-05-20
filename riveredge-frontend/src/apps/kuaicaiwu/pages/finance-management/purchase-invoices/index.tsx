@@ -345,7 +345,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 headerTitle="采购发票"
                 actionRef={actionRef}
                 columns={columns}
-                columnPersistenceId="kuaicaiwu-finance-purchase-invoices"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
                 scroll={{ x: 1600 }}
                 showAdvancedSearch
                 request={async (params) => {

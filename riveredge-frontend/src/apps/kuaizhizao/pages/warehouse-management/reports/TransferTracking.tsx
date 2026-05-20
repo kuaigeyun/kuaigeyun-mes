@@ -20,7 +20,7 @@ const TransferTracking: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.transfer-tracking')}
       reportType="transfer_tracking"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-transfer-tracking"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.TransferTracking"
     />
   );
 };

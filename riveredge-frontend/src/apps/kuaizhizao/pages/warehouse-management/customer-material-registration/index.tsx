@@ -340,7 +340,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="kuaizhizao-wm-customer-material-registration"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
         showAdvancedSearch={true}
         showCreateButton={true}
         createButtonText="新建客户来料登记"

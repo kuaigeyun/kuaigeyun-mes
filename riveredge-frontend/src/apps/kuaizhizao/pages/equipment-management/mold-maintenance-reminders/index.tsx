@@ -81,7 +81,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<MoldMaintenanceReminder>
         headerTitle="模具保养提醒"
-        columnPersistenceId="kuaizhizao-em-mold-maintenance-reminders"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders"
         actionRef={actionRef}
         rowKey="mold_uuid"
         columns={columns}

@@ -29,7 +29,7 @@ const EquipmentFaultAnalysis: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.equipment-fault-analysis')}
       reportType="failure_analysis"
       columns={columns}
-      columnPersistenceId="kuaizhizao-em-report-equipment-fault-analysis"
+      columnPersistenceId="apps.kuaizhizao.pages.equipment-management.reports.EquipmentFaultAnalysis"
       request={async (params: any) => {
         const res = await getEquipmentReport({
           ...params,

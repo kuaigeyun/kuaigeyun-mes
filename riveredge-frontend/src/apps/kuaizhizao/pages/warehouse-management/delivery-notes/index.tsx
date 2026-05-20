@@ -901,7 +901,7 @@ const DeliveryNotesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="送货单"
-          columnPersistenceId="kuaizhizao-wm-delivery-notes"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

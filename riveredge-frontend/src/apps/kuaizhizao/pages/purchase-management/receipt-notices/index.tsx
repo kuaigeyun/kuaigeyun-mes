@@ -1140,7 +1140,7 @@ const ReceiptNoticesPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable
           headerTitle="收货通知单"
-          columnPersistenceId="kuaizhizao-receipt-notices"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.receipt-notices"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

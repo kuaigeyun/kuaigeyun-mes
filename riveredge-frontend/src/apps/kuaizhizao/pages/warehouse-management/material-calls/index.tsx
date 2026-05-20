@@ -462,7 +462,7 @@ const MaterialCallsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="kuaizhizao-wm-material-calls"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-calls"
         showAdvancedSearch={true}
         expandable={{
           rowExpandable: (r: any) => Array.isArray(r?.items) && r.items.length > 0,

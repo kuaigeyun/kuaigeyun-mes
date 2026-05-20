@@ -317,7 +317,7 @@ const QualityExceptionsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="kuaizhizao-pe-quality-exceptions"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions"
         request={async (params) => {
           try {
             const pageSize = params.pageSize || 20;

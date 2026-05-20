@@ -684,7 +684,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable<OutsourceOrder>
         headerTitle="工序委外"
-        columnPersistenceId="kuaizhizao-outsource-orders"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-orders"
         actionRef={actionRef}
         columns={columns}
         request={handleRequest}

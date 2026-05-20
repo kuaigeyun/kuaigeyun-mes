@@ -517,7 +517,7 @@ const QualityReportPage: React.FC = () => {
             actionRef={actionRef}
             rowKey="id"
             columns={columns}
-            columnPersistenceId="kuaizhizao-report-quality-summary"
+            columnPersistenceId="apps.kuaizhizao.pages.reports.quality-report"
             showAdvancedSearch={true}
             request={async () => {
               return {

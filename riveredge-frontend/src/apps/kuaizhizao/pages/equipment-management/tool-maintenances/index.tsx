@@ -116,7 +116,7 @@ const ToolMaintenancesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ToolMaintenance>
         headerTitle="工装维保记录"
-        columnPersistenceId="kuaizhizao-em-tool-maintenances"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenances"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}

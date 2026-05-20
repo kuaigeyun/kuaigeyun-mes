@@ -183,7 +183,7 @@ const DashboardList: React.FC = () => {
                 <UniTable<Dashboard>
                     headerTitle="大屏中心"
                     actionRef={actionRef}
-                    columnPersistenceId="kuaireport-dashboard-list"
+                    columnPersistenceId="apps.kuaireport.pages.DashboardList"
                     scroll={{ x: 'max-content' }}
                     columns={columns}
                     request={async (params) => {

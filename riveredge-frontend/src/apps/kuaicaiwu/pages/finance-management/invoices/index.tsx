@@ -223,7 +223,7 @@ const InvoiceList: React.FC = () => {
         headerTitle={headerTitle}
         actionRef={actionRef}
         rowKey="invoice_code"
-        columnPersistenceId="kuaicaiwu-finance-invoices"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.invoices"
         scroll={{ x: 1680 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}

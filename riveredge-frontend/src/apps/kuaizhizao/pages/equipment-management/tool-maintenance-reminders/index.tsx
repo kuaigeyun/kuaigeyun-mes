@@ -90,7 +90,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ToolMaintenanceReminder>
         headerTitle="工装保养校准提醒"
-        columnPersistenceId="kuaizhizao-em-tool-maintenance-reminders"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders"
         actionRef={actionRef}
         rowKey={(record, index) =>
           [record.tool_uuid, record.reminder_type, record.due_date, index].filter(Boolean).join(':') || `reminder-${index}`

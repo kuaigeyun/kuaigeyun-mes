@@ -20,7 +20,7 @@ const SlowMovingInventory: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.slow-moving-inventory')}
       reportType="slow_moving"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-slow-moving-inventory"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.SlowMovingInventory"
     />
   );
 };

@@ -132,7 +132,7 @@ const MoldCalibrationsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<MoldCalibration>
         headerTitle="模具校准记录"
-        columnPersistenceId="kuaizhizao-em-mold-calibrations"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}

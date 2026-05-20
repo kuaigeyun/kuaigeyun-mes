@@ -550,7 +550,7 @@ const ToolLedgerPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Tool>
           headerTitle="工装台账"
-          columnPersistenceId="kuaizhizao-em-tool-ledger"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

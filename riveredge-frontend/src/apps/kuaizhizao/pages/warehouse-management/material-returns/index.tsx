@@ -427,7 +427,7 @@ const MaterialReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-wm-material-returns"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns"
           showAdvancedSearch
           showCreateButton
           createButtonText="新建还料单"

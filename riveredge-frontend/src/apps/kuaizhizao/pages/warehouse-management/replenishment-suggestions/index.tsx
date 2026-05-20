@@ -403,7 +403,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-wm-replenishment-suggestions"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions"
           showAdvancedSearch={true}
           request={async (params) => {
             try {

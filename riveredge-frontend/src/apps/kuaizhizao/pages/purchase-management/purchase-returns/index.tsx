@@ -481,7 +481,7 @@ const PurchaseReturnsPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseReturn>
           headerTitle="采购退货单"
-          columnPersistenceId="kuaizhizao-purchase-returns"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-returns"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

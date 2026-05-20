@@ -111,7 +111,7 @@ const ReportList: React.FC = () => {
       <UniTable<ReportRow>
         headerTitle="报表管理"
         actionRef={actionRef}
-        columnPersistenceId="kuaireport-report-list-legacy"
+        columnPersistenceId="apps.kuaireport.pages.ReportList"
         scroll={{ x: 'max-content' }}
         columns={columns}
         request={async (params) => {

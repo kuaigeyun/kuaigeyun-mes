@@ -756,7 +756,7 @@ const ProcessInspectionPage: React.FC = () => {
     >
       <UniTable<ProcessInspection>
         headerTitle="过程检验"
-        columnPersistenceId="kuaizhizao-qm-process-inspection"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

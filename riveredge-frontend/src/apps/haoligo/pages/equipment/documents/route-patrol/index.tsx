@@ -441,7 +441,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<EquipmentRoutePatrolRow>
-        columnPersistenceId="haoligo-equipment-route-patrols"
+        columnPersistenceId="apps.haoligo.pages.equipment.documents.route-patrol"
         headerTitle={title}
         actionRef={actionRef}
         rowKey="id"

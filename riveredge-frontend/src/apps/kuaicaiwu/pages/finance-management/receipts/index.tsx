@@ -334,7 +334,7 @@ const ReceiptsPage: React.FC = () => {
         headerTitle="收款单管理"
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="kuaicaiwu-finance-receipts"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts"
         scroll={{ x: 1680 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}

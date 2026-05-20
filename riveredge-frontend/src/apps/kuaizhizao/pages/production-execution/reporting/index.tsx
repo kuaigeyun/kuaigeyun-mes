@@ -1953,7 +1953,7 @@ const ReportingPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle="报工管理"
-        columnPersistenceId="kuaizhizao-reporting-management"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

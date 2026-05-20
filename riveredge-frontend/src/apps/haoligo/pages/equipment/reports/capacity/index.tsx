@@ -288,7 +288,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         {viewMode === 'detail' ? (
           <UniTable<EquipmentOutputRecordRow>
             key="capacity-detail"
-            columnPersistenceId="haoligo-equipment-reports-capacity-detail"
+            columnPersistenceId="apps.haoligo.pages.equipment.reports.capacity"
             headerTitle={title}
             actionRef={actionRef}
             rowKey="id"
@@ -330,7 +330,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         ) : (
           <UniTable<EquipmentCapacityByEquipmentRow>
             key="capacity-equipment"
-            columnPersistenceId="haoligo-equipment-reports-capacity-equipment"
+            columnPersistenceId="apps.haoligo.pages.equipment.reports.capacity:2"
             headerTitle={title}
             actionRef={actionRef}
             rowKey="equipment_id"

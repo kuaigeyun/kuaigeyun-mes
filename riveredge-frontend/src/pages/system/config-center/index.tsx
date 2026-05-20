@@ -649,7 +649,7 @@ const ConfigCenterPage: React.FC = () => {
           <Spin spinning={loading}>
             <div>
               <UniTable
-                columnPersistenceId="config-center-notification-rules-table"
+                columnPersistenceId="pages.system.config-center"
                 rowKey="id"
                 pagination={false}
                 search={false}

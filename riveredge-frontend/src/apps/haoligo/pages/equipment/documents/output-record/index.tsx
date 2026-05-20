@@ -526,7 +526,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<EquipmentOutputRecordRow>
-        columnPersistenceId="haoligo-equipment-output-records"
+        columnPersistenceId="apps.haoligo.pages.equipment.documents.output-record"
         headerTitle={title}
         actionRef={actionRef}
         rowKey="id"

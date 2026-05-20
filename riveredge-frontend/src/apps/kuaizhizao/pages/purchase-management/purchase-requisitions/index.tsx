@@ -936,7 +936,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="采购申请"
-          columnPersistenceId="kuaizhizao-purchase-requisition"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-requisitions"
           actionRef={actionRef}
           request={async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
             const s = searchFormValues || {};

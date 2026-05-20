@@ -237,7 +237,7 @@ const HolidaysPage: React.FC = () => {
           headerTitle="假期管理"
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-holidays"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.holidays"
           request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

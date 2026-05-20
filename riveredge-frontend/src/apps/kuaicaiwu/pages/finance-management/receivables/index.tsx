@@ -227,7 +227,7 @@ const ReceivableList: React.FC = () => {
                 headerTitle="应收账款"
                 actionRef={actionRef}
                 columns={columns}
-                columnPersistenceId="kuaicaiwu-finance-receivables"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables"
                 scroll={{ x: 1680 }}
                 request={async (params, _sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;

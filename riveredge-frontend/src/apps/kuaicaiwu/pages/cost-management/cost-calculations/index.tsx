@@ -757,7 +757,7 @@ const CostCalculationPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
-        columnPersistenceId="kuaicaiwu-cost-calculations-ledger"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations"
         scroll={{ x: 'max-content' }}
         request={async (params) => {
           const response = await costCalculationApi.list(params);

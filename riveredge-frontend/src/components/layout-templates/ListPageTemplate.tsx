@@ -10,9 +10,16 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Row, Col, Card, Statistic, theme as AntdTheme, Grid } from 'antd';
-import { getListPageTableScrollOffsetPx, STAT_CARD_CONFIG } from './constants';
+import { useLocation } from 'react-router-dom';
+import { getListPageTableScrollOffsetPx, STAT_CARD_CONFIG, type ListPageTableScrollLayout } from './constants';
+import {
+  getListPageStatCardsVisible,
+  ListPageStatCardsProvider,
+  toListPageStatCardsPreferenceSegment,
+} from './listPageStatCardsContext';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 
 /**
@@ -72,6 +79,10 @@ export interface ListPageTemplateProps {
   prioritizeMainContentPaint?: boolean;
   /** 主内容区 flex 占满剩余高度（Outlook 分栏等非 UniTable 页面） */
   fillMain?: boolean;
+  /** 指标卡显隐偏好键（默认当前路由 pathname；建议与 UniTable columnPersistenceId 对齐） */
+  statCardsPreferenceKey?: string;
+  /** 列表页表体 scroll.y 布局类型（MultiTab 模板传 multiTab） */
+  tableScrollLayout?: ListPageTableScrollLayout;
 }
 
 /**
@@ -103,19 +114,69 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   style,
   prioritizeMainContentPaint = true,
   fillMain = false,
+  statCardsPreferenceKey,
+  tableScrollLayout = 'list',
 }) => {
   const { token } = AntdTheme.useToken();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md && screens.xs;
+  const location = useLocation();
+  const preferences = useUserPreferenceStore((s) => s.preferences);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+
+  const statCardsPageKey = statCardsPreferenceKey ?? location.pathname;
+  const statCardsPrefSegment = toListPageStatCardsPreferenceSegment(statCardsPageKey);
 
   const hasStatCardsRow = Boolean(statCards && statCards.length > 0 && !isMobile);
+
+  const readStatCardsVisible = useCallback(
+    () => getListPageStatCardsVisible(preferences, statCardsPageKey),
+    [preferences, statCardsPageKey],
+  );
+
+  const [statCardsVisible, setStatCardsVisible] = useState(() => readStatCardsVisible());
+
+  useEffect(() => {
+    setStatCardsVisible(readStatCardsVisible());
+  }, [readStatCardsVisible]);
+
+  const toggleStatCardsVisible = useCallback(() => {
+    setStatCardsVisible((prev) => {
+      const next = !prev;
+      const currentMap =
+        (preferences?.ui as { list_page_stat_cards?: Record<string, boolean> } | undefined)
+          ?.list_page_stat_cards ?? {};
+      void updatePreferences({
+        ui: {
+          ...(typeof preferences?.ui === 'object' && preferences.ui !== null ? preferences.ui : {}),
+          list_page_stat_cards: {
+            ...currentMap,
+            [statCardsPrefSegment]: next,
+          },
+        },
+      });
+      return next;
+    });
+  }, [preferences, statCardsPrefSegment, updatePreferences]);
+
+  const showStatCardsRow = hasStatCardsRow && statCardsVisible;
   const tableScrollOffsetPx = getListPageTableScrollOffsetPx({
-    layout: 'list',
-    hasStatCardsRow,
+    layout: tableScrollLayout,
+    hasStatCardsRow: showStatCardsRow,
   });
 
+  const statCardsContextValue = useMemo(
+    () => ({
+      enabled: hasStatCardsRow,
+      visible: statCardsVisible,
+      toggle: toggleStatCardsVisible,
+      tableScrollOffsetPx,
+    }),
+    [hasStatCardsRow, statCardsVisible, toggleStatCardsVisible, tableScrollOffsetPx],
+  );
+
   const statCardsRow =
-    hasStatCardsRow ? (
+    showStatCardsRow ? (
       <div style={{ marginBottom: 16 }}>
         <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
           {statCards.map((card, index) => (
@@ -252,28 +313,24 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
     ? { order: 3, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
     : { order: 3 };
 
-  if (!prioritizeMainContentPaint) {
-    return (
-      <div
-        className={className}
-        style={{
-          padding: 0,
-          ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
-          ...style,
-        }}
-      >
-        {statCardsRow}
-        {toolbarRow}
-        {mainRow}
-      </div>
-    );
-  }
-
   const fillMainShellStyle: React.CSSProperties = fillMain
     ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' }
     : {};
 
-  return (
+  const shell = !prioritizeMainContentPaint ? (
+    <div
+      className={className}
+      style={{
+        padding: 0,
+        ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
+        ...style,
+      }}
+    >
+      {statCardsRow}
+      {toolbarRow}
+      {mainRow}
+    </div>
+  ) : (
     <div
       className={className}
       style={{
@@ -290,6 +347,10 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
       {toolbarRow ? <div style={{ order: 2, flexShrink: fillMain ? 0 : undefined }}>{toolbarRow}</div> : null}
       {statCardsRow ? <div style={{ order: 1, flexShrink: fillMain ? 0 : undefined }}>{statCardsRow}</div> : null}
     </div>
+  );
+
+  return (
+    <ListPageStatCardsProvider value={statCardsContextValue}>{shell}</ListPageStatCardsProvider>
   );
 };
 

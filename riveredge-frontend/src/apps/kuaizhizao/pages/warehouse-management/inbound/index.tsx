@@ -1553,7 +1553,7 @@ const InboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="入库管理"
-        columnPersistenceId="kuaizhizao-wm-inbound"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.receipt_type}::${record.id}`}
         columns={columns}

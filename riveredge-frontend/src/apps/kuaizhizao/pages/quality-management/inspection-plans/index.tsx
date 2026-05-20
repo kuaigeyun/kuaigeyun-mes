@@ -435,7 +435,7 @@ const InspectionPlansPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<InspectionPlan>
         headerTitle="质检方案"
-        columnPersistenceId="kuaizhizao-qm-inspection-plans"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

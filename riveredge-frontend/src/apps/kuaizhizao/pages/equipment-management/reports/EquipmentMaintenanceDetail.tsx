@@ -29,7 +29,7 @@ const EquipmentMaintenanceDetail: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.equipment-maintenance-detail')}
       reportType="equip_maint_detail"
       columns={columns}
-      columnPersistenceId="kuaizhizao-em-report-equipment-maintenance-detail"
+      columnPersistenceId="apps.kuaizhizao.pages.equipment-management.reports.EquipmentMaintenanceDetail"
     />
   );
 };

@@ -438,7 +438,7 @@ const SalesInvoicesPage: React.FC = () => {
         headerTitle="销售发票"
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="kuaicaiwu-finance-sales-invoices"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices"
         scroll={{ x: 1800 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}

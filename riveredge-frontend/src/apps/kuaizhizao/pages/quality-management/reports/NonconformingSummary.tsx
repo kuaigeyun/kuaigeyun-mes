@@ -17,7 +17,7 @@ const NonconformingSummary: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.nonconforming-summary')}
       reportType="nonconforming_summary"
-      columnPersistenceId="kuaizhizao-qm-report-nonconforming-summary"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.NonconformingSummary"
       columns={columns}
     />
   );

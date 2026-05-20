@@ -205,7 +205,7 @@ const BackflushRecordsPage: React.FC = () => {
         headerTitle="物料倒冲记录"
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="kuaizhizao-wm-backflush-records"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records"
         request={fetchRecords}
         rowKey="id"
         search={{ labelWidth: 'auto' }}

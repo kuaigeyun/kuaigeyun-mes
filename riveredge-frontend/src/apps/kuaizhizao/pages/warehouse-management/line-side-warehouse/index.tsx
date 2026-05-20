@@ -172,7 +172,7 @@ const LineSideWarehousePage: React.FC = () => {
         headerTitle="线边仓库存"
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="kuaizhizao-wm-line-side-warehouse"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse"
         request={fetchInventory}
         rowKey="id"
         search={{ labelWidth: 'auto' }}

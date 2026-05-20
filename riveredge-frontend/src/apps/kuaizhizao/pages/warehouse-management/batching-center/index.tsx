@@ -290,7 +290,7 @@ const BatchingCenterPage: React.FC = () => {
       <MaterialPrepReminders onCreateBatching={handleCreate} />
       <UniTable<BatchingOrder>
         headerTitle="配料单"
-        columnPersistenceId="kuaizhizao-wm-batching-center"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batching-center"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

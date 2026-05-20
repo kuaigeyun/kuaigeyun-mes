@@ -222,7 +222,7 @@ const SkillsPage: React.FC = () => {
           headerTitle="技能管理"
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-skills"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.skills"
           request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

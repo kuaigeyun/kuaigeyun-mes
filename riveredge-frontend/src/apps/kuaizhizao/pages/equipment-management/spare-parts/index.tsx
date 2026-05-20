@@ -103,7 +103,7 @@ const SparePartsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<SpareInventoryRow>
         headerTitle="备件库存列表"
-        columnPersistenceId="kuaizhizao-em-spare-parts"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts"
         rowKey={(r) => String(r.id ?? r.part_no ?? Math.random())}
         columns={columns}
         showAdvancedSearch

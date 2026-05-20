@@ -28,7 +28,7 @@ const EquipmentOEEAnalysis: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.equipment-oee-analysis')}
       reportType="oee"
       columns={columns}
-      columnPersistenceId="kuaizhizao-em-report-equipment-oee-analysis"
+      columnPersistenceId="apps.kuaizhizao.pages.equipment-management.reports.EquipmentOEEAnalysis"
       request={async (params: any) => {
         const res = await getEquipmentReport({
           ...params,

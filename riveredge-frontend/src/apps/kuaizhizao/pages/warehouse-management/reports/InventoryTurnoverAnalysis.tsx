@@ -20,7 +20,7 @@ const InventoryTurnoverAnalysis: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inventory-turnover-analysis')}
       reportType="turnover"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-inventory-turnover-analysis"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventoryTurnoverAnalysis"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,

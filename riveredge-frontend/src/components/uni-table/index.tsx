@@ -42,7 +42,7 @@ import {
   ProTableProps,
 } from '@ant-design/pro-components'
 import type { ColumnsState } from '@ant-design/pro-table'
-import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag } from 'antd'
+import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag, Tooltip } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -107,6 +107,7 @@ const useProTableSearch = () => {
   }
 }
 import { useConfigStore } from '../../stores/configStore'
+import { useListPageStatCardsContext } from '../layout-templates/listPageStatCardsContext'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
 import { useAntdResizableHeader } from 'use-antd-resizable-header'
 import 'use-antd-resizable-header/dist/style.css'
@@ -118,7 +119,7 @@ import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
-import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants'
+import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 
 /**
  * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（key/dataIndex=lifecycle）→ 操作列。
@@ -1009,8 +1010,13 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   }
   /**
    * 列展示/列宽 localStorage 的稳定 key（默认用 headerTitle，易随文案变化而漂移）。
-   * **列表页应显式传入**：与源码路径一致的点分 id，如 `pages.system.users.list`、`apps.kuaizhizao.pages.sales-management.sales-orders`；
-   * 同文件多表用后缀 `:2`。请使用相对路径导入至 `src/components/uni-table`（勿使用在生产构建中不可靠的 `@/components`  barrel）。
+   *
+   * **命名规范**（列表页必须显式传入）：
+   * - 取 `src/` 下页面文件相对路径，目录用 `.` 连接；`index.tsx` 省略文件名。
+   * - 例：`pages/system/users/list/index.tsx` → `pages.system.users.list`
+   * - 例：`apps.kuaizhizao.pages.sales-management.sales-orders`
+   * - 同文件多表 / 多 Tab 共用一表时：第二张表用 `:2`，第三张 `:3`（见 settlement、inventory-alert）。
+   * - 非 index 页面文件：保留文件名，如 `...reports.BaseReport`、`...ComputationHistoryTab`。
    */
   columnPersistenceId?: string
   /**
@@ -1111,6 +1117,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const getConfig = useConfigStore((s) => s.getConfig);
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const syncTablePreference = useUserPreferenceStore((s) => s.syncTablePreference);
+  const statCardsCtx = useListPageStatCardsContext();
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md && screens.xs // 手机端判定：小于 768px 且有 xs
 
@@ -2137,6 +2144,42 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     },
   }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust])
 
+  const statCardsOptionsRender = useCallback(
+    (_props: unknown, defaultDom: React.ReactNode[]) => {
+      if (!statCardsCtx?.enabled) return defaultDom
+      const toggleNode = (
+        <span
+          key="uni-stat-cards-toggle"
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+          onClick={statCardsCtx.toggle}
+        >
+          <Tooltip
+            title={t(
+              statCardsCtx.visible
+                ? 'components.uniTable.hideStatCards'
+                : 'components.uniTable.showStatCards',
+            )}
+          >
+            <BarChartOutlined
+              style={{
+                fontSize: 16,
+                color: statCardsCtx.visible ? undefined : token.colorTextQuaternary,
+              }}
+            />
+          </Tooltip>
+        </span>
+      )
+      const reloadIdx = defaultDom.findIndex(
+        (node) => React.isValidElement(node) && node.key === 'reload',
+      )
+      if (reloadIdx >= 0) {
+        return [...defaultDom.slice(0, reloadIdx), toggleNode, ...defaultDom.slice(reloadIdx)]
+      }
+      return [toggleNode, ...defaultDom]
+    },
+    [statCardsCtx, t, token.colorTextQuaternary],
+  )
+
   const memoizedRightActions = !isMobile ? buildRightActions() : undefined
 
   const memoizedToolbar = React.useMemo(() => ({
@@ -2227,6 +2270,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     restTableScrollY,
     shouldDisableAutoScrollY,
   ])
+
+  const listPageScrollY = React.useMemo(() => {
+    if (!proTableBodyScrollYEnabled) return undefined
+    const offsetPx = statCardsCtx?.tableScrollOffsetPx
+    if (offsetPx != null) {
+      return getViewportHeightExpr(offsetPx, { compensateHeaderInFullscreen: true })
+    }
+    return `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px - var(--header-height, ${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px)))`
+  }, [proTableBodyScrollYEnabled, statCardsCtx?.tableScrollOffsetPx])
+
+  React.useLayoutEffect(() => {
+    if (statCardsCtx?.tableScrollOffsetPx == null) return
+    window.dispatchEvent(new Event('resize'))
+  }, [statCardsCtx?.tableScrollOffsetPx])
 
   /** natural-height：antd 在 scroll.x 下可能重设 overflow，布局后强制关闭纵向滚动避免空纵条 */
   React.useLayoutEffect(() => {
@@ -2560,10 +2617,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       ? normalizedUserScroll
                       : { ...(normalizedUserScroll || {}), x: 'max-content' as const }
                 const useVirtual = virtualized || userVirtual === true
-                if (!useVirtual && mergedScroll?.y === undefined && proTableBodyScrollYEnabled) {
+                if (!useVirtual && mergedScroll?.y === undefined && listPageScrollY) {
                   mergedScroll = {
                     ...(mergedScroll || {}),
-                    y: `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (56px - var(--header-height, 56px)))`,
+                    y: listPageScrollY,
                   }
                 }
                 if (useVirtual) {
@@ -2624,6 +2681,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               })()}
               size="small"
               options={memoizedOptions}
+              optionsRender={statCardsCtx?.enabled ? statCardsOptionsRender : (restProps as any).optionsRender}
               revalidateOnFocus={false}
               />
               {enableRowSelection && selectedRowKeys.length > 0 ? (

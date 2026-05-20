@@ -143,7 +143,7 @@ const MoldUsagesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<MoldUsage>
         headerTitle="模具使用记录"
-        columnPersistenceId="kuaizhizao-em-mold-usages"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-usages"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}

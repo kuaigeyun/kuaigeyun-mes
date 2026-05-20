@@ -6,6 +6,61 @@ import { getTenantId, getUserInfo } from '../utils/auth';
 
 const PREFERENCE_STORAGE_KEY_BASE = 'user-preference-storage';
 
+/** 列偏好 id 统一后一次性清空本地/缓存中的 ui.tables（不做旧 key 映射） */
+const TABLE_COLUMN_PREFS_PURGED_FLAG = 'riveredge-table-column-prefs-purged-20260520';
+
+/** 清除 ProTable 列展示 localStorage（ui.tables.*.columns / columnsWidth） */
+function clearTableColumnLocalStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('ui.tables.')) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch (_) {}
+}
+
+function stripUiTablesFromPreferences(preferences: Record<string, any>): Record<string, any> {
+  if (!preferences || typeof preferences !== 'object') return preferences;
+  const prefs = JSON.parse(JSON.stringify(preferences)) as Record<string, any>;
+  if (prefs.ui && typeof prefs.ui === 'object' && 'tables' in prefs.ui) {
+    delete prefs.ui.tables;
+  }
+  return prefs;
+}
+
+/** 首次访问新版本时清空浏览器侧旧列偏好缓存 */
+function purgeLegacyTableColumnPreferences(): void {
+  if (typeof window === 'undefined') return;
+  if (localStorage.getItem(TABLE_COLUMN_PREFS_PURGED_FLAG)) return;
+
+  clearTableColumnLocalStorage();
+
+  const storageKey = getPreferenceStorageKey();
+  if (storageKey) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          state?: { preferences?: Record<string, unknown> };
+          preferences?: Record<string, unknown>;
+        };
+        const prefs = parsed?.state?.preferences ?? parsed?.preferences;
+        if (prefs && typeof prefs === 'object') {
+          const stripped = stripUiTablesFromPreferences(prefs as Record<string, any>);
+          if (parsed.state) parsed.state.preferences = stripped;
+          else parsed.preferences = stripped;
+          localStorage.setItem(storageKey, JSON.stringify(parsed));
+        }
+      }
+    } catch (_) {}
+  }
+
+  localStorage.setItem(TABLE_COLUMN_PREFS_PURGED_FLAG, '1');
+}
+
 /** 按租户+用户生成缓存 key，未登录返回空（不读写其他用户缓存） */
 function getPreferenceStorageKey(): string | null {
   if (typeof window === 'undefined') return null;
@@ -115,7 +170,8 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       fetchPreferences: async () => {
         const { initialized, loading } = get();
         if (initialized || loading) return;
-        
+
+        purgeLegacyTableColumnPreferences();
         // 先按当前账户 key 恢复本地缓存，再拉接口，避免换账号后首帧读到旧数据
         get().rehydrateFromStorage();
         set({ loading: true });
@@ -148,7 +204,8 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       },
 
       rehydrateFromStorage: () => {
-        const cached = readCachedPreferencesForCurrentUser();
+        purgeLegacyTableColumnPreferences();
+        const cached = stripUiTablesFromPreferences(readCachedPreferencesForCurrentUser());
         if (Object.keys(cached).length === 0) return;
         set((s) => ({ ...s, preferences: cached, initialized: true }));
         syncTableColumnsToLocalStorage(cached);

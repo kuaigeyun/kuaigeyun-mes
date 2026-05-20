@@ -209,7 +209,7 @@ const SummariesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-summaries"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.summaries"
           showAdvancedSearch
           request={async (params) => {
             try {

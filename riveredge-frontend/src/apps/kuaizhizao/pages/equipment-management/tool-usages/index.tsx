@@ -178,7 +178,7 @@ const ToolUsagesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ToolUsage>
         headerTitle="工装领用归还"
-        columnPersistenceId="kuaizhizao-em-tool-usages"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-usages"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}

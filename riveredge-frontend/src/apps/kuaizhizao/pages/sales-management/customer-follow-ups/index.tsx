@@ -457,7 +457,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}

@@ -157,7 +157,7 @@ const HourlyRatesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-hourly-rates"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates"
           showAdvancedSearch
           request={async (params) => {
             try {

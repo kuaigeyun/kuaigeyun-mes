@@ -2713,7 +2713,7 @@ const QuotationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           className="kuaizhizao-quotations-table"
-          columnPersistenceId="kuaizhizao-sales-quotations-v4"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.quotations"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"

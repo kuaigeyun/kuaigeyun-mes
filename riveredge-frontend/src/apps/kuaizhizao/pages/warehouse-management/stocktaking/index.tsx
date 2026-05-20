@@ -462,7 +462,7 @@ const StocktakingPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="成品盘点"
-        columnPersistenceId="kuaizhizao-wm-stocktaking"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

@@ -18,7 +18,7 @@ const EmployeeEfficiencyRanking: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.employee-efficiency-ranking')}
       reportType="efficiency_ranking"
-      columnPersistenceId="kuaizhizao-perf-report-efficiency-ranking"
+      columnPersistenceId="apps.kuaizhizao.pages.performance.reports.EmployeeEfficiencyRanking"
       columns={columns}
       request={async (params: any) => {
         const res = await getPerformanceReport({

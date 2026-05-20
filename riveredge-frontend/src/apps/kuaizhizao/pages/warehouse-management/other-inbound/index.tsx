@@ -454,7 +454,7 @@ const OtherInboundPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="其他入库"
-          columnPersistenceId="kuaizhizao-wm-other-inbound"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

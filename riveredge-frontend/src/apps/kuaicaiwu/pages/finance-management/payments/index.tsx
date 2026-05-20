@@ -334,7 +334,7 @@ const PaymentsPage: React.FC = () => {
         headerTitle="付款单管理"
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="kuaicaiwu-finance-payments"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments"
         scroll={{ x: 1680 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}

@@ -133,7 +133,7 @@ const ToolCalibrationsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ToolCalibration>
         headerTitle="工装校准记录"
-        columnPersistenceId="kuaizhizao-em-tool-calibrations"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}

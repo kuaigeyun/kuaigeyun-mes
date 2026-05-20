@@ -9,9 +9,8 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Card, Grid } from 'antd';
+import { Card } from 'antd';
 import ListPageTemplate, { StatCard } from './ListPageTemplate';
-import { getListPageTableScrollOffsetPx } from './constants';
 
 export interface TabItem {
     /** 标签唯一标识 */
@@ -66,13 +65,6 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     preserveMounted = false,
     prioritizeMainContentPaint,
 }) => {
-    const screens = Grid.useBreakpoint();
-    const isMobile = !screens.md && !!screens.xs;
-    const hasStatCardsRow = Boolean(statCards && statCards.length > 0 && !isMobile);
-    const tableScrollOffsetPx = getListPageTableScrollOffsetPx({
-      layout: 'multiTab',
-      hasStatCardsRow,
-    });
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
     const bodyInner = preserveMounted ? (
@@ -99,10 +91,10 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
             className={className}
             style={style}
             prioritizeMainContentPaint={prioritizeMainContentPaint}
+            tableScrollLayout="multiTab"
         >
             {header && <div style={{ marginBottom: 16 }}>{header}</div>}
             <Card
-                style={{ ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px` }}
                 tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
                 activeTabKey={activeTabKey}
                 onTabChange={onTabChange}

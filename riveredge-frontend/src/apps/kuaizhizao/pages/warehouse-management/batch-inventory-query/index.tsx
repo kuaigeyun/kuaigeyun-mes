@@ -330,7 +330,7 @@ const BatchInventoryQuery: React.FC = () => {
                 <UniTable<BatchInventoryItem>
                     actionRef={actionRef}
                     columns={columns}
-                    columnPersistenceId="kuaizhizao-wm-batch-inventory-query"
+                    columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query"
                     request={fetchBatchInventory}
                     showExportButton
                     onExport={handleExport}

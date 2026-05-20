@@ -20,7 +20,7 @@ const StocktakingHistory: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.stocktaking-history')}
       reportType="stocktaking_history"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-stocktaking-history"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.StocktakingHistory"
     />
   );
 };

@@ -552,7 +552,9 @@ const InventoryAlertPage: React.FC = () => {
         rowKey="id"
         columns={activeTab === 'alerts' ? alertColumns : ruleColumns}
         columnPersistenceId={
-          activeTab === 'alerts' ? 'kuaizhizao-wm-inventory-alert-records' : 'kuaizhizao-wm-inventory-alert-rules'
+          activeTab === 'alerts'
+            ? 'apps.kuaizhizao.pages.warehouse-management.inventory-alert'
+            : 'apps.kuaizhizao.pages.warehouse-management.inventory-alert:2'
         }
         showAdvancedSearch={true}
         showCreateButton={activeTab === 'rules'}

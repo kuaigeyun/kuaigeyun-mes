@@ -500,7 +500,7 @@ const MaintenanceRemindersPage: React.FC = () => {
     >
       <UniTable<MaintenanceReminder>
         headerTitle="设备维护提醒"
-        columnPersistenceId="kuaizhizao-em-maintenance-reminders"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
         actionRef={actionRef}
         request={async (params) => {
           const response = await maintenanceReminderApi.list({

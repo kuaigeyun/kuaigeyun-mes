@@ -227,7 +227,7 @@ const PayableList: React.FC = () => {
                 headerTitle="应付账款"
                 actionRef={actionRef}
                 rowKey="id"
-                columnPersistenceId="kuaicaiwu-finance-payables"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
                 scroll={{ x: 1680 }}
                 showAdvancedSearch
                 search={{ labelWidth: 120 }}

@@ -19,7 +19,7 @@ const OutboundSummary: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.outbound-summary')}
       reportType="outbound_summary"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-outbound-summary"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.OutboundSummary"
     />
   );
 };

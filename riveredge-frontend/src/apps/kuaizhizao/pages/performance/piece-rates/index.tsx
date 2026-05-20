@@ -142,7 +142,7 @@ const PieceRatesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="kuaizhizao-perf-piece-rates"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.piece-rates"
           showAdvancedSearch
           request={async (params) => {
             try {

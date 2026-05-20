@@ -28,7 +28,7 @@ const EquipmentStatusLog: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.equipment-status-log')}
       reportType="equip_status_log"
       columns={columns}
-      columnPersistenceId="kuaizhizao-em-report-equipment-status-log"
+      columnPersistenceId="apps.kuaizhizao.pages.equipment-management.reports.EquipmentStatusLog"
     />
   );
 };

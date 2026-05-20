@@ -1480,6 +1480,8 @@ export default {
   'components.uniTable.validatorDate': '{{title}}必须是有效的日期',
   'components.uniTable.columnReset': '重置',
   'components.uniTable.reload': '刷新',
+  'components.uniTable.hideStatCards': '隐藏指标卡',
+  'components.uniTable.showStatCards': '显示指标卡',
 
   // 布局模板（ListPage / FormModal / Dashboard / Wizard 等平台级 UI）
   'components.layoutTemplates.formModal.submitCreate': '创建',

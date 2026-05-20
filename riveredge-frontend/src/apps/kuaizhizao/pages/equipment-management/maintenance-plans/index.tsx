@@ -574,7 +574,7 @@ const MaintenancePlansPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
           headerTitle="维护保养计划管理"
-          columnPersistenceId="kuaizhizao-em-maintenance-plans"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

@@ -738,7 +738,7 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="出库管理"
-        columnPersistenceId="kuaizhizao-wm-outbound"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.outbound_type}::${record.id}`}
         columns={columns}

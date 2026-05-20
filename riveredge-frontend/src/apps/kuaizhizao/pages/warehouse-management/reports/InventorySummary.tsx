@@ -22,7 +22,7 @@ const InventorySummary: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inventory-summary')}
       reportType="inventory_summary"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-inventory-summary"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventorySummary"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,

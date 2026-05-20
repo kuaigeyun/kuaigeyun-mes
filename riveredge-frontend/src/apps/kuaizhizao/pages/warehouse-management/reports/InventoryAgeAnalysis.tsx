@@ -21,7 +21,7 @@ const InventoryAgeAnalysis: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inventory-age-analysis')}
       reportType="stock_age"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-inventory-age-analysis"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventoryAgeAnalysis"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,

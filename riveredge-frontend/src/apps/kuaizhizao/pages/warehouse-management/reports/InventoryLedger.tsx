@@ -21,7 +21,7 @@ const InventoryLedger: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inventory-ledger')}
       reportType="inventory_ledger"
       columns={columns}
-      columnPersistenceId="kuaizhizao-wm-report-inventory-ledger"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventoryLedger"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,

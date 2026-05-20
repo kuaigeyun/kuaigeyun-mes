@@ -700,7 +700,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<EquipmentSpotCheckRow>
-        columnPersistenceId="haoligo-equipment-spot-checks"
+        columnPersistenceId="apps.haoligo.pages.equipment.documents.spot-check"
         headerTitle={title}
         actionRef={actionRef}
         rowKey="id"
