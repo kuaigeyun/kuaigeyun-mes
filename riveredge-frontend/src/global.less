@@ -393,8 +393,8 @@ code {
   min-height: 0 !important;
   overflow: hidden !important;
 
-  /* uni-table 容器在 two-column-layout 中时，高度填满容器 */
-  > .uni-table-container {
+  /* uni-table 容器在 two-column-layout 中时，高度填满容器（natural-height 除外，见文件末尾覆盖） */
+  > .uni-table-container:not(.uni-table-natural-height) {
     flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
@@ -935,17 +935,15 @@ code {
   padding-inline: 16px !important;
 }
 
-/* Table/ProTable：当启用 scroll.y（固定表头）时，默认实现可能强制显示竖滚动条。
-   统一改为 auto：未溢出不显示；同时用 scrollbar-gutter 保留占位避免列宽抖动。 */
-.ant-table .ant-table-body {
+/* Table/ProTable 纵向滚动：仅 UniTable 限高模式启用，避免 natural-height 未触达限高仍出现空纵条 */
+.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-body {
   overflow-y: auto !important;
 }
 
-/* 固定列区域（left/right）同步同样策略，避免“未溢出仍显示竖条” */
-.ant-table .ant-table-fixed-left .ant-table-body-inner,
-.ant-table .ant-table-fixed-right .ant-table-body-inner,
-.ant-table .ant-table-fixed-left .ant-table-body-outer,
-.ant-table .ant-table-fixed-right .ant-table-body-outer {
+.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-left .ant-table-body-inner,
+.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-right .ant-table-body-inner,
+.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-left .ant-table-body-outer,
+.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-right .ant-table-body-outer {
   overflow-y: auto !important;
 }
 
@@ -1025,21 +1023,17 @@ code {
   vertical-align: middle !important;
 }
 
-/* 表格滚动条：与全局完全统一（6px、@scrollbar-thumb/@scrollbar-thumb-hover）
- * scrollbar-gutter：预留纵向滚动条占位，避免内容加载后滚动条出现导致整表横向轻微错位（固定列「左移」观感）
- */
+/* 表格横向滚动条样式（全站）；纵向 gutter 仅由 UniTable scroll-y-mode 统一控制 */
 .ant-table-wrapper .ant-table-body,
 .ant-table-wrapper .ant-table-content {
   overflow-x: auto !important;
-  scrollbar-gutter: stable;
   scrollbar-width: thin !important;
   scrollbar-color: @scrollbar-thumb transparent !important;
 }
 .ant-table-wrapper .ant-table-body::-webkit-scrollbar,
 .ant-table-wrapper .ant-table-content::-webkit-scrollbar {
-  width: 6px !important;
-  height: 6px !important;
-  display: block !important;
+  width: 6px;
+  height: 6px;
   background: transparent !important;
 }
 .ant-table-wrapper .ant-table-body::-webkit-scrollbar-thumb,
@@ -1058,6 +1052,16 @@ code {
 .ant-table-wrapper .ant-table-body::-webkit-scrollbar-corner,
 .ant-table-wrapper .ant-table-content::-webkit-scrollbar-corner {
   background: transparent !important;
+}
+
+/* UniTable 限高：预留纵向滚动条占位，避免表头/表体列宽抖动 */
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content {
+  scrollbar-gutter: stable;
+}
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body::-webkit-scrollbar,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content::-webkit-scrollbar {
+  display: block;
 }
 
 /* 已移除可能导致树组件错位的 top 偏移 hack */
@@ -1325,3 +1329,85 @@ code {
 @import './styles/action-column.less';
 @import './styles/uni-batch-split.less';
 
+/**
+ * UniTable 纵向滚动唯一控制面（与 components/uni-table/index.tsx 配对）
+ * 覆盖上文全局 .ant-table-body / .ant-table-content 的 overflow-y、scrollbar-gutter、
+ * ::-webkit-scrollbar 强制显示，避免「未限高仍出现纵滚条 / 表头被算进滚动区」。
+ */
+.uni-table-container.uni-table-natural-height {
+  .ant-pro-table,
+  .ant-pro-card,
+  .ant-pro-card-body,
+  .ant-pro-table-container,
+  .ant-table-wrapper,
+  .ant-spin-nested-loading,
+  .ant-spin-container,
+  .ant-table,
+  .ant-table-container {
+    height: auto !important;
+    max-height: none !important;
+    flex: 0 1 auto !important;
+  }
+
+  /* scroll.x 时表头/表体同在 .ant-table-content 内，须一并关闭纵向滚动与 gutter */
+  .ant-table-header,
+  .ant-table-content,
+  .ant-table-body,
+  .ant-table-body-inner,
+  .ant-table-fixed-left .ant-table-body-inner,
+  .ant-table-fixed-right .ant-table-body-inner,
+  .ant-table-fixed-left .ant-table-body-outer,
+  .ant-table-fixed-right .ant-table-body-outer {
+    overflow-y: hidden !important;
+    max-height: none !important;
+    scrollbar-gutter: auto !important;
+    flex: none !important;
+  }
+
+  /* 覆盖上文全局 ::-webkit-scrollbar 规则：natural-height 不显示纵向滚动条 */
+  .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
+  .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
+    width: 0 !important;
+    display: none !important;
+  }
+  .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+  .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+    height: 6px !important;
+    display: block !important;
+  }
+}
+
+/* 两栏布局：未限高时不拉伸 UniTable 填满列高（否则 flex+overflow-y:auto 产生空滚动条） */
+.two-column-layout-content > .uni-table-container.uni-table-natural-height {
+  height: auto !important;
+  flex: 0 1 auto !important;
+
+  > div,
+  .ant-pro-table,
+  .ant-pro-table-container,
+  .ant-table-wrapper,
+  .ant-spin-nested-loading,
+  .ant-spin-container,
+  .ant-table,
+  .ant-table-container {
+    height: auto !important;
+    flex: 0 1 auto !important;
+  }
+
+  .ant-table-header,
+  .ant-table-content,
+  .ant-table-body,
+  .ant-table-body-inner,
+  .ant-table-fixed-left .ant-table-body-inner,
+  .ant-table-fixed-right .ant-table-body-inner {
+    flex: none !important;
+    overflow-y: hidden !important;
+    scrollbar-gutter: auto !important;
+  }
+
+  .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
+  .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
+    width: 0 !important;
+    display: none !important;
+  }
+}

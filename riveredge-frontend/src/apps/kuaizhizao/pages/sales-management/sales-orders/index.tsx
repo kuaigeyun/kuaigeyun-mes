@@ -527,7 +527,7 @@ const SalesOrdersPage: React.FC = () => {
   const [pullQuotationCandidates, setPullQuotationCandidates] = useState<PullQuotationCandidate[]>([]);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 与客户跟进列表一致：交货逾期行浅色警示背景 */
-  const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(true);
+  const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
 
@@ -846,40 +846,36 @@ const SalesOrdersPage: React.FC = () => {
     });
   };
 
+  /**
+   * 订单编号单元格：编号 + 复制按钮（与项目其他「编号列」保持一致的 Space 布局）。
+   *
+   * ⚠️ 历史问题：之前使用 `inline-flex + width:100% + Tooltip` 包裹 `disabled` Button，
+   * 当 `disabled` 切换时 antd Tooltip 会在外层注入 `compatible-wrapper` span，
+   * 导致 flex item 由 wrapper 接管、Button 自带的 `flex: 0 0 14px` 失效，
+   * 加载完成后文字 ellipsis 可用区微变，整列内容向左轻微位移 1–2px。
+   * 现统一为 Space 布局，加载前后 DOM 结构稳定，不再出现位移。
+   */
   const renderStableOrderCodeCell = useCallback((rawCode?: string | null) => {
-    const code = rawCode?.trim() || '-';
-    const canCopy = code !== '-';
+    const code = rawCode?.trim();
+    if (!code) {
+      return <span>-</span>;
+    }
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 6 }}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{code}</span>
-        <Tooltip title={t('field.invitationCode.copy')}>
-          <Button
-            type="link"
-            size="small"
-            icon={<CopyOutlined />}
-            disabled={!canCopy}
-            style={{
-              padding: 0,
-              minWidth: 14,
-              width: 14,
-              height: 14,
-              lineHeight: '14px',
-              flex: '0 0 14px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!canCopy) return;
-              navigator.clipboard.writeText(code).then(
-                () => messageApi.success(t('common.copySuccess')),
-                () => messageApi.error(t('common.copyFailed')),
-              );
-            }}
-          />
-        </Tooltip>
-      </span>
+      <Space size={4}>
+        <span>{code}</span>
+        <Button
+          type="link"
+          size="small"
+          icon={<CopyOutlined style={{ fontSize: 12 }} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(code).then(
+              () => messageApi.success(t('common.copySuccess')),
+              () => messageApi.error(t('common.copyFailed')),
+            );
+          }}
+        />
+      </Space>
     );
   }, [messageApi, t]);
 
@@ -1907,7 +1903,7 @@ const SalesOrdersPage: React.FC = () => {
       hideInSearch: false,
       render: (_: unknown, record: SalesOrder) => renderStableOrderCodeCell(record.order_code),
     },
-    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true, hideInSearch: false },
+    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', ellipsis: true, sorter: true, hideInSearch: false },
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
     // 订单日期范围（仅搜索）
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('common.startDate') ?? '开始日期', t('common.endDate') ?? '结束日期'] } },
@@ -2097,7 +2093,7 @@ const SalesOrdersPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 130, ellipsis: true, hideInSearch: false },
     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 110, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
     { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
     {
       title: t('app.kuaizhizao.salesOrder.unit'),
