@@ -1,5 +1,5 @@
 /**
- * 全屏 / 居中页面加载：Lottie 动画（替代 compact 骨架屏）
+ * 全屏 / 居中页面加载：Lottie 动画（鉴权等待等；路由懒加载使用 PageSkeleton Spin）
  */
 import React from 'react';
 import Lottie from 'lottie-react';

@@ -437,7 +437,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 });
 
 /**
- * 延迟加载的骨架屏包装器
+ * 延迟加载的 Spin / Lottie 包装器（fullHeight 为全屏 Lottie）
  * 针对首屏和应用切入点优化
  */
 const DelayedFallback: React.FC<{

@@ -5,7 +5,7 @@
  * 应用加载失败不会影响系统核心功能的正常使用
  *
  * 性能优化：按需加载
- * - 骨架屏仅在获取应用列表（getInstalledApplicationList）时显示
+ * - Spin 占位仅在获取应用列表（getInstalledApplicationList）时显示
  * - 各应用插件在用户访问对应路由时才加载（React.lazy），与系统级页面体验一致
  *
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
@@ -27,7 +27,7 @@ const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] 
 
 /**
  * 延迟显示的 Fallback 组件
- * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
+ * 初始 delayMs 内渲染 null，超时后才显示 Spin，避免快速加载时的闪烁
  */
 const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 0 }) => {
   const [show, setShow] = useState(delayMs === 0);

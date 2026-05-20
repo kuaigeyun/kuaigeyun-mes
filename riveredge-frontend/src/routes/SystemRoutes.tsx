@@ -13,7 +13,7 @@
 
 import React, { Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Modal, Spin } from 'antd';
+import { Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
@@ -37,7 +37,7 @@ const DocsPage = React.lazy(() => import('../pages/docs'));
 
 /**
  * 延迟显示的 Fallback 组件
- * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
+ * 初始 delayMs 内渲染 null，超时后才显示 Spin，避免快速加载时的闪烁
  */
 const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayMs?: number }> = ({
   variant = 'content',
@@ -52,7 +52,7 @@ const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayM
   return show ? <PageSkeleton variant={variant} /> : null;
 };
 
-// 懒加载包装：主内容区统一骨架（DelayedFallback 默认 variant=content）
+// 懒加载包装：主内容区统一 Spin（DelayedFallback）
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<DelayedFallback />}><LazyComponent /></Suspense>
 );
@@ -79,11 +79,7 @@ const withPermission = (
 const SystemDashboardRouteGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { initialized, enabled } = useRedirectIfSystemDashboardOff();
   if (!initialized) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center' }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
   if (!enabled) return null;
   return <>{children}</>;

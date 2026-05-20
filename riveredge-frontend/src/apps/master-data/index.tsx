@@ -10,7 +10,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import SuspendedModalFloatingButton from './components/SuspendedModalFloatingButton';
 
-/** 页面懒加载包装：Suspense + PageSkeleton fallback */
+/** 页面懒加载包装：Suspense + Spin fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
 );

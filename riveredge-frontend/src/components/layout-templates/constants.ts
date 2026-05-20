@@ -116,8 +116,8 @@ export const PAGE_SPACING = {
 
 /**
  * 主内容区「自管留白」的推荐数值（px）：用于未走 UniTabs 水平 padding 的页面根、表单模板等。
- * ⚠️ 路由级 `PageSkeleton` 不应再叠加本 inset：桌面端 `UniTabs` 已对子节点施加左右 16px（见 uni-tabs/index.tsx），
- * 骨架外层若再 padding 16，肉眼会呈约 32px（双 16）并与真实页不一致。
+ * ⚠️ 路由级 `PageSkeleton`（Spin 占位）不应再叠加本 inset：桌面端 `UniTabs` 已对子节点施加左右 16px（见 uni-tabs/index.tsx），
+ * 占位外层若再 padding 16，肉眼会呈约 32px（双 16）并与真实页不一致。
  */
 export const MAIN_CONTENT_VIEW_INSET_PX = {
   top: PAGE_SPACING.CONTENT_TOP,
