@@ -460,7 +460,7 @@
     "haoligo:equipment-reports-capacity:delete",
     "haoligo:equipment-reports-capacity:import",
     "haoligo:equipment-reports-capacity:export",
-    "haoligo:haoligo:read",
+    "haoligo:entry:read",
     "haoligo:haoligo:create",
     "haoligo:haoligo:update",
     "haoligo:haoligo:delete",

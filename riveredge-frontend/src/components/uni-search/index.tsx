@@ -150,10 +150,11 @@ const UniSearch: React.FC<UniSearchProps> = ({
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        flexWrap: 'wrap',
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
         rowGap: 8,
         minWidth: 0,
-        flex: '1 1 auto',
+        flex: '1 1 0',
+        overflow: 'hidden',
         ...style,
       }}
     >

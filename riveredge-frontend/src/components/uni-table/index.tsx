@@ -2119,12 +2119,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             style={{
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              flexWrap: 'wrap',
+              alignItems: 'center',
+              flexWrap: isMobile ? 'wrap' : 'nowrap',
               gap: 8,
               rowGap: 8,
               width: '100%',
               marginTop: isMobile ? 8 : 0,
+              minWidth: 0,
             }}
           >
             <UniSearch
@@ -2163,12 +2164,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               toolBarButtonSize={toolBarButtonSize}
             />
             {!isMobile && viewTypes && viewTypes.length > 1 ? (
-              <UniView
-                viewTypes={viewTypes}
-                value={currentViewType}
-                onChange={handleViewTypeChange}
-                customViews={customViews}
-              />
+              <div style={{ flexShrink: 0, marginLeft: 8 }}>
+                <UniView
+                  viewTypes={viewTypes}
+                  value={currentViewType}
+                  onChange={handleViewTypeChange}
+                  customViews={customViews}
+                  style={{ marginLeft: 0 }}
+                />
+              </div>
             ) : null}
           </div>
 

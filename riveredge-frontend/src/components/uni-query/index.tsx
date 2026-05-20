@@ -2665,8 +2665,11 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   }, [savedSearchesData?.items, pagePath, orderUpdateTrigger, builtinLifecycleStageSearches]);
 
   /** 钉住条件条可用宽度内能完整展示的数量（超出部分进「更多」），由测量层 + ResizeObserver 更新 */
-  const [visiblePinCount, setVisiblePinCount] = useState(Number.MAX_SAFE_INTEGER);
-  /** 工具栏内预留给钉住条件的宽度（与红框内实际内容宽度解耦，避免 max-content 自洽变窄） */
+  const [visiblePinCount, setVisiblePinCount] = useState(1);
+  const [pinChipMaxWidth, setPinChipMaxWidth] = useState(150);
+  /** 全部钉住条件可在可用宽度内自然排下（不撑满、不留中间空白） */
+  const [pinAllFit, setPinAllFit] = useState(true);
+  const querySearchRowRef = useRef<HTMLDivElement>(null);
   const pinnedSlotRef = useRef<HTMLDivElement>(null);
   const pinnedBoxRef = useRef<HTMLDivElement>(null);
   const measureLayerRef = useRef<HTMLDivElement>(null);
@@ -2683,17 +2686,32 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
 
   const remeasurePinnedSplit = useCallback(() => {
     if (pinnedSearches.length === 0) {
+      setVisiblePinCount(0);
+      setPinAllFit(true);
       return;
     }
-    const slot = pinnedSlotRef.current;
+    const row = querySearchRowRef.current;
     const measure = measureLayerRef.current;
-    if (!slot || !measure) {
+    const slot = pinnedSlotRef.current;
+    const host = row?.parentElement;
+    if (!row || !host || !measure) {
       return;
     }
-    const avail = slot.clientWidth;
+
+    const gap = 8;
+    let fixed = 0;
+    Array.from(row.children).forEach((child) => {
+      if (child !== slot) {
+        fixed += (child as HTMLElement).offsetWidth;
+      }
+    });
+    const gaps = Math.max(0, row.children.length - 1) * gap;
+    const slotMargin = slot ? 16 : 0;
+    const avail = host.clientWidth - fixed - gaps - slotMargin;
     if (avail <= 0) {
       return;
     }
+
     const chipEls = measure.querySelectorAll<HTMLElement>('[data-pin-chip-measure]');
     const moreEl = measure.querySelector<HTMLElement>('[data-pin-more-measure]');
     if (chipEls.length !== pinnedSearches.length || !moreEl) {
@@ -2701,6 +2719,15 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     }
     const widths = Array.from(chipEls).map((el) => el.offsetWidth);
     const moreW = moreEl.offsetWidth;
+    const totalNatural = widths.reduce((sum, w) => sum + w, 0);
+
+    if (totalNatural <= avail) {
+      setVisiblePinCount(pinnedSearches.length);
+      setPinChipMaxWidth(150);
+      setPinAllFit(true);
+      return;
+    }
+
     let acc = 0;
     let best = 0;
     for (let i = 0; i < widths.length; i++) {
@@ -2719,7 +2746,14 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     if (best > pinnedSearches.length) {
       best = pinnedSearches.length;
     }
+
+    const needMoreBtn = best < pinnedSearches.length;
+    const chipBudget = Math.max(0, avail - (needMoreBtn ? moreW : 0));
+    const chipMax = Math.max(72, Math.min(150, Math.floor(chipBudget / best)));
+
     setVisiblePinCount(best);
+    setPinChipMaxWidth(chipMax);
+    setPinAllFit(false);
   }, [pinnedSearches]);
 
   useLayoutEffect(() => {
@@ -2727,8 +2761,9 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   }, [remeasurePinnedSplit, pinnedListKey, i18n.language]);
 
   useEffect(() => {
-    const slot = pinnedSlotRef.current;
-    if (!slot || typeof ResizeObserver === 'undefined') {
+    const row = querySearchRowRef.current;
+    const host = row?.parentElement;
+    if (!host || typeof ResizeObserver === 'undefined') {
       return undefined;
     }
     let raf = 0;
@@ -2740,7 +2775,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         remeasurePinnedSplit();
       });
     });
-    ro.observe(slot);
+    ro.observe(host);
     return () => {
       ro.disconnect();
       if (raf) {
@@ -2992,22 +3027,23 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   return (
     <>
       <div
+        ref={querySearchRowRef}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           minHeight: '32px',
-          flexWrap: 'wrap',
-          rowGap: 8,
-          flex: 1,
+          flexWrap: 'nowrap',
+          width: '100%',
           minWidth: 0,
+          overflow: 'hidden',
         }}
       >
       <Button
           ref={buttonRef}
           onClick={handleOpen}
           type="default"
-          style={{ height: '32px' }}
+          style={{ height: '32px', flexShrink: 0 }}
       >
         {t('components.uniQuery.advancedSearch')}
           <DownOutlined style={{ marginLeft: 4 }} />
