@@ -12,12 +12,13 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Dropdown } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -82,13 +83,25 @@ const LazyUniImport = lazy(() =>
 );
 const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
 
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  草稿: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
-  已发送: { text: '已发送', color: 'processing' },
-  已接受: { text: '已接受', color: 'success' },
-  已拒绝: { text: '已拒绝', color: 'error' },
-  已转订单: { text: '已转订单', color: 'success' },
-};
+/** 详情/列表状态 Tag：与生命周期主轴文案一致（含待审核等子态） */
+function getQuotationStatusTagProps(record: Quotation, auditRequired: boolean): { text: string; color: string } {
+  const lc = getQuotationLifecycle(record, auditRequired);
+  if (lc.status === 'exception') return { text: lc.stageName, color: 'error' };
+  if (lc.status === 'success') return { text: lc.stageName, color: 'success' };
+  const activeKey = lc.mainStages?.find((s) => s.status === 'active')?.key;
+  if (activeKey === 'draft') return { text: lc.stageName, color: RE_STATUS_BADGE_DRAFT };
+  if (activeKey === 'converted') return { text: lc.stageName, color: 'success' };
+  return { text: lc.stageName, color: 'processing' };
+}
+
+/** 列表快速筛选：DB status → 生命周期展示（筛选值仍为后端 status） */
+const QUOTATION_STATUS_FILTER_ENUM = {
+  草稿: { text: '草稿' },
+  已发送: { text: '已报价' },
+  已接受: { text: '客户确认' },
+  已转订单: { text: '已转订单' },
+  已拒绝: { text: '已驳回' },
+} as const;
 
 /** 与后端 LEGACY_PENDING_VALUES 一致 */
 const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
@@ -139,6 +152,15 @@ function canDeleteQuotation(q: Quotation): boolean {
   if (q.status === '已转订单') return false;
   if (q.sales_order_id != null && Number(q.sales_order_id) > 0) return false;
   return true;
+}
+
+/** 系列已有更新修订版，不可再从旧版下推 */
+function isQuotationSuperseded(q: Quotation): boolean {
+  return (
+    q.is_latest_in_series === false &&
+    q.superseded_by_id != null &&
+    Number(q.superseded_by_id) > 0
+  );
 }
 
 /** 允许「转订单」：已接受；或开审核且已发送并已审核通过；或已转单但下游已删可重新下推 */
@@ -546,6 +568,7 @@ const QuotationsPage: React.FC = () => {
     return typeof c === 'string' && c.trim() !== '' ? c.trim() : 'CNY';
   });
   const actionRef = useRef<ActionType>(null);
+  const lastQuotationsFlatCacheRef = useRef<Quotation[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
@@ -824,13 +847,7 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       hideInTable: true,
-      valueEnum: {
-        草稿: { text: '草稿' },
-        已发送: { text: '已发送' },
-        已接受: { text: '已接受' },
-        已拒绝: { text: '已拒绝' },
-        已转订单: { text: '已转订单' },
-      },
+      valueEnum: QUOTATION_STATUS_FILTER_ENUM,
       order: 40,
     },
     {
@@ -927,37 +944,6 @@ const QuotationsPage: React.FC = () => {
               重新编辑
             </Button>
           );
-        }
-        {
-          const convertible = canConvertQuotation(record, quotationAuditRequired);
-          // 仅当 superseded_by_id 有值时才认为"真正被取代"，避免数据异常导致误判
-          const superseded =
-            record.is_latest_in_series === false &&
-            record.superseded_by_id != null &&
-            Number(record.superseded_by_id) > 0;
-          const showConvert =
-            convertible ||
-            (superseded &&
-              (record.status === '已接受' ||
-                (record.status === '已发送' &&
-                  (quotationAuditRequired ? isApprovedReview(record.review_status) : false))));
-          if (showConvert) {
-            parts.push(
-              <Tooltip
-                key="cv"
-                title={superseded ? '该报价单已有修订版，请从最新修订版转销售订单' : undefined}
-              >
-                <Button
-                  type="link"
-                  size="small"
-                  disabled={superseded}
-                  onClick={() => !superseded && handleConvert(record)}
-                >
-                  转销售订单
-                </Button>
-              </Tooltip>
-            );
-          }
         }
         if (canRevokePushQuotation(record)) {
           parts.push(
@@ -1206,7 +1192,9 @@ const QuotationsPage: React.FC = () => {
           status: row.status || '草稿',
           items: Array.isArray(row.items) ? row.items : [],
         };
-        await createQuotation(payload);
+        await createQuotation(payload, {
+          autoSubmit: (payload.status || '草稿') !== '草稿',
+        });
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条报价单`);
@@ -1353,7 +1341,10 @@ const QuotationsPage: React.FC = () => {
     try {
       const result = await batchImport({
         items: toImport,
-        importFn: async (item) => createQuotation(item),
+        importFn: async (item) =>
+          createQuotation(item, {
+            autoSubmit: (item.status || '草稿') !== '草稿',
+          }),
         title: '正在导入报价单',
         concurrency: 3,
       });
@@ -1413,8 +1404,8 @@ const QuotationsPage: React.FC = () => {
     Modal.confirm({
       title: '提交报价单',
       content: quotationAuditRequired
-        ? `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」；若业务蓝图要求审核，将进入待审核。`
-        : `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」。`,
+        ? `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已报价」；若业务蓝图要求审核，将进入待审核。`
+        : `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已报价」。`,
       onOk: async () => {
         try {
           const updated = await submitQuotation(record.id!);
@@ -1515,7 +1506,7 @@ const QuotationsPage: React.FC = () => {
   const handleConfirmCustomer = (record: Quotation) => {
     Modal.confirm({
       title: '客户确认',
-      content: '标记为「已接受」，表示报价已获客户认可，可继续下推销售订单。',
+      content: '标记为「客户确认」，表示报价已获客户认可，可继续下推销售订单。',
       onOk: async () => {
         try {
           const updated = await confirmCustomerQuotation(record.id!);
@@ -1553,7 +1544,7 @@ const QuotationsPage: React.FC = () => {
   const handleRevokePush = (record: Quotation) => {
     Modal.confirm({
       title: '撤回下推',
-      content: '解除与已删除销售订单的关联，恢复为「已接受」，可再次转销售订单。',
+      content: '解除与已删除销售订单的关联，恢复为「客户确认」，可再次转销售订单。',
       onOk: async () => {
         try {
           const updated = await revokePushQuotation(record.id!);
@@ -1663,6 +1654,46 @@ const QuotationsPage: React.FC = () => {
       }
     },
     [handleRevision, messageApi]
+  );
+
+  const selectedQuotationForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const numericId = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(numericId) || numericId <= 0) return null;
+    return lastQuotationsFlatCacheRef.current.find((q) => q.id === numericId) ?? null;
+  }, [selectedRowKeys]);
+
+  const buildToolbarPushMenuItems = useCallback(
+    (record: Quotation) => {
+      const superseded = isQuotationSuperseded(record);
+      const convertible = canConvertQuotation(record, quotationAuditRequired);
+      return buildUniPushMenuItems([
+        {
+          key: 'sales-order',
+          label: '转销售订单',
+          icon: <SwapOutlined />,
+          disabled: superseded || !convertible,
+          title: superseded ? '该报价单已有修订版，请从最新修订版转销售订单' : undefined,
+          onClick: () => {
+            if (superseded || !convertible) return;
+            void (async () => {
+              try {
+                const latest = await getQuotation(record.id!);
+                handleConvert(latest);
+              } catch (error: any) {
+                messageApi.error(error?.message || '加载报价单失败');
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [handleConvert, messageApi, quotationAuditRequired],
+  );
+
+  const toolbarPushMenuItems = useMemo(
+    () => (selectedQuotationForToolbar ? buildToolbarPushMenuItems(selectedQuotationForToolbar) : []),
+    [buildToolbarPushMenuItems, selectedQuotationForToolbar],
   );
 
   const handleConfirmPrint = async () => {
@@ -1792,7 +1823,7 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const submitCreate = async (values: any) => {
+  const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
     const validItems = (values.items || []).filter(
       (it: any) =>
         it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
@@ -1814,43 +1845,59 @@ const QuotationsPage: React.FC = () => {
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
-    await createQuotation({
-      quotation_code: quotationCode || undefined,
-      quotation_date: toApiDateString(values.quotation_date),
-      valid_until: toApiDateString(values.valid_until),
-      delivery_date: toApiDateString(values.delivery_date),
-      customer_id: values.customer_id,
-      customer_name: customerName,
-      customer_contact: values.customer_contact,
-      customer_phone: values.customer_phone,
-      salesman_id: values.salesman_id,
-      salesman_name: values.salesman_name,
-      shipping_address: values.shipping_address,
-      shipping_method: values.shipping_method,
-      payment_terms: values.payment_terms,
-      currency_code: values.currency_code ?? defaultQuotationCurrency,
-      notes: values.notes,
-      price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
-      items: validItems.map((it: any) => ({
-        material_id: it.material_id,
-        material_code: it.material_code,
-        material_name: it.material_name,
-        material_spec: it.material_spec,
-        material_unit: it.material_unit,
-        quote_quantity: it.quote_quantity,
-        unit_price: it.unit_price,
-        tax_rate: it.tax_rate ?? 0,
-        delivery_date: toApiDateString(it.delivery_date),
-        notes: it.notes,
-      })),
-    });
-    messageApi.success('创建成功');
+    await createQuotation(
+      {
+        quotation_code: quotationCode || undefined,
+        quotation_date: toApiDateString(values.quotation_date),
+        valid_until: toApiDateString(values.valid_until),
+        delivery_date: toApiDateString(values.delivery_date),
+        customer_id: values.customer_id,
+        customer_name: customerName,
+        customer_contact: values.customer_contact,
+        customer_phone: values.customer_phone,
+        salesman_id: values.salesman_id,
+        salesman_name: values.salesman_name,
+        shipping_address: values.shipping_address,
+        shipping_method: values.shipping_method,
+        payment_terms: values.payment_terms,
+        currency_code: values.currency_code ?? defaultQuotationCurrency,
+        notes: values.notes,
+        price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        items: validItems.map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          material_spec: it.material_spec,
+          material_unit: it.material_unit,
+          quote_quantity: it.quote_quantity,
+          unit_price: it.unit_price,
+          tax_rate: it.tax_rate ?? 0,
+          delivery_date: toApiDateString(it.delivery_date),
+          notes: it.notes,
+        })),
+      },
+      { autoSubmit: !options?.asDraft },
+    );
+    messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : '创建成功');
     setModalVisible(false);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
 
     actionRef.current?.reload();
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      const values = await formRef.current?.validateFields();
+      if (values) await submitCreate(values, { asDraft: true });
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
+      } else if (err?.message !== t('app.kuaizhizao.quotation.validLineHint')) {
+        messageApi.error(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
+      }
+    }
   };
 
   const submitEdit = async (values: any) => {
@@ -1925,8 +1972,8 @@ const QuotationsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (s) => {
-        const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
+      render: (_, r) => {
+        const c = getQuotationStatusTagProps(r, quotationAuditRequired);
         return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
@@ -2764,6 +2811,18 @@ const QuotationsPage: React.FC = () => {
           showCreateButton
           createButtonText="新建报价单"
           onCreate={handleCreate}
+          toolBarActionsAfterCreate={[
+            <Dropdown
+              key={`quotation-push-${selectedQuotationForToolbar?.id ?? 'none'}`}
+              trigger={['click']}
+              disabled={!selectedQuotationForToolbar}
+              menu={{ items: toolbarPushMenuItems }}
+            >
+              <Button type="primary" icon={<ArrowDownOutlined />} size="middle">
+                {t('app.kuaizhizao.salesOrder.push')}
+              </Button>
+            </Dropdown>,
+          ]}
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
@@ -2780,7 +2839,7 @@ const QuotationsPage: React.FC = () => {
                   requireConfirm: true,
                   confirmTitle: '批量客户确认',
                   confirmDescription: (count) =>
-                    `确定将选中的 ${count} 条报价单标记为「已接受」吗？仅「已报价」且符合确认条件的单据会成功。`,
+                    `确定将选中的 ${count} 条报价单标记为「客户确认」吗？仅「已报价」且符合确认条件的单据会成功。`,
                   onClick: handleBatchConfirmCustomer,
                 },
                 ...(quotationAuditRequired
@@ -2886,6 +2945,7 @@ const QuotationsPage: React.FC = () => {
               });
               setListTotal(response.total ?? 0);
               const flat = response.data || [];
+              lastQuotationsFlatCacheRef.current = flat;
               return {
                 data: buildQuotationSeriesTree(flat),
                 success: true,
@@ -3189,6 +3249,11 @@ const QuotationsPage: React.FC = () => {
         formRef={formRef}
         width={1200}
         layout="vertical"
+        extraFooter={
+          editingId == null ? (
+            <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.quotation.saveDraft')}</Button>
+          ) : undefined
+        }
         initialValues={editingId == null ? { quotation_date: dayjs(), currency_code: defaultQuotationCurrency } : undefined}
         onValuesChange={(changed, _all) => {
           if ('customer_id' in changed && changed.customer_id != null) {

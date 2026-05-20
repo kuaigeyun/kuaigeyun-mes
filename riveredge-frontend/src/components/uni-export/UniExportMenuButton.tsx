@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Button, Dropdown } from 'antd';
+import { Button, Dropdown, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ButtonProps } from 'antd';
 import { DownloadOutlined, DownOutlined } from '@ant-design/icons';
@@ -25,6 +25,8 @@ export interface UniExportMenuButtonProps<T extends Record<string, any> = Record
   showSelected?: boolean;
   showCurrentPage?: boolean;
   showAll?: boolean;
+  /** 仅图标（窄屏/工具栏宽度不足） */
+  iconOnly?: boolean;
 }
 
 export function UniExportMenuButton<T extends Record<string, any> = Record<string, any>>({
@@ -35,8 +37,10 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
   showSelected = true,
   showCurrentPage = true,
   showAll = true,
+  iconOnly = false,
 }: UniExportMenuButtonProps<T>) {
   const { t } = useTranslation();
+  const exportLabel = t('components.uniTable.export');
   const items: MenuProps['items'] = [];
   if (showSelected) {
     items.push({
@@ -63,6 +67,17 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
 
   if (items.length === 0) return null;
 
+  const trigger = (
+    <Button icon={<DownloadOutlined />} size={size} aria-label={exportLabel}>
+      {iconOnly ? null : (
+        <>
+          {exportLabel}
+          <DownOutlined style={{ fontSize: 10, marginInlineStart: 2, opacity: 0.65 }} />
+        </>
+      )}
+    </Button>
+  );
+
   return (
     <Dropdown
       menu={{ items }}
@@ -71,10 +86,7 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
       mouseEnterDelay={0.05}
       mouseLeaveDelay={0.2}
     >
-      <Button icon={<DownloadOutlined />} size={size}>
-        {t('components.uniTable.export')}
-        <DownOutlined style={{ fontSize: 10, marginInlineStart: 2, opacity: 0.65 }} />
-      </Button>
+      {iconOnly ? <Tooltip title={exportLabel}>{trigger}</Tooltip> : trigger}
     </Dropdown>
   );
 }

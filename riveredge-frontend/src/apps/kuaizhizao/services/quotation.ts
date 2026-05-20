@@ -116,10 +116,19 @@ export async function getQuotation(id: number, includeItems: boolean = true): Pr
   });
 }
 
-export async function createQuotation(data: Partial<Quotation>): Promise<Quotation> {
+export async function createQuotation(
+  data: Partial<Quotation>,
+  options?: { autoSubmit?: boolean },
+): Promise<Quotation> {
   return apiRequest<Quotation>('/apps/kuaizhizao/quotations', {
     method: 'POST',
     data,
+    params:
+      options?.autoSubmit === false
+        ? { auto_submit: false }
+        : options?.autoSubmit === true
+          ? { auto_submit: true }
+          : undefined,
   });
 }
 

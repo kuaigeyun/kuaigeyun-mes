@@ -34,6 +34,10 @@ router = APIRouter(prefix="/quotations", tags=["App · Kuaige Zhizao · Quotatio
 @router.post("", response_model=QuotationResponse, summary="Create quotation")
 async def create_quotation(
     quotation_data: QuotationCreate,
+    auto_submit: bool = Query(
+        True,
+        description="创建后是否自动提交；false 时保持草稿",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -43,6 +47,7 @@ async def create_quotation(
             tenant_id=tenant_id,
             quotation_data=quotation_data,
             created_by=current_user.id,
+            auto_submit=auto_submit,
         )
     except Exception as e:
         logger.error("创建报价单失败: %s", e)

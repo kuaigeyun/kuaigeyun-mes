@@ -382,8 +382,10 @@ class QuotationService:
         tenant_id: int,
         quotation_data: QuotationCreate,
         created_by: int,
+        *,
+        auto_submit: bool = True,
     ) -> QuotationResponse:
-        """创建报价单"""
+        """创建报价单；auto_submit=False 时保持草稿，不自动提交为已报价。"""
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "quotation")
         if not is_enabled:
             raise BusinessLogicError("报价单节点未启用，无法创建报价单")
@@ -466,17 +468,18 @@ class QuotationService:
                 total_amount=total_amt,
             )
             quotation = await Quotation.get(id=quotation.id)
-            # 创建完成后即提交为「已发送」，生命周期进入「已报价」（审核按蓝图 quotation.auditRequired）
-            audit_required = await self.business_config_service.check_audit_required(
-                tenant_id, "quotation"
-            )
-            await self._release_quotation_from_draft(
-                tenant_id,
-                quotation.id,
-                created_by,
-                auto_approved=not audit_required,
-            )
-            quotation = await Quotation.get(id=quotation.id)
+            if auto_submit:
+                # 创建完成后即提交为「已发送」，生命周期进入「已报价」（审核按蓝图 quotation.auditRequired）
+                audit_required = await self.business_config_service.check_audit_required(
+                    tenant_id, "quotation"
+                )
+                await self._release_quotation_from_draft(
+                    tenant_id,
+                    quotation.id,
+                    created_by,
+                    auto_approved=not audit_required,
+                )
+                quotation = await Quotation.get(id=quotation.id)
             items = await QuotationItem.filter(
                 tenant_id=tenant_id, quotation_id=quotation.id
             ).order_by("id")

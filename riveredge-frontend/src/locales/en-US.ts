@@ -2541,6 +2541,9 @@ export default {
   'app.kuaizhizao.quotation.printTemplateDesign': 'Print template design',
   'app.kuaizhizao.quotation.formalPrintDenied':
     'PDF generation is available after approval, customer acceptance, or conversion to sales order.',
+  'app.kuaizhizao.quotation.saveDraft': 'Save as draft',
+  'app.kuaizhizao.quotation.savedDraft': 'Quotation saved as draft',
+  'app.kuaizhizao.quotation.completeRequired': 'Complete required fields before saving',
   'app.kuaizhizao.quotation.colSeries': 'Series code',
   'app.kuaizhizao.quotation.colVersion': 'Revision',
   'app.kuaizhizao.quotation.versionDisplay': 'Revision {{n}}',

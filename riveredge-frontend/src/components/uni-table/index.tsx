@@ -67,6 +67,9 @@ import { UniExportMenuButton } from '../uni-export'
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
 
+/** 容器宽度低于此值时，工具栏右侧导入/导出/同步仅显示图标 */
+const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
+
 /** 行点击切换勾选：命中可操作子元素时不切换，避免误选（成本仅一次 DOM closest） */
 function shouldIgnoreRowClickForSelection(target: Element): boolean {
   return !!target.closest(
@@ -1151,6 +1154,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const internalActionRef = useRef<ActionType>()
   const internalFormRef = useRef<ProFormInstance>()
   const containerRef = useRef<HTMLDivElement>(null)
+  const [dataActionIconOnly, setDataActionIconOnly] = useState(false)
   const buttonContainerRef = useRef<HTMLDivElement>(null)
   const tableBodyPaneRef = useRef<HTMLDivElement>(null)
 
@@ -2051,7 +2055,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }
 
   /** 3.2 右侧：uni-import / uni-export / uni-sync / 数据集（可选）/ 打印（表格设定见 `memoizedOptions`） */
-  const buildRightActions = () => {
+  const buildRightActions = (iconOnly = false) => {
     const rightButtons: ReactNode[] = []
 
     if (showImportButton && onImport) {
@@ -2059,6 +2063,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <UniImportToolbarButton
           key="import"
           size={toolBarButtonSize}
+          iconOnly={iconOnly}
           onOpen={() => setImportModalVisible(true)}
         />
       )
@@ -2069,6 +2074,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <UniExportMenuButton<T>
           key="export"
           size={toolBarButtonSize}
+          iconOnly={iconOnly}
           onExport={onExport}
           selectedRowKeys={selectedRowKeys}
           tableData={tableData}
@@ -2078,7 +2084,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     if (showSyncButton && onSync) {
       rightButtons.push(
-        <UniSyncButton key="sync" size={toolBarButtonSize} onSync={onSync} buttonText={syncButtonText} />
+        <UniSyncButton
+          key="sync"
+          size={toolBarButtonSize}
+          iconOnly={iconOnly}
+          onSync={onSync}
+          buttonText={syncButtonText}
+        />
       )
     }
 
@@ -2180,7 +2192,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [statCardsCtx, t, token.colorTextQuaternary],
   )
 
-  const memoizedRightActions = !isMobile ? buildRightActions() : undefined
+  const memoizedRightActions = !isMobile ? buildRightActions(dataActionIconOnly) : undefined
 
   const memoizedToolbar = React.useMemo(() => ({
     actions: [
@@ -2290,6 +2302,23 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (statCardsCtx?.tableScrollOffsetPx == null) return
     window.dispatchEvent(new Event('resize'))
   }, [statCardsCtx?.tableScrollOffsetPx])
+
+  React.useLayoutEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+    const sync = () => {
+      setDataActionIconOnly(root.clientWidth < DATA_ACTION_ICON_ONLY_MAX_WIDTH)
+    }
+    sync()
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => sync()) : null
+    ro?.observe(root)
+    window.addEventListener('resize', sync)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', sync)
+    }
+  }, [])
 
   /** natural-height：antd 在 scroll.x 下可能重设 overflow，布局后强制关闭纵向滚动避免空纵条 */
   React.useLayoutEffect(() => {
