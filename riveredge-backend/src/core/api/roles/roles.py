@@ -19,6 +19,11 @@ from core.schemas.role import (
     PermissionInfo,
 )
 from core.services.authorization.role_service import RoleService
+from core.services.authorization.role_permission_matrix_service import RolePermissionMatrixService
+from core.schemas.role_function_grants import (
+    RoleFunctionGrantsResponse,
+    RoleFunctionGrantsReplace,
+)
 from core.api.deps.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_access
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -420,6 +425,46 @@ async def assign_permissions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"分配角色权限失败: {str(e)}"
         )
+
+
+@router.get("/{role_uuid}/function-grants", response_model=RoleFunctionGrantsResponse)
+async def get_role_function_grants(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """角色功能权限矩阵（菜单树 + 按 code 回显，配置页专用）。"""
+    try:
+        return await RolePermissionMatrixService.get_function_grants(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/{role_uuid}/function-grants", response_model=RoleFunctionGrantsResponse)
+async def replace_role_function_grants(
+    role_uuid: str,
+    body: RoleFunctionGrantsReplace,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """全量替换角色的功能权限（按 code）；不删除 data/field 类型绑定。"""
+    try:
+        return await RolePermissionMatrixService.replace_function_grants(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            codes=body.codes,
+            current_user_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.get("/{role_uuid}/permissions", response_model=list[PermissionInfo])

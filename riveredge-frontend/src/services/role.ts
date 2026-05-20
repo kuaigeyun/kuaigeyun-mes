@@ -192,6 +192,53 @@ export async function getRolePermissions(roleUuid: string): Promise<Permission[]
   return apiRequest<Permission[]>(`/core/roles/${roleUuid}/permissions`);
 }
 
+/** 功能权限矩阵：服务端菜单树 + 按 code 授权 */
+export interface FunctionGrantAction {
+  action: string;
+  code: string;
+  label: string;
+  uuid: string;
+  granted: boolean;
+  merged_codes?: string[] | null;
+}
+
+export interface FunctionGrantMenuNode {
+  menu_uuid: string;
+  title: string;
+  path?: string | null;
+  resource?: string | null;
+  actions: FunctionGrantAction[];
+  children: FunctionGrantMenuNode[];
+}
+
+export interface FunctionGrantStats {
+  total_function_codes: number;
+  granted_function_codes: number;
+  granted_visible_on_tree: number;
+  granted_not_on_tree: number;
+}
+
+export interface RoleFunctionGrants {
+  role_uuid: string;
+  granted_codes: string[];
+  tree: FunctionGrantMenuNode[];
+  stats: FunctionGrantStats;
+}
+
+export async function getRoleFunctionGrants(roleUuid: string): Promise<RoleFunctionGrants> {
+  return apiRequest<RoleFunctionGrants>(`/core/roles/${roleUuid}/function-grants`);
+}
+
+export async function replaceRoleFunctionGrants(
+  roleUuid: string,
+  codes: string[]
+): Promise<RoleFunctionGrants> {
+  return apiRequest<RoleFunctionGrants>(`/core/roles/${roleUuid}/function-grants`, {
+    method: 'PUT',
+    data: { codes },
+  });
+}
+
 /**
  * 获取所有权限列表
  * 

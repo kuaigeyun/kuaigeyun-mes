@@ -51,9 +51,10 @@ import {
   getRoleList,
   getRoleByUuid,
   deleteRole,
-  getRolePermissions,
-  assignPermissions,
+  getRoleFunctionGrants,
+  replaceRoleFunctionGrants,
   getAllPermissions,
+  type RoleFunctionGrants,
   loadPresetRoles,
   getRolePresetPreview,
   type PresetRoleItem,
@@ -80,6 +81,10 @@ import {
   translateMenuName,
 } from '../../../utils/menuTranslation';
 import { KUAIZHIZAO_PRICING_VIEW } from '../../../utils/kuaizhizaoPricingPermission';
+import {
+  FunctionGrantTree,
+  collectCodesFromGrantTree,
+} from './components/FunctionGrantTree';
 
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
@@ -510,9 +515,9 @@ const RolesPermissionsPage: React.FC = () => {
 
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
-  const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
-  /** 功能权限 UI 真源：规范化 permission.code；保存时映射为当前权限池 UUID */
-  const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<string[]>([]);
+  /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
+  const [functionGrants, setFunctionGrants] = useState<RoleFunctionGrants | null>(null);
+  const [grantedCodes, setGrantedCodes] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
@@ -528,10 +533,7 @@ const RolesPermissionsPage: React.FC = () => {
   const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('masked');
   const [fieldKeywordInput, setFieldKeywordInput] = useState('amount,price,customer_name');
   const initializedExpandRef = useRef(false);
-  const selectedPermissionCodeSet = useMemo(
-    () => new Set(selectedPermissionCodes),
-    [selectedPermissionCodes]
-  );
+  const grantedCodeSet = useMemo(() => new Set(grantedCodes), [grantedCodes]);
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [currentEditRole, setCurrentEditRole] = useState<Role | null>(null);
@@ -609,7 +611,8 @@ const RolesPermissionsPage: React.FC = () => {
       // 如果删除的是当前选中的角色，清空选择
       setSelectedRole((prev) => {
         if (prev?.uuid === role.uuid) {
-          setSelectedPermissionCodes([]);
+          setFunctionGrants(null);
+          setGrantedCodes([]);
           setSelectedRoleKeys([]);
           return null;
         }
@@ -792,73 +795,44 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 按菜单树结构展示权限：菜单标题与侧栏翻译一致，带 permission_code 的节点下挂同资源前缀的操作权限
    */
-  const togglePermissionActionItem = useCallback((item: PermissionActionItem, checked: boolean) => {
-    setSelectedPermissionCodes((prev) =>
-      Array.from(applyActionItemToggle(new Set(prev), item, checked))
-    );
+  const toggleGrantedCodes = useCallback((codes: string[], checked: boolean) => {
+    setGrantedCodes((prev) => {
+      const next = new Set(prev);
+      codes.forEach((c) => {
+        if (checked) next.add(c);
+        else next.delete(c);
+      });
+      return Array.from(next);
+    });
   }, []);
 
-  useEffect(() => {
-    if (allPermissions.length === 0) {
-      setPermissionTreeData([]);
-      return;
-    }
-
-    const searchLower = permissionSearchKeyword.toLowerCase().trim();
-    const filteredItems = allPermissions.filter((p) => {
-      const matchSearch =
-        !searchLower ||
-        p.name.toLowerCase().includes(searchLower) ||
-        p.code.toLowerCase().includes(searchLower) ||
-        (p.description && p.description.toLowerCase().includes(searchLower));
-      return matchSearch;
-    });
-
-    const expandKeys: React.Key[] = [];
-
-    if (!menuTree.length) {
-      /** 无菜单树时不展示「未挂载」聚合节点（产品要求前端直接过滤，避免干扰配置） */
-      setPermissionTreeData([]);
-      if (!initializedExpandRef.current) {
-        setPermissionTreeExpandedKeys(expandKeys);
-        initializedExpandRef.current = true;
-      }
-      return;
-    }
-
-    const menusForPool = menuTree;
-    const treeData = buildMenuPermissionTreeData(
-      menusForPool,
-      filteredItems,
-      expandKeys,
-      t,
-      token
-    );
-
-    setPermissionTreeData(treeData);
-    if (!initializedExpandRef.current) {
-      setPermissionTreeExpandedKeys(expandKeys);
+  const loadFunctionGrantsForRole = useCallback(async (roleUuid: string) => {
+    const data = await getRoleFunctionGrants(roleUuid);
+    setFunctionGrants(data);
+    setGrantedCodes(data.granted_codes || []);
+    if (!initializedExpandRef.current && data.tree?.length) {
+      const keys: React.Key[] = [];
+      const walk = (nodes: RoleFunctionGrants['tree']) => {
+        nodes.forEach((n) => {
+          keys.push(`menu-${n.menu_uuid}`);
+          if (n.children?.length) walk(n.children);
+        });
+      };
+      walk(data.tree);
+      setPermissionTreeExpandedKeys(keys);
       initializedExpandRef.current = true;
     }
-  }, [
-    allPermissions,
-    permissionSearchKeyword,
-    menuTree,
-    t,
-    token,
-  ]);
+    return data;
+  }, []);
 
-  /** 当前权限树可见的操作权限 UUID（受搜索过滤影响，用于批量勾选） */
   const visibleFunctionPermissionCodes = useMemo(
-    () => collectPermissionCodesFromTree(permissionTreeData),
-    [permissionTreeData]
+    () => collectCodesFromGrantTree(functionGrants?.tree ?? []),
+    [functionGrants]
   );
 
-  const assignedFunctionPermissionCount = selectedPermissionCodes.length;
-  const treeVisibleAssignedCount = useMemo(() => {
-    const visible = new Set(visibleFunctionPermissionCodes);
-    return selectedPermissionCodes.filter((c) => visible.has(c)).length;
-  }, [selectedPermissionCodes, visibleFunctionPermissionCodes]);
+  const assignedFunctionPermissionCount = grantedCodes.length;
+  const treeVisibleAssignedCount = functionGrants?.stats?.granted_visible_on_tree ?? 0;
+  const grantedNotOnTree = functionGrants?.stats?.granted_not_on_tree ?? 0;
 
   const functionBatchAppOptions = useMemo(() => {
     const byApp = new Set<string>();
@@ -987,7 +961,7 @@ const RolesPermissionsPage: React.FC = () => {
           return p ? normalizeFunctionPermissionCode(p.code || '') : '';
         })
         .filter(Boolean);
-      setSelectedPermissionCodes(codes);
+      setGrantedCodes(codes);
       const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
       messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: codes.length }));
     },
@@ -1017,12 +991,12 @@ const RolesPermissionsPage: React.FC = () => {
       setSelectedRole(role);
 
       // 并行加载三层权限数据
-      const [rolePermissions, roleDataPolicies, roleFieldPolicies] = await Promise.all([
-        getRolePermissions(role.uuid),
+      initializedExpandRef.current = false;
+      const [, roleDataPolicies, roleFieldPolicies] = await Promise.all([
+        loadFunctionGrantsForRole(role.uuid),
         getRoleDataPolicies(role.uuid),
         getRoleFieldPolicies(role.uuid),
       ]);
-      setSelectedPermissionCodes(permissionCodesFromRolePermissions(rolePermissions));
       setDataPolicies(roleDataPolicies);
       setFieldPolicies(roleFieldPolicies);
     } catch (error: any) {
@@ -1044,11 +1018,10 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setSavingPermissions(true);
       if (permissionLayer === 'function') {
-        const permissionUuids = permissionUuidsFromCodes(selectedPermissionCodes, allPermissions);
-        await assignPermissions(selectedRole.uuid, permissionUuids);
-        messageApi.success(`功能权限保存成功：${permissionUuids.length} 项`);
-        const refreshed = await getRolePermissions(selectedRole.uuid);
-        setSelectedPermissionCodes(permissionCodesFromRolePermissions(refreshed));
+        const refreshed = await replaceRoleFunctionGrants(selectedRole.uuid, grantedCodes);
+        setFunctionGrants(refreshed);
+        setGrantedCodes(refreshed.granted_codes || []);
+        messageApi.success(`功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项`);
       } else if (permissionLayer === 'data') {
         const payload = dataPolicies
           .filter((x) => x.resource)
@@ -1116,10 +1089,10 @@ const RolesPermissionsPage: React.FC = () => {
     
     try {
       setCopying(true);
-      const rolePermissions = await getRolePermissions(sourceRoleUuid);
-
-      setSelectedPermissionCodes(
-        permissionCodesFromRolePermissions(rolePermissions)
+      const sourceGrants = await getRoleFunctionGrants(sourceRoleUuid);
+      setGrantedCodes(sourceGrants.granted_codes || []);
+      setFunctionGrants((prev) =>
+        prev ? { ...prev, granted_codes: sourceGrants.granted_codes } : prev
       );
       messageApi.success(t('pages.system.roles.copySuccess'));
       setCopyModalVisible(false);
@@ -1155,28 +1128,34 @@ const RolesPermissionsPage: React.FC = () => {
           }
         });
       };
-      traverse(permissionTreeData);
+      const traverseGrant = (nodes: RoleFunctionGrants['tree']) => {
+        nodes.forEach((node) => {
+          if (node.children?.length) {
+            allKeys.push(`menu-${node.menu_uuid}`);
+            traverseGrant(node.children);
+          }
+        });
+      };
+      if (functionGrants?.tree) traverseGrant(functionGrants.tree);
       setPermissionTreeExpandedKeys(allKeys);
     }
-  }, [permissionTreeExpandedKeys, permissionTreeData]);
+  }, [permissionTreeExpandedKeys, functionGrants]);
 
   const selectAllVisibleFunctionPermissions = useCallback(() => {
     if (!visibleFunctionPermissionCodes.length) return;
-    setSelectedPermissionCodes((prev) =>
-      Array.from(new Set([...prev, ...visibleFunctionPermissionCodes]))
-    );
+    setGrantedCodes((prev) => Array.from(new Set([...prev, ...visibleFunctionPermissionCodes])));
   }, [visibleFunctionPermissionCodes]);
 
   const clearVisibleFunctionPermissions = useCallback(() => {
     if (!visibleFunctionPermissionCodes.length) return;
     const target = new Set(visibleFunctionPermissionCodes);
-    setSelectedPermissionCodes((prev) => prev.filter((c) => !target.has(c)));
+    setGrantedCodes((prev) => prev.filter((c) => !target.has(c)));
   }, [visibleFunctionPermissionCodes]);
 
   const invertVisibleFunctionPermissions = useCallback(() => {
     if (!visibleFunctionPermissionCodes.length) return;
     const visible = new Set(visibleFunctionPermissionCodes);
-    setSelectedPermissionCodes((prev) => {
+    setGrantedCodes((prev) => {
       const curr = new Set(prev);
       visible.forEach((c) => {
         if (curr.has(c)) curr.delete(c);
@@ -1192,7 +1171,7 @@ const RolesPermissionsPage: React.FC = () => {
       .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
       .map((p) => normalizeFunctionPermissionCode(p.code || ''))
       .filter(Boolean);
-    setSelectedPermissionCodes((prev) => Array.from(new Set([...prev, ...codes])));
+    setGrantedCodes((prev) => Array.from(new Set([...prev, ...codes])));
   }, [functionBatchApp, allPermissions]);
 
   const clearByFunctionModule = useCallback(() => {
@@ -1203,7 +1182,7 @@ const RolesPermissionsPage: React.FC = () => {
         .map((p) => normalizeFunctionPermissionCode(p.code || ''))
         .filter(Boolean)
     );
-    setSelectedPermissionCodes((prev) => prev.filter((c) => !target.has(c)));
+    setGrantedCodes((prev) => prev.filter((c) => !target.has(c)));
   }, [functionBatchApp, allPermissions]);
 
   return (
@@ -1504,48 +1483,18 @@ const RolesPermissionsPage: React.FC = () => {
                       模块清空
                     </Button>
                   </Flex>
-                  <Tree
-                    className="permission-tree-horizontal"
-                    treeData={permissionTreeData}
-                    expandedKeys={permissionTreeExpandedKeys}
-                    onExpand={(keys) => setPermissionTreeExpandedKeys(keys as React.Key[])}
-                    showIcon
-                    titleRender={(node: any) => {
-                      if (node._actionItems && node._actionItems.length > 0) {
-                        return (
-                          <span className="permission-menu-title-wrap">
-                            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-                              {node.title}
-                            </span>
-                            <div className="permission-action-row">
-                              {node._actionItems.map((item: PermissionActionItem) => {
-                                const checked = isActionItemChecked(item, selectedPermissionCodeSet);
-                                return (
-                                  <label key={item.key} className="permission-action-chip">
-                                    <Checkbox
-                                      checked={checked}
-                                      onChange={(e) => togglePermissionActionItem(item, e.target.checked)}
-                                    />
-                                    <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </span>
-                        );
-                      }
-                      if (node._actionItems && node._actionItems.length === 0) {
-                        return (
-                          <span className="permission-menu-title-wrap">
-                            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-                              {node.title}
-                            </span>
-                          </span>
-                        );
-                      }
-                      return node.title;
-                    }}
-                  />
+                  {functionGrants?.tree?.length ? (
+                    <FunctionGrantTree
+                      tree={functionGrants.tree}
+                      grantedCodes={grantedCodeSet}
+                      expandedKeys={permissionTreeExpandedKeys}
+                      onExpand={(keys) => setPermissionTreeExpandedKeys(keys)}
+                      onToggle={toggleGrantedCodes}
+                      t={t}
+                    />
+                  ) : (
+                    <Empty description="暂无功能权限树，请检查菜单与权限同步" />
+                  )}
                 </Space>
               )}
               {permissionLayer === 'data' && (
@@ -1818,16 +1767,18 @@ const RolesPermissionsPage: React.FC = () => {
             }}
           >
             <Space separator={<Divider orientation="vertical" />}>
-              <span>系统总权限：{allPermissions.length} 项</span>
+              <span>
+                系统功能权限：
+                {functionGrants?.stats?.total_function_codes ?? allPermissions.length} 项
+              </span>
               <span>
                 当前已授权：
                 <span style={{ color: token.colorPrimary, fontWeight: 500 }}>{assignedFunctionPermissionCount}</span> 项
-                {permissionLayer === 'function' &&
-                  treeVisibleAssignedCount !== assignedFunctionPermissionCount && (
-                    <span style={{ color: token.colorTextSecondary, marginLeft: 4 }}>
-                      （树上可见 {treeVisibleAssignedCount} 项）
-                    </span>
-                  )}
+                {permissionLayer === 'function' && grantedNotOnTree > 0 && (
+                  <span style={{ color: token.colorTextSecondary, marginLeft: 4 }}>
+                    （树上可见 {treeVisibleAssignedCount} 项，未挂载 {grantedNotOnTree} 项）
+                  </span>
+                )}
               </span>
               <span>角色关联用户：<span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人</span>
             </Space>
