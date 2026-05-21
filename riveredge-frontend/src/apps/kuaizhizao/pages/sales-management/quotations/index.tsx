@@ -2823,6 +2823,9 @@ const QuotationsPage: React.FC = () => {
         <UniTable
           className="kuaizhizao-quotations-table"
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.quotations"
+          tanstackQuery={{
+            queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.quotations', listScopeFilter],
+          }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"

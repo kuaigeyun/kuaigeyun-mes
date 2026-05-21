@@ -379,16 +379,18 @@ class ReportService:
                 so_q = so_q.filter(order_date__lte=date_end.date())
             data = await so_q.values("order_date", "total_amount")
             if not data: return {"data": [], "success": True}
-            
             # 使用原生 Python 进行按月分组汇总
             res_dict = {}
             for row in data:
                 if not row["order_date"]: continue
                 month = row["order_date"].strftime('%Y-%m')
-                res_dict[month] = res_dict.get(month, 0) + float(row["total_amount"] or 0)
+                if month not in res_dict:
+                    res_dict[month] = {"revenue": 0.0, "quantity": 0}
+                res_dict[month]["revenue"] += float(row["total_amount"] or 0)
+                res_dict[month]["quantity"] += 1
             
             stats = [
-                {"month": k, "total_amount": v, "revenue": v, "quantity": 0}
+                {"month": k, "total_amount": v["revenue"], "revenue": v["revenue"], "quantity": v["quantity"]}
                 for k, v in sorted(res_dict.items())
             ]
             return {"data": stats, "success": True, "total": len(stats)}

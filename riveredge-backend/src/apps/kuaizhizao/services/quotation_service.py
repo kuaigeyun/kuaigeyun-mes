@@ -845,33 +845,44 @@ class QuotationService:
 
     @staticmethod
     async def _apply_quotation_list_scope(query, tenant_id: int, current_user: Optional[User], list_scope: Optional[str] = None):
-        """按 list_scope 过滤销售员：all / mine / department"""
+        """按 list_scope 过滤：all / mine / department（匹配 salesman_id 或 created_by）"""
+        from tortoise.expressions import Q
+
         if not current_user:
             return query
-        scope = (list_scope or "").strip().lower()
-        if not scope:
-            if current_user.is_regular_user():
-                return query.filter(salesman_id=current_user.id)
-            return query
-        if scope == "all":
-            if current_user.is_regular_user():
-                return query.filter(salesman_id=current_user.id)
-            return query
-        if scope == "mine":
-            return query.filter(salesman_id=current_user.id)
-        if scope == "department":
+
+        uid = current_user.id
+
+        def mine_filter(q):
+            return q.filter(Q(salesman_id=uid) | Q(created_by=uid))
+
+        async def department_filter(q):
             dept_id = getattr(current_user, "department_id", None)
             if not dept_id:
-                return query.filter(salesman_id=current_user.id)
+                return mine_filter(q)
             user_ids = await User.filter(
                 tenant_id=tenant_id,
                 department_id=dept_id,
                 deleted_at__isnull=True,
             ).values_list("id", flat=True)
-            ids = list(user_ids) if user_ids else [current_user.id]
-            return query.filter(salesman_id__in=ids)
+            ids = list(user_ids) if user_ids else [uid]
+            return q.filter(Q(salesman_id__in=ids) | Q(created_by__in=ids))
+
+        scope = (list_scope or "").strip().lower()
+        if not scope:
+            if current_user.is_regular_user():
+                return mine_filter(query)
+            return query
+        if scope == "all":
+            if current_user.is_regular_user():
+                return mine_filter(query)
+            return query
+        if scope == "mine":
+            return mine_filter(query)
+        if scope == "department":
+            return await department_filter(query)
         if current_user.is_regular_user():
-            return query.filter(salesman_id=current_user.id)
+            return mine_filter(query)
         return query
 
     async def list_quotations(
