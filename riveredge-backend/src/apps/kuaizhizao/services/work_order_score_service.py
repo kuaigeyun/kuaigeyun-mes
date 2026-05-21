@@ -517,3 +517,59 @@ class WorkOrderScoreService(BaseService):
                 item["picking_score"] = picking[sid].composite_score
                 item["picking_rank_band"] = picking[sid].rank_band
                 item["picking_score_breakdown"] = picking[sid].breakdown
+
+    async def preview_scheduling_rank(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        *,
+        kitting_rate: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """What-if：计算假想工单在排程队列中的综合分与预估排位（不写库）。"""
+        if not await self.is_score_enabled(tenant_id):
+            return None
+
+        hypo = await self.compute_score(
+            tenant_id,
+            work_order,
+            "scheduling",
+            kitting_rate=kitting_rate,
+            include_kitting=False,
+        )
+        hypo_score = float(hypo.composite_score)
+
+        active_statuses = [
+            "draft",
+            "released",
+            "dispatched",
+            "confirmed",
+            "in_progress",
+            "已下达",
+            "已确认",
+            "进行中",
+        ]
+        active_wos = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=active_statuses,
+            deleted_at__isnull=True,
+        ).all()
+        score_map = await self.batch_get_scores(
+            tenant_id,
+            [wo.id for wo in active_wos],
+            "scheduling",
+        )
+        peer_scores = [
+            float(cached.composite_score)
+            for cached in score_map.values()
+            if cached.composite_score is not None
+        ]
+        queue_rank = sum(1 for s in peer_scores if s > hypo_score) + 1
+        queue_total = len(active_wos) + 1
+
+        return {
+            "scheduling_score": hypo_score,
+            "scheduling_rank_band": hypo.rank_band,
+            "queue_rank": queue_rank,
+            "queue_total": queue_total,
+            "breakdown": hypo.breakdown,
+        }

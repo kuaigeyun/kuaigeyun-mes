@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 import { Column } from '@ant-design/charts';
+import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview';
 
 const { Text } = Typography;
 
@@ -780,6 +781,8 @@ const ProductionControlTower: React.FC = () => {
               style={{ borderRadius: token.borderRadius, marginBottom: 20 }}
             />
 
+            <SimulationSchedulingScorePreview preview={simulationResult.scheduling_score_preview} />
+
             {/* 物料齐套状态 */}
             <Card 
               size="small" 
@@ -846,6 +849,12 @@ const ProductionControlTower: React.FC = () => {
                           <Space>
                             <Tag color="red">抢占物料</Tag>
                             <Text strong>{item.work_order_code}</Text>
+                            {item.scheduling_score != null && (
+                              <Tag color={item.scheduling_rank_band === 'A' ? 'red' : item.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
+                                排程分 {Number(item.scheduling_score).toFixed(0)}
+                                {item.scheduling_rank_band ? `·${item.scheduling_rank_band}` : ''}
+                              </Tag>
+                            )}
                           </Space>
                         }
                         description={

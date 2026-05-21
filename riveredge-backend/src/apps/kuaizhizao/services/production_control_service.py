@@ -408,11 +408,43 @@ class ProductionControlService:
         else:
             recommendation = "严重缺料，不建议此时插单，以免造成生产停滞。"
 
+        from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+        score_svc = WorkOrderScoreService()
+        scheduling_score_preview = None
+        if await score_svc.is_score_enabled(tenant_id):
+            hypo_wo = WorkOrder(
+                tenant_id=tenant_id,
+                id=0,
+                code="__SIM__",
+                product_id=product_id,
+                quantity=Decimal(str(quantity)),
+                priority=params.get("priority") or "urgent",
+                planned_start_date=planned_start,
+                planned_end_date=planned_end,
+                status="draft",
+            )
+            scheduling_score_preview = await score_svc.preview_scheduling_rank(
+                tenant_id,
+                hypo_wo,
+                kitting_rate=readiness_rate,
+            )
+
+            if impacted_orders:
+                victim_ids = [int(v["work_order_id"]) for v in impacted_orders]
+                victim_scores = await score_svc.batch_get_scores(tenant_id, victim_ids, "scheduling")
+                for row in impacted_orders:
+                    cached = victim_scores.get(int(row["work_order_id"]))
+                    if cached:
+                        row["scheduling_score"] = cached.composite_score
+                        row["scheduling_rank_band"] = cached.rank_band
+
         return {
             "can_fulfill_material": readiness_rate == 100,
             "readiness_rate": round(readiness_rate, 2),
             "shortage_items": shortage_items,
             "impacted_orders": impacted_orders,
             "resource_load_change": load_changes,
-            "recommendation": recommendation
+            "recommendation": recommendation,
+            "scheduling_score_preview": scheduling_score_preview,
         }

@@ -87,6 +87,7 @@ import {
   DownOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
+import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
 import {
@@ -6880,6 +6881,8 @@ const WorkOrdersPage: React.FC = () => {
                     </Space>
                   </div>
 
+                  <SimulationSchedulingScorePreview preview={simulationResult.scheduling_score_preview} compact />
+
                   {simulationResult.shortage_items?.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <Typography.Text type="danger" strong>缺料明细：</Typography.Text>
@@ -6904,6 +6907,19 @@ const WorkOrdersPage: React.FC = () => {
                         pagination={false}
                         columns={[
                           { title: '工单', dataIndex: 'work_order_code' },
+                          {
+                            title: '排程分',
+                            dataIndex: 'scheduling_score',
+                            width: 88,
+                            render: (v: number, row: any) =>
+                              v != null ? (
+                                <Tag color={row.scheduling_rank_band === 'A' ? 'red' : row.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
+                                  {Number(v).toFixed(0)}{row.scheduling_rank_band ? `·${row.scheduling_rank_band}` : ''}
+                                </Tag>
+                              ) : (
+                                '—'
+                              ),
+                          },
                           { title: '冲突类型', dataIndex: 'impact_type', render: (t) => t === 'material_conflict' ? '物料抢占' : '资源排队' },
                           { title: '可能延期', dataIndex: 'delay_days', render: (d) => d > 0 ? `${d}天` : '未知' },
                         ]}

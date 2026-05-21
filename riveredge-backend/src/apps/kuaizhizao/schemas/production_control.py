@@ -79,6 +79,17 @@ class ImpactedOrderItem(BaseModel):
     impact_type: str = Field(..., description="影响类型：material_conflict(切料/抢料), resource_delay(资源排队延期)")
     delay_days: int = 0
     shortage_items: List[str] = []
+    scheduling_score: Optional[float] = Field(None, description="当前排程综合分")
+    scheduling_rank_band: Optional[str] = Field(None, description="等级带 A/B/C")
+
+
+class SchedulingScorePreview(BaseModel):
+    """插单 What-if 排程综合分预览"""
+    scheduling_score: float
+    scheduling_rank_band: str
+    queue_rank: int = Field(..., description="预估排位（含插单）")
+    queue_total: int = Field(..., description="队列工单总数（含插单）")
+    breakdown: Optional[Dict[str, Any]] = None
 
 
 class SimulationResult(BaseModel):
@@ -89,3 +100,6 @@ class SimulationResult(BaseModel):
     impacted_orders: List[ImpactedOrderItem] = []
     resource_load_change: List[Dict[str, Any]] = []
     recommendation: str
+    scheduling_score_preview: Optional[SchedulingScorePreview] = Field(
+        None, description="APS-Lite 排程综合分 What-if 预览（不写库）"
+    )
