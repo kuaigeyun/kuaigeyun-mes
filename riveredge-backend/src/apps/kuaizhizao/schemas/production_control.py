@@ -18,6 +18,8 @@ class MaterialReadinessItem(BaseModel):
     readiness_rate: float = Field(..., description="齐套率（0-100）")
     shortage_count: int = Field(..., description="缺料品种数")
     planned_start_date: Optional[str] = None
+    picking_score: Optional[float] = Field(None, description="备料场景综合分")
+    picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
 
 
 class ResourceLoadItem(BaseModel):

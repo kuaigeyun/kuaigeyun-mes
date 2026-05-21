@@ -93,6 +93,21 @@ class ProductionControlService:
         
         # 过滤失败的任务
         results = [r for r in results if r is not None]
+
+        if results:
+            from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+            score_svc = WorkOrderScoreService()
+            if await score_svc.is_score_enabled(tenant_id):
+                wo_ids = [int(r["work_order_id"]) for r in results]
+                score_map = await score_svc.batch_ensure_scores(
+                    tenant_id, wo_ids, "picking", include_kitting=True
+                )
+                for row in results:
+                    cached = score_map.get(int(row["work_order_id"]))
+                    if cached:
+                        row["picking_score"] = cached.composite_score
+                        row["picking_rank_band"] = cached.rank_band
                 
         return sorted(results, key=lambda x: x["readiness_rate"])
 
@@ -225,7 +240,9 @@ class ProductionControlService:
 
             score_svc = WorkOrderScoreService()
             wo_ids = [int(r["work_order_id"]) for r in results if r.get("work_order_id")]
-            score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "scheduling")
+            score_map = await score_svc.batch_ensure_scores(
+                tenant_id, wo_ids, "scheduling", include_kitting=False
+            )
             for row in results:
                 cached = score_map.get(int(row["work_order_id"]))
                 if cached:
@@ -432,7 +449,9 @@ class ProductionControlService:
 
             if impacted_orders:
                 victim_ids = [int(v["work_order_id"]) for v in impacted_orders]
-                victim_scores = await score_svc.batch_get_scores(tenant_id, victim_ids, "scheduling")
+                victim_scores = await score_svc.batch_ensure_scores(
+                    tenant_id, victim_ids, "scheduling", include_kitting=False
+                )
                 for row in impacted_orders:
                     cached = victim_scores.get(int(row["work_order_id"]))
                     if cached:

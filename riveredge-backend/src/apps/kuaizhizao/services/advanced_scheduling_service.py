@@ -182,8 +182,14 @@ class AdvancedSchedulingService(BaseService):
                 current_date = (work_order.planned_start_date or datetime.now()).date()
                 workshop_id = work_order.workshop_id or 0
                 
-                # 预估工单耗时
-                estimated_hours = (work_order.planned_quantity or 1.0) * 0.1
+                # 预估工单耗时（优先计划区间，否则简化占位）
+                if work_order.planned_start_date and work_order.planned_end_date:
+                    delta_h = (
+                        work_order.planned_end_date - work_order.planned_start_date
+                    ).total_seconds() / 3600.0
+                    estimated_hours = max(delta_h, 0.1)
+                else:
+                    estimated_hours = float(work_order.quantity or 1) * 0.1
                 capacity_limit = 24.0 # 默认每日 24h
                 
                 # 寻找可用日期 (最多向后搜索 14 天)

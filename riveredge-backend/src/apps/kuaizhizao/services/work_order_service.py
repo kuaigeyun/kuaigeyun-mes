@@ -1469,9 +1469,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             NotFoundError: 工单不存在
             ValidationError: 数据验证失败
         """
+        score_recalc_fields = ("priority", "planned_start_date", "planned_end_date")
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             update_data = work_order_data.model_dump(exclude_unset=True)
+            old_score_values = {f: getattr(work_order, f, None) for f in score_recalc_fields}
 
             if "process_route_id" in update_data:
                 new_pr_id = update_data.pop("process_route_id")
@@ -1524,7 +1526,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 **update_data
             )
 
-            return WorkOrderResponse.model_validate(work_order)
+            response = WorkOrderResponse.model_validate(work_order)
+
+        needs_score_recalc = any(
+            f in update_data and update_data.get(f) != old_score_values.get(f)
+            for f in score_recalc_fields
+        )
+        if needs_score_recalc:
+            from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                dispatch_work_order_score_recalc,
+            )
+            await dispatch_work_order_score_recalc(work_order_id, include_kitting=False)
+
+        return response
 
     async def batch_update_dates(
         self,
@@ -1581,6 +1595,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         if not updates:
             return
+        updated_wo_ids: set[int] = set()
         async with in_transaction():
             for item in updates[:50]:
                 op_id = item.operation_id if hasattr(item, 'operation_id') else item.get('operation_id')
@@ -1615,6 +1630,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 planned_end_date=wo_end,
                                 updated_by=updated_by,
                             )
+                            updated_wo_ids.add(int(op.work_order_id))
+
+        if updated_wo_ids:
+            from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                dispatch_work_order_score_recalc,
+            )
+            for wo_id in updated_wo_ids:
+                await dispatch_work_order_score_recalc(wo_id, include_kitting=False)
 
     async def delete_work_order(
         self,

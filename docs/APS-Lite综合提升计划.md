@@ -133,16 +133,25 @@
 
 ## 8. M1 验收 checklist
 
-- [ ] 迁移 279 已执行  
+- [ ] 迁移 279 已执行（目标环境 `aerich upgrade`；本地需已 `aerich init`）  
 - [x] scheduling / picking 双 profile 可配置（config-center → 计划管理）  
-- [x] 智能排产、备料、列表/排程/出库 UI 读缓存分  
-- [x] 优先级/排程/交期/领料/甘特拖拽改期触发重算  
+- [x] 列表/排程/出库/控制塔读分（缺快照自动 `batch_ensure_scores`）  
+- [x] 优先级/排程/交期/领料/甘特改期/工单编辑/工序改期触发重算  
 - [ ] `score_enabled=false` 全链路回退（待 P0 签字后验收）  
 - [x] 冻结单不参与自动重排  
 
-**P1 代码完成**：2026-05-21（M1–M3 + M5；M4 权重 UI 已接入 config-center）
+## 9. 落地收尾（2026-05-21）
 
-**P3 What-if**：插单模拟返回 `scheduling_score_preview`（控制塔 / 工单页只读预览，不写库）
+| 项 | 状态 |
+|----|------|
+| 列表/领料/风险 `batch_ensure_scores` | 已完成 |
+| 工单编辑 + 工序改期打分 Hook | 已完成 |
+| M5 控制塔齐套/缺料备料分列 | 已完成 |
+| 权重保存后 batch-refresh | 已完成 |
+| What-if 队列排位 peer 分 ensure | 已完成 |
+| 日负荷/排产工时：优先计划区间 | 已完成（无标准工时时仍简化回退） |
+
+**P1–P3 代码落地完成**；**M6** 与 **P0 签字** 仍待后续。
 
 ---
 

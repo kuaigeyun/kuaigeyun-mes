@@ -492,7 +492,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             score_svc = WorkOrderScoreService()
             if await score_svc.is_score_enabled(tenant_id):
                 wo_ids = [p.work_order_id for p in rows if p.work_order_id]
-                score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "picking")
+                score_map = await score_svc.batch_ensure_scores(
+                    tenant_id, wo_ids, "picking", include_kitting=True
+                )
                 enriched: List[ProductionPickingListResponse] = []
                 for row in rows:
                     cached = score_map.get(row.work_order_id)

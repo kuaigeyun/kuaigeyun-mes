@@ -27,6 +27,19 @@ import { SimulationSchedulingScorePreview } from '../../../../../components/Simu
 
 const { Text } = Typography;
 
+const renderPickingScoreTag = (v: number | null | undefined, row: { picking_rank_band?: string | null }) =>
+  v != null ? (
+    <Tag
+      color={row.picking_rank_band === 'A' ? 'red' : row.picking_rank_band === 'B' ? 'orange' : 'default'}
+      style={{ margin: 0 }}
+    >
+      {Number(v).toFixed(0)}
+      {row.picking_rank_band ? `·${row.picking_rank_band}` : ''}
+    </Tag>
+  ) : (
+    '-'
+  );
+
 type SummaryShape = {
   material_readiness: any[];
   resource_load: any[];
@@ -415,6 +428,12 @@ const ProductionControlTower: React.FC = () => {
                             columns={[
                               { title: '工单', dataIndex: 'work_order_code', width: 120, ellipsis: true },
                               {
+                                title: '备料分',
+                                dataIndex: 'picking_score',
+                                width: 88,
+                                render: (v: number, row: any) => renderPickingScoreTag(v, row),
+                              },
+                              {
                                 title: '计划开工',
                                 dataIndex: 'planned_start_date',
                                 width: 80,
@@ -470,6 +489,13 @@ const ProductionControlTower: React.FC = () => {
                             bordered={false}
                             locale={{ emptyText: <Empty style={{ padding: 40 }} description="暂无待协调缺料物料" /> }}
                             columns={[
+                              { title: '工单', dataIndex: 'work_order_code', width: 100, ellipsis: true },
+                              {
+                                title: '备料分',
+                                dataIndex: 'picking_score',
+                                width: 88,
+                                render: (v: number, row: any) => renderPickingScoreTag(v, row),
+                              },
                               { title: '缺料物料', dataIndex: 'material_name', ellipsis: true },
                               { title: '物料编码', dataIndex: 'material_code', width: 100, ellipsis: true },
                               { 

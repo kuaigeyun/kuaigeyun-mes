@@ -421,7 +421,10 @@ class WorkOrderScoreService(BaseService):
                 if scenario not in VALID_SCENARIOS:
                     continue
                 score = await self.compute_score(
-                    tenant_id, wo, scenario, include_kitting=include_kitting
+                    tenant_id,
+                    wo,
+                    scenario,
+                    include_kitting=(scenario == "picking"),
                 )
                 await self._persist_score(tenant_id, score)
                 refreshed += 1
@@ -497,6 +500,27 @@ class WorkOrderScoreService(BaseService):
 
         return scores
 
+    async def batch_ensure_scores(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+        scenario: str,
+        *,
+        refresh_if_stale: bool = True,
+        include_kitting: bool = False,
+    ) -> Dict[int, WorkOrderScoreResponse]:
+        """缺快照或过期时计算并持久化，返回完整分响应（供列表/风险/领料 enrichment）。"""
+        if not work_order_ids or not await self.is_score_enabled(tenant_id):
+            return {}
+        await self.batch_get_or_compute(
+            tenant_id,
+            work_order_ids,
+            scenario,
+            refresh_if_stale=refresh_if_stale,
+            include_kitting=include_kitting,
+        )
+        return await self.batch_get_scores(tenant_id, work_order_ids, scenario)
+
     async def attach_scores_to_list_items(
         self,
         tenant_id: int,
@@ -505,8 +529,12 @@ class WorkOrderScoreService(BaseService):
         if not items or not await self.is_score_enabled(tenant_id):
             return
         wo_ids = [item["id"] for item in items if item.get("id")]
-        scheduling = await self.batch_get_scores(tenant_id, wo_ids, "scheduling")
-        picking = await self.batch_get_scores(tenant_id, wo_ids, "picking")
+        scheduling = await self.batch_ensure_scores(
+            tenant_id, wo_ids, "scheduling", include_kitting=False
+        )
+        picking = await self.batch_ensure_scores(
+            tenant_id, wo_ids, "picking", include_kitting=True
+        )
         for item in items:
             sid = item.get("id")
             if sid in scheduling:
@@ -553,10 +581,11 @@ class WorkOrderScoreService(BaseService):
             status__in=active_statuses,
             deleted_at__isnull=True,
         ).all()
-        score_map = await self.batch_get_scores(
+        score_map = await self.batch_ensure_scores(
             tenant_id,
             [wo.id for wo in active_wos],
             "scheduling",
+            include_kitting=False,
         )
         peer_scores = [
             float(cached.composite_score)

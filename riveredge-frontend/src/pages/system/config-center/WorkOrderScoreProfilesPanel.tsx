@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Col, InputNumber, Row, Select, Space, Typography } from 'antd';
 import { batchUpdateProcessParameters } from '../../../services/businessConfig';
+import { workOrderApi } from '../../../apps/kuaizhizao/services/work-order';
 
 const WEIGHT_KEYS = [
   'manual_priority',
@@ -121,7 +122,22 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
           },
         },
       });
-      message.success('打分权重模板已保存');
+      try {
+        const refreshResult: { refreshed?: number; work_order_count?: number; skipped?: boolean } =
+          await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
+        if (refreshResult?.skipped) {
+          message.success('打分权重模板已保存（综合打分未启用，跳过重算）');
+        } else {
+          const woCount = refreshResult?.work_order_count ?? 0;
+          message.success(`打分权重模板已保存，已重算 ${woCount} 个工单的综合分`);
+        }
+      } catch (refreshErr: any) {
+        message.warning(
+          refreshErr?.message
+            ? `权重已保存，但综合分重算失败：${refreshErr.message}`
+            : '权重已保存，但综合分重算失败，请稍后在排程页手动刷新',
+        );
+      }
       await onSaved?.();
     } catch (e: any) {
       message.error(e?.message || '保存失败');

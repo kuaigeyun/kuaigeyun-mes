@@ -166,7 +166,34 @@ class ExceptionService:
             query = query.filter(alert_level=alert_level)
 
         exceptions = await query.order_by('-alert_level', '-created_at').offset(skip).limit(limit)
-        return [MaterialShortageExceptionListResponse.model_validate(e) for e in exceptions]
+        rows = [MaterialShortageExceptionListResponse.model_validate(e) for e in exceptions]
+
+        if rows:
+            from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+            score_svc = WorkOrderScoreService()
+            if await score_svc.is_score_enabled(tenant_id):
+                wo_ids = list({r.work_order_id for r in rows if r.work_order_id})
+                score_map = await score_svc.batch_ensure_scores(
+                    tenant_id, wo_ids, "picking", include_kitting=True
+                )
+                enriched: List[MaterialShortageExceptionListResponse] = []
+                for row in rows:
+                    cached = score_map.get(row.work_order_id)
+                    if cached:
+                        enriched.append(
+                            row.model_copy(
+                                update={
+                                    "picking_score": cached.composite_score,
+                                    "picking_rank_band": cached.rank_band,
+                                }
+                            )
+                        )
+                    else:
+                        enriched.append(row)
+                return enriched
+
+        return rows
 
     async def handle_material_shortage_exception(
         self,

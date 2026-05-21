@@ -21,6 +21,15 @@ import dayjs from 'dayjs';
 
 const GanttSchedulingChart = lazy(() => import('../../../components/GanttSchedulingChart'));
 
+/** 从计划起止推算工时；无计划区间时回退简化估算（与后端排产占位一致） */
+function estimateWorkOrderPlanHours(wo: WorkOrderForGantt): number {
+  if (wo.planned_start_date && wo.planned_end_date) {
+    const hours = dayjs(wo.planned_end_date).diff(dayjs(wo.planned_start_date), 'hour', true);
+    if (hours > 0) return hours;
+  }
+  return (Number(wo.quantity) || 1) * 0.1;
+}
+
 /** 默认排程约束（含 4M 人机料法开关） */
 const DEFAULT_SCHEDULING_CONSTRAINTS = {
   priority_weight: 0.3,
@@ -74,7 +83,7 @@ const SchedulingPage: React.FC = () => {
     for (const wo of ganttWorkOrders) {
       if (!wo.planned_start_date) continue;
       const day = dayjs(wo.planned_start_date).format('MM-DD');
-      const hours = (Number(wo.quantity) || 1) * 0.1;
+      const hours = estimateWorkOrderPlanHours(wo);
       map.set(day, (map.get(day) || 0) + hours);
     }
     return [...map.entries()]
@@ -484,7 +493,7 @@ const SchedulingPage: React.FC = () => {
             <>
               <div style={{ marginTop: 24, marginBottom: 8, fontWeight: 500 }}>排程综合分权重</div>
               <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
-                可在「参数设置 → 工单流程」中开启/关闭综合打分；权重模板由业务参数 score_profiles 配置
+                可在「参数设置 → 计划管理」中开启/关闭综合打分与编辑权重模板
               </div>
               <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                 {Object.entries(scoreConfig.profiles.scheduling.weights || {}).map(([key, weight]) => (
