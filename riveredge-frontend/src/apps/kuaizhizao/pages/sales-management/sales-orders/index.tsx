@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -38,7 +38,7 @@ import {
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
-import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue } from '../../../utils/salesOrderLifecycle';
+import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, mapSalesOrderLifecycleStageToApiParams, isSalesOrderClosed } from '../../../utils/salesOrderLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
@@ -52,7 +52,8 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { buildUniPushMenuItems } from '../../../../../components/uni-push';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
@@ -70,7 +71,6 @@ import {
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
   pushSalesOrderToDelivery,
-  pushSalesOrderAutoRoute,
   pushSalesOrderToInvoice,
   pushSalesOrderToSalesReturn,
   pullSalesOrderFromQuotation,
@@ -81,6 +81,7 @@ import {
   bulkApproveSalesOrders,
   bulkWithdrawSalesOrders,
   bulkUnapproveSalesOrders,
+  bulkCloseSalesOrders,
   deleteSalesOrder,
   getSalesOrderStatistics,
   SalesOrder,
@@ -462,6 +463,10 @@ const SalesOrdersPage: React.FC = () => {
   }, []);
 
   const auditEnabled = useAuditRequired('sales_order', false);
+  const lifecycleValueEnum = useMemo(
+    () => buildSalesOrderLifecycleValueEnum(t, auditEnabled),
+    [t, auditEnabled],
+  );
   const salesNodeEnabled = {
     sales_order: true,
     demand_computation: true,
@@ -791,52 +796,46 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理删除销售订单（批量）
+   * 批量删除（确认由 UniBatchDeleteButton 承担，此处仅执行删除）
    */
-  const handleDelete = async (keys: React.Key[]) => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
       messageApi.warning(t('app.kuaizhizao.salesOrder.selectToDelete'));
       return;
     }
-    const orderIds = [...new Set(keys.map((k) => rowKeyToOrderIdRef.current.get(String(k))).filter((id): id is number => id != null))];
-    const count = orderIds.length;
-
-    modalApi.confirm({
-      title: t('app.kuaizhizao.salesOrder.confirmDelete'),
-      content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count }),
-      okText: t('app.kuaizhizao.salesOrder.okDelete'),
-      okType: 'danger',
-      cancelText: t('common.cancel'),
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
-          const ids = orderIds;
-          const res = await bulkDeleteSalesOrders(ids);
-
-          if (res.failed_count === 0) {
-            messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
-          } else {
-            messageApi.warning(t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }));
-            if (res.failed_items && res.failed_items.length > 0) {
-              const errorMsg = res.failed_items.map(item => `订单ID ${item.id}: ${item.reason}`).join('\n');
-              console.error('删除失败详情:', errorMsg);
-              // 可以选择显示更详细的错误弹窗
-            }
-          }
-          invalidateOrdersCache();
-          invalidateMenuBadge();
-          invalidateStatistics();
-
-          actionRef.current?.reload();
-          // 清除选中项
-          if (actionRef.current?.clearSelected) {
-            actionRef.current.clearSelected();
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
-        }
-      },
-    });
+    const orderIds =
+      dataViewMode === 'order'
+        ? keys.map((k) => Number(k)).filter((id) => !Number.isNaN(id))
+        : [
+            ...new Set(
+              keys
+                .map((k) => rowKeyToOrderIdRef.current.get(String(k)))
+                .filter((id): id is number => id != null),
+            ),
+          ];
+    if (orderIds.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.selectToDelete'));
+      return;
+    }
+    try {
+      const res = await bulkDeleteSalesOrders(orderIds);
+      if (res.failed_count === 0) {
+        messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
+      } else {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }),
+        );
+      }
+      invalidateOrdersCache();
+      invalidateMenuBadge();
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
+      setSelectedRowKeys([]);
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
+      throw error;
+    }
   };
 
   /**
@@ -916,6 +915,7 @@ const SalesOrdersPage: React.FC = () => {
   const handleBatchApprove = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'), bulkApproveSalesOrders);
   const handleBatchWithdraw = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'), bulkWithdrawSalesOrders);
   const handleBatchUnapprove = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'), bulkUnapproveSalesOrders);
+  const handleBatchClose = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchClose', '批量关闭'), bulkCloseSalesOrders);
 
   /**
    * 处理删除销售订单（单条，草稿或待审核）
@@ -1278,8 +1278,8 @@ const SalesOrdersPage: React.FC = () => {
   /** 处理下推到销售出库 */
   const handlePushToDelivery = async (id: number) => {
     modalApi.confirm({
-      title: '下推到销售出库',
-      content: '确认按默认仓库生成销售出库单？',
+      title: t('app.kuaizhizao.salesOrder.pushToDeliveryTitle'),
+      content: t('app.kuaizhizao.salesOrder.pushToDeliveryConfirm'),
       zIndex: elevatedModalZIndex,
       onOk: async () => {
         try {
@@ -1288,24 +1288,6 @@ const SalesOrdersPage: React.FC = () => {
           refreshDrawerOrder(id);
         } catch (error: any) {
           messageApi.error(salesOrderCatchMessage(error, '下推销售出库失败'));
-        }
-      },
-    });
-  };
-
-  /** 处理按 MTO/MTS 自动路由下推 */
-  const handlePushAutoRoute = async (id: number) => {
-    modalApi.confirm({
-      title: '自动路由下推',
-      content: '确认按订单类型和可用库存自动路由下推到工单/发货通知单？',
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
-          const res = await pushSalesOrderAutoRoute(id);
-          messageApi.success(res?.message || '自动路由下推完成');
-          refreshDrawerOrder(id);
-        } catch (error: any) {
-          messageApi.error(salesOrderCatchMessage(error, '自动路由下推失败'));
         }
       },
     });
@@ -1788,14 +1770,13 @@ const SalesOrdersPage: React.FC = () => {
   }, [selectedRowKeys, resolveOrderIdByRowKey]);
 
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
-    const pushEnabledBase = isApprovedRecord(record);
+    const pushEnabledBase = isApprovedRecord(record) && !isSalesOrderClosed(record);
     const canPushComputation =
       pushEnabledBase && canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation);
     const canPushWorkOrder =
       pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
     const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
     const canPushDelivery = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-    const canPushAutoRoute = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
     const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
     const canPushSalesReturn = pushEnabledBase;
     const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
@@ -1815,6 +1796,12 @@ const SalesOrdersPage: React.FC = () => {
       },
       { type: 'divider' as const },
       {
+        key: 'invoice',
+        label: t('app.kuaizhizao.salesOrder.salesInvoice'),
+        disabled: !canPushInvoice,
+        onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
+      },
+      {
         key: 'shipment',
         label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
         disabled: !canPushShipment,
@@ -1822,25 +1809,13 @@ const SalesOrdersPage: React.FC = () => {
       },
       {
         key: 'delivery',
-        label: '下推销售出库单',
+        label: t('app.kuaizhizao.salesOrder.salesDelivery'),
         disabled: !canPushDelivery,
         onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
       },
       {
-        key: 'auto-route',
-        label: '自动路由下推',
-        disabled: !canPushAutoRoute,
-        onClick: () => canPushAutoRoute && handlePushAutoRoute(record.id!),
-      },
-      {
-        key: 'invoice',
-        label: t('app.kuaizhizao.salesOrder.salesInvoice'),
-        disabled: !canPushInvoice,
-        onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
-      },
-      {
         key: 'sales-return',
-        label: '下推销售退货单',
+        label: t('app.kuaizhizao.salesOrder.salesReturn'),
         disabled: !canPushSalesReturn,
         onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
       },
@@ -1856,7 +1831,7 @@ const SalesOrdersPage: React.FC = () => {
           ]
         : []),
     ]);
-  }, [handlePushAutoRoute, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
+  }, [handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
@@ -1930,20 +1905,7 @@ const SalesOrdersPage: React.FC = () => {
       align: 'left' as const,
       fixed: 'right' as const,
       valueType: 'select',
-      valueEnum: {
-        草稿: { text: t('app.kuaizhizao.salesOrder.lifecycleDraft') },
-        待审核: { text: t('app.kuaizhizao.salesOrder.lifecyclePendingReview') },
-        已审核: { text: t('app.kuaizhizao.salesOrder.lifecycleAudited') },
-        已生效: { text: t('app.kuaizhizao.salesOrder.lifecycleEffective') },
-        执行中: { text: t('app.kuaizhizao.salesOrder.lifecycleInProgress') },
-        已交货: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
-        发货出库: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
-        账款发票: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
-        账款发票处理: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
-        已完成: { text: t('app.kuaizhizao.salesOrder.lifecycleCompleted') },
-        已驳回: { text: t('app.kuaizhizao.salesOrder.lifecycleRejected') },
-        已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
-      },
+      valueEnum: lifecycleValueEnum,
       render: (_: unknown, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
         const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
@@ -1967,8 +1929,8 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'option',
       render: (_: any, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
-        const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-        const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
+        const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '') && !isSalesOrderClosed(record);
+        const canDelete = (['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW') && !isSalesOrderClosed(record);
         const isDraft = record.status === SalesOrderStatus.DRAFT;
         const parts: React.ReactNode[] = [
           <Button type="link" size="small" onClick={() => handleDetail([record.id!])}>
@@ -2124,20 +2086,7 @@ const SalesOrdersPage: React.FC = () => {
       width: 90,
       hideInSearch: false,
       valueType: 'select',
-      valueEnum: {
-        草稿: { text: t('app.kuaizhizao.salesOrder.lifecycleDraft') },
-        待审核: { text: t('app.kuaizhizao.salesOrder.lifecyclePendingReview') },
-        已审核: { text: t('app.kuaizhizao.salesOrder.lifecycleAudited') },
-        已生效: { text: t('app.kuaizhizao.salesOrder.lifecycleEffective') },
-        执行中: { text: t('app.kuaizhizao.salesOrder.lifecycleInProgress') },
-        已交货: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
-        发货出库: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
-        账款发票: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
-        账款发票处理: { text: t('app.kuaizhizao.salesOrder.lifecycleInvoicing') },
-        已完成: { text: t('app.kuaizhizao.salesOrder.lifecycleCompleted') },
-        已驳回: { text: t('app.kuaizhizao.salesOrder.lifecycleRejected') },
-        已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
-      },
+      valueEnum: lifecycleValueEnum,
       render: (_: unknown, record: SalesOrderItemRow) => {
         const orderRecord = { id: record.sales_order_id, status: record.status, review_status: record.review_status } as SalesOrder;
         const lifecycle = getSalesOrderLifecycle(orderRecord, auditEnabled);
@@ -2149,42 +2098,6 @@ const SalesOrdersPage: React.FC = () => {
   ];
 
   const columns = (dataViewMode === 'detail' ? detailColumns : orderColumns) as any[];
-
-  const handleDeleteResolved = dataViewMode === 'order'
-    ? async (keys: React.Key[]) => {
-        const ids = keys.map((k) => Number(k)).filter((id) => !Number.isNaN(id));
-        if (ids.length === 0) {
-          messageApi.warning(t('app.kuaizhizao.salesOrder.selectToDelete'));
-          return;
-        }
-        modalApi.confirm({
-          title: t('app.kuaizhizao.salesOrder.confirmDelete'),
-          content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count: ids.length }),
-          okText: t('app.kuaizhizao.salesOrder.okDelete'),
-          okType: 'danger',
-          cancelText: t('common.cancel'),
-          zIndex: elevatedModalZIndex,
-          onOk: async () => {
-            try {
-              const res = await bulkDeleteSalesOrders(ids);
-              if (res.failed_count === 0) {
-                messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
-              } else {
-                messageApi.warning(t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }));
-              }
-              invalidateOrdersCache();
-              invalidateMenuBadge();
-              invalidateStatistics();
-
-          actionRef.current?.reload();
-              if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
-            } catch (error: any) {
-              messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
-            }
-          },
-        });
-      }
-    : handleDelete;
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -2395,24 +2308,11 @@ const SalesOrdersPage: React.FC = () => {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
             };
-            // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status
+            // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status / review_status
             if (searchFormValues?.lifecycle) {
-              const lifecycleToStatus: Record<string, string> = {
-                草稿: 'DRAFT',
-                待审核: 'PENDING_REVIEW',
-                已审核: 'AUDITED',
-                已确认: 'CONFIRMED',
-                已生效: 'EFFECTIVE',
-                执行中: 'IN_PROGRESS',
-                已交货: 'DELIVERED',
-                发货出库: 'DELIVERED',
-                账款发票: 'IN_PROGRESS',
-                账款发票处理: 'IN_PROGRESS',
-                已完成: 'COMPLETED',
-                已驳回: 'REJECTED',
-                已取消: 'CANCELLED',
-              };
-              apiParams.status = lifecycleToStatus[searchFormValues.lifecycle] ?? searchFormValues.lifecycle;
+              const mapped = mapSalesOrderLifecycleStageToApiParams(searchFormValues.lifecycle);
+              if (mapped.status) apiParams.status = mapped.status;
+              if (mapped.review_status) apiParams.review_status = mapped.review_status;
             }
             if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
             if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
@@ -2547,22 +2447,6 @@ const SalesOrdersPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
-          toolBarActionsAfterCreate={[
-            <Dropdown
-              key={`push-toolbar-${selectedOrderForToolbar?.id ?? 'none'}`}
-              trigger={['click']}
-              menu={{
-                items: toolbarPushMenuItems,
-              }}
-            >
-              <Button
-                icon={<ArrowDownOutlined />}
-                disabled={!selectedOrderForToolbar || !canUseToolbarPush}
-              >
-                {t('app.kuaizhizao.salesOrder.push')}
-              </Button>
-            </Dropdown>,
-          ]}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-sales-order-with-pull"
@@ -2577,50 +2461,65 @@ const SalesOrdersPage: React.FC = () => {
                 },
               ])}
             />,
-            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
-              <Button
-                disabled={selectedRowKeys.length === 0}
-                danger
-                onClick={() => handleDeleteResolved(selectedRowKeys)}
-              >
-                <DeleteOutlined /> {t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
-              </Button>
-              <Dropdown
-                disabled={selectedRowKeys.length === 0}
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'submit',
-                      label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
-                      icon: <SendOutlined />,
-                      onClick: () => handleBatchSubmit(selectedRowKeys),
-                    },
-                    {
-                      key: 'approve',
-                      label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
-                      icon: <FileTextOutlined />,
-                      onClick: () => handleBatchApprove(selectedRowKeys),
-                    },
-                    {
-                      key: 'withdraw',
-                      label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
-                      icon: <RollbackOutlined />,
-                      onClick: () => handleBatchWithdraw(selectedRowKeys),
-                    },
-                    {
-                      key: 'unapprove',
-                      label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
-                      icon: <RollbackOutlined />,
-                      onClick: () => handleBatchUnapprove(selectedRowKeys),
-                    },
-                  ],
-                }}
-              >
-                <Button danger icon={<ArrowDownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
-            <Space key="highlight-overdue-switch" align="center" style={{ marginLeft: 8 }}>
+            <UniPushToolbarButton
+              key={`push-toolbar-${selectedOrderForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!selectedOrderForToolbar || !canUseToolbarPush}
+            />,
+          ]}
+          showDeleteButton={viewTypeState !== 'detailTable'}
+          deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
+          deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="sales-order-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              toolBarButtonSize="middle"
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
+                  icon: <SendOutlined />,
+                  onClick: handleBatchSubmit,
+                },
+                {
+                  key: 'withdraw',
+                  label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
+                  icon: <RollbackOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+                {
+                  key: 'approve',
+                  label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
+                  icon: <FileTextOutlined />,
+                  onClick: handleBatchApprove,
+                },
+                {
+                  key: 'unapprove',
+                  label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
+                  icon: <RollbackOutlined />,
+                  onClick: handleBatchUnapprove,
+                },
+                {
+                  key: 'close',
+                  label: t('app.kuaizhizao.salesOrder.batchClose', '批量关闭'),
+                  icon: <StopOutlined />,
+                  requireConfirm: true,
+                  confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle', '确认批量关闭'),
+                  confirmDescription: (count) =>
+                    t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', {
+                      count,
+                      defaultValue: `关闭后剩余未交货/未执行部分将不再继续履约，确定关闭选中的 ${count} 条销售订单吗？`,
+                    }),
+                  onClick: handleBatchClose,
+                },
+              ]}
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
+            <Space key="highlight-overdue-switch" align="center">
               <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
               <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
                 {t('app.kuaizhizao.salesOrder.highlightOverdue')}
@@ -3521,11 +3420,11 @@ const SalesOrdersPage: React.FC = () => {
                 </Button>
                 {(() => {
                   const lifecycle = getSalesOrderLifecycle(currentSalesOrder, auditEnabled);
-                  const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
+                  const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '') && !isSalesOrderClosed(currentSalesOrder);
                   const canDelete =
-                    ['草稿', '待审核'].includes(lifecycle.stageName ?? '') ||
+                    (['草稿', '待审核'].includes(lifecycle.stageName ?? '') ||
                     currentSalesOrder.status === SalesOrderStatus.DRAFT ||
-                    currentSalesOrder.status === 'PENDING_REVIEW';
+                    currentSalesOrder.status === 'PENDING_REVIEW') && !isSalesOrderClosed(currentSalesOrder);
                   return (
                     <>
                       {canEdit && (
@@ -3599,6 +3498,13 @@ const SalesOrdersPage: React.FC = () => {
                         },
                         { type: 'divider' },
                         {
+                          key: 'invoice',
+                          label: t('app.kuaizhizao.salesOrder.salesInvoice'),
+                          icon: <FileTextOutlined />,
+                          disabled: !salesNodeEnabled.invoice,
+                          onClick: () => handlePushToInvoice(currentSalesOrder.id!),
+                        },
+                        {
                           key: 'shipment',
                           label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
                           icon: <SendOutlined />,
@@ -3607,28 +3513,14 @@ const SalesOrdersPage: React.FC = () => {
                         },
                         {
                           key: 'delivery',
-                          label: '下推销售出库单',
+                          label: t('app.kuaizhizao.salesOrder.salesDelivery'),
                           icon: <SendOutlined />,
                           disabled: !salesNodeEnabled.shipment_notice,
                           onClick: () => handlePushToDelivery(currentSalesOrder.id!),
                         },
                         {
-                          key: 'auto-route',
-                          label: '自动路由下推',
-                          icon: <AppstoreAddOutlined />,
-                          disabled: !salesNodeEnabled.shipment_notice,
-                          onClick: () => handlePushAutoRoute(currentSalesOrder.id!),
-                        },
-                        {
-                          key: 'invoice',
-                          label: t('app.kuaizhizao.salesOrder.salesInvoice'),
-                          icon: <FileTextOutlined />,
-                          disabled: !salesNodeEnabled.invoice,
-                          onClick: () => handlePushToInvoice(currentSalesOrder.id!),
-                        },
-                        {
                           key: 'sales-return',
-                          label: '下推销售退货单',
+                          label: t('app.kuaizhizao.salesOrder.salesReturn'),
                           icon: <RollbackOutlined />,
                           onClick: () => handlePushToSalesReturn(currentSalesOrder.id!),
                         },
@@ -3646,81 +3538,12 @@ const SalesOrdersPage: React.FC = () => {
               </Space>
             }
             basic={<SalesOrderDetailBasicPane />}
-            collaboration={<SalesOrderDetailCollaborationPane />}
-            traceDocument={
-              currentSalesOrder?.id != null
-                ? {
-                    documentType: 'sales_order',
-                    documentId: currentSalesOrder.id,
-                    selfDocumentId: currentSalesOrder.id,
-                    renderBriefActions: (doc) => (
-                      <>
-                        {doc.document_type === 'quotation' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              setDrawerVisible(false);
-                              navigate('/apps/kuaizhizao/sales-management/quotations', {
-                                state: { openQuotationDetailId: doc.document_id },
-                              });
-                            }}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                          </Button>
-                        ) : null}
-                        {doc.document_type === 'sales_invoice' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              setDrawerVisible(false);
-                              navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${doc.document_id}`);
-                            }}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
-                          </Button>
-                        ) : null}
-                        {doc.document_type === 'receivable' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              setDrawerVisible(false);
-                              navigate(`/apps/kuaicaiwu/finance-management/receivables/${doc.document_id}`);
-                            }}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
-                          </Button>
-                        ) : null}
-                        {doc.document_type === 'receipt' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              setDrawerVisible(false);
-                              navigate('/apps/kuaicaiwu/finance-management/receipts');
-                            }}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
-                          </Button>
-                        ) : null}
-                        {doc.document_type === 'payment' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => {
-                              setDrawerVisible(false);
-                              navigate('/apps/kuaicaiwu/finance-management/payments');
-                            }}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                          </Button>
-                        ) : null}
-                      </>
-                    ),
-                  }
-                : null
+            collaboration={
+              <SalesOrderDetailCollaborationPane
+                drawerVisible={drawerVisible}
+                onCloseDrawer={() => setDrawerVisible(false)}
+                navigate={navigate}
+              />
             }
             lines={<SalesOrderDetailLinesPane />}
             timeline={<SalesOrderDetailTimelinePane />}

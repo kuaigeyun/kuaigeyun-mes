@@ -13,14 +13,14 @@ import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateS
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
-import { buildUniPushMenuItems } from '../../../../../components/uni-push';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -30,7 +30,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -2783,16 +2783,11 @@ const QuotationsPage: React.FC = () => {
           createButtonText="新建报价单"
           onCreate={handleCreate}
           toolBarActionsAfterCreate={[
-            <Dropdown
+            <UniPushToolbarButton
               key={`quotation-push-${selectedQuotationForToolbar?.id ?? 'none'}`}
-              trigger={['click']}
+              menuItems={toolbarPushMenuItems}
               disabled={!selectedQuotationForToolbar}
-              menu={{ items: toolbarPushMenuItems }}
-            >
-              <Button type="primary" icon={<ArrowDownOutlined />} size="middle">
-                {t('app.kuaizhizao.salesOrder.push')}
-              </Button>
-            </Dropdown>,
+            />,
           ]}
           enableRowSelection
           showDeleteButton
@@ -3023,37 +3018,40 @@ const QuotationsPage: React.FC = () => {
             ? (() => {
                 const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
-                if (mainStages.length === 0) return undefined;
                 return (
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    status={lifecycle.status}
-                    showLabels
-                    nextStepSuggestions={lifecycle.nextStepSuggestions}
-                    hideNextStepSuggestions={hideQuotationStepperNextRow}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {mainStages.length > 0 ? (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions={hideQuotationStepperNextRow}
+                      />
+                    ) : null}
+                    {quotationDetail.id != null ? (
+                      <DetailDrawerInlineFullChain
+                        documentType="quotation"
+                        documentId={quotationDetail.id}
+                        active={detailDrawerVisible}
+                        selfDocumentId={quotationDetail.id}
+                        renderBriefActions={(doc) =>
+                          doc.document_type === 'sales_order' ? (
+                            <Button
+                              type="primary"
+                              size="small"
+                              onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
+                            >
+                              {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    ) : null}
+                  </div>
                 );
               })()
             : undefined
-        }
-        traceDocument={
-          quotationDetail?.id != null
-            ? {
-                documentType: 'quotation',
-                documentId: quotationDetail.id,
-                selfDocumentId: quotationDetail.id,
-                renderBriefActions: (doc) =>
-                  doc.document_type === 'sales_order' ? (
-                    <Button
-                      type="primary"
-                      size="small"
-                      onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                    </Button>
-                  ) : null,
-              }
-            : null
         }
         lines={
           quotationDetail ? (

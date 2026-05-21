@@ -44,7 +44,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   DetailDrawerActions,
   FormModalTemplate,
   DRAWER_CONFIG,
@@ -1237,26 +1237,6 @@ const ReceiptNoticesPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={noticeDetail || undefined}
-        traceDocument={
-          noticeDetail?.id != null
-            ? {
-                documentType: 'receipt_notice',
-                documentId: noticeDetail.id,
-                selfDocumentId: noticeDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setNoticeDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           noticeDetail && (
             <DetailDrawerActions
@@ -1342,6 +1322,25 @@ const ReceiptNoticesPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {noticeDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='receipt_notice'
+                      documentId={noticeDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={noticeDetail.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setNoticeDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

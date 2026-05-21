@@ -14,7 +14,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
 import { holidayApi } from '../../../services/performance';
 import { HolidayFormModal } from '../../../components/HolidayFormModal';
@@ -241,23 +241,6 @@ const HolidaysPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
         columns={[]}
-        traceDocument={
-          holidayDetail?.id != null
-            ? {
-                documentType: 'performance_holiday',
-                documentId: holidayDetail.id,
-                selfDocumentId: holidayDetail.id,
-                renderBriefActions: (doc) => (
-                  <PerformanceTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={handleCloseDetail}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           detailLoading && !holidayDetail ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
@@ -288,6 +271,22 @@ const HolidaysPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {holidayDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='performance_holiday'
+                      documentId={holidayDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={holidayDetail.id}
+                      renderBriefActions={(doc) => (
+                  <PerformanceTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={handleCloseDetail}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

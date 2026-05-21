@@ -9,7 +9,7 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -50,7 +50,6 @@ import {
   PlayCircleOutlined,
   EyeOutlined,
   ReloadOutlined,
-  ArrowDownOutlined,
   DeleteOutlined,
   WarningOutlined,
   CopyOutlined,
@@ -61,6 +60,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import {
   MultiTabListPageTemplate,
   DetailDrawerSection,
+  DetailDrawerInlineFullChain,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
@@ -68,6 +68,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push'
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -579,6 +580,8 @@ const DemandComputationPage: React.FC = () => {
   const location = useLocation()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
+  const lastComputationsCacheRef = useRef<DemandComputation[]>([])
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
@@ -1162,10 +1165,10 @@ const DemandComputationPage: React.FC = () => {
   }
 
   /** 打开下推面板 */
-  const handleOpenPushPanel = (record: DemandComputation) => {
+  const handleOpenPushPanel = useCallback((record: DemandComputation) => {
     setPushPanelRecord(record)
     setPushPreviewData(null)
-  }
+  }, [])
 
   /** 下推面板确认执行 */
   const handlePushPanelConfirm = async () => {
@@ -1264,33 +1267,6 @@ const DemandComputationPage: React.FC = () => {
           ) : null}
         </Space>
       ),
-    },
-    {
-      title: '物料概看',
-      dataIndex: 'computation_summary',
-      width: 180,
-      hideInSearch: true,
-      render: (_, record) => {
-        const summary = record.computation_summary || {}
-        const shortage = summary.shortage_count || 0
-        const risk = summary.risk_count || 0
-        const total = summary.item_count || 0
-
-        if (total === 0 && record.computation_status !== '完成') return '-'
-        if (total === 0 && record.computation_status === '完成')
-          return <span style={{ color: '#999' }}>无物料需求</span>
-
-        return (
-          <Space size={4}>
-            {shortage > 0 ? (
-              <Tag color="error">缺料 {shortage}</Tag>
-            ) : (
-              <Tag color="success">无缺料</Tag>
-            )}
-            {risk > 0 && <Tag color="warning">风险 {risk}</Tag>}
-          </Space>
-        )
-      },
     },
     {
       title: '来源类型',
@@ -1401,13 +1377,6 @@ const DemandComputationPage: React.FC = () => {
             </Button>
           )
         }
-        if (record.computation_status === '完成') {
-          parts.push(
-            <Button key="pu" type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>
-              下推
-            </Button>
-          )
-        }
         parts.push(
           <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
             删除
@@ -1417,6 +1386,29 @@ const DemandComputationPage: React.FC = () => {
       },
     },
   ]
+
+  const selectedComputationForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null
+    const id = Number(selectedRowKeys[0])
+    if (!Number.isFinite(id) || id <= 0) return null
+    return lastComputationsCacheRef.current.find((row) => row.id === id) ?? null
+  }, [selectedRowKeys])
+
+  const canUseToolbarPush = selectedComputationForToolbar?.computation_status === '完成'
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      selectedComputationForToolbar && canUseToolbarPush
+        ? buildUniPushMenuItems([
+            {
+              key: 'push-documents',
+              label: t('app.kuaizhizao.demandComputation.pushDocuments', { defaultValue: '下推工单 / 采购' }),
+              onClick: () => handleOpenPushPanel(selectedComputationForToolbar),
+            },
+          ])
+        : [],
+    [selectedComputationForToolbar, canUseToolbarPush, handleOpenPushPanel, t],
+  )
 
   const statCards: StatCard[] = statistics
     ? [
@@ -1499,6 +1491,7 @@ const DemandComputationPage: React.FC = () => {
           }
 
           const result = await listDemandComputations(apiParams)
+          lastComputationsCacheRef.current = result.data || []
           return {
             data: result.data || [],
             success: result.success,
@@ -1506,6 +1499,8 @@ const DemandComputationPage: React.FC = () => {
           }
         }}
         rowKey="id"
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         enableRowSelection={true}
         showDeleteButton={true}
         onDelete={async (keys) => {
@@ -1551,6 +1546,11 @@ const DemandComputationPage: React.FC = () => {
                 },
               },
             ])}
+          />,
+          <UniPushToolbarButton
+            key={`computation-push-${selectedComputationForToolbar?.id ?? 'none'}`}
+            menuItems={toolbarPushMenuItems}
+            disabled={!selectedComputationForToolbar || !canUseToolbarPush}
           />,
         ]}
         toolBarActionsAfterDelete={[<MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />]}
@@ -2153,25 +2153,6 @@ const DemandComputationPage: React.FC = () => {
         styles={{
           body: { paddingTop: 8, paddingBottom: 8 },
         }}
-        traceDocument={
-          drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null
-            ? {
-                documentType: 'demand_computation',
-                documentId: currentComputation.id,
-                selfDocumentId: currentComputation.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false)
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         plainBody={
           currentComputation ? (
           <Tabs
@@ -2328,21 +2309,41 @@ const DemandComputationPage: React.FC = () => {
                     </DetailDrawerSection>
 
                     <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration', { defaultValue: '生命周期' })}>
-                      {(() => {
-                        const lifecycle = getDemandComputationLifecycle(currentComputation)
-                        const mainStages = lifecycle.mainStages ?? []
-                        return mainStages.length > 0 ? (
-                          <UniLifecycleStepper
-                            steps={mainStages}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                            hideNextStepSuggestions
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {(() => {
+                          const lifecycle = getDemandComputationLifecycle(currentComputation)
+                          const mainStages = lifecycle.mainStages ?? []
+                          return mainStages.length > 0 ? (
+                            <UniLifecycleStepper
+                              steps={mainStages}
+                              status={lifecycle.status}
+                              showLabels
+                              nextStepSuggestions={lifecycle.nextStepSuggestions}
+                              hideNextStepSuggestions
+                            />
+                          ) : (
+                            <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
+                          )
+                        })()}
+                        {currentComputation.id != null ? (
+                          <DetailDrawerInlineFullChain
+                            documentType="demand_computation"
+                            documentId={currentComputation.id}
+                            active={drawerVisible && detailTabKey === 'detail'}
+                            selfDocumentId={currentComputation.id}
+                            renderBriefActions={(doc) => (
+                              <WarehouseTraceBriefPrimaryActions
+                                doc={doc}
+                                t={t}
+                                navigate={navigate}
+                                closeDrawer={() => {
+                                  setDrawerVisible(false)
+                                }}
+                              />
+                            )}
                           />
-                        ) : (
-                          <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
-                        )
-                      })()}
+                        ) : null}
+                      </div>
                     </DetailDrawerSection>
 
                     <DetailDrawerSection title={t('app.uniDetail.sectionLines', { defaultValue: '明细信息' })}>

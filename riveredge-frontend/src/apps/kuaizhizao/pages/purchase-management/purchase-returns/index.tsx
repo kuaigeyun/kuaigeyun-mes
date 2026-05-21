@@ -31,7 +31,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   DetailDrawerActions,
   DRAWER_CONFIG,
   type StatCard,
@@ -518,26 +518,6 @@ const PurchaseReturnsPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={returnDetail || undefined}
-        traceDocument={
-          returnDetail?.id != null
-            ? {
-                documentType: 'purchase_return',
-                documentId: returnDetail.id,
-                selfDocumentId: returnDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setReturnDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           returnDetail && returnDetail.status === '待退货' ? (
             <DetailDrawerActions
@@ -587,6 +567,25 @@ const PurchaseReturnsPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {returnDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='purchase_return'
+                      documentId={returnDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={returnDetail.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setReturnDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

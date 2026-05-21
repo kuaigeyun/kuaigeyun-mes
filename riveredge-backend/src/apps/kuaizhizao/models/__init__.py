@@ -128,6 +128,7 @@ from .state_transition import StateTransitionRule, StateTransitionLog
 # 单据关联逻辑
 from .document_relation import DocumentRelation
 from .scheduling_config import SchedulingConfig
+from .work_order_score import WorkOrderScore
 
 __all__ = [
     # 生产执行模块
@@ -262,4 +263,5 @@ __all__ = [
     # 单据关联
     'DocumentRelation',
     'SchedulingConfig',
+    'WorkOrderScore',
 ]

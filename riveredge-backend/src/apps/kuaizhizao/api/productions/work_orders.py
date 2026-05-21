@@ -39,6 +39,12 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationDispatch,
     WorkOrderKittingAnalysisResponse,
 )
+from apps.kuaizhizao.schemas.work_order_score import (
+    WorkOrderScoreResponse,
+    WorkOrderScoreConfigResponse,
+    WorkOrderBatchScoreRefreshRequest,
+)
+from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
     ReworkOrderUpdate,
@@ -334,6 +340,10 @@ async def list_work_orders(
         True,
         description="是否计算齐套率（BOM+库存）；工单列表页建议 false 以大幅提升首屏速度，齐套率列可为空",
     ),
+    include_scores: bool = Query(
+        False,
+        description="是否附带排程/备料综合分（读缓存快照，不触发重算）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -372,6 +382,7 @@ async def list_work_orders(
             order_by=safe_order_by,
             include_operations=include_operations,
             include_readiness=include_readiness,
+            include_scores=include_scores,
         )
         return {
             "data": result,
@@ -410,6 +421,28 @@ async def get_work_order_execution_config(
         "current_user_role_codes": sorted(role_codes),
         "current_user_can_confirm_picking": can_confirm_picking,
     }
+
+
+@router.get("/work-orders/score-config", response_model=WorkOrderScoreConfigResponse, summary="Get work order score config")
+async def get_work_order_score_config(
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderScoreConfigResponse:
+    """获取租户工单综合打分配置（权重模板）。"""
+    return await WorkOrderScoreService().get_score_config(tenant_id)
+
+
+@router.post("/work-orders/scores/batch-refresh", summary="Batch refresh work order scores")
+async def batch_refresh_work_order_scores(
+    body: WorkOrderBatchScoreRefreshRequest,
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """批量刷新工单综合分（管理员/定时任务亦可用）。"""
+    return await WorkOrderScoreService().batch_refresh(
+        tenant_id=tenant_id,
+        work_order_ids=body.work_order_ids,
+        scenarios=body.scenarios,
+        include_kitting=False,
+    )
 
 
 @router.get("/work-orders/delayed", summary="List delayed work orders")
@@ -1217,4 +1250,46 @@ async def manually_complete_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         completed_by=current_user.id
+    )
+
+
+@router.get(
+    "/work-orders/{work_order_id}/scores",
+    response_model=WorkOrderScoreResponse,
+    summary="Get work order composite score",
+)
+async def get_work_order_score(
+    work_order_id: int,
+    scenario: str = Query("scheduling", description="场景 scheduling/picking"),
+    refresh_if_stale: bool = Query(False, description="缓存过期时自动重算"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderScoreResponse:
+    """获取单工单综合分及分解明细。"""
+    score = await WorkOrderScoreService().get_score(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        scenario=scenario,
+        refresh_if_stale=refresh_if_stale,
+    )
+    if not score:
+        raise HTTPException(status_code=404, detail="工单不存在或未启用综合打分")
+    return score
+
+
+@router.post(
+    "/work-orders/{work_order_id}/scores/refresh",
+    response_model=List[WorkOrderScoreResponse],
+    summary="Refresh work order composite scores",
+)
+async def refresh_work_order_scores(
+    work_order_id: int,
+    scenarios: Optional[List[str]] = Query(None, description="场景列表，默认 scheduling+picking"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[WorkOrderScoreResponse]:
+    """手动刷新单工单综合分。"""
+    return await WorkOrderScoreService().refresh_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        scenarios=scenarios,
+        include_kitting=True,
     )

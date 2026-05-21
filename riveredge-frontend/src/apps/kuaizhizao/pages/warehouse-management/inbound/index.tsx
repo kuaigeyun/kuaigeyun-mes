@@ -27,7 +27,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -2269,27 +2269,6 @@ const InboundPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
-        traceDocument={
-          currentOrder?.id != null
-            ? {
-                documentType: inboundDocumentTrackingType(currentOrder),
-                documentId: currentOrder.id,
-                selfDocumentId: currentOrder.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setCurrentOrder(null);
-                      setEditableReceiptQuantities({});
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           currentOrder ? (
             <Space>
@@ -2440,6 +2419,26 @@ const InboundPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {currentOrder.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType={inboundDocumentTrackingType(currentOrder)}
+                      documentId={currentOrder.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={currentOrder.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setCurrentOrder(null);
+                      setEditableReceiptQuantities({});
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

@@ -175,6 +175,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
+    "parameters.work_order.score_stale_minutes": {"type": "number", "min": 5, "max": 1440},
     "parameters.finance.auto_write_off_precision_limit": {"type": "number", "min": 0, "max": 100},
     "parameters.finance.revenue_recognition": {
         "type": "select",
@@ -243,6 +244,8 @@ PARAMETER_KEYS = {
     "parameters.work_order.split",
     "parameters.work_order.merge",
     "parameters.work_order.last_operation_auto_inbound_mode",
+    "parameters.work_order.score_enabled",
+    "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.auto_fill",
@@ -290,6 +293,8 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.split",
     "parameters.work_order.merge",
     "parameters.work_order.last_operation_auto_inbound_mode",
+    "parameters.work_order.score_enabled",
+    "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.auto_approve",
@@ -363,6 +368,30 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "require_confirmed_picking_before_operation_start": False,
         "require_confirmed_picking_before_reporting": False,
         "last_operation_auto_inbound_mode": "none",
+        "score_enabled": True,
+        "score_stale_minutes": 30,
+        "score_profiles": {
+            "scheduling": {
+                "weights": {
+                    "manual_priority": 0.25,
+                    "due_urgency": 0.35,
+                    "demand_urgency": 0.15,
+                    "kitting_readiness": 0.20,
+                    "plan_fidelity": 0.05,
+                },
+                "kitting_mode": "direct",
+            },
+            "picking": {
+                "weights": {
+                    "manual_priority": 0.20,
+                    "due_urgency": 0.25,
+                    "demand_urgency": 0.15,
+                    "kitting_readiness": 0.40,
+                    "plan_fidelity": 0.0,
+                },
+                "kitting_mode": "invert",
+            },
+        },
     },
     "reporting": {
         "quick_reporting": True,

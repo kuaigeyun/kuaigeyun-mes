@@ -22,7 +22,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { UniImport } from '../../../../../components/uni-import';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
@@ -1111,26 +1111,6 @@ const ShipmentNoticesPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={noticeDetail || undefined}
-        traceDocument={
-          noticeDetail?.id != null
-            ? {
-                documentType: 'shipment_notice',
-                documentId: noticeDetail.id,
-                selfDocumentId: noticeDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setNoticeDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           noticeDetail ? (
             <>
@@ -1177,6 +1157,25 @@ const ShipmentNoticesPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {noticeDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType="shipment_notice"
+                      documentId={noticeDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={noticeDetail.id}
+                      renderBriefActions={(doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailDrawerVisible(false);
+                            setNoticeDetail(null);
+                          }}
+                        />
+                      )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

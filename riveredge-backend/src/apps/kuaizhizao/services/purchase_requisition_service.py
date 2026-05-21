@@ -794,6 +794,19 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             po = await self.purchase_service.create_purchase_order(
                 tenant_id=tenant_id, order_data=po_data, created_by=created_by
             )
+            try:
+                po = await self.purchase_service.submit_purchase_order(
+                    tenant_id=tenant_id,
+                    order_id=po.id,
+                    submitted_by=created_by,
+                )
+            except Exception as e:
+                logger.warning(
+                    "采购申请转单后自动提交采购订单失败: requisition_id={} po_id={} err={}",
+                    requisition_id,
+                    po.id,
+                    e,
+                )
 
             for i, (item, _) in enumerate(items_converted):
                 po_item = po.items[i] if i < len(po.items) else None

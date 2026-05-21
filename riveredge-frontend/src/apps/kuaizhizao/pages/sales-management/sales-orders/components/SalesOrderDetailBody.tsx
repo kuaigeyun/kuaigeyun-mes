@@ -10,6 +10,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { App, Button, Space, Table, Tooltip, Typography, Descriptions } from 'antd';
 import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import type { NavigateFunction } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../../components/dictionary-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
@@ -17,7 +19,7 @@ import { MaterialInventoryIndicator } from '../../../../components/MaterialInven
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
-import { DetailDrawerSection } from '../../../../../../components/layout-templates';
+import { DetailDrawerSection, DetailDrawerInlineFullChain } from '../../../../../../components/layout-templates';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
@@ -303,10 +305,24 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
   );
 };
 
-export const SalesOrderDetailCollaborationPane: React.FC = () => {
+export interface SalesOrderDetailCollaborationPaneProps {
+  drawerVisible?: boolean;
+  onCloseDrawer?: () => void;
+  navigate?: NavigateFunction;
+}
+
+export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollaborationPaneProps> = ({
+  drawerVisible = true,
+  onCloseDrawer,
+  navigate: navigateProp,
+}) => {
+  const { t } = useTranslation();
+  const navigateHook = useNavigate();
+  const navigate = navigateProp ?? navigateHook;
   const { order, lifecycle } = useSalesOrderDetailContext();
   const mainStages = lifecycle.mainStages ?? [];
   const hideStepperNext = Boolean(lifecycle.nextStepSuggestions?.length);
+  const closeDrawer = onCloseDrawer ?? (() => {});
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -319,6 +335,80 @@ export const SalesOrderDetailCollaborationPane: React.FC = () => {
           hideNextStepSuggestions={hideStepperNext}
         />
       )}
+      {order.id != null ? (
+        <DetailDrawerInlineFullChain
+          documentType="sales_order"
+          documentId={order.id}
+          active={drawerVisible}
+          selfDocumentId={order.id}
+          renderBriefActions={(doc) => (
+            <>
+              {doc.document_type === 'quotation' ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    closeDrawer();
+                    navigate('/apps/kuaizhizao/sales-management/quotations', {
+                      state: { openQuotationDetailId: doc.document_id },
+                    });
+                  }}
+                >
+                  {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                </Button>
+              ) : null}
+              {doc.document_type === 'sales_invoice' ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    closeDrawer();
+                    navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${doc.document_id}`);
+                  }}
+                >
+                  {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
+                </Button>
+              ) : null}
+              {doc.document_type === 'receivable' ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    closeDrawer();
+                    navigate(`/apps/kuaicaiwu/finance-management/receivables/${doc.document_id}`);
+                  }}
+                >
+                  {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
+                </Button>
+              ) : null}
+              {doc.document_type === 'receipt' ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    closeDrawer();
+                    navigate('/apps/kuaicaiwu/finance-management/receipts');
+                  }}
+                >
+                  {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
+                </Button>
+              ) : null}
+              {doc.document_type === 'payment' ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    closeDrawer();
+                    navigate('/apps/kuaicaiwu/finance-management/payments');
+                  }}
+                >
+                  {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                </Button>
+              ) : null}
+            </>
+          )}
+        />
+      ) : null}
     </div>
   );
 };

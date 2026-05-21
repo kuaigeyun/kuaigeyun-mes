@@ -27,7 +27,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
@@ -782,26 +782,6 @@ const EquipmentFaultsPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={faultDetail || undefined}
-        traceDocument={
-          faultDetail?.id != null
-            ? {
-                documentType: 'equipment_fault',
-                documentId: faultDetail.id,
-                selfDocumentId: faultDetail.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setFaultDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           faultDetail ? (
             <>
@@ -828,6 +808,25 @@ const EquipmentFaultsPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {faultDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='equipment_fault'
+                      documentId={faultDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={faultDetail.id}
+                      renderBriefActions={(doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setFaultDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

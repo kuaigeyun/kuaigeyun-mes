@@ -63,7 +63,7 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   DRAWER_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
@@ -3135,27 +3135,6 @@ const ReportingPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={reportingDetail || undefined}
-        traceDocument={
-          reportingDetail?.id != null
-            ? {
-                documentType: 'reporting_record',
-                documentId: reportingDetail.id,
-                selfDocumentId: reportingDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setReportingDetail(null);
-                      setDetailMaterialBindings([]);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           reportingDetail && (
             <>
@@ -3191,6 +3170,26 @@ const ReportingPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {reportingDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='reporting_record'
+                      documentId={reportingDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={reportingDetail.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setReportingDetail(null);
+                      setDetailMaterialBindings([]);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, Badge, Button, Space, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -453,30 +453,31 @@ const EquipmentStatusPage: React.FC = () => {
           setHistoryList([]);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        traceDocument={
-          currentEquipment?.equipment?.id != null
-            ? {
-                documentType: 'equipment',
-                documentId: currentEquipment.equipment.id,
-                selfDocumentId: currentEquipment.equipment.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setCurrentEquipment(null);
-                      setHistoryList([]);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           currentEquipment ? (
             <>
+              <DetailDrawerSection title="生命周期">
+                {currentEquipment.equipment?.id != null ? (
+                  <DetailDrawerInlineFullChain
+                    documentType="equipment"
+                    documentId={currentEquipment.equipment.id}
+                    active={detailVisible}
+                    selfDocumentId={currentEquipment.equipment.id}
+                    renderBriefActions={(doc) => (
+                      <EquipmentTraceBriefPrimaryActions
+                        doc={doc}
+                        t={t}
+                        navigate={navigate}
+                        closeDrawer={() => {
+                          setDetailVisible(false);
+                          setCurrentEquipment(null);
+                          setHistoryList([]);
+                        }}
+                      />
+                    )}
+                  />
+                ) : null}
+              </DetailDrawerSection>
               <DetailDrawerSection title="实时监控">
                 <ProDescriptions
                   title={false}

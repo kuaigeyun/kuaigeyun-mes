@@ -53,6 +53,11 @@ function isCancelled(status: string | undefined): boolean {
   return s === 'CANCELLED' || s === '已取消';
 }
 
+function isClosed(status: string | undefined): boolean {
+  const s = norm(status);
+  return s === 'CLOSED' || s === '已关闭' || s === 'closed';
+}
+
 function isDraft(status: string | undefined): boolean {
   const s = norm(status);
   return s === 'DRAFT' || s === '草稿';
@@ -125,6 +130,7 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     已完成: 7,
     已驳回: 1,
     已取消: 0,
+    已关闭: 7,
   };
 
   const stageToIndexNoAudit: Record<string, number> = {
@@ -141,6 +147,7 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     已完成: 5,
     已驳回: 1,
     已取消: 0,
+    已关闭: 7,
   };
 
   const stageToIndex = auditRequired ? stageToIndexAudit : stageToIndexNoAudit;
@@ -169,6 +176,7 @@ const CN_STAGE_NAMES = new Set([
   '已完成',
   '已驳回',
   '已取消',
+  '已关闭',
 ]);
 
 /** 由主线节点推导圆环进度（与 parseBackendLifecycle 规则一致） */
@@ -202,6 +210,79 @@ function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): L
   }
 
   return { ...base, mainStages };
+}
+
+const SALES_ORDER_LIFECYCLE_STAGE_I18N: Record<string, string> = {
+  草稿: 'app.kuaizhizao.salesOrder.lifecycleDraft',
+  待审核: 'app.kuaizhizao.salesOrder.lifecyclePendingReview',
+  已审核: 'app.kuaizhizao.salesOrder.lifecycleAudited',
+  已生效: 'app.kuaizhizao.salesOrder.lifecycleEffective',
+  执行中: 'app.kuaizhizao.salesOrder.lifecycleInProgress',
+  发货出库: 'app.kuaizhizao.salesOrder.lifecycleDelivered',
+  账款发票处理: 'app.kuaizhizao.salesOrder.lifecycleInvoicing',
+  已完成: 'app.kuaizhizao.salesOrder.lifecycleCompleted',
+  已驳回: 'app.kuaizhizao.salesOrder.lifecycleRejected',
+  已取消: 'app.kuaizhizao.salesOrder.lifecycleCancelled',
+  已关闭: 'app.kuaizhizao.salesOrder.lifecycleClosed',
+};
+
+export const SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES = ['已驳回', '已取消', '已关闭'] as const;
+
+/** 列表筛选 / 钉住 Tab：与生命周期主轴一致（不含历史别名如「已交货」「账款发票」） */
+export function getSalesOrderLifecycleStageLabels(auditRequired = true): string[] {
+  const keys = auditRequired ? MAIN_STAGE_KEYS_AUDIT : MAIN_STAGE_KEYS_NO_AUDIT;
+  return [...keys.map((k) => MAIN_STAGE_LABELS[k]), ...SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES];
+}
+
+type LifecycleTranslate = (key: string, defaultValue?: string) => string;
+
+/** 供 ProColumns.valueEnum 与 uni-query 生命周期 Tab 使用 */
+export function buildSalesOrderLifecycleValueEnum(
+  t: LifecycleTranslate,
+  auditRequired = true,
+): Record<string, { text: string }> {
+  return Object.fromEntries(
+    getSalesOrderLifecycleStageLabels(auditRequired).map((stage) => [
+      stage,
+      { text: t(SALES_ORDER_LIFECYCLE_STAGE_I18N[stage] ?? stage, stage) },
+    ]),
+  );
+}
+
+/** lifecycle Tab 值 → 列表 API 查询参数 */
+export function mapSalesOrderLifecycleStageToApiParams(
+  stage: string,
+): { status?: string; review_status?: string } {
+  const normalized = normalizeStageName(stage);
+  switch (normalized) {
+    case '草稿':
+      return { status: 'DRAFT' };
+    case '待审核':
+      return { status: 'PENDING_REVIEW' };
+    case '已审核':
+      return { status: 'AUDITED' };
+    case '已生效':
+      return { status: 'CONFIRMED' };
+    case '执行中':
+      return { status: 'IN_PROGRESS' };
+    case '发货出库':
+      return { status: 'IN_PROGRESS' };
+    case '账款发票处理':
+      return { status: 'IN_PROGRESS' };
+    case '已完成':
+      return { status: 'COMPLETED' };
+    case '已驳回':
+      return { review_status: 'REJECTED' };
+    case '已取消':
+      return { status: 'CANCELLED' };
+    case '已关闭':
+      return { status: 'CLOSED' };
+    default:
+      if (stage === '已确认') return { status: 'CONFIRMED' };
+      if (stage === '已交货') return { status: 'DELIVERED' };
+      if (stage === '账款发票') return { status: 'IN_PROGRESS' };
+      return { status: stage };
+  }
 }
 
 /**
@@ -247,6 +328,19 @@ export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true)
         percent: ringPercentFromStages(mainStages),
         stageName: '已取消',
         status: 'exception',
+        mainStages,
+        nextStepSuggestions: [],
+      },
+      auditRequired,
+    );
+  }
+  if (isClosed(status)) {
+    const mainStages = buildMainStages('已完成', auditRequired);
+    return adaptForAuditSwitch(
+      {
+        percent: ringPercentFromStages(mainStages),
+        stageName: '已关闭',
+        status: 'normal',
         mainStages,
         nextStepSuggestions: [],
       },
@@ -377,8 +471,13 @@ export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true)
   );
 }
 
+/** 销售订单是否已关闭（剩余执行已终止） */
+export function isSalesOrderClosed(record: Pick<SalesOrder, 'status'>): boolean {
+  return isClosed(record.status);
+}
+
 /** 不视为「交货逾期」高亮的生命周期阶段（与列表展示语义一致） */
-const DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set(['已完成', '已取消', '草稿', '已驳回', '账款发票', '账款发票处理']);
+const DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set(['已完成', '已关闭', '已取消', '草稿', '已驳回', '账款发票', '账款发票处理']);
 
 /** 整单已交货闭环或处于不提示逾期的阶段 */
 export function isSalesOrderDeliveryHighlightExcluded(record: SalesOrder, auditRequired = true): boolean {

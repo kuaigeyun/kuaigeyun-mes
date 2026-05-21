@@ -102,6 +102,7 @@ import {
   FormModalTemplate,
   DetailDrawerTemplate,
   DetailDrawerSection,
+  DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   TOUCH_SCREEN_CONFIG,
   type StatCard,
@@ -156,6 +157,7 @@ const LazyStatTrendArea = lazy(() =>
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
 import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
+import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell'
 const LazyQRCodeGenerator = lazy(() =>
   import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
 )
@@ -221,6 +223,12 @@ interface WorkOrder {
   manufacturing_mode?: 'fabrication' | 'assembly'
   /** 齐套率 (%) */
   readiness_rate?: number
+  scheduling_score?: number
+  scheduling_rank_band?: string
+  scheduling_score_breakdown?: Record<string, any>
+  picking_score?: number
+  picking_rank_band?: string
+  picking_score_breakdown?: Record<string, any>
 }
 
 type PullDemandComputationCandidate = {
@@ -3959,6 +3967,32 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
+      title: '排程综合分',
+      dataIndex: 'scheduling_score',
+      width: 110,
+      hideInSearch: true,
+      render: (_, record) => (
+        <WorkOrderScoreCell
+          score={record.scheduling_score}
+          rankBand={record.scheduling_rank_band}
+          breakdown={record.scheduling_score_breakdown}
+        />
+      ),
+    },
+    {
+      title: '备料综合分',
+      dataIndex: 'picking_score',
+      width: 110,
+      hideInSearch: true,
+      render: (_, record) => (
+        <WorkOrderScoreCell
+          score={record.picking_score}
+          rankBand={record.picking_rank_band}
+          breakdown={record.picking_score_breakdown}
+        />
+      ),
+    },
+    {
       title: '销售订单',
       dataIndex: 'sales_order_code',
       width: 120,
@@ -5651,26 +5685,6 @@ const WorkOrdersPage: React.FC = () => {
           setWorkOrderDetail(null)
         }}
         dataSource={workOrderDetail || undefined}
-        traceDocument={
-          workOrderDetail?.id != null
-            ? {
-                documentType: 'work_order',
-                documentId: workOrderDetail.id,
-                selfDocumentId: workOrderDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false)
-                      setWorkOrderDetail(null)
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         columns={detailColumns}
         width="50%"
         styles={{ wrapper: { width: '50%' } }}
@@ -5754,13 +5768,34 @@ const WorkOrdersPage: React.FC = () => {
                   if (mainStages.length === 0) return null
                   return (
                     <DetailDrawerSection title="生命周期">
-                      <LazyUniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <LazyUniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          hideNextStepSuggestions
+                        />
+                        {workOrderDetail.id != null ? (
+                          <DetailDrawerInlineFullChain
+                            documentType="work_order"
+                            documentId={workOrderDetail.id}
+                            active={drawerVisible}
+                            selfDocumentId={workOrderDetail.id}
+                            renderBriefActions={(doc) => (
+                              <WarehouseTraceBriefPrimaryActions
+                                doc={doc}
+                                t={t}
+                                navigate={navigate}
+                                closeDrawer={() => {
+                                  setDrawerVisible(false);
+                                  setWorkOrderDetail(null);
+                                }}
+                              />
+                            )}
+                          />
+                        ) : null}
+                      </div>
                     </DetailDrawerSection>
                   )
                 })()}

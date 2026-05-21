@@ -15,6 +15,11 @@ from apps.kuaizhizao.workflows.functions.maintenance_reminder_workflow import (
     maintenance_reminder_checker_function,
     run_maintenance_reminder_scheduler,
 )
+from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+    run_work_order_score_scheduler,
+    work_order_score_recalc_one,
+    work_order_score_recalc_worker,
+)
 
 __all__ = [
     "run_exception_detection_scheduler",
@@ -24,5 +29,8 @@ __all__ = [
     "exception_process_step_transition_workflow_function",
     "run_maintenance_reminder_scheduler",
     "maintenance_reminder_checker_function",
+    "run_work_order_score_scheduler",
+    "work_order_score_recalc_worker",
+    "work_order_score_recalc_one",
 ]
 

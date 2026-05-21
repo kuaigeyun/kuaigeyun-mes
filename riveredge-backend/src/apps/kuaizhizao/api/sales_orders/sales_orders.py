@@ -929,33 +929,6 @@ async def push_sales_order_to_shipment_notice(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推发货通知单失败", "/sales-orders/{sales_order_id}/push-to-shipment-notice", tenant_id)
 
 
-@router.post("/{sales_order_id}/push-auto-route", response_model=Dict[str, Any], summary="Auto-route push (MTO/MTS)")
-async def push_sales_order_auto_route(
-    sales_order_id: int = Path(..., description="销售订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    按订单类型与库存可用量自动路由：
-    - MTO：下推工单
-    - MTS：下推发货通知
-    - AUTO：按明细自动拆分为 MTO/MTS 两路
-    """
-    try:
-        return await sales_order_service.push_sales_order_auto_route(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            created_by=current_user.id,
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
-    except (BusinessLogicError, ValidationError) as e:
-        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
-    except Exception as e:
-        logger.error(f"自动路由下推失败: {e}")
-        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "自动路由下推失败", "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
-
-
 @router.post("/{sales_order_id}/push-to-invoice", response_model=Dict[str, Any], summary="Push to sales invoice")
 async def push_sales_order_to_invoice(
     sales_order_id: int = Path(..., description="销售订单ID"),
@@ -1143,6 +1116,24 @@ async def bulk_unapprove_sales_orders(
     except Exception as e:
         logger.error(f"批量反审核失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量反审核失败", "/sales-orders/batch-unapprove", tenant_id)
+
+
+@router.post("/batch-close", response_model=Dict[str, Any], summary="Batch close sales orders")
+async def bulk_close_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量关闭销售订单：终止剩余未执行部分，已履约数据保留。"""
+    try:
+        return await sales_order_service.bulk_close_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            closed_by=current_user.id,
+        )
+    except Exception as e:
+        logger.error(f"批量关闭失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量关闭失败", "/sales-orders/batch-close", tenant_id)
 
 
 @router.post("/batch-delete", response_model=Dict[str, Any], summary="Batch delete sales orders")

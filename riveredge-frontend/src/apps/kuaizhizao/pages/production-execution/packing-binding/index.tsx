@@ -40,7 +40,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
   type StatCard,
@@ -677,26 +677,6 @@ const PackingBindingPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={currentBinding || undefined}
-        traceDocument={
-          currentBinding?.id != null
-            ? {
-                documentType: 'packing_binding',
-                documentId: currentBinding.id,
-                selfDocumentId: currentBinding.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setCurrentBinding(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           currentBinding && (
             <>
@@ -728,6 +708,25 @@ const PackingBindingPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {currentBinding.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='packing_binding'
+                      documentId={currentBinding.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={currentBinding.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setCurrentBinding(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

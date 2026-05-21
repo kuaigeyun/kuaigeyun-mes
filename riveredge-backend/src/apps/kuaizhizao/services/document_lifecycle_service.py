@@ -125,6 +125,11 @@ def _is_cancelled(status: Optional[str]) -> bool:
     return s in ("CANCELLED", "已取消")
 
 
+def _is_closed(status: Optional[str]) -> bool:
+    s = _norm(status)
+    return s in ("CLOSED", "已关闭", "closed")
+
+
 def _build_main_stages(
     stage_keys: List[Dict[str, str]],
     current_stage_key: str,
@@ -187,6 +192,15 @@ def get_sales_order_lifecycle(
             "current_stage_name": "已取消",
             "status": "exception",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    if _is_closed(status):
+        return {
+            "current_stage_key": "completed",
+            "current_stage_name": "已关闭",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "completed"),
             "sub_stages": None,
             "next_step_suggestions": [],
         }
@@ -515,14 +529,23 @@ def get_work_order_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 采购订单生命周期节点（与销售订单类似：草稿→待审核→已审核→下推入库→已完成）
+# 采购订单生命周期：草稿→待审核→已审核→已确认→执行中→账款发票→已完成
 # ---------------------------------------------------------------------------
 PURCHASE_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
     {"key": "pending_review", "label": "待审核"},
     {"key": "audited", "label": "已审核"},
-    {"key": "pushed", "label": "已下推入库"},
+    {"key": "confirmed", "label": "已确认"},
+    {"key": "executing", "label": "执行中"},
+    {"key": "invoicing", "label": "账款发票"},
     {"key": "completed", "label": "已完成"},
+]
+
+PURCHASE_ORDER_EXEC_SUB_STAGES = [
+    {"key": "receipt_notice", "label": "收货通知"},
+    {"key": "incoming_inspection", "label": "来料检验"},
+    {"key": "purchase_receipt", "label": "采购入库"},
+    {"key": "purchase_invoice", "label": "采购发票"},
 ]
 
 
@@ -530,21 +553,62 @@ def get_purchase_order_lifecycle(
     order: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """采购订单生命周期计算（与销售订单类似，增加子阶段支撑）"""
+    """采购订单生命周期：对齐采购履约链路（确认→收货入库→发票→完成）。"""
     status = _norm(getattr(order, "status", None))
     review_status = _norm(getattr(order, "review_status", None))
     milestones = milestones or []
     actions = {m.get("action") for m in milestones}
 
-    # 1. 计算子阶段 (基于里程碑)
+    exec_started = bool(
+        actions
+        & {
+            "push_to_purchase_receipt",
+            "push_to_receipt_notice",
+            "push_to_incoming_inspection",
+            "push_to_purchase_invoice",
+        }
+    ) or status in ("IN_PROGRESS", "执行中", "进行中")
+
     sub_stages = [
-        {"key": "audited", "label": "订单审核", "status": "done" if _is_approved(review_status) else "active"},
-        {"key": "shipping", "label": "供应商发货", "status": "done" if "push_to_purchase_receipt" in actions or status in ("已完成", "completed") else "active" if _is_approved(review_status) else "pending"},
-        {"key": "receipt", "label": "采购入库", "status": "done" if status in ("已完成", "completed") or "push_to_purchase_receipt" in actions else "pending"},
-        {"key": "invoice", "label": "采购发票", "status": "active" if status in ("已完成", "completed") else "pending"},
+        {
+            "key": "receipt_notice",
+            "label": "收货通知",
+            "status": "done"
+            if "push_to_receipt_notice" in actions or status in ("已完成", "COMPLETED", "completed")
+            else "active"
+            if _is_approved(review_status) and (_is_confirmed(status) or status in LEGACY_AUDITED_VALUES)
+            else "pending",
+        },
+        {
+            "key": "incoming_inspection",
+            "label": "来料检验",
+            "status": "done"
+            if "push_to_incoming_inspection" in actions or status in ("已完成", "COMPLETED", "completed")
+            else "active"
+            if exec_started
+            else "pending",
+        },
+        {
+            "key": "purchase_receipt",
+            "label": "采购入库",
+            "status": "done"
+            if "push_to_purchase_receipt" in actions or status in ("已完成", "COMPLETED", "completed")
+            else "active"
+            if exec_started
+            else "pending",
+        },
+        {
+            "key": "purchase_invoice",
+            "label": "采购发票",
+            "status": "done"
+            if "push_to_purchase_invoice" in actions
+            else "active"
+            if status in ("已完成", "COMPLETED", "completed")
+            else "pending",
+        },
     ]
 
-    if _is_rejected(review_status):
+    if _is_rejected(review_status) or status in ("REJECTED", "已驳回", "rejected"):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "已驳回",
@@ -584,20 +648,68 @@ def get_purchase_order_lifecycle(
             "next_step_suggestions": ["审核通过", "驳回"],
             "milestones": milestones,
         }
-    
-    current_key = "audited"
-    if status in ("已完成", "completed"):
-        current_key = "completed"
-    elif "push_to_purchase_receipt" in actions:
-        current_key = "pushed"
+    if _is_audited(status) and _is_approved(review_status) and not _is_confirmed(status):
+        return {
+            "current_stage_key": "audited",
+            "current_stage_name": "已审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": ["确认订单"],
+            "milestones": milestones,
+        }
+
+    if status in ("已完成", "COMPLETED", "completed"):
+        return {
+            "current_stage_key": "completed",
+            "current_stage_name": "已完成",
+            "status": "success",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "completed"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": [],
+            "milestones": milestones,
+        }
+
+    if exec_started and "push_to_purchase_receipt" in actions and "push_to_purchase_invoice" not in actions:
+        return {
+            "current_stage_key": "invoicing",
+            "current_stage_name": "账款发票",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "invoicing"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": ["下推采购发票", "登记应付与付款"],
+            "milestones": milestones,
+        }
+
+    if exec_started:
+        return {
+            "current_stage_key": "executing",
+            "current_stage_name": "执行中",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "executing"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": ["下推收货通知", "下推采购入库", "跟进来料检验"],
+            "milestones": milestones,
+        }
+
+    if _is_approved(review_status) and (_is_confirmed(status) or status in LEGACY_AUDITED_VALUES):
+        return {
+            "current_stage_key": "confirmed",
+            "current_stage_name": "已确认",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "confirmed"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": ["下推收货通知", "下推采购入库"],
+            "milestones": milestones,
+        }
 
     return {
-        "current_stage_key": current_key,
-        "current_stage_name": "已完成" if current_key == "completed" else "已下推" if current_key == "pushed" else "已审核",
-        "status": "success" if current_key == "completed" else "normal",
-        "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, current_key),
+        "current_stage_key": "audited",
+        "current_stage_name": "已审核",
+        "status": "normal",
+        "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
         "sub_stages": sub_stages,
-        "next_step_suggestions": ["下推收货通知", "下推采购发票"] if current_key != "completed" else [],
+        "next_step_suggestions": ["确认订单", "下推收货通知"],
         "milestones": milestones,
     }
 

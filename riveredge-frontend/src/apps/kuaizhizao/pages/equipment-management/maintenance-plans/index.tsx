@@ -29,7 +29,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
@@ -778,26 +778,6 @@ const MaintenancePlansPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={planDetail || undefined}
-        traceDocument={
-          planDetail?.id != null
-            ? {
-                documentType: 'maintenance_plan',
-                documentId: planDetail.id,
-                selfDocumentId: planDetail.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setPlanDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           planDetail ? (
             <>
@@ -824,6 +804,25 @@ const MaintenancePlansPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {planDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='maintenance_plan'
+                      documentId={planDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={planDetail.id}
+                      renderBriefActions={(doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setPlanDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

@@ -142,12 +142,24 @@ class AdvancedSchedulingService(BaseService):
         # 维护一个简单的日产能负荷表: {(workshop_id, date): current_hours}
         daily_load = {}
         
-        # 按优先级评分排序
-        sorted_orders = sorted(
-            work_orders,
-            key=lambda wo: self._get_priority_score(wo, constraints),
-            reverse=True
+        # 按综合分排序（统一 WorkOrderScoreService）
+        from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+        score_service = WorkOrderScoreService()
+        score_map = await score_service.batch_get_or_compute(
+            tenant_id,
+            [wo.id for wo in work_orders],
+            "scheduling",
+            refresh_if_stale=True,
+            include_kitting=False,
         )
+
+        def _sort_key(wo: WorkOrder) -> float:
+            if score_map.get(wo.id) is not None:
+                return score_map[wo.id]
+            return self._get_priority_score(wo, constraints)
+
+        sorted_orders = sorted(work_orders, key=_sort_key, reverse=True)
         
         # 模拟排产过程
         for work_order in sorted_orders:
@@ -314,7 +326,11 @@ class AdvancedSchedulingService(BaseService):
         将排产建议的具体日期更新到工单模型中，并推算工序级计划时间。
         """
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+            dispatch_work_order_score_recalc,
+        )
 
+        updated_ids: List[int] = []
         async with in_transaction():
             for res in results:
                 wo_id = res.get("work_order_id")
@@ -329,6 +345,7 @@ class AdvancedSchedulingService(BaseService):
                     wo.planned_start_date = dt_start
                     wo.updated_by = updated_by
                     await wo.save()
+                    updated_ids.append(wo_id)
 
                     operations = await WorkOrderOperation.filter(
                         tenant_id=tenant_id,
@@ -347,7 +364,10 @@ class AdvancedSchedulingService(BaseService):
                         await WorkOrder.filter(tenant_id=tenant_id, id=wo_id).update(
                             planned_end_date=datetime.combine(scheduled_date, datetime.min.time().replace(hour=17)),
                         )
-            return True
+
+        for wo_id in updated_ids:
+            await dispatch_work_order_score_recalc(wo_id, include_kitting=False)
+        return True
 
     async def optimize_schedule(
         self,

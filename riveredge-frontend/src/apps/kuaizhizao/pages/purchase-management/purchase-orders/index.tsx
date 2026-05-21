@@ -21,8 +21,9 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
@@ -64,8 +65,10 @@ import {
   isAuditedStatus,
 } from '../../../constants/documentStatus';
 import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
-import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
+import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, mapPurchaseOrderLifecycleStageToApiParams } from '../../../utils/purchaseOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import type { SubStage } from '../../../../../components/uni-lifecycle/types';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
@@ -369,6 +372,7 @@ const ORDER_TYPE_FALLBACK: Array<{ label: string; value: string }> = [
 
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
+  const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const navigate = useNavigate();
@@ -376,6 +380,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
+  const lastOrdersCacheRef = useRef<PurchaseOrder[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -400,8 +405,13 @@ const PurchaseOrdersPage: React.FC = () => {
   );
 
   const purchaseOrderLifecycle = useMemo(
-    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail) : null),
-    [orderDetail],
+    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail, purchaseOrderAuditEnabled) : null),
+    [orderDetail, purchaseOrderAuditEnabled],
+  );
+
+  const lifecycleValueEnum = useMemo(
+    () => buildPurchaseOrderLifecycleValueEnum(t, purchaseOrderAuditEnabled),
+    [t, purchaseOrderAuditEnabled],
   );
 
   // 供应商列表、订单类型、币种
@@ -631,13 +641,16 @@ const PurchaseOrdersPage: React.FC = () => {
       width: 132,
       fixed: 'right',
       align: 'left',
-      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: lifecycleValueEnum,
       render: (_: any, record: PurchaseOrder) => {
-        const lifecycle = getPurchaseOrderLifecycle(record);
+        const lifecycle = getPurchaseOrderLifecycle(record, purchaseOrderAuditEnabled);
+        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
+        const displayLabel = activeStage?.label ?? lifecycle.stageName;
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
+            stageName={displayLabel}
             status={lifecycle.status}
             showLabel
             size="small"
@@ -698,26 +711,6 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
           />
         );
-        if (isAuditedStatus(record.status)) {
-          parts.push(
-            <Dropdown
-              key="push"
-              trigger={['click']}
-              menu={{
-                items: [
-                  { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(record) },
-                  { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(record) },
-                  { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(record) },
-                  { key: 'purchase-return', label: '下推采购退货单', icon: <RollbackOutlined />, onClick: () => handlePushToReturn(record) },
-                ],
-              }}
-            >
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#722ed1' }}>
-                下推 <DownOutlined />
-              </Button>
-            </Dropdown>
-          );
-        }
         return renderPurchaseOrderRowActions(parts, `po-${record.id ?? 'row'}`);
       },
     },
@@ -979,6 +972,72 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToReturnLoading(false);
     }
   };
+
+  const selectedOrderForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return lastOrdersCacheRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const buildToolbarPushMenuItems = useCallback(
+    (record: PurchaseOrder) => {
+      const pushEnabled = isAuditedStatus(record.status);
+      return buildUniPushMenuItems([
+        {
+          key: 'receipt-notice',
+          label: '收货通知',
+          icon: <FileTextOutlined />,
+          disabled: !pushEnabled,
+          onClick: () => {
+            if (!pushEnabled) return;
+            void handlePushToNotice(record);
+          },
+        },
+        {
+          key: 'receipt',
+          label: '采购入库',
+          icon: <InboxOutlined />,
+          disabled: !pushEnabled,
+          onClick: () => {
+            if (!pushEnabled) return;
+            void handlePushToReceipt(record);
+          },
+        },
+        {
+          key: 'invoice',
+          label: '采购发票',
+          icon: <DollarOutlined />,
+          disabled: !pushEnabled,
+          onClick: () => {
+            if (!pushEnabled) return;
+            void handlePushToInvoice(record);
+          },
+        },
+        {
+          key: 'purchase-return',
+          label: '采购退货单',
+          icon: <RollbackOutlined />,
+          disabled: !pushEnabled,
+          onClick: () => {
+            if (!pushEnabled) return;
+            void handlePushToReturn(record);
+          },
+        },
+      ]);
+    },
+    [handlePushToInvoice, handlePushToNotice, handlePushToReceipt, handlePushToReturn],
+  );
+
+  const toolbarPushMenuItems = useMemo(
+    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
+    [buildToolbarPushMenuItems, selectedOrderForToolbar],
+  );
+
+  const canUseToolbarPush =
+    !!selectedOrderForToolbar &&
+    isAuditedStatus(selectedOrderForToolbar.status) &&
+    toolbarPushMenuItems.some((it) => (it as { type?: string; disabled?: boolean }).type !== 'divider' && !(it as { disabled?: boolean }).disabled);
 
   // 处理删除
   const handleDelete = async (record: PurchaseOrder) => {
@@ -1622,7 +1681,7 @@ const PurchaseOrdersPage: React.FC = () => {
           onClick:
             (statistics.pending_review_count ?? 0) > 0
               ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
+                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
                   actionRef.current?.reload?.();
                 }
               : undefined,
@@ -1735,6 +1794,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 },
               ])}
             />,
+            <UniPushToolbarButton
+              key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!selectedOrderForToolbar || !canUseToolbarPush}
+            />,
           ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
@@ -1789,15 +1853,23 @@ const PurchaseOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             try {
-              const response = await listPurchaseOrders({
+              const apiParams: Record<string, unknown> = {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                status: params.status,
-                review_status: params.review_status,
                 keyword: params.keyword,
-              });
+              };
+              if (searchFormValues?.lifecycle) {
+                const mapped = mapPurchaseOrderLifecycleStageToApiParams(searchFormValues.lifecycle);
+                if (mapped.status) apiParams.status = mapped.status;
+                if (mapped.review_status) apiParams.review_status = mapped.review_status;
+              } else {
+                if (params.status) apiParams.status = params.status;
+                if (params.review_status) apiParams.review_status = params.review_status;
+              }
+              const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
+              lastOrdersCacheRef.current = response.data || [];
               return {
                 data: response.data || [],
                 success: response.success !== false,
@@ -2591,7 +2663,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(orderDetail) },
                           { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(orderDetail) },
                           { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(orderDetail) },
-                          { key: 'purchase-return', label: '下推采购退货单', icon: <RollbackOutlined />, onClick: () => handlePushToReturn(orderDetail) },
+                          { key: 'purchase-return', label: '采购退货单', icon: <RollbackOutlined />, onClick: () => handlePushToReturn(orderDetail) },
                         ],
                       }}
                     >
@@ -2704,95 +2776,94 @@ const PurchaseOrdersPage: React.FC = () => {
                   hideNextStepSuggestions={Boolean(purchaseOrderLifecycle.nextStepSuggestions?.length)}
                 />
               ) : null}
+              {orderDetail.id != null ? (
+                <DetailDrawerInlineFullChain
+                  documentType="purchase_order"
+                  documentId={orderDetail.id}
+                  active={detailDrawerVisible}
+                  selfDocumentId={orderDetail.id}
+                  renderBriefActions={(doc) => (
+                    <>
+                      {doc.document_type === 'purchase_requisition' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.PURCHASE_REQUISITIONS);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
+                            defaultValue: '前往采购申请',
+                          })}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'receipt_notice' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.RECEIPT_NOTICES);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'purchase_return' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.PURCHASE_RETURNS);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'purchase_invoice' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'payable' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPayable')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'payment' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate('/apps/kuaicaiwu/finance-management/payments');
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
+                />
+              ) : null}
             </div>
           ) : null
-        }
-        traceDocument={
-          orderDetail?.id != null
-            ? {
-                documentType: 'purchase_order',
-                documentId: orderDetail.id,
-                selfDocumentId: orderDetail.id,
-                renderBriefActions: (doc) => (
-                  <>
-                    {doc.document_type === 'purchase_requisition' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate(ROUTES.PURCHASE_REQUISITIONS);
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
-                          defaultValue: '前往采购申请',
-                        })}
-                      </Button>
-                    ) : null}
-                    {doc.document_type === 'receipt_notice' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate(ROUTES.RECEIPT_NOTICES);
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
-                      </Button>
-                    ) : null}
-                    {doc.document_type === 'purchase_return' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate(ROUTES.PURCHASE_RETURNS);
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
-                      </Button>
-                    ) : null}
-                    {doc.document_type === 'purchase_invoice' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
-                      </Button>
-                    ) : null}
-                    {doc.document_type === 'payable' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenPayable')}
-                      </Button>
-                    ) : null}
-                    {doc.document_type === 'payment' ? (
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => {
-                          setDetailDrawerVisible(false);
-                          navigate('/apps/kuaicaiwu/finance-management/payments');
-                        }}
-                      >
-                        {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                      </Button>
-                    ) : null}
-                  </>
-                ),
-              }
-            : null
         }
         lines={
           orderDetail ? (

@@ -2,7 +2,7 @@
  * 采购申请管理页面
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -19,7 +19,8 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
@@ -95,6 +96,22 @@ function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix
   return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
+function canPushPurchaseRequisition(record: PurchaseRequisition): boolean {
+  const s = (record.status ?? '').toString().trim();
+  return [
+    '已通过',
+    '已确认',
+    '部分转单',
+    'approved',
+    'confirmed',
+    'audited',
+    'APPROVED',
+    'CONFIRMED',
+    'AUDITED',
+    'PARTIAL_CONVERTED',
+  ].includes(s);
+}
+
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -104,6 +121,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastRequisitionsCacheRef = useRef<PurchaseRequisition[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
@@ -359,18 +378,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       render: (_, record) => {
         const s = (record.status ?? '').toString().trim();
         const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
-        const isApprovedOrPartial = [
-          '已通过',
-          '已确认',
-          '部分转单',
-          'approved',
-          'confirmed',
-          'audited',
-          'APPROVED',
-          'CONFIRMED',
-          'AUDITED',
-          'PARTIAL_CONVERTED',
-        ].includes(s);
         const parts: React.ReactNode[] = [
           <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
@@ -413,13 +420,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
             />
           </span>
         );
-        if (isApprovedOrPartial) {
-          parts.push(
-            <Button key="cv" type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
-              下推采购单
-            </Button>
-          );
-        }
         if (isDraft) {
           parts.push(
             <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
@@ -771,6 +771,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
     persistDefaultSupplier: false,
   });
 
+  const selectedRequisitionForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return lastRequisitionsCacheRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const canUseToolbarPush = selectedRequisitionForToolbar
+    ? canPushPurchaseRequisition(selectedRequisitionForToolbar)
+    : false;
+
   const handleConvert = async (record: PurchaseRequisition) => {
     try {
       if (!supplierList.length) {
@@ -873,6 +884,23 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   };
 
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      selectedRequisitionForToolbar && canUseToolbarPush
+        ? buildUniPushMenuItems([
+            {
+              key: 'push-purchase-order',
+              label: '下推采购单',
+              icon: <SwapOutlined />,
+              onClick: () => {
+                void handleConvert(selectedRequisitionForToolbar);
+              },
+            },
+          ])
+        : [],
+    [selectedRequisitionForToolbar, canUseToolbarPush],
+  );
+
   const handleDeleteOne = (record: PurchaseRequisition) => {
     if (record.status !== '草稿') return;
     modalApi.confirm({
@@ -912,12 +940,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
               required_date_from: s.required_date_from,
               required_date_to: s.required_date_to,
             });
+            lastRequisitionsCacheRef.current = res.data || [];
             return {
               data: res.data || [],
               total: res.total || 0,
               success: res.success ?? true,
             };
           }}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           rowKey="id"
           showAdvancedSearch={true}
@@ -947,6 +978,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 <Button type="primary" icon={<DownOutlined />} />
               </Dropdown>
             </Space.Compact>,
+            <UniPushToolbarButton
+              key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!selectedRequisitionForToolbar || !canUseToolbarPush}
+            />,
           ]}
           enableRowSelection={true}
           showDeleteButton={true}
@@ -1454,26 +1490,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         dataSource={currentReq || undefined}
         columns={[]}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        traceDocument={
-          currentReq?.id != null
-            ? {
-                documentType: 'purchase_requisition',
-                documentId: currentReq.id,
-                selfDocumentId: currentReq.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setCurrentReq(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           currentReq && (
             <DetailDrawerActions
@@ -1545,16 +1561,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 ) },
                 {
                   key: 'convert',
-                  visible: [
-                    '已通过',
-                    '已确认',
-                    '部分转单',
-                    'approved',
-                    'confirmed',
-                    'APPROVED',
-                    'CONFIRMED',
-                    'PARTIAL_CONVERTED',
-                  ].includes((currentReq.status ?? '').toString().trim()),
+                  visible: canPushPurchaseRequisition(currentReq),
                   render: () => (
                     <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>
                       下推采购单
@@ -1669,6 +1676,25 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       </>
                     );
                   })()}
+                  {currentReq.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType="purchase_requisition"
+                      documentId={currentReq.id}
+                      active={detailVisible}
+                      selfDocumentId={currentReq.id}
+                      renderBriefActions={(doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailVisible(false);
+                            setCurrentReq(null);
+                          }}
+                        />
+                      )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

@@ -161,6 +161,21 @@ export const workOrderApi = {
   /** 获取工单齐套性分析 */
   getKittingAnalysis: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),
+
+  getScoreConfig: async () =>
+    apiRequest('/apps/kuaizhizao/work-orders/score-config', { method: 'GET' }),
+
+  getScore: async (id: string, params?: { scenario?: string; refresh_if_stale?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/scores`, { method: 'GET', params }),
+
+  refreshScores: async (id: string, scenarios?: string[]) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/scores/refresh`, {
+      method: 'POST',
+      params: scenarios ? { scenarios } : undefined,
+    }),
+
+  batchRefreshScores: async (data?: { work_order_ids?: number[]; scenarios?: string[] }) =>
+    apiRequest('/apps/kuaizhizao/work-orders/scores/batch-refresh', { method: 'POST', data: data || {} }),
 };
 
 export const reworkOrderApi = {

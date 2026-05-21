@@ -801,7 +801,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             Dict: items 列表，每项含 item_id, material_code, material_name, receipt_quantity, batch_number
         """
-        from apps.kuaizhizao.models.purchase_order_item import PurchaseOrderItem
         from apps.master_data.models.material import Material
         from apps.master_data.models.supplier import Supplier
         from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item

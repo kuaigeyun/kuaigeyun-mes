@@ -102,6 +102,8 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
   // —— 取消 / 关闭 ——
   已取消: { color: 'error' },
   CANCELLED: { color: 'error' },
+  已关闭: { color: 'default' },
+  CLOSED: { color: 'default' },
 
   // —— 其它单据 ——
   部分转单: { color: 'warning' },

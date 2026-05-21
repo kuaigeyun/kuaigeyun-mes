@@ -16,7 +16,7 @@ import { App, Button, Space, message, Badge, Tag, Modal, notification, Descripti
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { maintenanceReminderApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
 import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecycle';
@@ -530,26 +530,6 @@ const MaintenanceRemindersPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={2}
-        traceDocument={
-          currentReminder?.id != null
-            ? {
-                documentType: 'maintenance_reminder',
-                documentId: currentReminder.id,
-                selfDocumentId: currentReminder.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setCurrentReminder(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           currentReminder ? (
             <>
@@ -584,6 +564,25 @@ const MaintenanceRemindersPage: React.FC = () => {
                       ? `（${dayjs(currentReminder.handled_at).format('YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
                       : ''}
                   </Typography.Text>
+                  {currentReminder.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType="maintenance_reminder"
+                      documentId={currentReminder.id}
+                      active={detailVisible}
+                      selfDocumentId={currentReminder.id}
+                      renderBriefActions={(doc) => (
+                        <EquipmentTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailVisible(false);
+                            setCurrentReminder(null);
+                          }}
+                        />
+                      )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

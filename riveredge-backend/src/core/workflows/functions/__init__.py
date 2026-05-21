@@ -19,6 +19,9 @@ exception_process_workflow_function = None
 exception_process_step_transition_workflow_function = None
 maintenance_reminder_scheduler_function = None
 maintenance_reminder_checker_function = None
+work_order_score_scheduler_function = None
+work_order_score_recalc_worker_function = None
+work_order_score_recalc_one_function = None
 
 try:
     from core.workflows.functions.message_sender import message_sender_function
@@ -88,6 +91,21 @@ except ImportError:
     maintenance_reminder_scheduler_function = None
     maintenance_reminder_checker_function = None
 
+try:
+    from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+        run_work_order_score_scheduler,
+        work_order_score_recalc_one,
+        work_order_score_recalc_worker,
+    )
+
+    work_order_score_scheduler_function = run_work_order_score_scheduler
+    work_order_score_recalc_worker_function = work_order_score_recalc_worker
+    work_order_score_recalc_one_function = work_order_score_recalc_one
+except ImportError:
+    work_order_score_scheduler_function = None
+    work_order_score_recalc_worker_function = None
+    work_order_score_recalc_one_function = None
+
 __all__ = [
     "message_sender_function",
     "scheduled_task_executor_function",
@@ -103,5 +121,8 @@ __all__ = [
     "exception_process_step_transition_workflow_function",
     "maintenance_reminder_scheduler_function",
     "maintenance_reminder_checker_function",
+    "work_order_score_scheduler_function",
+    "work_order_score_recalc_worker_function",
+    "work_order_score_recalc_one_function",
 ]
 

@@ -15,6 +15,7 @@ import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
+import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import type { ViewMode, WorkOrderForGantt, GanttTaskLevel } from '../../../components/GanttSchedulingChart/types';
 
 const GanttSchedulingChart = lazy(() => import('../../../components/GanttSchedulingChart'));
@@ -43,7 +44,7 @@ const SchedulingPage: React.FC = () => {
 
   const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
     async () => {
-      const res = await workOrderApi.list({ skip: 0, limit: 500, include_operations: true });
+      const res = await workOrderApi.list({ skip: 0, limit: 500, include_operations: true, include_scores: true });
       const list = Array.isArray(res) ? res : (res?.data ?? []);
       return list as WorkOrderForGantt[];
     },
@@ -62,6 +63,10 @@ const SchedulingPage: React.FC = () => {
     },
     { refreshDeps: [] }
   );
+
+  const { data: scoreConfig } = useRequest(async () => workOrderApi.getScoreConfig(), {
+    refreshDeps: [],
+  });
 
   /**
    * 处理智能排产
@@ -190,6 +195,19 @@ const SchedulingPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '综合分',
+      dataIndex: 'scheduling_score',
+      width: 100,
+      align: 'center',
+      render: (_: any, record: any) => (
+        <WorkOrderScoreCell
+          score={record.scheduling_score}
+          rankBand={record.scheduling_rank_band}
+          breakdown={record.scheduling_score_breakdown}
+        />
+      ),
+    },
+    {
       title: '优先级',
       dataIndex: 'priority',
       width: 80,
@@ -240,6 +258,7 @@ const SchedulingPage: React.FC = () => {
             limit: params.pageSize ?? 20,
             status: params.status,
             code: params.code,
+            include_scores: true,
           });
           const data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
           const total = res?.total ?? (Array.isArray(data) ? data.length : 0);
@@ -261,6 +280,22 @@ const SchedulingPage: React.FC = () => {
             onClick={handleAutoSchedule}
           >
             智能排产
+          </Button>,
+          <Button
+            key="refresh-scores"
+            icon={<ReloadOutlined />}
+            onClick={async () => {
+              try {
+                await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
+                messageApi.success('综合分已触发重算');
+                actionRef.current?.reload();
+                refreshGantt();
+              } catch (e: any) {
+                messageApi.error(e?.message || '重算失败');
+              }
+            }}
+          >
+            重算综合分
           </Button>,
           <Button
             key="config"
@@ -398,6 +433,22 @@ const SchedulingPage: React.FC = () => {
               />
             </div>
           </Space>
+          {scoreConfig?.profiles?.scheduling && (
+            <>
+              <div style={{ marginTop: 24, marginBottom: 8, fontWeight: 500 }}>排程综合分权重</div>
+              <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
+                可在「参数设置 → 工单流程」中开启/关闭综合打分；权重模板由业务参数 score_profiles 配置
+              </div>
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                {Object.entries(scoreConfig.profiles.scheduling.weights || {}).map(([key, weight]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{key}</span>
+                    <span>{((Number(weight) || 0) * 100).toFixed(0)}%</span>
+                  </div>
+                ))}
+              </Space>
+            </>
+          )}
         </div>
       </Modal>
     </ListPageTemplate>

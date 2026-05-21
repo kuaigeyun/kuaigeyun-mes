@@ -16,7 +16,7 @@ import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumbe
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, MoreOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniImport } from '../../../../../components/uni-import';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
@@ -857,26 +857,6 @@ const SalesReturnsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={returnDetail || undefined}
-        traceDocument={
-          returnDetail?.id != null
-            ? {
-                documentType: 'sales_return',
-                documentId: returnDetail.id,
-                selfDocumentId: returnDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setReturnDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           returnDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -931,6 +911,25 @@ const SalesReturnsPage: React.FC = () => {
                       </>
                     );
                   })()}
+                  {returnDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType="sales_return"
+                      documentId={returnDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={returnDetail.id}
+                      renderBriefActions={(doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailDrawerVisible(false);
+                            setReturnDetail(null);
+                          }}
+                        />
+                      )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

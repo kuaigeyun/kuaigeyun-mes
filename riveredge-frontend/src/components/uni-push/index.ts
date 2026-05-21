@@ -8,3 +8,5 @@ export type UniPushMenuItem = NonNullable<MenuProps['items']>[number];
  */
 export const buildUniPushMenuItems = (items: UniPushMenuItem[]): UniPushMenuItem[] => items;
 
+export { UniPushToolbarButton } from './UniPushToolbarButton';
+export type { UniPushToolbarButtonProps } from './UniPushToolbarButton';

@@ -148,6 +148,8 @@ export async function fetchWorkOrderListForTable(
     limit: params.pageSize,
     /** 为 true 时后端按 BOM+库存计算齐套率（列表列可显示进度条）；数据量大时略慢 */
     include_readiness: true,
+    /** 附带排程/备料综合分（读缓存快照） */
+    include_scores: true,
   }
   const s = searchFormValues || {}
   if (s.code) apiParams.code = s.code

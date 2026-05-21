@@ -39,7 +39,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -838,26 +838,6 @@ const IncomingInspectionPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={3}
-        traceDocument={
-          inspectionDetail?.id != null
-            ? {
-                documentType: 'incoming_inspection',
-                documentId: inspectionDetail.id,
-                selfDocumentId: inspectionDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           inspectionDetail && (
             <UniWorkflowActions
@@ -921,6 +901,25 @@ const IncomingInspectionPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {inspectionDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='incoming_inspection'
+                      documentId={inspectionDetail.id}
+                      active={detailVisible}
+                      selfDocumentId={inspectionDetail.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailVisible(false);
+                      setInspectionDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

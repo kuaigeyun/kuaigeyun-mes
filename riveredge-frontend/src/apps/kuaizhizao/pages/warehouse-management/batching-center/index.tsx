@@ -22,7 +22,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
-import { workOrderApi } from '../../../services/production';
+import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -659,7 +659,13 @@ const MaterialPrepReminders: React.FC<{ onCreateBatching: (workOrderId: number) 
               title={
                 <Space>
                   <Typography.Text code>{item.work_order_code}</Typography.Text>
-                  <Tag color="green">齐套率 {Math.round(item.kitting_rate * 100)}%</Tag>
+                  <Tag color="green">齐套率 {Math.round(Number(item.kitting_rate))}%</Tag>
+                  {item.composite_score != null && (
+                    <WorkOrderScoreCell
+                      score={item.composite_score}
+                      breakdown={item.score_breakdown}
+                    />
+                  )}
                 </Space>
               }
               description={

@@ -46,7 +46,7 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getEquipmentAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
@@ -893,26 +893,6 @@ const EquipmentPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={equipmentDetail || undefined}
-        traceDocument={
-          equipmentDetail?.id != null
-            ? {
-                documentType: 'equipment',
-                documentId: equipmentDetail.id,
-                selfDocumentId: equipmentDetail.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setEquipmentDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           equipmentDetail ? (
             <>
@@ -939,6 +919,25 @@ const EquipmentPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {equipmentDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType="equipment"
+                      documentId={equipmentDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={equipmentDetail.id}
+                      renderBriefActions={(doc) => (
+                        <EquipmentTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDrawerVisible(false);
+                            setEquipmentDetail(null);
+                          }}
+                        />
+                      )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

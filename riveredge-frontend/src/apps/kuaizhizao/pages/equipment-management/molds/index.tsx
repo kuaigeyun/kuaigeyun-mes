@@ -19,7 +19,7 @@ import { getMoldAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
@@ -929,30 +929,32 @@ const MoldsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={moldDetail}
         columns={detailColumns}
-        traceDocument={
-          moldDetail?.id != null
-            ? {
-                documentType: 'mold',
-                documentId: moldDetail.id,
-                selfDocumentId: moldDetail.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setMoldDetail(null);
-                      setUsages([]);
-                      setCalibrations([]);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           moldDetail && (
+            <>
+              <DetailDrawerSection title="生命周期">
+                {moldDetail.id != null ? (
+                  <DetailDrawerInlineFullChain
+                    documentType="mold"
+                    documentId={moldDetail.id}
+                    active={drawerVisible}
+                    selfDocumentId={moldDetail.id}
+                    renderBriefActions={(doc) => (
+                      <EquipmentTraceBriefPrimaryActions
+                        doc={doc}
+                        t={t}
+                        navigate={navigate}
+                        closeDrawer={() => {
+                          setDrawerVisible(false);
+                          setMoldDetail(null);
+                          setUsages([]);
+                          setCalibrations([]);
+                        }}
+                      />
+                    )}
+                  />
+                ) : null}
+              </DetailDrawerSection>
             <Tabs
               defaultActiveKey="basic"
               items={[
@@ -1128,6 +1130,7 @@ const MoldsPage: React.FC = () => {
                 },
               ]}
             />
+            </>
           )
         }
       />

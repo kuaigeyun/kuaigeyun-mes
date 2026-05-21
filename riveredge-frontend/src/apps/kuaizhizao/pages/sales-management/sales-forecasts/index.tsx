@@ -19,7 +19,7 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
@@ -1459,25 +1459,6 @@ export default function SalesForecastsPage() {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={currentForecast || {}}
-        traceDocument={
-          currentForecast?.id != null
-            ? {
-                documentType: 'sales_forecast',
-                documentId: currentForecast.id,
-                selfDocumentId: currentForecast.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false)
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         footer={
           currentForecast && salesNodesEnabled.demand_computation
             ? (() => {
@@ -1594,21 +1575,42 @@ export default function SalesForecastsPage() {
               />
             </DetailDrawerSection>
 
-            {(() => {
-              const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
-              if (!lifecycle.mainStages?.length) return null;
-              return (
-                <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                  <UniLifecycleStepper
-                    steps={lifecycle.mainStages}
-                    status={lifecycle.status}
-                    showLabels
-                    nextStepSuggestions={lifecycle.nextStepSuggestions}
-                    hideNextStepSuggestions
+            <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {(() => {
+                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
+                  const mainStages = lifecycle.mainStages ?? [];
+                  if (mainStages.length === 0) return null;
+                  return (
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      status={lifecycle.status}
+                      showLabels
+                      nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      hideNextStepSuggestions
+                    />
+                  );
+                })()}
+                {currentForecast.id != null ? (
+                  <DetailDrawerInlineFullChain
+                    documentType="sales_forecast"
+                    documentId={currentForecast.id}
+                    active={drawerVisible}
+                    selfDocumentId={currentForecast.id}
+                    renderBriefActions={(doc) => (
+                      <WarehouseTraceBriefPrimaryActions
+                        doc={doc}
+                        t={t}
+                        navigate={navigate}
+                        closeDrawer={() => {
+                          setDrawerVisible(false);
+                        }}
+                      />
+                    )}
                   />
-                </DetailDrawerSection>
-              );
-            })()}
+                ) : null}
+              </div>
+            </DetailDrawerSection>
 
             <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
               {(currentForecast.items || []).length > 0 ? (

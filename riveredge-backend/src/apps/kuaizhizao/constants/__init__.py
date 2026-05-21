@@ -28,6 +28,7 @@ class DocumentStatus(str, Enum):
     APPROVED = "APPROVED"
     CONFIRMED = "CONFIRMED"     # 已确认（销售/采购订单确认后）
     CANCELLED = "CANCELLED"
+    CLOSED = "CLOSED"           # 手动关闭（部分履约后终止剩余执行）
     # 工单等执行类单据
     RELEASED = "RELEASED"       # 已下达
     IN_PROGRESS = "IN_PROGRESS" # 执行中
@@ -50,6 +51,7 @@ STATE_ALIASES: dict[str, str] = {
     "已审核": DocumentStatus.AUDITED.value,
     "已驳回": DocumentStatus.REJECTED.value,
     "已取消": DocumentStatus.CANCELLED.value,
+    "已关闭": DocumentStatus.CLOSED.value,
     "已确认": DocumentStatus.CONFIRMED.value,
     "已生效": "EFFECTIVE",
     "已完成": DocumentStatus.COMPLETED.value,
@@ -61,6 +63,7 @@ STATE_ALIASES: dict[str, str] = {
     "in_progress": DocumentStatus.IN_PROGRESS.value,
     "completed": DocumentStatus.COMPLETED.value,
     "cancelled": DocumentStatus.CANCELLED.value,
+    "closed": DocumentStatus.CLOSED.value,
 }
 
 # review_status 别名：中文 <-> ReviewStatus 枚举

@@ -1110,6 +1110,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         order_by: Optional[str] = None,
         include_operations: bool = False,
         include_readiness: bool = True,
+        include_scores: bool = False,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
@@ -1313,6 +1314,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         # 转换为响应格式
         result = []
+        result_dicts: list[dict] = []
         work_orders_to_update = []
 
         for wo in work_orders:
@@ -1357,10 +1359,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if snap:
                         item_dict["sales_order_code"] = snap[0]
                         item_dict["sales_order_name"] = snap[1]
-                
-                result.append(WorkOrderListResponse.model_validate(item_dict))
+
+                result_dicts.append(item_dict)
             except Exception as e:
                 logger.error(f"处理工单 {wo.id} 数据失败: {str(e)}")
+                continue
+
+        if include_scores and result_dicts:
+            from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+            await WorkOrderScoreService().attach_scores_to_list_items(tenant_id, result_dicts)
+
+        for item_dict in result_dicts:
+            try:
+                result.append(WorkOrderListResponse.model_validate(item_dict))
+            except Exception as e:
+                logger.error(f"工单列表响应校验失败: {str(e)}")
                 continue
 
         # 批量更新 created_by_name 为空的工单（性能优化：使用 bulk_update 减少数据库往返）
@@ -2936,6 +2949,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             logger.info(f"工单 {work_order.code} 优先级已设置为 {priority_data.priority}")
 
+            from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                dispatch_work_order_score_recalc,
+            )
+            await dispatch_work_order_score_recalc(work_order_id, include_kitting=False)
+
             return WorkOrderResponse.model_validate(work_order)
 
     async def batch_set_work_order_priority(
@@ -2985,6 +3003,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 updated_work_orders.append(WorkOrderResponse.model_validate(work_order))
 
             logger.info(f"批量设置 {len(updated_work_orders)} 个工单的优先级为 {batch_data.priority}")
+
+            from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                dispatch_work_order_score_recalc,
+            )
+            for work_order_id in batch_data.work_order_ids:
+                await dispatch_work_order_score_recalc(work_order_id, include_kitting=False)
 
             return updated_work_orders
 

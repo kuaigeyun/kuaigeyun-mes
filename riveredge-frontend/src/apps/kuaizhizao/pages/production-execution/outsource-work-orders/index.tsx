@@ -49,7 +49,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
   type StatCard,
@@ -1404,26 +1404,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={workOrderDetail || undefined}
-        traceDocument={
-          workOrderDetail?.id != null
-            ? {
-                documentType: 'outsource_work_order',
-                documentId: workOrderDetail.id,
-                selfDocumentId: workOrderDetail.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setWorkOrderDetail(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           workOrderDetail && (
             <>
@@ -1451,6 +1431,25 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                       />
                     );
                   })()}
+                  {workOrderDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='outsource_work_order'
+                      documentId={workOrderDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={workOrderDetail.id}
+                      renderBriefActions={(doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setWorkOrderDetail(null);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
 

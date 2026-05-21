@@ -134,6 +134,16 @@ async def maintenance_reminder_daily_tick() -> dict:
     return await run_maintenance_reminder_scheduler()
 
 
+@task(schedule=[{"cron": "*/30 * * * *"}])
+async def work_order_score_recalc_tick() -> dict:
+    """每 30 分钟批量重算 released 工单综合分。"""
+    from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+        run_work_order_score_scheduler,
+    )
+
+    return await run_work_order_score_scheduler()
+
+
 @task(schedule=[{"cron": "15 2 * * *"}])
 async def permission_governance_daily_tick() -> dict:
     """每天凌晨执行一次全租户权限治理兜底。"""

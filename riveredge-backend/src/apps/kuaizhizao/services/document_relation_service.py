@@ -28,6 +28,7 @@ from apps.kuaizhizao.models.sales_return import SalesReturn
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.demand_computation import DemandComputation
@@ -104,6 +105,11 @@ class DocumentRelationService:
         "sales_delivery": {"model": SalesDelivery, "code_field": "delivery_code", "name_field": None},
         "delivery_notice": {"model": DeliveryNotice, "code_field": "notice_code", "name_field": None},
         "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": "order_name"},
+        "purchase_requisition": {
+            "model": PurchaseRequisition,
+            "code_field": "requisition_code",
+            "name_field": "requisition_name",
+        },
         "purchase_receipt": {"model": PurchaseReceipt, "code_field": "receipt_code", "name_field": None},
         "purchase_return": {"model": PurchaseReturn, "code_field": "return_code", "name_field": None},
         "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},

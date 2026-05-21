@@ -15,7 +15,7 @@ import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutl
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   DocumentTrackingTimelineBody,
@@ -1065,26 +1065,6 @@ const OutboundPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
-        traceDocument={
-          currentOrder?.id != null
-            ? {
-                documentType: outboundDocumentTrackingType(currentOrder),
-                documentId: currentOrder.id,
-                selfDocumentId: currentOrder.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setCurrentOrder(null);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         extra={
           currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') && (
             <Button
@@ -1140,20 +1120,41 @@ const OutboundPage: React.FC = () => {
 
               {/* 生命周期 */}
               <DetailDrawerSection title="生命周期">
-                {(() => {
-                  const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>);
-                  const mainStages = lifecycle.mainStages ?? [];
-                  if (mainStages.length === 0) return null;
-                  return (
-                    <UniLifecycleStepper
-                      steps={mainStages}
-                      status={lifecycle.status}
-                      showLabels
-                      nextStepSuggestions={lifecycle.nextStepSuggestions}
-                      hideNextStepSuggestions
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
+                      />
+                    );
+                  })()}
+                  {currentOrder.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType={outboundDocumentTrackingType(currentOrder)}
+                      documentId={currentOrder.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={currentOrder.id}
+                      renderBriefActions={(doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailDrawerVisible(false);
+                            setCurrentOrder(null);
+                          }}
+                        />
+                      )}
                     />
-                  );
-                })()}
+                  ) : null}
+                </div>
               </DetailDrawerSection>
 
               {/* 出库单明细 */}

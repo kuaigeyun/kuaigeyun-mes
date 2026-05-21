@@ -26,7 +26,7 @@ import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-de
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { getToolAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
@@ -754,29 +754,6 @@ const ToolLedgerPage: React.FC = () => {
         columns={[]}
         column={2}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        traceDocument={
-          toolDetail?.id != null
-            ? {
-                documentType: 'tool',
-                documentId: toolDetail.id,
-                selfDocumentId: toolDetail.id,
-                renderBriefActions: (doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setToolDetail(null);
-                      setUsages([]);
-                      setMaintenances([]);
-                      setCalibrations([]);
-                    }}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           toolDetail ? (
             <>
@@ -803,6 +780,28 @@ const ToolLedgerPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {toolDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='tool'
+                      documentId={toolDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={toolDetail.id}
+                      renderBriefActions={(doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setToolDetail(null);
+                      setUsages([]);
+                      setMaintenances([]);
+                      setCalibrations([]);
+                    }}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

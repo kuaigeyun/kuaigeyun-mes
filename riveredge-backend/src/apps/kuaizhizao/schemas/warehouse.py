@@ -1294,6 +1294,8 @@ class MaterialPrepReminderItem(BaseSchema):
     priority: str = Field("normal", description="优先级")
     kitting_rate: float = Field(..., description="齐套率")
     kitting_status: str = Field(..., description="齐套状态")
+    composite_score: Optional[float] = Field(None, description="备料场景综合分")
+    score_breakdown: Optional[dict] = Field(None, description="打分明细")
 
 
 class MaterialPrepReminderResponse(BaseSchema):

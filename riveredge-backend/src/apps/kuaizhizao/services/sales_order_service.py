@@ -35,6 +35,7 @@ from apps.kuaizhizao.schemas.sales_order import (
 from apps.kuaizhizao.constants import (
     DemandStatus,
     ReviewStatus,
+    DocumentStatus,
     LEGACY_AUDITED_VALUES,
     REVIEW_STATUS_ALIASES,
     normalize_status,
@@ -401,6 +402,46 @@ class SalesOrderService:
 
     def _is_rejected_status(self, status: Optional[str]) -> bool:
         return normalize_status(status or "") == DemandStatus.REJECTED.value
+
+    def _is_closed(self, status: Optional[str]) -> bool:
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DocumentStatus.CLOSED.value or raw in ("已关闭", "CLOSED", "closed")
+
+    def _is_completed_status(self, status: Optional[str]) -> bool:
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DocumentStatus.COMPLETED.value or raw in ("已完成", "COMPLETED", "FINISHED")
+
+    def _is_cancelled_status(self, status: Optional[str]) -> bool:
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DocumentStatus.CANCELLED.value or raw in ("已取消", "CANCELLED")
+
+    def _assert_order_executable(self, order: SalesOrder) -> None:
+        """已关闭/已取消/已完成的订单不可再下推或继续执行。"""
+        if self._is_closed(order.status):
+            raise BusinessLogicError("订单已关闭，无法继续执行")
+        if self._is_cancelled_status(order.status):
+            raise BusinessLogicError("订单已取消，无法继续执行")
+        if self._is_completed_status(order.status):
+            raise BusinessLogicError("订单已完成，无法继续执行")
+
+    def _validate_can_close_sales_order(self, order: SalesOrder) -> None:
+        if self._is_closed(order.status):
+            raise BusinessLogicError("订单已关闭")
+        if self._is_cancelled_status(order.status):
+            raise BusinessLogicError("已取消的订单不能关闭")
+        if self._is_completed_status(order.status):
+            raise BusinessLogicError("已完成的订单无需关闭")
+        if self._is_draft(order.status):
+            raise BusinessLogicError("草稿订单请使用删除，不能关闭")
+        if self._is_pending_review_status(order.status) and not self._is_review_approved(order.review_status):
+            raise BusinessLogicError("待审核订单不能关闭，请先撤回或完成审核")
+        if self._is_rejected_status(order.status) or self._normalize_review_status(order.review_status) == ReviewStatus.REJECTED.value:
+            raise BusinessLogicError("已驳回订单不能关闭")
+        if not self._is_review_approved(order.review_status):
+            raise BusinessLogicError("只有已审核通过的订单才能关闭")
 
     async def _validate_customer_credit_limit_before_release(
         self,
@@ -1557,6 +1598,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if not demand:
@@ -1603,6 +1645,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -1730,6 +1773,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -1835,6 +1879,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -1883,6 +1928,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -2064,6 +2110,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -2366,6 +2413,54 @@ class SalesOrderService:
             tenant_id, sales_order_ids, unapproved_by, self.unapprove_sales_order
         )
 
+    async def close_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        closed_by: int,
+        reason: Optional[str] = None,
+    ) -> SalesOrderResponse:
+        """关闭销售订单：终止剩余未执行部分，已交货/已开票数据保留。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        self._validate_can_close_sales_order(order)
+
+        from apps.common.base_service import AppBaseService
+        closer_name = await AppBaseService().get_user_name(closed_by)
+        old_status = order.status
+        close_reason = reason or "手动关闭订单，剩余数量不再执行"
+
+        async with in_transaction():
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                status=DocumentStatus.CLOSED.value,
+                updated_by=closed_by,
+            )
+            await self._log_state_transition(
+                tenant_id,
+                sales_order_id,
+                old_status,
+                DocumentStatus.CLOSED.value,
+                closed_by,
+                closer_name,
+                close_reason,
+            )
+
+        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+
+    async def bulk_close_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        closed_by: int,
+    ) -> Dict[str, Any]:
+        """批量关闭销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, closed_by, self.close_sales_order
+        )
+
     async def bulk_delete_sales_orders(
         self,
         tenant_id: int,
@@ -2395,6 +2490,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise BusinessLogicError("只有已审核状态的销售订单才能确认")
+        self._assert_order_executable(order)
 
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
@@ -2484,6 +2580,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -2557,113 +2654,6 @@ class SalesOrderService:
             "notice_code": code,
         }
 
-    async def push_sales_order_auto_route(
-        self,
-        tenant_id: int,
-        sales_order_id: int,
-        created_by: int,
-    ) -> Dict[str, Any]:
-        """
-        P1-S-007: MTO/MTS 自动路由。
-        - order_type=MTO：全量下推工单
-        - order_type=MTS：全量下推发货通知
-        - 其他：按物料来源 + 动态可用库存自动拆分
-        """
-        from apps.kuaizhizao.utils.material_source_helper import (
-            SOURCE_TYPE_CONFIGURE,
-            SOURCE_TYPE_MAKE,
-            SOURCE_TYPE_OUTSOURCE,
-            get_material_source_type,
-        )
-        from apps.kuaizhizao.services.shipment_notice_service import get_material_available_quantity
-
-        order = await SalesOrder.get_or_none(
-            tenant_id=tenant_id,
-            id=sales_order_id,
-            deleted_at__isnull=True,
-        )
-        if not order:
-            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-
-        items = await SalesOrderItem.filter(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
-        ).order_by("id")
-        if not items:
-            raise BusinessLogicError("销售订单无明细，无法自动路由")
-
-        order_type = str(getattr(order, "order_type", "") or "").strip().upper()
-        mto_ids: List[int] = []
-        mts_ids: List[int] = []
-
-        if order_type == "MTO":
-            mto_ids = [int(it.id) for it in items]
-        elif order_type == "MTS":
-            mts_ids = [int(it.id) for it in items]
-        else:
-            available_cache: Dict[int, Decimal] = {}
-            for it in items:
-                item_id = int(getattr(it, "id", 0) or 0)
-                if item_id <= 0:
-                    continue
-                material_id = int(getattr(it, "material_id", 0) or 0)
-                qty = Decimal(str(getattr(it, "remaining_quantity", None) or getattr(it, "order_quantity", 0) or 0))
-                if qty <= Decimal("0"):
-                    continue
-
-                source_type = await get_material_source_type(tenant_id, material_id) if material_id else None
-                if source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
-                    mto_ids.append(item_id)
-                    continue
-
-                if material_id not in available_cache:
-                    avail = await get_material_available_quantity(
-                        tenant_id=tenant_id,
-                        material_id=material_id,
-                    )
-                    available_cache[material_id] = Decimal(str(avail or 0))
-                current_avail = available_cache.get(material_id, Decimal("0"))
-                if current_avail >= qty:
-                    mts_ids.append(item_id)
-                    available_cache[material_id] = current_avail - qty
-                else:
-                    mto_ids.append(item_id)
-
-        results: List[Dict[str, Any]] = []
-        if mto_ids:
-            mto_res = await self.push_sales_order_to_work_order(
-                tenant_id=tenant_id,
-                sales_order_id=sales_order_id,
-                created_by=created_by,
-                selected_item_ids=mto_ids,
-            )
-            results.append({"route": "MTO", "item_ids": mto_ids, "result": mto_res})
-        if mts_ids:
-            mts_res = await self.push_sales_order_to_shipment_notice(
-                tenant_id=tenant_id,
-                sales_order_id=sales_order_id,
-                created_by=created_by,
-                selected_item_ids=mts_ids,
-            )
-            results.append({"route": "MTS", "item_ids": mts_ids, "result": mts_res})
-
-        if not results:
-            raise BusinessLogicError("销售订单无可路由的有效欠发明细")
-
-        return {
-            "success": True,
-            "message": f"自动路由完成：MTO {len(mto_ids)} 行，MTS {len(mts_ids)} 行",
-            "route_summary": {
-                "order_type": order_type or "AUTO",
-                "mto_item_count": len(mto_ids),
-                "mts_item_count": len(mts_ids),
-            },
-            "route_results": results,
-        }
-
     async def push_sales_order_to_invoice(
         self,
         tenant_id: int,
@@ -2678,6 +2668,7 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if not self._is_audited(order.status):
             raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id

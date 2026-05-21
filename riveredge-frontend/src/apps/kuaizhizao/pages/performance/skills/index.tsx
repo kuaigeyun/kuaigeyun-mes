@@ -12,7 +12,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
 import { skillApi } from '../../../services/performance';
 import { SkillFormModal } from '../../../components/SkillFormModal';
@@ -226,23 +226,6 @@ const SkillsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
         columns={[]}
-        traceDocument={
-          skillDetail?.id != null
-            ? {
-                documentType: 'performance_skill',
-                documentId: skillDetail.id,
-                selfDocumentId: skillDetail.id,
-                renderBriefActions: (doc) => (
-                  <PerformanceTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={handleCloseDetail}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           detailLoading && !skillDetail ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
@@ -273,6 +256,22 @@ const SkillsPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {skillDetail.id != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='performance_skill'
+                      documentId={skillDetail.id}
+                      active={drawerVisible}
+                      selfDocumentId={skillDetail.id}
+                      renderBriefActions={(doc) => (
+                  <PerformanceTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={handleCloseDetail}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">

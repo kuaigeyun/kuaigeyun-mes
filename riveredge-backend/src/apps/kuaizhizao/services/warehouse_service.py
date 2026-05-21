@@ -513,31 +513,50 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         4. 返回分析结果中物料相对充裕且需要备料的项
         """
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
         wo_svc = WorkOrderService()
+        score_svc = WorkOrderScoreService()
 
         # 1. 基础工单筛选
-        # 假设状态包括：released, dispatched, confirmed 等（取决于具体业务定义）
         released_statuses = ["released", "dispatched", "confirmed", "已下达", "已确认"]
-        
+
         query = WorkOrder.filter(
             tenant_id=tenant_id,
             status__in=released_statuses,
             actual_start_date__isnull=True,
-            deleted_at__isnull=True
-        ).order_by("priority", "planned_start_date")
+            deleted_at__isnull=True,
+        )
 
-        total_count = await query.count()
-        # 为保证性能，暂不进行深层 BOM 计算的分页筛选，先分页获取工单再分析
-        # 实际生产中建议在 WorkOrder 上增加 kitting_status 缓存字段进行高效查询
-        work_orders = await query.offset(skip).limit(limit).all()
+        work_orders = await query.all()
+        total_count = len(work_orders)
+
+        if not work_orders:
+            return MaterialPrepReminderResponse(items=[], total_count=0)
+
+        wo_ids = [wo.id for wo in work_orders]
+        score_map = await score_svc.batch_get_or_compute(
+            tenant_id,
+            wo_ids,
+            "picking",
+            refresh_if_stale=True,
+            include_kitting=False,
+        )
+
+        def _sort_key(wo: WorkOrder) -> tuple:
+            score = score_map.get(wo.id, 0.0)
+            start = wo.planned_start_date or datetime.max
+            return (-score, start)
+
+        work_orders.sort(key=_sort_key)
+        page_orders = work_orders[skip : skip + limit]
 
         reminders = []
-        for wo in work_orders:
-            # 检查是否已有领料（如果是部分领料且可继续齐套，仍可提醒）
-            # 如果已经全领了，就不提醒备料了
+        cached_scores = await score_svc.batch_get_scores(tenant_id, [wo.id for wo in page_orders], "picking")
+        for wo in page_orders:
             kitting = await wo_svc.get_work_order_kitting_analysis(tenant_id, wo.id)
-            
-            # 如果齐套率达到 100% 且工单还没开始，或者大部分已齐，则推荐备料
+            cached = cached_scores.get(wo.id)
+            picking_score = cached.composite_score if cached else score_map.get(wo.id)
             if kitting.kitting_rate > 0 and kitting.status != "fully_picked":
                 reminders.append(MaterialPrepReminderItem(
                     work_order_id=wo.id,
@@ -547,7 +566,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     planned_start_date=wo.planned_start_date,
                     priority=wo.priority or "normal",
                     kitting_rate=float(kitting.kitting_rate),
-                    kitting_status=kitting.status
+                    kitting_status=kitting.status,
+                    composite_score=picking_score,
+                    score_breakdown=cached.breakdown if cached else None,
                 ))
 
         return MaterialPrepReminderResponse(
@@ -4142,7 +4163,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
                 
                 # 获取订单明细（用于创建入库单明细）
-                from apps.kuaizhizao.models.purchase_order_item import PurchaseOrderItem
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
                 order_items = await PurchaseOrderItem.filter(
                     tenant_id=tenant_id,
                     order_id=purchase_order.id

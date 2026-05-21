@@ -232,6 +232,12 @@ class WorkOrderListResponse(BaseModel):
     work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     readiness_rate: Optional[float] = Field(None, description="齐套率 (%)")
+    scheduling_score: Optional[float] = Field(None, description="排程场景综合分")
+    scheduling_rank_band: Optional[str] = Field(None, description="排程等级带 A/B/C")
+    scheduling_score_breakdown: Optional[dict] = Field(None, description="排程打分明细")
+    picking_score: Optional[float] = Field(None, description="备料场景综合分")
+    picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
+    picking_score_breakdown: Optional[dict] = Field(None, description="备料打分明细")
     manufacturing_mode: Optional[str] = Field(
         None,
         description="制造模式（fabrication/assembly）：定义在物料主数据；工单以 product_id 关联所制造的产品物料，从该物料 source_config 解析",

@@ -15,7 +15,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import {
   detailDrawerDescriptionItems,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerSection, DetailDrawerInlineFullChain,
   DRAWER_CONFIG,
   ListPageTemplate,
 } from '../../../../../components/layout-templates';
@@ -236,23 +236,6 @@ const SummariesPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
-        traceDocument={
-          summaryTrackingId != null
-            ? {
-                documentType: 'performance_summary',
-                documentId: summaryTrackingId,
-                selfDocumentId: summaryTrackingId,
-                renderBriefActions: (doc) => (
-                  <PerformanceTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={closeDrawer}
-                  />
-                ),
-              }
-            : null
-        }
         customContent={
           detailLoading && !detail ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
@@ -280,6 +263,22 @@ const SummariesPage: React.FC = () => {
                       />
                     );
                   })()}
+                  {summaryTrackingId != null ? (
+                    <DetailDrawerInlineFullChain
+                      documentType='performance_summary'
+                      documentId={summaryTrackingId}
+                      active={drawerVisible}
+                      selfDocumentId={summaryTrackingId}
+                      renderBriefActions={(doc) => (
+                  <PerformanceTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={closeDrawer}
+                  />
+                )}
+                    />
+                  ) : null}
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="报工明细">

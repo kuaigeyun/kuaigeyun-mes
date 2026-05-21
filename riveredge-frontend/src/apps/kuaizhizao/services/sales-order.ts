@@ -403,22 +403,6 @@ export async function pushSalesOrderToDelivery(salesOrderId: number): Promise<Pu
   });
 }
 
-export interface PushAutoRouteResponse {
-  success: boolean;
-  message: string;
-  route_summary?: {
-    order_type?: string;
-    mto_item_count?: number;
-    mts_item_count?: number;
-  };
-}
-
-export async function pushSalesOrderAutoRoute(salesOrderId: number): Promise<PushAutoRouteResponse> {
-  return apiRequest<PushAutoRouteResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-auto-route`, {
-    method: 'POST',
-  });
-}
-
 /**
  * 下推销售订单到销售发票
  */
@@ -642,6 +626,20 @@ export async function bulkUnapproveSalesOrders(ids: number[]): Promise<{
   failed_items: { id: number; reason: string }[];
 }> {
   return apiRequest('/apps/kuaizhizao/sales-orders/batch-unapprove', {
+    method: 'POST',
+    data: ids,
+  });
+}
+
+/**
+ * 批量关闭销售订单（终止剩余未执行部分）
+ */
+export async function bulkCloseSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-close', {
     method: 'POST',
     data: ids,
   });
