@@ -8,12 +8,13 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Descriptions, Typography, Segmented, Tag, Table, Empty, Spin } from 'antd';
+import { App, Button, Modal, Space, Descriptions, Typography, Tag, Table, Empty, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -473,16 +474,20 @@ const CustomerFollowUpsPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Segmented
+          beforeSearchButtons={
+            <ThemedSegmented
               key="pending-scope"
+              surfaceBackground
+              size="middle"
               value={pendingOnlyFilter ? 'pending' : 'all'}
               onChange={(v) => setPendingOnlyFilter(v === 'pending')}
               options={[
                 { label: t('app.kuaizhizao.customerFollowUp.listViewAll'), value: 'all' },
                 { label: t('app.kuaizhizao.customerFollowUp.pendingOnly'), value: 'pending' },
               ]}
-            />,
+            />
+          }
+          toolBarRender={() => [
             <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,

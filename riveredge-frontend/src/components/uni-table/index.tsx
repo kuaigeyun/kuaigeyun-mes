@@ -589,6 +589,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   beforeSearchButtons?: ReactNode
   /**
+   * 模糊搜索与高级搜索之间的自定义节点（典型：列表快速筛选 Segmented）
+   */
+  betweenFuzzyAndAdvancedButtons?: ReactNode
+  /**
    * 高级搜索按钮后的自定义按钮
    */
   afterSearchButtons?: ReactNode
@@ -1039,6 +1043,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   skipFuzzyPinyinClientFilter = false,
   showAdvancedSearch = true, // 默认显示高级搜索
   beforeSearchButtons,
+  betweenFuzzyAndAdvancedButtons,
   afterSearchButtons,
   enableRowSelection = false,
   onRowSelectionChange,
@@ -2529,17 +2534,22 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             <UniSearch
               beforeSearch={beforeSearchButtons}
               betweenFuzzyAndAdvanced={
-                isMobile && showCreateButton && onCreate ? (
-                  <Button
-                    key="mobile-create"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={onCreate}
-                    size={toolBarButtonSize}
-                    style={{ flexShrink: 0 }}
-                  >
-                    {createButtonText ?? t('components.uniTable.create')}
-                  </Button>
+                betweenFuzzyAndAdvancedButtons || (isMobile && showCreateButton && onCreate) ? (
+                  <>
+                    {betweenFuzzyAndAdvancedButtons}
+                    {isMobile && showCreateButton && onCreate ? (
+                      <Button
+                        key="mobile-create"
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={onCreate}
+                        size={toolBarButtonSize}
+                        style={{ flexShrink: 0 }}
+                      >
+                        {createButtonText ?? t('components.uniTable.create')}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null
               }
               showFuzzySearch={showFuzzySearch}

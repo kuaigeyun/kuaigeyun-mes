@@ -94,6 +94,8 @@ export interface QuotationListParams {
   quotation_code?: string;
   customer_name?: string;
   quotation_series_code?: string;
+  /** 数据范围：all 全部 / mine 我的 / department 我的部门 */
+  list_scope?: 'all' | 'mine' | 'department';
 }
 
 export interface QuotationListResponse {

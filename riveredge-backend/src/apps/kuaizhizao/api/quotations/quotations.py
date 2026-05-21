@@ -68,6 +68,10 @@ async def list_quotations(
     quotation_code: Optional[str] = Query(None, description="报价单编号（模糊）"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
     quotation_series_code: Optional[str] = Query(None, description="报价系列编码（精确）"),
+    list_scope: Optional[str] = Query(
+        None,
+        description="数据范围：all 全部 / mine 我的 / department 我的部门",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -84,6 +88,7 @@ async def list_quotations(
             quotation_code=quotation_code,
             customer_name=customer_name,
             quotation_series_code=quotation_series_code,
+            list_scope=list_scope,
             current_user=current_user,
         )
     except Exception as e:

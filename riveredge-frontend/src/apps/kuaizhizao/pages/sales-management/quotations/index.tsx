@@ -17,6 +17,7 @@ import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -74,6 +75,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../../../../stores/configStore';
+import { useGlobalStore } from '../../../../../stores';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { UniPdfPreview } from '../../../../../components/uni-preview';
@@ -102,6 +104,8 @@ const QUOTATION_STATUS_FILTER_ENUM = {
   已转订单: { text: '已转订单' },
   已拒绝: { text: '已驳回' },
 } as const;
+
+type QuotationListScope = 'all' | 'mine' | 'department';
 
 /** 与后端 LEGACY_PENDING_VALUES 一致 */
 const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
@@ -569,6 +573,10 @@ const QuotationsPage: React.FC = () => {
   });
   const actionRef = useRef<ActionType>(null);
   const lastQuotationsFlatCacheRef = useRef<Quotation[]>([]);
+  const listScopeSkipReloadRef = useRef(true);
+  const listScopeDefaultAppliedRef = useRef(false);
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>('mine');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
@@ -663,6 +671,22 @@ const QuotationsPage: React.FC = () => {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectingRecord, setRejectingRecord] = useState<Quotation | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
+
+  useEffect(() => {
+    if (listScopeDefaultAppliedRef.current || !currentUser) return;
+    listScopeDefaultAppliedRef.current = true;
+    setListScopeFilter(
+      currentUser.is_tenant_admin || currentUser.is_infra_admin ? 'all' : 'mine',
+    );
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (listScopeSkipReloadRef.current) {
+      listScopeSkipReloadRef.current = false;
+      return;
+    }
+    actionRef.current?.reload();
+  }, [listScopeFilter]);
 
   useEffect(() => {
     const load = async () => {
@@ -2807,6 +2831,20 @@ const QuotationsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
+          beforeSearchButtons={
+            <ThemedSegmented
+              key="quotation-list-scope"
+              surfaceBackground
+              size="middle"
+              value={listScopeFilter}
+              onChange={(v) => setListScopeFilter(v as QuotationListScope)}
+              options={[
+                { label: t('app.kuaizhizao.quotation.listScopeAll'), value: 'all' },
+                { label: t('app.kuaizhizao.quotation.listScopeMine'), value: 'mine' },
+                { label: t('app.kuaizhizao.quotation.listScopeDepartment'), value: 'department' },
+              ]}
+            />
+          }
           toolBarButtonSize="middle"
           showCreateButton
           createButtonText="新建报价单"
@@ -2899,7 +2937,7 @@ const QuotationsPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listQuotations({ skip: 0, limit: 10000 });
+              const res = await listQuotations({ skip: 0, limit: 10000, list_scope: listScopeFilter });
               let items = res.data || [];
               if (type === 'currentPage' && pageData?.length) {
                 items = flattenQuotationTableRows(pageData as QuotationTableRow[]);
@@ -2942,6 +2980,7 @@ const QuotationsPage: React.FC = () => {
                 customer_name: searchFormValues?.customer_name,
                 start_date: startDate,
                 end_date: endDate,
+                list_scope: listScopeFilter,
               });
               setListTotal(response.total ?? 0);
               const flat = response.data || [];

@@ -843,6 +843,37 @@ class QuotationService:
             }
         )
 
+    @staticmethod
+    async def _apply_quotation_list_scope(query, tenant_id: int, current_user: Optional[User], list_scope: Optional[str] = None):
+        """按 list_scope 过滤销售员：all / mine / department"""
+        if not current_user:
+            return query
+        scope = (list_scope or "").strip().lower()
+        if not scope:
+            if current_user.is_regular_user():
+                return query.filter(salesman_id=current_user.id)
+            return query
+        if scope == "all":
+            if current_user.is_regular_user():
+                return query.filter(salesman_id=current_user.id)
+            return query
+        if scope == "mine":
+            return query.filter(salesman_id=current_user.id)
+        if scope == "department":
+            dept_id = getattr(current_user, "department_id", None)
+            if not dept_id:
+                return query.filter(salesman_id=current_user.id)
+            user_ids = await User.filter(
+                tenant_id=tenant_id,
+                department_id=dept_id,
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            ids = list(user_ids) if user_ids else [current_user.id]
+            return query.filter(salesman_id__in=ids)
+        if current_user.is_regular_user():
+            return query.filter(salesman_id=current_user.id)
+        return query
+
     async def list_quotations(
         self,
         tenant_id: int,
@@ -855,16 +886,15 @@ class QuotationService:
         quotation_code: Optional[str] = None,
         customer_name: Optional[str] = None,
         quotation_series_code: Optional[str] = None,
+        list_scope: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> QuotationListResponse:
         """获取报价单列表"""
         from tortoise.expressions import Q
 
         query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        
-        # 业务员数据隔离：普通用户只能看到自己负责的报价单
-        if current_user and current_user.is_regular_user():
-            query = query.filter(salesman_id=current_user.id)
+
+        query = await self._apply_quotation_list_scope(query, tenant_id, current_user, list_scope)
         if quotation_series_code and str(quotation_series_code).strip():
             query = query.filter(
                 quotation_series_code=str(quotation_series_code).strip()
