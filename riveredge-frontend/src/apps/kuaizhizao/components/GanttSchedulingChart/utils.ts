@@ -41,12 +41,19 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
   const duration = Math.max(1, Math.ceil(durationDays));
 
   const baseText = [wo.code, wo.product_name].filter(Boolean).join(' - ') || `工单 ${wo.id}`;
+  const frozenPrefix = wo.is_frozen ? '🔒 ' : '';
+  const scoreSuffix =
+    wo.scheduling_score != null
+      ? ` [分:${Number(wo.scheduling_score).toFixed(0)}${wo.scheduling_rank_band ? `·${wo.scheduling_rank_band}` : ''}]`
+      : '';
   const eq = _aggregateResourceNames(wo, 'assigned_equipment_name');
   const mold = _aggregateResourceNames(wo, 'assigned_mold_name');
   const tool = _aggregateResourceNames(wo, 'assigned_tool_name');
   const resourceParts = [eq && `设备: ${eq}`, mold && `模具: ${mold}`, tool && `工装: ${tool}`].filter(Boolean);
   const subtitle = resourceParts.length > 0 ? resourceParts.join(' | ') : undefined;
-  const text = subtitle ? `${baseText}\n${subtitle}` : baseText;
+  const text = subtitle
+    ? `${frozenPrefix}${baseText}${scoreSuffix}\n${subtitle}`
+    : `${frozenPrefix}${baseText}${scoreSuffix}`;
 
   return {
     id: wo.id,
@@ -138,15 +145,28 @@ export function operationToGanttTask(
 }
 
 /**
+ * 按 APS-Lite 综合分排序（同分按工单编码）
+ */
+export function sortWorkOrdersForGantt(workOrders: WorkOrderForGantt[]): WorkOrderForGantt[] {
+  return [...workOrders].sort((a, b) => {
+    const sa = Number(a.scheduling_score ?? -1);
+    const sb = Number(b.scheduling_score ?? -1);
+    if (sb !== sa) return sb - sa;
+    return String(a.code || a.id).localeCompare(String(b.code || b.id));
+  });
+}
+
+/**
  * 工单列表转为 Gantt 任务（支持工单级或工序级）
  */
 export function workOrdersToGanttTasks(
   workOrders: WorkOrderForGantt[],
   level: 'work_order' | 'operation' = 'work_order'
 ): GanttTask[] {
+  const sorted = sortWorkOrdersForGantt(workOrders);
   if (level === 'operation') {
     const tasks: GanttTask[] = [];
-    for (const wo of workOrders) {
+    for (const wo of sorted) {
       const ops = (wo.operations || []).filter((o) => o.id != null);
       if (ops.length > 0) {
         for (const op of ops) {
@@ -158,7 +178,7 @@ export function workOrdersToGanttTasks(
     }
     return sortTasksByWorkCenter(tasks);
   }
-  return sortTasksByWorkCenter(workOrders.map(workOrderToGanttTask));
+  return sortTasksByWorkCenter(sorted.map(workOrderToGanttTask));
 }
 
 /**

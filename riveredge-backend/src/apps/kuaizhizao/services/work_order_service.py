@@ -1542,6 +1542,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         if not updates:
             return
+        updated_wo_ids: List[int] = []
         async with in_transaction():
             for item in updates[:50]:  # 单次最多 50 条
                 wo_id = item.work_order_id if hasattr(item, 'work_order_id') else item.get('work_order_id')
@@ -1555,6 +1556,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo.planned_end_date = end
                     wo.updated_by = updated_by
                     await wo.save()
+                    updated_wo_ids.append(int(wo_id))
+
+        if updated_wo_ids:
+            from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                dispatch_work_order_score_recalc,
+            )
+            for wo_id in updated_wo_ids:
+                await dispatch_work_order_score_recalc(wo_id, include_kitting=False)
 
     async def batch_update_operation_dates(
         self,

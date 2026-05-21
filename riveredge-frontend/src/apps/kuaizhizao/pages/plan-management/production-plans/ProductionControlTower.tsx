@@ -548,6 +548,19 @@ const ProductionControlTower: React.FC = () => {
                               },
                               { title: '工单编码', dataIndex: 'work_order_code', ellipsis: true },
                               { title: '产品名称', dataIndex: 'product_name', ellipsis: true },
+                              {
+                                title: '综合分',
+                                dataIndex: 'scheduling_score',
+                                width: 88,
+                                render: (v: number, row: any) =>
+                                  v != null ? (
+                                    <Tag color={row.scheduling_rank_band === 'A' ? 'red' : row.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
+                                      {Number(v).toFixed(0)}{row.scheduling_rank_band ? `·${row.scheduling_rank_band}` : ''}
+                                    </Tag>
+                                  ) : (
+                                    '-'
+                                  ),
+                              },
                               { 
                                 title: '计划完工', 
                                 dataIndex: 'planned_end_date', 

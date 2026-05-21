@@ -57,7 +57,9 @@ class ProductionPickingResponse(ProductionPickingBase):
 
 class ProductionPickingListResponse(ProductionPickingResponse):
     """生产领料单列表响应schema（简化版）"""
-    pass
+    picking_score: Optional[float] = Field(None, description="备料场景综合分")
+    picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
+    picking_score_breakdown: Optional[dict] = Field(None, description="备料打分明细")
 
 
 class ProductionPickingWithItemsResponse(ProductionPickingResponse):

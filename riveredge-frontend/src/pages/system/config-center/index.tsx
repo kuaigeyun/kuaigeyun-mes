@@ -39,6 +39,7 @@ import {
   type ConfigCategory,
 } from './configTree';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
+import { WorkOrderScoreProfilesPanel } from './WorkOrderScoreProfilesPanel';
 
 import type { Color } from 'antd/es/color-picker';
 
@@ -786,6 +787,13 @@ const ConfigCenterPage: React.FC = () => {
                     </div>
                   </Form>
                 </Spin>
+
+                {selectedCatId === 'planning' && (
+                  <WorkOrderScoreProfilesPanel
+                    scoreProfiles={bizRes?.parameters?.work_order?.score_profiles}
+                    onSaved={refetchBusinessConfig}
+                  />
+                )}
 
                 <Space style={{ marginTop: 24 }}>
                   <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>

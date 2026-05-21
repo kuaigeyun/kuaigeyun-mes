@@ -85,6 +85,8 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
   ],
   planning: [
     { key: 'bom.bom_multi_version_allowed', nameKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed', descriptionKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed_desc', source: 'business_config', sourcePath: 'parameters.bom.bom_multi_version_allowed', type: 'boolean' },
+    { key: 'work_order.score_enabled', nameKey: 'pages.system.configCenter.param.work_order_score_enabled', descriptionKey: 'pages.system.configCenter.param.work_order_score_enabled_desc', source: 'business_config', sourcePath: 'parameters.work_order.score_enabled', type: 'boolean' },
+    { key: 'work_order.score_stale_minutes', nameKey: 'pages.system.configCenter.param.work_order_score_stale_minutes', descriptionKey: 'pages.system.configCenter.param.work_order_score_stale_minutes_desc', source: 'business_config', sourcePath: 'parameters.work_order.score_stale_minutes', type: 'number', min: 5, max: 1440 },
   ],
   production: [
     { key: 'work_order.priority', nameKey: 'pages.system.configCenter.param.work_order_priority', descriptionKey: 'pages.system.configCenter.param.work_order_priority_desc', source: 'business_config', sourcePath: 'parameters.work_order.priority', type: 'boolean' },

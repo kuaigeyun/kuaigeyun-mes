@@ -31,6 +31,7 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -45,6 +46,9 @@ interface OutboundOrder {
   customer_name?: string;
   work_order_id?: number;
   work_order_code?: string;
+  picking_score?: number | null;
+  picking_rank_band?: string | null;
+  picking_score_breakdown?: Record<string, { score?: number; weight?: number; weighted?: number; raw?: unknown }> | null;
   warehouse_id?: number;
   warehouse_name?: string;
   delivered_by?: string; // 操作员
@@ -583,6 +587,22 @@ const OutboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '备料分',
+      dataIndex: 'picking_score',
+      width: 96,
+      hideInSearch: true,
+      render: (_: unknown, record: OutboundOrder) =>
+        record.outbound_type === 'production_picking' ? (
+          <WorkOrderScoreCell
+            score={record.picking_score}
+            rankBand={record.picking_rank_band}
+            breakdown={record.picking_score_breakdown}
+          />
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ),
+    },
+    {
       title: '出库数量',
       dataIndex: 'total_quantity',
       width: 100,
@@ -712,43 +732,69 @@ const OutboundPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params) => {
           try {
-            // 并行获取生产领料单和销售出库单
             const kw = (params as any).keyword;
+            const typeFilter = (params as any).outbound_type as string | undefined;
+            const skip = (params.current! - 1) * params.pageSize!;
+            const limit = params.pageSize!;
+
+            const fetchPicking = typeFilter !== 'sales_delivery';
+            const fetchDelivery = typeFilter !== 'production_picking';
+
             const [pickingRes, deliveryRes] = await Promise.all([
-              warehouseApi.productionPicking.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-                keyword: kw,
-              }),
-              warehouseApi.salesDelivery.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-                keyword: kw,
-              }),
+              fetchPicking
+                ? warehouseApi.productionPicking.list({
+                    skip,
+                    limit,
+                    ...params,
+                    keyword: kw,
+                  })
+                : Promise.resolve([]),
+              fetchDelivery
+                ? warehouseApi.salesDelivery.list({
+                    skip,
+                    limit,
+                    ...params,
+                    keyword: kw,
+                  })
+                : Promise.resolve([]),
             ]);
 
-            // 后端可能直接返回数组，或 { data/items: [] } 格式
             const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
-            const pickingData = toList(pickingRes).map((item: any) => ({
-              ...item,
-              outbound_type: 'production_picking' as const,
-            }));
-            const deliveryData = toList(deliveryRes).map((item: any) => ({
-              ...item,
-              outbound_type: 'sales_delivery' as const,
-            }));
+            const pickingData = fetchPicking
+              ? toList(pickingRes).map((item: any) => ({
+                  ...item,
+                  outbound_type: 'production_picking' as const,
+                }))
+              : [];
+            const deliveryData = fetchDelivery
+              ? toList(deliveryRes).map((item: any) => ({
+                  ...item,
+                  outbound_type: 'sales_delivery' as const,
+                }))
+              : [];
 
-            // 合并两个数据源
-            const combinedData = [...pickingData, ...deliveryData];
+            let combinedData = [...pickingData, ...deliveryData];
 
-            // 按创建时间排序
-            combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+            if (typeFilter === 'production_picking') {
+              combinedData.sort((a, b) => {
+                const sa = a.picking_score;
+                const sb = b.picking_score;
+                if (sa == null && sb == null) {
+                  return new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime();
+                }
+                if (sa == null) return 1;
+                if (sb == null) return -1;
+                return sb - sa;
+              });
+            } else {
+              combinedData.sort(
+                (a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime(),
+              );
+            }
 
             const total =
-              (typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
-              (typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length);
+              (fetchPicking && typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
+              (fetchDelivery && typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length);
 
             return {
               data: combinedData,

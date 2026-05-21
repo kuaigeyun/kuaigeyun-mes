@@ -40,6 +40,8 @@ class DeliveryRiskItem(BaseModel):
     risk_type: str = Field(..., description="风险类型：delayed(已延期), delivery_clash(晚于交付)")
     risk_desc: str
     delay_days: int
+    scheduling_score: Optional[float] = Field(None, description="排程综合分")
+    scheduling_rank_band: Optional[str] = Field(None, description="等级带 A/B/C")
 
 
 class ControlTowerSummary(BaseModel):

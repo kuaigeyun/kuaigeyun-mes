@@ -1327,6 +1327,30 @@ class SalesOrderService:
             await doc_svc.apply_upstream_change_impact(tenant_id, "sales_order", sales_order_id)
         except Exception as e:
             logger.warning("apply_upstream_change_impact failed: %s", e)
+        delivery_changed = any(
+            fc.get("field") == "delivery_date"
+            for fc in (field_changes if changed_fields else [])
+        ) or (
+            upd
+            and "delivery_date" in upd
+            and str(upd.get("delivery_date")) != str(old_values.get("delivery_date"))
+        )
+        if delivery_changed or items_changed:
+            try:
+                from apps.kuaizhizao.models.work_order import WorkOrder
+                from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                    dispatch_work_order_score_recalc,
+                )
+
+                related_wo_ids = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=sales_order_id,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+                for wo_id in related_wo_ids:
+                    await dispatch_work_order_score_recalc(int(wo_id), include_kitting=True)
+            except Exception as e:
+                logger.warning("销售订单 %s 交期变更后工单打分重算投递失败: %s", sales_order_id, e)
         out = result.model_dump()
         out["demand_synced"] = demand_synced
         return SalesOrderResponse(**out)

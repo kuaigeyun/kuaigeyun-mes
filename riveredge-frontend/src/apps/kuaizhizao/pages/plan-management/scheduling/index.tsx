@@ -7,9 +7,9 @@
  * 注意：MRP/LRP 运算结果请前往「需求计算」页面查看和操作。
  */
 
-import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Switch, Spin } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,6 +17,7 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import type { ViewMode, WorkOrderForGantt, GanttTaskLevel } from '../../../components/GanttSchedulingChart/types';
+import dayjs from 'dayjs';
 
 const GanttSchedulingChart = lazy(() => import('../../../components/GanttSchedulingChart'));
 
@@ -67,6 +68,24 @@ const SchedulingPage: React.FC = () => {
   const { data: scoreConfig } = useRequest(async () => workOrderApi.getScoreConfig(), {
     refreshDeps: [],
   });
+
+  const dailyLoadPreview = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const wo of ganttWorkOrders) {
+      if (!wo.planned_start_date) continue;
+      const day = dayjs(wo.planned_start_date).format('MM-DD');
+      const hours = (Number(wo.quantity) || 1) * 0.1;
+      map.set(day, (map.get(day) || 0) + hours);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(0, 7)
+      .map(([day, hours]) => ({
+        day,
+        hours: Math.round(hours * 10) / 10,
+        rate: Math.min(100, Math.round((hours / 24) * 100)),
+      }));
+  }, [ganttWorkOrders]);
 
   /**
    * 处理智能排产
@@ -208,6 +227,14 @@ const SchedulingPage: React.FC = () => {
       ),
     },
     {
+      title: '冻结',
+      dataIndex: 'is_frozen',
+      width: 72,
+      align: 'center',
+      render: (_: unknown, record: { is_frozen?: boolean }) =>
+        record.is_frozen ? <Tag color="purple">冻结</Tag> : <Typography.Text type="secondary">—</Typography.Text>,
+    },
+    {
       title: '优先级',
       dataIndex: 'priority',
       width: 80,
@@ -306,6 +333,26 @@ const SchedulingPage: React.FC = () => {
           </Button>,
         ]}
       />
+      {dailyLoadPreview.length > 0 && (
+        <Card size="small" style={{ marginTop: 16 }} title="近 7 日计划负荷（APS-Lite 只读预览）">
+          <Space orientation="vertical" style={{ width: '100%' }} size={8}>
+            {dailyLoadPreview.map((item) => (
+              <div key={item.day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Typography.Text style={{ width: 48 }}>{item.day}</Typography.Text>
+                <Progress
+                  percent={item.rate}
+                  size="small"
+                  style={{ flex: 1, margin: 0 }}
+                  status={item.rate >= 90 ? 'exception' : item.rate >= 70 ? 'active' : 'normal'}
+                />
+                <Typography.Text type="secondary" style={{ width: 72, textAlign: 'right' }}>
+                  {item.hours}h
+                </Typography.Text>
+              </div>
+            ))}
+          </Space>
+        </Card>
+      )}
       <Card
         style={{ marginTop: 16 }}
         title={

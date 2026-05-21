@@ -484,7 +484,33 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             query = query.filter(work_order_id=filters['work_order_id'])
 
         pickings = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [ProductionPickingListResponse.model_validate(picking) for picking in pickings]
+        rows = [ProductionPickingListResponse.model_validate(picking) for picking in pickings]
+
+        if rows:
+            from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+            score_svc = WorkOrderScoreService()
+            if await score_svc.is_score_enabled(tenant_id):
+                wo_ids = [p.work_order_id for p in rows if p.work_order_id]
+                score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "picking")
+                enriched: List[ProductionPickingListResponse] = []
+                for row in rows:
+                    cached = score_map.get(row.work_order_id)
+                    if cached:
+                        enriched.append(
+                            row.model_copy(
+                                update={
+                                    "picking_score": cached.composite_score,
+                                    "picking_rank_band": cached.rank_band,
+                                    "picking_score_breakdown": cached.breakdown,
+                                }
+                            )
+                        )
+                    else:
+                        enriched.append(row)
+                return enriched
+
+        return rows
 
     async def update_production_picking(self, tenant_id: int, picking_id: int, picking_data: ProductionPickingUpdate, updated_by: int) -> ProductionPickingResponse:
         """更新生产领料单"""
@@ -702,6 +728,21 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 raise
 
             updated_picking = await self.get_production_picking_by_id(tenant_id, picking_id)
+            if picking.work_order_id:
+                try:
+                    from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
+                        dispatch_work_order_score_recalc,
+                    )
+                    await dispatch_work_order_score_recalc(
+                        int(picking.work_order_id),
+                        include_kitting=True,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "领料确认后工单 %s 打分重算投递失败: %s",
+                        picking.work_order_id,
+                        e,
+                    )
             return updated_picking
 
     async def quick_pick_from_work_order(

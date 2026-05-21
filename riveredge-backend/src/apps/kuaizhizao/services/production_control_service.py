@@ -220,6 +220,18 @@ class ProductionControlService:
                                 "delay_days": diff
                             })
                             
+        if results:
+            from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
+
+            score_svc = WorkOrderScoreService()
+            wo_ids = [int(r["work_order_id"]) for r in results if r.get("work_order_id")]
+            score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "scheduling")
+            for row in results:
+                cached = score_map.get(int(row["work_order_id"]))
+                if cached:
+                    row["scheduling_score"] = cached.composite_score
+                    row["scheduling_rank_band"] = cached.rank_band
+
         return results
 
     async def release_kitted_work_orders(self, tenant_id: int, work_order_ids: List[int], operator_id: int = None) -> dict:

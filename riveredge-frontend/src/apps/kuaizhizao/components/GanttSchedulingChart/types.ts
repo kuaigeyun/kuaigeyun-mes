@@ -15,6 +15,9 @@ export interface WorkOrderForGantt {
   workshop_name?: string | null;
   status?: string;
   priority?: string;
+  scheduling_score?: number | null;
+  scheduling_rank_band?: string | null;
+  is_frozen?: boolean;
   /** 设备名称（取自首工序或聚合） */
   assigned_equipment_name?: string | null;
   /** 模具名称（取自首工序或聚合） */

@@ -154,15 +154,29 @@ class AdvancedSchedulingService(BaseService):
             include_kitting=False,
         )
 
-        def _sort_key(wo: WorkOrder) -> float:
-            if score_map.get(wo.id) is not None:
-                return score_map[wo.id]
-            return self._get_priority_score(wo, constraints)
+        def _sort_key(wo: WorkOrder) -> tuple:
+            frozen_boost = 1 if getattr(wo, "is_frozen", False) else 0
+            score = score_map.get(wo.id)
+            if score is not None:
+                return (frozen_boost, score)
+            return (frozen_boost, self._get_priority_score(wo, constraints))
 
         sorted_orders = sorted(work_orders, key=_sort_key, reverse=True)
         
-        # 模拟排产过程
+        # 模拟排产过程（冻结单保持原计划，不参与自动挪期）
         for work_order in sorted_orders:
+            if getattr(work_order, "is_frozen", False):
+                if work_order.planned_start_date:
+                    scheduled_orders.append({
+                        "work_order_id": work_order.id,
+                        "work_order_code": work_order.code,
+                        "original_date": work_order.planned_start_date.date(),
+                        "scheduled_date": work_order.planned_start_date.date(),
+                        "delay_days": 0,
+                        "estimated_hours": 0,
+                        "frozen": True,
+                    })
+                continue
             try:
                 # 获取计划日期，若无则默认今天
                 current_date = (work_order.planned_start_date or datetime.now()).date()
