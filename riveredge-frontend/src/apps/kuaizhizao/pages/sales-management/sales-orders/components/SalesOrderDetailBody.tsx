@@ -329,24 +329,14 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
 
   return (
     <>
-      <style>{`
-        .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-content,
-        .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-body {
-          overflow-x: hidden !important;
-        }
-        .sales-order-detail-drawer-items .ant-table-thead > tr > th {
-          white-space: nowrap;
-        }
-      `}</style>
       {order.fee_details && order.fee_details.length > 0 && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>费用明细</div>
-          <div className="sales-order-detail-drawer-items" style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-            <Table
-              size="small"
-              tableLayout="fixed"
-              style={{ minWidth: 560 }}
-              columns={[
+          <Table
+            size="small"
+            tableLayout="fixed"
+            style={{ minWidth: 560 }}
+            columns={[
                 {
                   title: '费用类型',
                   dataIndex: 'type',
@@ -372,12 +362,10 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
               rowKey={(_: any, i?: number) => i ?? 0}
               pagination={false}
             />
-          </div>
         </div>
       )}
 
       {order.items && order.items.length > 0 ? (
-        <div className="sales-order-detail-drawer-items" style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
           <Table<SalesOrderItem>
             size="small"
             tableLayout="fixed"
@@ -451,7 +439,6 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
             rowKey="id"
             pagination={false}
           />
-        </div>
       ) : (
         <Typography.Text type="secondary">暂无明细</Typography.Text>
       )}

@@ -39,6 +39,16 @@ export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
 export { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems'
 export { DetailDrawerSection } from './DetailDrawerSection'
 export type { DetailDrawerSectionProps } from './DetailDrawerSection'
+export { DetailDrawerLinesScroll } from './DetailDrawerLinesScroll'
+export type { DetailDrawerLinesScrollProps } from './DetailDrawerLinesScroll'
+export {
+  DetailDrawerInlineFullChain,
+  DETAIL_DRAWER_INLINE_FULL_CHAIN_HEIGHT,
+} from './DetailDrawerInlineFullChain'
+export type {
+  DetailDrawerInlineFullChainProps,
+  TraceBriefDocument,
+} from './DetailDrawerInlineFullChain'
 export { DetailDrawerActions } from './DetailDrawerActions'
 export type { DetailDrawerActionsProps, DetailDrawerActionItem } from './DetailDrawerActions'
 

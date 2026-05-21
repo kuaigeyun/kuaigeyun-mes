@@ -21,6 +21,7 @@ export interface DocumentTraceNode {
   document_name?: string | null;
   created_at?: string | null;
   level: number;
+  is_deleted?: boolean;
   children: DocumentTraceNode[];
   /** 仅 reporting_timeline 节点：合并报工时间线 */
   reporting_timeline?: DocumentTraceReportingEntry[] | null;

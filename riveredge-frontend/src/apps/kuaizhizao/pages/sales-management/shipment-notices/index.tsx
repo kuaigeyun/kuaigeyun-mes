@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, MoreOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -28,12 +28,8 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -88,16 +84,6 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 
 const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
 
-/** 详情抽屉外左侧全链路浮层（与销售订单/销售预测一致） */
-const SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN = 16;
-const SHIPMENT_NOTICE_LEFT_CHAIN_GAP = 16;
-const SHIPMENT_NOTICE_CHAIN_DRAWER_GAP = 16;
-const SHIPMENT_NOTICE_CHAIN_VERTICAL_TRIM =
-  SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN * 2 + SHIPMENT_NOTICE_LEFT_CHAIN_GAP;
-const shipmentNoticeChainHalfHeightCss = `calc((100vh - ${SHIPMENT_NOTICE_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const shipmentNoticeChainPanelWidthCss = `calc(50vw - ${SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN * 2 + SHIPMENT_NOTICE_CHAIN_DRAWER_GAP}px)`;
-const shipmentNoticeBriefPanelTopCss = `calc(${SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SHIPMENT_NOTICE_CHAIN_VERTICAL_TRIM}px) / 2 + ${SHIPMENT_NOTICE_LEFT_CHAIN_GAP}px)`;
-
 const ShipmentNoticesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -106,40 +92,16 @@ const ShipmentNoticesPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const { token } = AntdTheme.useToken();
   const noticeDetailDrawerZIndex = token.zIndexPopupBase;
-  const noticeChainOverlayZIndex = token.zIndexPopupBase + 1;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ShipmentNoticeDetail | null>(null);
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
 
   const shipmentTracking = useDocumentTracking(
     detailDrawerVisible && noticeDetail?.id ? 'shipment_notice' : undefined,
     noticeDetail?.id,
     trackingRefreshKey,
   );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'shipment_notice' && noticeDetail?.id != null && id === noticeDetail.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [noticeDetail?.id],
-  );
-
-  useEffect(() => {
-    if (detailDrawerVisible && noticeDetail?.id != null) {
-      setFullChainBriefDoc(null);
-    }
-  }, [detailDrawerVisible, noticeDetail?.id]);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [pullFromSalesOrderVisible, setPullFromSalesOrderVisible] = useState(false);
@@ -268,7 +230,6 @@ const ShipmentNoticesPage: React.FC = () => {
       setNoticeDetail(detail as ShipmentNoticeDetail);
       setDetailDrawerVisible(true);
       setTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch {
       messageApi.error('获取发货通知单详情失败');
     }
@@ -1138,137 +1099,6 @@ const ShipmentNoticesPage: React.FC = () => {
         </Space>
       </Modal>
 
-      {detailDrawerVisible && noticeDetail?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN,
-              top: SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN,
-              width: shipmentNoticeChainPanelWidthCss,
-              height: shipmentNoticeChainHalfHeightCss,
-              zIndex: noticeChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="shipment_notice"
-                documentId={noticeDetail.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: SHIPMENT_NOTICE_FULL_CHAIN_FLOAT_MARGIN,
-              top: shipmentNoticeBriefPanelTopCss,
-              width: shipmentNoticeChainPanelWidthCss,
-              height: shipmentNoticeChainHalfHeightCss,
-              zIndex: noticeChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'quotation' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate('/apps/kuaizhizao/sales-management/quotations', {
-                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
-                        });
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`发货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
@@ -1276,11 +1106,31 @@ const ShipmentNoticesPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setNoticeDetail(null);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={3}
+        dataSource={noticeDetail || undefined}
+        traceDocument={
+          noticeDetail?.id != null
+            ? {
+                documentType: 'shipment_notice',
+                documentId: noticeDetail.id,
+                selfDocumentId: noticeDetail.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setNoticeDetail(null);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         customContent={
           noticeDetail ? (
             <>

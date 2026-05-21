@@ -8,8 +8,101 @@ import type { NavigateFunction } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ROUTES } from '../../constants/routes';
 
+export interface EquipmentTraceBriefDoc {
+  document_type: string;
+  document_id: number;
+}
+
+/** 用于 DetailDrawerTemplate.traceDocument.renderBriefActions（内嵌全链路已含「关闭简览」） */
+export function EquipmentTraceBriefPrimaryActions(props: {
+  doc: EquipmentTraceBriefDoc;
+  t: TFunction;
+  navigate: NavigateFunction;
+  closeDrawer: () => void;
+}): React.ReactNode {
+  const { doc: brief, t, navigate, closeDrawer } = props;
+  const go = (path: string) => {
+    closeDrawer();
+    navigate(path);
+  };
+  return (
+    <>
+      {brief.document_type === 'purchase_order' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_ORDERS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'sales_order' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_ORDERS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+        </Button>
+      ) : null}
+      {brief.document_type === 'demand' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.DEMAND_MANAGEMENT)}>
+          {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'purchase_requisition' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_REQUISITIONS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', { defaultValue: '前往采购申请' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'work_order' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.WORK_ORDERS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'maintenance_reminder' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.MAINTENANCE_REMINDERS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenMaintenanceReminder', { defaultValue: '前往维护提醒' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'equipment' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.EQUIPMENT)}>
+          {t('components.documentTrackingPanel.traceBriefOpenEquipment', { defaultValue: '前往设备台账' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'equipment_fault' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.EQUIPMENT_FAULTS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenEquipmentFault', { defaultValue: '前往设备故障' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'maintenance_plan' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.MAINTENANCE_PLANS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenMaintenancePlan', { defaultValue: '前往保养计划' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'mold' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.MOLDS)}>
+          {t('components.documentTrackingPanel.traceBriefOpenMold', { defaultValue: '前往模具台账' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'tool' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.TOOL_LEDGER)}>
+          {t('components.documentTrackingPanel.traceBriefOpenTool', { defaultValue: '前往工装台账' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'incoming_inspection' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.INCOMING_INSPECTION)}>
+          {t('components.documentTrackingPanel.traceBriefOpenIncomingInspection', { defaultValue: '前往来料检验' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'process_inspection' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.PROCESS_INSPECTION)}>
+          {t('components.documentTrackingPanel.traceBriefOpenProcessInspection', { defaultValue: '前往过程检验' })}
+        </Button>
+      ) : null}
+      {brief.document_type === 'finished_goods_inspection' ? (
+        <Button type="primary" size="small" onClick={() => go(ROUTES.FINISHED_GOODS_INSPECTION)}>
+          {t('components.documentTrackingPanel.traceBriefOpenFinishedGoodsInspection', { defaultValue: '前往成品检验' })}
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
 export function EquipmentTraceBriefFooter(props: {
-  brief: { document_type: string; document_id: number } | null;
+  brief: EquipmentTraceBriefDoc | null;
   t: TFunction;
   navigate: NavigateFunction;
   closeDrawer: () => void;
@@ -17,10 +110,6 @@ export function EquipmentTraceBriefFooter(props: {
 }): React.ReactNode {
   const { brief, t, navigate, closeDrawer, onDismissBrief } = props;
   if (!brief) return null;
-  const go = (path: string) => {
-    closeDrawer();
-    navigate(path);
-  };
   return (
     <div
       style={{
@@ -34,76 +123,7 @@ export function EquipmentTraceBriefFooter(props: {
     >
       <Space wrap>
         <Button onClick={onDismissBrief}>{t('components.documentTrackingPanel.traceBriefDismiss')}</Button>
-        {brief.document_type === 'purchase_order' ? (
-          <Button type="primary" onClick={() => go(ROUTES.PURCHASE_ORDERS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'sales_order' ? (
-          <Button type="primary" onClick={() => go(ROUTES.SALES_ORDERS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-          </Button>
-        ) : null}
-        {brief.document_type === 'demand' ? (
-          <Button type="primary" onClick={() => go(ROUTES.DEMAND_MANAGEMENT)}>
-            {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'purchase_requisition' ? (
-          <Button type="primary" onClick={() => go(ROUTES.PURCHASE_REQUISITIONS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', { defaultValue: '前往采购申请' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'work_order' ? (
-          <Button type="primary" onClick={() => go(ROUTES.WORK_ORDERS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'maintenance_reminder' ? (
-          <Button type="primary" onClick={() => go(ROUTES.MAINTENANCE_REMINDERS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenMaintenanceReminder', { defaultValue: '前往维护提醒' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'equipment' ? (
-          <Button type="primary" onClick={() => go(ROUTES.EQUIPMENT)}>
-            {t('components.documentTrackingPanel.traceBriefOpenEquipment', { defaultValue: '前往设备台账' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'equipment_fault' ? (
-          <Button type="primary" onClick={() => go(ROUTES.EQUIPMENT_FAULTS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenEquipmentFault', { defaultValue: '前往设备故障' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'maintenance_plan' ? (
-          <Button type="primary" onClick={() => go(ROUTES.MAINTENANCE_PLANS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenMaintenancePlan', { defaultValue: '前往保养计划' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'mold' ? (
-          <Button type="primary" onClick={() => go(ROUTES.MOLDS)}>
-            {t('components.documentTrackingPanel.traceBriefOpenMold', { defaultValue: '前往模具台账' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'tool' ? (
-          <Button type="primary" onClick={() => go(ROUTES.TOOL_LEDGER)}>
-            {t('components.documentTrackingPanel.traceBriefOpenTool', { defaultValue: '前往工装台账' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'incoming_inspection' ? (
-          <Button type="primary" onClick={() => go(ROUTES.INCOMING_INSPECTION)}>
-            {t('components.documentTrackingPanel.traceBriefOpenIncomingInspection', { defaultValue: '前往来料检验' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'process_inspection' ? (
-          <Button type="primary" onClick={() => go(ROUTES.PROCESS_INSPECTION)}>
-            {t('components.documentTrackingPanel.traceBriefOpenProcessInspection', { defaultValue: '前往过程检验' })}
-          </Button>
-        ) : null}
-        {brief.document_type === 'finished_goods_inspection' ? (
-          <Button type="primary" onClick={() => go(ROUTES.FINISHED_GOODS_INSPECTION)}>
-            {t('components.documentTrackingPanel.traceBriefOpenFinishedGoodsInspection', { defaultValue: '前往成品检验' })}
-          </Button>
-        ) : null}
+        <EquipmentTraceBriefPrimaryActions doc={brief} t={t} navigate={navigate} closeDrawer={closeDrawer} />
       </Space>
     </div>
   );

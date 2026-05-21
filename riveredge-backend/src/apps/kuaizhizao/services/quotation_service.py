@@ -1352,6 +1352,11 @@ class QuotationService:
             sales_order_data=so_create,
             created_by=created_by,
         )
+        sales_order = await sales_order_service.apply_push_default_mode_after_create(
+            tenant_id=tenant_id,
+            sales_order_id=int(sales_order.id),
+            created_by=created_by,
+        )
 
         from apps.common.base_service import AppBaseService
 

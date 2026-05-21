@@ -13,6 +13,11 @@ import { useTranslation } from 'react-i18next';
 import { DRAWER_CONFIG } from './constants';
 import { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome';
 import { DetailDrawerSection } from './DetailDrawerSection';
+import { DetailDrawerLinesScroll } from './DetailDrawerLinesScroll';
+import {
+  DetailDrawerInlineFullChain,
+  type TraceBriefDocument,
+} from './DetailDrawerInlineFullChain';
 import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
 import './drawerSlideMotion.css';
 
@@ -83,14 +88,22 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   disableFloatingChrome?: boolean;
   /** 打开/关闭动画结束后回调（与 Ant Design Drawer 一致） */
   afterOpenChange?: DrawerProps['afterOpenChange'];
+
+  /**
+   * 协作区内嵌全链路（替代抽屉外左侧浮层）。
+   * 与 collaborationRelations 同时传入时，全链路叠在 relations 之后。
+   */
+  traceDocument?: {
+    documentType: string;
+    documentId: number;
+    selfDocumentId?: number;
+    height?: number;
+    renderBriefActions?: (doc: TraceBriefDocument) => ReactNode;
+  } | null;
 }
 
-function stackCollaborationParts(
-  metrics?: ReactNode,
-  lifecycle?: ReactNode,
-  relations?: ReactNode
-): ReactNode {
-  const parts = [metrics, lifecycle, relations].filter((p) => p != null && p !== false);
+function stackCollaborationParts(...nodes: (ReactNode | undefined)[]): ReactNode {
+  const parts = nodes.filter((p) => p != null && p !== false);
   if (parts.length === 0) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -134,12 +147,13 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   timelineVisible,
   dataSource,
   columns = [],
-  column = 2,
+  column = 3,
   customContent,
   children,
   placement,
   disableFloatingChrome = false,
   afterOpenChange,
+  traceDocument,
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -174,16 +188,41 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const resolvedLinesTitle = linesTitle ?? t('app.uniDetail.sectionLines');
   const resolvedTimelineTitle = timelineTitle ?? t('app.uniDetail.sectionTimeline');
 
+  const isOpen = open ?? visible ?? false;
+
   const hasBasicContent = basic != null && basic !== false;
   const showBasic = basicVisible !== false && (basicVisible === true || hasBasicContent);
 
-  const stackedCollaboration = useMemo(
-    () =>
+  const inlineFullChain = useMemo(() => {
+    if (!traceDocument?.documentId) return null;
+    return (
+      <DetailDrawerInlineFullChain
+        documentType={traceDocument.documentType}
+        documentId={traceDocument.documentId}
+        active={isOpen}
+        selfDocumentId={traceDocument.selfDocumentId}
+        height={traceDocument.height}
+        renderBriefActions={traceDocument.renderBriefActions}
+      />
+    );
+  }, [isOpen, traceDocument]);
+
+  const stackedCollaboration = useMemo(() => {
+    const base =
       collaboration ??
-      stackCollaborationParts(collaborationMetrics, collaborationLifecycle, collaborationRelations),
-    [collaboration, collaborationMetrics, collaborationLifecycle, collaborationRelations]
-  );
-  const hasCollaborationContent = stackedCollaboration != null && stackedCollaboration !== false;
+      stackCollaborationParts(collaborationMetrics, collaborationLifecycle, collaborationRelations);
+    if (inlineFullChain == null || inlineFullChain === false) return base;
+    return stackCollaborationParts(base, inlineFullChain);
+  }, [
+    collaboration,
+    collaborationMetrics,
+    collaborationLifecycle,
+    collaborationRelations,
+    inlineFullChain,
+  ]);
+  const hasCollaborationContent =
+    (stackedCollaboration != null && stackedCollaboration !== false) ||
+    (inlineFullChain != null && inlineFullChain !== false);
   const showCollaboration =
     collaborationVisible !== false &&
     (collaborationVisible === true || hasCollaborationContent);
@@ -207,6 +246,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     hasLegacyColumns ? (
       <Descriptions
         column={column}
+        size="small"
         items={detailDrawerDescriptionItems(columns, dataSource ?? undefined)}
       />
     ) : null;
@@ -228,16 +268,20 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
         <DetailDrawerSection title={collaborationSectionTitle}>{stackedCollaboration}</DetailDrawerSection>
       ) : null}
       {showLines ? (
-        <DetailDrawerSection title={resolvedLinesTitle}>{lines}</DetailDrawerSection>
+        <DetailDrawerSection title={resolvedLinesTitle}>
+          <DetailDrawerLinesScroll>{lines}</DetailDrawerLinesScroll>
+        </DetailDrawerSection>
       ) : null}
       {showTimeline ? (
         <DetailDrawerSection title={resolvedTimelineTitle}>{timeline}</DetailDrawerSection>
       ) : null}
+      {/* 兼容：已使用分区插槽但仍传入 plainBody/customContent/children 时，叠在分区之后 */}
+      {plainBody ?? customContent}
+      {children}
     </>
   );
 
   const drawerBody = usesStructuredSections ? sectionedBody : legacyBody;
-  const isOpen = open ?? visible ?? false;
   const showLoadingOverlay = !!loading && isOpen;
 
   return (

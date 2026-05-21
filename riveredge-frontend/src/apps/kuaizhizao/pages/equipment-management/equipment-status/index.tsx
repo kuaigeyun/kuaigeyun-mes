@@ -7,7 +7,7 @@
  * Date: 2026-01-16
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, Badge, Button, Space, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
@@ -17,26 +17,12 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
-import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 
 const { Meta } = Card;
 const { Option } = Select;
 const { Search } = Input;
-
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail）；此页跟踪主体为设备台账单据 */
-const ES_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const ES_DETAIL_LEFT_CHAIN_GAP = 16;
-const ES_DETAIL_CHAIN_DRAWER_GAP = 16;
-const ES_DETAIL_CHAIN_VERTICAL_TRIM = ES_DETAIL_CHAIN_FLOAT_MARGIN * 2 + ES_DETAIL_LEFT_CHAIN_GAP;
-const esDetailChainHalfHeightCss = `calc((100vh - ${ES_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const esDetailChainPanelWidthCss = `calc(50vw - ${ES_DETAIL_CHAIN_FLOAT_MARGIN * 2 + ES_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const esDetailBriefPanelTopCss = `calc(${ES_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${ES_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${ES_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface EquipmentStatus {
   equipment: {
@@ -74,7 +60,6 @@ const EquipmentStatusPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const equipmentStatusDrawerZIndex = token.zIndexPopupBase;
-  const equipmentStatusChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const [statusList, setStatusList] = useState<EquipmentStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,23 +78,6 @@ const EquipmentStatusPage: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [eqStatusTrackingRefreshKey, setEqStatusTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'equipment' && currentEquipment?.equipment?.id != null && id === currentEquipment.equipment.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [currentEquipment],
-  );
 
   const equipmentDocTracking = useDocumentTracking(
     detailVisible && currentEquipment?.equipment?.id ? 'equipment' : undefined,
@@ -183,11 +151,9 @@ const EquipmentStatusPage: React.FC = () => {
    */
   const handleViewDetail = async (equipment: EquipmentStatus) => {
     try {
-      setFullChainBriefDoc(null);
       setCurrentEquipment(equipment);
       setDetailVisible(true);
       setEqStatusTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
 
       // 加载状态历史
       setHistoryLoading(true);
@@ -476,118 +442,6 @@ const EquipmentStatusPage: React.FC = () => {
         </Card>
       )}
 
-      {detailVisible && currentEquipment?.equipment?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: ES_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: ES_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: esDetailChainPanelWidthCss,
-              height: esDetailChainHalfHeightCss,
-              zIndex: equipmentStatusChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="equipment"
-                documentId={currentEquipment.equipment.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: ES_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: esDetailBriefPanelTopCss,
-              width: esDetailChainPanelWidthCss,
-              height: esDetailChainHalfHeightCss,
-              zIndex: equipmentStatusChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            <EquipmentTraceBriefFooter
-              brief={fullChainBriefDoc}
-              t={t}
-              navigate={navigate}
-              closeDrawer={() => {
-                setDetailVisible(false);
-                setCurrentEquipment(null);
-                setHistoryList([]);
-                setFullChainBriefDoc(null);
-              }}
-              onDismissBrief={() => setFullChainBriefDoc(null)}
-            />
-          </div>
-        </>
-      ) : null}
-
       {/* 详情抽屉 */}
       <DetailDrawerTemplate
         title="设备状态详情"
@@ -597,9 +451,29 @@ const EquipmentStatusPage: React.FC = () => {
           setDetailVisible(false);
           setCurrentEquipment(null);
           setHistoryList([]);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        traceDocument={
+          currentEquipment?.equipment?.id != null
+            ? {
+                documentType: 'equipment',
+                documentId: currentEquipment.equipment.id,
+                selfDocumentId: currentEquipment.equipment.id,
+                renderBriefActions: (doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailVisible(false);
+                      setCurrentEquipment(null);
+                      setHistoryList([]);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         customContent={
           currentEquipment ? (
             <>

@@ -69,11 +69,10 @@ import {
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import {
-  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel'
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import {
   listDemandComputations,
   getDemandComputation,
@@ -115,16 +114,6 @@ import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
-
-/** 详情 Drawer 外左侧全链路浮层（与销售/需求详情一致） */
-const DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN = 16
-const DEMAND_COMPUTATION_LEFT_CHAIN_GAP = 16
-const DEMAND_COMPUTATION_CHAIN_DRAWER_GAP = 16
-const DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM =
-  DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_COMPUTATION_LEFT_CHAIN_GAP
-const demandComputationChainHalfHeightCss = `calc((100vh - ${DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM}px) / 2)`
-const demandComputationChainPanelWidthCss = `calc(50vw - ${DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_COMPUTATION_CHAIN_DRAWER_GAP}px)`
-const demandComputationBriefPanelTopCss = `calc(${DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM}px) / 2 + ${DEMAND_COMPUTATION_LEFT_CHAIN_GAP}px)`
 
 const MRP_SUGGESTION_SEGMENTED_OPTIONS = [
   { label: '净需求（推荐）', value: 'net' as const },
@@ -582,7 +571,6 @@ const InventoryParamsForm: React.FC<{
 const DemandComputationPage: React.FC = () => {
   const { token } = theme.useToken()
   const computationDetailDrawerZIndex = token.zIndexPopupBase
-  const computationChainOverlayZIndex = token.zIndexPopupBase + 1
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { message: messageApi, modal: modalApi } = App.useApp()
@@ -677,35 +665,12 @@ const DemandComputationPage: React.FC = () => {
   const [recalcSnapshotModalData, setRecalcSnapshotModalData] = useState<ComputationSnapshotItem | null>(null)
   const [detailTabKey, setDetailTabKey] = useState<string>('detail')
   const [computationTrackingRefreshKey, setComputationTrackingRefreshKey] = useState(0)
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0)
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false)
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  )
 
   const computationTracking = useDocumentTracking(
     drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? 'demand_computation' : undefined,
     drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined,
     computationTrackingRefreshKey,
   )
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return
-      if (type === 'demand_computation' && currentComputation?.id != null && id === currentComputation.id) {
-        setFullChainBriefDoc(null)
-        return
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id })
-    },
-    [currentComputation?.id],
-  )
-
-  useEffect(() => {
-    if (drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null) {
-      setFullChainBriefDoc(null)
-    }
-  }, [drawerVisible, detailTabKey, currentComputation?.id])
 
   /** 详情抽屉「下推与历史」：并行加载下推记录、重算历史（快照按需从「重算历史」打开） */
   const loadComputationRecordsTabData = useCallback(
@@ -982,7 +947,6 @@ const DemandComputationPage: React.FC = () => {
         setDetailTabKey('detail')
         setDrawerVisible(true)
         setComputationTrackingRefreshKey((k) => k + 1)
-        setFullChainRefreshKey((k) => k + 1)
       } catch (error: any) {
         messageApi.error('获取计算详情失败')
       }
@@ -1136,7 +1100,6 @@ const DemandComputationPage: React.FC = () => {
           .catch(() => {})
         if (detailTabKey === 'detail') {
           setComputationTrackingRefreshKey((k) => k + 1)
-          setFullChainRefreshKey((k) => k + 1)
         } else if (detailTabKey === 'records') {
           loadComputationRecordsTabData(executedId)
         }
@@ -1166,7 +1129,6 @@ const DemandComputationPage: React.FC = () => {
               .catch(() => {})
             if (detailTabKey === 'detail') {
               setComputationTrackingRefreshKey((k) => k + 1)
-              setFullChainRefreshKey((k) => k + 1)
             } else if (detailTabKey === 'records') {
               loadComputationRecordsTabData(record.id!)
             }
@@ -1232,7 +1194,6 @@ const DemandComputationPage: React.FC = () => {
           .catch(() => {})
         if (detailTabKey === 'detail') {
           setComputationTrackingRefreshKey((k) => k + 1)
-          setFullChainRefreshKey((k) => k + 1)
         } else if (detailTabKey === 'records') {
           loadComputationRecordsTabData(record.id!)
         }
@@ -2158,137 +2119,6 @@ const DemandComputationPage: React.FC = () => {
         ) : null}
       </Modal>
 
-      {drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
-              top: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
-              width: demandComputationChainPanelWidthCss,
-              height: demandComputationChainHalfHeightCss,
-              zIndex: computationChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="demand_computation"
-                documentId={currentComputation.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
-              top: demandComputationBriefPanelTopCss,
-              width: demandComputationChainPanelWidthCss,
-              height: demandComputationChainHalfHeightCss,
-              zIndex: computationChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'quotation' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false)
-                        navigate('/apps/kuaizhizao/sales-management/quotations', {
-                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
-                        })
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={
           currentComputation?.computation_code ? (
@@ -2315,7 +2145,6 @@ const DemandComputationPage: React.FC = () => {
         zIndex={computationDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
-          setFullChainBriefDoc(null)
           setRecalcSnapshotModalOpen(false)
           setRecalcSnapshotModalData(null)
         }}
@@ -2324,6 +2153,25 @@ const DemandComputationPage: React.FC = () => {
         styles={{
           body: { paddingTop: 8, paddingBottom: 8 },
         }}
+        traceDocument={
+          drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null
+            ? {
+                documentType: 'demand_computation',
+                documentId: currentComputation.id,
+                selfDocumentId: currentComputation.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false)
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         plainBody={
           currentComputation ? (
           <Tabs

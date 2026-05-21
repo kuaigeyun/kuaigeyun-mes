@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Empty, Spin, Button, Space, theme, message, Tooltip } from 'antd';
+import { Empty, Spin, Button, Space, theme, message, Tooltip, Tag } from 'antd';
 import {
   ReloadOutlined,
   FullscreenOutlined,
@@ -47,6 +47,9 @@ const TRACE_FLOW_NODE_BASE_SIZE: Record<'compact' | 'normal', [number, number]> 
  * 不写入 zoomRange，用户仍可滚轮/手势继续放大画布。
  */
 const TRACE_FLOW_SINGLE_NODE_MAX_VIEW_WIDTH_PX = { compact: 220, normal: 260 } as const;
+
+/** 首次 fitView / zoomTo 视口过渡，掩盖默认左上角再自适应的跳变 */
+const TRACE_FLOW_VIEWPORT_FIT_ANIM = { duration: 420, easing: 'cubic-in-out' } as const;
 
 /** G6 v5：节点点击为 target.id；旧版可能含 item.getModel */
 type FlowGraphNodeClickEvt = {
@@ -115,6 +118,8 @@ interface TraceDocumentFlowNodeProps {
   is_root: boolean;
   /** 画布点击选中（与 UniFlowNode selected 一致的主色描边 + 光晕） */
   selected: boolean;
+  /** 关联单据已删除 */
+  is_deleted?: boolean;
   compact: boolean;
 }
 
@@ -127,6 +132,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   created_at,
   is_root,
   selected,
+  is_deleted = false,
   compact,
 }) => {
   const { token } = useToken();
@@ -135,13 +141,15 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   const isSalesDelivery = document_type === 'sales_delivery';
   const isReportingTimeline = document_type === 'reporting_timeline';
   const success = token.colorSuccess;
-  const accentBase = is_root
-    ? token.colorPrimary
-    : isSalesDelivery
-      ? success
-      : isReportingTimeline
-        ? token.colorPrimary
-        : token.colorTextSecondary;
+  const accentBase = is_deleted
+    ? token.colorTextQuaternary
+    : is_root
+      ? token.colorPrimary
+      : isSalesDelivery
+        ? success
+        : isReportingTimeline
+          ? token.colorPrimary
+          : token.colorTextSecondary;
   /** 选中时统一用主色强调条与图标色 */
   const accent = selected ? token.colorPrimary : accentBase;
   const primary = token.colorPrimary;
@@ -158,20 +166,24 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   const cardBorder =
     selected
       ? `2px solid ${primary}`
-      : is_root
-        ? `1px solid ${accentBase}`
-        : isSalesDelivery
-          ? `1px solid ${success}`
-          : isReportingTimeline
-            ? `1px solid ${accentBase}`
-            : `1px solid ${token.colorBorderSecondary}`;
+      : is_deleted
+        ? `1px dashed ${token.colorErrorBorder}`
+        : is_root
+          ? `1px solid ${accentBase}`
+          : isSalesDelivery
+            ? `1px solid ${success}`
+            : isReportingTimeline
+              ? `1px solid ${accentBase}`
+              : `1px solid ${token.colorBorderSecondary}`;
   const cardShadow = selected
     ? `0 0 0 2px ${primary}22, ${token.boxShadowSecondary}`
-    : is_root
-      ? `0 0 0 2px ${accentBase}22, ${token.boxShadowSecondary}`
-      : isSalesDelivery
-        ? `0 0 0 2px ${success}22, ${token.boxShadowSecondary}`
-        : token.boxShadowTertiary;
+    : is_deleted
+      ? token.boxShadowTertiary
+      : is_root
+        ? `0 0 0 2px ${accentBase}22, ${token.boxShadowSecondary}`
+        : isSalesDelivery
+          ? `0 0 0 2px ${success}22, ${token.boxShadowSecondary}`
+          : token.boxShadowTertiary;
 
   return (
     <div
@@ -181,6 +193,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
         position: 'relative',
         filter: selected ? `drop-shadow(0 0 8px ${primary}33)` : 'none',
         transition: 'filter 0.2s ease',
+        opacity: is_deleted ? 0.72 : 1,
       }}
     >
       <div
@@ -188,7 +201,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',
-          background: token.colorBgContainer,
+          background: is_deleted ? token.colorFillQuaternary : token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
           border: cardBorder,
           boxShadow: cardShadow,
@@ -243,19 +256,28 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
-            {typeTitle}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{typeTitle}</span>
+            {is_deleted ? (
+              <Tag color="error" style={{ margin: 0, lineHeight: '14px', fontSize: compact ? 8 : 9, padding: '0 4px' }}>
+                {t('components.documentTrackingPanel.relationDeleted')}
+              </Tag>
+            ) : null}
           </div>
           <div
             style={{
               fontSize: compact ? 11 : 12,
               fontWeight: 600,
-              color: token.colorText,
+              color: is_deleted ? token.colorTextQuaternary : token.colorText,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               lineHeight: 1.35,
+              textDecoration: is_deleted ? 'line-through' : undefined,
             }}
             title={displaySubtitle ? `${code}\n${displaySubtitle}` : code}
           >
@@ -332,6 +354,10 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
 
   /** 仅在追溯拓扑变化时做一次 fitView，避免选中节点反复重置缩放/平移 */
   const traceFlowViewportFitKeyRef = useRef<string>('');
+  /** fitView 完成前保持遮罩，避免画布从左上角闪跳到居中 */
+  const [traceViewportReady, setTraceViewportReady] = useState(false);
+  /** 每次主动拉取/刷新递增，迫使 FlowGraph  remount 并重新 fitView */
+  const [traceLoadSeq, setTraceLoadSeq] = useState(0);
 
   /** 全屏包裹追溯图画布（不含外层「刷新」工具条） */
   const traceChartShellRef = useRef<HTMLDivElement | null>(null);
@@ -367,6 +393,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     if (!nodeId) return;
     const meta = metaRef.current[nodeId];
     if (!meta) return;
+    if (meta.is_deleted) return;
     setSelectedGraphNodeId(nodeId);
     onDocumentClickRef.current?.(meta.document_type, meta.document_id);
   }, []);
@@ -392,10 +419,22 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     }
   );
 
+  const beginTraceReload = useCallback(() => {
+    traceFlowViewportFitKeyRef.current = '';
+    setTraceViewportReady(false);
+    setTraceLoadSeq((n) => n + 1);
+  }, []);
+
+  const reloadTrace = useCallback(() => {
+    beginTraceReload();
+    run();
+  }, [beginTraceReload, run]);
+
   useEffect(() => {
     if (!enabled || !documentType || documentId == null) return;
+    beginTraceReload();
     run();
-  }, [enabled, documentType, documentId, refreshKey, run]);
+  }, [enabled, documentType, documentId, refreshKey, beginTraceReload, run]);
 
   useEffect(() => {
     onTraceLoadingChange?.(loading);
@@ -411,8 +450,8 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
   }, [trace]);
 
   useEffect(() => {
-    traceFlowViewportFitKeyRef.current = '';
-  }, [documentType, documentId]);
+    if (loading) setTraceViewportReady(false);
+  }, [loading]);
 
   const { flowKey, graphConfig } = useMemo(() => {
     if (!trace) {
@@ -421,7 +460,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     const { nodes, edges, metaById } = traceResponseToFlowGraphData(trace, formatLabel);
     metaRef.current = metaById;
 
-    const flowKey = `${documentType}-${documentId}-${nodes.length}-${edges.length}-${refreshKey}`;
+    const flowKey = `${documentType}-${documentId}-${nodes.length}-${edges.length}-${refreshKey}-${traceLoadSeq}`;
     const viewportPadding = compact ? TRACE_FLOW_VIEWPORT_PADDING.compact : TRACE_FLOW_VIEWPORT_PADDING.normal;
     const layoutMode = compact ? 'compact' : 'normal';
     const [nodeBaseWidth] = TRACE_FLOW_NODE_BASE_SIZE[layoutMode];
@@ -459,6 +498,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
             document_code: n.meta?.document_code,
             document_name: n.meta?.document_name,
             created_at: n.meta?.created_at,
+            is_deleted: n.meta?.is_deleted,
           },
         })),
         edges: edges.map((e) => ({
@@ -486,6 +526,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               document_code?: string;
               document_name?: string;
               created_at?: string;
+              is_deleted?: boolean;
             };
             const document_type = datum?.document_type ?? '';
             const document_id = datum?.document_id ?? 0;
@@ -498,6 +539,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
                 document_name={datum?.document_name}
                 created_at={datum?.created_at}
                 is_root={!!datum?.is_root}
+                is_deleted={!!datum?.is_deleted}
                 selected={nid !== '' && nid === selectedGraphNodeId}
                 compact={compact}
               />
@@ -521,20 +563,26 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         graph.off(NodeEvent.CLICK, handleTraceFlowNodeClick);
         graph.on(NodeEvent.CLICK, handleTraceFlowNodeClick);
 
-        if (traceFlowViewportFitKeyRef.current === flowKey) return;
+        if (traceFlowViewportFitKeyRef.current === flowKey) {
+          setTraceViewportReady(true);
+          return;
+        }
 
         traceFlowViewportFitKeyRef.current = flowKey;
         const runFitView = () => {
           if (graph.destroyed) return;
-          void graph.fitView({ when: 'always', direction: 'both' }, false).then(() => {
-            if (graph.destroyed) return;
-            if (nodes.length <= 1) {
-              const z = graph.getZoom();
-              if (z > singleNodeFitMaxZoom) {
-                void graph.zoomTo(singleNodeFitMaxZoom, false);
+          void graph
+            .fitView({ when: 'always', direction: 'both' }, TRACE_FLOW_VIEWPORT_FIT_ANIM)
+            .then(async () => {
+              if (graph.destroyed) return;
+              if (nodes.length <= 1) {
+                const z = graph.getZoom();
+                if (z > singleNodeFitMaxZoom) {
+                  await graph.zoomTo(singleNodeFitMaxZoom, TRACE_FLOW_VIEWPORT_FIT_ANIM);
+                }
               }
-            }
-          });
+              setTraceViewportReady(true);
+            });
         };
         queueMicrotask(() => requestAnimationFrame(runFitView));
       },
@@ -544,7 +592,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       flowKey,
       graphConfig: config,
     };
-  }, [trace, formatLabel, documentType, documentId, refreshKey, compact, selectedGraphNodeId, handleTraceFlowNodeClick]);
+  }, [trace, formatLabel, documentType, documentId, refreshKey, traceLoadSeq, compact, selectedGraphNodeId, handleTraceFlowNodeClick]);
 
   if (!enabled) {
     return <div style={{ minHeight: compact ? 0 : 400 }} />;
@@ -574,7 +622,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               onClick={() => void toggleTraceChartFullscreen()}
             />
           </Tooltip>
-          <Button type="default" size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => run()}>
+          <Button type="default" size="small" icon={<ReloadOutlined />} loading={loading} onClick={reloadTrace}>
             {t('components.documentRelationGraph.refresh')}
           </Button>
         </Space>
@@ -600,7 +648,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               size="small"
               icon={<ReloadOutlined />}
               loading={loading}
-              onClick={() => run()}
+              onClick={reloadTrace}
             >
               {t('components.documentRelationGraph.refresh')}
             </Button>
@@ -620,7 +668,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
             </Tooltip>
           </Space>
         ) : null}
-        {loading && (
+        {loading || (trace && graphConfig && !traceViewportReady) ? (
           <div
             style={{
               position: 'absolute',
@@ -634,22 +682,33 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
           >
             <Spin size="large" />
           </div>
-        )}
+        ) : null}
         {error && !trace && (
           <div style={{ padding: 48 }}>
             <Empty description={t('components.documentRelationGraph.loadFailed')} />
           </div>
         )}
         {!loading && trace && graphConfig && (
-          <FlowGraph
-            key={flowKey}
-            {...(graphConfig as object)}
-            {...(
-              compact || traceChartFullscreen
-                ? { containerStyle: { flex: 1, minHeight: 0, height: '100%', width: '100%' } as React.CSSProperties }
-                : {}
-            )}
-          />
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              height: compact || traceChartFullscreen ? '100%' : undefined,
+              width: '100%',
+              opacity: traceViewportReady ? 1 : 0,
+              transition: traceViewportReady ? 'opacity 0.28s ease-out' : 'none',
+            }}
+          >
+            <FlowGraph
+              key={flowKey}
+              {...(graphConfig as object)}
+              {...(
+                compact || traceChartFullscreen
+                  ? { containerStyle: { flex: 1, minHeight: 0, height: '100%', width: '100%' } as React.CSSProperties }
+                  : {}
+              )}
+            />
+          </div>
         )}
       </div>
     </div>

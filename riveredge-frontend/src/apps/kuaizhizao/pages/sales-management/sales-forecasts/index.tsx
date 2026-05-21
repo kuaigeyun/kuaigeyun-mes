@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -55,24 +55,10 @@ import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import type { SubStage } from '../../../../../components/uni-lifecycle/types'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel'
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import { downloadFile } from '../../../services/common'
 import { renderRowActionsOverflow } from '../../../../../components/uni-action'
-
-/** 销售预测详情抽屉外左侧「关联全链路」浮层（与销售订单详情一致） */
-const SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN = 16
-const SALES_FORECAST_LEFT_CHAIN_GAP = 16
-const SALES_FORECAST_CHAIN_DRAWER_GAP = 16
-const SALES_FORECAST_CHAIN_VERTICAL_TRIM =
-  SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_FORECAST_LEFT_CHAIN_GAP
-const salesForecastChainHalfHeightCss = `calc((100vh - ${SALES_FORECAST_CHAIN_VERTICAL_TRIM}px) / 2)`
-const salesForecastChainPanelWidthCss = `calc(50vw - ${SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_FORECAST_CHAIN_DRAWER_GAP}px)`
-const salesForecastBriefPanelTopCss = `calc(${SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SALES_FORECAST_CHAIN_VERTICAL_TRIM}px) / 2 + ${SALES_FORECAST_LEFT_CHAIN_GAP}px)`
 
 /** 是否已下推需求计算（列表/按钮门禁） */
 function isForecastComputationPushed(record: Record<string, unknown>): boolean {
@@ -138,7 +124,6 @@ export default function SalesForecastsPage() {
 
   const { token } = AntdTheme.useToken()
   const forecastDetailDrawerZIndex = token.zIndexPopupBase
-  const forecastChainOverlayZIndex = token.zIndexPopupBase + 1
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
 
   // 与 UniTable viewTypes 同步：table=单据维度；明细表格 / 帮助 走明细数据维度
@@ -156,12 +141,6 @@ export default function SalesForecastsPage() {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null)
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
-  /** 抽屉外左侧关联全链路浮层（与销售订单详情一致） */
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0)
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false)
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  )
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
@@ -176,7 +155,8 @@ export default function SalesForecastsPage() {
   }
   const forecastTracking = useDocumentTracking(
     drawerVisible && currentForecast ? 'sales_forecast' : undefined,
-    currentForecast?.id
+    currentForecast?.id,
+    trackingRefreshKey,
   );
 
   const toFlatRows = (data: SalesForecast[]) => {
@@ -422,24 +402,6 @@ export default function SalesForecastsPage() {
     }
   }
 
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return
-      if (type === 'sales_forecast' && currentForecast?.id != null && id === currentForecast.id) {
-        setFullChainBriefDoc(null)
-        return
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id })
-    },
-    [currentForecast?.id],
-  )
-
-  useEffect(() => {
-    if (drawerVisible && currentForecast?.id != null) {
-      setFullChainBriefDoc(null)
-    }
-  }, [drawerVisible, currentForecast?.id])
-
   // 处理批量导入（UniTable 内置）
   const handleImport = async (data: any[][]) => {
     try {
@@ -648,7 +610,6 @@ export default function SalesForecastsPage() {
       invalidateStatistics();
       invalidateMenuBadge();
       setTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
       actionRef.current?.reload()
     } catch (e: any) {
       messageApi.error(e?.message || t('common.saveFailed'))
@@ -677,9 +638,8 @@ export default function SalesForecastsPage() {
           invalidateForecastCache();
           invalidateStatistics();
           invalidateMenuBadge();
-          setTrackingRefreshKey((k) => k + 1);
-          setFullChainRefreshKey((k) => k + 1);
-          actionRef.current?.reload()
+      setTrackingRefreshKey((k) => k + 1);
+      actionRef.current?.reload()
         } catch (e: any) {
           messageApi.error(e?.message || t('app.kuaizhizao.salesForecast.pushFailed'))
         }
@@ -925,9 +885,8 @@ export default function SalesForecastsPage() {
               invalidateForecastCache();
               invalidateStatistics();
               invalidateMenuBadge();
-              setTrackingRefreshKey((k) => k + 1);
-              setFullChainRefreshKey((k) => k + 1);
-              actionRef.current?.reload();
+      setTrackingRefreshKey((k) => k + 1);
+      actionRef.current?.reload();
             }}
           />
         );
@@ -1490,161 +1449,35 @@ export default function SalesForecastsPage() {
         />
       </Modal>
 
-      {drawerVisible && currentForecast?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
-              top: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
-              width: salesForecastChainPanelWidthCss,
-              height: salesForecastChainHalfHeightCss,
-              zIndex: forecastChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: 13,
-                      color: 'var(--ant-color-text)',
-                    }}
-                  >
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="sales_forecast"
-                documentId={currentForecast.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
-              top: salesForecastBriefPanelTopCss,
-              width: salesForecastChainPanelWidthCss,
-              height: salesForecastChainHalfHeightCss,
-              zIndex: forecastChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'quotation' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false)
-                        navigate('/apps/kuaizhizao/sales-management/quotations', {
-                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
-                        })
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.salesForecast.detailTitle')}${currentForecast?.forecast_code ? ` - ${currentForecast.forecast_code}` : ''}`}
         open={drawerVisible}
         zIndex={forecastDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
-          setFullChainBriefDoc(null)
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={currentForecast || {}}
+        traceDocument={
+          currentForecast?.id != null
+            ? {
+                documentType: 'sales_forecast',
+                documentId: currentForecast.id,
+                selfDocumentId: currentForecast.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false)
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         footer={
           currentForecast && salesNodesEnabled.demand_computation
             ? (() => {
@@ -1728,9 +1561,8 @@ export default function SalesForecastsPage() {
                   invalidateForecastCache();
                   invalidateStatistics();
                   invalidateMenuBadge();
-                  setTrackingRefreshKey((k) => k + 1);
-                  setFullChainRefreshKey((k) => k + 1);
-                  actionRef.current?.reload();
+      setTrackingRefreshKey((k) => k + 1);
+      actionRef.current?.reload();
                   setDrawerVisible(false);
                 }}
                 actions={{

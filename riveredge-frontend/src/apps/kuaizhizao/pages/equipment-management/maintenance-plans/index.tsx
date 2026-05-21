@@ -8,7 +8,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
@@ -23,7 +23,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty, Spin, theme as AntdTheme } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -38,22 +38,8 @@ import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
-import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
-
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
-const MP_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const MP_DETAIL_LEFT_CHAIN_GAP = 16;
-const MP_DETAIL_CHAIN_DRAWER_GAP = 16;
-const MP_DETAIL_CHAIN_VERTICAL_TRIM = MP_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MP_DETAIL_LEFT_CHAIN_GAP;
-const mpDetailChainHalfHeightCss = `calc((100vh - ${MP_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const mpDetailChainPanelWidthCss = `calc(50vw - ${MP_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MP_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const mpDetailBriefPanelTopCss = `calc(${MP_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${MP_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${MP_DETAIL_LEFT_CHAIN_GAP}px)`;
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -115,7 +101,6 @@ const MaintenancePlansPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const planDetailDrawerZIndex = token.zIndexPopupBase;
-  const planChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -130,23 +115,6 @@ const MaintenancePlansPage: React.FC = () => {
   const [planDetail, setPlanDetail] = useState<MaintenancePlan | null>(null);
 
   const [planTrackingRefreshKey, setPlanTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'maintenance_plan' && planDetail?.id != null && id === planDetail.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [planDetail],
-  );
 
   const planTracking = useDocumentTracking(
     drawerVisible && planDetail?.id ? 'maintenance_plan' : undefined,
@@ -205,7 +173,6 @@ const MaintenancePlansPage: React.FC = () => {
    */
   const handleDetail = async (record: MaintenancePlan) => {
     try {
-      setFullChainBriefDoc(null);
       if (!record.uuid) {
         messageApi.error('维护计划UUID不存在');
         return;
@@ -214,7 +181,6 @@ const MaintenancePlansPage: React.FC = () => {
       setPlanDetail(detail);
       setDrawerVisible(true);
       setPlanTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取维护计划详情失败');
     }
@@ -237,7 +203,6 @@ const MaintenancePlansPage: React.FC = () => {
           if (planDetail?.uuid && keys.map(String).includes(String(planDetail.uuid))) {
             setDrawerVisible(false);
             setPlanDetail(null);
-            setFullChainBriefDoc(null);
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -275,7 +240,6 @@ const MaintenancePlansPage: React.FC = () => {
           const fresh = await maintenancePlanApi.get(editedUuid);
           setPlanDetail(fresh);
           setPlanTrackingRefreshKey((k) => k + 1);
-          setFullChainRefreshKey((k) => k + 1);
         } catch {
           /* ignore */
         }
@@ -801,117 +765,6 @@ const MaintenancePlansPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      {drawerVisible && planDetail?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: MP_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: MP_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: mpDetailChainPanelWidthCss,
-              height: mpDetailChainHalfHeightCss,
-              zIndex: planChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="maintenance_plan"
-                documentId={planDetail.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: MP_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: mpDetailBriefPanelTopCss,
-              width: mpDetailChainPanelWidthCss,
-              height: mpDetailChainHalfHeightCss,
-              zIndex: planChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            <EquipmentTraceBriefFooter
-              brief={fullChainBriefDoc}
-              t={t}
-              navigate={navigate}
-              closeDrawer={() => {
-                setDrawerVisible(false);
-                setPlanDetail(null);
-                setFullChainBriefDoc(null);
-              }}
-              onDismissBrief={() => setFullChainBriefDoc(null)}
-            />
-          </div>
-        </>
-      ) : null}
-
       {/* 维护计划详情 Drawer */}
       <DetailDrawerTemplate
         title="维护计划详情"
@@ -920,11 +773,31 @@ const MaintenancePlansPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setPlanDetail(null);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={3}
+        dataSource={planDetail || undefined}
+        traceDocument={
+          planDetail?.id != null
+            ? {
+                documentType: 'maintenance_plan',
+                documentId: planDetail.id,
+                selfDocumentId: planDetail.id,
+                renderBriefActions: (doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setPlanDetail(null);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         customContent={
           planDetail ? (
             <>

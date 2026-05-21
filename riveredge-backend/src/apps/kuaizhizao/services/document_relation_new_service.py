@@ -543,6 +543,13 @@ class DocumentRelationNewService:
                 document_name=rel.source_name,
                 created_at=rel.created_at,
                 level=level + 1,
+                is_deleted=await self._resolve_trace_node_deleted(
+                    tenant_id,
+                    rel.source_type,
+                    rel.source_id,
+                    rel.source_code,
+                    rel.created_at,
+                ),
                 children=children
             ))
         
@@ -585,6 +592,13 @@ class DocumentRelationNewService:
                 document_name=rel.target_name,
                 created_at=rel.created_at,
                 level=level + 1,
+                is_deleted=await self._resolve_trace_node_deleted(
+                    tenant_id,
+                    rel.target_type,
+                    rel.target_id,
+                    rel.target_code,
+                    rel.created_at,
+                ),
                 children=children
             ))
         
@@ -667,6 +681,28 @@ class DocumentRelationNewService:
         merged_children = filtered2[:idx] + [synth] + filtered2[idx:]
         return base.model_copy(update={"children": merged_children})
     
+    async def _resolve_trace_node_deleted(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        document_code: Optional[str] = None,
+        relation_created_at: Optional[datetime] = None,
+    ) -> bool:
+        """追溯节点是否已删除（与单据跟踪上下游 flags 一致）。"""
+        if document_type == "reporting_timeline":
+            return False
+        from core.services.document_tracking_service import DocumentTrackingService
+
+        flags = await DocumentTrackingService()._resolve_relation_flags(
+            tenant_id=tenant_id,
+            relation_type=document_type,
+            relation_id=document_id,
+            relation_created_at=relation_created_at,
+            relation_code=document_code,
+        )
+        return bool(flags.get("is_deleted"))
+
     async def _get_document_info(
         self,
         tenant_id: int,

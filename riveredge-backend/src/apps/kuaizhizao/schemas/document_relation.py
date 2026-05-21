@@ -107,6 +107,7 @@ class DocumentTraceNode(BaseModel):
     document_name: Optional[str] = Field(None, description="单据名称")
     created_at: Optional[datetime] = Field(None, description="单据创建时间")
     level: int = Field(..., description="层级（从根节点开始的层级）")
+    is_deleted: bool = Field(False, description="关联单据是否已软删除或不存在")
     children: List["DocumentTraceNode"] = Field(default_factory=list, description="子节点（下游或上游）")
     reporting_timeline: List[DocumentTraceReportingEntry] = Field(
         default_factory=list,

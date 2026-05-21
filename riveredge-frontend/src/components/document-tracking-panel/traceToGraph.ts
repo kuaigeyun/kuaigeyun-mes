@@ -20,6 +20,8 @@ export interface TraceGraphNodeMeta {
   created_at?: string;
   /** 是否为当前查看的单据 */
   is_root?: boolean;
+  /** 关联单据是否已删除 */
+  is_deleted?: boolean;
   /** 合并报工时间线（仅 reporting_timeline） */
   reporting_timeline?: DocumentTraceReportingEntry[];
 }
@@ -56,6 +58,7 @@ function upsertNode(map: Map<string, TraceGraphNodeMeta>, meta: TraceGraphNodeMe
   if (meta.document_name && !prev.document_name) prev.document_name = meta.document_name;
   if (meta.created_at && !prev.created_at) prev.created_at = meta.created_at;
   if (meta.is_root) prev.is_root = true;
+  if (meta.is_deleted) prev.is_deleted = true;
   if (meta.reporting_timeline !== undefined && meta.reporting_timeline !== null) {
     prev.reporting_timeline = meta.reporting_timeline;
   }
@@ -133,6 +136,7 @@ function walkUpstream(
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
     created_at: node.created_at ?? undefined,
+    is_deleted: node.is_deleted ?? undefined,
     reporting_timeline: node.reporting_timeline ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
@@ -156,6 +160,7 @@ function walkDownstream(
     document_code: node.document_code ?? undefined,
     document_name: node.document_name ?? undefined,
     created_at: node.created_at ?? undefined,
+    is_deleted: node.is_deleted ?? undefined,
     reporting_timeline: node.reporting_timeline ?? undefined,
   });
   const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);

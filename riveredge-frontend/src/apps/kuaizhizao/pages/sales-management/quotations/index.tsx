@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateSalesOrderList';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -59,9 +60,7 @@ import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetai
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
-  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
@@ -288,9 +287,6 @@ const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 
 /** 报价单详情内打开下游销售订单时：二层抽屉宽度（zIndex 见组件内 token.zIndexPopupBase + 50） */
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
-
-/** 详情抽屉内嵌全链路图固定高度 */
-const QUOTATION_INLINE_FULL_CHAIN_HEIGHT = 360;
 
 /** 列表树形行（antd Table children） */
 type QuotationTableRow = Quotation & { children?: QuotationTableRow[] };
@@ -578,15 +574,12 @@ const QuotationsPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>('mine');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const invalidateSalesOrderList = useInvalidateSalesOrderList();
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
-  /** 点击全链路节点后在图下方展示关联单据简览 */
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null
-  );
   const quotationTracking = useDocumentTracking(
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
@@ -994,7 +987,6 @@ const QuotationsPage: React.FC = () => {
     try {
       const res = await getQuotation(id);
       if (res) {
-        setFullChainBriefDoc(null);
         setQuotationDetail(res);
         setDetailDrawerVisible(true);
       }
@@ -1013,7 +1005,6 @@ const QuotationsPage: React.FC = () => {
       try {
         const res = await getQuotation(id);
         if (res) {
-          setFullChainBriefDoc(null);
           setQuotationDetail(res);
           setDetailDrawerVisible(true);
         }
@@ -1412,8 +1403,43 @@ const QuotationsPage: React.FC = () => {
       onOk: async () => {
         try {
           const res = await convertQuotationToOrder(record.id!);
-          messageApi.success(`已转为销售订单：${res.sales_order?.order_code || ''}`);
+          const salesOrderId = res.sales_order?.id;
+          const orderCode = res.sales_order?.order_code || '';
+          messageApi.success({
+            content: (
+              <span>
+                已转为销售订单：
+                {salesOrderId ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={async () => {
+                      setLinkedSalesOrderDrawerOpen(true);
+                      setLinkedSalesOrder(null);
+                      setLinkedSalesOrderLoading(true);
+                      try {
+                        const data = await getSalesOrder(salesOrderId, true, true);
+                        setLinkedSalesOrder(data);
+                      } catch (e: any) {
+                        messageApi.error(e?.message || e?.detail || '加载销售订单失败');
+                        setLinkedSalesOrderDrawerOpen(false);
+                      } finally {
+                        setLinkedSalesOrderLoading(false);
+                      }
+                    }}
+                  >
+                    {orderCode}
+                  </Button>
+                ) : (
+                  orderCode
+                )}
+              </span>
+            ),
+            duration: 6,
+          });
           invalidateMenuBadgeCounts();
+          invalidateSalesOrderList();
 
           actionRef.current?.reload();
           closeQuotationDetailDrawer();
@@ -2073,101 +2099,6 @@ const QuotationsPage: React.FC = () => {
     [messageApi]
   );
 
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'quotation' && quotationDetail?.id != null && id === quotationDetail.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [quotationDetail?.id]
-  );
-
-  const quotationInlineFullChain = useMemo(() => {
-    if (!quotationDetail?.id) return undefined;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-        <div
-          style={{
-            width: '100%',
-            height: QUOTATION_INLINE_FULL_CHAIN_HEIGHT,
-            display: 'flex',
-            flexDirection: 'column',
-            border: '1px solid var(--ant-color-border-secondary)',
-            borderRadius: token.borderRadiusLG,
-            overflow: 'hidden',
-            background: 'var(--ant-color-fill-quaternary)',
-          }}
-        >
-          <DocumentTrackingRelationsTabsBody
-            documentType="quotation"
-            documentId={quotationDetail.id as number}
-            onDocumentClick={onFullChainGraphNodeClick}
-            compact
-            hideInlineRefresh
-          />
-        </div>
-        {fullChainBriefDoc ? (
-          <div
-            style={{
-              border: '1px solid var(--ant-color-border-secondary)',
-              borderRadius: token.borderRadiusLG,
-              padding: 12,
-              background: 'var(--ant-color-bg-container)',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <TraceLinkedDocumentBrief
-              documentType={fullChainBriefDoc.document_type}
-              documentId={fullChainBriefDoc.document_id}
-              compactChrome
-            />
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-              <Space wrap>
-                <Button size="small" onClick={() => setFullChainBriefDoc(null)}>
-                  {t('components.documentTrackingPanel.traceBriefDismiss')}
-                </Button>
-                {fullChainBriefDoc.document_type === 'sales_order' ? (
-                  <Button
-                    type="primary"
-                    size="small"
-                    onClick={() => openLinkedSalesOrderDrawer(fullChainBriefDoc.document_id)}
-                  >
-                    {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                  </Button>
-                ) : null}
-              </Space>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  }, [
-    fullChainBriefDoc,
-    onFullChainGraphNodeClick,
-    openLinkedSalesOrderDrawer,
-    quotationDetail?.id,
-    t,
-    token.borderRadiusLG,
-  ]);
-
-  useEffect(() => {
-    if (detailDrawerVisible && quotationDetail?.id != null) {
-      setFullChainBriefDoc(null);
-    }
-  }, [detailDrawerVisible, quotationDetail?.id]);
-
   const closeLinkedSalesOrderDrawer = useCallback(() => {
     setLinkedSalesOrderDrawerOpen(false);
     setLinkedSalesOrder(null);
@@ -2175,7 +2106,6 @@ const QuotationsPage: React.FC = () => {
   }, []);
 
   const closeQuotationDetailDrawer = useCallback(() => {
-    setFullChainBriefDoc(null);
     closeLinkedSalesOrderDrawer();
     setDetailDrawerVisible(false);
     setQuotationDetail(null);
@@ -3106,26 +3036,30 @@ const QuotationsPage: React.FC = () => {
               })()
             : undefined
         }
-        collaborationRelations={quotationInlineFullChain}
+        traceDocument={
+          quotationDetail?.id != null
+            ? {
+                documentType: 'quotation',
+                documentId: quotationDetail.id,
+                selfDocumentId: quotationDetail.id,
+                renderBriefActions: (doc) =>
+                  doc.document_type === 'sales_order' ? (
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                    </Button>
+                  ) : null,
+              }
+            : null
+        }
         lines={
           quotationDetail ? (
             <>
-              {/*
-                横滚仅在外层；内层表体覆盖 global.less 的 overflow-x:auto 以免出现竖向滚动条。
-                外层 overflow-x:auto + overflow-y:hidden，避免同元素 visible/auto 配对问题。
-              */}
-              <style>{`
-                .quotation-detail-drawer-items .ant-table-wrapper .ant-table-body,
-                .quotation-detail-drawer-items .ant-table-wrapper .ant-table-content {
-                  overflow: visible !important;
-                }
-              `}</style>
               {quotationDetail.items && quotationDetail.items.length > 0 ? (
-                <div
-                  className="quotation-detail-drawer-items"
-                  style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                >
-                  <Table
+                <Table
                     size="small"
                     rowKey="id"
                     tableLayout="fixed"
@@ -3220,7 +3154,6 @@ const QuotationsPage: React.FC = () => {
                     dataSource={quotationDetail.items}
                     pagination={false}
                   />
-                </div>
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
               )}

@@ -1,0 +1,16 @@
+/** uni-detail 明细区：外层横滚，内层表体避免竖向滚动条 */
+.uni-detail-lines-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.uni-detail-lines-scroll .ant-table-wrapper .ant-table-body,
+.uni-detail-lines-scroll .ant-table-wrapper .ant-table-content {
+  overflow: visible !important;
+}
+
+.uni-detail-lines-scroll .ant-table-thead > tr > th {
+  white-space: nowrap;
+}

@@ -30,7 +30,6 @@ import {
   App,
   Button,
   Tag,
-  Space,
   Divider,
   Modal,
   Descriptions,
@@ -40,7 +39,7 @@ import {
   Spin,
   theme as AntdTheme,
 } from 'antd';
-import { EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -59,12 +58,8 @@ import { SimpleSparkline } from '../../../../../components';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -74,16 +69,6 @@ import { useGlobalStore } from '../../../../../stores/globalStore';
 import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
-import { ROUTES } from '../../../constants/routes';
-
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
-const OWO_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const OWO_DETAIL_LEFT_CHAIN_GAP = 16;
-const OWO_DETAIL_CHAIN_DRAWER_GAP = 16;
-const OWO_DETAIL_CHAIN_VERTICAL_TRIM = OWO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + OWO_DETAIL_LEFT_CHAIN_GAP;
-const owoDetailChainHalfHeightCss = `calc((100vh - ${OWO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const owoDetailChainPanelWidthCss = `calc(50vw - ${OWO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + OWO_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const owoDetailBriefPanelTopCss = `calc(${OWO_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${OWO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${OWO_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -190,7 +175,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const outsourceWorkOrderDetailDrawerZIndex = token.zIndexPopupBase;
-  const outsourceWorkOrderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -217,23 +201,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [workOrderDetail, setWorkOrderDetail] = useState<OutsourceWorkOrder | null>(null);
 
   const [owoTrackingRefreshKey, setOwoTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'outsource_work_order' && workOrderDetail?.id != null && id === workOrderDetail.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [workOrderDetail],
-  );
 
   const outsourceWorkOrderTracking = useDocumentTracking(
     drawerVisible && workOrderDetail?.id ? 'outsource_work_order' : undefined,
@@ -633,12 +600,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
    */
   const handleDetail = async (record: OutsourceWorkOrder) => {
     try {
-      setFullChainBriefDoc(null);
       const detail = await outsourceWorkOrderApi.get(record.id!.toString());
       setWorkOrderDetail(detail);
       setDrawerVisible(true);
       setOwoTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取工单委外详情失败');
     }
@@ -739,7 +704,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           const fresh = await outsourceWorkOrderApi.get(String(wid));
           setWorkOrderDetail(fresh);
           setOwoTrackingRefreshKey((k) => k + 1);
-          setFullChainRefreshKey((k) => k + 1);
         } catch {
           /* ignore */
         }
@@ -1428,220 +1392,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
       </FormModalTemplate >
 
-      {drawerVisible && workOrderDetail?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: OWO_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: OWO_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: owoDetailChainPanelWidthCss,
-              height: owoDetailChainHalfHeightCss,
-              zIndex: outsourceWorkOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="outsource_work_order"
-                documentId={workOrderDetail.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: OWO_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: owoDetailBriefPanelTopCss,
-              width: owoDetailChainPanelWidthCss,
-              height: owoDetailChainHalfHeightCss,
-              zIndex: outsourceWorkOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.PURCHASE_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', {
-                        defaultValue: '前往采购订单',
-                      })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'sales_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.SALES_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'demand' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.DEMAND_MANAGEMENT);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'purchase_requisition' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.PURCHASE_REQUISITIONS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
-                        defaultValue: '前往采购申请',
-                      })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'outsource_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.OUTSOURCE_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceOrder', {
-                        defaultValue: '前往工序委外',
-                      })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'outsource_work_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.OUTSOURCE_WORK_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceWorkOrder', {
-                        defaultValue: '前往工单委外',
-                      })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'rework_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.REWORK_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenReworkOrder', { defaultValue: '前往返工单' })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'work_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(ROUTES.WORK_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`工单委外详情${workOrderDetail?.code ? ` - ${workOrderDetail.code}` : ''}`}
         open={drawerVisible}
@@ -1649,12 +1399,31 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setWorkOrderDetail(null);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={3}
         dataSource={workOrderDetail || undefined}
+        traceDocument={
+          workOrderDetail?.id != null
+            ? {
+                documentType: 'outsource_work_order',
+                documentId: workOrderDetail.id,
+                selfDocumentId: workOrderDetail.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                      setWorkOrderDetail(null);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         customContent={
           workOrderDetail && (
             <>

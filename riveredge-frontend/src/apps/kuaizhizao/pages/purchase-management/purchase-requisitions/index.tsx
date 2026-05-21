@@ -15,7 +15,6 @@ import {
   CopyOutlined,
   PlusOutlined,
   AppstoreAddOutlined,
-  ReloadOutlined,
   DownOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -54,12 +53,8 @@ import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequ
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  useDocumentTracking,
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-} from '../../../../../components/document-tracking-panel';
+import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { PriceHistoryInsight } from '../purchase-orders/ProcurementEmpowermentComponents';
@@ -69,15 +64,6 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
-
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
-const PRQ_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const PRQ_DETAIL_LEFT_CHAIN_GAP = 16;
-const PRQ_DETAIL_CHAIN_DRAWER_GAP = 16;
-const PRQ_DETAIL_CHAIN_VERTICAL_TRIM = PRQ_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PRQ_DETAIL_LEFT_CHAIN_GAP;
-const prqDetailChainHalfHeightCss = `calc((100vh - ${PRQ_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const prqDetailChainPanelWidthCss = `calc(50vw - ${PRQ_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PRQ_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const prqDetailBriefPanelTopCss = `calc(${PRQ_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PRQ_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PRQ_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 const INITIAL_PR_FORM_ITEM_ROW = {
   material_id: undefined,
@@ -116,7 +102,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
-  const prqChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -139,35 +124,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
   const [prTrackingRefreshKey, setPrTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
 
   const prTracking = useDocumentTracking(
     detailVisible ? 'purchase_requisition' : undefined,
     detailVisible ? currentReq?.id : undefined,
     prTrackingRefreshKey,
   );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'purchase_requisition' && currentReq?.id != null && id === currentReq.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [currentReq?.id],
-  );
-
-  useEffect(() => {
-    if (detailVisible && currentReq?.id != null) {
-      setFullChainBriefDoc(null);
-    }
-  }, [detailVisible, currentReq?.id]);
 
   useEffect(() => {
     supplierApi.list?.({ isActive: true } as any).then((res: any) => {
@@ -764,7 +726,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setCurrentReq(detail);
       setDetailVisible(true);
       setPrTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch {
       messageApi.error('获取详情失败');
     }
@@ -1482,135 +1443,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {detailVisible && currentReq?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: PRQ_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: PRQ_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: prqDetailChainPanelWidthCss,
-              height: prqDetailChainHalfHeightCss,
-              zIndex: prqChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="purchase_requisition"
-                documentId={currentReq.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: PRQ_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: prqDetailBriefPanelTopCss,
-              width: prqDetailChainPanelWidthCss,
-              height: prqDetailChainHalfHeightCss,
-              zIndex: prqChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailVisible(false);
-                        navigate(ROUTES.PURCHASE_ORDERS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`采购申请详情 - ${currentReq?.requisition_code || ''}`}
         open={detailVisible}
@@ -1618,11 +1450,30 @@ const PurchaseRequisitionsPage: React.FC = () => {
         onClose={() => {
           setDetailVisible(false);
           setCurrentReq(null);
-          setFullChainBriefDoc(null);
         }}
         dataSource={currentReq || undefined}
         columns={[]}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        traceDocument={
+          currentReq?.id != null
+            ? {
+                documentType: 'purchase_requisition',
+                documentId: currentReq.id,
+                selfDocumentId: currentReq.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailVisible(false);
+                      setCurrentReq(null);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         extra={
           currentReq && (
             <DetailDrawerActions
@@ -1683,7 +1534,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
                       actionRef.current?.reload();
                       setPrTrackingRefreshKey((k) => k + 1);
-                      setFullChainRefreshKey((k) => k + 1);
                       if (currentReq?.id) {
                         try {
                           const res = await getPurchaseRequisition(currentReq.id);
@@ -1724,7 +1574,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           const res = await fixPurchaseRequisitionStatus(currentReq.id);
                           setCurrentReq(res);
                           setPrTrackingRefreshKey((k) => k + 1);
-                          setFullChainRefreshKey((k) => k + 1);
                           invalidateMenuBadgeCounts();
 
                           actionRef.current?.reload();

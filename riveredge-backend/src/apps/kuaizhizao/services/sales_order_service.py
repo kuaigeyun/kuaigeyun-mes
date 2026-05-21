@@ -777,6 +777,35 @@ class SalesOrderService:
             dp = self._merged_delivery_progress(order, list(items), shipped_by.get(order.id, Decimal("0")))
             return self._order_to_response(order, items=items, demand=demand, delivery_progress=dp)
 
+    async def apply_push_default_mode_after_create(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        push_mode: Optional[str] = None,
+    ) -> SalesOrderResponse:
+        """
+        下推创建销售订单后，按业务自动化「下推默认生成方式」处理：
+        - draft: 保持草稿
+        - confirm: 自动提交（无审核→已确认，有审核→待审核）
+        """
+        raw = (push_mode or "").strip().lower()
+        if raw not in ("draft", "confirm"):
+            raw = await self.business_config_service.get_push_default_mode(tenant_id)
+        logger.info(
+            "销售订单 {} 下推后处理: push_mode={} resolved={}",
+            sales_order_id,
+            push_mode,
+            raw,
+        )
+        if raw != "confirm":
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        return await self.submit_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            submitted_by=created_by,
+        )
+
     async def get_sales_order_by_id(
         self,
         tenant_id: int,

@@ -4,26 +4,24 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, ReloadOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
-  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { WarehouseTraceBriefFooter } from '../WarehouseTraceBriefFooter';
+import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import CodeField from '../../../../../components/code-field';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi, workOrderApi } from '../../../services/production';
@@ -96,15 +94,6 @@ function parseSalesDeliveryConfirmResult(raw: unknown): { status?: string } {
   return {};
 }
 
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
-const WM_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const WM_DETAIL_LEFT_CHAIN_GAP = 16;
-const WM_DETAIL_CHAIN_DRAWER_GAP = 16;
-const WM_DETAIL_CHAIN_VERTICAL_TRIM = WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_LEFT_CHAIN_GAP;
-const wmDetailChainHalfHeightCss = `calc((100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const wmDetailChainPanelWidthCss = `calc(50vw - ${WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const wmDetailBriefPanelTopCss = `calc(${WM_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${WM_DETAIL_LEFT_CHAIN_GAP}px)`;
-
 function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking' | 'sales_delivery' {
   return order.outbound_type === 'sales_delivery' ? 'sales_delivery' : 'production_picking';
 }
@@ -114,7 +103,6 @@ const OutboundPage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = AntdTheme.useToken();
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
-  const outboundChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const pullFromWorkOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_work_order');
   const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_sales_order');
@@ -129,11 +117,6 @@ const OutboundPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
 
   // 批量出库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
@@ -227,19 +210,6 @@ const OutboundPage: React.FC = () => {
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      const selfType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
-      if (selfType && type === selfType && currentOrder?.id != null && id === currentOrder.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [currentOrder],
-  );
 
   useEffect(() => {
     const loadExecutionConfig = async () => {
@@ -378,7 +348,6 @@ const OutboundPage: React.FC = () => {
    */
   const handleDetail = async (record: OutboundOrder) => {
     try {
-      setFullChainBriefDoc(null);
       let detailData;
       if (record.outbound_type === 'production_picking') {
         detailData = await warehouseApi.productionPicking.get(record.id!.toString());
@@ -388,7 +357,6 @@ const OutboundPage: React.FC = () => {
       setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : null);
       setDetailDrawerVisible(true);
       setOutboundTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch {
       messageApi.error('获取出库单详情失败');
     }
@@ -412,7 +380,6 @@ const OutboundPage: React.FC = () => {
       }
     }
     setOutboundTrackingRefreshKey((k) => k + 1);
-    setFullChainRefreshKey((k) => k + 1);
   };
 
   const openSalesDeliveryConfirmModal = async (record: OutboundOrder) => {
@@ -1088,117 +1055,6 @@ const OutboundPage: React.FC = () => {
         </Form>
       </Modal>
 
-      {detailDrawerVisible && currentOrder?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: WM_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: wmDetailChainPanelWidthCss,
-              height: wmDetailChainHalfHeightCss,
-              zIndex: outboundChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType={outboundDocumentTrackingType(currentOrder)}
-                documentId={currentOrder.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: wmDetailBriefPanelTopCss,
-              width: wmDetailChainPanelWidthCss,
-              height: wmDetailChainHalfHeightCss,
-              zIndex: outboundChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            <WarehouseTraceBriefFooter
-              brief={fullChainBriefDoc}
-              t={t}
-              navigate={navigate}
-              closeDrawer={() => {
-                setDetailDrawerVisible(false);
-                setCurrentOrder(null);
-                setFullChainBriefDoc(null);
-              }}
-              onDismissBrief={() => setFullChainBriefDoc(null)}
-            />
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
@@ -1206,10 +1062,29 @@ const OutboundPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        traceDocument={
+          currentOrder?.id != null
+            ? {
+                documentType: outboundDocumentTrackingType(currentOrder),
+                documentId: currentOrder.id,
+                selfDocumentId: currentOrder.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setCurrentOrder(null);
+                    }}
+                  />
+                ),
+              }
+            : null
+        }
         extra={
           currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') && (
             <Button

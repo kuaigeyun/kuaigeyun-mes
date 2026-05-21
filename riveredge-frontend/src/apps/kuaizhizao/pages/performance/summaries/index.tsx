@@ -2,13 +2,13 @@
  * 绩效汇总页面
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table, Spin, Empty, theme as AntdTheme } from 'antd';
-import { CalculatorOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CalculatorOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -19,31 +19,17 @@ import {
   DRAWER_CONFIG,
   ListPageTemplate,
 } from '../../../../../components/layout-templates';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
-import { PerformanceTraceBriefFooter } from '../PerformanceTraceBriefFooter';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
-
-const PERF_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const PERF_DETAIL_LEFT_CHAIN_GAP = 16;
-const PERF_DETAIL_CHAIN_DRAWER_GAP = 16;
-const PERF_DETAIL_CHAIN_VERTICAL_TRIM = PERF_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PERF_DETAIL_LEFT_CHAIN_GAP;
-const perfDetailChainHalfHeightCss = `calc((100vh - ${PERF_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const perfDetailChainPanelWidthCss = `calc(50vw - ${PERF_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PERF_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const perfDetailBriefPanelTopCss = `calc(${PERF_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PERF_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PERF_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 const SummariesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token } = AntdTheme.useToken();
   const summaryDrawerZIndex = token.zIndexPopupBase;
-  const summaryChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [period, setPeriod] = useState<string>(dayjs().format('YYYY-MM'));
@@ -55,11 +41,6 @@ const SummariesPage: React.FC = () => {
   const [calcLoading, setCalcLoading] = useState(false);
   const [summaryTrackingId, setSummaryTrackingId] = useState<number | null>(null);
   const [summaryTrackingRefreshKey, setSummaryTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
 
   const summaryTracking = useDocumentTracking(
     drawerVisible && summaryTrackingId != null ? 'performance_summary' : undefined,
@@ -67,20 +48,10 @@ const SummariesPage: React.FC = () => {
     summaryTrackingRefreshKey,
   );
 
-  const onFullChainGraphNodeClick = useCallback((type: string, id: number) => {
-    if (!id) return;
-    if (type === 'performance_summary' && summaryTrackingId != null && id === summaryTrackingId) {
-      setFullChainBriefDoc(null);
-      return;
-    }
-    setFullChainBriefDoc({ document_type: type, document_id: id });
-  }, [summaryTrackingId]);
-
   const closeDrawer = () => {
     setDrawerVisible(false);
     setDetail(null);
     setSummaryTrackingId(null);
-    setFullChainBriefDoc(null);
   };
 
   useEffect(() => {
@@ -96,7 +67,6 @@ const SummariesPage: React.FC = () => {
       messageApi.success('计算完成');
       actionRef.current?.reload();
       setSummaryTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch (e: any) {
       messageApi.error(e?.message || '计算失败');
     } finally {
@@ -106,7 +76,6 @@ const SummariesPage: React.FC = () => {
 
   const handleViewDetail = async (record: PerformanceSummary) => {
     try {
-      setFullChainBriefDoc(null);
       setSummaryTrackingId(record.id);
       setDrawerVisible(true);
       setDetailLoading(true);
@@ -116,7 +85,6 @@ const SummariesPage: React.FC = () => {
         setSummaryTrackingId(d.summary.id);
       }
       setSummaryTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch (e: any) {
       messageApi.error(e?.message || '加载失败');
     } finally {
@@ -260,112 +228,6 @@ const SummariesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {drawerVisible && summaryTrackingId != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: PERF_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: PERF_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: perfDetailChainPanelWidthCss,
-              height: perfDetailChainHalfHeightCss,
-              zIndex: summaryChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="performance_summary"
-                documentId={summaryTrackingId}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: PERF_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: perfDetailBriefPanelTopCss,
-              width: perfDetailChainPanelWidthCss,
-              height: perfDetailChainHalfHeightCss,
-              zIndex: summaryChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            <PerformanceTraceBriefFooter
-              brief={fullChainBriefDoc}
-              t={t}
-              navigate={navigate}
-              closeDrawer={closeDrawer}
-              onDismissBrief={() => setFullChainBriefDoc(null)}
-            />
-          </div>
-        </>
-      ) : null}
-
       <DetailDrawerTemplate
         title={`绩效明细 - ${detail?.employee_name || ''} ${detail?.period || ''}`}
         open={drawerVisible}
@@ -374,6 +236,23 @@ const SummariesPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        traceDocument={
+          summaryTrackingId != null
+            ? {
+                documentType: 'performance_summary',
+                documentId: summaryTrackingId,
+                selfDocumentId: summaryTrackingId,
+                renderBriefActions: (doc) => (
+                  <PerformanceTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={closeDrawer}
+                  />
+                ),
+              }
+            : null
+        }
         customContent={
           detailLoading && !detail ? (
             <div style={{ textAlign: 'center', padding: 48 }}>

@@ -10,9 +10,10 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -112,21 +113,7 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { renderRowActionsOverflow } from '../../../../../components/uni-action';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
-import {
-  DocumentTrackingRelationsTabsBody,
-  TraceLinkedDocumentBrief,
-} from '../../../../../components/document-tracking-panel';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-
-/** 销售订单详情抽屉外左侧「关联全链路」浮层布局（zIndex 见页面内 theme.zIndexPopupBase + 1） */
-const SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN = 16;
-const SALES_ORDER_LEFT_CHAIN_GAP = 16;
-const SALES_ORDER_CHAIN_DRAWER_GAP = 16;
-const SALES_ORDER_CHAIN_VERTICAL_TRIM =
-  SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_ORDER_LEFT_CHAIN_GAP;
-const salesOrderChainHalfHeightCss = `calc((100vh - ${SALES_ORDER_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const salesOrderChainPanelWidthCss = `calc(50vw - ${SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_ORDER_CHAIN_DRAWER_GAP}px)`;
-const salesOrderBriefPanelTopCss = `calc(${SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SALES_ORDER_CHAIN_VERTICAL_TRIM}px) / 2 + ${SALES_ORDER_LEFT_CHAIN_GAP}px)`;
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -437,6 +424,19 @@ const SalesOrdersPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] });
   };
 
+  const listRefreshVersion = useListPageRefreshStore(
+    (s) => s.versions[LIST_PAGE_REFRESH_KEYS.salesOrders] ?? 0,
+  );
+  const listRefreshHandledRef = useRef(0);
+  useEffect(() => {
+    if (listRefreshVersion <= listRefreshHandledRef.current) return;
+    listRefreshHandledRef.current = listRefreshVersion;
+    invalidateOrdersCache();
+    invalidateMenuBadge();
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [listRefreshVersion, invalidateMenuBadge]);
+
   const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
     queryKey: ['salesOrderStatistics', location.pathname],
@@ -447,7 +447,6 @@ const SalesOrdersPage: React.FC = () => {
 
   const { token } = AntdTheme.useToken();
   const salesOrderDetailDrawerZIndex = token.zIndexPopupBase;
-  const salesOrderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const elevatedModalZIndex = token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET;
   const nestedElevatedPopupZIndex = elevatedModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
@@ -492,12 +491,6 @@ const SalesOrdersPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
-  /** 抽屉外左侧关联全链路浮层（与报价单详情交互一致） */
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
 
   // 提醒弹窗状态
   const [reminderModalOpen, setReminderModalOpen] = useState(false);
@@ -1528,7 +1521,6 @@ const SalesOrdersPage: React.FC = () => {
         const res = await getSalesOrder(targetId, true, true);
         setCurrentSalesOrder(res);
         setTrackingRefreshKey((k) => k + 1);
-        setFullChainRefreshKey((k) => k + 1);
       } catch {
         // 忽略
       }
@@ -1536,26 +1528,6 @@ const SalesOrdersPage: React.FC = () => {
     invalidateOrdersCache();
           actionRef.current?.reload();
   };
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'sales_order' && currentSalesOrder?.id != null && id === currentSalesOrder.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [currentSalesOrder?.id],
-  );
-
-  useEffect(() => {
-    if (drawerVisible && currentSalesOrder?.id != null) {
-      setFullChainBriefDoc(null);
-    }
-  }, [drawerVisible, currentSalesOrder?.id]);
-
-
 
   /**
    * 处理批量导入
@@ -3499,194 +3471,6 @@ const SalesOrdersPage: React.FC = () => {
         }}
       />
 
-      {drawerVisible && currentSalesOrder?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN,
-              top: SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN,
-              width: salesOrderChainPanelWidthCss,
-              height: salesOrderChainHalfHeightCss,
-              zIndex: salesOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: 13,
-                      color: 'var(--ant-color-text)',
-                    }}
-                  >
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="sales_order"
-                documentId={currentSalesOrder.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: SALES_ORDER_FULL_CHAIN_FLOAT_MARGIN,
-              top: salesOrderBriefPanelTopCss,
-              width: salesOrderChainPanelWidthCss,
-              height: salesOrderChainHalfHeightCss,
-              zIndex: salesOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'quotation' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate('/apps/kuaizhizao/sales-management/quotations', {
-                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
-                        });
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'sales_invoice' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${fullChainBriefDoc.document_id}`);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'receivable' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(`/apps/kuaicaiwu/finance-management/receivables/${fullChainBriefDoc.document_id}`);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'receipt' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate('/apps/kuaicaiwu/finance-management/receipts');
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'payment' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate('/apps/kuaicaiwu/finance-management/payments');
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
       {/* 详情抽屉：DetailDrawerTemplate + 与报价单一致的分区 */}
       {currentSalesOrder ? (
         <SalesOrderDetailProvider
@@ -3726,7 +3510,6 @@ const SalesOrdersPage: React.FC = () => {
             open={drawerVisible}
             onClose={() => {
               setDrawerVisible(false);
-              setFullChainBriefDoc(null);
             }}
             width={DRAWER_CONFIG.HALF_WIDTH}
             zIndex={salesOrderDetailDrawerZIndex}
@@ -3864,6 +3647,81 @@ const SalesOrdersPage: React.FC = () => {
             }
             basic={<SalesOrderDetailBasicPane />}
             collaboration={<SalesOrderDetailCollaborationPane />}
+            traceDocument={
+              currentSalesOrder?.id != null
+                ? {
+                    documentType: 'sales_order',
+                    documentId: currentSalesOrder.id,
+                    selfDocumentId: currentSalesOrder.id,
+                    renderBriefActions: (doc) => (
+                      <>
+                        {doc.document_type === 'quotation' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => {
+                              setDrawerVisible(false);
+                              navigate('/apps/kuaizhizao/sales-management/quotations', {
+                                state: { openQuotationDetailId: doc.document_id },
+                              });
+                            }}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                          </Button>
+                        ) : null}
+                        {doc.document_type === 'sales_invoice' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => {
+                              setDrawerVisible(false);
+                              navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${doc.document_id}`);
+                            }}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
+                          </Button>
+                        ) : null}
+                        {doc.document_type === 'receivable' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => {
+                              setDrawerVisible(false);
+                              navigate(`/apps/kuaicaiwu/finance-management/receivables/${doc.document_id}`);
+                            }}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
+                          </Button>
+                        ) : null}
+                        {doc.document_type === 'receipt' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => {
+                              setDrawerVisible(false);
+                              navigate('/apps/kuaicaiwu/finance-management/receipts');
+                            }}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
+                          </Button>
+                        ) : null}
+                        {doc.document_type === 'payment' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => {
+                              setDrawerVisible(false);
+                              navigate('/apps/kuaicaiwu/finance-management/payments');
+                            }}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                          </Button>
+                        ) : null}
+                      </>
+                    ),
+                  }
+                : null
+            }
             lines={<SalesOrderDetailLinesPane />}
             timeline={<SalesOrderDetailTimelinePane />}
           />

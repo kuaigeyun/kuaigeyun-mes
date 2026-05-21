@@ -15,7 +15,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -53,12 +53,7 @@ import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
-import {
-  DocumentTrackingRelationsTabsBody,
-  DocumentTrackingTimelineBody,
-  TraceLinkedDocumentBrief,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { getUserList, type User } from '../../../../../services/user';
 import {
   DocumentStatus,
@@ -75,15 +70,6 @@ import { SupplierFormModal } from '../../../../master-data/components/SupplierFo
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-
-/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
-const PO_DETAIL_CHAIN_FLOAT_MARGIN = 16;
-const PO_DETAIL_LEFT_CHAIN_GAP = 16;
-const PO_DETAIL_CHAIN_DRAWER_GAP = 16;
-const PO_DETAIL_CHAIN_VERTICAL_TRIM = PO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PO_DETAIL_LEFT_CHAIN_GAP;
-const poDetailChainHalfHeightCss = `calc((100vh - ${PO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
-const poDetailChainPanelWidthCss = `calc(50vw - ${PO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PO_DETAIL_CHAIN_DRAWER_GAP}px)`;
-const poDetailBriefPanelTopCss = `calc(${PO_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PO_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -385,7 +371,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
-  const purchaseOrderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
@@ -408,11 +393,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
   const [poTrackingRefreshKey, setPoTrackingRefreshKey] = useState(0);
-  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
-  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
-  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
-    null,
-  );
   const purchaseOrderTracking = useDocumentTracking(
     detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
     orderDetail?.id,
@@ -423,24 +403,6 @@ const PurchaseOrdersPage: React.FC = () => {
     () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail) : null),
     [orderDetail],
   );
-
-  const onFullChainGraphNodeClick = useCallback(
-    (type: string, id: number) => {
-      if (!id) return;
-      if (type === 'purchase_order' && orderDetail?.id != null && id === orderDetail.id) {
-        setFullChainBriefDoc(null);
-        return;
-      }
-      setFullChainBriefDoc({ document_type: type, document_id: id });
-    },
-    [orderDetail?.id],
-  );
-
-  useEffect(() => {
-    if (detailDrawerVisible && orderDetail?.id != null) {
-      setFullChainBriefDoc(null);
-    }
-  }, [detailDrawerVisible, orderDetail?.id]);
 
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
@@ -775,7 +737,6 @@ const PurchaseOrdersPage: React.FC = () => {
 
       setDetailDrawerVisible(true);
       setPoTrackingRefreshKey((k) => k + 1);
-      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
     }
@@ -2556,193 +2517,6 @@ const PurchaseOrdersPage: React.FC = () => {
         orderCode={landingCostOrder?.order_code || ''}
       />
 
-      {detailDrawerVisible && orderDetail?.id != null ? (
-        <>
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
-            style={{
-              position: 'fixed',
-              left: PO_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: PO_DETAIL_CHAIN_FLOAT_MARGIN,
-              width: poDetailChainPanelWidthCss,
-              height: poDetailChainHalfHeightCss,
-              zIndex: purchaseOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ flexShrink: 0, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
-                  </div>
-                </div>
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={fullChainTraceLoading}
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
-                >
-                  {t('components.documentRelationGraph.refresh')}
-                </Button>
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <DocumentTrackingRelationsTabsBody
-                documentType="purchase_order"
-                documentId={orderDetail.id}
-                refreshKey={fullChainRefreshKey}
-                onDocumentClick={onFullChainGraphNodeClick}
-                compact
-                hideInlineRefresh
-                onTraceLoadingChange={setFullChainTraceLoading}
-              />
-            </div>
-          </div>
-
-          <div
-            role="complementary"
-            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
-            style={{
-              position: 'fixed',
-              left: PO_DETAIL_CHAIN_FLOAT_MARGIN,
-              top: poDetailBriefPanelTopCss,
-              width: poDetailChainPanelWidthCss,
-              height: poDetailChainHalfHeightCss,
-              zIndex: purchaseOrderChainOverlayZIndex,
-              boxSizing: 'border-box',
-              padding: 16,
-              borderRadius: token.borderRadiusLG,
-              background: 'var(--ant-color-bg-container)',
-              borderRight: '1px solid var(--ant-color-border)',
-              borderBottom: '1px solid var(--ant-color-border)',
-              boxShadow: 'var(--ant-box-shadow-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                marginBottom: 8,
-                flexShrink: 0,
-                color: 'var(--ant-color-text)',
-              }}
-            >
-              {t('components.documentTrackingPanel.traceBriefTitle')}
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <TraceLinkedDocumentBrief
-                documentType={fullChainBriefDoc?.document_type}
-                documentId={fullChainBriefDoc?.document_id}
-                compactChrome
-              />
-            </div>
-            {fullChainBriefDoc ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  marginTop: 8,
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--ant-color-border)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <Space wrap>
-                  <Button onClick={() => setFullChainBriefDoc(null)}>
-                    {t('components.documentTrackingPanel.traceBriefDismiss')}
-                  </Button>
-                  {fullChainBriefDoc.document_type === 'purchase_requisition' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate(ROUTES.PURCHASE_REQUISITIONS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
-                        defaultValue: '前往采购申请',
-                      })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'receipt_notice' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate(ROUTES.RECEIPT_NOTICES);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'purchase_return' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate(ROUTES.PURCHASE_RETURNS);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'purchase_invoice' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${fullChainBriefDoc.document_id}`);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'payable' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate(`/apps/kuaicaiwu/finance-management/payables/${fullChainBriefDoc.document_id}`);
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPayable')}
-                    </Button>
-                  ) : null}
-                  {fullChainBriefDoc.document_type === 'payment' ? (
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setDetailDrawerVisible(false);
-                        navigate('/apps/kuaicaiwu/finance-management/payments');
-                      }}
-                    >
-                      {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                    </Button>
-                  ) : null}
-                </Space>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {/* 采购订单详情 Drawer */}
       <DetailDrawerTemplate
         title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
         open={detailDrawerVisible}
@@ -2751,7 +2525,6 @@ const PurchaseOrdersPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
           setApprovalStatus(null);
-          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         collaborationTitleSuffix={
@@ -2804,7 +2577,6 @@ const PurchaseOrdersPage: React.FC = () => {
                         loadApprovalData(orderDetail.id!);
                         getPurchaseOrder(orderDetail.id!).then(setOrderDetail);
                         setPoTrackingRefreshKey((k) => k + 1);
-                        setFullChainRefreshKey((k) => k + 1);
                       }}
                     />
                   ),
@@ -2935,20 +2707,97 @@ const PurchaseOrdersPage: React.FC = () => {
             </div>
           ) : null
         }
+        traceDocument={
+          orderDetail?.id != null
+            ? {
+                documentType: 'purchase_order',
+                documentId: orderDetail.id,
+                selfDocumentId: orderDetail.id,
+                renderBriefActions: (doc) => (
+                  <>
+                    {doc.document_type === 'purchase_requisition' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate(ROUTES.PURCHASE_REQUISITIONS);
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
+                          defaultValue: '前往采购申请',
+                        })}
+                      </Button>
+                    ) : null}
+                    {doc.document_type === 'receipt_notice' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate(ROUTES.RECEIPT_NOTICES);
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
+                      </Button>
+                    ) : null}
+                    {doc.document_type === 'purchase_return' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate(ROUTES.PURCHASE_RETURNS);
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
+                      </Button>
+                    ) : null}
+                    {doc.document_type === 'purchase_invoice' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
+                      </Button>
+                    ) : null}
+                    {doc.document_type === 'payable' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenPayable')}
+                      </Button>
+                    ) : null}
+                    {doc.document_type === 'payment' ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          navigate('/apps/kuaicaiwu/finance-management/payments');
+                        }}
+                      >
+                        {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                      </Button>
+                    ) : null}
+                  </>
+                ),
+              }
+            : null
+        }
         lines={
           orderDetail ? (
             <>
-              <style>{`
-                .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-body,
-                .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-content {
-                  overflow: visible !important;
-                }
-              `}</style>
               {orderDetail.items && orderDetail.items.length > 0 ? (
-                <div
-                  className="purchase-order-detail-drawer-items"
-                  style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                >
                   <Table
                     size="small"
                     tableLayout="fixed"
@@ -2987,7 +2836,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     rowKey="id"
                     bordered
                   />
-                </div>
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
               )}
