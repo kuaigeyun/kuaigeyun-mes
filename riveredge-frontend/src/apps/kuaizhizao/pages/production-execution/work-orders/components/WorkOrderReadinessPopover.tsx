@@ -5,12 +5,14 @@
  * - 发起叫料为独立 Modal（zIndex 更高），挂在主 Modal 同级，避免嵌套 Dialog 事件问题
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { SelectProps } from 'antd'
 import { Spin, Empty, Typography, Table, Space, Modal, Form, Button, InputNumber, Input, App, Select, Tabs } from 'antd'
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
 import { warehouseApi } from '../../../../services/warehouse-execution'
+import { batchingOrderApi } from '../../../../services/batching-order'
 import { getMaterialCallLifecycle } from '../../../../utils/materialCallLifecycle'
 import UniMaterialSelect from '../../../../../../components/uni-material-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
@@ -416,10 +418,13 @@ const WorkOrderMaterialCallModal: React.FC<{
 const WorkOrderReadinessPopoverContent: React.FC<{
   workOrderId: number
   setCallModalOpen: (v: boolean) => void
-}> = ({ workOrderId, setCallModalOpen }) => {
+  onCloseMain?: () => void
+}> = ({ workOrderId, setCallModalOpen, onCloseMain }) => {
   const { message: messageApi } = App.useApp()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts()
+  const [pullLoading, setPullLoading] = useState(false)
   const {
     data: kittingData,
     isLoading: kittingLoading,
@@ -513,12 +518,54 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const callList = Array.isArray(calls) ? calls : []
 
+  const hasShortage = warehouseRows.some((r) => r.qtyVsRequired === 'short')
+
+  const handleGoBatching = async () => {
+    setPullLoading(true)
+    try {
+      await batchingOrderApi.pullFromWorkOrder({
+        work_order_id: workOrderId,
+        allow_existing_draft: true,
+        remarks: '工单齐套率面板一键配料',
+      })
+      messageApi.success('已生成配料任务，请在配料中心确认')
+      invalidateMenuBadgeCounts()
+      onCloseMain?.()
+      navigate('/apps/kuaizhizao/warehouse-management/batching-center')
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message ?? '生成配料任务失败')
+    } finally {
+      setPullLoading(false)
+    }
+  }
+
   const tabItems = [
     {
       key: 'warehouse',
       label: '物料所在仓库',
       children: (
         <>
+          <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
+              仓库可在<strong>配料中心</strong>按齐套缺料主动配料（领料 + 倒冲物料）；现场缺料亦可发起叫料。
+            </Typography.Paragraph>
+            <Space wrap>
+              <Button
+                type="primary"
+                size="small"
+                loading={pullLoading}
+                disabled={!hasShortage}
+                onClick={handleGoBatching}
+              >
+                去配料
+              </Button>
+              {!hasShortage ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  当前无待配料缺料，无需配料
+                </Typography.Text>
+              ) : null}
+            </Space>
+          </Space>
           {kittingError ? (
             <Typography.Text type="danger" style={{ display: 'block' }}>
               {(error as Error)?.message ?? '齐套分析加载失败'}
@@ -774,7 +821,11 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
         getContainer={() => document.body}
       >
         {mainModalOpen ? (
-          <WorkOrderReadinessPopoverContent workOrderId={workOrderId} setCallModalOpen={setCallModalOpen} />
+          <WorkOrderReadinessPopoverContent
+            workOrderId={workOrderId}
+            setCallModalOpen={setCallModalOpen}
+            onCloseMain={() => setMainModalOpen(false)}
+          />
         ) : null}
       </Modal>
       {callModalOpen && (

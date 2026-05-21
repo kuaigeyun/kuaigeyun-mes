@@ -671,6 +671,16 @@
             "permission": "kuaizhizao:inventory:read"
           },
           {
+            "title": "app.kuaizhizao.menu.warehouse-management.batching-center",
+            "path": "/apps/kuaimes/warehouse-management/batching-center",
+            "permission": "kuaizhizao:warehouse-management-batching-center:read",
+            "sort_order": 1,
+            "meta": {
+              "module": "warehouse",
+              "node": "batching_order"
+            }
+          },
+          {
             "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
             "children": [
               {
@@ -710,7 +720,7 @@
                 "sort_order": 4
               }
             ],
-            "sort_order": 1
+            "sort_order": 2
           },
           {
             "title": "app.kuaizhizao.menu.warehouse-management.outbound-group",
@@ -756,53 +766,41 @@
                 }
               }
             ],
-            "sort_order": 2
+            "sort_order": 3
           },
           {
             "title": "app.kuaizhizao.menu.warehouse-management.function-group",
             "children": [
               {
-                "title": "app.kuaizhizao.menu.warehouse-management.batching-center",
-                "path": "/apps/kuaimes/warehouse-management/batching-center",
-                "permission": "kuaizhizao:warehouse-management-batching-center:read",
-                "sort_order": 1
-              },
-              {
-                "title": "app.kuaizhizao.menu.warehouse-management.material-calls",
-                "path": "/apps/kuaimes/warehouse-management/material-calls",
-                "permission": "kuaizhizao:warehouse-management-material-calls:read",
-                "sort_order": 2
-              },
-              {
                 "title": "app.kuaizhizao.menu.warehouse-management.stocktaking",
                 "path": "/apps/kuaimes/warehouse-management/stocktaking",
                 "permission": "kuaizhizao:warehouse-management-stocktaking:read",
-                "sort_order": 3
+                "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory-transfer",
                 "path": "/apps/kuaimes/warehouse-management/inventory-transfer",
                 "permission": "kuaizhizao:warehouse-management-inventory-transfer:read",
-                "sort_order": 4
+                "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.assembly-orders",
                 "path": "/apps/kuaimes/warehouse-management/assembly-orders",
                 "permission": "kuaizhizao:warehouse-management-assembly-orders:read",
-                "sort_order": 5
+                "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.disassembly-orders",
                 "path": "/apps/kuaimes/warehouse-management/disassembly-orders",
                 "permission": "kuaizhizao:warehouse-management-disassembly-orders:read",
-                "sort_order": 6
+                "sort_order": 4
               }
             ],
-            "sort_order": 3
+            "sort_order": 4
           },
           {
             "title": "app.kuaizhizao.menu.warehouse-management.inventory-group",
-            "sort_order": 4,
+            "sort_order": 5,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory",
@@ -851,7 +849,7 @@
           {
             "title": "app.kuaizhizao.menu.warehouse-management.reports",
             "icon": "fileText",
-            "sort_order": 5,
+            "sort_order": 6,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-summary",

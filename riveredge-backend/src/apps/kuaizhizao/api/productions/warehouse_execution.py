@@ -42,11 +42,13 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
 )
 from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
 from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+from apps.kuaizhizao.services.batching_center_service import BatchingCenterService
 from apps.kuaizhizao.services.warehouse_dashboard_service import WarehouseDashboardService
 from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
+batching_center_service = BatchingCenterService()
 packing_binding_service = PackingBindingService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
@@ -147,6 +149,8 @@ from apps.kuaizhizao.schemas.batching_order import (
     BatchingOrderListResponse,
     BatchingOrderWithItemsResponse,
     PullFromWorkOrderRequest,
+    BatchingOrderConfirmRequest,
+    BatchingCenterTaskListResponse,
 )
 
 router = APIRouter(
@@ -3114,6 +3118,34 @@ async def process_replenishment_suggestion(
 
 # ============ 配料单 API ============
 
+@router.get(
+    "/batching-center/tasks",
+    response_model=BatchingCenterTaskListResponse,
+    summary="List batching center unified task queue",
+)
+async def list_batching_center_tasks(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    task_type: Optional[str] = Query(None, description="proactive_prep|material_call|batching_draft|backflush_alert"),
+    status: Optional[str] = Query(None),
+    work_order_code: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    include_completed_batching: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingCenterTaskListResponse:
+    return await batching_center_service.list_tasks(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        task_type=task_type,
+        status=status,
+        work_order_code=work_order_code,
+        priority=priority,
+        include_completed_batching=include_completed_batching,
+    )
+
+
 @router.get("/batching-orders", response_model=BatchingOrderListResponse, summary="List batching orders")
 async def list_batching_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -3180,6 +3212,29 @@ async def pull_batching_order_from_work_order(
         raise _http_exception_with_trace(400, str(e), "/batching-orders/pull-from-work-order", tenant_id)
 
 
+@router.post(
+    "/batching-orders/{order_id}/sync-from-work-order",
+    response_model=BatchingOrderWithItemsResponse,
+    summary="Sync batching order lines from work order",
+)
+async def sync_batching_order_from_work_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """按工单当前齐套缺料补全草稿配料单明细（含领料 + 倒冲）"""
+    try:
+        return await batching_order_service.sync_from_work_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}/sync-from-work-order", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/{order_id}/sync-from-work-order", tenant_id)
+
+
 @router.get("/batching-orders/{order_id}", response_model=BatchingOrderWithItemsResponse, summary="Get batching order")
 async def get_batching_order(
     order_id: int,
@@ -3238,15 +3293,17 @@ async def delete_batching_order(
 @router.post("/batching-orders/{order_id}/confirm", response_model=BatchingOrderResponse, summary="Confirm batching")
 async def confirm_batching_order(
     order_id: int,
+    confirm_data: Optional[BatchingOrderConfirmRequest] = None,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> BatchingOrderResponse:
-    """确认配料（更新明细为已拣，扣减主仓库存）"""
+    """确认配料（主仓扣减 + 线边仓入库）"""
     try:
         return await batching_order_service.confirm_batching_order(
             tenant_id=tenant_id,
             order_id=order_id,
             executed_by=current_user.id,
+            confirm_data=confirm_data,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}/confirm", tenant_id)

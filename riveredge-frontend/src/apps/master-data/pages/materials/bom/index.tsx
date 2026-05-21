@@ -23,6 +23,16 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../../componen
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
+
+const BOM_ISSUE_METHOD_OPTIONS = [
+  { label: '领料配料', value: 'pick' },
+  { label: '倒冲', value: 'backflush' },
+  { label: '不发料', value: 'none' },
+] as const;
+
+const BOM_ISSUE_METHOD_LABEL: Record<string, string> = Object.fromEntries(
+  BOM_ISSUE_METHOD_OPTIONS.map((o) => [o.value, o.label]),
+);
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
@@ -158,6 +168,7 @@ const BOM_DETAIL_LINE_ONLY_DATA_INDEX = new Set<string>([
   'unit',
   'wasteRate',
   'isRequired',
+  'issueMethod',
   'level',
   'path',
   'isAlternative',
@@ -511,6 +522,7 @@ const BOMPage: React.FC = () => {
         unit: b.unit,
         wasteRate: b.wasteRate ?? 0,
         isRequired: b.isRequired !== false,
+        issueMethod: b.issueMethod ?? (b as { issue_method?: string }).issue_method ?? 'pick',
         isAlternative: b.isAlternative,
         alternativeGroupId: b.alternativeGroupId,
         priority: b.priority,
@@ -1007,6 +1019,7 @@ const BOMPage: React.FC = () => {
               unit: unitValue,
               waste_rate: item.wasteRate ?? 0,
               is_required: item.isRequired !== false,
+              issue_method: item.issueMethod ?? 'pick',
               is_alternative: item.isAlternative || false,
               alternative_group_id: item.alternativeGroupId || null,
               priority: item.priority || 0,
@@ -2001,6 +2014,15 @@ const BOMPage: React.FC = () => {
       ),
     },
     {
+      title: '发料方式',
+      dataIndex: 'issueMethod',
+      render: (_, record) => {
+        const v =
+          record.issueMethod ?? (record as { issue_method?: string }).issue_method ?? 'pick';
+        return BOM_ISSUE_METHOD_LABEL[v] ?? v;
+      },
+    },
+    {
       title: t('app.master-data.bom.levelTitle'),
       dataIndex: 'level',
       render: (_, record) => record.level ?? 0,
@@ -2151,6 +2173,17 @@ const BOMPage: React.FC = () => {
             {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
           </Tag>
         ),
+      },
+      {
+        title: '发料方式',
+        dataIndex: 'issueMethod',
+        width: 90,
+        align: 'center',
+        render: (_, record) => {
+          const v =
+            record.issueMethod ?? (record as { issue_method?: string }).issue_method ?? 'pick';
+          return BOM_ISSUE_METHOD_LABEL[v] ?? v;
+        },
       },
       {
         title: t('app.master-data.bom.levelTitle'),
@@ -2604,6 +2637,7 @@ const BOMPage: React.FC = () => {
             priority: 0,
             wasteRate: 0,
             isRequired: true,
+            issueMethod: 'pick',
           }],
         }}
         className="bom-form-modal"
@@ -2794,6 +2828,20 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
+                      title: '发料方式',
+                      dataIndex: 'issueMethod',
+                      width: 110,
+                      render: (_, record, index) => (
+                        <AntForm.Item
+                          name={[index, 'issueMethod']}
+                          initialValue="pick"
+                          style={{ margin: 0 }}
+                        >
+                          <Select size="small" options={[...BOM_ISSUE_METHOD_OPTIONS]} />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
                       title: t('app.master-data.bom.isRequiredTitle'),
                       dataIndex: 'isRequired',
                       width: 80,
@@ -2956,6 +3004,7 @@ const BOMPage: React.FC = () => {
                                 quantity: 1,
                                 wasteRate: 0,
                                 isRequired: true,
+                                issueMethod: 'pick',
                                 isAlternative: false,
                                 alternativeGroupId: undefined,
                                 priority: 0,

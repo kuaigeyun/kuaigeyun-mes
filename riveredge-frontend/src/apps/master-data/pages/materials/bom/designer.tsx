@@ -42,6 +42,7 @@ import {
   findParentNode,
   handleMoveNodeLogic,
   removeNode,
+  resolveIssueMethodForNode,
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
@@ -148,6 +149,14 @@ const BOMDesignerPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const getSourceTypeLabel = (key: string) => (SOURCE_TYPE_I18N_KEYS[key] ? t(SOURCE_TYPE_I18N_KEYS[key]) : key);
+  const issueMethodOptions = useMemo(
+    () => [
+      { label: t('app.master-data.bom.issueMethodPick'), value: 'pick' },
+      { label: t('app.master-data.bom.issueMethodBackflush'), value: 'backflush' },
+      { label: t('app.master-data.bom.issueMethodNone'), value: 'none' },
+    ],
+    [t],
+  );
   const { token } = useToken();
   const navigate = useNavigate();
   const location = useLocation();
@@ -253,6 +262,7 @@ const BOMDesignerPage: React.FC = () => {
             isAlternative: child.isAlternative ?? false,
             alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
             priority: child.priority ?? index,
+            issueMethod: resolveIssueMethodForNode(child.issueMethod, child.material),
           });
 
           if (child.children && child.children.length > 0) {
@@ -376,6 +386,10 @@ const BOMDesignerPage: React.FC = () => {
         alternativeGroupId: item.alternativeGroupId ?? null,
         priority: (item as any).priority ?? 0,
         bomVersion: (item as any).bomVersion ?? (item as any).bom_version,
+        issueMethod: resolveIssueMethodForNode(
+          item.issueMethod ?? (item as any).issue_method,
+          material as Material,
+        ),
       };
 
       if (item.children && item.children.length > 0) {
@@ -431,6 +445,10 @@ const BOMDesignerPage: React.FC = () => {
         alternativeGroupId: item.alternativeGroupId ?? null,
         priority: (item as any).priority ?? 0,
         bomVersion: (item as any).bomVersion ?? (item as any).bom_version,
+        issueMethod: resolveIssueMethodForNode(
+          item.issueMethod ?? (item as any).issue_method,
+          material as Material,
+        ),
       };
       if (item.children && item.children.length > 0) {
         const filteredChildren = excludeId != null
@@ -773,6 +791,7 @@ const BOMDesignerPage: React.FC = () => {
         unit: baseUnit,
         wasteRate: 0,
         isRequired: true,
+        issueMethod: resolveIssueMethodForNode(undefined, material),
         componentId: material.id,
         isConfigurable: true,
         configurableGroupId: gid,
@@ -894,6 +913,7 @@ const BOMDesignerPage: React.FC = () => {
         unit: baseUnit,
         wasteRate: 0,
         isRequired: true,
+        issueMethod: resolveIssueMethodForNode(undefined, material),
         componentId: material.id,
         isConfigurable: false,
         configurableGroupId: null,
@@ -1047,6 +1067,7 @@ const BOMDesignerPage: React.FC = () => {
           unit: values.unit,
           wasteRate: values.wasteRate || 0,
           isRequired: values.isRequired !== false,
+          issueMethod: values.issueMethod ?? 'pick',
           componentId: values.materialId,
           isConfigurable: values.isConfigurable ?? false,
           configurableGroupId: values.isConfigurable ? configurableGroupId : null,
@@ -1095,6 +1116,7 @@ const BOMDesignerPage: React.FC = () => {
           isAlternative: child.isAlternative ?? false,
           alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
           priority: child.priority ?? index,
+          issueMethod: resolveIssueMethodForNode(child.issueMethod, child.material),
         });
       }
     });
@@ -1126,6 +1148,7 @@ const BOMDesignerPage: React.FC = () => {
           isAlternative: child.isAlternative ?? false,
           alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
           priority: child.priority ?? index,
+          issueMethod: resolveIssueMethodForNode(child.issueMethod, child.material),
         });
       }
     });
@@ -2875,6 +2898,7 @@ const BOMDesignerPage: React.FC = () => {
                     const variantManaged = (material as any).variantManaged ?? (material as any).variant_managed ?? false;
                     nodeConfigForm.setFieldsValue({
                       isConfigurable: variantManaged ? true : nodeConfigForm.getFieldValue('isConfigurable'),
+                      issueMethod: resolveIssueMethodForNode(null, material),
                     });
                     if (nodeConfigForm.getFieldValue('isConfigurable') || nodeConfigForm.getFieldValue('isAlternative')) {
                       setTimeout(() => handleSaveNodeConfig(), 0);
@@ -2968,6 +2992,14 @@ const BOMDesignerPage: React.FC = () => {
                   </Form.Item>
                 </Col>
               </Row>
+              <Form.Item
+                name="issueMethod"
+                label={t('app.master-data.bom.issueMethod')}
+                tooltip={t('app.master-data.bom.issueMethodTooltip')}
+                initialValue="pick"
+              >
+                <Select options={issueMethodOptions} />
+              </Form.Item>
               <Row gutter={12}>
                 <Col span={8}>
                   <Form.Item name="isRequired" label={t('app.master-data.bom.isRequired')} valuePropName="checked">

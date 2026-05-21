@@ -252,6 +252,7 @@ async def calculate_material_requirements_from_bom(
     """
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
     from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
+    from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method
 
     # 始终优先按来源控制展开 BOM：穿透虚拟件（Phantom）、处理配置件/配置位与子件递归。
     # 此前仅在传入 variant/config 时才展开，导致齐套/叫料等界面把虚拟件当作单行实体、库存为 0。
@@ -279,6 +280,7 @@ async def calculate_material_requirements_from_bom(
                     "material_code": item.get("material_code", ""),
                     "material_name": item.get("material_name", ""),
                     "source_type": item.get("source_type", "Buy"),
+                    "issue_method": item.get("issue_method"),
                     "required_quantity": 0.0,
                     "unit": item.get("unit", ""),
                 }
@@ -286,6 +288,7 @@ async def calculate_material_requirements_from_bom(
 
         requirements = []
         for req in by_component.values():
+            im = resolve_issue_method(req.get("issue_method"), req.get("source_type"))
             requirements.append(MaterialRequirement(
                 component_id=req["material_id"],
                 component_code=req["material_code"],
@@ -297,6 +300,7 @@ async def calculate_material_requirements_from_bom(
                 planned_receipt=0.0,
                 unit=req["unit"] or "",
                 lead_time=0,
+                issue_method=im,
             ))
         return requirements
 
@@ -339,7 +343,11 @@ async def calculate_material_requirements_from_bom(
             available_inventory=0.0,  # TODO: 从库存系统获取
             planned_receipt=0.0,  # TODO: 从计划系统获取
             unit=item.unit,
-            lead_time=0  # TODO: 从物料主数据获取
+            lead_time=0,  # TODO: 从物料主数据获取
+            issue_method=resolve_issue_method(
+                getattr(item, "issue_method", None),
+                getattr(component, "source_type", None),
+            ),
         )
         
         requirements.append(requirement)

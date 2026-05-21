@@ -10,19 +10,16 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined, ShoppingOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
-import { warehouseApi } from '../../../services/warehouse-execution';
-import { List, Typography, Progress } from 'antd';
-import { UniTable } from '../../../../../components/uni-table';
+import { ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
+import { workOrderApi } from '../../../services/work-order';
+import BatchingTaskQueue from './BatchingTaskQueue';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
-import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -66,7 +63,6 @@ interface BatchingOrderItem {
 const BatchingCenterPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -115,12 +111,13 @@ const BatchingCenterPage: React.FC = () => {
         }
         await batchingOrderApi.pullFromWorkOrder({
           work_order_id: values.work_order_id,
-          warehouse_id: values.warehouse_id,
-          warehouse_name: values._warehouse_name || '',
+          warehouse_id: values.warehouse_id || undefined,
+          warehouse_name: values._warehouse_name || undefined,
           batching_date: values.batching_date?.toISOString?.() || new Date().toISOString(),
           target_warehouse_id: values.target_warehouse_id || undefined,
           target_warehouse_name: values._target_warehouse_name || undefined,
           remarks: values.remarks,
+          allow_existing_draft: true,
         });
         messageApi.success('从工单生成配料单成功');
       } else {
@@ -150,8 +147,6 @@ const BatchingCenterPage: React.FC = () => {
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
     } catch (error: any) {
       if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
         messageApi.error(error.message || '创建配料单失败');
@@ -160,186 +155,16 @@ const BatchingCenterPage: React.FC = () => {
     }
   };
 
-  const handleDetail = async (record: BatchingOrder) => {
-    try {
-      const detail = await batchingOrderApi.get(record.id!.toString());
-      setCurrentOrder(detail);
-      setDetailDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || '获取配料单详情失败');
-    }
-  };
-
-  const handleConfirm = async (record: BatchingOrder) => {
-    Modal.confirm({
-      title: '确认配料',
-      content: `确定要确认配料单 "${record.code}" 吗？确认后将扣减主仓库存。`,
-      onOk: async () => {
-        try {
-          await batchingOrderApi.confirm(record.id!.toString());
-          messageApi.success('配料确认成功');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '确认配料失败');
-        }
-      },
-    });
-  };
-
-  const columns: ProColumns<BatchingOrder>[] = [
-    {
-      title: '配料单号',
-      dataIndex: 'code',
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '仓库',
-      dataIndex: 'warehouse_name',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '工单号',
-      dataIndex: 'work_order_code',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '配料日期',
-      dataIndex: 'batching_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '物料种类',
-      dataIndex: 'total_items',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 132,
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getBatchingOrderLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
-      title: '操作',
-      width: 180,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          {(record.status === 'draft' || record.status === 'picking') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
-            >
-              确认配料
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
   return (
     <ListPageTemplate>
-      <MaterialPrepReminders onCreateBatching={handleCreate} />
-      <UniTable<BatchingOrder>
-        headerTitle="配料单"
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batching-center"
-        actionRef={actionRef}
-        rowKey="id"
-        columns={columns}
-        showAdvancedSearch={true}
-        enableRowSelection={true}
-        showDeleteButton={true}
-        onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 条配料单吗？仅草稿状态的配料单可删除。`,
-            onOk: async () => {
-              try {
-                for (const id of keys) {
-                  await batchingOrderApi.delete(String(id));
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                invalidateMenuBadgeCounts();
-
-                actionRef.current?.reload();
-              } catch (error: any) {
-                messageApi.error(error?.message || '删除失败');
-              }
-            },
+      <BatchingTaskQueue
+        onCreate={() => handleCreate()}
+        onOpenBatchingDetail={(id) => {
+          batchingOrderApi.get(String(id)).then((order) => {
+            setCurrentOrder(order);
+            setDetailDrawerVisible(true);
           });
         }}
-        showCreateButton={true}
-        createButtonText="新建配料单"
-        onCreate={handleCreate}
-        request={async (params) => {
-          try {
-            const result = await batchingOrderApi.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
-              code: params.code,
-              warehouse_id: params.warehouse_id,
-              work_order_id: params.work_order_id,
-              status: params.status,
-              keyword: (params as any).keyword,
-            });
-            return {
-              data: result.items || [],
-              success: true,
-              total: result.total || 0,
-            };
-          } catch (error) {
-            return { data: [], success: false, total: 0 };
-          }
-        }}
-        scroll={{ x: 1800 }}
       />
 
       {/* 新建配料单 Modal */}
@@ -378,7 +203,7 @@ const BatchingCenterPage: React.FC = () => {
                     option?.label?.toLowerCase().includes(input.toLowerCase()),
                 }}
                 request={async () => {
-                  const res = await workOrderApi.list({ status: 'in_progress', limit: 200 });
+                  const res = await workOrderApi.list({ status: 'released,in_progress', limit: 200 });
                   const items = res?.items || res?.data || [];
                   return items.map((wo: any) => ({
                     label: `${wo.code || ''} - ${wo.name || ''}`,
@@ -614,71 +439,6 @@ const BatchingCenterPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
     </ListPageTemplate>
-  );
-};
-
-/**
- * 主动备料提醒组件
- */
-const MaterialPrepReminders: React.FC<{ onCreateBatching: (workOrderId: number) => void }> = ({
-  onCreateBatching,
-}) => {
-  const { data: reminders, isLoading } = useQuery({
-    queryKey: ['materialPrepReminders'],
-    queryFn: () => warehouseApi.productionPicking.getMaterialPrepReminders({ limit: 5 }),
-    staleTime: 30000,
-  });
-
-  if (!reminders?.items?.length) return null;
-
-  return (
-    <Card
-      size="small"
-      title={
-        <Space>
-          <BellOutlined style={{ color: '#faad14' }} />
-          <Typography.Text strong>智能备料提醒 (齐套工单)</Typography.Text>
-        </Space>
-      }
-      style={{ marginBottom: 16, border: '1px solid #ffe58f', background: '#fffbe6' }}
-      styles={{ body: { padding: '0 12px' } }}
-    >
-      <List
-        size="small"
-        loading={isLoading}
-        dataSource={reminders.items}
-        renderItem={(item: any) => (
-          <List.Item
-            extra={
-              <Button type="primary" size="small" onClick={() => onCreateBatching(item.work_order_id)}>
-                立即配料
-              </Button>
-            }
-          >
-            <List.Item.Meta
-              title={
-                <Space>
-                  <Typography.Text code>{item.work_order_code}</Typography.Text>
-                  <Tag color="green">齐套率 {Math.round(Number(item.kitting_rate))}%</Tag>
-                  {item.composite_score != null && (
-                    <WorkOrderScoreCell
-                      score={item.composite_score}
-                      breakdown={item.score_breakdown}
-                    />
-                  )}
-                </Space>
-              }
-              description={
-                <Space size="large" style={{ fontSize: '12px', color: '#666' }}>
-                  <span>推荐仓库: {item.suggested_warehouse_name || '主仓'}</span>
-                  <span>计划开始: {item.planned_start_date ? dayjs(item.planned_start_date).format('MM-DD HH:mm') : '-'}</span>
-                </Space>
-              }
-            />
-          </List.Item>
-        )}
-      />
-    </Card>
   );
 };
 

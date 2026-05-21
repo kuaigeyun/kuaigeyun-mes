@@ -2515,6 +2515,7 @@ class MaterialService:
                 unit=item.unit,
                 waste_rate=item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
                 is_required=item.is_required if hasattr(item, 'is_required') else True,
+                issue_method=getattr(item, 'issue_method', None) or "pick",
                 level=1,  # 直接子件深度 1（根主料为 0）
                 path=f"{data.material_id}/{item.component_id}",
                 version=data.version,
@@ -3721,6 +3722,7 @@ class MaterialService:
                     is_alternative=is_alt,
                     alternative_group_id=alt_group_id if is_alt else None,
                     priority=prio,
+                    issue_method=getattr(item, "issue_method", None) or "pick",
                 )
                 bom_list.append(bom)
         
@@ -3898,6 +3900,7 @@ class MaterialService:
                     "is_alternative": getattr(bom, "is_alternative", False),
                     "alternative_group_id": getattr(bom, "alternative_group_id", None),
                     "priority": getattr(bom, "priority", 0),
+                    "issue_method": getattr(bom, "issue_method", None) or "pick",
                     "children": []
                 }
                 

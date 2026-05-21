@@ -27,7 +27,27 @@ export const batchingOrderApi = {
   pullFromWorkOrder: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/batching-orders/pull-from-work-order', { method: 'POST', data });
   },
-  confirm: async (id: string) => {
-    return apiRequest(`/apps/kuaizhizao/batching-orders/${id}/confirm`, { method: 'POST' });
+  syncFromWorkOrder: async (id: string | number) => {
+    return apiRequest(`/apps/kuaizhizao/batching-orders/${id}/sync-from-work-order`, { method: 'POST' });
+  },
+  confirm: async (
+    id: string,
+    data?: {
+      item_batches?: {
+        item_id: number;
+        batch_no?: string;
+        pick_quantity?: number;
+        skip?: boolean;
+      }[];
+    },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/batching-orders/${id}/confirm`, { method: 'POST', data: data ?? {} });
+  },
+  listTasks: async (params?: Record<string, unknown>) => {
+    try {
+      return await apiRequest('/apps/kuaizhizao/batching-center/tasks', { method: 'GET', params });
+    } catch {
+      return { items: [], total: 0 };
+    }
   },
 };

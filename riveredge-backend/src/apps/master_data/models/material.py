@@ -319,6 +319,11 @@ class BOM(BaseModel):
         description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
     )
     is_required = fields.BooleanField(default=True, description="是否必选（是/否，默认：是）")
+    issue_method = fields.CharField(
+        max_length=20,
+        default="pick",
+        description="发料方式：pick=领料配料, backflush=倒冲, none=不发料",
+    )
     
     # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
     level = fields.IntField(default=0, description="层级深度（0为顶层，用于多层级BOM展开）")

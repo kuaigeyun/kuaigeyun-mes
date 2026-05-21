@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.work_order_score import (
     WorkOrderScoreResponse,
 )
 from core.services.base import BaseService
+from core.timezone_utils import make_aware, now_utc
 from infra.services.business_config_service import BusinessConfigService
 
 SCORE_CONFIG_VERSION = "default-v1"
@@ -275,7 +276,7 @@ class WorkOrderScoreService(BaseService):
         composite += plan_weighted
 
         composite = round(min(100.0, max(0.0, composite)), 2)
-        now = datetime.now()
+        now = now_utc()
         return WorkOrderScoreResponse(
             work_order_id=work_order.id,
             scenario=scenario,
@@ -314,7 +315,7 @@ class WorkOrderScoreService(BaseService):
     def _is_stale(self, computed_at: Optional[datetime], stale_minutes: int) -> bool:
         if not computed_at:
             return True
-        return datetime.now() - computed_at > timedelta(minutes=stale_minutes)
+        return now_utc() - make_aware(computed_at) > timedelta(minutes=stale_minutes)
 
     async def get_score(
         self,

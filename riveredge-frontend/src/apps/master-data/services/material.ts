@@ -146,6 +146,7 @@ function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyI
     alternativeGroupId: optionalNumberId(raw.alternative_group_id ?? raw.alternativeGroupId),
     priority: Number(raw.priority ?? 0),
     bomVersion: (raw.bom_version != null || raw.bomVersion != null) ? String(raw.bom_version ?? raw.bomVersion) : undefined,
+    issueMethod: (raw.issue_method ?? raw.issueMethod ?? 'pick') as 'pick' | 'backflush' | 'none',
     children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 }
@@ -583,6 +584,7 @@ export const bomApi = {
         is_alternative: item.isAlternative,
         alternative_group_id: item.alternativeGroupId,
         priority: item.priority ?? 0,
+        issue_method: item.issueMethod ?? 'pick',
         remark: item.remark,
       })),
       version: data.version,

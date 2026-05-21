@@ -170,7 +170,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/warehouse-management/material-borrows': 'material_borrow',
   '/apps/kuaizhizao/warehouse-management/delivery-notes': 'delivery_notice',
   '/apps/kuaizhizao/warehouse-management/batching-center': 'batching_order',
-  '/apps/kuaizhizao/warehouse-management/material-calls': 'material_call',
+  '/apps/kuaizhizao/warehouse-management/material-calls': 'batching_order',
   '/apps/kuaizhizao/warehouse-management/stocktaking': 'stocktaking',
   '/apps/kuaizhizao/warehouse-management/inventory-transfer': 'inventory_transfer',
   '/apps/kuaizhizao/warehouse-management/assembly-orders': 'assembly_order',

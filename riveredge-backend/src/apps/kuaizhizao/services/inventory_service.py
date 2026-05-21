@@ -145,6 +145,8 @@ class InventoryService:
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
@@ -233,6 +235,9 @@ class InventoryService:
                 inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
                 if inv:
                     inv.quantity = (inv.quantity or Decimal(0)) + quantity
+                    if work_order_id and not inv.work_order_id:
+                        inv.work_order_id = work_order_id
+                        inv.work_order_code = work_order_code
                     await inv.save()
                 else:
                     mat = material or await Material.get_or_none(id=material_id)
@@ -249,6 +254,8 @@ class InventoryService:
                         source_type=source_type or "direct",
                         source_doc_id=source_doc_id,
                         source_doc_code=source_doc_code or "",
+                        work_order_id=work_order_id,
+                        work_order_code=work_order_code,
                     )
             return True
         except Exception as e:
@@ -264,10 +271,11 @@ class InventoryService:
         warehouse_id: Optional[int] = None,
         batch_no: Optional[str] = None,
         serial_nos: Optional[list[str]] = None,
-        # ... rest stay same if possible, but I'll update all for consistency
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
     ) -> bool:
         """
         增加库存（独立事务包装）。
@@ -282,6 +290,8 @@ class InventoryService:
             source_type=source_type,
             source_doc_id=source_doc_id,
             source_doc_code=source_doc_code,
+            work_order_id=work_order_id,
+            work_order_code=work_order_code,
         )
 
     @staticmethod

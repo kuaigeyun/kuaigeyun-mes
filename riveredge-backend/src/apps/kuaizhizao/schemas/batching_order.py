@@ -128,12 +128,59 @@ class BatchingOrderWithItemsResponse(BatchingOrderResponse):
 
 class PullFromWorkOrderRequest(BaseModel):
     work_order_id: int = Field(..., description="工单ID")
-    warehouse_id: int = Field(..., description="拣选源仓库ID")
-    warehouse_name: str = Field(..., description="拣选源仓库名称")
+    warehouse_id: Optional[int] = Field(None, description="拣选源仓库ID，空则按工单解析")
+    warehouse_name: Optional[str] = Field(None, description="拣选源仓库名称")
     batching_date: Optional[datetime] = Field(None, description="配料日期")
-    target_warehouse_id: Optional[int] = Field(None, description="目标线边仓ID")
+    target_warehouse_id: Optional[int] = Field(None, description="目标线边仓ID，空则按工单解析")
     target_warehouse_name: Optional[str] = Field(None, description="目标线边仓名称")
     remarks: Optional[str] = Field(None, description="备注")
+    allow_existing_draft: bool = Field(False, description="若已有草稿配料单则返回已有单")
+
+
+class BatchingOrderConfirmItemBatch(BaseModel):
+    item_id: int = Field(..., description="配料明细ID")
+    batch_no: Optional[str] = Field(None, description="批号（跳过配料时可空）")
+    pick_quantity: Optional[Decimal] = Field(None, description="本次配料数量，空则按需求数量")
+    skip: bool = Field(False, description="本次不配料")
+
+
+class BatchingOrderConfirmRequest(BaseModel):
+    item_batches: Optional[List[BatchingOrderConfirmItemBatch]] = Field(
+        None, description="确认配料时各明细（可部分配料或跳过行）"
+    )
+
+
+class BatchingCenterTaskItem(BaseModel):
+    task_type: str = Field(..., description="proactive_prep|material_call|batching_draft|backflush_alert")
+    task_id: int = Field(..., description="业务主键")
+    doc_code: Optional[str] = None
+    work_order_id: Optional[int] = None
+    work_order_code: Optional[str] = None
+    product_name: Optional[str] = None
+    picking_score: Optional[float] = None
+    picking_rank_band: Optional[str] = None
+    kitting_rate: Optional[float] = None
+    shortage_summary: Optional[str] = None
+    priority: Optional[str] = None
+    sla_overdue: bool = False
+    status: Optional[str] = None
+    material_name: Optional[str] = None
+    material_code: Optional[str] = None
+    requested_quantity: Optional[float] = None
+    material_unit: Optional[str] = None
+    caller_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    score_breakdown: Optional[dict] = None
+    suggested_warehouse_id: Optional[int] = None
+    suggested_warehouse_name: Optional[str] = None
+    items: Optional[List[dict]] = Field(None, description="叫料/配料明细（展开用）")
+    error_message: Optional[str] = None
+
+
+class BatchingCenterTaskListResponse(BaseModel):
+    items: List[BatchingCenterTaskItem] = Field(default_factory=list)
+    total: int = 0
 
 
 BatchingOrderCreateWithItems.model_rebuild()

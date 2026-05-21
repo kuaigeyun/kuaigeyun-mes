@@ -340,7 +340,7 @@ async def get_todos(
                     priority=prio,
                     due_date=row.needed_at,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/material-calls",
+                    link="/apps/kuaizhizao/warehouse-management/batching-center",
                     created_at=row.created_at,
                 ))
             return out
@@ -756,7 +756,7 @@ async def handle_todo(
             "success": True,
             "message": "请前往叫料处理",
             "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/material-calls",
+            "redirect": "/apps/kuaizhizao/warehouse-management/batching-center",
         }
     elif todo_id.startswith("receipt_notice_"):
         return {

@@ -25,6 +25,27 @@ from apps.master_data.models.material import Material, BOM
 from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _select_configurable, _bom_effective_filter
 
 
+def _bom_leaf_requirement(
+    bom_item: BOM,
+    component: Material,
+    component_qty: float,
+    level: int,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """BOM 展开叶节点需求（携带发料方式）。"""
+    return {
+        "material_id": component.id,
+        "material_code": component.main_code or component.code,
+        "material_name": component.name,
+        "source_type": component.source_type,
+        "required_quantity": component_qty,
+        "unit": bom_item.unit or component.base_unit,
+        "level": level,
+        "issue_method": getattr(bom_item, "issue_method", None) or "pick",
+        **extra,
+    }
+
+
 async def _get_bom_for_material(
     tenant_id: int,
     material_id: int,
@@ -427,45 +448,24 @@ async def expand_bom_with_source_control(
                     if child_requirements:
                         requirements.extend(child_requirements)
                     else:
-                        requirements.append({
-                            "material_id": component.id,
-                            "material_code": component.main_code or component.code,
-                            "material_name": component.name,
-                            "source_type": component.source_type,
-                            "required_quantity": component_qty,
-                            "unit": bom_item.unit or component.base_unit,
-                            "level": level + 1,
-                            "from_phantom": True,
-                            "phantom_material_id": material_id,
-                        })
+                        requirements.append(_bom_leaf_requirement(
+                            bom_item, component, component_qty, level + 1,
+                            from_phantom=True, phantom_material_id=material_id,
+                        ))
                 elif ct == SOURCE_TYPE_CONFIGURE:
                     child_requirements = await expand_bom_with_source_control(**_expand_kw)
                     if child_requirements:
                         requirements.extend(child_requirements)
                     else:
-                        requirements.append({
-                            "material_id": component.id,
-                            "material_code": component.main_code or component.code,
-                            "material_name": component.name,
-                            "source_type": component.source_type,
-                            "required_quantity": component_qty,
-                            "unit": bom_item.unit or component.base_unit,
-                            "level": level + 1,
-                            "from_phantom": True,
-                            "phantom_material_id": material_id,
-                        })
+                        requirements.append(_bom_leaf_requirement(
+                            bom_item, component, component_qty, level + 1,
+                            from_phantom=True, phantom_material_id=material_id,
+                        ))
                 else:
-                    requirements.append({
-                        "material_id": component.id,
-                        "material_code": component.main_code or component.code,
-                        "material_name": component.name,
-                        "source_type": component.source_type,
-                        "required_quantity": component_qty,
-                        "unit": bom_item.unit or component.base_unit,
-                        "level": level + 1,
-                        "from_phantom": True,
-                        "phantom_material_id": material_id,
-                    })
+                    requirements.append(_bom_leaf_requirement(
+                        bom_item, component, component_qty, level + 1,
+                        from_phantom=True, phantom_material_id=material_id,
+                    ))
         else:
             # MRP（历史）：虚拟件下对每个子件递归展开；无展开结果则记叶
             for bom_item in bom_items:
@@ -485,17 +485,10 @@ async def expand_bom_with_source_control(
                 if child_requirements:
                     requirements.extend(child_requirements)
                 else:
-                    requirements.append({
-                        "material_id": component.id,
-                        "material_code": component.main_code or component.code,
-                        "material_name": component.name,
-                        "source_type": component.source_type,
-                        "required_quantity": component_qty,
-                        "unit": bom_item.unit or component.base_unit,
-                        "level": level + 1,
-                        "from_phantom": True,
-                        "phantom_material_id": material_id,
-                    })
+                    requirements.append(_bom_leaf_requirement(
+                        bom_item, component, component_qty, level + 1,
+                        from_phantom=True, phantom_material_id=material_id,
+                    ))
 
         return requirements
     
@@ -574,27 +567,13 @@ async def expand_bom_with_source_control(
                 if child_requirements:
                     requirements.extend(child_requirements)
                 else:
-                    requirements.append({
-                        "material_id": component.id,
-                        "material_code": component.main_code or component.code,
-                        "material_name": component.name,
-                        "source_type": component_source_type,
-                        "required_quantity": component_qty,
-                        "unit": bom_item.unit or component.base_unit,
-                        "level": level + 1,
-                        "from_phantom": False,
-                    })
+                    requirements.append(_bom_leaf_requirement(
+                        bom_item, component, component_qty, level + 1, from_phantom=False,
+                    ))
             else:
-                requirements.append({
-                    "material_id": component.id,
-                    "material_code": component.main_code or component.code,
-                    "material_name": component.name,
-                    "source_type": component_source_type,
-                    "required_quantity": component_qty,
-                    "unit": bom_item.unit or component.base_unit,
-                    "level": level + 1,
-                    "from_phantom": False,
-                })
+                requirements.append(_bom_leaf_requirement(
+                    bom_item, component, component_qty, level + 1, from_phantom=False,
+                ))
     else:
         # MRP（历史）：子件为虚拟件则整段展开；否则先记一行再按是否存在 BOM 行递归展开
         for bom_item in bom_items:
@@ -615,16 +594,9 @@ async def expand_bom_with_source_control(
                 )
                 requirements.extend(child_requirements)
             else:
-                requirements.append({
-                    "material_id": component.id,
-                    "material_code": component.main_code or component.code,
-                    "material_name": component.name,
-                    "source_type": component_source_type,
-                    "required_quantity": component_qty,
-                    "unit": bom_item.unit or component.base_unit,
-                    "level": level + 1,
-                    "from_phantom": False,
-                })
+                requirements.append(_bom_leaf_requirement(
+                    bom_item, component, component_qty, level + 1, from_phantom=False,
+                ))
                 if await _child_has_any_approved_bom_row(
                     tenant_id, component.id, only_approved, as_of_date
                 ):

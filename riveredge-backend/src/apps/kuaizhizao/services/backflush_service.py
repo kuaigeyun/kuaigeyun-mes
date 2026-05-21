@@ -55,14 +55,19 @@ class BackflushService(AppBaseService[BackflushRecord]):
                 tenant_id=tenant_id,
                 material_id=product_id,
                 required_quantity=report_quantity,
-                only_approved=True
+                only_approved=True,
+                for_kitting_analysis=True,
             )
         except NotFoundError:
             logger.debug(f"产品 {product_id} 无BOM或BOM未审核，跳过倒冲")
             return []
 
+        from apps.kuaizhizao.utils.issue_method_resolver import is_backflush_material
+
         consumption_list = []
         for req in requirements:
+            if not is_backflush_material(getattr(req, "issue_method", None), req.component_type):
+                continue
             consumption_list.append({
                 "component_id": req.component_id,
                 "component_code": req.component_code,
@@ -261,6 +266,18 @@ class BackflushService(AppBaseService[BackflushRecord]):
         )
         if not work_order:
             raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        existing_ok = await BackflushRecord.filter(
+            tenant_id=tenant_id,
+            report_id=report_id,
+            status="success",
+            deleted_at__isnull=True,
+        ).exists()
+        if existing_ok:
+            logger.info(f"报工 {report_id} 已成功倒冲，跳过重复执行")
+            return await BackflushRecord.filter(
+                tenant_id=tenant_id, report_id=report_id, deleted_at__isnull=True
+            ).all()
 
         consumption_list = await self.calculate_consumption(
             tenant_id=tenant_id,

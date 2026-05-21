@@ -56,6 +56,7 @@ class MaterialRequirement(BaseSchema):
     planned_receipt: float = Field(..., description="计划入库")
     unit: str = Field(..., description="单位")
     lead_time: int = Field(..., description="前置时间")
+    issue_method: str = Field(default="pick", description="发料方式 pick/backflush/none")
 
 
 class MRPRequirement(BaseSchema):

@@ -1298,6 +1298,8 @@ class MaterialPrepReminderItem(BaseSchema):
     kitting_status: str = Field(..., description="齐套状态")
     composite_score: Optional[float] = Field(None, description="备料场景综合分")
     score_breakdown: Optional[dict] = Field(None, description="打分明细")
+    suggested_warehouse_id: Optional[int] = Field(None, description="建议主仓ID")
+    suggested_warehouse_name: Optional[str] = Field(None, description="建议主仓名称")
 
 
 class MaterialPrepReminderResponse(BaseSchema):

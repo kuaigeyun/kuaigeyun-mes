@@ -451,6 +451,7 @@ export interface BOM {
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate: number; // 损耗率（百分比，如：5.00表示5%）
   isRequired: boolean; // 是否必选（默认：true）
+  issueMethod?: 'pick' | 'backflush' | 'none';
   // 层级信息（用于多层级BOM展开，根据优化设计规范新增）
   level: number; // 层级深度（0为顶层）
   path?: string; // 层级路径（如：1/2/3）
@@ -495,7 +496,7 @@ export interface BOMCreate {
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
   isRequired?: boolean; // 是否必选（默认：true）
-  // 层级信息（根据优化设计规范新增）
+  issueMethod?: 'pick' | 'backflush' | 'none';
   level?: number; // 层级深度（0为顶层）
   path?: string; // 层级路径（如：1/2/3）
   isAlternative?: boolean;
@@ -513,6 +514,7 @@ export interface BOMUpdate {
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
   isRequired?: boolean; // 是否必选
+  issueMethod?: 'pick' | 'backflush' | 'none';
   // 层级信息（根据优化设计规范新增）
   level?: number; // 层级深度（0为顶层）
   path?: string; // 层级路径（如：1/2/3）
@@ -551,6 +553,7 @@ export interface BOMItemCreate {
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
   isRequired?: boolean; // 是否必选（默认：true）
+  issueMethod?: 'pick' | 'backflush' | 'none';
   isAlternative?: boolean;
   alternativeGroupId?: number;
   priority?: number;
@@ -594,6 +597,8 @@ export interface BOMBatchImportItem {
   isAlternative?: boolean; // 是否为替代料（同组替代料生产时择一）
   alternativeGroupId?: number | null; // 替代料组ID（同组填相同ID）
   priority?: number; // 优先级（替代料顺序，数字越小越优先）
+  /** 发料方式：pick=领料配料, backflush=倒冲, none=不发料 */
+  issueMethod?: 'pick' | 'backflush' | 'none';
   remark?: string; // 备注（可选）
 }
 
@@ -697,6 +702,8 @@ export interface BOMHierarchyItem {
   priority?: number;
   /** 成品/半成品节点：该物料 BOM 的版本号，用于在节点上显示 */
   bomVersion?: string;
+  /** 发料方式：pick=领料配料, backflush=倒冲, none=不发料 */
+  issueMethod?: 'pick' | 'backflush' | 'none';
   children: BOMHierarchyItem[]; // 子项（递归结构）
 }
 

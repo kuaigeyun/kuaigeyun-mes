@@ -1,6 +1,25 @@
 import { Material } from '../../../types/material';
 import { message } from 'antd'; // Add message import if needed or use arg
 
+const DEFAULT_ISSUE_METHOD_BY_SOURCE: Record<string, 'pick' | 'backflush' | 'none'> = {
+  Phantom: 'none',
+  Service: 'none',
+  Buy: 'backflush',
+  Make: 'pick',
+  Outsource: 'pick',
+  Configure: 'pick',
+};
+
+export function resolveIssueMethodForNode(
+  issueMethod?: string | null,
+  material?: Material | null,
+): 'pick' | 'backflush' | 'none' {
+  const explicit = (issueMethod ?? '').trim().toLowerCase();
+  if (explicit === 'pick' || explicit === 'backflush' || explicit === 'none') return explicit;
+  const st = material?.sourceType ?? (material as any)?.source_type;
+  return DEFAULT_ISSUE_METHOD_BY_SOURCE[st] ?? 'pick';
+}
+
 export interface MindMapNode {
   id: string;
   value: string;
@@ -16,6 +35,8 @@ export interface MindMapNode {
   isAlternative?: boolean;
   alternativeGroupId?: number | null;
   priority?: number;
+  /** 发料方式：pick=领料配料, backflush=倒冲, none=不发料 */
+  issueMethod?: 'pick' | 'backflush' | 'none';
   children?: MindMapNode[];
   [key: string]: any;
 }
@@ -188,6 +209,7 @@ export const handleAddChildNode = (
       quantity: 1,
       wasteRate: 0,
       isRequired: true,
+      issueMethod: 'pick',
     });
   }
 };
@@ -285,6 +307,7 @@ export const handleNodeSelect = (
         unit: node.unit || '',
         wasteRate: node.wasteRate || 0,
         isRequired: node.isRequired !== false,
+        issueMethod: resolveIssueMethodForNode(node.issueMethod, node.material),
         isConfigurable: node.isConfigurable ?? false,
         configurableGroupId: node.configurableGroupId ?? null,
         isDefaultConfigurable: false,

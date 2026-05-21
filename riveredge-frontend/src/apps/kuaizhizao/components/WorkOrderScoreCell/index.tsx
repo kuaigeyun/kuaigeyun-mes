@@ -2,7 +2,7 @@
  * 工单综合分展示（含分解 Tooltip）
  */
 import React from 'react';
-import { Tag, Tooltip, Typography } from 'antd';
+import { Tag, Tooltip, Space } from 'antd';
 
 const DIMENSION_LABELS: Record<string, string> = {
   manual_priority: '人工优先级',
@@ -32,7 +32,11 @@ export const WorkOrderScoreCell: React.FC<WorkOrderScoreCellProps> = ({
   emptyText = '—',
 }) => {
   if (score == null || Number.isNaN(Number(score))) {
-    return <Typography.Text type="secondary">{emptyText}</Typography.Text>;
+    return (
+      <Tag bordered color="default" style={{ margin: 0 }}>
+        {emptyText}
+      </Tag>
+    );
   }
 
   const band = rankBand || (score >= 80 ? 'A' : score >= 60 ? 'B' : 'C');
@@ -57,10 +61,14 @@ export const WorkOrderScoreCell: React.FC<WorkOrderScoreCellProps> = ({
 
   return (
     <Tooltip title={tooltipContent}>
-      <Tag color={BAND_COLORS[band] || 'blue'} style={{ cursor: 'help', margin: 0 }}>
-        {Number(score).toFixed(1)}
-        {band ? ` · ${band}` : ''}
-      </Tag>
+      <Space size={4} style={{ whiteSpace: 'nowrap' }}>
+        <Tag bordered color="processing" style={{ cursor: 'help', margin: 0 }}>
+          {Number(score).toFixed(1)}
+        </Tag>
+        <Tag bordered color={BAND_COLORS[band] || 'default'} style={{ cursor: 'help', margin: 0 }}>
+          {band}
+        </Tag>
+      </Space>
     </Tooltip>
   );
 };

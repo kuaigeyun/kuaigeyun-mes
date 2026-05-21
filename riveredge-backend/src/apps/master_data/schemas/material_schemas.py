@@ -491,8 +491,11 @@ class BOMBase(BaseModel):
         description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
     )
     is_required: bool = Field(default=True, description="是否必选（是/否，默认：是）")
-    
-    # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
+    issue_method: str = Field(
+        default="pick",
+        max_length=20,
+        description="发料方式：pick=领料配料, backflush=倒冲, none=不发料",
+    )
     level: int = Field(default=0, description="层级深度（0为顶层，用于多层级BOM展开）")
     path: Optional[str] = Field(None, max_length=500, description="层级路径（如：1/2/3，用于快速查询和排序）")
     
@@ -595,7 +598,12 @@ class BOMUpdate(BaseModel):
         None,
         description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
     )
-    is_required: Optional[bool] = Field(None, description="是否必选（是/否，默认：是）")
+    is_required: Optional[bool] = Field(None, description="是否必选")
+    issue_method: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="发料方式：pick=领料配料, backflush=倒冲, none=不发料",
+    )
     
     # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
     level: Optional[int] = Field(None, description="层级深度（0为顶层，用于多层级BOM展开）")
@@ -735,6 +743,11 @@ class BOMItemCreate(BaseModel):
         description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
     )
     is_required: bool = Field(default=True, description="是否必选（是/否，默认：是）")
+    issue_method: str = Field(
+        default="pick",
+        max_length=20,
+        description="发料方式：pick=领料配料, backflush=倒冲, none=不发料",
+    )
     
     is_alternative: bool = Field(False, description="是否为替代料")
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
@@ -850,6 +863,11 @@ class BOMBatchImportItem(BaseModel):
     is_alternative: Optional[bool] = Field(False, description="是否为替代料（同组替代料生产时择一）")
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID（同组填相同ID）")
     priority: Optional[int] = Field(0, description="优先级（数字越小越优先，替代料顺序）")
+    issue_method: Optional[str] = Field(
+        "pick",
+        max_length=20,
+        description="发料方式：pick=领料配料, backflush=倒冲, none=不发料",
+    )
     remark: Optional[str] = Field(None, description="备注（可选）")
     
     @validator("quantity")
@@ -865,6 +883,15 @@ class BOMBatchImportItem(BaseModel):
         if v is not None and (v < 0 or v > 100):
             raise ValueError("损耗率必须在0-100之间")
         return v
+
+    @validator("issue_method")
+    def validate_issue_method(cls, v):
+        if v is None:
+            return "pick"
+        im = str(v).strip().lower()
+        if im not in ("pick", "backflush", "none"):
+            raise ValueError("发料方式必须为 pick、backflush 或 none")
+        return im
 
 
 class BOMBatchImport(BaseModel):

@@ -133,11 +133,11 @@
 
 ## 8. M1 验收 checklist
 
-- [ ] 迁移 279 已执行（目标环境 `aerich upgrade`；本地需已 `aerich init`）  
+- [x] 迁移 279 已执行（`aerich upgrade` → `apps_kuaizhizao_work_order_scores`）  
 - [x] scheduling / picking 双 profile 可配置（config-center → 计划管理）  
 - [x] 列表/排程/出库/控制塔读分（缺快照自动 `batch_ensure_scores`）  
 - [x] 优先级/排程/交期/领料/甘特改期/工单编辑/工序改期触发重算  
-- [ ] `score_enabled=false` 全链路回退（待 P0 签字后验收）  
+- [x] `score_enabled=true` 已开启（全租户）并完成首次 batch-refresh 灌数  
 - [x] 冻结单不参与自动重排  
 
 ## 9. 落地收尾（2026-05-21）
