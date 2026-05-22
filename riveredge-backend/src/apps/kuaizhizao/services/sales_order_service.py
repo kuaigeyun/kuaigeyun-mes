@@ -26,6 +26,11 @@ from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.kuaicaiwu.models.receivable import Receivable
+from apps.kuaicaiwu.models.invoice import Invoice
+from apps.kuaicaiwu.constants.finance_source_types import (
+    RECEIVABLE_SOURCE_SALES_DELIVERY,
+    RECEIVABLE_SOURCE_SALES_INVOICE,
+)
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.state_transition import StateTransitionLog
@@ -155,6 +160,123 @@ class SalesOrderService:
         for oid, dids in order_for.items():
             out[oid] = sum((qty_by_did.get(d, Decimal("0")) for d in dids), start=Decimal("0"))
         return out
+
+    _EXCLUDED_SALES_INVOICE_STATUSES = ("已作废", "已红冲")
+
+    async def _batch_finance_progress_by_order(
+        self,
+        tenant_id: int,
+        orders: List[SalesOrder],
+        order_to_delivery_ids: Dict[int, List[int]],
+    ) -> Dict[int, Dict[str, float]]:
+        """
+        批量计算销售订单账款/发票进度（0-100）。
+        - invoice_amount_progress：销项发票（或应收立账）相对订单金额的覆盖度
+        - collection_progress：已收款相对订单金额
+        - invoice_progress：二者较小值，开票与收款均完成时为 100
+        """
+        if not orders:
+            return {}
+
+        code_to_order_id: Dict[str, int] = {}
+        for order in orders:
+            code = str(order.order_code or "").strip()
+            if code:
+                code_to_order_id[code] = int(order.id)
+
+        invoiced_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        received_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        receivable_total_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+
+        if code_to_order_id:
+            invoice_rows = await Invoice.filter(
+                tenant_id=tenant_id,
+                category="OUT",
+                source_document_code__in=list(code_to_order_id.keys()),
+            ).exclude(status__in=self._EXCLUDED_SALES_INVOICE_STATUSES).values_list(
+                "id", "source_document_code", "total_amount"
+            )
+            invoice_id_to_order: Dict[int, int] = {}
+            for invoice_id, source_code, total_amount in invoice_rows:
+                oid = code_to_order_id.get(str(source_code or "").strip())
+                if not oid:
+                    continue
+                invoice_id_to_order[int(invoice_id)] = oid
+                invoiced_by_order[oid] += Decimal(str(total_amount or 0))
+
+            if invoice_id_to_order:
+                recv_from_invoice = await Receivable.filter(
+                    tenant_id=tenant_id,
+                    source_type=RECEIVABLE_SOURCE_SALES_INVOICE,
+                    source_id__in=list(invoice_id_to_order.keys()),
+                    deleted_at__isnull=True,
+                ).values_list("source_id", "received_amount")
+                for source_id, received_amount in recv_from_invoice:
+                    oid = invoice_id_to_order.get(int(source_id))
+                    if oid:
+                        received_by_order[oid] += Decimal(str(received_amount or 0))
+
+        delivery_to_order: Dict[int, int] = {}
+        all_delivery_ids: List[int] = []
+        for oid, dids in order_to_delivery_ids.items():
+            for did in dids:
+                delivery_to_order[int(did)] = int(oid)
+                all_delivery_ids.append(int(did))
+
+        if all_delivery_ids:
+            recv_from_delivery = await Receivable.filter(
+                tenant_id=tenant_id,
+                source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
+                source_id__in=all_delivery_ids,
+                deleted_at__isnull=True,
+            ).values_list(
+                "source_id", "total_amount", "received_amount"
+            )
+            for source_id, total_amount, received_amount in recv_from_delivery:
+                oid = delivery_to_order.get(int(source_id))
+                if not oid:
+                    continue
+                total = Decimal(str(total_amount or 0))
+                received = Decimal(str(received_amount or 0))
+                receivable_total_by_order[oid] += total
+                received_by_order[oid] += received
+
+        result: Dict[int, Dict[str, float]] = {}
+        for order in orders:
+            order_amount = Decimal(str(order.total_amount or 0))
+            if order_amount <= 0:
+                result[order.id] = {
+                    "invoice_progress": 0.0,
+                    "invoice_amount_progress": 0.0,
+                    "collection_progress": 0.0,
+                }
+                continue
+
+            invoiced = max(
+                invoiced_by_order.get(order.id, Decimal("0")),
+                receivable_total_by_order.get(order.id, Decimal("0")),
+            )
+
+            received = received_by_order.get(order.id, Decimal("0"))
+            invoice_amount_progress = float(
+                min(Decimal("100"), (invoiced / order_amount) * Decimal("100"))
+            )
+            collection_progress = float(
+                min(Decimal("100"), (received / order_amount) * Decimal("100"))
+            )
+            if invoice_amount_progress <= 0 and collection_progress <= 0:
+                invoice_progress = 0.0
+            elif invoice_amount_progress >= 100 and collection_progress >= 100:
+                invoice_progress = 100.0
+            else:
+                invoice_progress = float(min(invoice_amount_progress, collection_progress))
+
+            result[order.id] = {
+                "invoice_progress": round(invoice_progress, 1),
+                "invoice_amount_progress": round(invoice_amount_progress, 1),
+                "collection_progress": round(collection_progress, 1),
+            }
+        return result
 
     async def _batch_shippable_by_order(
         self,
@@ -328,6 +450,8 @@ class SalesOrderService:
         duration_info: Optional[dict] = None,
         delivery_progress: Optional[float] = None,
         invoice_progress: Optional[float] = None,
+        invoice_amount_progress: Optional[float] = None,
+        collection_progress: Optional[float] = None,
         material_code_fallback: Optional[Dict[int, str]] = None,
         material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
         milestones: Optional[List[Dict[str, Any]]] = None,
@@ -341,6 +465,8 @@ class SalesOrderService:
             items=items,
             delivery_progress=delivery_progress,
             invoice_progress=invoice_progress,
+            invoice_amount_progress=invoice_amount_progress,
+            collection_progress=collection_progress,
             pushed_to_computation=bool(demand and getattr(demand, "pushed_to_computation", False)),
             milestones=milestones,
         )
@@ -1046,6 +1172,16 @@ class SalesOrderService:
             else {}
         )
 
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).values_list("id", "sales_order_id")
+        order_to_deliveries: Dict[int, List[int]] = {sales_order_id: [int(d[0]) for d in deliveries]}
+        finance = (
+            await self._batch_finance_progress_by_order(tenant_id, [order], order_to_deliveries)
+        ).get(sales_order_id, {})
+
         return self._order_to_response(
             order,
             items=items,
@@ -1055,6 +1191,9 @@ class SalesOrderService:
             material_fallback=material_fallback,
             milestones=milestones,
             delivery_progress=delivery_progress,
+            invoice_progress=finance.get("invoice_progress", 0.0),
+            invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
+            collection_progress=finance.get("collection_progress", 0.0),
             shippable_hint=shippable_map.get(sales_order_id),
         )
 
@@ -1194,31 +1333,19 @@ class SalesOrderService:
                         material_code_fallback_all[oid] = fallback
                         material_fallback_all[oid] = mat_fallback
 
-        # 5. 批量计算开票进度
+        # 5. 批量计算账款/发票进度
         deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
             sales_order_id__in=order_ids,
             deleted_at__isnull=True,
         ).values_list("id", "sales_order_id")
-        delivery_ids = [d[0] for d in deliveries]
         order_to_deliveries: Dict[int, List[int]] = {}
         for did, oid in deliveries:
             order_to_deliveries.setdefault(oid, []).append(did)
 
-        invoiced_by_order: Dict[int, Decimal] = {}
-        if delivery_ids:
-            receivables = await Receivable.filter(
-                tenant_id=tenant_id,
-                source_type="销售出库",
-                source_id__in=delivery_ids,
-                invoice_issued=True,
-                deleted_at__isnull=True,
-            ).values_list("source_id", "total_amount")
-            delivery_to_invoiced: Dict[int, Decimal] = {}
-            for did, amt in receivables:
-                delivery_to_invoiced[did] = delivery_to_invoiced.get(did, Decimal("0")) + Decimal(str(amt or 0))
-            for oid, dids in order_to_deliveries.items():
-                invoiced_by_order[oid] = sum(delivery_to_invoiced.get(did, Decimal("0")) for did in dids)
+        finance_progress_by_order = await self._batch_finance_progress_by_order(
+            tenant_id, orders, order_to_deliveries
+        )
 
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
 
@@ -1241,16 +1368,10 @@ class SalesOrderService:
 
             delivery_progress = delivery_progress_by_order.get(order.id, 0.0)
 
-            invoice_progress_val: Optional[float] = None
-            order_amount = Decimal(str(order.total_amount or 0))
-            if order_amount and order_amount > 0:
-                invoiced = invoiced_by_order.get(order.id, Decimal("0"))
-                try:
-                    invoice_progress_val = float(min(100, (invoiced / order_amount) * 100))
-                except Exception:
-                    invoice_progress_val = 0.0
-            else:
-                invoice_progress_val = 0.0
+            finance = finance_progress_by_order.get(order.id, {})
+            invoice_progress_val = finance.get("invoice_progress", 0.0)
+            invoice_amount_progress_val = finance.get("invoice_amount_progress", 0.0)
+            collection_progress_val = finance.get("collection_progress", 0.0)
 
             sales_orders.append(
                 self._order_to_response(
@@ -1259,6 +1380,8 @@ class SalesOrderService:
                     demand=demand_by_order.get(order.id),
                     delivery_progress=delivery_progress,
                     invoice_progress=invoice_progress_val,
+                    invoice_amount_progress=invoice_amount_progress_val,
+                    collection_progress=collection_progress_val,
                     material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                     material_fallback=material_fallback_all.get(order.id) if include_items else None,
                     shippable_hint=shippable_map.get(order.id),

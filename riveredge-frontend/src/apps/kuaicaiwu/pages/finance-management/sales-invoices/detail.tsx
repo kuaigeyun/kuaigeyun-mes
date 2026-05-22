@@ -3,7 +3,6 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  PageContainer,
   ProDescriptions,
   ProForm,
   ProFormDatePicker,
@@ -12,15 +11,22 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { Button, Card, Form, Input, Modal, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Space, Spin, Table, Tag, Typography, message, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import {
+  DetailDrawerSection,
+  DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  uniTabsChildPageVerticalInsetStyle,
+} from '../../../../../components/layout-templates';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import {
-  displaySalesInvoiceListCode,
+  formatSalesInvoiceDetailPageTitle,
+  formatSalesInvoiceTabTitle,
   formatSalesInvoiceTypeZh,
   INVOICE_TYPE_OPTIONS,
 } from '../../../utils/salesInvoiceUi';
@@ -79,12 +85,26 @@ function moneyCell(v: string | number | undefined | null) {
 const SalesInvoiceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm();
   const voidReasonRef = useRef('');
   const redLetterReasonRef = useRef('');
   const reasonFieldKeyRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SalesInvoiceDetail | null>(null);
+
+  const pageTitle = formatSalesInvoiceDetailPageTitle(data?.invoice_number);
+  const tabTitle = formatSalesInvoiceTabTitle(data?.invoice_number);
+
+  useEffect(() => {
+    if (!data) return;
+    const tabKey = location.pathname + location.search;
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, title: tabTitle },
+      }),
+    );
+  }, [tabTitle, data, location.pathname, location.search]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -148,7 +168,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
     if (!id || !data) return;
     Modal.confirm({
       title: '审核通过',
-      content: `确认审核通过 ${data.invoice_number?.trim() || displaySalesInvoiceListCode(data)}？`,
+      content: `确认审核通过 ${data.invoice_number?.trim() || '该发票'}？`,
       onOk: async () => {
         await apiRequest(`/apps/kuaicaiwu/sales-invoices/${id}/approve`, { method: 'POST' });
         message.success('已审核');
@@ -223,28 +243,63 @@ const SalesInvoiceDetailPage: React.FC = () => {
 
   if (!id) return null;
 
+  const isRedDraft = data?.original_invoice_id != null;
+  const showRedLetterBtn = data
+    && String(data.status || '') === '已审核'
+    && !data.red_flush_invoice_id
+    && !isRedDraft;
+
+  const pageActions = data ? (
+    <Space wrap size={8}>
+      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>返回</Button>
+      {editable ? (
+        <Button type="primary" onClick={save}>
+          保存修改
+        </Button>
+      ) : null}
+      {data.review_status === '待审核' && ['未审核', 'DRAFT'].includes(String(data.status || '')) ? (
+        <Button type="primary" onClick={approve}>
+          审核通过
+        </Button>
+      ) : null}
+      {editable ? (
+        <Button danger onClick={openVoid}>
+          作废
+        </Button>
+      ) : null}
+      {showRedLetterBtn ? (
+        <Button onClick={openRedLetter}>
+          申请红字发票
+        </Button>
+      ) : null}
+    </Space>
+  ) : null;
+
+  const renderShell = (body: React.ReactNode) => (
+    <div style={uniTabsChildPageVerticalInsetStyle()}>
+      <div style={DOCUMENT_DETAIL_PAGE_HEADER_STYLE}>
+        <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+          {pageTitle}
+        </Typography.Title>
+        {pageActions}
+      </div>
+      {body}
+    </div>
+  );
+
   if (loading && !data) {
-    return (
-      <PageContainer>
-        <div style={{ padding: 80, textAlign: 'center' }}>
-          <Spin size="large" />
-        </div>
-      </PageContainer>
+    return renderShell(
+      <div style={{ padding: '48px 0', textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>,
     );
   }
 
   if (!data) {
-    return (
-      <PageContainer>
-        <Typography.Text type="secondary">未找到发票</Typography.Text>
-      </PageContainer>
-    );
+    return renderShell(<Empty description="未找到发票" />);
   }
 
   const lc = getChineseInvoiceLifecycle(data as unknown as Record<string, unknown>);
-  const isRedDraft = data.original_invoice_id != null;
-  const showRedLetterBtn =
-    String(data.status || '') === '已审核' && !data.red_flush_invoice_id && !isRedDraft;
 
   const lineColumns: ColumnsType<SalesInvoiceLine> = [
     { title: '货物或应税劳务名称', dataIndex: 'item_name', width: 200 },
@@ -287,36 +342,9 @@ const SalesInvoiceDetailPage: React.FC = () => {
     },
   ];
 
-  return (
-    <PageContainer
-      title={`销售发票 · ${displaySalesInvoiceListCode(data)}`}
-      extra={[
-        <Button key="back" onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>
-          返回列表
-        </Button>,
-        editable ? (
-          <Button key="save" type="primary" onClick={save}>
-            保存修改
-          </Button>
-        ) : null,
-        data.review_status === '待审核' && ['未审核', 'DRAFT'].includes(String(data.status || '')) ? (
-          <Button key="ap" type="primary" onClick={approve}>
-            审核通过
-          </Button>
-        ) : null,
-        editable ? (
-          <Button key="void" danger onClick={openVoid}>
-            作废
-          </Button>
-        ) : null,
-        showRedLetterBtn ? (
-          <Button key="red" onClick={openRedLetter}>
-            申请红字发票
-          </Button>
-        ) : null,
-      ].filter(Boolean)}
-    >
-      <Card size="small" style={{ marginBottom: 16 }}>
+  return renderShell(
+    <>
+      <DetailDrawerSection title="状态与关联">
         <Space align="start" size={24} wrap>
           <UniLifecycle percent={lc.percent} stageName={lc.stageName} status={lc.status} subStages={lc.subStages} showLabel size="small" />
           {isRedDraft ? <Tag color="volcano">红字发票</Tag> : null}
@@ -336,29 +364,25 @@ const SalesInvoiceDetailPage: React.FC = () => {
             </Typography.Link>
           ) : null}
         </Space>
-      </Card>
+      </DetailDrawerSection>
 
-      <ProDescriptions column={2} bordered size="small" title="票面与抬头">
-        <ProDescriptions.Item label="内部序号">{displaySalesInvoiceListCode(data)}</ProDescriptions.Item>
-        <ProDescriptions.Item label="系统编码（调试）">
-          <Typography.Text copyable={{ text: data.invoice_code }} code style={{ fontSize: 12 }}>
-            {data.invoice_code}
-          </Typography.Text>
-        </ProDescriptions.Item>
-        <ProDescriptions.Item label="客户">{data.customer_name}</ProDescriptions.Item>
-        <ProDescriptions.Item label="来源订单号">{data.sales_order_code || '—'}</ProDescriptions.Item>
-        <ProDescriptions.Item label="状态">{data.status}</ProDescriptions.Item>
-        <ProDescriptions.Item label="审核">{data.review_status}</ProDescriptions.Item>
-        {data.void_reason ? (
-          <ProDescriptions.Item label="作废原因" span={2}>
-            <Typography.Text type="danger">{data.void_reason}</Typography.Text>
-            {data.voided_at ? `（${dayjs(data.voided_at).format('YYYY-MM-DD HH:mm')}）` : null}
-          </ProDescriptions.Item>
-        ) : null}
-      </ProDescriptions>
+      <DetailDrawerSection title="票面与抬头">
+        <ProDescriptions column={2} bordered size="small">
+          <ProDescriptions.Item label="客户">{data.customer_name}</ProDescriptions.Item>
+          <ProDescriptions.Item label="来源订单号">{data.sales_order_code || '—'}</ProDescriptions.Item>
+          <ProDescriptions.Item label="状态">{data.status}</ProDescriptions.Item>
+          <ProDescriptions.Item label="审核">{data.review_status}</ProDescriptions.Item>
+          {data.void_reason ? (
+            <ProDescriptions.Item label="作废原因" span={2}>
+              <Typography.Text type="danger">{data.void_reason}</Typography.Text>
+              {data.voided_at ? `（${dayjs(data.voided_at).format('YYYY-MM-DD HH:mm')}）` : null}
+            </ProDescriptions.Item>
+          ) : null}
+        </ProDescriptions>
+      </DetailDrawerSection>
 
       {editable ? (
-        <Card size="small" title="编辑票面信息" style={{ marginTop: 16 }}>
+        <DetailDrawerSection title="编辑票面信息">
           <ProForm form={form} submitter={false} layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 14 }}>
             <ProFormText name="invoice_number" label="发票号码" placeholder="取得税控票面号码后填写" />
             <ProFormDatePicker name="invoice_date" label="开票日期" rules={[{ required: true }]} fieldProps={{ style: { width: '100%' } }} />
@@ -369,25 +393,27 @@ const SalesInvoiceDetailPage: React.FC = () => {
             <ProFormDigit name="total_amount" label="价税合计" min={-1e12} fieldProps={{ precision: 2 }} rules={[{ required: true }]} />
             <ProFormTextArea name="notes" label="备注" />
           </ProForm>
-        </Card>
+        </DetailDrawerSection>
       ) : (
-        <ProDescriptions column={2} bordered size="small" title="金额与类型" style={{ marginTop: 16 }}>
-          <ProDescriptions.Item label="发票号码">{data.invoice_number?.trim() ? data.invoice_number : '—'}</ProDescriptions.Item>
-          <ProDescriptions.Item label="开票日期">{data.invoice_date}</ProDescriptions.Item>
-          <ProDescriptions.Item label="发票类型">{formatSalesInvoiceTypeZh(data.invoice_type)}</ProDescriptions.Item>
-          <ProDescriptions.Item label="税率">{data.tax_rate}%</ProDescriptions.Item>
-          <ProDescriptions.Item label="不含税金额">¥{moneyCell(data.invoice_amount)}</ProDescriptions.Item>
-          <ProDescriptions.Item label="税额">¥{moneyCell(data.tax_amount)}</ProDescriptions.Item>
-          <ProDescriptions.Item label="价税合计">
-            <Typography.Text strong>¥{moneyCell(data.total_amount)}</Typography.Text>
-          </ProDescriptions.Item>
-          <ProDescriptions.Item label="备注" span={2}>
-            {data.notes || '—'}
-          </ProDescriptions.Item>
-        </ProDescriptions>
+        <DetailDrawerSection title="金额与类型">
+          <ProDescriptions column={2} bordered size="small">
+            <ProDescriptions.Item label="发票号码">{data.invoice_number?.trim() ? data.invoice_number : '—'}</ProDescriptions.Item>
+            <ProDescriptions.Item label="开票日期">{data.invoice_date}</ProDescriptions.Item>
+            <ProDescriptions.Item label="发票类型">{formatSalesInvoiceTypeZh(data.invoice_type)}</ProDescriptions.Item>
+            <ProDescriptions.Item label="税率">{data.tax_rate}%</ProDescriptions.Item>
+            <ProDescriptions.Item label="不含税金额">¥{moneyCell(data.invoice_amount)}</ProDescriptions.Item>
+            <ProDescriptions.Item label="税额">¥{moneyCell(data.tax_amount)}</ProDescriptions.Item>
+            <ProDescriptions.Item label="价税合计">
+              <Typography.Text strong>¥{moneyCell(data.total_amount)}</Typography.Text>
+            </ProDescriptions.Item>
+            <ProDescriptions.Item label="备注" span={2}>
+              {data.notes || '—'}
+            </ProDescriptions.Item>
+          </ProDescriptions>
+        </DetailDrawerSection>
       )}
 
-      <Card size="small" title="发票明细" style={{ marginTop: 16 }}>
+      <DetailDrawerSection title="发票明细" marginBottom={0}>
         <Table<SalesInvoiceLine>
           size="small"
           rowKey="id"
@@ -397,8 +423,8 @@ const SalesInvoiceDetailPage: React.FC = () => {
           locale={{ emptyText: '无明细（可通过统一发票入口维护明细）' }}
           scroll={{ x: 1000 }}
         />
-      </Card>
-    </PageContainer>
+      </DetailDrawerSection>
+    </>,
   );
 };
 

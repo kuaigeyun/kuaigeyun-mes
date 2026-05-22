@@ -31,6 +31,7 @@ export interface PayableListParams {
     limit?: number;
     status?: string;
     supplier_id?: number;
+    pending_settlement?: boolean;
 }
 
 export interface PayableCreateData {

@@ -131,9 +131,9 @@ class PayableService(AppBaseService[Payable]):
             raise NotFoundError(f"应付单不存在: {payable_id}")
         return PayableResponse.model_validate(payable)
 
-    async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PayableResponse]:
+    async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[PayableResponse], int]:
         """获取应付单列表"""
-        query = Payable.filter(tenant_id=tenant_id)
+        query = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('supplier_id'):
@@ -142,9 +142,12 @@ class PayableService(AppBaseService[Payable]):
             query = query.filter(due_date__gte=filters['due_date_start'])
         if filters.get('due_date_end'):
             query = query.filter(due_date__lte=filters['due_date_end'])
+        if filters.get('pending_settlement'):
+            query = query.filter(remaining_amount__gt=0)
 
+        total = await query.count()
         payables = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [PayableResponse.model_validate(payable) for payable in payables]
+        return [PayableResponse.model_validate(payable) for payable in payables], total
 
     async def update_payable(self, tenant_id: int, payable_id: int, payable_data: PayableUpdate, updated_by: int) -> PayableResponse:
         """更新应付单"""

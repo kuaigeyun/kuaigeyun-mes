@@ -98,6 +98,7 @@ async def list_payments(
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
+    unsettled_only: bool = Query(False, description="仅返回有余额的付款单（unsettled_amount > 0）"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     _auth: object = Depends(
@@ -113,6 +114,8 @@ async def list_payments(
     query = Payment.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     if status:
         query = query.filter(status=status)
+    if unsettled_only:
+        query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if supplier_id:
         query = query.filter(supplier_id=supplier_id)
     if start_date:

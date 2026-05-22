@@ -44,3 +44,15 @@ export function displaySalesInvoiceListCode(r: SalesInvoiceCodeRow): string {
   if (isUuidInvoiceCode(r.invoice_code)) return `#${r.id}`;
   return String(r.invoice_code ?? '—');
 }
+
+/** 详情页标题：销售发票 + 发票号码（无号码时不展示内部序号） */
+export function formatSalesInvoiceDetailPageTitle(invoiceNumber?: string | null): string {
+  const num = String(invoiceNumber ?? '').trim();
+  return num ? `销售发票 ${num}` : '销售发票';
+}
+
+/** 详情 Tab 标题：优先发票号码 */
+export function formatSalesInvoiceTabTitle(invoiceNumber?: string | null): string {
+  const num = String(invoiceNumber ?? '').trim();
+  return num || '销售发票';
+}

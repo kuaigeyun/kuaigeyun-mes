@@ -321,6 +321,7 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
   const navigate = navigateProp ?? navigateHook;
   const { order, lifecycle } = useSalesOrderDetailContext();
   const mainStages = lifecycle.mainStages ?? [];
+  const subStages = lifecycle.subStages ?? [];
   const hideStepperNext = Boolean(lifecycle.nextStepSuggestions?.length);
   const closeDrawer = onCloseDrawer ?? (() => {});
 
@@ -333,6 +334,16 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
           showLabels
           nextStepSuggestions={lifecycle.nextStepSuggestions}
           hideNextStepSuggestions={hideStepperNext}
+        />
+      )}
+      {subStages.length > 0 && (
+        <UniLifecycleStepper
+          steps={subStages}
+          status={lifecycle.status}
+          showLabels
+          nodeSize={36}
+          connectorWidth={36}
+          stepLabelMaxWidth={120}
         />
       )}
       {order.id != null ? (

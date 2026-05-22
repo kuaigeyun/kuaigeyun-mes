@@ -164,6 +164,8 @@ def get_sales_order_lifecycle(
     items: Optional[List[Any]] = None,
     delivery_progress: Optional[float] = None,
     invoice_progress: Optional[float] = None,
+    invoice_amount_progress: Optional[float] = None,
+    collection_progress: Optional[float] = None,
     pushed_to_computation: bool = False,
     milestones: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
@@ -175,6 +177,8 @@ def get_sales_order_lifecycle(
     review_status = _norm(getattr(order, "review_status", None))
     delivery = delivery_progress if delivery_progress is not None else 0.0
     invoice = invoice_progress if invoice_progress is not None else 0.0
+    invoice_amt = invoice_amount_progress if invoice_amount_progress is not None else invoice
+    collection = collection_progress if collection_progress is not None else invoice
     pushed = pushed_to_computation or getattr(order, "planning_pushed_to_computation", False)
 
     if _is_rejected(review_status):
@@ -248,13 +252,34 @@ def get_sales_order_lifecycle(
             "next_step_suggestions": [],
         }
     if effective and delivery >= 100 and invoice < 100:
+        finance_sub_stages = [
+            {
+                "key": "sales_invoice",
+                "label": "销售发票",
+                "status": "done" if invoice_amt >= 100 else ("active" if invoice_amt > 0 else "pending"),
+                "percent": round(invoice_amt, 1),
+            },
+            {
+                "key": "receivable_collection",
+                "label": "收款核销",
+                "status": "done"
+                if collection >= 100
+                else ("active" if collection > 0 or invoice_amt >= 100 else "pending"),
+                "percent": round(collection, 1),
+            },
+        ]
+        suggestions: List[str] = []
+        if invoice_amt < 100:
+            suggestions.append("下推销售发票")
+        if collection < 100:
+            suggestions.append("登记收款与对账")
         return {
             "current_stage_key": "invoicing",
             "current_stage_name": "账款发票处理",
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "invoicing"),
-            "sub_stages": None,
-            "next_step_suggestions": ["下推销售发票", "登记收款与对账"],
+            "sub_stages": finance_sub_stages,
+            "next_step_suggestions": suggestions or ["下推销售发票", "登记收款与对账"],
         }
     # 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度）
     if effective and delivery <= 0:

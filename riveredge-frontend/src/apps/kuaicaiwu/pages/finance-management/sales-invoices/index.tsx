@@ -26,6 +26,7 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../../kuaizhizao/services/sales-order';
 import { warehouseApi } from '../../../../kuaizhizao/services/warehouse-execution';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 
 interface SalesInvoice {
   id: number;
@@ -80,6 +81,8 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullSourceType, setPullSourceType] = useState<'sales_order' | 'sales_delivery'>('sales_order');
   const [pullCandidates, setPullCandidates] = useState<PullInvoiceCandidate[]>([]);
   const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
+  const [pullFormVisible, setPullFormVisible] = useState(false);
+  const [pullSelectedSource, setPullSelectedSource] = useState<PullInvoiceCandidate | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
@@ -124,17 +127,32 @@ const SalesInvoicesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const fetchExistingSourceCodesFromInvoices = async (): Promise<Set<string>> => {
+    const codes = new Set<string>();
+    const pageSize = 200;
+    let skip = 0;
+    let total = Infinity;
+    while (skip < total) {
+      const res = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', {
+        params: { skip, limit: pageSize },
+      });
+      const items = res?.items || [];
+      total = Number(res?.total ?? items.length);
+      items.forEach((x: any) => {
+        const code = String(x?.sales_order_code || '').trim();
+        if (code) codes.add(code);
+      });
+      if (items.length < pageSize) break;
+      skip += pageSize;
+    }
+    return codes;
+  };
+
   const loadPullCandidates = async (sourceType: 'sales_order' | 'sales_delivery', keyword = '') => {
     setPullLoading(true);
     try {
       const kw = keyword.trim().toLowerCase();
-      const invoiceRes = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', { params: { skip: 0, limit: 5000 } });
-      const invoices = invoiceRes?.items || [];
-      const existedCodes = new Set<string>(
-        invoices
-          .map((x: any) => String(x?.sales_order_code || '').trim())
-          .filter((x: string) => !!x),
-      );
+      const existedCodes = await fetchExistingSourceCodesFromInvoices();
 
       if (sourceType === 'sales_order') {
         const orderRes = await listSalesOrders({ skip: 0, limit: 200, keyword: kw || undefined });
@@ -173,8 +191,9 @@ const SalesInvoicesPage: React.FC = () => {
         });
         setPullCandidates(rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true)));
       }
-    } catch {
+    } catch (e: any) {
       setPullCandidates([]);
+      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || '加载来源单失败');
     } finally {
       setPullLoading(false);
     }
@@ -188,7 +207,7 @@ const SalesInvoicesPage: React.FC = () => {
     await loadPullCandidates(sourceType, '');
   };
 
-  const handlePullConfirm = async () => {
+  const handlePullNext = () => {
     if (!selectedPullSourceId) {
       messageApi.warning(`请选择${pullSourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel}`);
       return;
@@ -204,33 +223,53 @@ const SalesInvoicesPage: React.FC = () => {
       messageApi.warning(`源单据金额为 0，无法创建${pullFromSalesOrderAction.targetLabel}`);
       return;
     }
-    const taxRate = 13;
+    setPullSelectedSource(selected);
+    setPullVisible(false);
+    setPullFormVisible(true);
+  };
+
+  const handlePullCreateSubmit = async (values: any) => {
+    if (!pullSelectedSource) return false;
+    const invoiceAmount = Number(values.invoice_amount) || 0;
+    if (invoiceAmount <= 0) {
+      messageApi.warning('不含税金额必须大于 0');
+      return false;
+    }
+    const taxRate = Number(values.tax_rate) || 13;
     const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
     const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
+    const sourceLabel = pullSelectedSource.source_type === 'sales_order'
+      ? pullFromSalesOrderAction.sourceLabel
+      : pullFromSalesDeliveryAction.sourceLabel;
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/sales-invoices', {
         method: 'POST',
         data: {
-          customer_id: selected.customer_id,
-          customer_name: selected.customer_name || '',
-          sales_order_code: selected.source_code,
-          invoice_number: '',
-          invoice_date: dayjs().format('YYYY-MM-DD'),
-          invoice_type: '增值税专用发票',
+          customer_id: pullSelectedSource.customer_id,
+          customer_name: pullSelectedSource.customer_name || '',
+          sales_order_code: pullSelectedSource.source_code,
+          invoice_number: String(values.invoice_number ?? '').trim(),
+          invoice_date: values.invoice_date?.format
+            ? values.invoice_date.format('YYYY-MM-DD')
+            : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+          invoice_type: values.invoice_type || '增值税专用发票',
           tax_rate: taxRate,
           invoice_amount: invoiceAmount,
           tax_amount: taxAmount,
           total_amount: totalAmount,
-          notes: `从${selected.source_type === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel} ${selected.source_code} 创建`,
+          notes: String(values.notes ?? '').trim() || `从${sourceLabel} ${pullSelectedSource.source_code} 创建`,
         },
       });
       messageApi.success(`已创建${pullFromSalesOrderAction.targetLabel}`);
-      setPullVisible(false);
+      setPullFormVisible(false);
+      setPullSelectedSource(null);
       setSelectedPullSourceId(null);
       actionRef.current?.reload();
+      return true;
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || '创建失败');
+      return false;
     } finally {
       setPullSubmitting(false);
     }
@@ -496,11 +535,9 @@ const SalesInvoicesPage: React.FC = () => {
           setPullVisible(false);
           setSelectedPullSourceId(null);
         }}
-        onOk={() => {
-          void handlePullConfirm();
-        }}
-        okText={`创建${pullFromSalesOrderAction.targetLabel}`}
-        confirmLoading={pullSubmitting}
+        onOk={handlePullNext}
+        okText="下一步"
+        confirmLoading={false}
         destroyOnClose
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -541,7 +578,16 @@ const SalesInvoicesPage: React.FC = () => {
             columns={[
               { title: '源单号', dataIndex: 'source_code', width: 220, ellipsis: true },
               { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
-              { title: '单据状态', dataIndex: 'source_status', width: 130, align: 'center' },
+              {
+                title: '单据状态',
+                dataIndex: 'source_status',
+                width: 130,
+                align: 'center',
+                render: (v) => {
+                  const { text, color } = getStatusDisplay(v);
+                  return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+                },
+              },
               { title: '业务日期', dataIndex: 'source_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
               {
                 title: '金额',
@@ -561,6 +607,74 @@ const SalesInvoicesPage: React.FC = () => {
           />
         </Space>
       </Modal>
+
+      <ModalForm
+        title="填写销项发票信息"
+        open={pullFormVisible}
+        onOpenChange={(open) => {
+          if (pullSubmitting) return;
+          setPullFormVisible(open);
+          if (!open) {
+            setPullSelectedSource(null);
+            setSelectedPullSourceId(null);
+          }
+        }}
+        onFinish={handlePullCreateSubmit}
+        width={560}
+        modalProps={{ destroyOnClose: true }}
+        submitter={{ submitButtonProps: { loading: pullSubmitting } }}
+        initialValues={
+          pullSelectedSource
+            ? {
+                source_code: pullSelectedSource.source_code,
+                customer_name: pullSelectedSource.customer_name,
+                invoice_date: pullSelectedSource.source_date ? dayjs(pullSelectedSource.source_date) : dayjs(),
+                invoice_type: '增值税专用发票',
+                tax_rate: 13,
+                invoice_amount: pullSelectedSource.amount,
+                notes: `从${
+                  pullSelectedSource.source_type === 'sales_order'
+                    ? pullFromSalesOrderAction.sourceLabel
+                    : pullFromSalesDeliveryAction.sourceLabel
+                } ${pullSelectedSource.source_code} 创建`,
+              }
+            : undefined
+        }
+      >
+        <ProFormText name="source_code" label="来源单号" readonly />
+        <ProFormText name="customer_name" label="客户" readonly />
+        <ProFormText
+          name="invoice_number"
+          label="发票号码"
+          placeholder="可选，取得纸质/电子票面号码后填写"
+        />
+        <ProFormSelect
+          name="invoice_type"
+          label="发票类型"
+          options={INVOICE_TYPE_OPTIONS}
+          rules={[{ required: true, message: '请选择发票类型' }]}
+        />
+        <ProFormDatePicker
+          name="invoice_date"
+          label="开票日期"
+          rules={[{ required: true, message: '请选择开票日期' }]}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormSelect
+          name="tax_rate"
+          label="税率"
+          options={TAX_RATE_OPTIONS}
+          rules={[{ required: true, message: '请选择税率' }]}
+        />
+        <ProFormDigit
+          name="invoice_amount"
+          label="不含税金额"
+          min={0}
+          rules={[{ required: true, message: '请输入不含税金额' }]}
+          fieldProps={{ precision: 2, style: { width: '100%' } }}
+        />
+        <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 3 }} />
+      </ModalForm>
 
       <ModalForm
         title="开具销售发票"

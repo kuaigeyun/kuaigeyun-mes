@@ -186,7 +186,7 @@ function ringPercentFromStages(stages: SubStage[]): number {
 }
 
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
-  const base: LifecycleResult = { ...result, subStages: undefined };
+  const base: LifecycleResult = { ...result };
   const stageRaw = normalizeStageName(base.stageName);
 
   if (stageRaw && CN_STAGE_NAMES.has(stageRaw)) {
@@ -293,14 +293,24 @@ function computeSalesOrderLifecycle(record: SalesOrder, auditRequired = true): L
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
     const result = parseBackendLifecycle(backend);
+    const enriched: LifecycleResult = {
+      ...result,
+      ...(record.invoice_progress != null &&
+      normalizeStageName(result.stageName) === '账款发票处理'
+        ? {
+            subPercent: Number(record.invoice_progress),
+            subLabel: '账款',
+          }
+        : {}),
+    };
     const s = norm(record?.status);
     const r = norm(record?.review_status);
     const isRecordAudited =
       (s === 'AUDITED' || s === '已审核') && (r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过');
-    if (isRecordAudited && result.stageName === '待审核') {
-      return adaptForAuditSwitch({ ...result, stageName: '已审核' }, auditRequired);
+    if (isRecordAudited && enriched.stageName === '待审核') {
+      return adaptForAuditSwitch({ ...enriched, stageName: '已审核' }, auditRequired);
     }
-    return adaptForAuditSwitch(result, auditRequired);
+    return adaptForAuditSwitch(enriched, auditRequired);
   }
   const status = norm(record?.status);
   const reviewStatus = norm(record?.review_status);

@@ -1,21 +1,28 @@
 import React, { useState, useRef } from 'react';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
-import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert } from 'antd';
+import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Tabs } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { settlementService } from '../../../services/finance/settlement';
 import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
+import { payableService } from '../../../services/finance/payable';
+import { paymentService } from '../../../services/finance/payment';
 
 const SettlementPage: React.FC = () => {
   const receivableActionRef = useRef<ActionType>();
   const receiptActionRef = useRef<ActionType>();
+  const payableActionRef = useRef<ActionType>();
+  const paymentActionRef = useRef<ActionType>();
+  const [activeTab, setActiveTab] = useState('receivable');
   const [selectedReceivable, setSelectedReceivable] = useState<Record<string, unknown> | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<Record<string, unknown> | null>(null);
+  const [selectedPayable, setSelectedPayable] = useState<Record<string, unknown> | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Record<string, unknown> | null>(null);
   const [settleAmount, setSettleAmount] = useState<number>(0);
 
-  const handleManualSettle = async () => {
+  const handleManualSettleReceivable = async () => {
     if (!selectedReceivable || !selectedReceipt || settleAmount <= 0) {
       message.error('请选择单据并输入正确的核销金额');
       return;
@@ -31,6 +38,27 @@ const SettlementPage: React.FC = () => {
       setSelectedReceipt(null);
       receivableActionRef.current?.reload();
       receiptActionRef.current?.reload();
+    } catch (error: any) {
+      message.error(`核销失败: ${error.message}`);
+    }
+  };
+
+  const handleManualSettlePayable = async () => {
+    if (!selectedPayable || !selectedPayment || settleAmount <= 0) {
+      message.error('请选择单据并输入正确的核销金额');
+      return;
+    }
+    try {
+      await settlementService.settlePayable(
+        selectedPayable.id as number,
+        selectedPayment.id as number,
+        settleAmount,
+      );
+      message.success('核销成功');
+      setSelectedPayable(null);
+      setSelectedPayment(null);
+      payableActionRef.current?.reload();
+      paymentActionRef.current?.reload();
     } catch (error: any) {
       message.error(`核销失败: ${error.message}`);
     }
@@ -85,13 +113,62 @@ const SettlementPage: React.FC = () => {
     },
   ];
 
-  return (
-    <ListPageTemplate>
+  const payableColumns: ProColumns<Record<string, unknown>>[] = [
+    {
+      title: '编号',
+      dataIndex: 'payable_code',
+      width: 160,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.payable_code ?? '') }} ellipsis>
+          {String(r.payable_code ?? '-')}
+        </Typography.Text>
+      ),
+    },
+    { title: '供应商', dataIndex: 'supplier_name', ellipsis: true },
+    { title: '待付金额', dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 80,
+      render: (_, record) => [
+        <a key="sel" onClick={() => {
+          setSelectedPayable(record);
+          setSettleAmount(Number(record.remaining_amount) || 0);
+        }}
+        >
+          选择
+        </a>,
+      ],
+    },
+  ];
+
+  const paymentColumns: ProColumns<Record<string, unknown>>[] = [
+    {
+      title: '编号',
+      dataIndex: 'payment_code',
+      width: 160,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
+          {String(r.payment_code ?? '-')}
+        </Typography.Text>
+      ),
+    },
+    { title: '余额', dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 80,
+      render: (_, record) => [<a key="m" onClick={() => setSelectedPayment(record)}>匹配</a>],
+    },
+  ];
+
+  const receivableSettlement = (
+    <>
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="往来核销用于将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
+        message="将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
       />
       <Row gutter={16}>
         <Col span={12}>
@@ -148,9 +225,9 @@ const SettlementPage: React.FC = () => {
       </Row>
 
       <Modal
-        title="确认手动核销"
+        title="确认手动核销（应收）"
         open={!!(selectedReceivable && selectedReceipt)}
-        onOk={handleManualSettle}
+        onOk={handleManualSettleReceivable}
         onCancel={() => {
           setSelectedReceivable(null);
           setSelectedReceipt(null);
@@ -174,6 +251,117 @@ const SettlementPage: React.FC = () => {
           />
         </Space>
       </Modal>
+    </>
+  );
+
+  const payableSettlement = (
+    <>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="将「有余额的付款单」手动匹配到「有待付金额的应付单」。若已在应付详情登记付款并自动核销，或单据已全部结清，则此处不会显示数据。"
+      />
+      <Row gutter={16}>
+        <Col span={12}>
+          <UniTable
+            headerTitle="待核销应付单"
+            actionRef={payableActionRef}
+            rowKey="id"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
+            search={{ labelWidth: 'auto' }}
+            showAdvancedSearch
+            scroll={{ x: 720 }}
+            request={async (params) => {
+              const { current, pageSize, ...rest } = params;
+              const res = await payableService.listPayables({
+                skip: ((current || 1) - 1) * (pageSize || 20),
+                limit: pageSize || 20,
+                pending_settlement: true,
+                ...rest,
+              });
+              return {
+                data: (res?.items || []) as any[],
+                total: res?.total || 0,
+                success: true,
+              };
+            }}
+            columns={payableColumns}
+          />
+        </Col>
+        <Col span={12}>
+          <UniTable
+            headerTitle="可用付款单"
+            actionRef={paymentActionRef}
+            rowKey="id"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"
+            search={false}
+            scroll={{ x: 560 }}
+            request={async (params) => {
+              const { current, pageSize, ...rest } = params;
+              const res = await paymentService.listPayments({
+                skip: ((current || 1) - 1) * (pageSize || 20),
+                limit: pageSize || 20,
+                unsettled_only: true,
+                ...rest,
+              });
+              return {
+                data: (res?.items || []) as any[],
+                total: res?.total || 0,
+                success: true,
+              };
+            }}
+            columns={paymentColumns}
+          />
+        </Col>
+      </Row>
+
+      <Modal
+        title="确认手动核销（应付）"
+        open={!!(selectedPayable && selectedPayment)}
+        onOk={handleManualSettlePayable}
+        onCancel={() => {
+          setSelectedPayable(null);
+          setSelectedPayment(null);
+        }}
+      >
+        <Space orientation="vertical" style={{ width: '100%' }}>
+          <p>
+            将付款单 <b>{String(selectedPayment?.payment_code ?? '')}</b> 的金额核销至应付单{' '}
+            <b>{String(selectedPayable?.payable_code ?? '')}</b>
+          </p>
+          <Divider />
+          <Typography.Text>核销金额：</Typography.Text>
+          <InputNumber
+            style={{ width: '100%' }}
+            value={settleAmount}
+            onChange={(val) => setSettleAmount(val || 0)}
+            max={Math.min(
+              Number(selectedPayable?.remaining_amount) || 0,
+              Number(selectedPayment?.unsettled_amount) || 0,
+            )}
+          />
+        </Space>
+      </Modal>
+    </>
+  );
+
+  return (
+    <ListPageTemplate>
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) => {
+          setActiveTab(key);
+          setSelectedReceivable(null);
+          setSelectedReceipt(null);
+          setSelectedPayable(null);
+          setSelectedPayment(null);
+        }}
+        items={[
+          { key: 'receivable', label: '应收核销', children: receivableSettlement },
+          { key: 'payable', label: '应付核销', children: payableSettlement },
+        ]}
+      />
     </ListPageTemplate>
   );
 };

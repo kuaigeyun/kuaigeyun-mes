@@ -19,6 +19,7 @@ import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { payableService } from '../../../services/finance/payable';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 
 interface PaymentVoucher {
   id: number;
@@ -65,6 +66,8 @@ const PaymentsPage: React.FC = () => {
   const [pullKeyword, setPullKeyword] = useState('');
   const [pullCandidates, setPullCandidates] = useState<PullPayableCandidate[]>([]);
   const [selectedPullPayableId, setSelectedPullPayableId] = useState<number | null>(null);
+  const [pullFormVisible, setPullFormVisible] = useState(false);
+  const [pullSelectedPayable, setPullSelectedPayable] = useState<PullPayableCandidate | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
@@ -106,9 +109,8 @@ const PaymentsPage: React.FC = () => {
     setPullLoading(true);
     try {
       const kw = keyword.trim().toLowerCase();
-      const res = await payableService.listPayables({ skip: 0, limit: 200 });
+      const res = await payableService.listPayables({ skip: 0, limit: 200, pending_settlement: true });
       const rows = (res?.items || [])
-        .filter((r: any) => Number(r?.remaining_amount || 0) > 0)
         .map((r: any) => ({
           id: Number(r.id),
           payable_code: String(r.payable_code || ''),
@@ -124,8 +126,9 @@ const PaymentsPage: React.FC = () => {
           return `${r.payable_code} ${r.supplier_name}`.toLowerCase().includes(kw);
         });
       setPullCandidates(rows);
-    } catch {
+    } catch (e: any) {
       setPullCandidates([]);
+      messageApi.error(e?.response?.data?.detail || e?.message || '加载应付单失败');
     } finally {
       setPullLoading(false);
     }
@@ -138,7 +141,7 @@ const PaymentsPage: React.FC = () => {
     await loadPullPayableCandidates('');
   };
 
-  const handlePullConfirm = async () => {
+  const handlePullNext = () => {
     if (!selectedPullPayableId) {
       messageApi.warning(`请选择${pullFromPayableAction.sourceLabel}`);
       return;
@@ -149,25 +152,43 @@ const PaymentsPage: React.FC = () => {
       messageApi.warning(`${pullFromPayableAction.sourceLabel}剩余应付为 0，无法创建${pullFromPayableAction.targetLabel}`);
       return;
     }
+    setPullSelectedPayable(selected);
+    setPullVisible(false);
+    setPullFormVisible(true);
+  };
+
+  const handlePullCreateSubmit = async (values: any) => {
+    if (!pullSelectedPayable) return false;
+    const totalAmount = Number(values.total_amount) || 0;
+    if (totalAmount <= 0) {
+      messageApi.warning('付款金额必须大于 0');
+      return false;
+    }
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/payments', {
         method: 'POST',
         data: {
-          supplier_id: selected.supplier_id,
-          supplier_name: selected.supplier_name,
-          total_amount: selected.remaining_amount,
-          payment_date: dayjs().format('YYYY-MM-DD'),
-          payment_method: '银行转账',
-          notes: `从${pullFromPayableAction.sourceLabel} ${selected.payable_code} 创建`,
+          supplier_id: pullSelectedPayable.supplier_id,
+          supplier_name: pullSelectedPayable.supplier_name,
+          total_amount: totalAmount,
+          payment_date: values.payment_date?.format
+            ? values.payment_date.format('YYYY-MM-DD')
+            : (values.payment_date || dayjs().format('YYYY-MM-DD')),
+          payment_method: values.payment_method || '银行转账',
+          bank_account: values.bank_account,
+          notes: String(values.notes ?? '').trim() || `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
         },
       });
       messageApi.success(`已创建${pullFromPayableAction.targetLabel}`);
-      setPullVisible(false);
+      setPullFormVisible(false);
+      setPullSelectedPayable(null);
       setSelectedPullPayableId(null);
       actionRef.current?.reload();
+      return true;
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail || e?.message || '创建失败');
+      return false;
     } finally {
       setPullSubmitting(false);
     }
@@ -386,10 +407,10 @@ const PaymentsPage: React.FC = () => {
           setSelectedPullPayableId(null);
         }}
         onOk={() => {
-          void handlePullConfirm();
+          void handlePullNext();
         }}
-        okText={`创建${pullFromPayableAction.targetLabel}`}
-        confirmLoading={pullSubmitting}
+        okText="下一步"
+        confirmLoading={false}
         destroyOnClose
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -421,7 +442,16 @@ const PaymentsPage: React.FC = () => {
             columns={[
               { title: '应付单号', dataIndex: 'payable_code', width: 220, ellipsis: true },
               { title: '供应商', dataIndex: 'supplier_name', width: 220, ellipsis: true },
-              { title: '业务状态', dataIndex: 'status', width: 120, align: 'center' },
+              {
+                title: '业务状态',
+                dataIndex: 'status',
+                width: 120,
+                align: 'center',
+                render: (v) => {
+                  const { text, color } = getStatusDisplay(v);
+                  return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+                },
+              },
               { title: '审核状态', dataIndex: 'review_status', width: 120, align: 'center' },
               { title: '到期日期', dataIndex: 'due_date', width: 120, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
               {
@@ -442,6 +472,54 @@ const PaymentsPage: React.FC = () => {
           />
         </Space>
       </Modal>
+
+      <ModalForm
+        title="填写付款单信息"
+        open={pullFormVisible}
+        onOpenChange={(open) => {
+          if (pullSubmitting) return;
+          setPullFormVisible(open);
+          if (!open) {
+            setPullSelectedPayable(null);
+            setSelectedPullPayableId(null);
+          }
+        }}
+        onFinish={handlePullCreateSubmit}
+        width={480}
+        modalProps={{ destroyOnClose: true }}
+        submitter={{ submitButtonProps: { loading: pullSubmitting } }}
+        initialValues={
+          pullSelectedPayable
+            ? {
+                payable_code: pullSelectedPayable.payable_code,
+                supplier_name: pullSelectedPayable.supplier_name,
+                total_amount: pullSelectedPayable.remaining_amount,
+                payment_date: dayjs(),
+                payment_method: '银行转账',
+                notes: `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
+              }
+            : undefined
+        }
+      >
+        <ProFormText name="payable_code" label="来源应付单" readonly />
+        <ProFormText name="supplier_name" label="供应商" readonly />
+        <ProFormMoney
+          name="total_amount"
+          label="付款金额"
+          min={0.01}
+          rules={[{ required: true }]}
+          fieldProps={{ max: pullSelectedPayable?.remaining_amount }}
+        />
+        <ProFormDatePicker name="payment_date" label="付款日期" rules={[{ required: true }]} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormSelect
+          name="payment_method"
+          label="付款方式"
+          options={PAYMENT_METHOD_OPTIONS}
+          rules={[{ required: true, message: '请选择付款方式' }]}
+        />
+        <ProFormText name="bank_account" label="出款账号" placeholder="如：工商银行 622588****" />
+        <ProFormTextArea name="notes" label="备注" />
+      </ModalForm>
 
       <ModalForm
         title="新建付款单"

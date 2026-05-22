@@ -70,6 +70,7 @@ async def list_payables(
     limit: int = Query(20, ge=1),
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
+    pending_settlement: bool = Query(False, description="仅返回待核销应付（remaining_amount > 0）"),
     _auth: object = Depends(
         require_access(
             "finance.payable",
@@ -79,12 +80,17 @@ async def list_payables(
     ),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    payables = await payable_service.list_payables(
-        tenant_id, skip, limit, status=status, supplier_id=supplier_id
+    payables, total = await payable_service.list_payables(
+        tenant_id,
+        skip,
+        limit,
+        status=status,
+        supplier_id=supplier_id,
+        pending_settlement=pending_settlement,
     )
     return PayableListResponse(
         items=payables,
-        total=len(payables),
+        total=total,
         skip=skip,
         limit=limit
     )
