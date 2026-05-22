@@ -11,7 +11,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionType,
   ProColumns,
@@ -578,6 +578,7 @@ const DemandComputationPage: React.FC = () => {
   const pullFromDemandAction = getKuaizhizaoDocumentAction('demand_computation.pull_from_demand')
   const queryClient = useQueryClient()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
   const lastComputationsCacheRef = useRef<DemandComputation[]>([])
@@ -736,6 +737,9 @@ const DemandComputationPage: React.FC = () => {
   }>({})
   const [pushPanelLoading, setPushPanelLoading] = useState(false)
   const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
+  /** 协调看板深链：打开下推面板时预设采购路径 */
+  const pushPurchasePresetRef = useRef<'requisition' | 'purchase_order' | null>(null)
+  const deepLinkHandledRef = useRef<string | null>(null)
 
   /** 下推面板：打开时加载 options，初始化 config */
   React.useEffect(() => {
@@ -745,9 +749,17 @@ const DemandComputationPage: React.FC = () => {
       try {
         const opts = await getPushOptions(pushPanelRecord.id!)
         setPushOptions(opts)
+        const presetPurchase = pushPurchasePresetRef.current
+        pushPurchasePresetRef.current = null
         setPushConfig({
-          production: opts.production_choices.length > 0 ? 'work_order' : undefined,
-          purchase: opts.purchase_choices.length > 0 ? opts.default_purchase : undefined,
+          production: presetPurchase
+            ? undefined
+            : opts.production_choices.length > 0
+              ? 'work_order'
+              : undefined,
+          purchase:
+            presetPurchase ??
+            (opts.purchase_choices.length > 0 ? opts.default_purchase : undefined),
         })
       } catch (e) {
         messageApi.error('加载下推配置失败')
@@ -756,7 +768,7 @@ const DemandComputationPage: React.FC = () => {
       }
     }
     load()
-  }, [pushPanelRecord?.id])
+  }, [pushPanelRecord?.id, messageApi])
 
   /** 下推面板：配置变化时刷新预览 */
   React.useEffect(() => {
@@ -1169,6 +1181,66 @@ const DemandComputationPage: React.FC = () => {
     setPushPanelRecord(record)
     setPushPreviewData(null)
   }, [])
+
+  /** 协调看板 / 管控塔深链：computationId、action=pushPurchase、drawerTab */
+  useEffect(() => {
+    const computationIdRaw = searchParams.get('computationId')
+    if (!computationIdRaw) return
+
+    const linkKey = `${computationIdRaw}:${searchParams.get('action') ?? ''}:${searchParams.get('drawerTab') ?? ''}`
+    if (deepLinkHandledRef.current === linkKey) return
+    deepLinkHandledRef.current = linkKey
+
+    const computationId = Number(computationIdRaw)
+    if (Number.isNaN(computationId) || computationId <= 0) return
+
+    const action = searchParams.get('action')
+    const drawerTab = searchParams.get('drawerTab')
+
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('computationId')
+    nextParams.delete('action')
+    nextParams.delete('drawerTab')
+    const nextSearch = nextParams.toString()
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true })
+
+    void (async () => {
+      try {
+        const data = await getDemandComputation(computationId, true)
+        if (action === 'pushPurchase') {
+          pushPurchasePresetRef.current = 'purchase_order'
+          setPushPanelRecord(data)
+          setPushPreviewData(null)
+          return
+        }
+
+        setCurrentComputation(data)
+        setDetailTabKey(drawerTab === 'records' ? 'records' : 'detail')
+        setDrawerVisible(true)
+        setComputationTrackingRefreshKey((k) => k + 1)
+        if (drawerTab === 'records') {
+          loadComputationRecordsTabData(computationId)
+        } else {
+          void Promise.all([
+            prefetchMaterialsForUnitSelect((data.items || []).map((i) => i.material_id)),
+            getMaterialSources(computationId).catch(() => {}),
+            validateMaterialSources(computationId)
+              .then(setValidationResults)
+              .catch(() => setValidationResults(null)),
+          ])
+        }
+      } catch {
+        messageApi.error('打开需求计算失败')
+        deepLinkHandledRef.current = null
+      }
+    })()
+  }, [
+    searchParams,
+    location.pathname,
+    navigate,
+    messageApi,
+    loadComputationRecordsTabData,
+  ])
 
   /** 下推面板确认执行 */
   const handlePushPanelConfirm = async () => {

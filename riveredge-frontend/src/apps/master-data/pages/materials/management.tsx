@@ -95,6 +95,13 @@ import {
 } from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
+import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
+import {
+  fabricationMaterialNeedsRawMaterialSetup,
+  isFabricationFromValues,
+  toFabricationMaterialRef,
+} from '../../utils/fabricationRawMaterial'
+import type { FabricationMaterialRef } from '../../utils/fabricationRawMaterial'
 import { QRCodeGenerator } from '../../../../components/qrcode'
 
 // 导入服务和类型
@@ -322,6 +329,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialDrawerVisible, setMaterialDrawerVisible] = useState(false)
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null)
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false)
+  const [fabricationWizardOpen, setFabricationWizardOpen] = useState(false)
+  const [fabricationWizardMaterial, setFabricationWizardMaterial] = useState<FabricationMaterialRef | null>(null)
 
   // 数据状态
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([])
@@ -1370,6 +1379,19 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }
 
+  const maybeOpenFabricationWizard = async (saved: Material, formValues: Record<string, unknown>) => {
+    if (!isFabricationFromValues(formValues) || !saved.id) return
+    try {
+      const needsSetup = await fabricationMaterialNeedsRawMaterialSetup(saved.id)
+      if (needsSetup) {
+        setFabricationWizardMaterial(toFabricationMaterialRef(saved))
+        setFabricationWizardOpen(true)
+      }
+    } catch {
+      // 检查失败时不阻断主流程
+    }
+  }
+
   const handleMaterialSubmit = async (values: any) => {
     try {
       setMaterialFormLoading(true)
@@ -1381,15 +1403,15 @@ const MaterialsManagementPage: React.FC = () => {
         
         setMaterialModalVisible(false)
         actionRef.current?.reload()
+        await maybeOpenFabricationWizard(refreshed, values)
         return result
       } else {
-        // 主编码只由 MaterialForm 决定：有 main_code 则按用户/预览保存，无则省略由后端规则生成。
-        // 禁止在此处 delete main_code（曾导致预览/手填均被丢弃，只能累加序号）。
         const result = await materialApi.create(values as MaterialCreate)
         messageApi.success(t('common.createSuccess'))
         
         setMaterialModalVisible(false)
         actionRef.current?.reload()
+        await maybeOpenFabricationWizard(result, values)
         return result
       }
     } catch (error: any) {
@@ -2847,6 +2869,18 @@ const MaterialsManagementPage: React.FC = () => {
           </Menu>
         </div>
       )}
+
+      <FabricationRawMaterialWizard
+        open={fabricationWizardOpen}
+        onClose={() => {
+          setFabricationWizardOpen(false)
+          setFabricationWizardMaterial(null)
+        }}
+        fabricationMaterial={fabricationWizardMaterial}
+        onSuccess={() => {
+          actionRef.current?.reload()
+        }}
+      />
 
     </>
   )

@@ -3968,28 +3968,14 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: '排程综合分',
+      title: '权重分',
       dataIndex: 'scheduling_score',
-      width: 110,
+      width: 88,
       hideInSearch: true,
       render: (_, record) => (
         <WorkOrderScoreCell
           score={record.scheduling_score}
-          rankBand={record.scheduling_rank_band}
           breakdown={record.scheduling_score_breakdown}
-        />
-      ),
-    },
-    {
-      title: '备料综合分',
-      dataIndex: 'picking_score',
-      width: 110,
-      hideInSearch: true,
-      render: (_, record) => (
-        <WorkOrderScoreCell
-          score={record.picking_score}
-          rankBand={record.picking_rank_band}
-          breakdown={record.picking_score_breakdown}
         />
       ),
     },
@@ -6908,17 +6894,15 @@ const WorkOrdersPage: React.FC = () => {
                         columns={[
                           { title: '工单', dataIndex: 'work_order_code' },
                           {
-                            title: '排程分',
+                            title: '权重分',
                             dataIndex: 'scheduling_score',
                             width: 88,
-                            render: (v: number, row: any) =>
-                              v != null ? (
-                                <Tag color={row.scheduling_rank_band === 'A' ? 'red' : row.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
-                                  {Number(v).toFixed(0)}{row.scheduling_rank_band ? `·${row.scheduling_rank_band}` : ''}
-                                </Tag>
-                              ) : (
-                                '—'
-                              ),
+                            render: (v: number, row: any) => (
+                              <WorkOrderScoreCell
+                                score={v}
+                                breakdown={row.scheduling_score_breakdown}
+                              />
+                            ),
                           },
                           { title: '冲突类型', dataIndex: 'impact_type', render: (t) => t === 'material_conflict' ? '物料抢占' : '资源排队' },
                           { title: '可能延期', dataIndex: 'delay_days', render: (d) => d > 0 ? `${d}天` : '未知' },

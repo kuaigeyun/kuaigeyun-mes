@@ -11,7 +11,7 @@ Date: 2026-01-16
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -25,6 +25,10 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialIssueCreate,
     OutsourceMaterialIssueUpdate,
     OutsourceMaterialIssueResponse,
+    OutsourceMaterialIssuePreviewResponse,
+    OutsourceMaterialIssuePreviewLine,
+    OutsourceMaterialIssueBatchCreate,
+    OutsourceMaterialIssueBatchResponse,
 )
 from loguru import logger
 
@@ -103,7 +107,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
 
-            # 创建委外发料单
+            # 创建委外发料单（创建即扣库存，标记为已完成）
+            now = datetime.now()
             material_issue = await OutsourceMaterialIssue.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -120,8 +125,10 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 location_id=issue_data.location_id,
                 location_name=issue_data.location_name,
                 batch_number=issue_data.batch_number,
-                status=issue_data.status,
-                issued_at=issue_data.issued_at,
+                status="completed",
+                issued_at=now,
+                issued_by=created_by,
+                issued_by_name=user_info["name"],
                 remarks=issue_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -148,8 +155,157 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             )
 
             logger.info(f"创建委外发料单成功: {code}")
-            
+
+            await material_issue.refresh_from_db()
             return OutsourceMaterialIssueResponse.model_validate(material_issue)
+
+    @staticmethod
+    def _should_issue_for_outsource(issue_method: Optional[str], source_type: Optional[str]) -> bool:
+        from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method, ISSUE_METHOD_NONE
+
+        if (source_type or "").strip() in ("Phantom", "Service"):
+            return False
+        return resolve_issue_method(issue_method, source_type) != ISSUE_METHOD_NONE
+
+    async def get_issue_preview(
+        self,
+        tenant_id: int,
+        outsource_work_order_id: int,
+    ) -> OutsourceMaterialIssuePreviewResponse:
+        """根据委外工单产品 BOM 生成待发料明细预览。"""
+        from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+        from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
+
+        owo = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not owo:
+            raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
+
+        message: Optional[str] = None
+        try:
+            reqs = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=owo.product_id,
+                required_quantity=float(owo.quantity or 0),
+                only_approved=True,
+                for_kitting_analysis=True,
+            )
+        except NotFoundError:
+            reqs = []
+            message = "产品 BOM 不存在或未审核，请先在工程 BOM 中维护"
+
+        issue_reqs = [
+            r for r in reqs
+            if self._should_issue_for_outsource(
+                getattr(r, "issue_method", None),
+                getattr(r, "component_type", None),
+            )
+        ]
+
+        existing = await OutsourceMaterialIssue.filter(
+            tenant_id=tenant_id,
+            outsource_work_order_id=outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        issued_map: Dict[int, float] = {}
+        for issue in existing:
+            mid = int(issue.material_id)
+            issued_map[mid] = issued_map.get(mid, 0.0) + float(issue.quantity or 0)
+
+        mat_ids = [int(r.component_id) for r in issue_reqs]
+        inv_map = await batch_get_material_inventory(tenant_id, mat_ids)
+
+        lines: List[OutsourceMaterialIssuePreviewLine] = []
+        for r in issue_reqs:
+            mid = int(r.component_id)
+            required = Decimal(str(r.net_requirement or r.gross_requirement or 0))
+            issued = Decimal(str(issued_map.get(mid, 0)))
+            pending = max(Decimal("0"), required - issued)
+            available = Decimal(str(inv_map.get(mid, 0)))
+            lines.append(
+                OutsourceMaterialIssuePreviewLine(
+                    material_id=mid,
+                    material_code=r.component_code or "",
+                    material_name=r.component_name or "",
+                    unit=r.unit or "",
+                    required_quantity=required,
+                    issued_quantity=issued,
+                    pending_quantity=pending,
+                    available_quantity=available,
+                    issue_method=getattr(r, "issue_method", None) or "pick",
+                )
+            )
+
+        if not lines and not message:
+            message = "BOM 中无需要发料的子件（虚拟件/不发料项已排除）"
+
+        return OutsourceMaterialIssuePreviewResponse(
+            outsource_work_order_id=owo.id,
+            outsource_work_order_code=owo.code,
+            product_name=owo.product_name,
+            quantity=owo.quantity or Decimal("0"),
+            lines=lines,
+            message=message,
+        )
+
+    async def create_material_issues_batch(
+        self,
+        tenant_id: int,
+        batch_data: OutsourceMaterialIssueBatchCreate,
+        created_by: int,
+    ) -> OutsourceMaterialIssueBatchResponse:
+        """批量创建委外发料单。"""
+        if not batch_data.lines:
+            raise ValidationError("请至少填写一条发料明细")
+
+        created: List[OutsourceMaterialIssueResponse] = []
+        for line in batch_data.lines:
+            wh_id = line.warehouse_id or batch_data.warehouse_id
+            wh_name = line.warehouse_name or batch_data.warehouse_name
+            issue_data = OutsourceMaterialIssueCreate(
+                outsource_work_order_id=batch_data.outsource_work_order_id,
+                outsource_work_order_code=batch_data.outsource_work_order_code,
+                material_id=line.material_id,
+                material_code=line.material_code,
+                material_name=line.material_name,
+                quantity=line.quantity,
+                unit=line.unit,
+                warehouse_id=wh_id,
+                warehouse_name=wh_name,
+                batch_number=line.batch_number,
+                remarks=batch_data.remarks,
+            )
+            resp = await self.create_material_issue(
+                tenant_id=tenant_id,
+                issue_data=issue_data,
+                created_by=created_by,
+            )
+            created.append(resp)
+
+        return OutsourceMaterialIssueBatchResponse(
+            created_count=len(created),
+            issues=created,
+        )
+
+    async def _normalize_legacy_draft_issues(
+        self, issues: List[OutsourceMaterialIssue]
+    ) -> None:
+        """历史数据：创建时已扣库存但状态仍为 draft，补写为 completed。"""
+        for issue in issues:
+            if issue.status != "draft":
+                continue
+            issue.status = "completed"
+            if not issue.issued_at:
+                issue.issued_at = issue.created_at or datetime.now()
+            if not issue.issued_by:
+                issue.issued_by = issue.created_by
+            if not issue.issued_by_name:
+                issue.issued_by_name = issue.created_by_name
+            await issue.save()
+            logger.info(f"补写委外发料单状态 draft->completed: {issue.code}")
 
     async def list_material_issues(
         self,
@@ -185,6 +341,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         issues = await OutsourceMaterialIssue.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
 
+        await self._normalize_legacy_draft_issues(issues)
+
         return [OutsourceMaterialIssueResponse.model_validate(issue) for issue in issues]
 
     async def get_material_issue(
@@ -213,6 +371,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         if not issue:
             raise NotFoundError(f"委外发料单ID {issue_id} 不存在")
+
+        await self._normalize_legacy_draft_issues([issue])
 
         return OutsourceMaterialIssueResponse.model_validate(issue)
 
@@ -261,5 +421,6 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         await issue.save()
 
         logger.info(f"完成委外发料单: {issue.code}")
-        
+
+        await issue.refresh_from_db()
         return OutsourceMaterialIssueResponse.model_validate(issue)

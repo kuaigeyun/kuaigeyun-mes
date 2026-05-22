@@ -467,7 +467,7 @@ async def expand_bom_with_source_control(
                         from_phantom=True, phantom_material_id=material_id,
                     ))
         else:
-            # MRP（历史）：虚拟件下对每个子件递归展开；无展开结果则记叶
+            # MRP：虚拟件下子件为虚拟/配置件则穿透；其余先记一行再递归下层（与非虚拟父件一致）
             for bom_item in bom_items:
                 component = await bom_item.component
                 if not component:
@@ -475,20 +475,36 @@ async def expand_bom_with_source_control(
                 component_qty = float(bom_item.quantity) * required_quantity
                 if bom_item.waste_rate:
                     component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
-                child_requirements = await expand_bom_with_source_control(
+                ct = component.source_type
+                _expand_kw = dict(
                     tenant_id=tenant_id,
                     material_id=component.id,
                     required_quantity=component_qty,
                     flatten_intermediate_subassemblies=False,
                     **_kw,
                 )
-                if child_requirements:
+                if ct == SOURCE_TYPE_PHANTOM:
+                    child_requirements = await expand_bom_with_source_control(**_expand_kw)
                     requirements.extend(child_requirements)
+                elif ct == SOURCE_TYPE_CONFIGURE:
+                    child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                    if child_requirements:
+                        requirements.extend(child_requirements)
+                    else:
+                        requirements.append(_bom_leaf_requirement(
+                            bom_item, component, component_qty, level + 1,
+                            from_phantom=True, phantom_material_id=material_id,
+                        ))
                 else:
                     requirements.append(_bom_leaf_requirement(
                         bom_item, component, component_qty, level + 1,
                         from_phantom=True, phantom_material_id=material_id,
                     ))
+                    if await _child_has_any_approved_bom_row(
+                        tenant_id, component.id, only_approved, as_of_date
+                    ):
+                        child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                        requirements.extend(child_requirements)
 
         return requirements
     

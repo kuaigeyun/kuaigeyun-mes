@@ -7,11 +7,12 @@
  * 注意：MRP/LRP 运算结果请前往「需求计算」页面查看和操作。
  */
 
-import React, { useRef, useState, useCallback, lazy, Suspense, useMemo } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography, Alert } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
@@ -45,6 +46,15 @@ const DEFAULT_SCHEDULING_CONSTRAINTS = {
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const filterWorkOrderIds = useMemo(() => {
+    const raw = searchParams.get('work_order_ids');
+    if (!raw) return undefined;
+    const ids = raw.split(',').map((s) => Number(s.trim())).filter((n) => !Number.isNaN(n) && n > 0);
+    return ids.length > 0 ? ids : undefined;
+  }, [searchParams]);
+
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('week');
@@ -55,11 +65,21 @@ const SchedulingPage: React.FC = () => {
   const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
     async () => {
       const res = await workOrderApi.list({ skip: 0, limit: 500, include_operations: true, include_scores: true });
-      const list = Array.isArray(res) ? res : (res?.data ?? []);
+      let list = Array.isArray(res) ? res : (res?.data ?? []);
+      if (filterWorkOrderIds?.length) {
+        const idSet = new Set(filterWorkOrderIds);
+        list = list.filter((wo: WorkOrderForGantt) => idSet.has(wo.id));
+      }
       return list as WorkOrderForGantt[];
     },
-    { refreshDeps: [] }
+    { refreshDeps: [filterWorkOrderIds] }
   );
+
+  useEffect(() => {
+    if (filterWorkOrderIds?.length) {
+      setSelectedRowKeys(filterWorkOrderIds);
+    }
+  }, [filterWorkOrderIds]);
 
   // 加载默认排程配置（若有）
   useRequest(
@@ -113,6 +133,21 @@ const SchedulingPage: React.FC = () => {
       if (result.statistics.scheduled_count > 0) {
         messageApi.success(
           `智能排产完成：成功排产 ${result.statistics.scheduled_count} 个工单，排产成功率 ${(result.statistics.scheduling_rate * 100).toFixed(1)}%`
+        );
+        messageApi.info(
+          <span>
+            可返回{' '}
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              onClick={() => navigate('/apps/kuaizhizao/plan-management/dashboard')}
+            >
+              生产协调中心
+            </Button>{' '}
+            查看下达进度
+          </span>,
+          6,
         );
       } else {
         messageApi.warning('智能排产完成，但没有工单可以排产');
@@ -223,14 +258,13 @@ const SchedulingPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '综合分',
+      title: '权重分',
       dataIndex: 'scheduling_score',
-      width: 100,
+      width: 88,
       align: 'center',
       render: (_: any, record: any) => (
         <WorkOrderScoreCell
           score={record.scheduling_score}
-          rankBand={record.scheduling_rank_band}
           breakdown={record.scheduling_score_breakdown}
         />
       ),
@@ -281,6 +315,20 @@ const SchedulingPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
+      {filterWorkOrderIds?.length ? (
+        <Alert
+          type="info"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message={`已从协调中心带入 ${filterWorkOrderIds.length} 个工单进行排程`}
+          action={
+            <Button size="small" onClick={() => navigate('/apps/kuaizhizao/plan-management/dashboard')}>
+              返回协调中心
+            </Button>
+          }
+        />
+      ) : null}
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.plan-management.scheduling"
         headerTitle="待排产工单"
@@ -296,8 +344,14 @@ const SchedulingPage: React.FC = () => {
             code: params.code,
             include_scores: true,
           });
-          const data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
-          const total = res?.total ?? (Array.isArray(data) ? data.length : 0);
+          let data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
+          if (filterWorkOrderIds?.length) {
+            const idSet = new Set(filterWorkOrderIds);
+            data = data.filter((row: { id?: number }) => row.id != null && idSet.has(row.id));
+          }
+          const total = filterWorkOrderIds?.length
+            ? data.length
+            : (res?.total ?? (Array.isArray(data) ? data.length : 0));
           return {
             data: Array.isArray(data) ? data : [],
             success: true,
@@ -323,7 +377,7 @@ const SchedulingPage: React.FC = () => {
             onClick={async () => {
               try {
                 await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
-                messageApi.success('综合分已触发重算');
+                messageApi.success('权重分已触发重算');
                 actionRef.current?.reload();
                 refreshGantt();
               } catch (e: any) {
@@ -331,7 +385,7 @@ const SchedulingPage: React.FC = () => {
               }
             }}
           >
-            重算综合分
+            重算权重分
           </Button>,
           <Button
             key="config"
@@ -491,9 +545,9 @@ const SchedulingPage: React.FC = () => {
           </Space>
           {scoreConfig?.profiles?.scheduling && (
             <>
-              <div style={{ marginTop: 24, marginBottom: 8, fontWeight: 500 }}>排程综合分权重</div>
+              <div style={{ marginTop: 24, marginBottom: 8, fontWeight: 500 }}>权重分配置</div>
               <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
-                可在「参数设置 → 计划管理」中开启/关闭综合打分与编辑权重模板
+                可在「参数设置 → 计划管理」中开启/关闭权重打分与编辑权重模板
               </div>
               <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                 {Object.entries(scoreConfig.profiles.scheduling.weights || {}).map(([key, weight]) => (

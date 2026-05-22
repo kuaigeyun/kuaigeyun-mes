@@ -250,6 +250,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order_operation:
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
 
+            # 报工会将 pending 工序隐式置为 in_progress，等同开工，须同样校验领料
+            if work_order_operation.status == "pending":
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+                await WorkOrderService.assert_confirmed_picking_before_operation_start_if_required(
+                    tenant_id,
+                    reporting_data.work_order_id,
+                    action_label="报工",
+                )
+
             # 根据报工类型验证数据（核心功能，新增）
             reporting_type = work_order_operation.reporting_type or "quantity"
 

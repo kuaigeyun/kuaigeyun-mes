@@ -1,5 +1,5 @@
 /**
- * 插单模拟 · APS-Lite 排程综合分 What-if 预览（只读，不写库）
+ * 插单模拟 · APS-Lite 权重分 What-if 预览（只读，不写库）
  */
 import React from 'react';
 import { Card, Space, Typography } from 'antd';
@@ -7,7 +7,6 @@ import { WorkOrderScoreCell } from '../apps/kuaizhizao/components/WorkOrderScore
 
 export interface SchedulingScorePreviewData {
   scheduling_score: number;
-  scheduling_rank_band?: string | null;
   queue_rank: number;
   queue_total: number;
   breakdown?: Record<string, { score?: number; weight?: number; weighted?: number; raw?: unknown }> | null;
@@ -29,17 +28,19 @@ export const SimulationSchedulingScorePreview: React.FC<SimulationSchedulingScor
   const body = (
     <Space orientation="vertical" size={8} style={{ width: '100%' }}>
       <Space wrap size="middle">
-        <WorkOrderScoreCell
-          score={preview.scheduling_score}
-          rankBand={preview.scheduling_rank_band}
-          breakdown={preview.breakdown}
-        />
+        <Space size={4}>
+          <Typography.Text type="secondary">权重分</Typography.Text>
+          <WorkOrderScoreCell
+            score={preview.scheduling_score}
+            breakdown={preview.breakdown}
+          />
+        </Space>
         <Typography.Text type="secondary">
           预估排程队列排位：第 <Typography.Text strong>{preview.queue_rank}</Typography.Text> / {preview.queue_total}
         </Typography.Text>
       </Space>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        基于当前 scheduling 权重与齐套率模拟，不写入工单；正式下达后将按 M1 规则重算并持久化。
+        基于当前权重配置与齐套率模拟，不写入工单；正式下达后将按 M1 规则重算并持久化。
       </Typography.Text>
     </Space>
   );
@@ -49,7 +50,7 @@ export const SimulationSchedulingScorePreview: React.FC<SimulationSchedulingScor
   }
 
   return (
-    <Card size="small" title="排程优先级预览（APS-Lite What-if）" style={{ marginBottom: 16 }}>
+    <Card size="small" title="权重分预览（APS-Lite What-if）" style={{ marginBottom: 16 }}>
       {body}
     </Card>
   );

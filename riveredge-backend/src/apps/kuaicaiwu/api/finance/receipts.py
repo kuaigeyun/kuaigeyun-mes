@@ -13,6 +13,7 @@ from apps.kuaicaiwu.schemas.finance import (
     ReceiptVoucherResponse, ReceiptVoucherListResponse,
 )
 from apps.kuaicaiwu.models.receipt import Receipt
+from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
@@ -102,6 +103,7 @@ async def list_receipts(
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
+    unsettled_only: bool = Query(False, description="仅返回有余额的收款单（unsettled_amount > 0）"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     _auth: object = Depends(
@@ -115,9 +117,22 @@ async def list_receipts(
     current_user: User = Depends(get_current_user),
 ):
     """获取收款单列表"""
+    try:
+        settlement_service = AccountSettlementService()
+        await settlement_service.backfill_receipts_from_legacy_receivables(tenant_id, current_user.id)
+    except Exception as exc:
+        logger.warning(
+            "kuaicaiwu_receipts_backfill_failed tenant_id={} user_id={} error={}",
+            tenant_id,
+            current_user.id,
+            exc,
+        )
+
     query = Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     if status:
         query = query.filter(status=status)
+    if unsettled_only:
+        query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if customer_id:
         query = query.filter(customer_id=customer_id)
     if start_date:
@@ -126,7 +141,7 @@ async def list_receipts(
         query = query.filter(receipt_date__lte=end_date)
 
     total = await query.count()
-    items = await query.offset(skip).limit(limit).order_by("-receipt_date", "-id")
+    items = await query.order_by("-receipt_date", "-id").offset(skip).limit(limit).all()
     serialized = [await _serialize(tenant_id, current_user.id, r) for r in items]
     return ReceiptVoucherListResponse(
         items=serialized,

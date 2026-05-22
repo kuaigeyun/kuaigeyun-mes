@@ -2407,37 +2407,56 @@ const BOMPage: React.FC = () => {
               const items: BOM[] = batchItems[k] ?? [];
               return buildGroupRow(g, items);
             });
-            // 成品视图下：补拉「当前成品子件中的半成品」的 BOM，否则半成品行无法展开
+            // 成品视图下：递归补拉半成品 BOM（如 010001→020001→020002），否则嵌套半成品无法展开
             let allGroupRowsForNesting: BOMGroupRow[] = displayGroupRows;
-            const semiFinishedIds = new Set<number>();
+            const mergedBatchItems: Record<string, BOM[]> = { ...batchItems };
+            const existingGroupKeys = new Set(
+              filteredGroups.map((g) => `${g.material_id}|${g.version}`)
+            );
+            let frontierSemiIds = new Set<number>();
             for (const g of filteredGroups) {
-              const items = batchItems[`${g.material_id}|${g.version}`] ?? [];
+              const items = mergedBatchItems[`${g.material_id}|${g.version}`] ?? [];
               for (const it of items) {
-                if (componentIdSet.has(it.componentId)) semiFinishedIds.add(it.componentId);
+                if (componentIdSet.has(it.componentId)) frontierSemiIds.add(it.componentId);
               }
             }
-            if (semiFinishedIds.size > 0) {
-              const semiFinishedGroupSummaries = groups.filter((x) => semiFinishedIds.has(x.material_id));
+            const processedSemiIds = new Set<number>();
+            while (frontierSemiIds.size > 0) {
+              const nextFrontier = new Set<number>();
+              const semiFinishedGroupSummaries = groups.filter((x) => frontierSemiIds.has(x.material_id));
               const byMid = new Map<number, typeof groups[0]>();
               for (const x of semiFinishedGroupSummaries) {
                 const cur = byMid.get(x.material_id);
                 if (!cur) byMid.set(x.material_id, x);
                 else if (x.is_default) byMid.set(x.material_id, x);
               }
-              const toFetch = Array.from(byMid.values());
-              const existingKeys = new Set(filteredGroups.map((g) => `${g.material_id}|${g.version}`));
-              const needFetch = toFetch.filter((g) => !existingKeys.has(`${g.material_id}|${g.version}`));
+              const needFetch = Array.from(byMid.values()).filter(
+                (g) => !existingGroupKeys.has(`${g.material_id}|${g.version}`)
+              );
               if (needFetch.length > 0) {
                 const semiBatch = await bomApi.getBatchItems(
                   needFetch.map((g) => ({ material_id: g.material_id, version: g.version })),
                   includeObsolete
                 );
+                Object.assign(mergedBatchItems, semiBatch);
                 const semiRows: BOMGroupRow[] = needFetch.map((g) => {
-                  const items = semiBatch[`${g.material_id}|${g.version}`] ?? [];
+                  const key = `${g.material_id}|${g.version}`;
+                  existingGroupKeys.add(key);
+                  const items = semiBatch[key] ?? [];
                   return buildGroupRow(g, items);
                 });
-                allGroupRowsForNesting = [...displayGroupRows, ...semiRows];
+                allGroupRowsForNesting = [...allGroupRowsForNesting, ...semiRows];
+                for (const g of needFetch) {
+                  const items = semiBatch[`${g.material_id}|${g.version}`] ?? [];
+                  for (const it of items) {
+                    if (componentIdSet.has(it.componentId) && !processedSemiIds.has(it.componentId)) {
+                      nextFrontier.add(it.componentId);
+                    }
+                  }
+                }
               }
+              frontierSemiIds.forEach((id) => processedSemiIds.add(id));
+              frontierSemiIds = nextFrontier;
             }
             groupKeyToUuidsRef.current = keyToUuids;
             const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);

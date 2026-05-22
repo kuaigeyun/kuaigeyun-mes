@@ -37,7 +37,6 @@ import {
 } from './components/SalesOrderDetailBody';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, mapSalesOrderLifecycleStageToApiParams, isSalesOrderClosed } from '../../../utils/salesOrderLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -141,6 +140,8 @@ type SalesOrderItemRow = SalesOrderItem & {
   review_status?: string;
   pushed_to_computation?: boolean;
   lifecycle?: Record<string, unknown>;
+  has_shippable_products?: boolean;
+  shippable_quantity?: number;
   /** 生命周期阶段名，用于卡片分组 */
   _lifecycleStage?: string;
   items?: { work_order_id?: number | null }[];
@@ -1908,16 +1909,16 @@ const SalesOrdersPage: React.FC = () => {
       valueEnum: lifecycleValueEnum,
       render: (_: unknown, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
-        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
-        const displayLabel = activeStage?.label ?? lifecycle.stageName;
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={displayLabel}
+            stageName={lifecycle.stageName}
             status={lifecycle.status}
             subStages={lifecycle.subStages}
+            subPercent={lifecycle.subPercent}
+            subLabel={lifecycle.subLabel}
             showLabel
-            showCircleTooltip={false}
+            showCircleTooltip
           />
         );
       },
@@ -2088,7 +2089,14 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
       render: (_: unknown, record: SalesOrderItemRow) => {
-        const orderRecord = { id: record.sales_order_id, status: record.status, review_status: record.review_status } as SalesOrder;
+        const orderRecord = {
+          id: record.sales_order_id,
+          status: record.status,
+          review_status: record.review_status,
+          has_shippable_products: record.has_shippable_products,
+          shippable_quantity: record.shippable_quantity,
+          delivery_progress: record.delivery_progress,
+        } as SalesOrder;
         const lifecycle = getSalesOrderLifecycle(orderRecord, auditEnabled);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
@@ -2369,6 +2377,8 @@ const SalesOrdersPage: React.FC = () => {
                     status: order.status,
                     review_status: order.review_status,
                     pushed_to_computation: order.pushed_to_computation,
+                    has_shippable_products: order.has_shippable_products,
+                    shippable_quantity: order.shippable_quantity,
                     material_code: '-',
                     material_name: '-',
                     required_quantity: 0,
@@ -2393,6 +2403,8 @@ const SalesOrdersPage: React.FC = () => {
                       status: order.status,
                       review_status: order.review_status,
                       pushed_to_computation: order.pushed_to_computation,
+                      has_shippable_products: order.has_shippable_products,
+                      shippable_quantity: order.shippable_quantity,
                       material_code: item.material_code ?? '',
                       material_name: item.material_name ?? '',
                       material_spec: item.material_spec ?? '',

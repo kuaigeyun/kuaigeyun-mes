@@ -70,6 +70,7 @@ async def list_receivables(
     limit: int = Query(20, ge=1),
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
+    pending_settlement: bool = Query(False, description="仅返回待核销应收（remaining_amount > 0）"),
     _auth: object = Depends(
         require_access(
             "finance.receivable",
@@ -79,10 +80,14 @@ async def list_receivables(
     ),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    receivables = await receivable_service.list_receivables(
-        tenant_id, skip, limit, status=status, customer_id=customer_id
+    receivables, total = await receivable_service.list_receivables(
+        tenant_id,
+        skip,
+        limit,
+        status=status,
+        customer_id=customer_id,
+        pending_settlement=pending_settlement,
     )
-    total = len(receivables)
     return ReceivableListResponse(
         items=receivables,
         total=total,

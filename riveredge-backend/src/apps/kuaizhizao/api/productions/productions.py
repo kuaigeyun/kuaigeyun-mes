@@ -99,6 +99,9 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialIssueCreate,
     OutsourceMaterialIssueUpdate,
     OutsourceMaterialIssueResponse,
+    OutsourceMaterialIssuePreviewResponse,
+    OutsourceMaterialIssueBatchCreate,
+    OutsourceMaterialIssueBatchResponse,
     OutsourceMaterialReceiptCreate,
     OutsourceMaterialReceiptUpdate,
     OutsourceMaterialReceiptResponse,
@@ -3279,6 +3282,49 @@ async def delete_outsource_work_order(
 
 
 # ==================== 委外发料 API ====================
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/issue-preview",
+    response_model=OutsourceMaterialIssuePreviewResponse,
+    summary="Preview subcontract issue lines from BOM",
+)
+async def get_outsource_issue_preview(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialIssuePreviewResponse:
+    """根据委外工单产品 BOM 返回待发料明细预览。"""
+    try:
+        return await outsource_material_issue_service.get_issue_preview(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-work-orders/{work_order_id}/issue-preview", tenant_id)
+
+
+@router.post(
+    "/outsource-material-issues/batch",
+    response_model=OutsourceMaterialIssueBatchResponse,
+    summary="Batch create subcontract issues",
+)
+async def create_outsource_material_issues_batch(
+    data: OutsourceMaterialIssueBatchCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialIssueBatchResponse:
+    """批量创建委外发料单（按 BOM 明细行）。"""
+    try:
+        return await outsource_material_issue_service.create_material_issues_batch(
+            tenant_id=tenant_id,
+            batch_data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-issues/batch", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-issues/batch", tenant_id)
+
 
 @router.post("/outsource-material-issues", response_model=OutsourceMaterialIssueResponse, summary="Create subcontract issue")
 async def create_outsource_material_issue(

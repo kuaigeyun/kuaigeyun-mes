@@ -54,7 +54,7 @@ const PayableDetail: React.FC = () => {
         payment_method: values.payment_method || '银行转账',
         notes: values.notes,
       });
-      message.success('付款记录已添加');
+      message.success('付款单已创建并完成核销');
       setPaymentModalVisible(false);
       loadData();
     } catch {

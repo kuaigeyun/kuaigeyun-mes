@@ -289,7 +289,7 @@ export function mapSalesOrderLifecycleStageToApiParams(
  * 根据销售订单计算生命周期结果，供 UniLifecycle 使用。
  * 优先使用后端下发的 lifecycle（节点由后端控制），无则前端兜底计算。
  */
-export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
+function computeSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
     const result = parseBackendLifecycle(backend);
@@ -469,6 +469,48 @@ export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true)
     },
     auditRequired,
   );
+}
+
+const SHIPPABLE_STAGE = '可发货';
+const SHIPPABLE_ELIGIBLE_STAGES = new Set(['执行中', '已生效', '发货出库', '已交货']);
+
+/** 库存满足欠交时，将「执行中」升维展示为「可发货」（阶段名 + 绿色圆环） */
+function applyShippableLifecycleHint(record: SalesOrder, result: LifecycleResult): LifecycleResult {
+  if (!record.has_shippable_products) return result;
+
+  const stage = normalizeStageName(result.stageName);
+  const activeExecuting = result.mainStages?.some((s) => s.status === 'active' && s.key === 'executing');
+  if (!SHIPPABLE_ELIGIBLE_STAGES.has(stage) && !activeExecuting) return result;
+
+  const qty = Number(record.shippable_quantity ?? 0);
+  const mainStages = result.mainStages?.map((s) =>
+    s.status === 'active' && s.key === 'executing' ? { ...s, label: SHIPPABLE_STAGE } : s,
+  );
+  const subStages = result.subStages?.map((s) =>
+    s.key === 'shipment_waiting' && s.status !== 'done'
+      ? { ...s, label: SHIPPABLE_STAGE, status: 'active' as SubStage['status'] }
+      : s,
+  );
+
+  const suggestions = [
+    '下推发货通知',
+    ...(result.nextStepSuggestions ?? []).filter((s) => !s.includes('可发货')),
+  ];
+
+  return {
+    ...result,
+    stageName: SHIPPABLE_STAGE,
+    status: 'success',
+    mainStages,
+    subStages,
+    subPercent: qty > 0 ? undefined : result.subPercent,
+    subLabel: qty > 0 ? `${Math.round(qty)}件待出` : result.subLabel,
+    nextStepSuggestions: suggestions,
+  };
+}
+
+export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
+  return applyShippableLifecycleHint(record, computeSalesOrderLifecycle(record, auditRequired));
 }
 
 /** 销售订单是否已关闭（剩余执行已终止） */

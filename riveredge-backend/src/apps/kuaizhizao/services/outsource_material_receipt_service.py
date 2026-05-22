@@ -109,7 +109,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
 
-            # 创建委外收货单
+            # 创建委外收货单（创建即入库，标记为已完成）
+            now = datetime.now()
             material_receipt = await OutsourceMaterialReceipt.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -125,8 +126,10 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 location_id=receipt_data.location_id,
                 location_name=receipt_data.location_name,
                 batch_number=receipt_data.batch_number,
-                status=receipt_data.status,
-                received_at=receipt_data.received_at,
+                status="completed",
+                received_at=now,
+                received_by=created_by,
+                received_by_name=user_info["name"],
                 remarks=receipt_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -170,8 +173,26 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             # await accounts_payable_service.create_payable(...)
 
             logger.info(f"创建委外收货单成功: {code}")
-            
+
+            await material_receipt.refresh_from_db()
             return OutsourceMaterialReceiptResponse.model_validate(material_receipt)
+
+    async def _normalize_legacy_draft_receipts(
+        self, receipts: List[OutsourceMaterialReceipt]
+    ) -> None:
+        """历史数据：创建时已入库但状态仍为 draft，补写为 completed。"""
+        for receipt in receipts:
+            if receipt.status != "draft":
+                continue
+            receipt.status = "completed"
+            if not receipt.received_at:
+                receipt.received_at = receipt.created_at or datetime.now()
+            if not receipt.received_by:
+                receipt.received_by = receipt.created_by
+            if not receipt.received_by_name:
+                receipt.received_by_name = receipt.created_by_name
+            await receipt.save()
+            logger.info(f"补写委外收货单状态 draft->completed: {receipt.code}")
 
     async def list_material_receipts(
         self,
@@ -207,6 +228,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         receipts = await OutsourceMaterialReceipt.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
 
+        await self._normalize_legacy_draft_receipts(receipts)
+
         return [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
 
     async def get_material_receipt(
@@ -235,6 +258,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         if not receipt:
             raise NotFoundError(f"委外收货单ID {receipt_id} 不存在")
+
+        await self._normalize_legacy_draft_receipts([receipt])
 
         return OutsourceMaterialReceiptResponse.model_validate(receipt)
 
@@ -283,5 +308,6 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         await receipt.save()
 
         logger.info(f"完成委外收货单: {receipt.code}")
-        
+
+        await receipt.refresh_from_db()
         return OutsourceMaterialReceiptResponse.model_validate(receipt)

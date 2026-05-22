@@ -24,7 +24,7 @@ import {
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import CodeField from '../../../../../components/code-field';
 import { apiRequest } from '../../../../../services/api';
-import { warehouseApi, workOrderApi } from '../../../services/production';
+import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
@@ -39,7 +39,7 @@ interface OutboundOrder {
   tenant_id?: number;
   delivery_code?: string; // 销售出库单编号
   picking_code?: string; // 生产领料单编号
-  outbound_type?: 'production_picking' | 'sales_delivery'; // 出库类型
+  outbound_type?: 'production_picking' | 'sales_delivery' | 'outsource_issue'; // 出库类型
   status?: string;
   delivery_date?: string; // 出库日期
   customer_id?: number;
@@ -98,8 +98,45 @@ function parseSalesDeliveryConfirmResult(raw: unknown): { status?: string } {
   return {};
 }
 
-function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking' | 'sales_delivery' {
-  return order.outbound_type === 'sales_delivery' ? 'sales_delivery' : 'production_picking';
+function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking' | 'sales_delivery' | undefined {
+  if (order.outbound_type === 'sales_delivery') return 'sales_delivery';
+  if (order.outbound_type === 'production_picking') return 'production_picking';
+  return undefined;
+}
+
+function mapOutsourceIssueToOutbound(item: Record<string, unknown>): OutboundOrder {
+  const code = String(item.code ?? '');
+  const statusRaw = String(item.status ?? '');
+  const status =
+    statusRaw === 'completed' ? '已完成' : statusRaw === 'draft' ? '已出库' : statusRaw || '已出库';
+  return {
+    id: item.id as number,
+    outbound_type: 'outsource_issue',
+    picking_code: code,
+    work_order_code: String(item.outsource_work_order_code ?? item.outsourceWorkOrderCode ?? ''),
+    warehouse_id: item.warehouse_id as number | undefined,
+    warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
+    total_quantity: Number(item.quantity ?? 0),
+    total_items: 1,
+    delivered_by: String(
+      item.issued_by_name ?? item.issuedByName ?? item.created_by_name ?? item.createdByName ?? '',
+    ),
+    delivery_date: String(item.issued_at ?? item.issuedAt ?? item.created_at ?? item.createdAt ?? ''),
+    status,
+    updated_at: String(item.updated_at ?? item.updatedAt ?? ''),
+    created_at: String(item.created_at ?? item.createdAt ?? ''),
+    notes: String(item.remarks ?? item.notes ?? ''),
+    items: [
+      {
+        material_code: String(item.material_code ?? item.materialCode ?? ''),
+        material_name: String(item.material_name ?? item.materialName ?? ''),
+        delivery_quantity: Number(item.quantity ?? 0),
+        material_unit: String(item.unit ?? ''),
+        warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
+        batch_number: String(item.batch_number ?? item.batchNumber ?? ''),
+      },
+    ],
+  };
 }
 
 const OutboundPage: React.FC = () => {
@@ -357,6 +394,13 @@ const OutboundPage: React.FC = () => {
         detailData = await warehouseApi.productionPicking.get(record.id!.toString());
       } else if (record.outbound_type === 'sales_delivery') {
         detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+      } else if (record.outbound_type === 'outsource_issue') {
+        const raw = await outsourceMaterialIssueApi.get(record.id!.toString());
+        detailData = mapOutsourceIssueToOutbound(raw as Record<string, unknown>);
+        setCurrentOrder(detailData);
+        setDetailDrawerVisible(true);
+        setOutboundTrackingRefreshKey((k) => k + 1);
+        return;
       }
       setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : null);
       setDetailDrawerVisible(true);
@@ -572,6 +616,7 @@ const OutboundPage: React.FC = () => {
       valueEnum: {
         production_picking: { text: '生产领料', status: 'processing' },
         sales_delivery: { text: '销售出库', status: 'success' },
+        outsource_issue: { text: '委外发料', status: 'warning' },
       },
     },
     {
@@ -587,15 +632,14 @@ const OutboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '备料分',
+      title: '权重分',
       dataIndex: 'picking_score',
-      width: 96,
+      width: 88,
       hideInSearch: true,
       render: (_: unknown, record: OutboundOrder) =>
         record.outbound_type === 'production_picking' ? (
           <WorkOrderScoreCell
             score={record.picking_score}
-            rankBand={record.picking_rank_band}
             breakdown={record.picking_score_breakdown}
           />
         ) : (
@@ -676,7 +720,8 @@ const OutboundPage: React.FC = () => {
           >
             详情
           </Button>
-          {(record.status === 'draft' || record.status === '草稿' || record.status === '待领料' || record.status === '待出库') && (
+          {(record.status === 'draft' || record.status === '草稿' || record.status === '待领料' || record.status === '待出库') &&
+            record.outbound_type !== 'outsource_issue' && (
             <Tooltip
               title={
                 record.outbound_type === 'production_picking' &&
@@ -737,10 +782,11 @@ const OutboundPage: React.FC = () => {
             const skip = (params.current! - 1) * params.pageSize!;
             const limit = params.pageSize!;
 
-            const fetchPicking = typeFilter !== 'sales_delivery';
-            const fetchDelivery = typeFilter !== 'production_picking';
+            const fetchPicking = !typeFilter || typeFilter === 'production_picking';
+            const fetchDelivery = !typeFilter || typeFilter === 'sales_delivery';
+            const fetchOutsource = !typeFilter || typeFilter === 'outsource_issue';
 
-            const [pickingRes, deliveryRes] = await Promise.all([
+            const [pickingRes, deliveryRes, outsourceRes] = await Promise.all([
               fetchPicking
                 ? warehouseApi.productionPicking.list({
                     skip,
@@ -754,6 +800,13 @@ const OutboundPage: React.FC = () => {
                     skip,
                     limit,
                     ...params,
+                    keyword: kw,
+                  })
+                : Promise.resolve([]),
+              fetchOutsource
+                ? outsourceMaterialIssueApi.list({
+                    skip,
+                    limit,
                     keyword: kw,
                   })
                 : Promise.resolve([]),
@@ -772,8 +825,11 @@ const OutboundPage: React.FC = () => {
                   outbound_type: 'sales_delivery' as const,
                 }))
               : [];
+            const outsourceData = fetchOutsource
+              ? toList(outsourceRes).map((item: any) => mapOutsourceIssueToOutbound(item))
+              : [];
 
-            let combinedData = [...pickingData, ...deliveryData];
+            let combinedData = [...pickingData, ...deliveryData, ...outsourceData];
 
             if (typeFilter === 'production_picking') {
               combinedData.sort((a, b) => {
@@ -794,7 +850,8 @@ const OutboundPage: React.FC = () => {
 
             const total =
               (fetchPicking && typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
-              (fetchDelivery && typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length);
+              (fetchDelivery && typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length) +
+              (fetchOutsource ? outsourceData.length : 0);
 
             return {
               data: combinedData,
@@ -1112,7 +1169,8 @@ const OutboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
-          currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') && (
+          currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') &&
+            currentOrder.outbound_type !== 'outsource_issue' && (
             <Button
               type="primary"
               icon={<CheckCircleOutlined />}
@@ -1134,9 +1192,15 @@ const OutboundPage: React.FC = () => {
                 <p><strong>出库单号：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
                 <p><strong>出库类型：</strong>
                   <Tag color={
-                    currentOrder.outbound_type === 'production_picking' ? 'processing' : 'success'
+                    currentOrder.outbound_type === 'production_picking' ? 'processing'
+                      : currentOrder.outbound_type === 'outsource_issue' ? 'warning'
+                        : 'success'
                   }>
-                    {currentOrder.outbound_type === 'production_picking' ? '生产领料' : '销售出库'}
+                    {currentOrder.outbound_type === 'production_picking'
+                      ? '生产领料'
+                      : currentOrder.outbound_type === 'outsource_issue'
+                        ? '委外发料'
+                        : '销售出库'}
                   </Tag>
                 </p>
                 <p><strong>状态：</strong>
@@ -1181,9 +1245,9 @@ const OutboundPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {currentOrder.id != null ? (
+                  {currentOrder.id != null && outboundDocumentTrackingType(currentOrder) ? (
                     <DetailDrawerInlineFullChain
-                      documentType={outboundDocumentTrackingType(currentOrder)}
+                      documentType={outboundDocumentTrackingType(currentOrder)!}
                       documentId={currentOrder.id}
                       active={detailDrawerVisible}
                       selfDocumentId={currentOrder.id}

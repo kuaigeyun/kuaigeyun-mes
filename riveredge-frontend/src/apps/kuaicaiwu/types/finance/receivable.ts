@@ -31,6 +31,7 @@ export interface ReceivableListParams {
     limit?: number;
     status?: string;
     customer_id?: number;
+    pending_settlement?: boolean;
 }
 
 export interface ReceivableCreateData {

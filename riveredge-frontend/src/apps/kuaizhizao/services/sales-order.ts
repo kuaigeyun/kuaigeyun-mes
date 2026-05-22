@@ -68,6 +68,10 @@ export interface SalesOrder {
   delivery_progress?: number | null;
   /** 开票进度 0-100（列表接口返回） */
   invoice_progress?: number | null;
+  /** 是否存在可发货产品（库存满足且仍有欠交） */
+  has_shippable_products?: boolean;
+  /** 当前可发货数量合计 */
+  shippable_quantity?: number;
   /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
   demand_synced?: boolean;
   fee_details?: any[];
@@ -382,6 +386,9 @@ export interface PushToShipmentNoticeResponse {
   message: string;
   notice_id?: number;
   notice_code?: string;
+  status?: string;
+  sales_delivery_id?: number;
+  sales_delivery_code?: string;
 }
 
 export async function pushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushToShipmentNoticeResponse> {

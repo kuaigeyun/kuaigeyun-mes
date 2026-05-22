@@ -823,7 +823,7 @@ class CodeGenerationService:
                 "code_sequence_recalibrate rule_code={} prefix={} effective_prefix={} scope_key={} max_from_db={} current_seq_before={}",
                 request_rule_code,
                 log_prefix,
-                effective_prefix,
+                log_prefix,
                 scope_key,
                 max_from_db,
                 sequence.current_seq,

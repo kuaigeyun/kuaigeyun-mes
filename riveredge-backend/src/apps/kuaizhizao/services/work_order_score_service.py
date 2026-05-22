@@ -467,6 +467,7 @@ class WorkOrderScoreService(BaseService):
         *,
         refresh_if_stale: bool = True,
         include_kitting: bool = False,
+        kitting_rates: Optional[Dict[int, float]] = None,
     ) -> Dict[int, float]:
         """返回 work_order_id -> composite_score，供排序使用。"""
         if not work_order_ids or not await self.is_score_enabled(tenant_id):
@@ -476,10 +477,21 @@ class WorkOrderScoreService(BaseService):
         cached_map = await self.batch_get_scores(tenant_id, work_order_ids, scenario)
         scores: Dict[int, float] = {}
         missing_or_stale: List[int] = []
+        kitting_rates = kitting_rates or {}
 
         for wo_id in work_order_ids:
             cached = cached_map.get(wo_id)
-            if cached and not (
+            needs_recompute = False
+            if cached and include_kitting:
+                expected_rate = kitting_rates.get(wo_id)
+                cached_raw = (cached.breakdown or {}).get("kitting_readiness", {}).get("raw")
+                if expected_rate is not None:
+                    if cached_raw is None or abs(float(cached_raw) - float(expected_rate)) > 0.01:
+                        needs_recompute = True
+                elif cached_raw is None:
+                    needs_recompute = True
+
+            if cached and not needs_recompute and not (
                 refresh_if_stale and self._is_stale(cached.computed_at, cfg.stale_minutes)
             ):
                 scores[wo_id] = cached.composite_score
@@ -494,7 +506,11 @@ class WorkOrderScoreService(BaseService):
             ).all()
             for wo in work_orders:
                 score = await self.compute_score(
-                    tenant_id, wo, scenario, include_kitting=include_kitting
+                    tenant_id,
+                    wo,
+                    scenario,
+                    kitting_rate=kitting_rates.get(wo.id),
+                    include_kitting=include_kitting,
                 )
                 await self._persist_score(tenant_id, score)
                 scores[wo.id] = score.composite_score
@@ -509,6 +525,7 @@ class WorkOrderScoreService(BaseService):
         *,
         refresh_if_stale: bool = True,
         include_kitting: bool = False,
+        kitting_rates: Optional[Dict[int, float]] = None,
     ) -> Dict[int, WorkOrderScoreResponse]:
         """缺快照或过期时计算并持久化，返回完整分响应（供列表/风险/领料 enrichment）。"""
         if not work_order_ids or not await self.is_score_enabled(tenant_id):
@@ -519,6 +536,7 @@ class WorkOrderScoreService(BaseService):
             scenario,
             refresh_if_stale=refresh_if_stale,
             include_kitting=include_kitting,
+            kitting_rates=kitting_rates,
         )
         return await self.batch_get_scores(tenant_id, work_order_ids, scenario)
 
@@ -530,11 +548,27 @@ class WorkOrderScoreService(BaseService):
         if not items or not await self.is_score_enabled(tenant_id):
             return
         wo_ids = [item["id"] for item in items if item.get("id")]
+        kitting_rates: Dict[int, float] = {}
+        for item in items:
+            wo_id = item.get("id")
+            readiness = item.get("readiness_rate")
+            if wo_id and readiness is not None:
+                kitting_rates[int(wo_id)] = float(readiness)
+
+        # 列表「权重分」纳入各工单齐套率，避免同销售订单/交期的父子工单分数完全相同
         scheduling = await self.batch_ensure_scores(
-            tenant_id, wo_ids, "scheduling", include_kitting=False
+            tenant_id,
+            wo_ids,
+            "scheduling",
+            include_kitting=True,
+            kitting_rates=kitting_rates,
         )
         picking = await self.batch_ensure_scores(
-            tenant_id, wo_ids, "picking", include_kitting=True
+            tenant_id,
+            wo_ids,
+            "picking",
+            include_kitting=True,
+            kitting_rates=kitting_rates,
         )
         for item in items:
             sid = item.get("id")

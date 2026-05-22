@@ -56,6 +56,11 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
+import OutsourceIssueFormContent, { type OutsourceIssueLine } from '../../../components/OutsourceIssueFormContent';
+import OutsourceReceiptFormContent, {
+  buildReceiptLineFromWorkOrder,
+  type OutsourceReceiptLine,
+} from '../../../components/OutsourceReceiptFormContent';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -131,6 +136,16 @@ const PRIORITY_FALLBACK = [
   { label: '高', value: 'high' },
   { label: '紧急', value: 'urgent' },
 ];
+
+function unwrapMaterialList(response: unknown): any[] {
+  if (Array.isArray(response)) return response;
+  if (response && typeof response === 'object') {
+    const r = response as Record<string, unknown>;
+    if (Array.isArray(r.data)) return r.data;
+    if (Array.isArray(r.items)) return r.items;
+  }
+  return [];
+}
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -210,7 +225,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   const refreshLocalStats = useCallback(async () => {
     try {
-      const response = await outsourceWorkOrderApi.list({ skip: 0, limit: 5000 });
+      const response = await outsourceWorkOrderApi.list({ skip: 0, limit: 1000 });
       const arr = Array.isArray(response)
         ? response
         : (response as any)?.data || (response as any)?.items || [];
@@ -232,11 +247,15 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   // 委外发料 Modal 相关状态
   const [issueModalVisible, setIssueModalVisible] = useState(false);
   const [currentWorkOrderForIssue, setCurrentWorkOrderForIssue] = useState<OutsourceWorkOrder | null>(null);
+  const [issueLines, setIssueLines] = useState<OutsourceIssueLine[]>([]);
+  const [issuePreviewLoading, setIssuePreviewLoading] = useState(false);
+  const [issuePreviewMessage, setIssuePreviewMessage] = useState<string | null>(null);
   const issueFormRef = useRef<any>(null);
 
   // 委外收货 Modal 相关状态
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
   const [currentWorkOrderForReceipt, setCurrentWorkOrderForReceipt] = useState<OutsourceWorkOrder | null>(null);
+  const [receiptLine, setReceiptLine] = useState<OutsourceReceiptLine | null>(null);
   const receiptFormRef = useRef<any>(null);
 
   // 当前选中产品的物料来源信息
@@ -257,8 +276,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     const loadData = async () => {
       try {
         // 加载产品列表（只显示委外件）
-        const products = await materialApi.list({ isActive: true });
-        const outsourceProducts = products.filter((p: any) =>
+        const productsRes = await materialApi.list({ isActive: true, limit: 1000 });
+        const outsourceProducts = unwrapMaterialList(productsRes).filter((p: any) =>
           (p.sourceType === 'Outsource' || p.source_type === 'Outsource')
         );
         setProductList(outsourceProducts);
@@ -722,9 +741,38 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       const detail = await outsourceWorkOrderApi.get(record.id!.toString());
       setCurrentWorkOrderForIssue(detail);
       setIssueModalVisible(true);
+      setIssueLines([]);
+      setIssuePreviewMessage(null);
+      setIssuePreviewLoading(true);
       setTimeout(() => {
         issueFormRef.current?.resetFields();
       }, 100);
+      try {
+        const preview = await outsourceMaterialIssueApi.issuePreview(detail.id!);
+        const rawLines = preview?.lines ?? preview?.data?.lines ?? [];
+        setIssuePreviewMessage(preview?.message ?? preview?.data?.message ?? null);
+        setIssueLines(
+          rawLines.map((l: any) => {
+            const pending = Number(l.pendingQuantity ?? l.pending_quantity ?? 0);
+            return {
+              key: Number(l.materialId ?? l.material_id),
+              materialId: Number(l.materialId ?? l.material_id),
+              materialCode: l.materialCode ?? l.material_code ?? '',
+              materialName: l.materialName ?? l.material_name ?? '',
+              unit: l.unit ?? '',
+              requiredQuantity: Number(l.requiredQuantity ?? l.required_quantity ?? 0),
+              issuedQuantity: Number(l.issuedQuantity ?? l.issued_quantity ?? 0),
+              pendingQuantity: pending,
+              availableQuantity: Number(l.availableQuantity ?? l.available_quantity ?? 0),
+              issueQuantity: pending > 0 ? pending : 0,
+            };
+          }),
+        );
+      } catch (err: any) {
+        messageApi.error(err?.message || '加载待发物料明细失败');
+      } finally {
+        setIssuePreviewLoading(false);
+      }
     } catch (error) {
       messageApi.error('获取工单委外详情失败');
     }
@@ -739,33 +787,44 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         throw new Error('工单委外信息不存在');
       }
 
-      const submitData = {
+      const activeLines = issueLines.filter((l) => l.issueQuantity > 0);
+      if (activeLines.length === 0) {
+        messageApi.error('请至少填写一行本次发料数量');
+        throw new Error('no lines');
+      }
+      if (!values.warehouseId) {
+        messageApi.error('请选择出库仓库');
+        throw new Error('no warehouse');
+      }
+
+      await outsourceMaterialIssueApi.createBatch({
         outsource_work_order_id: currentWorkOrderForIssue.id,
         outsource_work_order_code: currentWorkOrderForIssue.code,
-        material_id: values.materialId,
-        material_code: values.materialCode,
-        material_name: values.materialName,
-        quantity: values.quantity,
-        unit: values.unit,
         warehouse_id: values.warehouseId,
         warehouse_name: values.warehouseName,
-        location_id: values.locationId,
-        location_name: values.locationName,
-        batch_number: values.batchNumber,
         remarks: values.remarks,
-      };
-
-      await outsourceMaterialIssueApi.create(submitData);
-      messageApi.success('委外发料单创建成功');
+        lines: activeLines.map((l) => ({
+          material_id: l.materialId,
+          material_code: l.materialCode,
+          material_name: l.materialName,
+          quantity: l.issueQuantity,
+          unit: l.unit,
+        })),
+      });
+      messageApi.success(`委外发料成功，共 ${activeLines.length} 条明细`);
       setIssueModalVisible(false);
       setCurrentWorkOrderForIssue(null);
+      setIssueLines([]);
+      setIssuePreviewMessage(null);
       issueFormRef.current?.resetFields();
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建委外发料单失败');
+      if (error?.message && error.message !== 'no lines' && error.message !== 'no warehouse') {
+        messageApi.error(error.message || '创建委外发料单失败');
+      }
       throw error;
     }
   };
@@ -777,13 +836,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     try {
       const detail = await outsourceWorkOrderApi.get(record.id!.toString());
       setCurrentWorkOrderForReceipt(detail);
+      setReceiptLine(buildReceiptLineFromWorkOrder(detail));
       setReceiptModalVisible(true);
       setTimeout(() => {
-        receiptFormRef.current?.setFieldsValue({
-          quantity: detail.quantity! - (detail.receivedQuantity || 0),
-          qualifiedQuantity: detail.quantity! - (detail.receivedQuantity || 0),
-          unit: 'PC', // 默认单位
-        });
+        receiptFormRef.current?.resetFields();
       }, 100);
     } catch (error) {
       messageApi.error('获取工单委外详情失败');
@@ -795,21 +851,31 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
    */
   const handleSubmitReceipt = async (values: any): Promise<void> => {
     try {
-      if (!currentWorkOrderForReceipt?.id) {
+      if (!currentWorkOrderForReceipt?.id || !receiptLine) {
         throw new Error('工单委外信息不存在');
+      }
+      if (receiptLine.receiptQuantity <= 0) {
+        messageApi.error('请填写本次收货数量');
+        throw new Error('no qty');
+      }
+      if (!values.warehouseId) {
+        messageApi.error('请选择入库仓库');
+        throw new Error('no warehouse');
+      }
+      if (receiptLine.receiptQuantity > receiptLine.pendingQuantity) {
+        messageApi.error('收货数量不能超过待收数量');
+        throw new Error('over qty');
       }
 
       const submitData = {
         outsource_work_order_id: currentWorkOrderForReceipt.id,
         outsource_work_order_code: currentWorkOrderForReceipt.code,
-        quantity: values.quantity,
-        qualified_quantity: values.qualifiedQuantity || 0,
-        unqualified_quantity: values.unqualifiedQuantity || 0,
-        unit: values.unit || 'PC',
+        quantity: receiptLine.receiptQuantity,
+        qualified_quantity: receiptLine.qualifiedQuantity || 0,
+        unqualified_quantity: receiptLine.unqualifiedQuantity || 0,
+        unit: receiptLine.unit || '件',
         warehouse_id: values.warehouseId,
         warehouse_name: values.warehouseName,
-        location_id: values.locationId,
-        location_name: values.locationName,
         batch_number: values.batchNumber,
         remarks: values.remarks,
       };
@@ -818,13 +884,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       messageApi.success('委外收货单创建成功');
       setReceiptModalVisible(false);
       setCurrentWorkOrderForReceipt(null);
+      setReceiptLine(null);
       receiptFormRef.current?.resetFields();
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建委外收货单失败');
+      if (error?.message && !['no qty', 'no warehouse', 'over qty'].includes(error.message)) {
+        messageApi.error(error.message || '创建委外收货单失败');
+      }
       throw error;
     }
   };
@@ -1086,7 +1155,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     try {
       const response = await outsourceWorkOrderApi.list({
         skip: (params.current! - 1) * params.pageSize!,
-        limit: params.pageSize,
+        limit: Math.min(params.pageSize ?? 100, 1000),
         ...params,
         keyword: params.keyword,
       });
@@ -1485,6 +1554,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         onClose={() => {
           setIssueModalVisible(false);
           setCurrentWorkOrderForIssue(null);
+          setIssueLines([]);
+          setIssuePreviewMessage(null);
           issueFormRef.current?.resetFields();
         }}
         onFinish={handleSubmitIssue}
@@ -1493,104 +1564,27 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       >
         {currentWorkOrderForIssue && (
           <>
-            <Divider>工单委外信息</Divider>
-            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>工单委外编号：</strong>{currentWorkOrderForIssue.code}</div>
-              <div><strong>产品名称：</strong>{currentWorkOrderForIssue.productName || currentWorkOrderForIssue.product_name}</div>
-              <div><strong>委外数量：</strong>{currentWorkOrderForIssue.quantity != null ? Number(currentWorkOrderForIssue.quantity).toFixed(2) : '-'}</div>
-              <div><strong>已发料数量：</strong>{Number(currentWorkOrderForIssue.issuedQuantity ?? currentWorkOrderForIssue.issued_quantity ?? 0).toFixed(2)}</div>
-            </div>
-            <Divider>发料信息</Divider>
-            <ProFormSelect
-              name="materialId"
-              label="原材料"
-              placeholder="请选择原材料"
-              rules={[{ required: true, message: '请选择原材料' }]}
-              request={async () => {
-                try {
-                  const materials = await materialApi.list({ isActive: true, sourceType: 'Buy' });
-                  return materials.map((m: any) => ({
-                    label: `${m.code || m.mainCode} - ${m.name}`,
-                    value: m.id,
-                  }));
-                } catch (error) {
-                  return [];
-                }
-              }}
-              fieldProps={{
-                showSearch: true,
-                filterOption: (input: string, option: any) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                onChange: async (value: number | undefined) => {
-                  if (value) {
-                    const materials = await materialApi.list({ isActive: true });
-                    const material = materials.find((m: any) => m.id === value);
-                    if (material) {
-                      issueFormRef.current?.setFieldsValue({
-                        materialCode: material.code || material.mainCode,
-                        materialName: material.name,
-                        unit: material.baseUnit || 'PC',
-                      });
-                    }
-                  }
-                }
-              }}
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="materialCode"
-              label="物料编号"
-              disabled
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="materialName"
-              label="物料名称"
-              disabled
-              colProps={{ span: 12 }}
-            />
-            <ProFormDigit
-              name="quantity"
-              label="发料数量"
-              placeholder="请输入发料数量"
-              min={0}
-              precision={2}
-              rules={[{ required: true, message: '请输入发料数量' }]}
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="unit"
-              label="单位"
-              disabled
-              colProps={{ span: 12 }}
+            <OutsourceIssueFormContent
+              workOrder={currentWorkOrderForIssue}
+              lines={issueLines}
+              onLinesChange={setIssueLines}
+              loading={issuePreviewLoading}
+              previewMessage={issuePreviewMessage}
             />
             <UniWarehouseSelect
               name="warehouseId"
-              label="仓库"
+              label="出库仓库"
               placeholder="请选择仓库"
               required
               colProps={{ span: 12 }}
               onChange={(val, wh) => issueFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
             />
-            <ProFormText
-              name="warehouseName"
-              label="仓库名称"
-              disabled
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="batchNumber"
-              label="批次号"
-              placeholder="请输入批次号（可选）"
-              colProps={{ span: 12 }}
-            />
+            <ProFormText name="warehouseName" hidden />
             <ProFormTextArea
               name="remarks"
               label="备注"
               placeholder="请输入备注信息"
-              fieldProps={{
-                rows: 4,
-              }}
+              fieldProps={{ rows: 2 }}
               colProps={{ span: 24 }}
             />
           </>
@@ -1604,6 +1598,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         onClose={() => {
           setReceiptModalVisible(false);
           setCurrentWorkOrderForReceipt(null);
+          setReceiptLine(null);
           receiptFormRef.current?.resetFields();
         }}
         onFinish={handleSubmitReceipt}
@@ -1612,63 +1607,20 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       >
         {currentWorkOrderForReceipt && (
           <>
-            <Divider>工单委外信息</Divider>
-            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>工单委外编号：</strong>{currentWorkOrderForReceipt.code}</div>
-              <div><strong>产品名称：</strong>{currentWorkOrderForReceipt.productName || currentWorkOrderForReceipt.product_name}</div>
-              <div><strong>委外数量：</strong>{currentWorkOrderForReceipt.quantity != null ? Number(currentWorkOrderForReceipt.quantity).toFixed(2) : '-'}</div>
-              <div><strong>已收货数量：</strong>{Number(currentWorkOrderForReceipt.receivedQuantity ?? currentWorkOrderForReceipt.received_quantity ?? 0).toFixed(2)}</div>
-              <div><strong>剩余数量：</strong>{(Number(currentWorkOrderForReceipt.quantity ?? 0) - Number(currentWorkOrderForReceipt.receivedQuantity ?? currentWorkOrderForReceipt.received_quantity ?? 0)).toFixed(2)}</div>
-            </div>
-            <Divider>收货信息</Divider>
-            <ProFormDigit
-              name="quantity"
-              label="收货数量"
-              placeholder="请输入收货数量"
-              min={0}
-              precision={2}
-              rules={[{ required: true, message: '请输入收货数量' }]}
-              colProps={{ span: 12 }}
-            />
-            <ProFormDigit
-              name="qualifiedQuantity"
-              label="合格数量"
-              placeholder="请输入合格数量"
-              min={0}
-              precision={2}
-              rules={[{ required: true, message: '请输入合格数量' }]}
-              colProps={{ span: 12 }}
-            />
-            <ProFormDigit
-              name="unqualifiedQuantity"
-              label="不合格数量"
-              placeholder="请输入不合格数量"
-              min={0}
-              precision={2}
-              initialValue={0}
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="unit"
-              label="单位"
-              initialValue="PC"
-              disabled
-              colProps={{ span: 12 }}
+            <OutsourceReceiptFormContent
+              workOrder={currentWorkOrderForReceipt}
+              line={receiptLine}
+              onLineChange={setReceiptLine}
             />
             <UniWarehouseSelect
               name="warehouseId"
-              label="仓库"
+              label="入库仓库"
               placeholder="请选择仓库"
               required
               colProps={{ span: 12 }}
               onChange={(val, wh) => receiptFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
             />
-            <ProFormText
-              name="warehouseName"
-              label="仓库名称"
-              disabled
-              colProps={{ span: 12 }}
-            />
+            <ProFormText name="warehouseName" hidden />
             <ProFormText
               name="batchNumber"
               label="批次号"
@@ -1679,9 +1631,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               name="remarks"
               label="备注"
               placeholder="请输入备注信息"
-              fieldProps={{
-                rows: 4,
-              }}
+              fieldProps={{ rows: 2 }}
               colProps={{ span: 24 }}
             />
           </>

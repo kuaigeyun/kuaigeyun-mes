@@ -156,7 +156,7 @@ class PayableService(AppBaseService[Payable]):
             return await self.get_payable_by_id(tenant_id, payable_id)
 
     async def record_payment(self, tenant_id: int, payable_id: int, payment_data: PaymentRecordCreate, recorded_by: int) -> PayableResponse:
-        """记录付款"""
+        """登记付款：创建付款单并核销至当前应付单"""
         async with in_transaction():
             payable = await self.get_payable_by_id(tenant_id, payable_id)
             if payable.status == '已结清':
@@ -165,43 +165,41 @@ class PayableService(AppBaseService[Payable]):
             if payment_amount > payable.remaining_amount:
                 raise ValidationError("付款金额不能超过剩余金额")
 
-            new_paid_amount = self._money(payable.paid_amount + payment_amount)
-            new_remaining_amount = self._money(payable.total_amount - new_paid_amount)
-            new_status = "已结清" if new_remaining_amount <= Decimal("0.00") else "部分付款"
+            today = datetime.now().strftime("%Y%m%d")
+            count = await Payment.filter(tenant_id=tenant_id).count()
+            code = f"PK{today}{count + 1:04d}"
 
-            await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
-                paid_amount=new_paid_amount,
-                remaining_amount=new_remaining_amount,
-                status=new_status,
-                updated_by=recorded_by
-            )
-            await self._log_payable_amount_audit(
+            note_parts: list[str] = []
+            if payment_data.notes:
+                note_parts.append(payment_data.notes.strip())
+            note_parts.append(f"应付单 {payable.payable_code}")
+            notes = " · ".join(note_parts)
+
+            payment = await Payment.create(
                 tenant_id=tenant_id,
-                payable_id=payable_id,
-                operator_id=recorded_by,
-                before_paid=payable.paid_amount,
-                before_remaining=payable.remaining_amount,
-                after_paid=new_paid_amount,
-                after_remaining=new_remaining_amount,
-                scene="record_payment",
+                payment_code=code,
+                supplier_id=payable.supplier_id,
+                supplier_name=payable.supplier_name,
+                total_amount=payment_amount,
+                settled_amount=Decimal("0.00"),
+                unsettled_amount=payment_amount,
+                payment_date=payment_data.payment_date,
+                payment_method=payment_data.payment_method,
+                bank_account=payment_data.reference_number,
+                status="Draft",
+                notes=notes,
+                created_by=recorded_by,
             )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="PAYABLE_PAYMENT_RECORDED",
-                business_type="payable",
-                source_doc_type="Payable",
-                source_doc_id=payable_id,
-                source_doc_code=payable.payable_code,
-                amount=payment_amount,
-                currency="CNY",
-                operator_id=recorded_by,
-                payload={
-                    "before_paid_amount": str(payable.paid_amount),
-                    "after_paid_amount": str(new_paid_amount),
-                    "before_remaining_amount": str(payable.remaining_amount),
-                    "after_remaining_amount": str(new_remaining_amount),
-                },
+
+            settlement_service = AccountSettlementService()
+            await settlement_service.settle_payable(
+                tenant_id,
+                payable_id,
+                payment.id,
+                payment_amount,
+                recorded_by,
             )
+
             return await self.get_payable_by_id(tenant_id, payable_id)
 
     async def approve_payable(self, tenant_id: int, payable_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> PayableResponse:
@@ -556,9 +554,9 @@ class ReceivableService(AppBaseService[Receivable]):
             raise NotFoundError(f"应收单不存在: {receivable_id}")
         return ReceivableResponse.model_validate(receivable)
 
-    async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ReceivableResponse]:
+    async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[ReceivableResponse], int]:
         """获取应收单列表"""
-        query = Receivable.filter(tenant_id=tenant_id)
+        query = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('customer_id'):
@@ -567,12 +565,15 @@ class ReceivableService(AppBaseService[Receivable]):
             query = query.filter(due_date__gte=filters['due_date_start'])
         if filters.get('due_date_end'):
             query = query.filter(due_date__lte=filters['due_date_end'])
+        if filters.get('pending_settlement'):
+            query = query.filter(remaining_amount__gt=0)
 
+        total = await query.count()
         receivables = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [ReceivableResponse.model_validate(receivable) for receivable in receivables]
+        return [ReceivableResponse.model_validate(receivable) for receivable in receivables], total
 
     async def record_receipt(self, tenant_id: int, receivable_id: int, receipt_data: ReceiptRecordCreate, recorded_by: int) -> ReceivableResponse:
-        """记录收款"""
+        """登记收款：创建收款单并核销至当前应收单"""
         async with in_transaction():
             receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
             if receivable.status == '已结清':
@@ -581,43 +582,41 @@ class ReceivableService(AppBaseService[Receivable]):
             if receipt_amount > receivable.remaining_amount:
                 raise ValidationError("收款金额不能超过剩余金额")
 
-            new_received_amount = self._money(receivable.received_amount + receipt_amount)
-            new_remaining_amount = self._money(receivable.total_amount - new_received_amount)
-            new_status = "已结清" if new_remaining_amount <= Decimal("0.00") else "部分收款"
+            today = datetime.now().strftime("%Y%m%d")
+            count = await Receipt.filter(tenant_id=tenant_id).count()
+            code = f"SK{today}{count + 1:04d}"
 
-            await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
-                received_amount=new_received_amount,
-                remaining_amount=new_remaining_amount,
-                status=new_status,
-                updated_by=recorded_by
-            )
-            await self._log_receivable_amount_audit(
+            note_parts: list[str] = []
+            if receipt_data.notes:
+                note_parts.append(receipt_data.notes.strip())
+            note_parts.append(f"应收单 {receivable.receivable_code}")
+            notes = " · ".join(note_parts)
+
+            receipt = await Receipt.create(
                 tenant_id=tenant_id,
-                receivable_id=receivable_id,
-                operator_id=recorded_by,
-                before_received=receivable.received_amount,
-                before_remaining=receivable.remaining_amount,
-                after_received=new_received_amount,
-                after_remaining=new_remaining_amount,
-                scene="record_receipt",
+                receipt_code=code,
+                customer_id=receivable.customer_id,
+                customer_name=receivable.customer_name,
+                total_amount=receipt_amount,
+                settled_amount=Decimal("0.00"),
+                unsettled_amount=receipt_amount,
+                receipt_date=receipt_data.receipt_date,
+                payment_method=receipt_data.receipt_method,
+                bank_account=receipt_data.reference_number,
+                status="Draft",
+                notes=notes,
+                created_by=recorded_by,
             )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="RECEIVABLE_RECEIPT_RECORDED",
-                business_type="receivable",
-                source_doc_type="Receivable",
-                source_doc_id=receivable_id,
-                source_doc_code=receivable.receivable_code,
-                amount=receipt_amount,
-                currency="CNY",
-                operator_id=recorded_by,
-                payload={
-                    "before_received_amount": str(receivable.received_amount),
-                    "after_received_amount": str(new_received_amount),
-                    "before_remaining_amount": str(receivable.remaining_amount),
-                    "after_remaining_amount": str(new_remaining_amount),
-                },
+
+            settlement_service = AccountSettlementService()
+            await settlement_service.settle_receivable(
+                tenant_id,
+                receivable_id,
+                receipt.id,
+                receipt_amount,
+                recorded_by,
             )
+
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 
     async def approve_receivable(self, tenant_id: int, receivable_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> ReceivableResponse:
@@ -1135,6 +1134,89 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             )
         )
         return suggestions[:limit]
+
+    async def backfill_receipts_from_legacy_receivables(self, tenant_id: int, operator_id: int) -> int:
+        """
+        为「应收已收款、但无收款单/核销记录」的历史数据补录收款单（幂等）。
+        修复旧版 record_receipt 只改应收金额、未创建 Receipt 的问题。
+        """
+        created = 0
+        receivables = await Receivable.filter(
+            tenant_id=tenant_id,
+            received_amount__gt=0,
+            deleted_at__isnull=True,
+        ).all()
+        for receivable in receivables:
+            exists = await SettlementRecord.filter(
+                tenant_id=tenant_id,
+                debit_doc_type="Receivable",
+                debit_doc_id=receivable.id,
+                credit_doc_type="Receipt",
+            ).exists()
+            if exists:
+                continue
+            await self._create_backfill_receipt_for_receivable(tenant_id, receivable, operator_id)
+            created += 1
+        return created
+
+    async def _create_backfill_receipt_for_receivable(
+        self,
+        tenant_id: int,
+        receivable: Receivable,
+        operator_id: int,
+    ) -> Receipt:
+        received = self._money(receivable.received_amount or Decimal("0.00"))
+        if received <= Decimal("0.00"):
+            raise ValidationError("应收已收金额无效，无法补录收款单")
+
+        today = datetime.now()
+        day_key = today.strftime("%Y%m%d")
+        receipt_count = await Receipt.filter(tenant_id=tenant_id).count()
+        receipt_code = f"SK{day_key}{receipt_count + 1:04d}"
+
+        receipt_date = receivable.business_date or today.date()
+        if getattr(receivable, "updated_at", None):
+            updated = receivable.updated_at
+            receipt_date = updated.date() if isinstance(updated, datetime) else updated
+
+        receipt = await Receipt.create(
+            tenant_id=tenant_id,
+            receipt_code=receipt_code,
+            customer_id=receivable.customer_id,
+            customer_name=receivable.customer_name,
+            total_amount=received,
+            settled_amount=received,
+            unsettled_amount=Decimal("0.00"),
+            receipt_date=receipt_date,
+            payment_method="银行转账",
+            status="Confirmed",
+            notes=f"应收单 {receivable.receivable_code} 历史收款补录",
+            created_by=operator_id,
+        )
+
+        user_name = await self.get_user_name(operator_id)
+        settlement_code = await self.generate_code(
+            tenant_id, "SETTLEMENT_CODE", prefix=f"HX{day_key}"
+        )
+        await SettlementRecord.create(
+            tenant_id=tenant_id,
+            settlement_code=settlement_code,
+            partner_id=receivable.customer_id,
+            partner_name=receivable.customer_name,
+            debit_doc_type="Receivable",
+            debit_doc_id=receivable.id,
+            debit_doc_code=receivable.receivable_code,
+            credit_doc_type="Receipt",
+            credit_doc_id=receipt.id,
+            credit_doc_code=receipt.receipt_code,
+            amount=received,
+            currency="CNY",
+            settlement_date=today.date(),
+            operator_id=operator_id,
+            operator_name=user_name,
+            notes=json.dumps({"backfill": True, "scene": "legacy_receivable_receipt"}, ensure_ascii=False),
+        )
+        return receipt
 
     async def settle_receivable(
         self, 

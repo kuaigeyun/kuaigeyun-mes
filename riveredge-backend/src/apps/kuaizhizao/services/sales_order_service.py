@@ -8,6 +8,7 @@ Author: Luigi Lu
 Date: 2026-01-19
 """
 
+from collections import defaultdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
@@ -155,6 +156,95 @@ class SalesOrderService:
             out[oid] = sum((qty_by_did.get(d, Decimal("0")) for d in dids), start=Decimal("0"))
         return out
 
+    async def _batch_shippable_by_order(
+        self,
+        tenant_id: int,
+        order_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """
+        批量判断销售订单是否存在可发货产品（库存可用且仍有欠交数量）。
+        口径与发货通知校验一致：扣除「已通知」占用后再与仓内可用库存比较。
+        """
+        if not order_ids:
+            return {}
+
+        from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
+
+        item_rows = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+        ).values("id", "sales_order_id", "material_id", "order_quantity", "delivered_quantity", "remaining_quantity")
+
+        material_ids: set[int] = set()
+        items_by_order: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        for row in item_rows:
+            mid = int(row.get("material_id") or 0)
+            if mid <= 0:
+                continue
+            material_ids.add(mid)
+            items_by_order[int(row["sales_order_id"])].append(row)
+
+        if not material_ids:
+            return {oid: {"has_shippable_products": False, "shippable_quantity": 0.0} for oid in order_ids}
+
+        inventory_map = await batch_get_material_inventory(tenant_id, list(material_ids))
+
+        notice_ids = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            status="已通知",
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+
+        reserved_by_so_item: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        reserved_by_material: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        if notice_ids:
+            notice_items = await ShipmentNoticeItem.filter(
+                tenant_id=tenant_id,
+                notice_id__in=list(notice_ids),
+            ).values("sales_order_item_id", "material_id", "notice_quantity")
+            for ni in notice_items:
+                qty = Decimal(str(ni.get("notice_quantity") or 0))
+                if qty <= 0:
+                    continue
+                so_item_id = ni.get("sales_order_item_id")
+                if so_item_id is not None:
+                    reserved_by_so_item[int(so_item_id)] += qty
+                mid = int(ni.get("material_id") or 0)
+                if mid > 0:
+                    reserved_by_material[mid] += qty
+
+        result: Dict[int, Dict[str, Any]] = {}
+        for oid in order_ids:
+            total_shippable = Decimal("0")
+            has_shippable = False
+            for it in items_by_order.get(oid, []):
+                order_qty = Decimal(str(it.get("order_quantity") or 0))
+                delivered = Decimal(str(it.get("delivered_quantity") or 0))
+                remaining_raw = it.get("remaining_quantity")
+                remaining = (
+                    Decimal(str(remaining_raw))
+                    if remaining_raw is not None
+                    else order_qty - delivered
+                )
+                remaining = max(Decimal("0"), remaining)
+                so_item_id = int(it["id"])
+                owe = remaining - reserved_by_so_item.get(so_item_id, Decimal("0"))
+                owe = max(Decimal("0"), owe)
+                if owe <= 0:
+                    continue
+                mid = int(it["material_id"])
+                avail = inventory_map.get(mid, Decimal("0")) - reserved_by_material.get(mid, Decimal("0"))
+                avail = max(Decimal("0"), avail)
+                shippable = min(owe, avail)
+                if shippable > 0:
+                    has_shippable = True
+                    total_shippable += shippable
+            result[oid] = {
+                "has_shippable_products": has_shippable,
+                "shippable_quantity": float(total_shippable) if has_shippable else 0.0,
+            }
+        return result
+
     @classmethod
     def _allocate_total_amount_with_proration(
         cls,
@@ -241,6 +331,7 @@ class SalesOrderService:
         material_code_fallback: Optional[Dict[int, str]] = None,
         material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
         milestones: Optional[List[Dict[str, Any]]] = None,
+        shippable_hint: Optional[Dict[str, Any]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -306,6 +397,33 @@ class SalesOrderService:
             base["delivery_progress"] = round(delivery_progress, 1)
         if invoice_progress is not None:
             base["invoice_progress"] = round(invoice_progress, 1)
+        hint = shippable_hint or {}
+        base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
+        base["shippable_quantity"] = float(hint.get("shippable_quantity") or 0.0)
+        if base["has_shippable_products"]:
+            lifecycle = dict(lifecycle)
+            lifecycle["current_stage_name"] = "可发货"
+            lifecycle["status"] = "success"
+            if lifecycle.get("main_stages"):
+                lifecycle["main_stages"] = [
+                    {**ms, "label": "可发货"}
+                    if ms.get("key") == "executing" and ms.get("status") == "active"
+                    else ms
+                    for ms in lifecycle["main_stages"]
+                ]
+            if lifecycle.get("sub_stages"):
+                lifecycle["sub_stages"] = [
+                    {**ss, "label": "可发货", "status": "active"}
+                    if ss.get("key") == "shipment_waiting" and ss.get("status") != "done"
+                    else ss
+                    for ss in lifecycle["sub_stages"]
+                ]
+            suggestions = list(lifecycle.get("next_step_suggestions") or [])
+            ship_tip = "下推发货通知"
+            if ship_tip not in suggestions:
+                lifecycle["next_step_suggestions"] = [ship_tip] + [
+                    s for s in suggestions if "可发货" not in s
+                ]
         base["lifecycle"] = lifecycle
         fallback = material_code_fallback or {}
         mat_fallback = material_fallback or {}
@@ -922,6 +1040,11 @@ class SalesOrderService:
         delivery_progress = self._merged_delivery_progress(
             order, items_for_progress, shipped_by.get(sales_order_id, Decimal("0"))
         )
+        shippable_map = (
+            await self._batch_shippable_by_order(tenant_id, [sales_order_id])
+            if delivery_progress < 100
+            else {}
+        )
 
         return self._order_to_response(
             order,
@@ -932,6 +1055,7 @@ class SalesOrderService:
             material_fallback=material_fallback,
             milestones=milestones,
             delivery_progress=delivery_progress,
+            shippable_hint=shippable_map.get(sales_order_id),
         )
 
     async def list_sales_orders(
@@ -1098,14 +1222,24 @@ class SalesOrderService:
 
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
 
+        eligible_ship_check_ids: List[int] = []
+        delivery_progress_by_order: Dict[int, float] = {}
+        for order in orders:
+            items = items_by_order.get(order.id) or []
+            ship_q = shipped_by_order.get(order.id, Decimal("0"))
+            dp = self._merged_delivery_progress(order, items, ship_q)
+            delivery_progress_by_order[order.id] = dp
+            if dp < 100:
+                eligible_ship_check_ids.append(order.id)
+        shippable_map = await self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids)
+
         # 6. 组装响应
         sales_orders = []
         for order in orders:
             items = items_by_order.get(order.id) or []
             items_for_response = items if include_items else None
 
-            ship_q = shipped_by_order.get(order.id, Decimal("0"))
-            delivery_progress = self._merged_delivery_progress(order, items, ship_q)
+            delivery_progress = delivery_progress_by_order.get(order.id, 0.0)
 
             invoice_progress_val: Optional[float] = None
             order_amount = Decimal(str(order.total_amount or 0))
@@ -1127,6 +1261,7 @@ class SalesOrderService:
                     invoice_progress=invoice_progress_val,
                     material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                     material_fallback=material_fallback_all.get(order.id) if include_items else None,
+                    shippable_hint=shippable_map.get(order.id),
                 )
             )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)
@@ -2670,12 +2805,30 @@ class SalesOrderService:
                 total_quantity=total_qty,
                 total_amount=total_amt,
             )
-        logger.info("从销售订单 %s 生成发货通知单 %s", order.order_code, code)
+
+        notice_id = notice.id
+        notice_service = ShipmentNoticeService()
+        try:
+            notified = await notice_service.notify_warehouse(
+                tenant_id=tenant_id,
+                notice_id=notice_id,
+                notified_by=created_by,
+            )
+        except Exception as e:
+            logger.error("发货通知单 %s 自动通知仓库失败: %s", code, e)
+            raise BusinessLogicError(
+                f"已生成发货通知单 {code}，但自动通知仓库失败：{e}"
+            ) from e
+
+        logger.info("从销售订单 %s 生成发货通知单 %s 并已通知仓库", order.order_code, code)
         return {
             "success": True,
-            "message": "已生成发货通知单",
-            "notice_id": notice.id,
+            "message": "已生成发货通知单并已通知仓库",
+            "notice_id": notice_id,
             "notice_code": code,
+            "status": notified.status,
+            "sales_delivery_id": getattr(notified, "sales_delivery_id", None),
+            "sales_delivery_code": getattr(notified, "sales_delivery_code", None),
         }
 
     async def push_sales_order_to_invoice(

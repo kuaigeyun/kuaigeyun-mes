@@ -12,6 +12,7 @@ from fastapi import APIRouter
 # 导入子路由（按资源分目录，主文件复数与目录一致）
 from .productions.productions import router as production_router
 from .productions.production_control_api import router as production_control_router
+from .productions.coordination_board_api import router as coordination_board_router
 from .purchases.purchases import router as purchase_router
 from .purchase_requisitions.purchase_requisitions import router as purchase_requisition_router
 from .material_calls.material_calls import router as material_call_router
@@ -79,6 +80,7 @@ router.include_router(document_push_pull_router)  # 单据下推和上拉
 router.include_router(document_relation_router)  # 单据关联关系
 router.include_router(scheduling_config_router)  # 排程配置
 router.include_router(production_control_router)  # 生产计划管控塔
+router.include_router(coordination_board_router)  # 生产协调看板
 router.include_router(dashboard_router)
 
 # 注册设备管理路由

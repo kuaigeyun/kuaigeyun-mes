@@ -46,6 +46,14 @@ class DeliveryRiskItem(BaseModel):
     scheduling_rank_band: Optional[str] = Field(None, description="等级带 A/B/C")
 
 
+class ControlTowerStats(BaseModel):
+    """管控塔计划类 KPI"""
+    total_count: int = Field(0, description="需求计算总数")
+    pending_review_count: int = Field(0, description="进行中计算数")
+    executed_count: int = Field(0, description="已完成计算数")
+    overdue_plans_count: int = Field(0, description="交期风险/逾期数")
+
+
 class ControlTowerSummary(BaseModel):
     """管控塔概览统计"""
     material_readiness: List[MaterialReadinessItem]
@@ -53,6 +61,7 @@ class ControlTowerSummary(BaseModel):
     delivery_risks: List[DeliveryRiskItem]
     total_wip_count: int = Field(..., description="在制工单总数")
     total_risk_count: int = Field(..., description="风险工单总数")
+    stats: Optional[ControlTowerStats] = Field(None, description="计划类 KPI")
 
 
 class BulkReleaseRequest(BaseModel):

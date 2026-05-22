@@ -81,6 +81,9 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
   已完成: { color: 'gold' },
   COMPLETED: { color: 'gold' },
 
+  可发货: { color: 'success' },
+  READY_TO_SHIP: { color: 'success' },
+
   已执行: { color: 'cyan' },
   EXECUTED: { color: 'cyan' },
 

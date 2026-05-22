@@ -1,24 +1,50 @@
 /**
- * 配料中心页面
+ * 物料中心页面
  *
- * 按工单或生产计划，从主仓/线边仓拣选物料并按 BOM 配好，供产线使用。
- * 配料是提前准备、集中调配的仓储作业，区别于生产领料（工单直接领料）。
+ * 集中处理工单配料、产线叫料、委外收发等物料流转作业。
  *
  * Author: Luigi Lu
  * Date: 2026-02-28
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table, Form as AntForm, InputNumber, Row, Col, Tooltip } from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  ShoppingOutlined,
+  PhoneOutlined,
+  CarryOutOutlined,
+  BulbOutlined,
+  WarningOutlined,
+  ExportOutlined,
+  ImportOutlined,
+} from '@ant-design/icons';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import {
+  MultiTabListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  WAREHOUSE_DETAIL_TABLE_STYLES,
+} from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { workOrderApi } from '../../../services/work-order';
 import BatchingTaskQueue from './BatchingTaskQueue';
+import OutsourceMaterialPanel from './OutsourceMaterialPanel';
+import {
+  MATERIAL_CENTER_TABS,
+  DEFAULT_MATERIAL_CENTER_TAB,
+  isBatchingTaskTab,
+  type MaterialCenterTabKey,
+  type BatchingTaskTabKey,
+} from './materialCenterTabs';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -65,6 +91,15 @@ const BatchingCenterPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const [searchParams] = useSearchParams();
+  const initialTab = useMemo(() => {
+    const tab = searchParams.get('tab');
+    if (tab && MATERIAL_CENTER_TABS.some((t) => t.key === tab)) {
+      return tab as MaterialCenterTabKey;
+    }
+    return DEFAULT_MATERIAL_CENTER_TAB;
+  }, [searchParams]);
+  const [activeTabKey, setActiveTabKey] = useState<MaterialCenterTabKey>(initialTab);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -155,16 +190,50 @@ const BatchingCenterPage: React.FC = () => {
     }
   };
 
-  return (
-    <ListPageTemplate>
+  const openBatchingDetail = (orderId: number) => {
+    batchingOrderApi.get(String(orderId)).then((order) => {
+      setCurrentOrder(order);
+      setDetailDrawerVisible(true);
+    });
+  };
+
+  const tabIcons: Record<MaterialCenterTabKey, React.ReactNode> = {
+    batching_draft: <CarryOutOutlined />,
+    material_call: <PhoneOutlined />,
+    outsource_issue: <ExportOutlined />,
+    outsource_receipt: <ImportOutlined />,
+    proactive_prep: <BulbOutlined />,
+    backflush_alert: <WarningOutlined />,
+  };
+
+  const taskTabs = MATERIAL_CENTER_TABS.map((tab) => ({
+    key: tab.key,
+    label: (
+      <Tooltip title={tab.hint}>
+        <Space size={4}>
+          {tabIcons[tab.key]}
+          <span>{tab.label}</span>
+        </Space>
+      </Tooltip>
+    ),
+    children: isBatchingTaskTab(tab.key) ? (
       <BatchingTaskQueue
-        onCreate={() => handleCreate()}
-        onOpenBatchingDetail={(id) => {
-          batchingOrderApi.get(String(id)).then((order) => {
-            setCurrentOrder(order);
-            setDetailDrawerVisible(true);
-          });
-        }}
+        taskType={tab.key as BatchingTaskTabKey}
+        onCreate={tab.key === 'batching_draft' ? () => handleCreate() : undefined}
+        onOpenBatchingDetail={openBatchingDetail}
+        onRefreshBatchingList={invalidateMenuBadgeCounts}
+      />
+    ) : (
+      <OutsourceMaterialPanel mode={tab.key} />
+    ),
+  }));
+
+  return (
+    <>
+      <MultiTabListPageTemplate
+        activeTabKey={activeTabKey}
+        onTabChange={(key) => setActiveTabKey(key as MaterialCenterTabKey)}
+        tabs={taskTabs}
       />
 
       {/* 新建配料单 Modal */}
@@ -438,7 +507,7 @@ const BatchingCenterPage: React.FC = () => {
           </Card>
         )}
       </DetailDrawerTemplate>
-    </ListPageTemplate>
+    </>
   );
 };
 

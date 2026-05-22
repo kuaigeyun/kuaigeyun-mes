@@ -520,4 +520,15 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             },
         ],
     },
+    {
+        "code": "WORK_ORDER_PRIORITY",
+        "name": "工单优先级",
+        "description": "生产工单、委外工单等业务单据的优先级",
+        "items": [
+            {"label": "低", "value": "low", "description": "低优先级", "sort_order": 1},
+            {"label": "正常", "value": "normal", "description": "正常优先级", "sort_order": 2},
+            {"label": "高", "value": "high", "description": "高优先级", "sort_order": 3},
+            {"label": "紧急", "value": "urgent", "description": "紧急优先级", "sort_order": 4},
+        ],
+    },
 ]

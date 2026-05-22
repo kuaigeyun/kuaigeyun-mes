@@ -31,6 +31,24 @@ export const ReviewStatusEnum = {
   REJECTED: 'REJECTED',
 } as const;
 
+const ENGLISH_STATUS_ALIASES: Record<string, string> = {
+  draft: DocumentStatus.DRAFT,
+  pending_review: DocumentStatus.PENDING_REVIEW,
+  pending: DocumentStatus.PENDING_REVIEW,
+  submitted: DocumentStatus.PENDING_REVIEW,
+  audited: DocumentStatus.AUDITED,
+  approved: DocumentStatus.AUDITED,
+  rejected: DocumentStatus.REJECTED,
+  confirmed: DocumentStatus.CONFIRMED,
+  cancelled: DocumentStatus.CANCELLED,
+  canceled: DocumentStatus.CANCELLED,
+  released: DocumentStatus.RELEASED,
+  in_progress: DocumentStatus.IN_PROGRESS,
+  completed: DocumentStatus.COMPLETED,
+  partial_converted: DocumentStatus.PARTIAL_CONVERTED,
+  full_converted: DocumentStatus.FULL_CONVERTED,
+};
+
 const FALLBACK_STATUS_ALIASES: Record<string, string> = {
   草稿: DocumentStatus.DRAFT,
   待审核: DocumentStatus.PENDING_REVIEW,
@@ -40,9 +58,11 @@ const FALLBACK_STATUS_ALIASES: Record<string, string> = {
   已取消: DocumentStatus.CANCELLED,
   已下达: DocumentStatus.RELEASED,
   执行中: DocumentStatus.IN_PROGRESS,
+  进行中: DocumentStatus.IN_PROGRESS,
   已完成: DocumentStatus.COMPLETED,
   部分转单: DocumentStatus.PARTIAL_CONVERTED,
   全部转单: DocumentStatus.FULL_CONVERTED,
+  已通过: DocumentStatus.AUDITED,
 };
 
 const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
@@ -75,9 +95,18 @@ const FALLBACK_REVIEW_DISPLAY: Record<string, { text: string; color: string }> =
 };
 
 function normalizeStatus(status: string): string {
+  const trimmed = String(status).trim();
+  if (!trimmed) return trimmed;
   const cache = getDocumentStatusCache();
   const aliases = cache?.documentStatus?.aliases ?? FALLBACK_STATUS_ALIASES;
-  return aliases[status] ?? status;
+  if (aliases[trimmed]) return aliases[trimmed];
+  const upper = trimmed.toUpperCase().replace(/[\s-]+/g, '_');
+  if ((cache?.documentStatus?.display ?? FALLBACK_STATUS_DISPLAY)[upper]) {
+    return upper;
+  }
+  const lower = trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+  if (ENGLISH_STATUS_ALIASES[lower]) return ENGLISH_STATUS_ALIASES[lower];
+  return trimmed;
 }
 
 function normalizeReviewStatus(status: string): string {

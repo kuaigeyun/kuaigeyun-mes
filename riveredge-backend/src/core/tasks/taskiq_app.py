@@ -4,6 +4,7 @@ Taskiq 入口：PostgreSQL broker（taskiq-pg / AsyncpgBroker）+ PG 持久化�
 API 进程与 worker 进程均需能 import 本模块以注册任务。
 """
 
+import os
 from urllib.parse import quote_plus
 
 from loguru import logger
@@ -15,6 +16,29 @@ from taskiq.state import TaskiqState
 from taskiq_pg.asyncpg import AsyncpgBroker, AsyncpgScheduleSource
 
 from infra.config.infra_config import infra_settings
+
+
+def _taskiq_pool_kwargs() -> dict:
+    """Taskiq asyncpg 池参数；默认远小于 asyncpg 内置 min_size=10，避免多进程占满 PG 连接。"""
+    raw_min = os.environ.get("RIVEREDGE_TASKIQ_POOL_MIN", "1")
+    raw_max = os.environ.get("RIVEREDGE_TASKIQ_POOL_MAX", "3")
+    try:
+        min_size = max(1, int(raw_min))
+    except (TypeError, ValueError):
+        min_size = 1
+    try:
+        max_size = max(min_size, int(raw_max))
+    except (TypeError, ValueError):
+        max_size = 3
+    return {
+        "min_size": min_size,
+        "max_size": max_size,
+        "command_timeout": 60,
+        "server_settings": {"application_name": "riveredge_taskiq"},
+    }
+
+
+_TASKIQ_POOL = _taskiq_pool_kwargs()
 
 
 def get_taskiq_postgres_dsn() -> str:
@@ -36,12 +60,17 @@ broker = AsyncpgBroker(
     dsn=get_taskiq_postgres_dsn,
     table_name="riveredge_taskiq_messages",
     channel_name="riveredge_taskiq",
+    write_kwargs=_TASKIQ_POOL,
+    read_kwargs={
+        "server_settings": {"application_name": "riveredge_taskiq_listen"},
+    },
 )
 
 schedule_source = AsyncpgScheduleSource(
     broker=broker,
     dsn=get_taskiq_postgres_dsn,
     table_name="riveredge_taskiq_schedules",
+    **_TASKIQ_POOL,
 )
 
 scheduler = TaskiqScheduler(

@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, theme } from 'antd';
 import {
@@ -117,11 +117,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const lastRequisitionsCacheRef = useRef<PurchaseRequisition[]>([]);
+  const deepLinkHandledRef = useRef<string | null>(null);
+  const pendingPushPoIdRef = useRef<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
@@ -883,6 +887,80 @@ const PurchaseRequisitionsPage: React.FC = () => {
       messageApi.error('加载详情失败');
     }
   };
+
+  /** 协调看板深链：requisitionId + action=pushPO */
+  useEffect(() => {
+    const requisitionIdRaw = searchParams.get('requisitionId');
+    if (!requisitionIdRaw) return;
+
+    const action = searchParams.get('action');
+    const linkKey = `${requisitionIdRaw}:${action ?? ''}`;
+    if (deepLinkHandledRef.current === linkKey) return;
+
+    const requisitionId = Number(requisitionIdRaw);
+    if (Number.isNaN(requisitionId) || requisitionId <= 0) return;
+
+    deepLinkHandledRef.current = linkKey;
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('requisitionId');
+    nextParams.delete('action');
+    const nextSearch = nextParams.toString();
+    navigate(
+      { pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' },
+      { replace: true },
+    );
+
+    if (action === 'pushPO') {
+      setSelectedRowKeys([requisitionId]);
+      if (supplierList.length === 0) {
+        pendingPushPoIdRef.current = requisitionId;
+        return;
+      }
+      pendingPushPoIdRef.current = null;
+      void (async () => {
+        try {
+          const detail = await getPurchaseRequisition(requisitionId);
+          void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
+          setCurrentReq(detail);
+          await handleConvert({ ...detail, id: requisitionId });
+        } catch {
+          messageApi.error('打开采购申请失败');
+        }
+      })();
+      return;
+    }
+
+    void (async () => {
+      try {
+        const detail = await getPurchaseRequisition(requisitionId);
+        void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
+        setCurrentReq(detail);
+        setDetailVisible(true);
+        setPrTrackingRefreshKey((k) => k + 1);
+      } catch {
+        messageApi.error('打开采购申请失败');
+        deepLinkHandledRef.current = null;
+      }
+    })();
+  }, [searchParams, location.pathname, navigate, messageApi, supplierList]);
+
+  useEffect(() => {
+    const requisitionId = pendingPushPoIdRef.current;
+    if (requisitionId == null || supplierList.length === 0) return;
+    pendingPushPoIdRef.current = null;
+
+    void (async () => {
+      try {
+        const detail = await getPurchaseRequisition(requisitionId);
+        void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
+        setCurrentReq(detail);
+        await handleConvert({ ...detail, id: requisitionId });
+      } catch {
+        messageApi.error('打开采购申请失败');
+      }
+    })();
+  }, [supplierList, messageApi]);
 
   const toolbarPushMenuItems = useMemo(
     () =>

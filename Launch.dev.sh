@@ -22,10 +22,25 @@ kill_port() {
         log_warn "清理端口 $port..."
         local pids=$(netstat -ano 2>/dev/null | grep ":$port " | awk '{print $NF}' | sort -u | grep -v "^0$")
         for pid in $pids; do
-            [ ! -z "$pid" ] && taskkill.exe //F //PID $pid 2>/dev/null || true
+            if [ ! -z "$pid" ]; then
+                # 先尝试优雅退出，让 lifespan 关闭 Tortoise/Taskiq 连接池
+                kill -INT "$pid" 2>/dev/null || taskkill.exe //PID "$pid" 2>/dev/null || true
+            fi
+        done
+        sleep 3
+        for pid in $pids; do
+            [ ! -z "$pid" ] && taskkill.exe //F //PID "$pid" 2>/dev/null || true
         done
         sleep 1
     fi
+}
+
+graceful_kill_pid() {
+    local pid=$1
+    [ -z "$pid" ] && return 0
+    kill -INT "$pid" 2>/dev/null || taskkill.exe //PID "$pid" 2>/dev/null || true
+    sleep 3
+    taskkill.exe //F //PID "$pid" 2>/dev/null || true
 }
 
 start_backend() {
@@ -90,11 +105,11 @@ stop_all() {
     kill_port "${BACKEND_PORT}"
     kill_port "${FRONTEND_PORT}"
     
-    # 清理 Worker 和 Scheduler
+    # 清理 Worker 和 Scheduler（先 SIGINT 再强杀，避免 PG 连接泄漏）
     for pidfile in .logs/worker.pid .logs/scheduler.pid; do
         if [ -f "$pidfile" ]; then
             local pid=$(cat "$pidfile")
-            [ ! -z "$pid" ] && taskkill.exe //F //PID $pid 2>/dev/null || true
+            graceful_kill_pid "$pid"
             rm -f "$pidfile"
         fi
     done

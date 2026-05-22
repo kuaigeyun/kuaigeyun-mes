@@ -81,6 +81,11 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "system-department": "BM",
     "system-position": "ZW",
     "system-role": "JS",
+    # 轻管理会计 — 财务单据
+    "kuaicaiwu-finance-receivable": "YS",           # 应收
+    "kuaicaiwu-finance-payable": "PY",              # 应付
+    "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
+    "kuaicaiwu-finance-settlement": "HX",           # 核销
 }
 
 # 页面配置数据结构
@@ -1125,6 +1130,55 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
         "skip_date": True,
     },
+    # 轻管理会计 - 财务协同
+    {
+        "page_code": "kuaicaiwu-finance-receivable",
+        "page_name": "应收账款",
+        "page_path": "/apps/kuaicaiwu/finance-management/receivables",
+        "code_field": "receivable_code",
+        "code_field_label": "应收单编码",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "RECEIVABLE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-payable",
+        "page_name": "应付账款",
+        "page_path": "/apps/kuaicaiwu/finance-management/payables",
+        "code_field": "payable_code",
+        "code_field_label": "应付单编码",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "PAYABLE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-purchase-invoice",
+        "page_name": "进项发票",
+        "page_path": "/apps/kuaicaiwu/finance-management/purchase-invoices",
+        "code_field": "invoice_code",
+        "code_field_label": "进项发票编码",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_INVOICE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-settlement",
+        "page_name": "核销",
+        "page_path": "/apps/kuaicaiwu/finance-management/settlement",
+        "code_field": "settlement_code",
+        "code_field_label": "核销单编码",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "SETTLEMENT_CODE",
+        "allow_manual_edit": True,
+    },
 ]
 
 
@@ -1235,5 +1289,21 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-factory-work-center": ("apps.master_data.models.factory", "WorkCenter", "code"),
     "WORK_GROUP_CODE": ("apps.master_data.models.factory", "WorkGroup", "code"),
     "master-data-factory-work-group": ("apps.master_data.models.factory", "WorkGroup", "code"),
+    "RECEIVABLE_CODE": ("apps.kuaicaiwu.models.receivable", "Receivable", "receivable_code"),
+    "kuaicaiwu-finance-receivable": ("apps.kuaicaiwu.models.receivable", "Receivable", "receivable_code"),
+    "PAYABLE_CODE": ("apps.kuaicaiwu.models.payable", "Payable", "payable_code"),
+    "kuaicaiwu-finance-payable": ("apps.kuaicaiwu.models.payable", "Payable", "payable_code"),
+    "PURCHASE_INVOICE_CODE": (
+        "apps.kuaicaiwu.models.purchase_invoice",
+        "PurchaseInvoice",
+        "invoice_code",
+    ),
+    "kuaicaiwu-finance-purchase-invoice": (
+        "apps.kuaicaiwu.models.purchase_invoice",
+        "PurchaseInvoice",
+        "invoice_code",
+    ),
+    "SETTLEMENT_CODE": ("apps.kuaicaiwu.models.settlement", "Settlement", "settlement_code"),
+    "kuaicaiwu-finance-settlement": ("apps.kuaicaiwu.models.settlement", "Settlement", "settlement_code"),
 }
 

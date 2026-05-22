@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
-import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col } from 'antd';
+import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { settlementService } from '../../../services/finance/settlement';
@@ -87,6 +87,12 @@ const SettlementPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="往来核销用于将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
+      />
       <Row gutter={16}>
         <Col span={12}>
           <UniTable
@@ -102,7 +108,7 @@ const SettlementPage: React.FC = () => {
               const res = await receivableService.listReceivables({
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
-                status: '未收款',
+                pending_settlement: true,
                 ...rest,
               });
               return {
@@ -127,13 +133,12 @@ const SettlementPage: React.FC = () => {
               const res = await receiptService.listReceipts({
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
-                status: 'Confirmed',
+                unsettled_only: true,
                 ...rest,
               });
-              const items = (res?.items || []).filter((i: { unsettled_amount?: number }) => (i.unsettled_amount ?? 0) > 0);
               return {
-                data: items as any[],
-                total: (res?.total ?? items.length) as any,
+                data: (res?.items || []) as any[],
+                total: res?.total || 0,
                 success: true,
               };
             }}

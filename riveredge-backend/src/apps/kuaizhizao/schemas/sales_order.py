@@ -192,6 +192,8 @@ class SalesOrderResponse(SalesOrderBase):
     duration_info: Optional[dict] = Field(None, description="耗时统计信息")
     delivery_progress: Optional[float] = Field(None, description="交货进度 0-100")
     invoice_progress: Optional[float] = Field(None, description="开票进度 0-100")
+    has_shippable_products: bool = Field(False, description="是否存在可发货产品（库存满足且仍有欠交）")
+    shippable_quantity: float = Field(0.0, description="当前可发货数量合计（扣除已通知占用）")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供前端 UniLifecycleStepper 展示）")
 

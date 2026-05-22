@@ -140,6 +140,38 @@ export function mainContentViewInsetStyle(base?: CSSProperties): CSSProperties {
 }
 
 /**
+ * UniTabs 内普通页面根容器样式。
+ * 四边 16px 均由 UniTabs 承担，页面勿再叠加 padding/margin：
+ * - 顶部：`.uni-tabs-content { margin-top: 16px }`
+ * - 左右：内层 wrapper `padding: 0 16px`
+ * - 底部：内容区高度 calc 已扣减 16px，与顶栏/标签栏共同形成下边距
+ */
+export function uniTabsChildPageVerticalInsetStyle(base?: CSSProperties): CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    ...base,
+  };
+}
+
+/** 单据详情页（UniTabs 内）页头行：标题 + 操作区 */
+export const DOCUMENT_DETAIL_PAGE_HEADER_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: PAGE_SPACING.BLOCK_GAP,
+  marginBottom: PAGE_SPACING.BLOCK_GAP,
+  flexWrap: 'wrap',
+};
+
+/** 单据详情页标题样式 */
+export const DOCUMENT_DETAIL_PAGE_TITLE_STYLE: CSSProperties = {
+  margin: 0,
+  fontSize: 20,
+  fontWeight: 600,
+  lineHeight: 1.4,
+};
+
+/**
  * 两栏布局配置
  */
 export const TWO_COLUMN_LAYOUT = {

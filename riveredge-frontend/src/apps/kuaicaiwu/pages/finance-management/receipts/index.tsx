@@ -358,13 +358,16 @@ const ReceiptsPage: React.FC = () => {
             ])}
           />,
         ]}
-        request={async (params) => {
-          const { current, pageSize, ...rest } = params;
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { current, pageSize, status, customer_id, start_date, end_date } = params;
           const res = await apiRequest<any>('/apps/kuaicaiwu/receipts', {
             params: {
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              ...rest,
+              status: searchFormValues?.status ?? status,
+              customer_id: searchFormValues?.customer_id ?? customer_id,
+              start_date: searchFormValues?.start_date ?? start_date,
+              end_date: searchFormValues?.end_date ?? end_date,
             },
           });
           return {

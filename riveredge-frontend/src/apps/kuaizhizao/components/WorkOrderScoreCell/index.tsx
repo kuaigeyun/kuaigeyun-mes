@@ -1,8 +1,8 @@
 /**
- * 工单综合分展示（含分解 Tooltip）
+ * 工单权重分展示（含分解 Tooltip）
  */
 import React from 'react';
-import { Tag, Tooltip, Space } from 'antd';
+import { Tooltip } from 'antd';
 
 const DIMENSION_LABELS: Record<string, string> = {
   manual_priority: '人工优先级',
@@ -12,38 +12,27 @@ const DIMENSION_LABELS: Record<string, string> = {
   plan_fidelity: '计划一致性',
 };
 
-const BAND_COLORS: Record<string, string> = {
-  A: 'red',
-  B: 'orange',
-  C: 'default',
-};
-
 export interface WorkOrderScoreCellProps {
   score?: number | null;
-  rankBand?: string | null;
   breakdown?: Record<string, { score?: number; weight?: number; weighted?: number; raw?: unknown }> | null;
   emptyText?: string;
 }
 
 export const WorkOrderScoreCell: React.FC<WorkOrderScoreCellProps> = ({
   score,
-  rankBand,
   breakdown,
   emptyText = '—',
 }) => {
   if (score == null || Number.isNaN(Number(score))) {
-    return (
-      <Tag bordered color="default" style={{ margin: 0 }}>
-        {emptyText}
-      </Tag>
-    );
+    return <span style={{ color: '#999' }}>{emptyText}</span>;
   }
 
-  const band = rankBand || (score >= 80 ? 'A' : score >= 60 ? 'B' : 'C');
+  const numericScore = Number(score);
   const tooltipContent = breakdown && Object.keys(breakdown).length > 0 ? (
-    <div style={{ maxWidth: 280 }}>
+    <div style={{ maxWidth: 300 }}>
+      <div style={{ marginBottom: 6, fontWeight: 600 }}>权重分计算</div>
       {Object.entries(breakdown).map(([key, item]) => (
-        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, lineHeight: 1.6 }}>
           <span>{DIMENSION_LABELS[key] || key}</span>
           <span>
             {item.score?.toFixed?.(0) ?? item.score}
@@ -54,21 +43,37 @@ export const WorkOrderScoreCell: React.FC<WorkOrderScoreCellProps> = ({
           </span>
         </div>
       ))}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginTop: 6,
+          paddingTop: 6,
+          borderTop: '1px solid rgba(255,255,255,0.2)',
+          fontWeight: 600,
+        }}
+      >
+        <span>合计</span>
+        <span>{numericScore.toFixed(1)}</span>
+      </div>
     </div>
   ) : (
-    '综合分由多维度加权计算，可在参数设置中配置权重'
+    '权重分由多维度加权计算，可在参数设置中配置权重'
   );
 
   return (
     <Tooltip title={tooltipContent}>
-      <Space size={4} style={{ whiteSpace: 'nowrap' }}>
-        <Tag bordered color="processing" style={{ cursor: 'help', margin: 0 }}>
-          {Number(score).toFixed(1)}
-        </Tag>
-        <Tag bordered color={BAND_COLORS[band] || 'default'} style={{ cursor: 'help', margin: 0 }}>
-          {band}
-        </Tag>
-      </Space>
+      <span
+        style={{
+          cursor: 'help',
+          color: '#1677ff',
+          borderBottom: '1px dashed #1677ff',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {numericScore.toFixed(1)}
+      </span>
     </Tooltip>
   );
 };

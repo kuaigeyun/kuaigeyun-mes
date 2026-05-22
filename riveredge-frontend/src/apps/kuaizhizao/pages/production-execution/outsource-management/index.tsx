@@ -6,18 +6,18 @@ import { OutsourceOrdersTable } from '../outsource-orders';
 import { OutsourceWorkOrdersTable } from '../outsource-work-orders';
 
 const OutsourceManagementPage: React.FC = () => {
-    const [activeTabKey, setActiveTabKey] = useState<string>('process');
+    const [activeTabKey, setActiveTabKey] = useState<string>('whole');
 
     const tabs = [
-        {
-            key: 'process',
-            label: (<Space><PartitionOutlined /><span>工序委外</span></Space>),
-            children: <OutsourceOrdersTable />,
-        },
         {
             key: 'whole',
             label: (<Space><UnorderedListOutlined /><span>工单委外</span></Space>),
             children: <OutsourceWorkOrdersTable />,
+        },
+        {
+            key: 'process',
+            label: (<Space><PartitionOutlined /><span>工序委外</span></Space>),
+            children: <OutsourceOrdersTable />,
         },
     ];
 

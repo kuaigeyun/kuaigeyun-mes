@@ -1,5 +1,5 @@
 /**
- * 配料中心统一任务队列（主动备料 + 叫料 + 配料单 + 倒冲预警）
+ * 物料中心任务队列（配料执行 / 产线叫料 / 备料建议 / 倒冲异常）
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -22,7 +22,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
-  PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -33,6 +32,7 @@ import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { BATCHING_TASK_TYPE_LABEL } from './batchingCenterTabs';
 
 type BatchPickOption = { value: string; label: string };
 
@@ -64,15 +64,18 @@ export type BatchingTaskRow = {
   error_message?: string;
 };
 
+export type { BatchingTaskTabKey } from './batchingCenterTabs';
+export { BATCHING_TASK_TYPE_LABEL } from './batchingCenterTabs';
+
 const TASK_TYPE_MAP: Record<string, { text: string; color: string }> = {
-  proactive_prep: { text: '主动备料', color: 'blue' },
-  material_call: { text: '现场叫料', color: 'orange' },
-  batching_draft: { text: '配料单', color: 'green' },
-  backflush_alert: { text: '倒冲预警', color: 'red' },
+  batching_draft: { text: BATCHING_TASK_TYPE_LABEL.batching_draft, color: 'green' },
+  material_call: { text: BATCHING_TASK_TYPE_LABEL.material_call, color: 'orange' },
+  proactive_prep: { text: BATCHING_TASK_TYPE_LABEL.proactive_prep, color: 'blue' },
+  backflush_alert: { text: BATCHING_TASK_TYPE_LABEL.backflush_alert, color: 'red' },
 };
 
 const PROACTIVE_PREP_STATUS: Record<string, string> = {
-  pending_prep: '待配料',
+  pending_prep: '缺料待备',
 };
 
 const MATERIAL_CALL_STATUS: Record<string, string> = {
@@ -113,12 +116,13 @@ function formatTaskDateTime(value?: string): string {
 }
 
 type Props = {
+  taskType: BatchingTaskTabKey;
   onCreate?: () => void;
   onOpenBatchingDetail?: (orderId: number) => void;
   onRefreshBatchingList?: () => void;
 };
 
-const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, onRefreshBatchingList }) => {
+const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatchingDetail, onRefreshBatchingList }) => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -282,11 +286,9 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
     try {
       await batchingOrderApi.pullFromWorkOrder({
         work_order_id: record.work_order_id,
-        warehouse_id: record.suggested_warehouse_id,
-        warehouse_name: record.suggested_warehouse_name,
         allow_existing_draft: true,
       });
-      messageApi.success('已生成配料单');
+      messageApi.success('已生成配料单，请到「配料执行」继续处理');
       reload();
     } catch (e: any) {
       messageApi.error(e.message || '生成配料单失败');
@@ -361,12 +363,14 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
       title: '任务类型',
       dataIndex: 'task_type',
       width: 110,
+      hideInTable: true,
+      hideInSearch: true,
       valueType: 'select',
       valueEnum: {
-        proactive_prep: { text: '主动备料' },
-        material_call: { text: '现场叫料' },
-        batching_draft: { text: '配料单' },
-        backflush_alert: { text: '倒冲预警' },
+        batching_draft: { text: BATCHING_TASK_TYPE_LABEL.batching_draft },
+        material_call: { text: BATCHING_TASK_TYPE_LABEL.material_call },
+        proactive_prep: { text: BATCHING_TASK_TYPE_LABEL.proactive_prep },
+        backflush_alert: { text: BATCHING_TASK_TYPE_LABEL.backflush_alert },
       },
       render: (_, r) => {
         const m = TASK_TYPE_MAP[r.task_type] ?? { text: r.task_type, color: 'default' };
@@ -417,14 +421,13 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
       },
     },
     {
-      title: '备料分',
+      title: '权重分',
       dataIndex: 'picking_score',
-      width: 120,
+      width: 88,
       hideInSearch: true,
       render: (_, r) => (
         <WorkOrderScoreCell
           score={r.picking_score}
-          rankBand={r.picking_rank_band}
           breakdown={r.score_breakdown}
         />
       ),
@@ -495,7 +498,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
         if (record.task_type === 'proactive_prep') {
           return (
             <Button type="link" size="small" onClick={() => handleProactivePrep(record)}>
-              一键配料
+              生成配料单
             </Button>
           );
         }
@@ -739,19 +742,13 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
         actionRef={actionRef}
         rowKey={(r) => `${r.task_type}-${r.task_id}`}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batching-center.tasks"
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}`}
         showAdvancedSearch
-        polling={10000}
+        polling={false}
         scroll={{ x: 1400 }}
-        toolBarRender={
-          onCreate
-            ? () => [
-                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate}>
-                  新建配料单
-                </Button>,
-              ]
-            : undefined
-        }
+        showCreateButton={Boolean(onCreate)}
+        onCreate={onCreate}
+        createButtonText="新建配料单"
         expandable={{
           rowExpandable: (r) => r.task_type === 'material_call' && Array.isArray(r.items) && r.items.length > 0,
           expandedRowRender: (r) => (
@@ -779,7 +776,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ onCreate, onOpenBatchingDetail, on
             const res = await batchingOrderApi.listTasks({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              task_type: params.task_type,
+              task_type: taskType,
               status: params.status,
               work_order_code: params.doc_code || params.work_order_code,
               priority: params.priority,

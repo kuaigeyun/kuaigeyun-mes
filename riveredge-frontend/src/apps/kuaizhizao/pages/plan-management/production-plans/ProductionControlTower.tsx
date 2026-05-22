@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Card, Row, Col, Progress, Table, Tag, Typography, Space, Spin, Empty, 
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
-  theme, Modal, List, Divider, notification, Alert, Tabs, Badge
+  theme, List, Divider, Alert
 } from 'antd';
 import { useRequest } from 'ahooks';
 import {
@@ -12,10 +12,8 @@ import {
   DashboardOutlined,
   AppstoreOutlined,
   SafetyOutlined,
-  ToolOutlined,
   AuditOutlined,
   ScheduleOutlined,
-  PlayCircleOutlined,
   ThunderboltOutlined,
   FireOutlined
 } from '@ant-design/icons';
@@ -24,21 +22,10 @@ import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 import { Column } from '@ant-design/charts';
 import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview';
+import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
+import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 
 const { Text } = Typography;
-
-const renderPickingScoreTag = (v: number | null | undefined, row: { picking_rank_band?: string | null }) =>
-  v != null ? (
-    <Tag
-      color={row.picking_rank_band === 'A' ? 'red' : row.picking_rank_band === 'B' ? 'orange' : 'default'}
-      style={{ margin: 0 }}
-    >
-      {Number(v).toFixed(0)}
-      {row.picking_rank_band ? `·${row.picking_rank_band}` : ''}
-    </Tag>
-  ) : (
-    '-'
-  );
 
 type SummaryShape = {
   material_readiness: any[];
@@ -65,7 +52,6 @@ const ProductionControlTower: React.FC = () => {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
-  const [releasing, setReleasing] = useState(false);
 
   const { data: summary, loading, refresh: refreshSummary } = useRequest(async () => {
     return apiRequest('/apps/kuaizhizao/production-control/summary');
@@ -78,11 +64,6 @@ const ProductionControlTower: React.FC = () => {
   const readinessList = s?.material_readiness || [];
   const risks = s?.delivery_risks || [];
   
-  // 获取待协调缺料物料异常记录
-  const { data: shortagesData, loading: shortagesLoading, refresh: refreshShortages } = useRequest(async () => {
-    return apiRequest('/apps/kuaizhizao/exceptions/material-shortage?status=pending');
-  });
-  const shortages = shortagesData || [];
   const delayedCount = risks.filter((r: any) => r.risk_type === 'delayed').length;
   const avgReadiness =
     readinessList.length > 0
@@ -110,44 +91,6 @@ const ProductionControlTower: React.FC = () => {
     } finally {
       setMaterialsLoading(false);
     }
-  };
-
-  // 一键自动下达齐套工单
-  const handleAutoRelease = () => {
-    Modal.confirm({
-      title: '确认自动下达齐套工单？',
-      icon: <PlayCircleOutlined style={{ color: '#52c41a' }} />,
-      content: '系统将扫描所有“草稿”状态的工单，若分析其物料完全齐套，将直接下达为“待执行”状态。',
-      okText: '立即下达',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          setReleasing(true);
-          const res = await apiRequest('/apps/kuaizhizao/production-control/release-kitted', {
-            method: 'POST',
-            data: { work_order_ids: [] }
-          });
-          const successCount = res?.count ?? 0;
-          if (successCount > 0) {
-            notification.success({
-              message: '自动下达完成',
-              description: `成功下达了 ${successCount} 个齐套工单。`,
-              duration: 4.5,
-            });
-          } else {
-            notification.info({
-              message: '下达结果',
-              description: '当前未发现符合完全齐套条件的“草稿”状态工单。',
-            });
-          }
-          refreshSummary();
-        } catch (err: any) {
-          message.error(err?.message || "下达请求失败");
-        } finally {
-          setReleasing(false);
-        }
-      }
-    });
   };
 
   // 提交插单模拟
@@ -266,7 +209,7 @@ const ProductionControlTower: React.FC = () => {
                       <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
                         {s?.stats?.total_count ?? 0}
                       </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
+                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
                         所有层级计划累计
                       </div>
                     </div>
@@ -304,7 +247,7 @@ const ProductionControlTower: React.FC = () => {
                       <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
                         {s?.total_risk_count ?? 0}
                       </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
+                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
                         含延期与产能瓶颈风险
                       </div>
                     </div>
@@ -342,7 +285,7 @@ const ProductionControlTower: React.FC = () => {
                       <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
                         {avgReadiness}%
                       </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
+                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
                         在制工单 {s?.total_wip_count ?? 0} 个
                       </div>
                     </div>
@@ -374,277 +317,20 @@ const ProductionControlTower: React.FC = () => {
                     }}>
                       {sc.icon}
                     </div>
-                    <Text strong style={{ fontSize: 13 }}>{sc.title}</Text>
+                    <Text strong style={{ fontSize: 15 }}>{sc.title}</Text>
                   </Card>
                 </Col>
               ))}
             </Row>
           </Col>
 
-          {/* 业务台账区 */}
+          {/* 执行协调 */}
           <Col span={24}>
             <Card
               style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
               styles={{ body: { padding: '16px 24px' } }}
             >
-              <Tabs
-                defaultActiveKey="kitting"
-                size="large"
-                style={{ marginBottom: -8 }}
-                items={[
-                  {
-                    key: 'kitting',
-                    label: (
-                      <Space>
-                        <ToolOutlined style={{ color: token.colorPrimary }} />
-                        <span style={{ fontWeight: 600 }}>物料齐套与缺料监控</span>
-                      </Space>
-                    ),
-                    children: (
-                      <Row gutter={[24, 16]} style={{ marginTop: 12 }}>
-                        {/* 工单齐套监控 */}
-                        <Col xs={24} lg={12}>
-                          <div style={{
-                            padding: '8px 12px',
-                            background: 'rgba(0, 0, 0, 0.02)',
-                            borderRadius: token.borderRadius,
-                            fontWeight: 600,
-                            fontSize: 13,
-                            marginBottom: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            border: '1px solid rgba(0, 0, 0, 0.03)'
-                          }}>
-                            <Badge status="processing" />
-                            <span>工单齐套进度跟踪 (Top 10)</span>
-                          </div>
-                          <Table
-                            size="small"
-                            dataSource={readinessList.slice(0, 10)}
-                            pagination={false}
-                            rowKey="work_order_id"
-                            bordered={false}
-                            columns={[
-                              { title: '工单', dataIndex: 'work_order_code', width: 120, ellipsis: true },
-                              {
-                                title: '备料分',
-                                dataIndex: 'picking_score',
-                                width: 88,
-                                render: (v: number, row: any) => renderPickingScoreTag(v, row),
-                              },
-                              {
-                                title: '计划开工',
-                                dataIndex: 'planned_start_date',
-                                width: 80,
-                                render: (v) => v ? dayjs(v).format('MM-DD') : '-'
-                              },
-                              { 
-                                title: '开工倒计时', 
-                                dataIndex: 'planned_start_date', 
-                                width: 100, 
-                                render: (v) => {
-                                  if (!v) return '-';
-                                  const diffDays = dayjs(v).startOf('day').diff(dayjs().startOf('day'), 'day');
-                                  if (diffDays < 0) return <span style={{ color: '#ff4d4f' }}>已开工</span>;
-                                  if (diffDays === 0) return <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>今天</span>;
-                                  if (diffDays === 1) return <span style={{ color: '#fa8c16' }}>明天</span>;
-                                  return <span>{diffDays} 天后</span>;
-                                }
-                              },
-                              { title: '齐套率', dataIndex: 'readiness_rate', width: 100, render: (v) => <Progress percent={v} size="small" /> },
-                              { 
-                                title: '缺料', 
-                                dataIndex: 'shortage_count', 
-                                width: 70,
-                                render: (count: number) => count > 0 ? <Tag color="error" style={{ margin: 0 }}>{count} 种</Tag> : <Badge status="success" text="齐套" />
-                              }
-                            ]}
-                          />
-                        </Col>
-
-                        {/* 缺料预警明细 */}
-                        <Col xs={24} lg={12}>
-                          <div style={{
-                            padding: '8px 12px',
-                            background: 'rgba(0, 0, 0, 0.02)',
-                            borderRadius: token.borderRadius,
-                            fontWeight: 600,
-                            fontSize: 13,
-                            marginBottom: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            border: '1px solid rgba(0, 0, 0, 0.03)'
-                          }}>
-                            <Badge status="error" />
-                            <span>待协调缺料明细 (采购/替代跟进)</span>
-                          </div>
-                          <Table
-                            size="small"
-                            dataSource={shortages.slice(0, 10)}
-                            loading={shortagesLoading}
-                            pagination={false}
-                            rowKey="id"
-                            bordered={false}
-                            locale={{ emptyText: <Empty style={{ padding: 40 }} description="暂无待协调缺料物料" /> }}
-                            columns={[
-                              { title: '工单', dataIndex: 'work_order_code', width: 100, ellipsis: true },
-                              {
-                                title: '备料分',
-                                dataIndex: 'picking_score',
-                                width: 88,
-                                render: (v: number, row: any) => renderPickingScoreTag(v, row),
-                              },
-                              { title: '缺料物料', dataIndex: 'material_name', ellipsis: true },
-                              { title: '物料编码', dataIndex: 'material_code', width: 100, ellipsis: true },
-                              { 
-                                title: '缺料量', 
-                                dataIndex: 'shortage_quantity', 
-                                width: 80, 
-                                render: (v) => (
-                                  <span style={{ color: '#ff4d4f', fontWeight: 600 }}>
-                                    {v}
-                                  </span>
-                                ) 
-                              },
-                              { 
-                                title: '预警', 
-                                dataIndex: 'alert_level', 
-                                width: 70,
-                                render: (level: string) => {
-                                  const colors: Record<string, string> = { critical: 'red', high: 'orange', medium: 'gold', low: 'blue' };
-                                  const names: Record<string, string> = { critical: '紧急', high: '高', medium: '中', low: '低' };
-                                  return <Tag color={colors[level] || 'blue'} style={{ border: 'none', margin: 0 }}>{names[level] || level}</Tag>;
-                                }
-                              },
-                              { 
-                                title: '建议行动', 
-                                dataIndex: 'suggested_action', 
-                                width: 80,
-                                render: (action: string) => {
-                                  const names: Record<string, string> = { purchase: '提报采购', substitute: '寻找替代', adjust: '调整计划' };
-                                  return <Tag color="geekblue" style={{ border: 'none', margin: 0 }}>{names[action] || action}</Tag>;
-                                }
-                              }
-                            ]}
-                          />
-                        </Col>
-                      </Row>
-                    )
-                  },
-                  {
-                    key: 'risks',
-                    label: (
-                      <Space>
-                        <AlertOutlined style={{ color: '#ff4d4f' }} />
-                        <span style={{ fontWeight: 600 }}>交期风险与异常调度</span>
-                      </Space>
-                    ),
-                    children: (
-                      <Row gutter={[24, 16]} style={{ marginTop: 12 }}>
-                        {/* 交期风险工单 */}
-                        <Col xs={24} lg={12}>
-                          <div style={{
-                            padding: '8px 12px',
-                            background: 'rgba(0, 0, 0, 0.02)',
-                            borderRadius: token.borderRadius,
-                            fontWeight: 600,
-                            fontSize: 13,
-                            marginBottom: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            border: '1px solid rgba(0, 0, 0, 0.03)'
-                          }}>
-                            <Badge status="warning" />
-                            <span>交付风险工单追踪</span>
-                          </div>
-                          <Table
-                            size="small"
-                            dataSource={risks.slice(0, 10)}
-                            pagination={false}
-                            rowKey="work_order_id"
-                            bordered={false}
-                            columns={[
-                              { 
-                                title: '风险级别', 
-                                dataIndex: 'risk_type', 
-                                width: 90, 
-                                render: (v) => <Tag color={v === 'delayed' ? 'red' : 'orange'} style={{ border: 'none', margin: 0 }}>{v === 'delayed' ? '逾期' : '风险'}</Tag> 
-                              },
-                              { title: '工单编码', dataIndex: 'work_order_code', ellipsis: true },
-                              { title: '产品名称', dataIndex: 'product_name', ellipsis: true },
-                              {
-                                title: '综合分',
-                                dataIndex: 'scheduling_score',
-                                width: 88,
-                                render: (v: number, row: any) =>
-                                  v != null ? (
-                                    <Tag color={row.scheduling_rank_band === 'A' ? 'red' : row.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
-                                      {Number(v).toFixed(0)}{row.scheduling_rank_band ? `·${row.scheduling_rank_band}` : ''}
-                                    </Tag>
-                                  ) : (
-                                    '-'
-                                  ),
-                              },
-                              { 
-                                title: '计划完工', 
-                                dataIndex: 'planned_end_date', 
-                                width: 110, 
-                                render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-' 
-                              },
-                            ]}
-                            locale={{ emptyText: <Empty style={{ padding: 40 }} description="当前暂无交期风险" /> }}
-                          />
-                        </Col>
-
-                        {/* 延迟/调整分析建议 */}
-                        <Col xs={24} lg={12}>
-                          <div style={{
-                            padding: '8px 12px',
-                            background: 'rgba(0, 0, 0, 0.02)',
-                            borderRadius: token.borderRadius,
-                            fontWeight: 600,
-                            fontSize: 13,
-                            marginBottom: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            border: '1px solid rgba(0, 0, 0, 0.03)'
-                          }}>
-                            <Badge status="default" />
-                            <span>智能排产调度建议</span>
-                          </div>
-                          <List
-                            size="small"
-                            bordered={false}
-                            dataSource={
-                              risks.length > 0 
-                                ? risks.slice(0, 5).map((r: any) => ({
-                                    title: `工单 ${r.work_order_code} 风险提示`,
-                                    desc: r.risk_desc || `交付时间与实际计划有冲突，建议立即点击快捷菜单进入【智能排产】进行产能平衡与重新排定。`
-                                  }))
-                                : [
-                                    { title: '生产计划执行状态良好', desc: '目前未检测到潜在的延期工单或异常交期风险，无需执行调整。' }
-                                  ]
-                            }
-                            renderItem={(item: any) => (
-                              <List.Item style={{ padding: '8px 4px' }}>
-                                <List.Item.Meta
-                                  avatar={<Badge status={risks.length > 0 ? "warning" : "success"} style={{ marginTop: 6 }} />}
-                                  title={<span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(0,0,0,0.85)' }}>{item.title}</span>}
-                                  description={<span style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }}>{item.desc}</span>}
-                                />
-                              </List.Item>
-                            )}
-                          />
-                        </Col>
-                      </Row>
-                    )
-                  }
-                ]}
-              />
+              <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
             </Card>
           </Col>
 
@@ -876,10 +562,7 @@ const ProductionControlTower: React.FC = () => {
                             <Tag color="red">抢占物料</Tag>
                             <Text strong>{item.work_order_code}</Text>
                             {item.scheduling_score != null && (
-                              <Tag color={item.scheduling_rank_band === 'A' ? 'red' : item.scheduling_rank_band === 'B' ? 'orange' : 'default'}>
-                                排程分 {Number(item.scheduling_score).toFixed(0)}
-                                {item.scheduling_rank_band ? `·${item.scheduling_rank_band}` : ''}
-                              </Tag>
+                              <WorkOrderScoreCell score={item.scheduling_score} />
                             )}
                           </Space>
                         }

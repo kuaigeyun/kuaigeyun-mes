@@ -420,7 +420,8 @@ async def update_computation(
 async def generate_orders(
     computation_id: int = Path(..., description="计算ID"),
     generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单"),
-    allow_draft: bool = Query(False, description="验证失败时是否仍生成草稿单，由下游用户补全"),
+    allow_draft: bool = Query(False, description="兼容：True 时等价于 push_mode=draft"),
+    push_mode: Optional[str] = Query(None, description="下推模式：draft=草稿，confirm=正式；缺省读组织配置"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -444,6 +445,7 @@ async def generate_orders(
             created_by=current_user.id,
             generate_mode=generate_mode,
             allow_draft=allow_draft,
+            push_mode=push_mode,
         )
         return result
     except NotFoundError as e:

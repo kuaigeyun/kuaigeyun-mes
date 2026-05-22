@@ -305,6 +305,32 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             
             return OutsourceWorkOrderResponse.model_validate(outsource_work_order)
 
+    async def release_outsource_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        released_by: int,
+    ) -> OutsourceWorkOrderResponse:
+        """下达委外工单（draft → released）"""
+        outsource_work_order = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not outsource_work_order:
+            raise NotFoundError(f"委外工单ID {work_order_id} 不存在")
+        if outsource_work_order.status != "draft":
+            raise ValidationError("只能下达草稿状态的委外工单")
+
+        user_info = await self.get_user_info(released_by)
+        outsource_work_order.status = "released"
+        outsource_work_order.updated_by = released_by
+        outsource_work_order.updated_by_name = user_info["name"]
+        await outsource_work_order.save()
+
+        logger.info(f"下达委外工单成功: {outsource_work_order.code}")
+        return OutsourceWorkOrderResponse.model_validate(outsource_work_order)
+
     async def list_outsource_work_orders(
         self,
         tenant_id: int,

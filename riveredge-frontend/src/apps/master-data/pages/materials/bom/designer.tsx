@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App } from 'antd';
+import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
 import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { MindMap, RCNode } from '@ant-design/graphs';
 
@@ -57,6 +57,12 @@ import {
   getViewportHeightExpr,
 } from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
+import FabricationRawMaterialWizard from '../../../components/FabricationRawMaterialWizard';
+import {
+  isFabricationMaterial,
+  toFabricationMaterialRef,
+} from '../../../utils/fabricationRawMaterial';
+import type { FabricationMaterialRef } from '../../../utils/fabricationRawMaterial';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 
@@ -237,10 +243,25 @@ const BOMDesignerPage: React.FC = () => {
   const [copyBomModalVisible, setCopyBomModalVisible] = useState(false);
   const [copyBomNewRootMaterial, setCopyBomNewRootMaterial] = useState<Material | null>(null);
   const [copyBomLoading, setCopyBomLoading] = useState(false);
+  /** 工艺型原料向导（Tier 3） */
+  const fabricationWizardPromptedRef = useRef<Set<string>>(new Set());
+  const [fabricationWizardState, setFabricationWizardState] = useState<{
+    open: boolean;
+    material: FabricationMaterialRef | null;
+    nodeId?: string;
+  }>({ open: false, material: null });
 
-  /**
-   * 将 MindMap 数据转换为 BOM 批量导入格式（含递归：用于草稿保存时整树写入）
-   */
+  const openFabricationWizard = useCallback((material: Material, nodeId?: string) => {
+    setFabricationWizardState({
+      open: true,
+      material: toFabricationMaterialRef(material),
+      nodeId,
+    });
+  }, []);
+
+  const closeFabricationWizard = useCallback(() => {
+    setFabricationWizardState({ open: false, material: null });
+  }, []);
   const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
     const items: any[] = [];
     const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
@@ -587,6 +608,17 @@ const BOMDesignerPage: React.FC = () => {
         hierarchyItems: hierarchy.items?.length || 0,
         mindMapData: data,
       });
+
+      if (
+        isFabricationMaterial(material) &&
+        (!hierarchy.items || hierarchy.items.length === 0)
+      ) {
+        const promptKey = `root-${material.id}`;
+        if (!fabricationWizardPromptedRef.current.has(promptKey)) {
+          fabricationWizardPromptedRef.current.add(promptKey);
+          setTimeout(() => openFabricationWizard(material, 'root'), 400);
+        }
+      }
     } catch (error: any) {
       console.error('BOM设计器 - 加载失败:', error);
       messageApi.error(error.message || t('app.master-data.bom.loadBomFailed'));
@@ -1002,7 +1034,18 @@ const BOMDesignerPage: React.FC = () => {
     setLoadingSubBomNodeId(nodeId);
     try {
       const boms = await bomApi.getByMaterial(node.componentId, undefined, false, true);
-      if (!boms || boms.length === 0) return;
+      if (!boms || boms.length === 0) {
+        const mat =
+          node.material ?? materials.find((m) => m.id === node.componentId) ?? null;
+        if (mat && isFabricationMaterial(mat)) {
+          const promptKey = `node-${node.componentId}`;
+          if (!fabricationWizardPromptedRef.current.has(promptKey)) {
+            fabricationWizardPromptedRef.current.add(promptKey);
+            openFabricationWizard(mat, nodeId);
+          }
+        }
+        return;
+      }
       const version = resolveVersionFromBoms(boms);
       const hierarchy = await bomApi.getHierarchy(node.componentId, version);
       const items = hierarchy?.items ?? [];
@@ -1025,7 +1068,7 @@ const BOMDesignerPage: React.FC = () => {
       }
       setLoadingSubBomNodeId(null);
     }
-  }, [resolveVersionFromBoms, convertHierarchyItemsToMindMapNodes, handleUpdateBOM, messageApi, t]);
+  }, [resolveVersionFromBoms, convertHierarchyItemsToMindMapNodes, handleUpdateBOM, messageApi, t, materials, openFabricationWizard]);
 
   /**
    * 选择节点
@@ -2852,6 +2895,26 @@ const BOMDesignerPage: React.FC = () => {
               <p style={{ color: BOM_COLORS.textMuted, fontSize: 12, marginTop: 16 }}>
                 {t('app.master-data.bom.mainMaterialCannotEdit')}
               </p>
+              {rootMaterial && isFabricationMaterial(rootMaterial) && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 16 }}
+                  message={t('app.master-data.fabricationWizard.introTitle')}
+                  description={
+                    <Space orientation="vertical" size={8}>
+                      <span>{t('app.master-data.fabricationWizard.promptAfterCreate')}</span>
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => openFabricationWizard(rootMaterial, 'root')}
+                      >
+                        {t('app.master-data.fabricationWizard.configureRawMaterial')}
+                      </Button>
+                    </Space>
+                  }
+                />
+              )}
             </div>
           ) : (
             <>
@@ -3762,6 +3825,20 @@ const BOMDesignerPage: React.FC = () => {
         />
       </Form.Item>
     </Modal>
+    <FabricationRawMaterialWizard
+      open={fabricationWizardState.open}
+      onClose={closeFabricationWizard}
+      fabricationMaterial={fabricationWizardState.material}
+      onSuccess={() => {
+        const nodeId = fabricationWizardState.nodeId;
+        if (nodeId === 'root' || !nodeId) {
+          loadBOMData();
+        } else {
+          loadingSubBomForNodeRef.current = null;
+          loadSemiProductChildrenIfNeeded(nodeId);
+        }
+      }}
+    />
   </>
   );
 };

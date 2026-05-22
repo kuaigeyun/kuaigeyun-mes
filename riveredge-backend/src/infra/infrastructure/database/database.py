@@ -57,8 +57,8 @@ if _is_aerich:
     _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN_AERICH", 1)
     _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX_AERICH", 2)
 else:
-    _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN", 5)
-    _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX", 20)
+    _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN", 2)
+    _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX", 10)
 
 
 # Tortoise ORM 配置
@@ -276,6 +276,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.payment",  # 付款单
                 "apps.kuaicaiwu.models.settlement",  # 核销单
                 "apps.kuaicaiwu.models.partner_statement",  # 往来对账单
+                "apps.kuaicaiwu.models.accounting_event",  # 会计事件链路
                 "apps.kuaicaiwu.models.standard_cost",  # 标准成本
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型

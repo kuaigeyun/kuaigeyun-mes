@@ -1805,7 +1805,8 @@ class DemandComputationService:
         computation_id: int,
         created_by: int,
         generate_mode: str = "all",
-        allow_draft: bool = False
+        allow_draft: bool = False,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -1815,11 +1816,21 @@ class DemandComputationService:
             computation_id: 计算ID
             created_by: 创建人ID
             generate_mode: 生成粒度，all=全部，work_order_only=仅工单，purchase_only=仅采购
-            allow_draft: 验证失败时是否仍生成草稿单，由下游用户补全
+            allow_draft: 兼容旧参数；未传 push_mode 且为 True 时等价于 draft 模式
+            push_mode: draft=草稿下推，confirm=正式下推（自动下达/提交）；缺省读组织配置
             
         Returns:
             Dict: 包含生成的工单和采购单信息
         """
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            if allow_draft:
+                resolved_push_mode = "draft"
+            else:
+                from infra.services.business_config_service import BusinessConfigService
+                resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        allow_draft = resolved_push_mode == "draft"
+        push_as_confirm = resolved_push_mode == "confirm"
         # 不使用外层 in_transaction，避免与 create_work_order/create_purchase_order 内部事务嵌套，
         # 导致内层失败后 PostgreSQL 报「当前事务被终止, 事务块结束之前的查询被忽略」
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
@@ -2153,6 +2164,33 @@ class DemandComputationService:
                     created_by=created_by
                 )
                 purchase_orders.append(purchase_order)
+
+        # 建立需求计算→采购单的追溯关系（与工单/委外一致）
+        for po in purchase_orders:
+            po_id = po.get("id") if isinstance(po, dict) else po.id
+            po_code = po.get("order_code") if isinstance(po, dict) else getattr(po, "order_code", None)
+            if not po_id:
+                continue
+            try:
+                rel_data = DocumentRelationCreate(
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    source_code=computation.computation_code,
+                    source_name=None,
+                    target_type="purchase_order",
+                    target_id=po_id,
+                    target_code=po_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="从需求计算直连生成采购订单",
+                    business_mode=computation.business_mode,
+                    demand_id=computation.demand_id,
+                )
+                await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
+            except BusinessLogicError as e:
+                if "关联关系已存在" not in str(e):
+                    raise
         
         # #region agent log
         try:
@@ -2161,9 +2199,18 @@ class DemandComputationService:
         except Exception:
             pass
         # #endregion
+        if push_as_confirm:
+            await self._apply_push_confirm_to_generated_orders(
+                tenant_id=tenant_id,
+                created_by=created_by,
+                work_orders=work_orders,
+                outsource_work_orders=outsource_work_orders,
+                purchase_orders=purchase_orders,
+            )
         return {
             "computation_id": computation_id,
             "computation_code": computation.computation_code,
+            "push_mode": resolved_push_mode,
             "work_orders": work_orders,
             "outsource_work_orders": outsource_work_orders,
             "purchase_orders": purchase_orders,
@@ -2171,6 +2218,66 @@ class DemandComputationService:
             "outsource_work_order_count": len(outsource_work_orders),  # 委外工单数量（委外管理页）
             "purchase_order_count": len(purchase_orders),
         }
+
+    async def _apply_push_confirm_to_generated_orders(
+        self,
+        tenant_id: int,
+        created_by: int,
+        work_orders: List[Dict[str, Any]],
+        outsource_work_orders: List[Dict[str, Any]],
+        purchase_orders: List[Dict[str, Any]],
+    ) -> None:
+        """下推 confirm 模式：生产工单下达、委外工单下达、采购单提交/确认。"""
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        wo_service = WorkOrderService()
+        owo_service = OutsourceWorkOrderService()
+        po_service = PurchaseService()
+
+        for wo in work_orders:
+            wo_id = wo.get("id")
+            if not wo_id:
+                continue
+            try:
+                released = await wo_service.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=wo_id,
+                    released_by=created_by,
+                    check_shortage=False,
+                )
+                wo["status"] = getattr(released, "status", "released")
+            except Exception as e:
+                logger.warning(f"需求计算下推自动下达生产工单 {wo_id} 失败: {e}")
+
+        for owo in outsource_work_orders:
+            owo_id = owo.get("id")
+            if not owo_id:
+                continue
+            try:
+                released = await owo_service.release_outsource_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=owo_id,
+                    released_by=created_by,
+                )
+                owo["status"] = getattr(released, "status", "released")
+            except Exception as e:
+                logger.warning(f"需求计算下推自动下达委外工单 {owo_id} 失败: {e}")
+
+        for po in purchase_orders:
+            po_id = po.get("id")
+            if not po_id:
+                continue
+            try:
+                submitted = await po_service.submit_purchase_order(
+                    tenant_id=tenant_id,
+                    order_id=po_id,
+                    submitted_by=created_by,
+                )
+                po["status"] = getattr(submitted, "status", None)
+            except Exception as e:
+                logger.warning(f"需求计算下推自动提交采购单 {po_id} 失败: {e}")
 
     async def get_push_records(
         self,
@@ -2493,7 +2600,6 @@ class DemandComputationService:
         resolved_push_mode = str(push_mode or "").strip().lower()
         if resolved_push_mode not in ("draft", "confirm"):
             resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
-        allow_draft_by_mode = resolved_push_mode == "draft"
 
         results = {
             "work_orders": [],
@@ -2511,7 +2617,7 @@ class DemandComputationService:
                 computation_id=computation_id,
                 created_by=created_by,
                 generate_mode="work_order_only",
-                allow_draft=allow_draft_by_mode,
+                push_mode=resolved_push_mode,
             )
             results["work_orders"] = r.get("work_orders", [])
             results["outsource_work_orders"] = r.get("outsource_work_orders", [])
@@ -2542,7 +2648,7 @@ class DemandComputationService:
                 computation_id=computation_id,
                 created_by=created_by,
                 generate_mode="purchase_only",
-                allow_draft=allow_draft_by_mode,
+                push_mode=resolved_push_mode,
             )
             results["purchase_orders"] = r.get("purchase_orders", [])
 

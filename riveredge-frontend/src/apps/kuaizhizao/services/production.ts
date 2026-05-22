@@ -36,6 +36,29 @@ export const productionControlApi = {
   },
 };
 
+export const coordinationBoardApi = {
+  listActiveOrders: async (limit = 20) => {
+    return apiRequest('/apps/kuaizhizao/coordination-board/active-orders', {
+      method: 'GET',
+      params: { limit },
+    });
+  },
+
+  listActiveComputations: async (limit = 20) => {
+    return apiRequest('/apps/kuaizhizao/coordination-board/active-computations', {
+      method: 'GET',
+      params: { limit },
+    });
+  },
+
+  getPipeline: async (params?: { computation_id?: number; sales_order_id?: number }) => {
+    return apiRequest('/apps/kuaizhizao/coordination-board/pipeline', {
+      method: 'GET',
+      params,
+    });
+  },
+};
+
 // 委外工单相关接口
 export const outsourceWorkOrderApi = {
   // 获取委外工单列表
@@ -84,6 +107,16 @@ export const outsourceMaterialIssueApi = {
   // 完成委外发料
   complete: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/outsource-material-issues/${id}/complete`, { method: 'POST' });
+  },
+
+  // 发料预览（从 BOM 读取待发物料明细）
+  issuePreview: async (outsourceWorkOrderId: number | string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${outsourceWorkOrderId}/issue-preview`, { method: 'GET' });
+  },
+
+  // 批量创建委外发料单
+  createBatch: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-issues/batch', { method: 'POST', data });
   },
 };
 

@@ -9,7 +9,7 @@ from core.api.deps import get_current_user
 from apps.kuaizhizao.services.production_control_service import ProductionControlService
 from apps.kuaizhizao.schemas.production_control import (
     MaterialReadinessItem, ResourceLoadItem, DeliveryRiskItem, ControlTowerSummary,
-    BulkReleaseRequest, UrgentOrderSimulationRequest, SimulationResult
+    BulkReleaseRequest, UrgentOrderSimulationRequest, SimulationResult, ControlTowerStats
 )
 from apps.kuaizhizao.models.work_order import WorkOrder
 
@@ -65,13 +65,35 @@ async def get_control_tower_summary(
     readiness, load, risks, total_wip = await asyncio.gather(
         readiness_task, load_task, risks_task, wip_count_task
     )
+
+    from apps.kuaizhizao.models.demand_computation import DemandComputation
+
+    comp_total = await DemandComputation.filter(tenant_id=tenant_id).count()
+    comp_pending = await DemandComputation.filter(
+        tenant_id=tenant_id, computation_status="进行中"
+    ).count()
+    comp_done = await DemandComputation.filter(
+        tenant_id=tenant_id, computation_status="完成"
+    ).count()
+    overdue_count = len([
+        r for r in risks
+        if (getattr(r, "risk_type", None) if not isinstance(r, dict) else r.get("risk_type")) == "delayed"
+    ])
+
+    stats = ControlTowerStats(
+        total_count=comp_total,
+        pending_review_count=comp_pending,
+        executed_count=comp_done,
+        overdue_plans_count=overdue_count,
+    )
     
     return ControlTowerSummary(
         material_readiness=readiness,
         resource_load=load,
         delivery_risks=risks,
         total_wip_count=total_wip,
-        total_risk_count=len(risks)
+        total_risk_count=len(risks),
+        stats=stats,
     )
 
 

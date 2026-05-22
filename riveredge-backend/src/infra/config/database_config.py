@@ -23,8 +23,8 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-_POOL_MIN = _int_env("RIVEREDGE_DB_POOL_MIN", 5)
-_POOL_MAX = _int_env("RIVEREDGE_DB_POOL_MAX", 20)
+_POOL_MIN = _int_env("RIVEREDGE_DB_POOL_MIN", 2)
+_POOL_MAX = _int_env("RIVEREDGE_DB_POOL_MAX", 10)
 
 # 数据库配置（从平台级配置读取）
 DB_HOST = infra_settings.DB_HOST

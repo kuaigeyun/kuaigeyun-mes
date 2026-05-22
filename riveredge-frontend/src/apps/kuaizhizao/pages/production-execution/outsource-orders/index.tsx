@@ -174,7 +174,7 @@ export const OutsourceOrdersTable: React.FC = () => {
 
   const refreshLocalStats = useCallback(async () => {
     try {
-      const response = await outsourceOrderApi.list({ skip: 0, limit: 5000 });
+      const response = await outsourceOrderApi.list({ skip: 0, limit: 1000 });
       const arr = Array.isArray(response) ? response : [];
       setLocalStats({
         total: arr.length,
@@ -604,7 +604,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     try {
       const response = await outsourceOrderApi.list({
         skip: (params.current! - 1) * params.pageSize!,
-        limit: params.pageSize,
+        limit: Math.min(params.pageSize ?? 100, 1000),
         ...params,
         keyword: params.keyword,
       });

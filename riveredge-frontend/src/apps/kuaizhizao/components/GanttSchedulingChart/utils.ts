@@ -44,7 +44,7 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
   const frozenPrefix = wo.is_frozen ? '🔒 ' : '';
   const scoreSuffix =
     wo.scheduling_score != null
-      ? ` [分:${Number(wo.scheduling_score).toFixed(0)}${wo.scheduling_rank_band ? `·${wo.scheduling_rank_band}` : ''}]`
+      ? ` [权重:${Number(wo.scheduling_score).toFixed(1)}]`
       : '';
   const eq = _aggregateResourceNames(wo, 'assigned_equipment_name');
   const mold = _aggregateResourceNames(wo, 'assigned_mold_name');

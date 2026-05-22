@@ -104,7 +104,7 @@ class OutsourceWorkOrderListResponse(BaseModel):
 
 class OutsourceMaterialIssueBase(BaseModel):
     """委外发料基础Schema"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     code: Optional[str] = Field(None, description="委外发料单编码（可选，创建时自动生成）")
     outsource_work_order_id: int = Field(..., description="委外工单ID")
@@ -160,11 +160,68 @@ class OutsourceMaterialIssueResponse(OutsourceMaterialIssueBase):
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
 
 
+class OutsourceMaterialIssuePreviewLine(BaseModel):
+    """委外发料预览明细（来自 BOM）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    unit: str = Field(..., description="单位")
+    required_quantity: Decimal = Field(..., description="需求数量")
+    issued_quantity: Decimal = Field(..., description="已发数量")
+    pending_quantity: Decimal = Field(..., description="待发数量")
+    available_quantity: Decimal = Field(..., description="可用库存")
+    issue_method: str = Field(..., description="发料方式")
+
+
+class OutsourceMaterialIssuePreviewResponse(BaseModel):
+    """委外发料预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    product_name: str = Field(...)
+    quantity: Decimal = Field(..., description="委外数量")
+    lines: List[OutsourceMaterialIssuePreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class OutsourceMaterialIssueLineCreate(BaseModel):
+    """委外发料批量创建明细"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    quantity: Decimal = Field(..., gt=0, description="发料数量")
+    unit: str = Field(..., description="单位")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    batch_number: Optional[str] = Field(None, description="批次号")
+
+
+class OutsourceMaterialIssueBatchCreate(BaseModel):
+    """委外发料批量创建"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    warehouse_id: Optional[int] = Field(None, description="默认仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="默认仓库名称")
+    remarks: Optional[str] = Field(None, description="备注")
+    lines: List[OutsourceMaterialIssueLineCreate] = Field(..., min_length=1)
+
+
+class OutsourceMaterialIssueBatchResponse(BaseModel):
+    """委外发料批量创建响应"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    created_count: int = Field(..., alias="createdCount")
+    issues: List[OutsourceMaterialIssueResponse] = Field(default_factory=list)
+
+
 # ==================== 委外收货 Schema ====================
 
 class OutsourceMaterialReceiptBase(BaseModel):
     """委外收货基础Schema"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     code: Optional[str] = Field(None, description="委外收货单编码（可选，创建时自动生成）")
     outsource_work_order_id: int = Field(..., description="委外工单ID")

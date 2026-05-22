@@ -3131,6 +3131,9 @@ async def list_batching_center_tasks(
     work_order_code: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     include_completed_batching: bool = Query(False),
+    include_proactive_prep: bool = Query(
+        False, description="未指定 task_type 时是否包含主动备料（默认否，较慢）"
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> BatchingCenterTaskListResponse:
@@ -3143,6 +3146,7 @@ async def list_batching_center_tasks(
         work_order_code=work_order_code,
         priority=priority,
         include_completed_batching=include_completed_batching,
+        include_proactive_prep=include_proactive_prep,
     )
 
 

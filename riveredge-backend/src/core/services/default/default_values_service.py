@@ -221,8 +221,8 @@ class DefaultValuesService:
         Returns:
             bool: 是否为业务单据
         """
-        # 业务单据通常以 kuaizhizao- 开头（除了物料管理）
-        return page_code.startswith("kuaizhizao-")
+        # 业务单据：快格轻制造 / 轻管理会计（格式：缩写 + YYYYMMDD + 流水）
+        return page_code.startswith("kuaizhizao-") or page_code.startswith("kuaicaiwu-")
     
     @staticmethod
     def _build_rule_components(page_code: str, abbreviation: str, page_config: Dict[str, Any] = None) -> List[Dict[str, Any]]:

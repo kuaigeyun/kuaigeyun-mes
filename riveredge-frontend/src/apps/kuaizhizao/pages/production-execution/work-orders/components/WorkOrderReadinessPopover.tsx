@@ -528,7 +528,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         allow_existing_draft: true,
         remarks: '工单齐套率面板一键配料',
       })
-      messageApi.success('已生成配料任务，请在配料中心确认')
+      messageApi.success('已生成配料任务，请在物料中心确认')
       invalidateMenuBadgeCounts()
       onCloseMain?.()
       navigate('/apps/kuaizhizao/warehouse-management/batching-center')
@@ -547,7 +547,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         <>
           <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
             <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-              仓库可在<strong>配料中心</strong>按齐套缺料主动配料（领料 + 倒冲物料）；现场缺料亦可发起叫料。
+              仓库可在<strong>物料中心</strong>按齐套缺料主动配料（领料 + 倒冲物料）；现场缺料亦可发起叫料。
             </Typography.Paragraph>
             <Space wrap>
               <Button
@@ -609,7 +609,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       children: (
         <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            由生产现场向仓库发起；仓库部门在<strong>配料中心</strong>主动备货、配送。配料中心及可用仓库范围以<strong>仓储关联</strong>中的配置为准。
+            由生产现场向仓库发起；仓库部门在<strong>物料中心</strong>主动备货、配送。物料中心及可用仓库范围以<strong>仓储关联</strong>中的配置为准。
           </Typography.Paragraph>
           <Button type="primary" size="small" onClick={() => setCallModalOpen(true)}>
             发起叫料申请
