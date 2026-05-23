@@ -207,10 +207,28 @@ export function resolveUserForMenuPermission(user: CurrentUser | undefined): Cur
 
 type PermissionMenuItem = {
   path?: string;
+  key?: string;
+  className?: string;
   children?: PermissionMenuItem[];
   permissionCodes?: string[];
   hideInMenu?: boolean;
 };
+
+/** 应用侧栏分组标题（快制造 / 主数据等），无 path，仅作视觉分组 */
+export function isAppGroupTitleItem(item: { key?: string; className?: string }): boolean {
+  const key = String(item.key ?? '');
+  const cls = String(item.className ?? '');
+  return (
+    key.startsWith('app-group-') ||
+    cls.includes('menu-group-title-app') ||
+    cls.includes('app-menu-container-start')
+  );
+}
+
+function isAppGroupPlaceholderItem(item: PermissionMenuItem): boolean {
+  const key = String(item.key ?? '');
+  return key.startsWith('app-group-placeholder-');
+}
 
 /**
  * 按权限过滤菜单树：先筛子节点；分组占位权限不阻断子树；有可见子节点则保留父节点。
@@ -229,7 +247,14 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
       }
 
       const permissionCodes = item.permissionCodes;
-      const hasVisibleChildren = (nextChildren ?? []).some((child) => !child.hideInMenu);
+      const hasVisibleChildren = (nextChildren ?? []).some(
+        (child) => !child.hideInMenu && !isAppGroupPlaceholderItem(child),
+      );
+
+      // 应用分组标题不参与权限/path 剔除（子项为占位符，真实菜单项为同级兄弟节点）
+      if (isAppGroupTitleItem(item)) {
+        return { ...item, children: nextChildren };
+      }
 
       if (hasVisibleChildren) {
         return { ...item, children: nextChildren };

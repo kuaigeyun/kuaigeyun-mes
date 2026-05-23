@@ -19,7 +19,7 @@ import { refreshCurrentUserInStore } from '../services/auth';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
-import { filterMenuItemsByPermission, resolveUserForMenuPermission } from '../utils/permission';
+import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
 
 /** 与 Dashboard / clearSessionQueries 共用，避免侧栏与工作台菜单缓存不一致 */
 const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
@@ -92,6 +92,31 @@ function filterOutSystemDashboardMenus(items: MenuDataItem[]): MenuDataItem[] {
       })
       .filter((m): m is MenuDataItem => m !== null);
   return walk(items);
+}
+
+function reconcileAppGroupTitles(items: MenuDataItem[]): MenuDataItem[] {
+  const result: MenuDataItem[] = [];
+  let pendingGroup: MenuDataItem | null = null;
+
+  const isAppMenuSibling = (item: MenuDataItem) =>
+    Boolean(item.className?.includes('app-menu-item') || item.path?.startsWith('/apps/'));
+
+  for (const item of items) {
+    if (isAppGroupTitleItem(item)) {
+      pendingGroup = item;
+      continue;
+    }
+    if (pendingGroup) {
+      if (isAppMenuSibling(item) && !item.hideInMenu) {
+        result.push(pendingGroup);
+        pendingGroup = null;
+      } else if (!isAppMenuSibling(item)) {
+        pendingGroup = null;
+      }
+    }
+    result.push(item);
+  }
+  return result;
 }
 
 export interface UseUnifiedMenuDataOptions {
@@ -201,6 +226,14 @@ export function useUnifiedMenuData(
       const appMenuItems: MenuDataItem[] = [];
       filteredApplicationMenus.forEach((appMenu) => {
         if (!appMenu.children?.length) return;
+        const convertedChildren = appMenu.children.map((child) => {
+          const converted = convertMenuTreeToMenuDataItem(child, true);
+          converted.className = converted.className ? `${converted.className} app-menu-item` : 'app-menu-item';
+          return converted;
+        });
+        const visibleChildren = filterMenuItemsByPermission(convertedChildren, menuPermissionUser);
+        if (!visibleChildren.length) return;
+
         if (!collapsed) {
           const findFirstAppPath = (list: any[]): string | null => {
             for (const c of list) {
@@ -212,7 +245,7 @@ export function useUnifiedMenuData(
             }
             return null;
           };
-          const firstPath = findFirstAppPath(appMenu.children);
+          const firstPath = findFirstAppPath(visibleChildren);
           const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
           const appName = code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name;
           appMenuItems.push({
@@ -224,10 +257,8 @@ export function useUnifiedMenuData(
             children: [{ key: `app-group-placeholder-${appMenu.uuid}`, name: '', style: { display: 'none' } }],
           } as MenuDataItem);
         }
-        appMenu.children.forEach((child) => {
-          const converted = convertMenuTreeToMenuDataItem(child, true);
-          converted.className = converted.className ? `${converted.className} app-menu-item` : 'app-menu-item';
-          appMenuItems.push(converted);
+        visibleChildren.forEach((child) => {
+          appMenuItems.push(child);
         });
       });
       items.splice(1, 0, ...appMenuItems);
@@ -256,7 +287,7 @@ export function useUnifiedMenuData(
     if (!systemDashboardEnabled) {
       result = filterOutSystemDashboardMenus(result);
     }
-    return result;
+    return reconcileAppGroupTitles(result);
   }, [
     menuPermissionUser,
     launchWizardEnabled,
