@@ -167,50 +167,42 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
 
   return (
     <>
-      <Card
-        title={title || "快捷入口"}
-        extra={
-          showConfig && (
-            <Button
-              type="text"
-              size="small"
-              icon={<SettingOutlined />}
-              onClick={handleOpenConfig}
-            >
-              自定义
-            </Button>
-          )
-        }
-        style={{
-          width: '100%',
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: token.borderRadiusLG,
-          boxShadow: token.boxShadowTertiary,
-        }}
-        styles={{
-          body: {
-            flex: 1,
-            minHeight: 0,
-            overflow: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-          },
-        }}
-      >
-        <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
+      <div className="dashboard-section dashboard-quick-entry-section">
+        <div className="dashboard-section__head">
+          <div className="dashboard-section__title">{title || '快捷入口'}</div>
+          {showConfig ? (
+            <div className="dashboard-section__extra">
+              <Button
+                type="text"
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={handleOpenConfig}
+              >
+                自定义
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <Card
+          variant="borderless"
+          className="dashboard-section__card"
+          style={{
+            borderRadius: token.borderRadiusLG,
+            boxShadow: token.boxShadowTertiary,
+          }}
+        >
+        <div className="quick-entry-grid-wrap">
           {loading ? (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin size="small" />
             </div>
           ) : displayedItems.length > 0 ? (
-            <div 
-              style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
-                gap: '16px 8px' 
+            <div
+              className="quick-entry-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))',
+                gap: '14px 6px',
               }}
             >
               {displayedItems.map((item, index) => (
@@ -244,6 +236,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           )}
         </div>
       </Card>
+      </div>
 
       {/* 配置模态框 */}
       <Modal

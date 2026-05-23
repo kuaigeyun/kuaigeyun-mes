@@ -8,6 +8,7 @@
 import { clearAuth, getToken, isInfraSuperAdminUser } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
+import { navigateTo } from '../utils/navigation';
 
 /**
  * API 基础 URL
@@ -400,9 +401,9 @@ export async function apiRequest<T = any>(
           const currentPath = window.location.pathname;
           if (currentPath !== '/login' && currentPath !== '/infra/login') {
             if (currentPath.startsWith('/infra')) {
-              window.location.href = '/infra/login';
+              navigateTo('/infra/login', { replace: true });
             } else {
-              window.location.href = '/login';
+              navigateTo('/login', { replace: true });
             }
           }
 

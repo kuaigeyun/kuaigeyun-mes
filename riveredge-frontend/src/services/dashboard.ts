@@ -216,6 +216,7 @@ export interface ProcessProgressItem {
   current_progress: number;
   task_count: number;
   planned_quantity: number;
+  completed_quantity: number;
   qualified_quantity: number;
   unqualified_quantity: number;
   status: string;
@@ -461,6 +462,9 @@ export interface ActiveWorkOrderStep {
  * 执行中工单
  */
 export interface ActiveWorkOrderItem {
+  /** 工单主键（用于拉取工序明细） */
+  work_order_id: number;
+  /** 工单编码（展示用） */
   id: string;
   product_code: string;
   product: string;

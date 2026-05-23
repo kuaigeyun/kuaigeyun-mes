@@ -26,6 +26,8 @@ interface WeatherWidgetProps {
   onWeatherChange?: (data: WeatherData | null) => void;
   /** 紧凑布局（窄列、工作台首行） */
   compact?: boolean;
+  /** 侧栏日历等极窄场景：更小图标与字号，与周围文字对齐 */
+  mini?: boolean;
   /** 浅色卡上用深色字；深色背景卡用 light（默认） */
   tone?: 'light' | 'dark';
 }
@@ -38,6 +40,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   style,
   onWeatherChange,
   compact = false,
+  mini = false,
   tone = 'dark',
 }) => {
   // 1. 优先从本地缓存读取，实现“秒开”
@@ -109,9 +112,9 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     };
   }, [loadWeather]);
 
-  const iconBox = 56;
-  const tempSize = compact ? 24 : 20;
-  const metaSize = compact ? 12 : 13;
+  const iconBox = mini ? 48 : 56;
+  const tempSize = mini ? 16 : compact ? 24 : 20;
+  const metaSize = mini ? 11 : compact ? 12 : 13;
 
   const tc =
     tone === 'light'

@@ -8,6 +8,7 @@ Date: 2025-01-15
 """
 
 from typing import List, Optional
+import re
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -1052,6 +1053,7 @@ class ProcessProgressItem(BaseModel):
     current_progress: float = Field(..., description="当前进度（百分比）")
     task_count: int = Field(..., description="生产任务数")
     planned_quantity: float = Field(..., description="计划数")
+    completed_quantity: float = Field(..., description="已完成数量")
     qualified_quantity: float = Field(..., description="合格数")
     unqualified_quantity: float = Field(..., description="不合格数")
     status: str = Field(..., description="状态（not_started/in_progress/completed）")
@@ -1166,6 +1168,7 @@ async def get_process_progress(
                 current_progress=round(current_progress, 2),
                 task_count=stats["task_count"],
                 planned_quantity=round(planned_qty, 2),
+                completed_quantity=round(completed_qty, 2),
                 qualified_quantity=round(float(stats["qualified_quantity"]), 2),
                 unqualified_quantity=round(float(stats["unqualified_quantity"]), 2),
                 status=status,
@@ -2634,6 +2637,7 @@ async def get_work_orders_active(
             })
 
         items.append({
+            "work_order_id": w.get("id"),
             "id": w.get("code") or str(w.get("id")),
             "product_code": w.get("product_code") or "",
             "product": w.get("product_name") or "",

@@ -41,3 +41,23 @@ export function generateQuickEntryGradient(index: number, isDark: boolean): stri
   ];
   return gradients[index % gradients.length];
 }
+
+function parseGradientColors(gradient: string): [string, string] {
+  const colors = gradient.match(/#[0-9A-Fa-f]{6}/g);
+  return [colors?.[0] ?? '#0A84FF', colors?.[1] ?? '#5AC8FA'];
+}
+
+/** 工序卡 header 配色（与快捷入口图标色板一致，按 index 循环） */
+export function getQuickEntryHeaderColors(index: number, isDark: boolean) {
+  const gradient = generateQuickEntryGradient(index, isDark);
+  const [solid, soft] = parseGradientColors(gradient);
+  return {
+    solid,
+    soft,
+    nameBackground: solid,
+    progressBackground: isDark
+      ? `color-mix(in srgb, ${soft} 28%, #141414)`
+      : `color-mix(in srgb, ${soft} 38%, #ffffff)`,
+    progressText: isDark ? soft : solid,
+  };
+}

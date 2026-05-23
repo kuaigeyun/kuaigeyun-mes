@@ -10,6 +10,7 @@ import './pages/login/index.less';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
@@ -46,6 +47,12 @@ i18n.use(initReactI18next).init({
   },
 });
 
+const loginQueryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false, refetchOnWindowFocus: false },
+  },
+});
+
 /**
  * 登录成功后跳转主应用（全页面加载）
  * 当 path 不是 /login 时，说明用户已登录成功，需加载主应用
@@ -78,16 +85,18 @@ function LoginRoot() {
   const initialPath = window.location.pathname === '/login' ? '/login' : '/login';
 
   return (
-    <ConfigProvider locale={locale}>
-      <App>
-        <MemoryRouter initialEntries={[initialPath]} initialIndex={0}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="*" element={<RedirectToApp />} />
-          </Routes>
-        </MemoryRouter>
-      </App>
-    </ConfigProvider>
+    <QueryClientProvider client={loginQueryClient}>
+      <ConfigProvider locale={locale}>
+        <App>
+          <MemoryRouter initialEntries={[initialPath]} initialIndex={0}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="*" element={<RedirectToApp />} />
+            </Routes>
+          </MemoryRouter>
+        </App>
+      </ConfigProvider>
+    </QueryClientProvider>
   );
 }
 

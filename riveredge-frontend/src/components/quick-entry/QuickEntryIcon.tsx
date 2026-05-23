@@ -9,6 +9,13 @@ import { theme } from 'antd';
 
 const { useToken } = theme;
 
+/** 图标容器边长 */
+export const QUICK_ENTRY_ICON_BOX_SIZE = 52;
+/** 图标容器圆角（固定 8px） */
+export const QUICK_ENTRY_ICON_BORDER_RADIUS = 8;
+/** 图标字号 */
+export const QUICK_ENTRY_ICON_FONT_SIZE = 20;
+
 export interface QuickEntryIconProps {
   /** 图标 */
   icon: React.ReactNode;
@@ -44,6 +51,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
 
   return (
     <div
+      className="quick-entry-icon"
       style={{
         position: 'relative',
         width: '100%',
@@ -61,13 +69,13 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         onContextDelete();
       }}
     >
-      {/* 扁平图标容器 */}
       <div
+        className="quick-entry-icon__box"
         style={{
-          width: '64px',
-          height: '64px',
-          flexShrink: 0, // ⚠️ 防止小屏挤压变成矩形
-          borderRadius: token.borderRadiusLG,
+          width: QUICK_ENTRY_ICON_BOX_SIZE,
+          height: QUICK_ENTRY_ICON_BOX_SIZE,
+          flexShrink: 0,
+          borderRadius: QUICK_ENTRY_ICON_BORDER_RADIUS,
           background: bgColor,
           boxShadow: token.boxShadowTertiary,
           display: 'flex',
@@ -76,7 +84,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           transition: 'all 0.2s ease',
           position: 'relative',
           overflow: 'hidden',
-          marginBottom: '6px',
+          marginBottom: 4,
         }}
         onMouseEnter={(e) => {
           if (onClick) {
@@ -89,21 +97,21 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           e.currentTarget.style.boxShadow = token.boxShadowTertiary;
         }}
       >
-        {/* 图标 */}
         <div
+          className="quick-entry-icon__glyph"
           style={{
-            fontSize: '24px',
+            fontSize: QUICK_ENTRY_ICON_FONT_SIZE,
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
+            lineHeight: 1,
           }}
         >
           {icon}
         </div>
 
-        {/* 删除按钮（编辑模式下） */}
         {editable && onDelete && (
           <button
             onClick={(e) => {
@@ -114,8 +122,8 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
               position: 'absolute',
               top: '-8px',
               right: '-8px',
-              width: '24px',
-              height: '24px',
+              width: '22px',
+              height: '22px',
               borderRadius: '50%',
               background: '#ff4d4f',
               border: '2px solid #ffffff',
@@ -143,20 +151,19 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         )}
       </div>
 
-      {/* 标题文字 */}
       <div
+        className="quick-entry-icon__title"
         style={{
           fontSize: '12px',
           color: token.colorText,
           fontWeight: 400,
           textAlign: 'center',
-          lineHeight: 1.4,
+          lineHeight: 1.3,
           maxWidth: '100%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
           padding: '0 2px',
-          marginTop: '4px',
         }}
       >
         {title}

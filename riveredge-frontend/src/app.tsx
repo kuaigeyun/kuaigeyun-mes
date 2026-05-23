@@ -49,6 +49,7 @@ if (typeof window !== 'undefined') {
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const loading = useGlobalStore((s) => s.loading);
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
@@ -326,11 +327,11 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         clearInterval(checkTimerRef.current);
       }
 
-      // 跳转到登录页
+      // SPA 内部跳转登录页（避免 dev 下全页 /login → login.html MPA 缺 Provider 白屏）
       if (location.pathname.startsWith('/infra')) {
-        window.location.href = '/infra/login';
+        navigate('/infra/login', { replace: true });
       } else {
-        window.location.href = '/login';
+        navigate('/login', { replace: true });
       }
     };
 
@@ -388,6 +389,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     t,
     tokenCheckIntervalSec,
     inactivityTimeoutSec,
+    navigate,
   ]);
 
   // 检查是否有 token（这是判断是否登录的唯一标准）

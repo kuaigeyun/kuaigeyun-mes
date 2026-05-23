@@ -95,8 +95,8 @@ import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getFilePreview } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
-import compassAnimation from '../../static/lottie/compass.json';
 import OnboardingGuide from '../components/onboarding-guide';
+import { OnboardingWizardEntry } from '../components/onboarding-guide/OnboardingWizardEntry';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
@@ -391,17 +391,12 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }
 
-  // 如果不是公开页面且未登录，自动重定向到登录页
+  // 如果不是公开页面且未登录，自动重定向到登录页（SPA 内部跳转，避免 dev 下 /login MPA 缺 Provider 白屏）
   if (!isPublicPath && !currentUser && !getToken()) {
-    // infra 级路由重定向到 infra 登录页（仍是 SPA 内部 /infra/login）
     if (location.pathname.startsWith('/infra')) {
       return <Navigate to="/infra/login" replace />;
     }
-    // 系统级路由：必须用浏览器真实导航跳到 /login（独立 MPA login.html）
-    // 而非 React Router 内部 navigate，否则会让用户停留在主应用 bundle 中渲染 /login，
-    // 一旦刷新就会切到 MPA bundle 造成"首次正常 刷新异常"的双轨制问题。
-    window.location.replace('/login');
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
@@ -789,7 +784,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
-  const [onboardingHovered, setOnboardingHovered] = useState(false);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
   const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
@@ -901,10 +895,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const performLogout = useCallback(() => {
     clearSessionScopedQueries(queryClient);
     logout();
-    // 使用浏览器真实导航跳转到 /login（独立 MPA login.html），与 IndexPage、AuthGuard 保持一致；
-    // 否则 SPA 内部 navigate 会让登录页跑在主应用 bundle 中，刷新后切换到 MPA bundle 行为不一致。
-    window.location.replace('/login');
-  }, [queryClient, logout]);
+    // SPA 内部跳转：dev 下 /login 会映射到 login.html MPA，LoginPage 依赖 QueryClientProvider，全页跳转易白屏
+    navigate('/login', { replace: true });
+  }, [queryClient, logout, navigate]);
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
@@ -1534,6 +1527,57 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }),
     [isDarkSiderFooter, token.colorPrimary],
   );
+
+  /** 开始菜单（底栏入口 + 浮层）配色：随深色/浅色侧栏切换，遵循主流中性底 + 主题色强调 */
+  const startMenuTheme = React.useMemo(() => {
+    const primary = String(token.colorPrimary);
+    if (isDarkSiderFooter) {
+      return {
+        settingsBtnBg: 'rgba(255, 255, 255, 0.08)',
+        settingsBtnBgHover: 'rgba(255, 255, 255, 0.12)',
+        settingsBtnBgActive: 'rgba(255, 255, 255, 0.16)',
+        settingsBtnBorder: 'rgba(255, 255, 255, 0.14)',
+        settingsBtnColor: primary,
+        panelBg: 'rgba(28, 30, 36, 0.92)',
+        panelBgFallback: '#1f2128',
+        panelBorder: 'rgba(255, 255, 255, 0.12)',
+        panelShadow: '0 16px 48px rgba(0, 0, 0, 0.48)',
+        panelBlur: true,
+        panelHeaderBorder: 'rgba(255, 255, 255, 0.1)',
+        panelTitleColor: 'rgba(255, 255, 255, 0.92)',
+        panelCloseColor: 'rgba(255, 255, 255, 0.85)',
+        panelCloseHoverBg: 'rgba(255, 255, 255, 0.1)',
+        panelGroupBg: 'rgba(255, 255, 255, 0.04)',
+        panelGroupBorder: 'rgba(255, 255, 255, 0.08)',
+        panelGroupTitle: 'rgba(255, 255, 255, 0.72)',
+        panelItemColor: 'rgba(255, 255, 255, 0.88)',
+        panelItemBg: 'rgba(255, 255, 255, 0.02)',
+        panelItemHoverBg: 'rgba(255, 255, 255, 0.08)',
+      };
+    }
+    return {
+      settingsBtnBg: String(siderFooterToken.colorPrimaryBg),
+      settingsBtnBgHover: String(siderFooterToken.colorPrimaryBgHover),
+      settingsBtnBgActive: String(siderFooterToken.colorPrimaryBorder),
+      settingsBtnBorder: String(siderFooterToken.colorPrimaryBorder),
+      settingsBtnColor: primary,
+      panelBg: String(token.colorBgElevated),
+      panelBgFallback: String(token.colorBgElevated),
+      panelBorder: String(token.colorBorderSecondary),
+      panelShadow: String(token.boxShadowSecondary ?? '0 6px 16px 0 rgba(0, 0, 0, 0.08)'),
+      panelBlur: false,
+      panelHeaderBorder: String(token.colorSplit),
+      panelTitleColor: String(token.colorText),
+      panelCloseColor: String(token.colorTextSecondary),
+      panelCloseHoverBg: String(token.colorFillSecondary),
+      panelGroupBg: String(token.colorFillQuaternary),
+      panelGroupBorder: String(token.colorBorderSecondary),
+      panelGroupTitle: String(token.colorTextSecondary),
+      panelItemColor: String(token.colorText),
+      panelItemBg: 'transparent',
+      panelItemHoverBg: String(token.colorFillTertiary),
+    };
+  }, [isDarkSiderFooter, token, siderFooterToken]);
 
   /**
    * 检查锁屏状态，如果已锁定则重定向到锁屏页
@@ -3093,30 +3137,30 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .riveredge-footer-settings-btn,
         .riveredge-footer-collapse-btn {
           width: 100% !important;
           border-radius: ${Number(token.borderRadius || 6)}px !important;
         }
-        /* 系统设置：始终用主题色 token，勿写死蓝 */
+        /* 系统设置入口：深色侧栏中性底 + 主题色字；浅色侧栏主色浅底 */
         .riveredge-footer-settings-btn {
-          background: ${siderFooterToken.colorPrimaryBg} !important;
-          border-color: ${siderFooterToken.colorPrimaryBorder} !important;
-          box-shadow: inset 0 0 0 1px color-mix(in srgb, ${siderFooterToken.colorPrimaryBorder} 35%, transparent) !important;
-          color: ${siderFooterToken.colorPrimary} !important;
+          background: ${startMenuTheme.settingsBtnBg} !important;
+          border-color: ${startMenuTheme.settingsBtnBorder} !important;
+          box-shadow: none !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .riveredge-footer-settings-btn .anticon,
         .riveredge-footer-settings-btn svg {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .riveredge-footer-settings-btn:hover {
-          background: ${siderFooterToken.colorPrimaryBgHover} !important;
-          border-color: ${siderFooterToken.colorPrimaryBorderHover ?? siderFooterToken.colorPrimaryBorder} !important;
+          background: ${startMenuTheme.settingsBtnBgHover} !important;
+          border-color: ${startMenuTheme.settingsBtnBorder} !important;
         }
         .riveredge-footer-settings-btn:active {
-          background: ${siderFooterToken.colorPrimaryBorder} !important;
+          background: ${startMenuTheme.settingsBtnBgActive} !important;
         }
         /* 折叠钮统一中性底 token */
         .riveredge-footer-collapse-btn {
@@ -3157,11 +3201,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           width: min(var(--riveredge-system-panel-width, 940px), calc(100vw - 24px));
           max-height: min(86vh, 860px);
           border-radius: ${Number(token.borderRadiusLG || 8)}px;
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          background: rgba(20, 22, 28, 0.86);
-          backdrop-filter: blur(24px) saturate(125%);
-          -webkit-backdrop-filter: blur(24px) saturate(125%);
-          box-shadow: 0 26px 56px rgba(0, 0, 0, 0.58);
+          border: 1px solid ${startMenuTheme.panelBorder};
+          background: ${startMenuTheme.panelBg};
+          ${startMenuTheme.panelBlur ? 'backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);' : ''}
+          box-shadow: ${startMenuTheme.panelShadow};
           z-index: 1200;
           overflow: hidden;
           transform-origin: left bottom;
@@ -3182,20 +3225,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center;
           justify-content: space-between;
           padding: 16px 18px 12px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+          border-bottom: 1px solid ${startMenuTheme.panelHeaderBorder};
         }
         .riveredge-system-settings-panel-title {
           font-size: 16px;
           font-weight: 700;
-          color: rgba(255, 255, 255, 0.94);
+          color: ${startMenuTheme.panelTitleColor};
         }
         .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
         .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon {
-          color: rgba(255, 255, 255, 0.94) !important;
+          color: ${startMenuTheme.panelCloseColor} !important;
         }
         .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover {
-          color: #ffffff !important;
-          background: rgba(255, 255, 255, 0.1) !important;
+          color: ${startMenuTheme.panelTitleColor} !important;
+          background: ${startMenuTheme.panelCloseHoverBg} !important;
         }
         .riveredge-system-settings-panel-body {
           padding: 14px;
@@ -3209,13 +3252,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-system-settings-group {
           border-radius: ${Number(token.borderRadiusLG || 8)}px;
           padding: 12px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: ${startMenuTheme.panelGroupBg};
+          border: 1px solid ${startMenuTheme.panelGroupBorder};
         }
         .riveredge-system-settings-group-title {
           font-size: 13px;
           font-weight: 600;
-          color: rgba(255, 255, 255, 0.86);
+          color: ${startMenuTheme.panelGroupTitle};
           margin-bottom: 10px;
         }
         .riveredge-system-settings-grid {
@@ -3226,13 +3269,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-system-settings-item {
           width: 100%;
           border: none;
-          background: rgba(255, 255, 255, 0.02);
+          background: ${startMenuTheme.panelItemBg};
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           gap: 10px;
-          color: rgba(255, 255, 255, 0.92);
+          color: ${startMenuTheme.panelItemColor};
           padding: 10px 8px;
           border-radius: ${Number(token.borderRadius || 6)}px;
           min-height: 76px;
@@ -3240,7 +3283,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           transition: all 0.2s ease;
         }
         .riveredge-system-settings-item:hover {
-          background: rgba(255, 255, 255, 0.07);
+          background: ${startMenuTheme.panelItemHoverBg};
           transform: translateY(-1px);
           box-shadow: none;
         }
@@ -3297,7 +3340,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         @supports not ((backdrop-filter: blur(2px))) {
           .riveredge-system-settings-panel {
-            background: rgba(14, 18, 26, 0.96);
+            background: ${startMenuTheme.panelBgFallback};
           }
         }
         /* 侧边栏底部收起按钮图标样式 - 根据菜单栏背景色自动适配 */
@@ -3322,7 +3365,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover .anticon,
@@ -3345,7 +3388,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:active .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active .anticon,
@@ -3366,7 +3409,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn svg,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
@@ -3376,7 +3419,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover svg,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
@@ -3386,7 +3429,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active svg,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg {
-          color: ${siderFooterToken.colorPrimary} !important;
+          color: ${startMenuTheme.settingsBtnColor} !important;
         }
         /* ==================== 左侧菜单栏滚动条样式 ==================== */
         /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
@@ -4496,9 +4539,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           const dividerColor = isDarkSiderFooter
             ? 'rgba(255, 255, 255, 0.15)'
             : 'rgba(0, 0, 0, 0.12)';
-          const settingsBtnBg = String(siderFooterToken.colorPrimaryBg);
-          const settingsBtnBorder = String(siderFooterToken.colorPrimaryBorder);
-          const settingsAccentColor = String(siderFooterToken.colorPrimary);
+          const settingsBtnBg = startMenuTheme.settingsBtnBg;
+          const settingsBtnBorder = startMenuTheme.settingsBtnBorder;
+          const settingsAccentColor = startMenuTheme.settingsBtnColor;
           const collapseBtnBg = String(siderFooterToken.colorFillSecondary);
           const collapseBtnBorder = String(siderFooterToken.colorSplit);
           const collapseChromeColor = siderTextColor;
@@ -4726,79 +4769,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
           }
 
-          // 上线向导：与站点设置「上线向导是否开启」联动；关闭时不展示顶栏入口
-          if (launchWizardEnabled) {
+          // 上线向导：工作台欢迎条右侧展示；其他页面保留顶栏入口
+          if (launchWizardEnabled && location.pathname !== '/system/dashboard/workplace') {
             actions.push(
-              <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
-                <Space
-                  className="riveredge-header-onboarding-space"
-                  size={4}
-                  onClick={() => navigate('/system/onboarding-wizard')}
-                  style={{
-                    cursor: 'pointer',
-                    padding: '0 12px 0 0',
-                    height: 32,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '16px',
-                    background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
-                    setOnboardingHovered(true);
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
-                    setOnboardingHovered(false);
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 32,
-                      height: 32,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      lineHeight: 0,
-                    }}
-                  >
-                    <Lottie
-                      animationData={compassAnimation}
-                      loop={onboardingHovered}
-                      autoplay={onboardingHovered}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        display: 'block',
-                        ...(!isLightModeLightBg
-                          ? {
-                              filter: 'brightness(1.2) contrast(1.08)',
-                            }
-                          : {}),
-                      }}
-                    />
-                  </span>
-                  {!isMobileOrTablet && (
-                    <span
-                      style={{
-                        fontSize: token.fontSize,
-                        fontWeight: 500,
-                        color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-                        lineHeight: '32px',
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {t('menu.system.onboarding-wizard')}
-                    </span>
-                  )}
-                </Space>
-              </Tooltip>
+              <OnboardingWizardEntry
+                key="onboarding"
+                variant="header"
+                compact={isMobileOrTablet}
+                isLightModeLightBg={isLightModeLightBg}
+              />,
             );
           }
 
