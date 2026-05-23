@@ -78,7 +78,7 @@ import IterationFloatButton from '../components/iteration-float-button';
 import { RouteTransition } from '../components/route-transition';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
-import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
+import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP } from '../config/i18n';
@@ -225,7 +225,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
-  const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
+  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
 
   // 获取组织 ID
   const currentTenantId = getTenantId();
@@ -256,6 +256,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_infra_admin: true, // 平台超级管理员始终是平台管理
           is_tenant_admin: false,
           tenant_id: undefined,
+          user_type: 'infra_superadmin' as const,
         };
       } else {
         // 系统级用户：调用系统接口
@@ -278,7 +279,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           username: savedUserInfo.username || 'admin',
           email: savedUserInfo.email,
           full_name: savedUserInfo.full_name,
-          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
+          is_infra_admin: isInfraSuperAdminUser(savedUserInfo) || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
           tenant_name: savedUserInfo.tenant_name,
@@ -291,7 +292,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         setCurrentUser(restoredUser);
 
         // 如果是平台超级管理员，但后端接口失败，记录警告但不阻止访问
-        if (savedUserInfo.user_type === 'infra_superadmin') {
+        if (isInfraSuperAdminUser(savedUserInfo)) {
           console.warn('⚠️ 获取平台超级管理员信息失败，使用本地缓存:', error);
         } else {
           console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);

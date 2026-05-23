@@ -5,7 +5,7 @@
  */
 
 // 使用 Fetch API 进行 HTTP 请求
-import { clearAuth, getToken } from '../utils/auth';
+import { clearAuth, getToken, isInfraSuperAdminUser } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 
@@ -207,7 +207,7 @@ export async function apiRequest<T = any>(
             }
           }
           // 检查是否是平台超级管理员
-          isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin' || userInfo?.is_infra_admin === true;
+          isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
         }
       } catch (error) {
         // 忽略解析错误

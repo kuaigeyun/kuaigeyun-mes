@@ -11,7 +11,7 @@ import { SwapOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getTenantList, TenantStatus } from '../../services/tenant';
-import { getUserInfo, setTenantId, getTenantId } from '../../utils/auth';
+import { getUserInfo, setTenantId, getTenantId, isInfraSuperAdminUser } from '../../utils/auth';
 
 const { Option } = Select;
 
@@ -27,7 +27,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const userInfo = getUserInfo();
-  const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
+  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
   const currentTenantId = getTenantId();
 
   // 获取组织列表（仅平台超级管理员需要）

@@ -125,3 +125,136 @@ export function hasResourceAction(
   const permissionCode = `${resource}:${action}`;
   return hasPermission(user, permissionCode);
 }
+
+/** 与后端 menu_resource_resolver 一致：分组占位权限不参与菜单可见性拦截 */
+const GENERIC_MENU_RESOURCES = new Set(['workspace', 'entry']);
+
+function extractAppCodeFromMenuPath(path?: string): string | null {
+  if (!path) return null;
+  const matched = path.match(/^\/apps\/([^/]+)/);
+  return matched ? matched[1].toLowerCase() : null;
+}
+
+function resolveAppCodeFromMenuItem(item: PermissionMenuItem): string | null {
+  const fromPath = extractAppCodeFromMenuPath(item.path);
+  if (fromPath) return fromPath;
+  for (const child of item.children ?? []) {
+    const code = resolveAppCodeFromMenuItem(child);
+    if (code) return code;
+  }
+  return null;
+}
+
+/** 用户是否拥有某应用下任意权限（菜单码与角色授权不完全一致时的兜底） */
+function userHasAnyAppPermission(user: CurrentUser, appCode: string): boolean {
+  const prefix = `${appCode.toLowerCase()}:`;
+  const userPerms = buildUserPermissionSet(user);
+  for (const p of userPerms) {
+    if (p.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function isGenericMenuPermissionCode(code: string): boolean {
+  const norm = normalizePermissionCode(code);
+  if (!norm) return true;
+  const parts = norm.split(':').filter(Boolean);
+  if (parts.length < 3) return true;
+  const app = parts[0];
+  const resource = parts.slice(1, -1).join(':');
+  return GENERIC_MENU_RESOURCES.has(resource) || resource === app;
+}
+
+/** 用户是否满足菜单项所需权限（精确匹配 + 同 resource 任意 action） */
+function userHasMenuPermission(user: CurrentUser, permissionCode: string): boolean {
+  if (hasPermission(user, permissionCode)) return true;
+  if (isGenericMenuPermissionCode(permissionCode)) return false;
+  const norm = normalizePermissionCode(permissionCode);
+  const parts = norm.split(':').filter(Boolean);
+  if (parts.length < 3) return false;
+  const resourcePrefix = parts.slice(0, -1).join(':');
+  const userPerms = buildUserPermissionSet(user);
+  for (const p of userPerms) {
+    if (p.startsWith(`${resourcePrefix}:`)) return true;
+  }
+  return false;
+}
+
+function hasAnyMenuPermission(user: CurrentUser | undefined, permissionCodes: string[]): boolean {
+  if (!user) return false;
+  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) return true;
+  return permissionCodes.some((code) => userHasMenuPermission(user, code));
+}
+
+/** 合并 store 与 localStorage 中的 permissions，避免 /auth/me 竞态导致侧栏误判 */
+export function resolveUserForMenuPermission(user: CurrentUser | undefined): CurrentUser | undefined {
+  if (!user) return undefined;
+  if (user.permissions?.length) return user;
+  if (typeof window === 'undefined') return user;
+  try {
+    const raw = localStorage.getItem('user_info');
+    if (!raw) return user;
+    const saved = JSON.parse(raw);
+    const savedPerms = Array.isArray(saved?.permissions) ? saved.permissions : [];
+    if (savedPerms.length) {
+      return { ...user, permissions: savedPerms };
+    }
+  } catch {
+    // ignore
+  }
+  return user;
+}
+
+type PermissionMenuItem = {
+  path?: string;
+  children?: PermissionMenuItem[];
+  permissionCodes?: string[];
+  hideInMenu?: boolean;
+};
+
+/**
+ * 按权限过滤菜单树：先筛子节点；分组占位权限不阻断子树；有可见子节点则保留父节点。
+ * hideInMenu 的隐藏路由不参与「可见子节点」判定，避免父菜单被误保留。
+ */
+export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
+  items: T[],
+  user: CurrentUser | undefined,
+): T[] {
+  if (!user) return [];
+  return items
+    .map((item) => {
+      let nextChildren: T[] | undefined;
+      if (item.children?.length) {
+        nextChildren = filterMenuItemsByPermission(item.children as T[], user);
+      }
+
+      const permissionCodes = item.permissionCodes;
+      const hasVisibleChildren = (nextChildren ?? []).some((child) => !child.hideInMenu);
+
+      if (hasVisibleChildren) {
+        return { ...item, children: nextChildren };
+      }
+
+      // 隐藏路由（设计器等）仅作路由注册，不应单独撑开侧栏/系统配置父菜单
+      if (item.hideInMenu) {
+        return null;
+      }
+
+      if (permissionCodes?.length) {
+        const required = permissionCodes.filter((c) => c && !isGenericMenuPermissionCode(c));
+        if (required.length > 0 && !hasAnyMenuPermission(user, required)) {
+          const appCode = resolveAppCodeFromMenuItem(item);
+          if (!appCode || !userHasAnyAppPermission(user, appCode)) {
+            return null;
+          }
+        }
+      }
+
+      if (!item.path && !hasVisibleChildren) {
+        return null;
+      }
+
+      return { ...item, children: nextChildren };
+    })
+    .filter((m): m is T => m !== null);
+}

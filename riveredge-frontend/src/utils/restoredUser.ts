@@ -3,7 +3,7 @@
  * 供 app 与 main 挂载前同步灌入 store，避免刷新首帧无用户态。
  */
 
-import { getToken, getUserInfo, setUserInfo, setTenantId } from './auth';
+import { getToken, getUserInfo, setUserInfo, setTenantId, isInfraSuperAdminUser } from './auth';
 import { useGlobalStore } from '../stores/globalStore';
 import type { CurrentUser } from '../types/api';
 
@@ -16,7 +16,7 @@ export function buildRestoredUserFromStorage(): CurrentUser | null {
     email: savedUserInfo.email,
     full_name: savedUserInfo.full_name,
     is_infra_admin:
-      savedUserInfo.user_type === 'infra_superadmin' ||
+      isInfraSuperAdminUser(savedUserInfo) ||
       savedUserInfo.is_infra_admin ||
       false,
     is_tenant_admin: savedUserInfo.is_tenant_admin || false,
@@ -34,6 +34,7 @@ export function buildRestoredUserFromStorage(): CurrentUser | null {
 export function seedCurrentUserFromAuthStorage(): void {
   if (typeof window === 'undefined') return;
   const token = getToken();
+  const savedUserInfo = getUserInfo();
   const restored = buildRestoredUserFromStorage();
   if (!token || !restored) return;
 
@@ -41,7 +42,11 @@ export function seedCurrentUserFromAuthStorage(): void {
   if (currentUser) return;
 
   setCurrentUser(restored);
-  setUserInfo(restored);
+  setUserInfo({
+    ...savedUserInfo,
+    ...restored,
+    ...(isInfraSuperAdminUser(savedUserInfo) ? { user_type: 'infra_superadmin' as const } : {}),
+  });
   if (restored.tenant_id != null) {
     setTenantId(restored.tenant_id);
   }

@@ -57,7 +57,7 @@ import {
   getTenantStatistics,
   getUserStatistics,
 } from '../../../services/superadmin';
-import { getToken, getUserInfo } from '../../../utils/auth';
+import { getToken, getUserInfo, isInfraSuperAdminUser } from '../../../utils/auth';
 
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
@@ -82,7 +82,7 @@ export default function OperationsDashboard() {
 
   const hasToken = !!getToken();
   const userInfo = getUserInfo();
-  const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
+  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [timeRangeType, setTimeRangeType] = useState<TimeRangeType>('month');

@@ -122,14 +122,38 @@ async def get_current_user_info(
     """
     获取当前用户信息接口
     """
+    # 平台超级管理员无租户上下文，直接返回管理员信息
+    if getattr(current_user, "_is_infra_superadmin", False):
+        from infra.models.infra_superadmin import InfraSuperAdmin
+
+        admin_id = getattr(current_user, "_infra_superadmin_id", current_user.id)
+        admin = await InfraSuperAdmin.get_or_none(id=admin_id)
+        if not admin:
+            raise NotFoundError("用户", str(admin_id))
+        return CurrentUserResponse(
+            id=admin.id,
+            uuid=str(admin.uuid),
+            username=admin.username,
+            email=admin.email,
+            full_name=admin.full_name,
+            avatar=admin.avatar,
+            tenant_id=None,
+            tenant_name=None,
+            is_active=admin.is_active,
+            is_infra_admin=True,
+            is_tenant_admin=False,
+            permissions=[],
+            permission_version=1,
+        )
+
     from infra.services.user_service import UserService
-    
+
     service = UserService()
     user_info = await service.get_user_with_tenant_info(current_user.id, current_user.tenant_id)
-    
+
     if not user_info:
         raise NotFoundError("用户", str(current_user.id))
-    
+
     return CurrentUserResponse(**user_info)
 
 

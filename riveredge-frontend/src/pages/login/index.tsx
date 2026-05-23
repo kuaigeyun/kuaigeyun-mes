@@ -20,6 +20,7 @@ import {
   AppstoreOutlined,
 } from '@ant-design/icons';
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import {
   registerPersonal,
@@ -34,6 +35,7 @@ import {
   type LoginResponse,
 } from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
+import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { getDefaultTenantHomePath } from '../../stores/configStore';
 import { getTenantBackendHome } from '../../services/menu';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
@@ -104,10 +106,12 @@ export default function LoginPage() {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
+  const queryClient = useQueryClient();
 
   /** 登录成功后再异步同步 store，避免首屏静态引入 globalStore / userPreferenceStore 重依赖 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
     setUserInfo(userInfo);
+    clearSessionScopedQueries(queryClient);
     void import('../../stores/globalStore')
       .then(({ useGlobalStore }) => {
         useGlobalStore.getState().setCurrentUser(userInfo);
@@ -118,7 +122,7 @@ export default function LoginPage() {
         useUserPreferenceStore.getState().rehydrateFromStorage();
       })
       .catch(() => {});
-  }, []);
+  }, [queryClient]);
 
   const resolvePostLoginHomePath = useCallback(async (): Promise<string> => {
     const fallbackPath = getDefaultTenantHomePath();

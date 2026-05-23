@@ -239,3 +239,29 @@ export function getTokenRemainingTime(token?: string | null): number {
   const remaining = expirationTime - currentTime;
   return Math.max(0, remaining); // 如果已过期，返回 0
 }
+
+/**
+ * 判断是否为平台超级管理员
+ *
+ * 登录时 user_info 会写入 user_type；AuthGuard 刷新用户信息后可能丢失该字段，
+ * 因此同时兼容 is_infra_admin（无租户）与 JWT 中的 is_infra_superadmin 标记。
+ */
+export function isInfraSuperAdminUser(userInfo?: any | null): boolean {
+  if (userInfo?.user_type === 'infra_superadmin') {
+    return true;
+  }
+  if (
+    userInfo?.is_infra_admin === true &&
+    (userInfo.tenant_id == null || userInfo.tenant_id === '')
+  ) {
+    return true;
+  }
+  const token = getToken();
+  if (token) {
+    const payload = decodeJWT(token);
+    if (payload?.is_infra_superadmin === true) {
+      return true;
+    }
+  }
+  return false;
+}

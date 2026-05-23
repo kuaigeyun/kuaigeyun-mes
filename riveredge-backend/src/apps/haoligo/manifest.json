@@ -27,7 +27,7 @@
             "title": "app.haoligo.menu.workspace",
             "path": "/apps/haoligo/workspace",
             "icon": "LayoutDashboard",
-            "permission": "haoligo:equipment-documents:read",
+            "permission": "haoligo:workspace:read",
             "sort_order": 0
           }
         ]

@@ -2,11 +2,11 @@
  * 统一菜单数据 Hook
  *
  * 平台级/系统级：使用原有 getMenuConfig 硬编号
- * 应用级 APP：数据库 getMenuTree(is_active=true) → 权限过滤 → 输出
+ * 应用级 APP：数据库 getNavigationMenuTree() → 权限过滤 → 输出
  *
  * 菜单显示层级（蓝图设置已下线）：
- * 1. 菜单管理：getMenuTree(is_active=true)，未入库或禁用则不返回（= 功能关闭）
- * 2. 权限管理：filterMenuByPermission，用户无权限则隐藏
+ * 1. 菜单管理：navigation-tree（任意登录用户可读），未入库或禁用则不返回（= 功能关闭）
+ * 2. 权限管理：filterMenuItemsByPermission，用户无权限则隐藏
  *
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
@@ -14,16 +14,33 @@
 import { useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { getMenuTree, type MenuTree } from '../services/menu';
+import { getNavigationMenuTree, type MenuTree } from '../services/menu';
+import { refreshCurrentUserInStore } from '../services/auth';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
-import { hasAnyPermission } from '../utils/permission';
+import { filterMenuItemsByPermission, resolveUserForMenuPermission } from '../utils/permission';
 
-/** 与 BasicLayout 保持一致，确保缓存共享 */
-const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
+/** 与 Dashboard / clearSessionQueries 共用，避免侧栏与工作台菜单缓存不一致 */
+const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
 
-/** 递归按 sort_order 排序应用菜单树（与后端 manifest / 库表一致，避免历史 children 顺序错乱） */
+function treeHasAppPath(nodes: MenuTree[]): boolean {
+  for (const n of nodes) {
+    if (n.path?.startsWith('/apps/')) return true;
+    if (n.children?.length && treeHasAppPath(n.children)) return true;
+  }
+  return false;
+}
+
+function collectApplicationRoots(tree: MenuTree[]): MenuTree[] {
+  const byUuid = tree.filter((m) => m.application_uuid);
+  if (byUuid.length) return byUuid;
+  // 兼容：部分租户菜单根未写入 application_uuid，但 path 在 /apps/ 下
+  return tree.filter(
+    (m) => m.path?.startsWith('/apps/') || treeHasAppPath(m.children ?? []),
+  );
+}
+
 function sortMenuTreeBySortOrder(nodes: MenuTree[]): MenuTree[] {
   return [...nodes]
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -77,30 +94,6 @@ function filterOutSystemDashboardMenus(items: MenuDataItem[]): MenuDataItem[] {
   return walk(items);
 }
 
-function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDataItem[] {
-  return items
-    .map((item) => {
-      const permissionCodes = (item as any).permissionCodes as string[] | undefined;
-      if (permissionCodes && permissionCodes.length > 0) {
-        if (!hasAnyPermission(currentUser, permissionCodes)) {
-          return null;
-        }
-      }
-
-      if (!item.children || item.children.length === 0) {
-        return item;
-      }
-
-      const nextChildren = filterMenuByPermission(item.children as MenuDataItem[], currentUser);
-      if (nextChildren.length === 0 && !item.path) {
-        return null;
-      }
-
-      return { ...item, children: nextChildren };
-    })
-    .filter((m): m is MenuDataItem => m !== null);
-}
-
 export interface UseUnifiedMenuDataOptions {
   /** 平台级/系统级菜单配置（原有硬编号，由 BasicLayout 传入 getMenuConfig） */
   getSystemMenuConfig: () => MenuDataItem[];
@@ -146,11 +139,28 @@ export function useUnifiedMenuData(
 
   const systemMenuConfig = useMemo(() => getSystemMenuConfig(), [getSystemMenuConfig]);
 
+  const menuPermissionUser = useMemo(
+    () => resolveUserForMenuPermission(currentUser),
+    [currentUser],
+  );
+
+  // 权限列表为空时主动拉取 /auth/me，避免侧栏因本地缓存无 permissions 而整树被滤空
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    if (currentUser.is_tenant_admin || currentUser.is_infra_admin) return;
+    if (menuPermissionUser?.permissions?.length) return;
+    void refreshCurrentUserInStore().catch(() => {});
+  }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
+
+  const navigationMenuQueryKey = useMemo(
+    () => [NAVIGATION_MENU_TREE_QUERY_KEY, currentUser?.tenant_id ?? null, currentUser?.permission_version ?? 0] as const,
+    [currentUser?.tenant_id, currentUser?.permission_version],
+  );
+
   const { data: fullMenuTree, isLoading, refetch } = useQuery({
-    queryKey: [APPLICATION_MENUS_QUERY_KEY],
-    queryFn: () => getMenuTree({ is_active: true }),
+    queryKey: navigationMenuQueryKey,
+    queryFn: () => getNavigationMenuTree(),
     enabled: !!currentUser,
-    // dev 与 prod 统一 5 分钟，避免开发期频繁 refetch 菜单；需要强制刷新请手动 invalidate
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -158,12 +168,10 @@ export function useUnifiedMenuData(
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
-    return tree
-      .filter((m) => m.application_uuid)
-      .map((app) => ({
-        ...app,
-        children: app.children?.length ? sortMenuTreeBySortOrder(app.children) : [],
-      }));
+    return collectApplicationRoots(tree).map((app) => ({
+      ...app,
+      children: app.children?.length ? sortMenuTreeBySortOrder(app.children) : [],
+    }));
   }, [fullMenuTree]);
 
   // 蓝图下线后不再做业务配置过滤；菜单可见性完全由 is_active + 权限控制。
@@ -171,17 +179,23 @@ export function useUnifiedMenuData(
 
   useEffect(() => {
     if (applicationMenuVersion > 0) {
-      queryClient.invalidateQueries({ queryKey: [APPLICATION_MENUS_QUERY_KEY] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] }); // Dashboard 快捷入口共用菜单源
+      queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     }
   }, [applicationMenuVersion, queryClient]);
+
+  useEffect(() => {
+    if (currentUser?.permission_version != null) {
+      queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
+    }
+  }, [currentUser?.permission_version, queryClient]);
 
   const invalidateAndRefetch = useCallback(() => {
     useGlobalStore.getState().incrementApplicationMenuVersion();
   }, []);
 
   const sidebarMenuData = useMemo(() => {
-    if (!currentUser) return [];
+    if (!menuPermissionUser) return [];
     let items: MenuDataItem[] = [...systemMenuConfig];
     if (filteredApplicationMenus?.length) {
       const appMenuItems: MenuDataItem[] = [];
@@ -235,7 +249,7 @@ export function useUnifiedMenuData(
         return true;
       });
     }
-    let result = filterMenuByPermission(items, currentUser);
+    let result = filterMenuItemsByPermission(items, menuPermissionUser);
     if (!launchWizardEnabled) {
       result = filterOutLaunchWizardMenus(result);
     }
@@ -244,7 +258,7 @@ export function useUnifiedMenuData(
     }
     return result;
   }, [
-    currentUser,
+    menuPermissionUser,
     launchWizardEnabled,
     systemDashboardEnabled,
     systemMenuConfig,
@@ -252,10 +266,11 @@ export function useUnifiedMenuData(
     convertMenuTreeToMenuDataItem,
     collapsed,
     t,
+    currentUser?.is_infra_admin,
   ]);
 
   const breadcrumbMenuData = useMemo(() => {
-    if (!currentUser) return [];
+    if (!menuPermissionUser) return [];
     const items: MenuDataItem[] = [...systemMenuConfig];
     if (filteredApplicationMenus?.length) {
       const appItems: MenuDataItem[] = filteredApplicationMenus.map((appMenu) => {
@@ -281,7 +296,7 @@ export function useUnifiedMenuData(
       });
       items.splice(1, 0, ...appItems);
     }
-    let result = filterMenuByPermission(items, currentUser);
+    let result = filterMenuItemsByPermission(items, menuPermissionUser);
     if (!launchWizardEnabled) {
       result = filterOutLaunchWizardMenus(result);
     }
@@ -290,7 +305,7 @@ export function useUnifiedMenuData(
     }
     return result;
   }, [
-    currentUser,
+    menuPermissionUser,
     launchWizardEnabled,
     systemDashboardEnabled,
     systemMenuConfig,
