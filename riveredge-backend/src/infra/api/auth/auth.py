@@ -117,7 +117,8 @@ async def guest_login(
 
 @router.get("/me", response_model=CurrentUserResponse)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
 ):
     """
     获取当前用户信息接口
@@ -148,8 +149,14 @@ async def get_current_user_info(
 
     from infra.services.user_service import UserService
 
+    # 会话组织以 JWT 为准（get_current_user 已写入 request.state.tenant_id）
+    jwt_tenant_id = getattr(request.state, "tenant_id", None)
+
     service = UserService()
-    user_info = await service.get_user_with_tenant_info(current_user.id, current_user.tenant_id)
+    user_info = await service.get_user_with_tenant_info(
+        current_user.id,
+        jwt_tenant_id,
+    )
 
     if not user_info:
         raise NotFoundError("用户", str(current_user.id))

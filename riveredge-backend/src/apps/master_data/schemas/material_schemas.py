@@ -287,6 +287,68 @@ class MaterialBulkTrackingRequest(BaseModel):
         return self
 
 
+class MaterialBulkVariantRequest(BaseModel):
+    """批量开启/关闭物料属性管理（不批量写入属性值）"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    variant_managed: bool = Field(
+        ...,
+        alias="variantManaged",
+        description="是否启用属性管理；false 时清空 variant_attributes",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialGenerateVariantsRequest(BaseModel):
+    """按属性枚举笛卡尔积批量生成属性 SKU 行"""
+
+    attribute_names: Optional[List[str]] = Field(
+        None,
+        alias="attributeNames",
+        description="参与组合的属性名；为空则使用全部启用的枚举型属性",
+    )
+    skip_existing: bool = Field(True, alias="skipExisting", description="跳过已存在的属性组合")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialGenerateVariantsResponse(BaseModel):
+    """批量生成属性 SKU 结果"""
+
+    created_count: int = Field(..., alias="createdCount")
+    skipped_count: int = Field(..., alias="skippedCount")
+    failed_count: int = Field(..., alias="failedCount")
+    created_uuids: List[str] = Field(default_factory=list, alias="createdUuids")
+    message: str = Field(..., description="摘要说明")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialMaterializeVariantRequest(BaseModel):
+    """将临时属性组合物化为属性 SKU 行（查找或创建）"""
+
+    master_material_uuid: Optional[str] = Field(None, alias="masterMaterialUuid")
+    main_code: Optional[str] = Field(None, alias="mainCode")
+    variant_attributes: Dict[str, Any] = Field(..., alias="variantAttributes")
+    create_if_missing: bool = Field(True, alias="createIfMissing")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def validate_lookup_key(self) -> "MaterialMaterializeVariantRequest":
+        if not self.master_material_uuid and not self.main_code:
+            raise ValueError("masterMaterialUuid 与 mainCode 至少提供一个")
+        if not self.variant_attributes:
+            raise ValueError("variantAttributes 不能为空")
+        return self
+
+
 class MaterialBulkTrackingResponse(BaseModel):
     """批量更新批号/序列号管理结果"""
 
@@ -346,6 +408,48 @@ class MaterialBatchMoveGroupRequest(BaseModel):
 
 class MaterialBatchMoveGroupResponse(BaseModel):
     """批量移动物料分组结果"""
+
+    updated_count: int = Field(..., description="成功更新的物料数量")
+    requested_count: int = Field(..., description="请求中的 UUID 数量（去重后）")
+    not_found_uuids: List[str] = Field(default_factory=list, description="未找到或未匹配的 UUID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchUpdateProcessRouteRequest(BaseModel):
+    """批量更新物料工艺路线"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    process_route_id: Optional[int] = Field(
+        None,
+        alias="processRouteId",
+        description="工艺路线 ID；null 表示清除绑定",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchUpdateSourceTypeRequest(BaseModel):
+    """批量更新物料来源类型"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    source_type: str = Field(..., alias="sourceType", max_length=20, description="物料来源类型")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBatchFieldUpdateResponse(BaseModel):
+    """批量更新物料字段（工艺路线 / 来源类型等）结果"""
 
     updated_count: int = Field(..., description="成功更新的物料数量")
     requested_count: int = Field(..., description="请求中的 UUID 数量（去重后）")
@@ -414,6 +518,7 @@ class MaterialCodeAliasResponse(BaseModel):
     external_entity_type: Optional[str] = Field(None, description="外部实体类型（customer/supplier，用于客户编码和供应商编码）")
     external_entity_id: Optional[int] = Field(None, description="外部实体ID（客户ID或供应商ID）")
     description: Optional[str] = Field(None, description="描述")
+    name: Optional[str] = Field(None, description="名称（客户品名/供应商品名等）")
     is_primary: bool = Field(False, description="是否为主要编码")
     
     model_config = ConfigDict(from_attributes=True)
@@ -445,12 +550,28 @@ class MaterialResponse(MaterialBase):
     
     # 编码别名列表（可选，需要时加载）
     code_aliases: Optional[List[MaterialCodeAliasResponse]] = Field(None, description="编码别名列表")
+
+    # 树形列表：属性 SKU 子行（仅 treeView 请求时填充）
+    children: Optional[List["MaterialResponse"]] = Field(None, description="属性 SKU 子行")
     
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
         by_alias=True
     )
+
+
+MaterialResponse.model_rebuild()
+
+
+class MaterialMaterializeVariantResponse(BaseModel):
+    """物化属性组合结果"""
+
+    material: MaterialResponse
+    created: bool = Field(..., description="是否新建 SKU 行")
+    matched_existing: bool = Field(..., alias="matchedExisting", description="是否匹配已有 SKU")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # ==================== 级联查询响应 Schema ====================

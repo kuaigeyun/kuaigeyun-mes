@@ -451,7 +451,6 @@ const VariantAttributesPage: React.FC = () => {
             { required: true, message: '请输入属性名称' },
             { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '属性名称只能包含字母、数字、下划线和中文' },
           ]}
-          disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormSelect

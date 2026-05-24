@@ -19,6 +19,12 @@
         "sort_order": 1,
         "children": [
           {
+            "title": "app.kuaicaiwu.menu.finance-management.dashboard",
+            "path": "/apps/kuaicaiwu/finance-management/dashboard",
+            "permission": "kuaicaiwu:finance-dashboard:read",
+            "sort_order": 0
+          },
+          {
             "title": "app.kuaicaiwu.menu.finance-management.receivables",
             "path": "/apps/kuaicaiwu/finance-management/receivables",
             "permission": "kuaicaiwu:receivable:read",
@@ -68,6 +74,12 @@
         "sort_order": 2,
         "children": [
           {
+            "title": "app.kuaicaiwu.menu.cost-management.dashboard",
+            "path": "/apps/kuaizhizao/cost-management/dashboard",
+            "permission": "kuaizhizao:cost-management-dashboard:read",
+            "sort_order": 0
+          },
+          {
             "title": "app.kuaicaiwu.menu.cost-management.cost-calculations",
             "path": "/apps/kuaicaiwu/cost-management/cost-calculations",
             "permission": "kuaicaiwu:cost:read",
@@ -90,6 +102,7 @@
     ]
   },
   "permissions": [
+    "kuaicaiwu:finance-dashboard:read",
     "kuaicaiwu:cost:audit",
     "kuaicaiwu:cost:create",
     "kuaicaiwu:cost:delete",

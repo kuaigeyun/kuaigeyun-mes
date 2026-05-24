@@ -30,6 +30,14 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  getMaterialDefaultTaxRate,
+  pickSaleUnitPrice,
+  resolveCustomerSalePricesBatch,
+  resolveOrderLineSalePrice,
+} from '../../../../master-data/utils/resolve-partner-material-price';
+import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
+import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
@@ -444,6 +452,12 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
   const onMaterialPicked = useCallback(
     (_val: number | undefined, material: Material | undefined) => {
       if (!material) return;
+      form.setFieldValue(
+        ['items', index, '_sourceType'],
+        (material as any)?.sourceType || (material as any)?.source_type,
+      );
+      form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
+      form.setFieldValue(['items', index, 'variant_attributes'], undefined);
       const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
       if (pt !== 'tax_inclusive') return;
       const raw = Number(form.getFieldValue(['items', index, 'unit_price'])) || 0;
@@ -1061,6 +1075,7 @@ const QuotationsPage: React.FC = () => {
           quote_quantity: Number(it.quote_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           tax_rate: Number(it.tax_rate) || 0,
+          variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
         })),
@@ -1815,6 +1830,7 @@ const QuotationsPage: React.FC = () => {
     quote_quantity: 1,
     unit_price: undefined,
     tax_rate: 0,
+    variant_attributes: undefined,
     delivery_date: undefined,
     notes: '',
   };
@@ -1922,6 +1938,7 @@ const QuotationsPage: React.FC = () => {
           quote_quantity: it.quote_quantity,
           unit_price: it.unit_price,
           tax_rate: it.tax_rate ?? 0,
+          variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
           delivery_date: toApiDateString(it.delivery_date),
           notes: it.notes,
         })),
@@ -1987,6 +2004,7 @@ const QuotationsPage: React.FC = () => {
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
         tax_rate: it.tax_rate ?? 0,
+        variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
         delivery_date: toApiDateString(it.delivery_date),
         notes: it.notes,
       })),
@@ -2111,15 +2129,72 @@ const QuotationsPage: React.FC = () => {
     setQuotationDetail(null);
   }, [closeLinkedSalesOrderDrawer]);
 
+  const refreshQuotationLinePriceByVariant = useCallback(
+    async (index: number, attrs?: Record<string, unknown>) => {
+      const customerId = formRef.current?.getFieldValue('customer_id');
+      const materialId = formRef.current?.getFieldValue(['items', index, 'material_id']);
+      const material = materialList.find((m: any) => m.id === Number(materialId));
+      const quotationDate = formRef.current?.getFieldValue('quotation_date');
+      const asOf =
+        quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
+      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
+        customerId ? Number(customerId) : undefined,
+        materialId ? Number(materialId) : undefined,
+        attrs,
+        material,
+        asOf,
+      );
+      let up = unitPrice;
+      if (pt === 'tax_inclusive' && up > 0) {
+        up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
+      }
+      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+      if (items[index]) {
+        items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+        formRef.current?.setFieldsValue({ items });
+      }
+    },
+    [materialList],
+  );
+
   const appendQuotationItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const customerId = formRef.current?.getFieldValue('customer_id');
+      const quotationDate = formRef.current?.getFieldValue('quotation_date');
+      const asOf =
+        quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
+
+      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveCustomerSalePricesBatch>>[number]>();
+      if (customerId && selected.length) {
+        try {
+          const items = await resolveCustomerSalePricesBatch(
+            Number(customerId),
+            selected.map((m) => ({
+              materialId: m.id,
+              variantAttributes: parseVariantAttributesValue(
+                m.variantAttributes ?? (m as any).variant_attributes,
+              ),
+            })),
+            asOf,
+            selected,
+          );
+          selected.forEach((m, i) => {
+            if (items[i]) resolveMap.set(m.id, items[i]);
+          });
+        } catch {
+          /* 回退物料默认价 */
+        }
+      }
+
       const rowFromMaterial = (m: Material) => {
-        const taxR = Number((m as any).defaults?.defaultTaxRate ?? (m as any).defaults?.default_tax_rate) || 0;
-        let up = Number((m as any).defaults?.defaultSalePrice ?? (m as any).default_sale_price) || 0;
+        const resolved = resolveMap.get(m.id);
+        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
+        let up = pickSaleUnitPrice(m, resolved);
         if (pt === 'tax_inclusive' && up > 0) {
           up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
         }
@@ -2132,6 +2207,9 @@ const QuotationsPage: React.FC = () => {
           quote_quantity: 1,
           unit_price: up,
           tax_rate: taxR,
+          variant_attributes: undefined,
+          _sourceType: m.sourceType ?? (m as any).source_type,
+          _masterMaterialUuid: m.uuid,
           delivery_date: defaultDelivery,
           notes: '',
         };
@@ -2369,6 +2447,22 @@ const QuotationsPage: React.FC = () => {
                         render: (_: unknown, __: unknown, index: number) => (
                           <QuotationMaterialSelectCell index={index} />
                         ),
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.variantAttributes'),
+                        dataIndex: 'variant_attributes',
+                        width: 220,
+                        render: (_: unknown, __: unknown, index: number) =>
+                          formRef.current ? (
+                            <OrderLineVariantAttributesCell
+                              form={formRef.current}
+                              rowIndex={index}
+                              materials={materialList as Material[]}
+                              onAttributesChange={(attrs) =>
+                                refreshQuotationLinePriceByVariant(index, attrs)
+                              }
+                            />
+                          ) : null,
                       },
                       {
                         title: '规格',

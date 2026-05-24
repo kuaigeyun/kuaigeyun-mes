@@ -177,6 +177,18 @@
             "path": "/apps/master-data/supply-chain/suppliers",
             "permission": "master-data:supply-chain:supplier:read",
             "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.supply-chain.customer-price-books",
+            "path": "/apps/master-data/supply-chain/customer-price-books",
+            "permission": "master-data:supply-chain:customer-price-book:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.supply-chain.supplier-price-books",
+            "path": "/apps/master-data/supply-chain/supplier-price-books",
+            "permission": "master-data:supply-chain:supplier-price-book:read",
+            "sort_order": 4
           }
         ]
       }
@@ -371,6 +383,18 @@
     "master-data:supply-chain:supplier:revoke",
     "master-data:supply-chain:supplier:submit",
     "master-data:supply-chain:supplier:update",
+    "master-data:supply-chain:customer-price-book:read",
+    "master-data:supply-chain:customer-price-book:create",
+    "master-data:supply-chain:customer-price-book:update",
+    "master-data:supply-chain:customer-price-book:delete",
+    "master-data:supply-chain:customer-price-book:import",
+    "master-data:supply-chain:customer-price-book:export",
+    "master-data:supply-chain:supplier-price-book:read",
+    "master-data:supply-chain:supplier-price-book:create",
+    "master-data:supply-chain:supplier-price-book:update",
+    "master-data:supply-chain:supplier-price-book:delete",
+    "master-data:supply-chain:supplier-price-book:import",
+    "master-data:supply-chain:supplier-price-book:export",
     "master-data:warehouse:storage-area:approve",
     "master-data:warehouse:storage-area:audit",
     "master-data:warehouse:storage-area:create",

@@ -51,6 +51,11 @@ import {
 import { PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
+import {
+  getMaterialDefaultTaxRate,
+  pickPurchaseUnitPrice,
+  resolveSupplierPurchasePricesBatch,
+} from '../../../../master-data/utils/resolve-partner-material-price';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -526,23 +531,48 @@ const PurchaseOrdersPage: React.FC = () => {
   }, []);
 
   const appendPurchaseItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
       if (!selected?.length) return;
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDate =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const supplierId = formRef.current?.getFieldValue('supplier_id');
+      const orderDate = formRef.current?.getFieldValue('order_date');
+      const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
+
+      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveSupplierPurchasePricesBatch>>[number]>();
+      if (supplierId && selected.length) {
+        try {
+          const items = await resolveSupplierPurchasePricesBatch(
+            Number(supplierId),
+            selected.map((m) => m.id),
+            asOf,
+          );
+          selected.forEach((m, i) => {
+            if (items[i]) resolveMap.set(m.id, items[i]);
+          });
+        } catch {
+          /* 回退物料默认价 */
+        }
+      }
+
       const current = formRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_spec: m.specification ?? '',
-        unit: m.baseUnit ?? '件',
-        ordered_quantity: 1,
-        unit_price: 0,
-        tax_rate: 0,
-        required_date: defaultDate,
-      }));
+      const newRows = selected.map((m) => {
+        const resolved = resolveMap.get(m.id);
+        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
+        const price = pickPurchaseUnitPrice(m, resolved);
+        return {
+          material_id: m.id,
+          material_code: m.mainCode ?? m.code ?? '',
+          material_name: m.name ?? '',
+          material_spec: m.specification ?? '',
+          unit: m.baseUnit ?? '件',
+          ordered_quantity: 1,
+          unit_price: price,
+          tax_rate: taxR,
+          required_date: defaultDate,
+        };
+      });
       const firstRow = current?.[0];
       const firstRowEmpty =
         current.length === 1 &&

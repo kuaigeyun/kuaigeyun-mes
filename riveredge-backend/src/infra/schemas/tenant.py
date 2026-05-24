@@ -6,8 +6,9 @@
 
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+import re
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from infra.models.tenant import TenantStatus, TenantPlan
 
@@ -39,6 +40,24 @@ class TenantBase(BaseModel):
     expires_at: Optional[datetime] = Field(default=None, description="过期时间（可选）")
 
 
+class TenantAdminAccountCreate(BaseModel):
+    """新建组织时一并创建的组织管理员账户"""
+
+    username: str = Field(..., min_length=3, max_length=50, description="用户名")
+    password: str = Field(..., min_length=8, max_length=128, description="登录密码")
+    full_name: Optional[str] = Field(None, max_length=100, description="姓名")
+    phone: Optional[str] = Field(None, description="手机号（可选）")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        if v is None or v == "":
+            return None
+        if not re.match(r"^1[3-9]\d{9}$", str(v).strip()):
+            raise ValueError("手机号格式不正确，须为11位中国大陆手机号")
+        return str(v).strip()
+
+
 class TenantCreate(TenantBase):
     """
     组织创建 Schema
@@ -54,11 +73,21 @@ class TenantCreate(TenantBase):
         max_users: 最大用户数限制（可选，默认 10）
         max_storage: 最大存储空间限制（可选，默认 1024 MB）
         expires_at: 过期时间（可选）
-        init_data_options: 可选初始化项 key 列表（如编码规则、部门预设等）。None 表示全量初始化，[] 表示仅必选
+        init_data_options: 可选初始化项 key 列表（部门/职位/角色等业务预置）。None 或 [] 表示仅加载系统级必选数据
+        industry_preset: 行业预设代码（一键建账，与 init_data_options 互斥）
+        admin_account: 组织管理员账户（新建组织时必填）
     """
     init_data_options: Optional[List[str]] = Field(
         default=None,
-        description="可选初始化项 key 列表。None=全量，[]=仅必选",
+        description="可选初始化项 key 列表。None 或 []=仅系统级必选",
+    )
+    industry_preset: Optional[str] = Field(
+        default=None,
+        description="行业预设代码（一键建账）",
+    )
+    admin_account: Optional[TenantAdminAccountCreate] = Field(
+        None,
+        description="组织管理员账户（平台新建组织时必填）",
     )
 
 
@@ -107,12 +136,16 @@ class TenantResponse(TenantBase):
         max_users: 最大用户数限制
         max_storage: 最大存储空间限制（MB）
         expires_at: 过期时间（可选）
+        last_login_at: 组织内用户最后登录时间（取各用户 last_login 最大值）
+        user_count: 已使用用户数
         created_at: 创建时间
         updated_at: 更新时间
     """
     
     id: int = Field(..., description="组织 ID（内部使用）")
     uuid: str = Field(..., description="组织 UUID（对外暴露，业务标识）")
+    last_login_at: Optional[datetime] = Field(None, description="组织内用户最后登录时间")
+    user_count: int = Field(default=0, description="已使用用户数")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

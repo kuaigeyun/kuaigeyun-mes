@@ -156,6 +156,7 @@ class MaterialCodeService:
         code: str,
         department: Optional[str] = None,
         description: Optional[str] = None,
+        name: Optional[str] = None,
         is_primary: bool = False,
         external_entity_type: Optional[str] = None,
         external_entity_id: Optional[int] = None
@@ -237,6 +238,7 @@ class MaterialCodeService:
             code=code,
             department=department,
             description=description,
+            name=name,
             is_primary=is_primary,
             external_entity_type=external_entity_type,
             external_entity_id=external_entity_id
@@ -244,6 +246,76 @@ class MaterialCodeService:
         
         logger.info(f"为物料 {material_id} 创建编码别名: {code_type}:{code}")
         return code_alias
+
+    @staticmethod
+    async def get_partner_material_alias(
+        tenant_id: int,
+        material_id: int,
+        partner_type: str,
+        partner_id: int,
+    ) -> Optional[MaterialCodeAlias]:
+        """按物料 + 客户/供应商查找编号映射（不含按 code 反查）。"""
+        code_type = "CUSTOMER" if partner_type == "customer" else "SUPPLIER"
+        return await MaterialCodeAlias.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            code_type=code_type,
+            external_entity_type=partner_type,
+            external_entity_id=partner_id,
+            deleted_at__isnull=True,
+        ).first()
+
+    @staticmethod
+    async def sync_partner_alias_from_price_book(
+        tenant_id: int,
+        material_id: int,
+        partner_type: str,
+        partner_id: int,
+        partner_material_code: Optional[str],
+        partner_material_name: Optional[str],
+        sync_partner_alias: bool = True,
+    ) -> None:
+        """
+        价格本保存时回写物料编号映射（推荐策略）：
+        - 已有映射：只读，若提交料号/品名与现有一致则忽略，不一致则拒绝
+        - 无映射且 sync_partner_alias：有伙伴料号则 create_code_alias
+        """
+        if not sync_partner_alias:
+            return
+
+        code = (partner_material_code or "").strip()
+        name = (partner_material_name or "").strip() or None
+        code_type = "CUSTOMER" if partner_type == "customer" else "SUPPLIER"
+
+        existing = await MaterialCodeService.get_partner_material_alias(
+            tenant_id, material_id, partner_type, partner_id
+        )
+
+        if existing:
+            if code and code != existing.code:
+                raise ValidationError(
+                    f"该{'客户' if partner_type == 'customer' else '供应商'}在此物料上已有编号映射"
+                    f"（{existing.code}），与提交的伙伴料号不一致，请到物料主数据修改"
+                )
+            if name and existing.name and name != existing.name:
+                raise ValidationError(
+                    f"该{'客户' if partner_type == 'customer' else '供应商'}在此物料上已有品名"
+                    f"（{existing.name}），与提交不一致，请到物料主数据修改"
+                )
+            return
+
+        if not code:
+            return
+
+        await MaterialCodeService.create_code_alias(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            code_type=code_type,
+            code=code,
+            name=name,
+            external_entity_type=partner_type,
+            external_entity_id=partner_id,
+        )
     
     @staticmethod
     async def get_material_by_code(

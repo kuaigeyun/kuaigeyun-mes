@@ -1,35 +1,41 @@
 /**
- * 初始化向导页面 - Modal 形式
- *
- * 新组织注册后的初始化向导，以弹窗形式展示
+ * 初始化向导页面（已废弃交互，自动应用默认设置并跳转首页）
  *
  * Author: Luigi Lu
  * Date: 2025-01-15
  */
 
-import React from 'react'
-import { Modal } from 'antd'
-import InitWizard from '../../../components/init-wizard'
+import React, { useEffect } from 'react'
+import { Spin } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { getInitSteps } from '../../../services/init-wizard'
 import { getTenantId } from '../../../utils/auth'
 import { getDefaultTenantHomePath } from '../../../stores/configStore'
 
 /**
- * 初始化向导页面组件（Modal 形式）
+ * 访问 /init/wizard 时静默完成默认初始化并进入首页，不再展示向导弹窗
  */
 const InitWizardPage: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const tenantId = getTenantId()
 
-  const handleComplete = () => {
-    navigate(getDefaultTenantHomePath(), { replace: true })
-  }
+  useEffect(() => {
+    if (!tenantId) return
 
-  const handleCancel = () => {
-    navigate(getDefaultTenantHomePath(), { replace: true })
-  }
+    let cancelled = false
+    const goHome = () => {
+      if (!cancelled) {
+        navigate(getDefaultTenantHomePath(), { replace: true })
+      }
+    }
+
+    void getInitSteps(tenantId).finally(goHome)
+    return () => {
+      cancelled = true
+    }
+  }, [tenantId, navigate])
 
   if (!tenantId) {
     return (
@@ -40,20 +46,15 @@ const InitWizardPage: React.FC = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'rgba(0,0,0,0.02)' }}>
-      <Modal
-        title={t('pages.init.wizard.title')}
-        open
-        width={720}
-        closable
-        maskClosable={false}
-        footer={null}
-        destroyOnHidden
-        onCancel={handleCancel}
-        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
-      >
-        <InitWizard tenantId={tenantId} onComplete={handleComplete} onCancel={handleCancel} />
-      </Modal>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Spin size="large" />
     </div>
   )
 }

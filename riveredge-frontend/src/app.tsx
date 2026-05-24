@@ -146,12 +146,11 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     refetchOnWindowFocus: true,
   });
 
-  // 处理用户信息加载成功
+  // 处理用户信息加载成功（唯一数据源：/auth/me）
   useEffect(() => {
     if (userData) {
       setCurrentUser(userData);
       setUserInfo(userData);
-      // 尽早预取头像 URL，与 BasicLayout 的请求复用，缩短顶栏头像显示延迟
       if (userData.avatar) prefetchAvatarUrl(userData.avatar);
     }
   }, [userData, setCurrentUser]);

@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { App, Card, Col, Row, Space, Spin, Typography, theme, Table, Tag, Badge, Progress, Empty } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { App, Table, Tag, Badge, Progress, Empty, Typography, theme } from 'antd';
 import {
   AppstoreOutlined,
+  AuditOutlined,
   ToolOutlined,
   WarningOutlined,
   CodeSandboxOutlined,
-  ShopOutlined,
+  BuildOutlined,
+  SearchOutlined,
+  FileProtectOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { Column, Pie } from '@ant-design/charts';
@@ -18,15 +21,22 @@ import {
   listWorkshops,
   type HaoligoMeta,
 } from '../../services/haoligo';
-import { useGlobalStore } from '../../../../stores/globalStore';
-import { PAGE_SPACING } from '../../../../components/layout-templates/constants';
 import {
   EQUIPMENT_STATUS_LABEL_CHART_COLORS,
   EQUIPMENT_STATUS_LABEL_ORDER,
 } from '../../utils/operationalStatusTrafficLight';
 import { MOLD_LEDGER_STATUSES, MOLD_STATUS_CHART_COLORS } from '../../constants/moldStatus';
+import {
+  ModuleCenterLayout,
+  ModuleKpiRow,
+  ModuleShortcutGrid,
+  ModuleActionPanel,
+  ModuleChartPanel,
+  ModuleChartRow,
+} from '../../../kuaizhizao/components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
 
-const { Title, Paragraph, Text } = Typography;
+const { Text } = Typography;
 const { useToken } = theme;
 
 /**
@@ -36,7 +46,6 @@ const WorkspacePage: React.FC = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { token } = useToken();
-  const { currentUser } = useGlobalStore();
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<HaoligoMeta | null>(null);
@@ -174,23 +183,65 @@ const WorkspacePage: React.FC = () => {
     void load();
   }, [load]);
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-        <Spin size="large" tip="加载工作台…" />
-      </div>
-    );
-  }
+  const faultCount = eqStatusData.find((d) => d.type === '故障' || d.type === '维修中')?.value ?? 0;
+  const maintenanceDue = equipmentWarningData.filter((r) => r.daysLeft <= 7).length;
+  const moldLifeAlert = moldLifeData.filter((m) => m.percent >= 85).length;
 
-  const statCardStyle = {
-    borderRadius: token.borderRadiusLG,
-    boxShadow: '0 8px 24px rgba(0,0,0,0.03)',
-    border: 'none',
-    height: '100%',
-    transition: 'all 0.3s ease',
-  };
+  const kpis: ModuleKpiDef[] = useMemo(
+    () => [
+      {
+        key: 'equipment',
+        title: '设备总台账',
+        value: equipmentTotal,
+        subtitle: `覆盖 ${workshopCount} 个车间`,
+        icon: <ToolOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+        onClick: () => navigate('/apps/haoligo/equipment'),
+        sideMetrics: [{ label: '故障/停机', value: faultCount }],
+      },
+      {
+        key: 'maintenance',
+        title: '维保到期预警',
+        value: maintenanceDue,
+        subtitle: '7 天内需维保设备',
+        icon: <WarningOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
+        onClick: () => navigate('/apps/haoligo/equipment'),
+        sideMetrics: [{ label: '隐患待办', value: hazardChecking + hazardRepairing }],
+      },
+      {
+        key: 'mold',
+        title: '模具寿命预警',
+        value: moldLifeAlert,
+        subtitle: `模具档案 ${moldTotal} 套`,
+        icon: <CodeSandboxOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+        onClick: () => navigate('/apps/haoligo/molds'),
+        sideMetrics: [{ label: '已治理隐患', value: hazardDone }],
+      },
+    ],
+    [
+      equipmentTotal,
+      workshopCount,
+      faultCount,
+      maintenanceDue,
+      hazardChecking,
+      hazardRepairing,
+      moldLifeAlert,
+      moldTotal,
+      hazardDone,
+      navigate,
+    ],
+  );
 
-  const chartCardBodyStyle = { overflow: 'visible' as const, padding: 16 };
+  const shortcuts: ModuleShortcutDef[] = [
+    { key: 'molds', title: '模具管理', icon: <AppstoreOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/haoligo/molds' },
+    { key: 'equipment', title: '设备台账', icon: <ToolOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/haoligo/equipment/ledger' },
+    { key: 'spot-check', title: '设备点检', icon: <AuditOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/haoligo/equipment/documents/spot-check' },
+    { key: 'repair', title: '故障报修', icon: <BuildOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />, path: '/apps/haoligo/equipment/documents/upkeep-sheet?service_type=维修' },
+    { key: 'maintenance', title: '保养计划', icon: <FileProtectOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/haoligo/equipment/documents/upkeep-sheet?service_type=保养' },
+    { key: 'inspection', title: '巡查隐患', icon: <SearchOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/haoligo/patrol/hazards' },
+  ];
 
   const hazardTrendConfig = {
     data: hazardTrendData,
@@ -322,127 +373,31 @@ const WorkspacePage: React.FC = () => {
   ];
 
   return (
-    <div style={{ width: '100%', padding: PAGE_SPACING.PADDING }}>
-      {/* 顶部通栏 Hero 区域 */}
-      <div
-        style={{
-          background: `linear-gradient(135deg, ${token.colorPrimary} 0%, #1d39c4 100%)`,
-          borderRadius: token.borderRadiusLG,
-          padding: '36px 48px',
-          color: '#fff',
-          boxShadow: '0 10px 30px -10px rgba(0,0,0,0.25)',
-          marginBottom: PAGE_SPACING.BLOCK_GAP,
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ position: 'absolute', right: -60, top: -60, width: 250, height: 250, background: 'rgba(255,255,255,0.08)', borderRadius: '50%' }} />
-        <div style={{ position: 'absolute', right: 120, bottom: -50, width: 140, height: 140, background: 'rgba(255,255,255,0.08)', borderRadius: '50%' }} />
-        
-        <Title level={2} style={{ color: '#fff', marginTop: 0, marginBottom: 12, fontWeight: 600 }}>
-          👋 欢迎回来，{currentUser?.full_name || currentUser?.username || '管理员'}！祝您工作顺利。
-        </Title>
-        <Paragraph style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, maxWidth: 650, marginBottom: 0, lineHeight: 1.6 }}>
-          一站式设备与模具管理、现场巡查统一入口。为您提供全生命周期的资产管理。
-        </Paragraph>
-      </div>
-
-      {/* 核心指标区域 */}
-      <Row gutter={[PAGE_SPACING.BLOCK_GAP, PAGE_SPACING.BLOCK_GAP]} style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} style={{ ...statCardStyle, background: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, boxShadow: '0 8px 16px rgba(22,119,255,0.25)' }}>
-                <ShopOutlined />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Text type="secondary" style={{ fontSize: 14 }}>覆盖车间数</Text>
-                <div style={{ fontSize: 28, fontWeight: 600, color: token.colorTextHeading, lineHeight: 1.2 }}>
-                  {workshopCount} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>个</span>
-                </div>
-                <div style={{ fontSize: 12, color: token.colorTextDescription, marginTop: 4 }}>
-                  已全面覆盖 <span style={{ color: token.colorPrimary }}>100%</span> 核心生产区域
-                </div>
-              </div>
-            </div>
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} style={{ ...statCardStyle, background: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #13c2c2 0%, #08979c 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, boxShadow: '0 8px 16px rgba(19,194,194,0.25)' }}>
-                <ToolOutlined />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Text type="secondary" style={{ fontSize: 14 }}>设备总台账</Text>
-                <div style={{ fontSize: 28, fontWeight: 600, color: token.colorTextHeading, lineHeight: 1.2 }}>
-                  {equipmentTotal} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>台</span>
-                </div>
-                <div style={{ fontSize: 12, color: token.colorTextDescription, marginTop: 4 }}>
-                  {eqStatusData.length > 0 ? [...eqStatusData].sort((a,b)=>b.value-a.value).slice(0,3).map((item, idx, arr) => (
-                    <span key={item.type}>
-                      <span style={{ color: statusCountColor(item.type, EQUIPMENT_STATUS_LABEL_CHART_COLORS) }}>{item.value}</span> {item.type}{idx < arr.length - 1 ? ' / ' : ''}
-                    </span>
-                  )) : '暂无数据'}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} style={{ ...statCardStyle, background: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, boxShadow: '0 8px 16px rgba(82,196,26,0.25)' }}>
-                <CodeSandboxOutlined />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Text type="secondary" style={{ fontSize: 14 }}>模具总档案</Text>
-                <div style={{ fontSize: 28, fontWeight: 600, color: token.colorTextHeading, lineHeight: 1.2 }}>
-                  {moldTotal} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>套</span>
-                </div>
-                <div style={{ fontSize: 12, color: token.colorTextDescription, marginTop: 4 }}>
-                  {moldStatusData.length > 0 ? [...moldStatusData].sort((a,b)=>b.value-a.value).slice(0,3).map((item, idx, arr) => (
-                    <span key={item.type}>
-                      <span style={{ color: statusCountColor(item.type, MOLD_STATUS_CHART_COLORS) }}>{item.value}</span> {item.type}{idx < arr.length - 1 ? ' / ' : ''}
-                    </span>
-                  )) : '暂无数据'}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} style={{ ...statCardStyle, background: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, boxShadow: '0 8px 16px rgba(255,77,79,0.25)' }}>
-                <WarningOutlined />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Text type="secondary" style={{ fontSize: 14 }}>隐患处置单</Text>
-                <div style={{ fontSize: 28, fontWeight: 600, color: token.colorTextHeading, lineHeight: 1.2 }}>
-                  {hazardDone} <span style={{ fontSize: 14, fontWeight: 'normal', color: token.colorTextSecondary }}>单</span>
-                </div>
-                <div style={{ fontSize: 12, color: token.colorTextDescription, marginTop: 4 }}>
-                  <span style={{ color: '#faad14' }}>{hazardChecking}</span> 已登记 / <span style={{ color: '#52c41a' }}>{hazardRepairing}</span> 已治理
-                </div>
-              </div>
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 中部图表区域 */}
-      <Row gutter={[PAGE_SPACING.BLOCK_GAP, PAGE_SPACING.BLOCK_GAP]} style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}>
-        <Col xs={24} lg={8}>
-          <Card
-            title="设备综合运行状态"
-            bordered={false}
-            styles={{ body: chartCardBodyStyle }}
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: '100%' }}
+    <ModuleCenterLayout
+      loading={loading}
+      kpiRow={<ModuleKpiRow items={kpis} />}
+      shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />}
+      actionRow={
+        <>
+          <ModuleActionPanel
+            title="设备维保预警"
+            lg={12}
+            extra={<a onClick={() => navigate('/apps/haoligo/equipment')}>查看全部</a>}
           >
+            <Table dataSource={equipmentWarningData} columns={equipmentWarningColumns} pagination={false} size="middle" />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            title="模具保养/寿命预警"
+            lg={12}
+            extra={<a onClick={() => navigate('/apps/haoligo/molds')}>查看全部</a>}
+          >
+            <Table dataSource={moldLifeData} columns={moldLifeColumns} pagination={false} size="middle" />
+          </ModuleActionPanel>
+        </>
+      }
+      chartRow={
+        <ModuleChartRow>
+          <ModuleChartPanel title="设备综合运行状态" lg={12} height={320}>
             {eqStatusData.some((d) => d.value > 0) ? (
               <div style={pieChartShellStyle}>
                 <Pie {...buildDonutPieConfig(eqStatusData, EQUIPMENT_STATUS_LABEL_CHART_COLORS, EQUIPMENT_STATUS_LABEL_ORDER)} />
@@ -450,31 +405,8 @@ const WorkspacePage: React.FC = () => {
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
             )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card
-            title="模具资产状态分布"
-            bordered={false}
-            styles={{ body: chartCardBodyStyle }}
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: '100%' }}
-          >
-            {moldStatusData.some((d) => d.value > 0) ? (
-              <div style={pieChartShellStyle}>
-                <Pie {...buildDonutPieConfig(moldStatusData, MOLD_STATUS_CHART_COLORS, MOLD_LEDGER_STATUSES)} />
-              </div>
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card
-            title="近七日巡查隐患上报"
-            bordered={false}
-            styles={{ body: chartCardBodyStyle }}
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: '100%' }}
-          >
+          </ModuleChartPanel>
+          <ModuleChartPanel title="近七日巡查隐患上报" lg={12} height={320}>
             {hazardTrendData.some((d) => d.count > 0) ? (
               <div style={columnChartShellStyle}>
                 <Column {...hazardTrendConfig} />
@@ -482,44 +414,10 @@ const WorkspacePage: React.FC = () => {
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
             )}
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 核心业务预警大盘 (设备 & 模具核心) */}
-      <Row gutter={[PAGE_SPACING.BLOCK_GAP, PAGE_SPACING.BLOCK_GAP]} style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}>
-        <Col xs={24} xl={12}>
-          <Card 
-            title={<><WarningOutlined style={{ color: token.colorWarning, marginRight: 8 }} />设备维保预警</>} 
-            bordered={false} 
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-            extra={<a onClick={() => navigate('/apps/haoligo/equipment')}>查看全部</a>}
-          >
-            <Table 
-              dataSource={equipmentWarningData} 
-              columns={equipmentWarningColumns} 
-              pagination={false} 
-              size="middle"
-            />
-          </Card>
-        </Col>
-        <Col xs={24} xl={12}>
-          <Card 
-            title={<><AppstoreOutlined style={{ color: '#13c2c2', marginRight: 8 }} />模具保养/寿命预警</>} 
-            bordered={false} 
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-            extra={<a onClick={() => navigate('/apps/haoligo/molds')}>查看全部</a>}
-          >
-            <Table 
-              dataSource={moldLifeData} 
-              columns={moldLifeColumns} 
-              pagination={false} 
-              size="middle"
-            />
-          </Card>
-        </Col>
-      </Row>
-    </div>
+          </ModuleChartPanel>
+        </ModuleChartRow>
+      }
+    />
   );
 };
 

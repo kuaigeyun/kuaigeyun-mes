@@ -69,9 +69,9 @@ export interface DashboardResponse {
 /**
  * 获取待办事项列表
  */
-export async function getTodos(limit: number = 20): Promise<TodoListResponse> {
+export async function getTodos(limit: number = 20, module?: string): Promise<TodoListResponse> {
   return apiRequest<TodoListResponse>('/apps/kuaizhizao/dashboard/todos', {
-    params: { limit },
+    params: { limit, ...(module ? { module } : {}) },
   });
 }
 

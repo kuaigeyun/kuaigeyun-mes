@@ -86,6 +86,15 @@ class InitWizardService:
         settings = tenant.settings or {}
         init_completed = bool(settings.get("init_completed"))
 
+        if not init_completed:
+            try:
+                await self.apply_default_init_settings(tenant_id)
+                tenant = await Tenant.get_or_none(id=tenant_id)
+                settings = (tenant.settings or {}) if tenant else {}
+                init_completed = bool(settings.get("init_completed"))
+            except Exception as e:
+                logger.warning(f"组织 {tenant_id} 自动默认初始化失败: {e}")
+
         # 根据已保存的数据判断各步骤是否完成
         completed_steps = set()
         if settings.get("init_step2"):
@@ -340,4 +349,20 @@ class InitWizardService:
             "message": "初始化完成",
             "tenant_id": tenant_id
         }
+
+    async def apply_default_init_settings(self, tenant_id: int) -> None:
+        """新建组织时自动应用默认初始化设置，跳过向导。"""
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            logger.warning(f"组织 {tenant_id} 不存在，跳过默认初始化")
+            return
+
+        settings = tenant.settings or {}
+        if settings.get("init_completed"):
+            return
+
+        default_settings = Step2DefaultSettings()
+        init_data = InitWizardData(step2_default_settings=default_settings)
+        await self.complete_init_wizard(tenant_id, init_data)
+        logger.info(f"组织 {tenant_id} 已自动应用默认初始化设置")
 

@@ -33,6 +33,7 @@ import {
   type TenantSearchOption,
   type OrganizationRegisterRequest,
   type LoginResponse,
+  tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
@@ -663,9 +664,7 @@ export default function LoginPage() {
             }
             
             // 从 tenants 数组中查找对应的租户名称
-            const tenants = loginResponse.tenants || [];
-            const selectedTenant = tenants.find(t => t.id === tenantId);
-            const tenantName = selectedTenant?.name || '';
+            const tenantName = tenantNameFromLoginResponse(loginResponse);
 
             const userInfo = {
               id: loginResponse.user.id,
@@ -758,9 +757,7 @@ export default function LoginPage() {
             }
             
             // 从 tenants 数组中查找对应的租户名称
-            const tenants = loginResponse.tenants || [];
-            const selectedTenant = tenants.find(t => t.id === tenantId);
-            const tenantName = selectedTenant?.name || '';
+            const tenantName = tenantNameFromLoginResponse(loginResponse);
 
             const userInfo = {
               id: loginResponse.user.id,
@@ -782,11 +779,11 @@ export default function LoginPage() {
       syncUserStateAfterLogin(userInfo);
       setRegisterDrawerVisible(false);
       setRegisterType('personal');
-      // 延迟执行消息提示和导航，避免阻塞主线程
-      // 新注册的组织跳转到初始化向导
       setTimeout(() => {
         message.success(t('pages.login.success'));
-        navigate('/init/wizard', { replace: true });
+        void resolvePostLoginHomePath().then((path) => {
+          navigate(path, { replace: true });
+        });
       }, 0);
           }
         } catch (loginError: any) {
@@ -854,10 +851,7 @@ export default function LoginPage() {
         setTenantId(response.default_tenant_id);
       }
 
-      // 从 tenants 数组中查找对应的租户名称（平台管理员可能没有租户）
-      const tenantName = response.default_tenant_id && tenants.length > 0 
-        ? tenants.find(t => t.id === response.default_tenant_id)?.name || ''
-        : '';
+      const tenantName = tenantNameFromLoginResponse(response);
 
       // 更新用户状态
       const userInfo = {
@@ -907,9 +901,7 @@ export default function LoginPage() {
     if (selectedTenantId) {
       setTenantId(selectedTenantId);
 
-      // 从 tenants 数组中查找对应的租户名称
-      const selectedTenant = tenants.find(t => t.id === selectedTenantId);
-      const tenantName = selectedTenant?.name || '';
+      const tenantName = tenantNameFromLoginResponse(response);
 
       // 更新用户状态
       const userInfo = {
@@ -942,19 +934,6 @@ export default function LoginPage() {
           navigate(path, { replace: true });
         });
       }
-
-      // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
-      (async () => {
-        try {
-          const { getInitSteps } = await import('../../services/init-wizard');
-          const stepsRes = await getInitSteps(selectedTenantId);
-          if (stepsRes.init_completed === false) {
-            navigate('/init/wizard', { replace: true });
-          }
-        } catch {
-          // 忽略错误，用户已在目标页
-        }
-      })();
     } else {
       message.error(t('pages.login.loginFailed'));
     }
@@ -1326,12 +1305,7 @@ export default function LoginPage() {
         if (tenantId) {
           setTenantId(tenantId);
 
-          const tenantName = (response.user as any)?.tenant_name || 
-            (() => {
-              const tenants = response.tenants || [];
-              const selectedTenant = tenants.find(t => t.id === tenantId);
-              return selectedTenant?.name || t('pages.login.defaultTenantName');
-            })();
+          const tenantName = tenantNameFromLoginResponse(response);
 
           // 更新用户状态
           const userInfo = {
@@ -1423,10 +1397,7 @@ export default function LoginPage() {
         const selectedTenantId = response.user?.tenant_id || tenantId;
         setTenantId(selectedTenantId);
 
-        // 从 tenants 数组中查找对应的租户名称
-        const tenants = response.tenants || [];
-        const selectedTenant = tenants.find(t => t.id === selectedTenantId);
-        const tenantName = selectedTenant?.name || '';
+        const tenantName = tenantNameFromLoginResponse(response);
 
         // 更新用户状态
         const userInfo = {
@@ -1460,19 +1431,6 @@ export default function LoginPage() {
           const homePath = await resolvePostLoginHomePath();
           navigate(homePath, { replace: true });
         }
-
-        // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
-        (async () => {
-          try {
-            const { getInitSteps } = await import('../../services/init-wizard');
-            const stepsRes = await getInitSteps(selectedTenantId);
-            if (stepsRes.init_completed === false) {
-              navigate('/init/wizard', { replace: true });
-            }
-          } catch {
-            // 忽略错误，用户已在目标页
-          }
-        })();
       } else {
         message.error(t('pages.login.tenantSelectFailed'));
       }

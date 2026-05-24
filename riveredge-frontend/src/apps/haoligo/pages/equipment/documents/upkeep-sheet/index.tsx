@@ -17,6 +17,7 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import { App, Button, Col, Form, Input, Modal, Row, Space, Spin, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -89,6 +90,11 @@ function resolveDefaultLeafDeptUuid(
 const EquipmentUpkeepSheetPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams] = useSearchParams();
+  const urlServiceType = useMemo(() => {
+    const value = (searchParams.get('service_type') || '').trim();
+    return value === '维修' || value === '保养' ? value : undefined;
+  }, [searchParams]);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
@@ -351,7 +357,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
         }
         setFormInitialValues({
-          service_type: '保养',
+          service_type: urlServiceType ?? '保养',
           applicant_user_id: uid,
           department_uuid: deptUuid,
           equipment_id: undefined,
@@ -365,7 +371,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [messageApi, preloadTenantFormOptions, t]);
+  }, [messageApi, preloadTenantFormOptions, t, urlServiceType]);
 
   const handleMainModalCancel = useCallback(() => {
     setModalVisible(false);
@@ -621,6 +627,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
               const res = await listEquipmentUpkeepSheets({
                 skip,
                 limit: pageSize,
+                service_type: urlServiceType,
                 keyword:
                   typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
                     ? searchFormValues.keyword.trim()

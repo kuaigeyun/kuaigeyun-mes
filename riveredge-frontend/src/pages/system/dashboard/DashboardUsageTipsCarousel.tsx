@@ -92,6 +92,7 @@ export function DashboardUsageTipsCarousel({
           <Button
             type="text"
             size="small"
+            className="dashboard-usage-tips-footer__copy-btn"
             icon={<CopyOutlined />}
             disabled={!gitCommit.trim()}
             onClick={onCopyCommit}

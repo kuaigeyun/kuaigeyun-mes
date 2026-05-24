@@ -17,8 +17,14 @@ import type {
   MaterialListResponse,
   MaterialBulkTrackingPayload,
   MaterialBulkTrackingResult,
+  MaterialBulkVariantPayload,
+  MaterialGenerateVariantsPayload,
+  MaterialGenerateVariantsResult,
+  MaterialMaterializeVariantPayload,
+  MaterialMaterializeVariantResult,
   MaterialBatchDeleteResult,
   MaterialBatchMoveGroupResult,
+  MaterialBatchFieldUpdateResult,
   MaterialRewriteMainCodesPayload,
   MaterialRewriteMainCodesResult,
   BOM,
@@ -240,10 +246,12 @@ export const materialApi = {
     if (!params) {
       return unwrap(await api.get('/apps/master-data/materials'));
     }
-    const { sortBy, sortOrder, ...rest } = params;
+    const { sortBy, sortOrder, treeView, mastersOnly, ...rest } = params;
     const backendParams: Record<string, unknown> = { ...rest };
     if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
     if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
+    if (treeView) backendParams.treeView = true;
+    if (mastersOnly) backendParams.mastersOnly = true;
     return unwrap(await api.get('/apps/master-data/materials', { params: backendParams }));
   },
 
@@ -289,6 +297,32 @@ export const materialApi = {
   },
 
   /**
+   * 批量更新物料工艺路线（单请求，后端批量 UPDATE）
+   */
+  batchUpdateProcessRoute: async (
+    material_uuids: string[],
+    processRouteId: number | null,
+  ): Promise<MaterialBatchFieldUpdateResult> => {
+    return api.post('/apps/master-data/materials/batch-process-route', {
+      material_uuids,
+      processRouteId,
+    });
+  },
+
+  /**
+   * 批量更新物料来源类型（单请求，后端批量 UPDATE）
+   */
+  batchUpdateSourceType: async (
+    material_uuids: string[],
+    sourceType: string,
+  ): Promise<MaterialBatchFieldUpdateResult> => {
+    return api.post('/apps/master-data/materials/batch-source-type', {
+      material_uuids,
+      sourceType,
+    });
+  },
+
+  /**
    * 试运营模式：按所属分组编号重写物料主编码
    */
   rewriteMainCodes: async (
@@ -318,6 +352,30 @@ export const materialApi = {
     if (data.default_serial_rule_id !== undefined) body.default_serial_rule_id = data.default_serial_rule_id;
     return api.post('/apps/master-data/materials/batch-tracking', body);
   },
+
+  /**
+   * 批量更新属性管理开关及属性值（单请求，后端批量 SQL）
+   */
+  bulkUpdateVariant: async (data: MaterialBulkVariantPayload): Promise<MaterialBulkTrackingResult> => {
+    return api.post('/apps/master-data/materials/batch-variant', {
+      material_uuids: data.material_uuids,
+      variantManaged: data.variantManaged,
+    });
+  },
+
+  listVariants: async (materialUuid: string): Promise<Material[]> =>
+    api.get(`/apps/master-data/materials/${materialUuid}/variants`),
+
+  generateVariants: async (
+    materialUuid: string,
+    data: MaterialGenerateVariantsPayload,
+  ): Promise<MaterialGenerateVariantsResult> =>
+    api.post(`/apps/master-data/materials/${materialUuid}/generate-variants`, data),
+
+  materializeVariant: async (
+    data: MaterialMaterializeVariantPayload,
+  ): Promise<MaterialMaterializeVariantResult> =>
+    api.post('/apps/master-data/materials/materialize-variant', data),
 
   /**
    * 生成物料二维码

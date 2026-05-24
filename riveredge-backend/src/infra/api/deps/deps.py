@@ -147,10 +147,6 @@ async def get_current_user(
         # state 写入失败不影响主流程
         pass
 
-    # 设置组织上下文 ⭐ 关键：自动设置组织上下文
-    if tenant_id:
-        set_current_tenant_id(tenant_id)
-    
     # 获取用户（排除已软删除的用户，避免已删除用户通过旧 Token 继续访问）
     user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     if not user:
@@ -167,6 +163,28 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="用户未激活",
         )
+
+    # JWT 中的组织必须存在、激活，且与当前用户记录一致（防止组织删除后旧 Token/孤儿账号继续访问）
+    if tenant_id is not None and not getattr(user, "_is_infra_superadmin", False):
+        from infra.models.tenant import Tenant, TenantStatus
+
+        tid = int(tenant_id)
+        tenant = await Tenant.get_or_none(id=tid, status=TenantStatus.ACTIVE)
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="会话组织已失效，请重新登录",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if user.tenant_id is not None and user.tenant_id != tid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="会话组织已失效，请重新登录",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        set_current_tenant_id(tid)
+    elif tenant_id:
+        set_current_tenant_id(int(tenant_id))
 
     return user
 

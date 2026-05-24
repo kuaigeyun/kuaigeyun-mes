@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
+import asyncio
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -25,6 +26,34 @@ from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/tenants", tags=["Platform · Tenants"])
+
+
+async def _initialize_tenant_data_background(
+    tenant_id: int,
+    init_data_options: Optional[list],
+    industry_preset: Optional[str],
+) -> None:
+    """后台初始化组织数据，避免阻塞创建接口响应。"""
+    try:
+        service = TenantService()
+        await service.initialize_tenant_data(
+            tenant_id,
+            init_data_options=init_data_options,
+            current_user_id=None,
+            industry_preset=industry_preset,
+        )
+        logger.info(f"组织 {tenant_id} 后台初始化完成")
+    except Exception as e:
+        logger.error(f"组织 {tenant_id} 后台初始化失败: {e}", exc_info=True)
+
+
+async def _rollback_created_tenant(tenant_id: int) -> None:
+    """创建流程失败时清理已写入的组织记录。"""
+    from infra.models.tenant import Tenant as TenantModel
+    from infra.models.tenant_activity_log import TenantActivityLog
+
+    await TenantActivityLog.filter(tenant_id=tenant_id).delete()
+    await TenantModel.filter(id=tenant_id).delete()
 
 
 class BulkInactivityTimeoutBody(BaseModel):
@@ -338,18 +367,53 @@ async def create_tenant_by_superadmin(
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     if not tenant_service:
         tenant_service = TenantService()  # 向后兼容
+
+    if not data.admin_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请指定组织管理员账户",
+        )
     
     # ⚠️ 第三阶段改进：统一错误处理
     # 异常由全局异常处理中间件统一处理
     tenant = await tenant_service.create_tenant(data)
-    # 初始化组织数据（必选+可选，init_data_options 为 None 时全量初始化）
-    init_opts = getattr(data, "init_data_options", None)
-    await tenant_service.initialize_tenant_data(
-        tenant.id,
-        init_data_options=init_opts,
-        current_user_id=None,
+
+    # 先创建管理员，失败则回滚组织，避免留下无管理员且名称占用的脏数据
+    from infra.schemas.user import UserCreate
+    from infra.services.user_service import UserService
+
+    admin = data.admin_account
+    user_service = UserService()
+    try:
+        admin_user = await user_service.create_user(
+            UserCreate(
+                username=admin.username,
+                phone=admin.phone,
+                password=admin.password,
+                full_name=admin.full_name,
+                tenant_id=tenant.id,
+                is_active=True,
+                is_infra_admin=False,
+                is_tenant_admin=True,
+            ),
+            tenant_id=tenant.id,
+        )
+    except Exception:
+        await _rollback_created_tenant(tenant.id)
+        raise
+
+    # 系统级初始化耗时较长，放后台执行，接口立即返回
+    asyncio.create_task(
+        _initialize_tenant_data_background(
+            tenant.id,
+            init_data_options=data.init_data_options,
+            industry_preset=data.industry_preset,
+        )
     )
-    logger.info(f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})")
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})，"
+        f"管理员: {admin_user.username} (ID: {admin_user.id})，初始化任务已提交后台"
+    )
     return tenant
 
 
@@ -399,9 +463,9 @@ async def delete_tenant_by_superadmin(
     tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
-    删除组织（平台超级管理员，软删除）
-    
-    将组织状态设置为 SUSPENDED，而不是真正删除数据。
+    删除组织（平台超级管理员）
+
+    仅已暂停且无业务单据的组织允许删除，删除后从系统中移除。
     
     Args:
         tenant_id: 组织 ID

@@ -487,7 +487,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
       '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 主数据-仓库数据 - 使用归档图标（区别于仓储管理）
-      '/apps/master-data/supply-chain': ManufacturingIcons.handshake, // 主数据-业务伙伴（客户+供应商）- 握手/合作图标
+      '/apps/master-data/supply-chain': ManufacturingIcons.handshake, // 主数据-客户供应商（客户+供应商）- 握手/合作图标
       '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
@@ -1022,7 +1022,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 支持应用菜单的国际化翻译
    */
   const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false, depth: number = 0): MenuDataItem => {
-    // 处理图标：一级菜单必显图标，有 icon 的二级菜单（如主数据-业务伙伴）也显示
+    // 处理图标：一级菜单必显图标，有 icon 的二级菜单（如主数据-客户供应商）也显示
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
 

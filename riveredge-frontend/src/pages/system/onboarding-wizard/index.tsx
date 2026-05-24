@@ -349,7 +349,7 @@ const OnboardingWizardPage: React.FC = () => {
       value: '建立工厂数字底座，通过标准化配置降低运维成本，确保数据安全合规。'
     },
     'system': {
-      data: '工厂组织、仓库库位、物料主文件、业务伙伴档案',
+      data: '工厂组织、仓库库位、物料主文件、客户供应商档案',
       docs: '产品 BOM、工艺路线、期初库存建账',
       value: '统一全厂数据语言，消除信息孤岛，支撑从销售到生产的全链路自动化流转。'
     }
@@ -596,9 +596,9 @@ const OnboardingWizardPage: React.FC = () => {
         },
         { 
           id: 'partner_data', 
-          name: '录入业务伙伴', 
+          name: '录入客户供应商', 
           required: true, 
-          description: '在“业务伙伴”中建立客户档案与供应商合格名录', 
+          description: '在「客户供应商」中建立客户档案与供应商合格名录', 
           completed: false, 
           jump_path: '/apps/master-data/supply-chain/customers',
           subItems: [

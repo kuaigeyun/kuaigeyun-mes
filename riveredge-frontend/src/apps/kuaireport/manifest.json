@@ -27,12 +27,36 @@
             "path": "/apps/kuaireport/dashboards",
             "permission": "kuaireport:dashboard:read",
             "sort_order": 2
+          },
+          {
+            "title": "app.kuaireport.menu.analysis-center",
+            "path": "/apps/kuaireport/analysis-center",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.kuaireport.menu.analysisCenterReports",
+        "children": [
+          {
+            "title": "app.kuaireport.menu.analysis-center.document-timing",
+            "path": "/apps/kuaireport/analysis-center/document-timing",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaireport.menu.analysis-center.document-efficiency",
+            "path": "/apps/kuaireport/analysis-center/document-efficiency",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 2
           }
         ]
       }
     ]
   },
   "permissions": [
+    "kuaireport:analysis-center:read",
     "kuaireport:dashboard:export",
     "kuaireport:dashboard:read",
     "kuaireport:report:export",

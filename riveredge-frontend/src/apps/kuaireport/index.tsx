@@ -18,6 +18,7 @@ import PlaceholderPage from '../kuaizhizao/components/PlaceholderPage';
 
 const DocumentTimingPage = lazy(() => import('../kuaizhizao/pages/analysis-center/document-timing'));
 const DocumentEfficiencyPage = lazy(() => import('../kuaizhizao/pages/analysis-center/document-efficiency'));
+const EfficiencyCenterDashboard = lazy(() => import('./pages/EfficiencyCenterDashboard'));
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
     <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
@@ -41,6 +42,7 @@ const KuaireportApp: React.FC = () => {
             <Route path="dashboard-view" element={<DashboardView />} />
 
             {/* 分析中心（从快制造迁移） */}
+            <Route path="analysis-center" element={withPageSuspense(EfficiencyCenterDashboard)} />
             <Route path="analysis-center/document-timing" element={withPageSuspense(DocumentTimingPage)} />
             <Route path="analysis-center/document-efficiency" element={withPageSuspense(DocumentEfficiencyPage)} />
             <Route path="analysis-center/reports/sales-order-full-trace" element={<PlaceholderPage title="销售订单全链路跟踪" />} />

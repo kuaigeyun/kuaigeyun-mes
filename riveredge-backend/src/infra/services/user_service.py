@@ -321,49 +321,49 @@ class UserService:
         
         return user
     
-    async def get_user_with_tenant_info(self, user_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    async def get_user_with_tenant_info(
+        self,
+        user_id: int,
+        session_tenant_id: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         获取用户及其组织信息
-        
-        获取用户详细信息，包括组织名称。
-        
-        Args:
-            user_id: 用户ID
-            tenant_id: 组织ID（可选，默认从上下文获取）
-            
-        Returns:
-            Optional[Dict[str, Any]]: 用户信息字典（包含组织名称），如果用户不存在则返回None
-            
-        Example:
-            >>> service = UserService()
-            >>> user_info = await service.get_user_with_tenant_info(1)
-            >>> user_info['tenant_name']
-            '测试组织'
+
+        session_tenant_id 为当前 JWT 会话组织（/auth/me 传入），用于解析 tenant_name。
         """
         from infra.models.tenant import Tenant
-        
-        # 获取用户
-        user = await self.get_user_by_id(user_id, tenant_id)
+
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
         if not user:
             return None
-        
-        # 获取组织信息
-        tenant_name = None
-        if user.tenant_id:
-            tenant = await Tenant.get_or_none(id=user.tenant_id)
-            if tenant:
-                tenant_name = tenant.name
+
+        # 会话组织：JWT 显式传入优先，否则用户所属组织
+        effective_tenant_id = (
+            session_tenant_id if session_tenant_id is not None else user.tenant_id
+        )
+
+        tenant_name: Optional[str] = None
+        if effective_tenant_id is not None:
+            tenant = await Tenant.get_or_none(id=effective_tenant_id)
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"组织不存在 (id={effective_tenant_id})",
+                )
+            tenant_name = tenant.name
+
         await user.fetch_related("department", "position", "roles")
         permissions: List[str] = []
         permission_version = 1
-        if user.tenant_id:
+        permission_tenant_id = effective_tenant_id or user.tenant_id
+        if permission_tenant_id is not None:
             permission_set = await UserPermissionService.get_user_permissions(
                 user_id=user.id,
-                tenant_id=user.tenant_id,
+                tenant_id=permission_tenant_id,
             )
             permissions = sorted(permission_set)
             permission_version = await PermissionVersionService.get_version(
-                tenant_id=user.tenant_id,
+                tenant_id=permission_tenant_id,
                 user_id=user.id,
             )
         department = None
@@ -387,7 +387,7 @@ class UserService:
             "email": user.email,
             "full_name": user.full_name,
             "avatar": user.avatar,
-            "tenant_id": user.tenant_id,
+            "tenant_id": effective_tenant_id,
             "tenant_name": tenant_name,
             "is_active": user.is_active,
             "is_infra_admin": user.is_infra_admin,

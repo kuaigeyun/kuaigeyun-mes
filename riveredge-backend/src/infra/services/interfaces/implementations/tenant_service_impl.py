@@ -124,3 +124,18 @@ class TenantServiceImpl(TenantServiceInterface):
             skip_tenant_filter=skip_tenant_filter
         )
 
+    async def initialize_tenant_data(
+        self,
+        tenant_id: int,
+        init_data_options: Optional[Any] = None,
+        current_user_id: Optional[int] = None,
+        industry_preset: Optional[str] = None,
+    ) -> None:
+        """初始化组织默认数据"""
+        await self._tenant_service.initialize_tenant_data(
+            tenant_id=tenant_id,
+            init_data_options=init_data_options,
+            current_user_id=current_user_id,
+            industry_preset=industry_preset,
+        )
+

@@ -33,6 +33,8 @@ class QuotationItem(BaseModel):
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
 
+    variant_attributes = fields.JSONField(null=True, description="属性组合（临时组合）")
+
     # 交货信息
     delivery_date = fields.DateField(null=True, description="预计交货日期")
 

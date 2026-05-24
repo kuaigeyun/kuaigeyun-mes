@@ -98,6 +98,14 @@ import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import type { Customer } from '../../../../master-data/types/supply-chain';
+import {
+  getMaterialDefaultTaxRate,
+  pickSaleUnitPrice,
+  resolveCustomerSalePricesBatch,
+  resolveOrderLineSalePrice,
+} from '../../../../master-data/utils/resolve-partner-material-price';
+import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
+import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import dayjs from 'dayjs';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -704,8 +712,7 @@ const SalesOrdersPage: React.FC = () => {
             delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
             variant_attributes: (() => {
               const va = (item as any).variant_attributes;
-              if (va == null) return '';
-              return typeof va === 'string' ? va : JSON.stringify(va, null, 2);
+              return parseVariantAttributesValue(va) ?? (va == null ? undefined : va);
             })(),
           };
           return base;
@@ -1698,24 +1705,74 @@ const SalesOrdersPage: React.FC = () => {
     messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
   };
 
+  /** 属性变更后按价格本重算行单价 */
+  const refreshOrderLinePriceByVariant = React.useCallback(
+    async (index: number, attrs?: Record<string, unknown>) => {
+      const customerId = formRef.current?.getFieldValue('customer_id');
+      const materialId = formRef.current?.getFieldValue(['items', index, 'material_id']);
+      const material = materials.find((m) => m.id === Number(materialId));
+      const orderDate = formRef.current?.getFieldValue('order_date');
+      const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
+      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
+        customerId ? Number(customerId) : undefined,
+        materialId ? Number(materialId) : undefined,
+        attrs,
+        material,
+        asOf,
+      );
+      let up = unitPrice;
+      if (pt === 'tax_inclusive' && up > 0) {
+        up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
+      }
+      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+      if (items[index]) {
+        items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+        formRef.current?.setFieldsValue({ items });
+      }
+    },
+    [materials],
+  );
+
   /** 从物料多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
   const appendOrderItemsFromMaterials = React.useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const customerId = formRef.current?.getFieldValue('customer_id');
+      const orderDate = formRef.current?.getFieldValue('order_date');
+      const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
+
+      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveCustomerSalePricesBatch>>[number]>();
+      if (customerId && selected.length) {
+        try {
+          const items = await resolveCustomerSalePricesBatch(
+            Number(customerId),
+            selected.map((m) => ({
+              materialId: m.id,
+              variantAttributes: parseVariantAttributesValue(
+                m.variantAttributes ?? (m as any).variant_attributes,
+              ),
+            })),
+            asOf,
+            selected,
+          );
+          selected.forEach((m, i) => {
+            if (items[i]) resolveMap.set(m.id, items[i]);
+          });
+        } catch {
+          /* 回退物料默认价 */
+        }
+      }
+
       const rowFromMaterial = (m: Material) => {
         const mainCode = m.mainCode ?? m.code ?? '';
         const st = m.sourceType ?? (m as any).source_type;
-        const taxR = Number((m as any).defaults?.defaultTaxRate ?? (m as any).defaults?.default_tax_rate) || 0;
-        let up =
-          Number(
-            (m as any).defaults?.defaultSalePrice ??
-              (m as any).defaults?.default_sale_price ??
-              (m as any).defaultSalePrice ??
-              (m as any).default_sale_price,
-          ) || 0;
+        const resolved = resolveMap.get(m.id);
+        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
+        let up = pickSaleUnitPrice(m, resolved);
         if (pt === 'tax_inclusive' && up > 0) {
           up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
         }
@@ -1729,8 +1786,9 @@ const SalesOrdersPage: React.FC = () => {
           delivery_date: defaultDelivery,
           unit_price: up,
           tax_rate: taxR,
-          variant_attributes: '',
+          variant_attributes: undefined,
           _sourceType: st,
+          _masterMaterialUuid: m.uuid,
         };
       };
       const isEmptyItemRow = (row: any) => {
@@ -1752,7 +1810,7 @@ const SalesOrdersPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.salesOrder.materialPickerAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [messageApi, t, materials],
   );
 
   const resolveOrderIdByRowKey = useCallback((rowKey: React.Key): number | null => {
@@ -2912,6 +2970,14 @@ const SalesOrdersPage: React.FC = () => {
                                         ['items', index, '_sourceType'],
                                         (material as any)?.sourceType || (material as any)?.source_type,
                                       );
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, '_masterMaterialUuid'],
+                                        material.uuid,
+                                      );
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, 'variant_attributes'],
+                                        undefined,
+                                      );
                                       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
                                       if (pt !== 'tax_inclusive') return;
                                       const raw = Number(formRef.current?.getFieldValue(['items', index, 'unit_price'])) || 0;
@@ -2932,27 +2998,16 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.variantAttributes'),
                       dataIndex: 'variant_attributes',
-                      width: 140,
-                      render: (_: any, __: any, index: number) => (
-                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
-                          {({ getFieldValue }: any) => {
-                            const row = getFieldValue('items')?.[index];
-                            const mid = row?.material_id ? Number(row.material_id) : null;
-                            const st = row?._sourceType ?? materials.find((m: any) => m.id === mid)?.sourceType ?? materials.find((m: any) => m.id === mid)?.source_type;
-                            const isConfigure = st === 'Configure';
-                            if (!isConfigure) return <span style={{ color: '#999' }}>-</span>;
-                            return (
-                              <AntForm.Item name={[index, 'variant_attributes']} style={{ margin: 0 }}>
-                                <Input
-                                  placeholder={t('app.kuaizhizao.salesOrder.variantAttributesPlaceholder')}
-                                  size="small"
-                                  allowClear
-                                />
-                              </AntForm.Item>
-                            );
-                          }}
-                        </AntForm.Item>
-                      ),
+                      width: 220,
+                      render: (_: any, __: any, index: number) =>
+                        formRef.current ? (
+                          <OrderLineVariantAttributesCell
+                            form={formRef.current}
+                            rowIndex={index}
+                            materials={materials}
+                            onAttributesChange={(attrs) => refreshOrderLinePriceByVariant(index, attrs)}
+                          />
+                        ) : null,
                     },
                     {
                       title: t('app.kuaizhizao.salesOrder.spec'),
@@ -3345,8 +3400,8 @@ const SalesOrdersPage: React.FC = () => {
           open={materialPickerOpen}
           zIndex={nestedElevatedPopupZIndex}
           onCancel={() => setMaterialPickerOpen(false)}
-          onConfirm={(selected) => {
-            appendOrderItemsFromMaterials(selected);
+          onConfirm={async (selected) => {
+            await appendOrderItemsFromMaterials(selected);
             setMaterialPickerOpen(false);
           }}
         />

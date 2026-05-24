@@ -234,8 +234,42 @@ function stripUniTableColumnWidth(col: any): any {
  * 1. 主文本列去掉 width，由单元格内容撑开；
  * 2. 若可见数据列仍全部带 width，则再释放一列非 fixed 列，避免整表宽度锁死。
  */
-function applyUniTableColumnWidthPolicy(columns: any[]): any[] {
-  if (!columns?.length) return columns
+const UNI_TABLE_SELECTION_COL_WIDTH = 48
+const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120
+
+function parseUniTableColumnWidth(width: unknown): number | undefined {
+  if (typeof width === 'number' && Number.isFinite(width)) return width
+  if (typeof width === 'string') {
+    const n = parseInt(width, 10)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
+}
+
+function hasUniTableFixedColumns(columns: any[]): boolean {
+  return columns.some(
+    (c) => !c.hideInTable && (c.fixed === 'left' || c.fixed === 'right'),
+  )
+}
+
+/** 空表 + 固定列：按列宽求和得到 scroll.x，保证表头与固定列对齐（antd 固定列依赖 scroll.x）。 */
+function computeUniTableMinScrollX(
+  columns: any[],
+  options?: { includeSelection?: boolean },
+): number {
+  let total = options?.includeSelection ? UNI_TABLE_SELECTION_COL_WIDTH : 0
+  for (const col of columns) {
+    if (col.hideInTable) continue
+    total +=
+      parseUniTableColumnWidth(col.width) ??
+      parseUniTableColumnWidth(col.minWidth) ??
+      UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH
+  }
+  return total
+}
+
+function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false): any[] {
+  if (!columns?.length || preserveWidths) return columns
 
   let result = columns.map((col) =>
     isUniTableFlexTextColumn(col) ? stripUniTableColumnWidth(col) : col,
@@ -1393,8 +1427,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       return col
     })
-    return applyUniTableColumnWidthPolicy(mapped)
-  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled])
+    return applyUniTableColumnWidthPolicy(mapped, tableData.length === 0)
+  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled, tableData.length])
 
   // 全项目统一策略：结构化列保留页面 width；主文本列由 applyUniTableColumnWidthPolicy 释放 width；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
@@ -2281,6 +2315,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   ])
 
   const isEmptyTable = tableData.length === 0
+  const emptyTableHasFixedColumns =
+    isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
+  const tableHasRowSelection =
+    enableRowSelection || !!(restProps as { rowSelection?: unknown }).rowSelection
 
   const proTableBodyScrollYEnabled = React.useMemo(() => {
     if (allowCustomScrollY && restTableScrollY != null) return true
@@ -2340,7 +2378,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           el.style.overflowY = 'hidden'
           el.style.maxHeight = 'none'
           el.style.scrollbarGutter = 'auto'
-          if (isEmptyTable) {
+          if (isEmptyTable && !emptyTableHasFixedColumns) {
             el.style.setProperty('overflow-x', 'hidden', 'important')
           } else {
             el.style.removeProperty('overflow-x')
@@ -2356,7 +2394,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const tableHost = root.querySelector('.ant-table-wrapper')
     if (ro && tableHost) ro.observe(tableHost)
     return () => ro?.disconnect()
-  }, [proTableBodyScrollYEnabled, isEmptyTable, tableData, currentViewType, showDelayedLoading])
+  }, [
+    proTableBodyScrollYEnabled,
+    isEmptyTable,
+    emptyTableHasFixedColumns,
+    tableData,
+    currentViewType,
+    showDelayedLoading,
+  ])
 
   React.useLayoutEffect(() => {
     if (!enableRowSelection || selectedRowKeys.length === 0) return
@@ -2482,16 +2527,22 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           height: 6px !important;
           display: block !important;
         }
-        /* 空表 natural-height：不注入 scroll.x 时关闭横向滚动，避免仅表头时出现空横条 */
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-content,
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-body,
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-fixed-left .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-fixed-right .ant-table-body-inner {
+        /* 空表且无固定列：关闭横向滚动，避免仅表头时出现空横条 */
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-content,
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body,
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body-inner,
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-left .ant-table-body-inner,
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-right .ant-table-body-inner {
           overflow-x: hidden !important;
         }
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
-        .uni-table-container.uni-table-natural-height.uni-table-empty .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+        /* 空表有固定列：保留 scroll 容器以维持表头对齐，仅隐藏横向滚动条外观 */
+        .uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+        .uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+          height: 0 !important;
+          display: none !important;
+        }
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
           height: 0 !important;
           display: none !important;
         }
@@ -2504,7 +2555,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       `}</style>
       <div
         ref={containerRef}
-        className={`uni-table-container${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}`}
+        className={`uni-table-container${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}`}
         style={{
           position: 'relative',
           padding: isMobile ? '0 8px' : 0,
@@ -2696,10 +2747,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   const { y: _omitScrollY, ...scrollWithoutY } = mergedScroll
                   mergedScroll = scrollWithoutY
                 }
-                /** 空表 + natural-height：不强制 scroll.x=max-content，避免固定列布局产生空横向滚动条 */
+                /** 空表 + natural-height：无固定列时不注入 scroll.x；有固定列时按列宽求和注入 scroll.x 以保证表头对齐 */
                 if (!proTableBodyScrollYEnabled && isEmptyTable) {
-                  mergedScroll =
-                    ourScrollX != null ? ({ x: ourScrollX } as typeof mergedScroll) : undefined
+                  if (ourScrollX != null) {
+                    mergedScroll = { x: ourScrollX } as typeof mergedScroll
+                  } else if (emptyTableHasFixedColumns) {
+                    const minScrollX = computeUniTableMinScrollX(effectiveTableColumns, {
+                      includeSelection: tableHasRowSelection,
+                    })
+                    mergedScroll =
+                      minScrollX > 0 ? ({ x: minScrollX } as typeof mergedScroll) : undefined
+                  } else {
+                    mergedScroll = undefined
+                  }
                 }
 
                 const mergedOnRow =

@@ -8,6 +8,18 @@ import { UniDropdown } from '../uni-dropdown';
 import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { NamePath } from 'antd/es/form/interface';
 import { MaterialFormModal } from '../../apps/master-data/components/MaterialFormModal';
+import { isVariantSkuMaterial } from '../../apps/master-data/components/MaterialVariantCombinationsTable';
+
+function formatMaterialSelectLabel(m: Record<string, any>): string {
+  const mainCode = getMaterialField(m, 'mainCode') || '';
+  const nameVal = getMaterialField(m, 'name') || '';
+  return `${mainCode} - ${nameVal}`.trim() || String(m.id ?? '');
+}
+
+function filterSelectableMaterials(items: Material[], mastersOnly: boolean): Material[] {
+  if (!mastersOnly) return items;
+  return items.filter((m) => !isVariantSkuMaterial(m));
+}
 
 /** 与 Form.Item 的 getValueFromEvent 对齐：将 Select 值规范为数字 ID */
 export function uniMaterialSelectValueFromEvent(val: unknown): number | undefined {
@@ -56,6 +68,8 @@ interface UniMaterialSelectProps {
   getPopupContainer?: SelectProps['getPopupContainer'];
   /** 只展示启用的物料，默认为 true */
   activeOnly?: boolean;
+  /** 仅主物料（不列出属性 SKU 行），默认为 true */
+  mastersOnly?: boolean;
   /** 初始绑定的表单实例（通常可以从外层 ProForm / Form 自动获取，也可手动传入） */
   formItemProps?: any;
   /** 组件所在的是否是 Form.List 的子项？如果是，请传递该行的 field.name 以便计算回填路径 */
@@ -98,6 +112,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   } as Record<string, string>,
   getPopupContainer,
   activeOnly = true,
+  mastersOnly = true,
   listFieldKey,
   listFieldName,
   size = 'middle',
@@ -131,9 +146,12 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       const response: any = await materialApi.list({
         keyword: searchText,
         isActive: activeOnly ? true : undefined,
+        mastersOnly: mastersOnly ? true : undefined,
         limit: 200,
       });
-      setData(response?.data || response?.items || response || []);
+      const raw = response?.data || response?.items || response || [];
+      const rows = Array.isArray(raw) ? raw : [];
+      setData(filterSelectableMaterials(rows, mastersOnly));
     } catch (error) {
       console.error('Failed to fetch materials:', error);
       message.error('加载物料列表失败，请稍后重试');
@@ -149,7 +167,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   useEffect(() => {
     fetchMaterials();
-  }, []);
+  }, [activeOnly, mastersOnly]);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -197,12 +215,10 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   const options = useMemo(() => {
     const opts = data.map((item) => {
-      const code = getMaterialField(item as any, 'mainCode') || getMaterialField(item as any, 'code') || '';
-      const nameVal = getMaterialField(item as any, 'name') || '';
       const rawId = (item as any).id;
       const numId = Number(rawId);
       return {
-        label: `${code} - ${nameVal}`.trim() || String(rawId),
+        label: formatMaterialSelectLabel(item as any),
         value: Number.isFinite(numId) ? numId : rawId,
       };
     });
@@ -245,19 +261,18 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                 const list = await materialApi.list({
                   limit: 200,
                   isActive: activeOnly ? true : undefined,
+                  mastersOnly: mastersOnly ? true : undefined,
                   ...(kw && { keyword: kw }),
                 });
                 const raw = list as { items?: Material[]; data?: Material[] } | Material[];
                 const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
-                const items = Array.isArray(rows) ? rows : [];
+                const items = filterSelectableMaterials(Array.isArray(rows) ? rows : [], mastersOnly);
                 return items.map((m) => {
-                  const code = getMaterialField(m as any, 'mainCode') || getMaterialField(m as any, 'code') || '';
-                  const nameVal = getMaterialField(m as any, 'name') || '';
                   const rawId = (m as any).id;
                   const numId = Number(rawId);
                   return {
                     value: Number.isFinite(numId) ? numId : rawId,
-                    label: `${code} - ${nameVal}`.trim() || String(rawId),
+                    label: formatMaterialSelectLabel(m as any),
                   };
                 });
               },
@@ -277,7 +292,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         if (form) {
           form.setFieldValue(name, newMaterial.id);
           handleChange(newMaterial.id, {
-            label: `${newMaterial.mainCode || newMaterial.code} - ${newMaterial.name}`,
+            label: formatMaterialSelectLabel(newMaterial as any),
             value: newMaterial.id,
           });
         }

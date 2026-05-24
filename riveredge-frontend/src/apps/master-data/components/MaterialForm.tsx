@@ -42,8 +42,13 @@ import { processRouteApi, operationApi } from '../services/process';
 import { materialCodeMappingApi } from '../services/material';
 import type { Warehouse } from '../types/warehouse';
 import type { ProcessRoute, Operation } from '../types/process';
-import type { VariantAttributeDefinition } from '../types/variant-attribute';
-import { variantAttributeApi } from '../services/variant-attribute';
+import {
+  MaterialVariantCombinationsTable,
+  flushPendingVariantCombinations,
+  isVariantSkuMaterial,
+  normalizeScalarAttrs,
+  type PendingVariantCombination,
+} from './MaterialVariantCombinationsTable';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { testGenerateCode } from '../../../services/codeRule';
 
@@ -143,6 +148,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   ], [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
+  const [pendingVariantRows, setPendingVariantRows] = useState<PendingVariantCombination[]>([]);
+
+  useEffect(() => {
+    if (!open) {
+      setPendingVariantRows([]);
+    }
+  }, [open]);
 
   const emitAgentDebugLog = useCallback(
     (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
@@ -439,6 +451,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 customerUuid: undefined,
                 customerName: undefined,
                 code: alias.code,
+                name: alias.name,
                 description: alias.description,
               });
             } else if (codeType === 'SUPPLIER' || externalEntityType === 'supplier') {
@@ -449,6 +462,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 supplierUuid: undefined,
                 supplierName: undefined,
                 code: alias.code,
+                name: alias.name,
                 description: alias.description,
               });
             } else if (['SALE', 'DES', 'PUR', 'WH', 'PROD'].includes(codeType)) {
@@ -925,13 +939,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         variant_managed: restValues.variantManaged,
         variant_attributes: (() => {
           if (!restValues.variantManaged) return undefined;
-          const va = restValues.variantAttributes;
-          if (va == null) return undefined;
-          if (typeof va !== 'object') return undefined;
-          const filtered = Object.fromEntries(
-            Object.entries(va).filter(([, v]) => v != null && v !== '' && (!Array.isArray(v) || v.length > 0))
-          );
-          return Object.keys(filtered).length > 0 ? filtered : null;
+          if (isVariantSkuMaterial(material)) {
+            const va = material?.variantAttributes ?? (material as any)?.variant_attributes;
+            return va && typeof va === 'object' ? normalizeScalarAttrs(va as Record<string, unknown>) : null;
+          }
+          return null;
         })(),
         description: restValues.description,
         brand: restValues.brand,
@@ -950,12 +962,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         customer_codes: customerCodes.length > 0 ? customerCodes.map(code => ({
           customer_id: code.customerId,
           code: code.code,
+          name: code.name,
           description: code.description,
         })) : undefined,
         // 供应商编号
         supplier_codes: supplierCodes.length > 0 ? supplierCodes.map(code => ({
           supplier_id: code.supplierId,
           code: code.code,
+          name: code.name,
           description: code.description,
         })) : undefined,
         // 默认值
@@ -987,6 +1001,25 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const { customData: cfValues, standardValues: coreData } = extractFormValues(submitData);
 
       const result = await onFinish(coreData as any);
+
+      if (
+        !isEdit &&
+        restValues.variantManaged &&
+        pendingVariantRows.length > 0 &&
+        result &&
+        typeof result === 'object'
+      ) {
+        const created = await flushPendingVariantCombinations(result as Material, pendingVariantRows);
+        if (created > 0) {
+          messageApi.success(
+            t('app.master-data.materials.variantCombosFlushed', {
+              count: created,
+              defaultValue: `已创建 ${created} 条属性组合`,
+            }),
+          );
+          setPendingVariantRows([]);
+        }
+      }
       
       // 保存自定义字段值（API 要求 record_id 为数字主键，勿传 uuid）
       const recordIdForCustom =
@@ -1016,10 +1049,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const handleVariantManagedChange = (checked: boolean) => {
     setVariantManaged(checked);
     if (!checked) {
-      // 如果关闭属性管理，清空属性
-      formRef.current?.setFieldsValue({
-        variantAttributes: undefined,
-      });
+      setPendingVariantRows([]);
     }
   };
 
@@ -1170,7 +1200,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: t('app.master-data.materialForm.variantManagement'),
               disabled: !variantManaged,
               children: (
-                <VariantManagementTab />
+                <MaterialVariantCombinationsTable
+                  material={material}
+                  isEdit={isEdit}
+                  pendingRows={pendingVariantRows}
+                  onPendingRowsChange={setPendingVariantRows}
+                />
               ),
             },
             {
@@ -1976,261 +2011,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           fieldProps={{ rows: 3, maxLength: 500 }}
         />
       </Col>
-    </Row>
-  );
-};
-
-/**
- * 属性管理标签页
- */
-const VariantManagementTab: React.FC = () => {
-  const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
-  const [variantAttributeDefinitions, setVariantAttributeDefinitions] = useState<VariantAttributeDefinition[]>([]);
-  const [definitionsLoading, setDefinitionsLoading] = useState(false);
-
-  // 加载属性定义
-  useEffect(() => {
-    const loadDefinitions = async () => {
-      setDefinitionsLoading(true);
-      try {
-        const definitions = await variantAttributeApi.list({ is_active: true });
-        // 按显示顺序排序
-        definitions.sort((a, b) => a.display_order - b.display_order);
-        setVariantAttributeDefinitions(definitions);
-      } catch (error: any) {
-        messageApi.error(error.message || t('app.master-data.materialForm.loadVariantDefFailed'));
-      } finally {
-        setDefinitionsLoading(false);
-      }
-    };
-
-    loadDefinitions();
-  }, []);
-
-  if (definitionsLoading) {
-    return <div>{t('app.master-data.materialForm.loading')}</div>;
-  }
-
-  if (variantAttributeDefinitions.length === 0) {
-    return (
-      <div>
-        <p>{t('app.master-data.materialForm.noVariantDef')}</p>
-        <p>{t('app.master-data.materialForm.configVariantFirst')}</p>
-      </div>
-    );
-  }
-
-  return (
-    <Row gutter={16}>
-      {variantAttributeDefinitions.map((def) => {
-        const fieldName = ['variantAttributes', def.attribute_name];
-        
-        // 根据属性类型渲染对应的ProForm组件
-        switch (def.attribute_type) {
-          case 'enum':
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormSelect
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  fieldProps={{ mode: def.allow_multiple ? 'multiple' : undefined }}
-                  options={def.enum_values?.map(v => ({ label: v, value: v }))}
-                  rules={[
-                    {
-                      validator: async (_: any, value: any) => {
-                        if (!value) return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-          
-          case 'text':
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormText
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  fieldProps={{
-                    maxLength: def.validation_rules?.max_length,
-                  }}
-                  rules={[
-                    {
-                      validator: async (_: any, value: any) => {
-                        if (!value) return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-          
-          case 'number':
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormDigit
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  fieldProps={{
-                    min: def.validation_rules?.min,
-                    max: def.validation_rules?.max,
-                  }}
-                  rules={[
-                    {
-                      validator: async (_: any, value: any) => {
-                        if (value == null || value === '') return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-          
-          case 'date':
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormText
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  fieldProps={{
-                    type: 'date',
-                  }}
-                  rules={[
-                    {
-                      validator: async (_: any, value: any) => {
-                        if (!value) return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-          
-          case 'boolean':
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormSelect
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  options={[
-                    { label: t('app.master-data.bom.yes'), value: true },
-                    { label: t('app.master-data.bom.no'), value: false },
-                  ]}
-                  rules={[
-                    {
-                      validator: async (_, value) => {
-                        if (value === undefined || value === null) return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-          
-          default:
-            return (
-              <Col span={12} key={def.attribute_name}>
-                <ProFormText
-                  name={fieldName}
-                  label={def.display_name}
-                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={false}
-                  tooltip={def.description}
-                  rules={[
-                    {
-                      validator: async (_: any, value: any) => {
-                        if (!value) return;
-                        try {
-                          const result = await variantAttributeApi.validate({
-                            attribute_name: def.attribute_name,
-                            attribute_value: value,
-                          });
-                          if (!result.is_valid) {
-                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                          }
-                        } catch (error: any) {
-                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
-                        }
-                      },
-                    },
-                  ]}
-                />
-              </Col>
-            );
-        }
-      })}
     </Row>
   );
 };

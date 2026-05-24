@@ -68,6 +68,7 @@ class MaterialCodeAlias(BaseModel):
     external_entity_id = fields.IntField(null=True, description="外部实体ID（客户ID或供应商ID）")
     
     # 扩展信息
+    name = fields.CharField(max_length=200, null=True, description="名称（客户品名/供应商品名等，可选）")
     description = fields.TextField(null=True, description="描述（可选）")
     is_primary = fields.BooleanField(default=False, description="是否为主要编码（同一类型中，只有一个可以是主要编码）")
     

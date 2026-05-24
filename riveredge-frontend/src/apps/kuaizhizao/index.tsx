@@ -88,6 +88,7 @@ const SparePartsPage = lazy(() => import('./pages/equipment-management/spare-par
 
 // 成本管理（分析中心已迁至快报表 kuaireport）
 const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
+const CostCenterDashboardPage = lazy(() => import('./pages/cost-management/dashboard'));
 const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
 const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
 const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
@@ -125,6 +126,7 @@ const PackingBindingPage = lazy(() => import('./pages/production-execution/packi
 
 // 绩效管理页面
 const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
+const PerformanceCenterDashboardPage = lazy(() => import('./pages/performance/dashboard'));
 const SkillsPage = lazy(() => import('./pages/performance/skills'));
 const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
 const PieceRatesPage = lazy(() => import('./pages/performance/piece-rates'));
@@ -296,6 +298,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/spare-parts" element={withPageSuspense(SparePartsPage)} />
 
       {/* 绩效管理路由 */}
+      <Route path="performance/dashboard" element={withPageSuspense(PerformanceCenterDashboardPage)} />
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
       <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
       <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
@@ -330,6 +333,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
 
       {/* 成本管理 */}
+      <Route path="cost-management/dashboard" element={withPageSuspense(CostCenterDashboardPage)} />
       <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
       <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />

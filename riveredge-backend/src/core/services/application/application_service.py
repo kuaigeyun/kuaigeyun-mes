@@ -24,6 +24,7 @@ from loguru import logger
 ApplicationDict = Dict[str, Any]
 
 _PLACEHOLDER_APP_CODES = {"kuaicrm", "kuaipdm", "kuaichain"}
+_BASE_APP_CODES = frozenset({"master-data"})
 _PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
 
 
@@ -40,6 +41,40 @@ class ApplicationService:
             return True
         cat = str(manifest.get("market_category") or "").strip().lower()
         return cat == "dedicated"
+
+    @staticmethod
+    def _manifest_is_base(manifest: Dict[str, Any]) -> bool:
+        code = str(manifest.get("code") or "")
+        if code in _BASE_APP_CODES:
+            return True
+        return str(manifest.get("market_category") or "").strip().lower() == "base"
+
+    @staticmethod
+    def is_base_app_code(app_code: str) -> bool:
+        if app_code in _BASE_APP_CODES:
+            return True
+        manifest = ApplicationService._get_manifest_by_code(app_code)
+        return bool(manifest and ApplicationService._manifest_is_base(manifest))
+
+    @staticmethod
+    async def _auto_enable_base_app_if_needed(
+        tenant_id: int,
+        app_code: str,
+        application: ApplicationDict,
+    ) -> ApplicationDict:
+        """基础应用（如主数据）安装后默认启用。"""
+        if not ApplicationService.is_base_app_code(app_code):
+            return application
+        if not application.get("is_installed") or application.get("is_active"):
+            return application
+        uuid = application.get("uuid")
+        if not uuid:
+            return application
+        try:
+            return await ApplicationService.enable_application(tenant_id, str(uuid))
+        except Exception as e:
+            logger.error(f"自动启用基础应用 {app_code} 失败 (tenant_id={tenant_id}): {e}")
+            return application
 
     @staticmethod
     def effective_is_dedicated(app_row: Dict[str, Any]) -> bool:
@@ -1104,6 +1139,9 @@ class ApplicationService:
                             sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
+                        application = await ApplicationService._auto_enable_base_app_if_needed(
+                            tenant_id, code, application
+                        )
                 else:
                     # 创建新应用
                     application = await ApplicationService.create_application(
@@ -1119,11 +1157,18 @@ class ApplicationService:
                             sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
+                        application = await ApplicationService._auto_enable_base_app_if_needed(
+                            tenant_id, code, application
+                        )
                 
                 ded = ApplicationService._manifest_is_dedicated(manifest)
                 await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
                 if isinstance(application, dict):
                     application["is_dedicated"] = ded
+
+                application = await ApplicationService._auto_enable_base_app_if_needed(
+                    tenant_id, code, application
+                )
 
                 registered_apps.append(application)
                 

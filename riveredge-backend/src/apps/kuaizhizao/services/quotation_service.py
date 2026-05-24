@@ -257,6 +257,7 @@ class QuotationService:
                     unit_price=it.unit_price,
                     tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     total_amount=it.total_amount,
+                    variant_attributes=getattr(it, "variant_attributes", None),
                     delivery_date=it.delivery_date,
                     notes=it.notes,
                     created_at=it.created_at,
@@ -459,6 +460,7 @@ class QuotationService:
                     unit_price=unit_pr,
                     tax_rate=tax_r,
                     total_amount=amt,
+                    variant_attributes=getattr(item_data, "variant_attributes", None),
                     delivery_date=item_data.delivery_date,
                     notes=item_data.notes,
                 )
@@ -1019,9 +1021,10 @@ class QuotationService:
                         quote_quantity=qty,
                         unit_price=unit_pr,
                         tax_rate=tax_r,
-                        total_amount=amt,
-                        delivery_date=item_data.delivery_date,
-                        notes=item_data.notes,
+                    total_amount=amt,
+                    variant_attributes=getattr(item_data, "variant_attributes", None),
+                    delivery_date=item_data.delivery_date,
+                    notes=item_data.notes,
                     )
                 await Quotation.filter(id=quotation_id).update(
                     total_quantity=total_qty,
@@ -1165,6 +1168,7 @@ class QuotationService:
                     munit = item_data.material_unit
                     ddate = item_data.delivery_date
                     nit = item_data.notes
+                    mvar = getattr(item_data, "variant_attributes", None)
                 else:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
@@ -1189,6 +1193,7 @@ class QuotationService:
                     munit = (item_data.material_unit or "")[:20]
                     ddate = item_data.delivery_date
                     nit = item_data.notes
+                    mvar = getattr(item_data, "variant_attributes", None)
 
                 total_qty += qty
                 total_amt += amt
@@ -1204,6 +1209,7 @@ class QuotationService:
                     unit_price=unit_pr,
                     tax_rate=tax_r,
                     total_amount=amt,
+                    variant_attributes=mvar,
                     delivery_date=ddate,
                     notes=nit,
                 )
@@ -1317,6 +1323,7 @@ class QuotationService:
                 delivery_date=it.delivery_date or delivery_date,
                 unit_price=it.unit_price,
                 tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
+                variant_attributes=getattr(it, "variant_attributes", None),
                 item_amount=it.total_amount,
                 notes=it.notes,
             )

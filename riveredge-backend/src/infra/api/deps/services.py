@@ -169,6 +169,20 @@ def get_tenant_service_with_fallback() -> Any:
 
         async def deactivate_tenant(self, tenant_id: int, skip_tenant_filter: bool = True):
             return await self._tenant_service.deactivate_tenant(tenant_id, skip_tenant_filter=skip_tenant_filter)
+
+        async def initialize_tenant_data(
+            self,
+            tenant_id: int,
+            init_data_options=None,
+            current_user_id=None,
+            industry_preset=None,
+        ):
+            return await self._tenant_service.initialize_tenant_data(
+                tenant_id=tenant_id,
+                init_data_options=init_data_options,
+                current_user_id=current_user_id,
+                industry_preset=industry_preset,
+            )
     
     return TenantServiceAdapter()
 

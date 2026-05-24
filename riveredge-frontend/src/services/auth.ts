@@ -104,6 +104,11 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   return apiRequest<CurrentUser>('/auth/me');
 }
 
+/** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */
+export function tenantNameFromLoginResponse(response: LoginResponse): string {
+  return response.user?.tenant_name?.trim() ?? '';
+}
+
 /**
  * 从服务端拉取最新用户权限并写入全局 Store / localStorage（角色权限变更后需调用）
  */

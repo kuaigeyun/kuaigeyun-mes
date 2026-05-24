@@ -7,10 +7,10 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormCheckbox, ProFormGroup } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
-import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -27,7 +27,6 @@ import {
   deactivateTenant,
   deleteTenantBySuperAdmin,
 } from '../../../../services/tenant';
-import { getInitConfig, getIndustryPresets, type InitItem, type IndustryPreset } from '../../../../services/tenantInit';
 // 使用 apiRequest 统一处理 HTTP 请求
 
 // @ts-ignore
@@ -57,7 +56,6 @@ const SuperAdminTenantList: React.FC = () => {
   const { message } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentTenantId, setCurrentTenantId] = useState<number | null>(null);
   const [tenantDetail, setTenantDetail] = useState<Tenant | null>(null);
@@ -69,8 +67,6 @@ const SuperAdminTenantList: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [packageConfigs, setPackageConfigs] = useState<Record<string, PackageConfig>>({});
   const [selectedPlan, setSelectedPlan] = useState<TenantPlan>(TenantPlan.TRIAL);
-  const [initOptionalItems, setInitOptionalItems] = useState<InitItem[]>([]);
-  const [industryPresets, setIndustryPresets] = useState<IndustryPreset[]>([]);
   
   /**
    * 审核通过组织注册
@@ -629,62 +625,48 @@ const SuperAdminTenantList: React.FC = () => {
   /**
    * 打开编辑 Modal
    */
-  const handleEdit = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const tenantId = Number(keys[0]);
-      setIsEdit(true);
-      setCurrentTenantId(tenantId);
-      setModalVisible(true);
-      setFormLoading(true);
-      
-      try {
-        // 使用平台超级管理员接口获取组织详情
-        const data = await apiRequest<Tenant>(`/infra/tenants/${tenantId}`, {
-          method: 'GET',
+  const openEditModal = async (tenantId: number) => {
+    setIsEdit(true);
+    setCurrentTenantId(tenantId);
+    setModalVisible(true);
+    setFormLoading(true);
+
+    try {
+      const data = await apiRequest<Tenant>(`/infra/tenants/${tenantId}`, {
+        method: 'GET',
+      });
+      setSelectedPlan(data.plan);
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          name: data.name,
+          domain: data.domain,
+          status: data.status,
+          plan: data.plan,
+          max_users: data.max_users,
+          max_storage: data.max_storage,
+          expires_at: data.expires_at,
         });
-        setSelectedPlan(data.plan);
-        // 设置表单初始值
-        setTimeout(() => {
-          formRef.current?.setFieldsValue({
-            name: data.name,
-            domain: data.domain,
-            status: data.status,
-            plan: data.plan,
-            max_users: data.max_users,
-            max_storage: data.max_storage,
-            expires_at: data.expires_at,
-          });
-        }, 0);
-      } catch (error: any) {
-        message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
-        setModalVisible(false);
-      } finally {
-        setFormLoading(false);
-      }
+      }, 0);
+    } catch (error: any) {
+      message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
+      setModalVisible(false);
+    } finally {
+      setFormLoading(false);
     }
   };
 
-  // 新建时加载初始化项配置并设置默认全选
-  useEffect(() => {
-    if (modalVisible && !isEdit) {
-      getInitConfig()
-        .then((res) => {
-          const items = res.optional || [];
-          setInitOptionalItems(items);
-          // 默认全选
-          formRef.current?.setFieldsValue({
-            init_data_options: items.map((i) => i.key),
-          });
-        })
-        .catch(() => setInitOptionalItems([]));
-        
-      getIndustryPresets()
-        .then((res) => {
-          setIndustryPresets(res || []);
-        })
-        .catch(() => setIndustryPresets([]));
+  /**
+   * 删除单行组织（仅停用/未激活且无业务单据）
+   */
+  const handleDeleteRow = async (tenantId: number) => {
+    try {
+      await deleteTenantBySuperAdmin(tenantId);
+      message.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      message.error(error?.message || error?.detail || t('pages.infra.tenant.operationFailed'));
     }
-  }, [modalVisible, isEdit]);
+  };
 
   /**
    * 关闭 Modal
@@ -723,15 +705,22 @@ const SuperAdminTenantList: React.FC = () => {
         });
         message.success(t('pages.infra.tenant.updateSuccess'));
       } else {
+        const adminAccount = values.admin_account;
         const createData: CreateTenantData = {
           name: values.name,
           domain: values.domain,
-          status: values.status || TenantStatus.INACTIVE,
+          status: values.status || TenantStatus.ACTIVE,
           plan: values.plan || TenantPlan.TRIAL,
           settings: values.settings || {},
+          max_users: values.max_users,
+          max_storage: values.max_storage,
           expires_at: values.expires_at,
-          industry_preset: values.industry_preset || null,
-          init_data_options: values.init_data_options,
+          admin_account: {
+            username: adminAccount.username,
+            password: adminAccount.password,
+            full_name: adminAccount.full_name || undefined,
+            phone: adminAccount.phone || undefined,
+          },
         };
         await apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
@@ -747,131 +736,6 @@ const SuperAdminTenantList: React.FC = () => {
     } finally {
       setFormLoading(false);
     }
-  };
-
-  /**
-   * 处理删除
-   * 
-   * 支持批量删除组织（软删除）
-   * 
-   * @param keys - 要删除的组织 ID 数组
-   */
-  const handleDelete = async (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      message.warning(t('pages.infra.tenant.selectToDelete'));
-      return;
-    }
-
-    Modal.confirm({
-      title: t('pages.infra.tenant.deleteConfirmTitle'),
-      content: t('pages.infra.tenant.deleteConfirmContent', { count: keys.length }),
-      okText: t('pages.infra.tenant.deleteConfirmOk'),
-      okType: 'danger',
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          const progressModal = Modal.info({
-            title: t('pages.infra.tenant.deleting'),
-            width: 600,
-            content: (
-              <div>
-                <Progress percent={0} status="active" />
-                <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deletePreparing', { count: keys.length })}</p>
-              </div>
-            ),
-            okButtonProps: { style: { display: 'none' } },
-          });
-
-          const tenantIds = keys.map(key => Number(key));
-          const results: Array<{ success: boolean; tenantId: number; message: string }> = [];
-          let successCount = 0;
-          let failCount = 0;
-
-          for (let i = 0; i < tenantIds.length; i++) {
-            const tenantId = tenantIds[i];
-            const percent = Math.round(((i + 1) / tenantIds.length) * 100);
-
-            try {
-              await deleteTenantBySuperAdmin(tenantId);
-              successCount++;
-              results.push({
-                success: true,
-                tenantId,
-                message: t('pages.infra.tenant.deleteRowSuccess', { id: tenantId }),
-              });
-
-              progressModal.update({
-                content: (
-                  <div>
-                    <Progress percent={percent} status="active" />
-                    <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteProgress', { current: i + 1, total: tenantIds.length })}</p>
-                    <p style={{ marginTop: 8, color: '#52c41a' }}>{t('pages.infra.tenant.deleteProgressCount', { success: successCount, fail: failCount })}</p>
-                  </div>
-                ),
-              });
-            } catch (error: any) {
-              failCount++;
-              const errorMessage = error?.message || error?.detail || t('pages.infra.tenant.operationFailed');
-              results.push({
-                success: false,
-                tenantId,
-                message: t('pages.infra.tenant.deleteRowFail', { id: tenantId, message: errorMessage }),
-              });
-
-              progressModal.update({
-                content: (
-                  <div>
-                    <Progress percent={percent} status="active" />
-                    <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteProgress', { current: i + 1, total: tenantIds.length })}</p>
-                    <p style={{ marginTop: 8, color: '#52c41a' }}>{t('pages.infra.tenant.deleteProgressCount', { success: successCount, fail: failCount })}</p>
-                  </div>
-                ),
-              });
-            }
-          }
-
-          progressModal.destroy();
-
-          const failedResults = results.filter(r => !r.success);
-          if (failedResults.length > 0) {
-            Modal.warning({
-              title: t('pages.infra.tenant.deletePartialTitle'),
-              width: 700,
-              content: (
-                <div>
-                  <p><strong>{t('pages.infra.tenant.deleteResult', { success: successCount, fail: failCount })}</strong></p>
-                  <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteFailedRecords')}</p>
-                  <List
-                    size="small"
-                    dataSource={failedResults}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <Typography.Text type="danger">{item.message}</Typography.Text>
-                      </List.Item>
-                    )}
-                  />
-                </div>
-              ),
-              onOk: () => {
-                actionRef.current?.reload();
-                setSelectedRowKeys([]);
-              },
-            });
-          } else {
-            Modal.success({
-              title: t('pages.infra.tenant.deleteSuccessTitle'),
-              content: t('pages.infra.tenant.deleteSuccessContent', { count: successCount }),
-              onOk: () => {
-                actionRef.current?.reload();
-                setSelectedRowKeys([]);
-              },
-            });
-          }
-        } catch (error: any) {
-          message.error(t('pages.infra.tenant.deleteOpFailed', { message: error?.message || '' }));
-        }
-      },
-    });
   };
 
   /**
@@ -981,6 +845,14 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['lg'],
     },
     {
+      title: t('pages.infra.tenant.userCount'),
+      dataIndex: 'user_count',
+      width: 120,
+      hideInSearch: true,
+      responsive: ['lg'],
+      render: (_, record) => record.user_count ?? 0,
+    },
+    {
       title: t('pages.infra.tenant.maxStorage'),
       dataIndex: 'max_storage',
       width: 150,
@@ -998,9 +870,17 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['xl'],
     },
     {
+      title: t('pages.infra.tenant.lastLoginAt'),
+      dataIndex: 'last_login_at',
+      valueType: 'dateTime',
+      hideInSearch: true,
+      width: 180,
+      responsive: ['xl'],
+    },
+    {
       title: t('pages.infra.tenant.actions'),
       valueType: 'option',
-      width: 300,
+      width: 360,
       fixed: 'right',
       render: (_, record) => {
         const isInactive = record.status === TenantStatus.INACTIVE;
@@ -1008,7 +888,7 @@ const SuperAdminTenantList: React.FC = () => {
         const isSuspended = record.status === TenantStatus.SUSPENDED;
 
         return (
-          <Space>
+          <Space wrap size={[4, 4]}>
             <Button
               type="link"
               size="small"
@@ -1016,6 +896,25 @@ const SuperAdminTenantList: React.FC = () => {
             >
               {t('pages.infra.tenant.detail')}
             </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEditModal(record.id)}
+            >
+              {t('common.edit')}
+            </Button>
+            {isSuspended && (
+              <Popconfirm
+                title={t('pages.infra.tenant.deleteRowConfirmTitle')}
+                description={t('pages.infra.tenant.deleteRowConfirmContent')}
+                onConfirm={() => handleDeleteRow(record.id)}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  {t('common.delete')}
+                </Button>
+              </Popconfirm>
+            )}
             {isInactive && (
               <Popconfirm
                 title={t('pages.infra.tenant.approveConfirm')}
@@ -1091,18 +990,9 @@ const SuperAdminTenantList: React.FC = () => {
       columns={columns}
       rowKey="id"
       showAdvancedSearch={true}
-      enableRowSelection={true}
-      onRowSelectionChange={(keys) => {
-        setSelectedRowKeys(keys);
-      }}
       showCreateButton={true}
       createButtonText={t('pages.infra.tenant.createButton')}
       onCreate={handleCreate}
-      showEditButton={true}
-      onEdit={handleEdit}
-      showDeleteButton={true}
-      deleteButtonText={t('pages.infra.tenant.batchDeleteButton')}
-      onDelete={handleDelete}
       showImportButton={true}
       onImport={handleImport}
       importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('pages.infra.tenant.importHeaderStatus'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
@@ -1277,16 +1167,18 @@ const SuperAdminTenantList: React.FC = () => {
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef}
+      grid
       initialValues={{
-        status: TenantStatus.INACTIVE,
+        status: TenantStatus.ACTIVE,
         plan: TenantPlan.TRIAL,
       }}
     >
+        <ProFormGroup title={t('pages.infra.tenant.basicInfoTitle')} colProps={{ span: 24 }}>
         <ProFormText
           name="name"
           label={t('pages.infra.tenant.name')}
           placeholder={t('pages.infra.tenant.namePlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
           rules={[
             { required: true, message: t('pages.infra.tenant.nameRequired') },
             { min: 1, max: 100, message: t('pages.infra.tenant.nameLength') },
@@ -1296,7 +1188,7 @@ const SuperAdminTenantList: React.FC = () => {
           name="domain"
           label={t('pages.infra.tenant.formDomainLabel')}
           placeholder={t('pages.infra.tenant.formDomainPlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
           rules={[
             { required: true, message: t('pages.infra.tenant.formDomainRequired') },
             { min: 1, max: 100, message: t('pages.infra.tenant.domainLength') },
@@ -1307,7 +1199,7 @@ const SuperAdminTenantList: React.FC = () => {
           name="status"
           label={t('pages.infra.tenant.formStatusLabel')}
           placeholder={t('pages.infra.tenant.formStatusPlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
           options={[
             { label: t('pages.infra.tenant.statusActive'), value: TenantStatus.ACTIVE },
             { label: t('pages.infra.tenant.statusInactive'), value: TenantStatus.INACTIVE },
@@ -1315,11 +1207,13 @@ const SuperAdminTenantList: React.FC = () => {
             { label: t('pages.infra.tenant.statusSuspended'), value: TenantStatus.SUSPENDED },
           ]}
         />
+        </ProFormGroup>
+        <ProFormGroup title={t('pages.infra.tenant.formPlanLabel')} colProps={{ span: 24 }}>
         <SafeProFormSelect
           name="plan"
           label={t('pages.infra.tenant.formPlanLabel')}
           placeholder={t('pages.infra.tenant.formPlanPlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 24 }}
           options={[
             { label: t('pages.infra.tenant.planTrial'), value: TenantPlan.TRIAL },
             { label: t('pages.infra.tenant.planBasic'), value: TenantPlan.BASIC },
@@ -1345,62 +1239,92 @@ const SuperAdminTenantList: React.FC = () => {
           name="max_users"
           label={t('pages.infra.tenant.maxUsers')}
           placeholder={t('pages.infra.tenant.formMaxUsersPlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
           min={1}
           rules={[{ required: true, message: t('pages.infra.tenant.formMaxUsersRequired') }]}
-          extra={t('pages.infra.tenant.formPlanExtra')}
         />
         <ProFormDigit
           name="max_storage"
           label={t('pages.infra.tenant.formMaxStorageLabel')}
           placeholder={t('pages.infra.tenant.formMaxStoragePlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
           min={0}
           rules={[{ required: true, message: t('pages.infra.tenant.formMaxStorageRequired') }]}
-          extra={t('pages.infra.tenant.formPlanExtra')}
         />
         <ProFormDateTimePicker
           name="expires_at"
           label={t('pages.infra.tenant.formExpiresAtLabel')}
           placeholder={t('pages.infra.tenant.formExpiresAtPlaceholder')}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
+          fieldProps={{ style: { width: '100%' } }}
         />
+        </ProFormGroup>
         {!isEdit && (
-          <ProFormGroup
-            title="数据初始化配置"
-            colProps={{ span: 24 }}
-          >
-            {industryPresets.length > 0 && (
-              <ProFormSelect
-                name="industry_preset"
-                label="行业预设 (一键建账)"
-                placeholder="请选择行业预设模板"
-                colProps={{ span: 24 }}
-                options={[
-                  ...industryPresets.map(p => ({
-                    label: `${p.name} - ${p.description}`,
-                    value: p.code,
-                  }))
-                ]}
-                fieldProps={{
-                  allowClear: true,
-                }}
-                extra="选择行业预设后，将自动忽略下方勾选的个别模块，直接装载该行业的完整数据包。"
-              />
-            )}
-            
-            {initOptionalItems.length > 0 && (
-              <ProFormCheckbox.Group
-                name="init_data_options"
-                label={t('pages.infra.tenant.initDataOptions')}
-                options={initOptionalItems.map((i) => ({
-                  label: `${i.name}：${i.description}`,
-                  value: i.key,
-                }))}
-                colProps={{ span: 24 }}
-                extra={t('pages.infra.tenant.initDataOptionsExtra')}
-              />
-            )}
+          <ProFormGroup title={t('pages.infra.tenant.adminAccountTitle')} colProps={{ span: 24 }}>
+            <ProFormText
+              name={['admin_account', 'username']}
+              label={t('pages.infra.tenant.adminUsername')}
+              placeholder={t('field.user.usernamePlaceholder')}
+              colProps={{ span: 8 }}
+              rules={[
+                { required: true, message: t('field.user.usernameRequired') },
+                { min: 3, message: t('field.user.usernameMin') },
+                { max: 50, message: t('field.user.usernameMax') },
+                { pattern: /^[a-zA-Z0-9_-]+$/, message: t('field.user.usernamePattern') },
+              ]}
+            />
+            <ProFormText
+              name={['admin_account', 'full_name']}
+              label={t('pages.infra.tenant.adminFullName')}
+              placeholder={t('field.user.fullNamePlaceholder')}
+              colProps={{ span: 8 }}
+            />
+            <ProFormText
+              name={['admin_account', 'phone']}
+              label={t('pages.infra.tenant.adminPhoneOptional')}
+              placeholder={t('field.user.phonePlaceholder')}
+              colProps={{ span: 8 }}
+              rules={[
+                {
+                  validator: (_, value) => {
+                    if (!value) return Promise.resolve();
+                    if (!/^1[3-9]\d{9}$/.test(String(value).trim())) {
+                      return Promise.reject(new Error(t('field.user.phonePattern')));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            />
+            <ProFormText.Password
+              name={['admin_account', 'password']}
+              label={t('field.user.password')}
+              placeholder={t('field.user.passwordPlaceholder')}
+              colProps={{ span: 12 }}
+              rules={[
+                { required: true, message: t('field.user.passwordRequiredPlaceholder') },
+                { min: 8, message: t('field.user.passwordMin') },
+                { max: 128, message: t('field.user.passwordMax') },
+              ]}
+            />
+            <ProFormText.Password
+              name={['admin_account', 'password_confirm']}
+              label={t('field.user.confirmPassword')}
+              placeholder={t('field.user.confirmPasswordPlaceholder')}
+              colProps={{ span: 12 }}
+              dependencies={[['admin_account', 'password']]}
+              rules={[
+                { required: true, message: t('field.user.confirmPasswordRequired') },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue(['admin_account', 'password']) === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error(t('field.user.passwordMismatch')));
+                  },
+                }),
+              ]}
+            />
           </ProFormGroup>
         )}
     </FormModalTemplate>

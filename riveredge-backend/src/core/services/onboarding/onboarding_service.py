@@ -424,8 +424,8 @@ GO_LIVE_ASSISTANT_PHASES = [
                 "id": "init_completed",
                 "name": "组织初始化",
                 "required": True,
-                "description": "完成时区、货币、语言、日期格式等基础设置",
-                "jump_path": "/init/wizard",
+                "description": "完成时区、货币、语言、日期格式等基础设置（系统自动应用默认值）",
+                "jump_path": "/system/site-settings",
                 "check_key": "init_completed",
             },
             {
@@ -583,6 +583,16 @@ class OnboardingService:
 
         settings = tenant.settings or {}
         init_completed = bool(settings.get("init_completed"))
+
+        if not init_completed:
+            try:
+                from infra.services.init_wizard_service import InitWizardService
+                await InitWizardService().apply_default_init_settings(tenant_id)
+                tenant = await Tenant.get_or_none(id=tenant_id)
+                settings = (tenant.settings or {}) if tenant else {}
+                init_completed = bool(settings.get("init_completed"))
+            except Exception as e:
+                logger.warning(f"组织 {tenant_id} 自动默认初始化失败: {e}")
 
         if not init_completed:
             return {

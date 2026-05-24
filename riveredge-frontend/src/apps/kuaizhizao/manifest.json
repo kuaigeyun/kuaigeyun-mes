@@ -1185,6 +1185,15 @@
         },
         "children": [
           {
+            "title": "app.kuaizhizao.menu.performance-management.dashboard",
+            "path": "/apps/kuaizhizao/performance/dashboard",
+            "permission": "kuaizhizao:performance-dashboard:read",
+            "sort_order": 0,
+            "meta": {
+              "module": "performance"
+            }
+          },
+          {
             "title": "app.kuaizhizao.menu.performance-management.holidays",
             "path": "/apps/kuaizhizao/performance/holidays",
             "permission": "kuaizhizao:performance-holidays:read",
@@ -1246,6 +1255,40 @@
             ]
           }
         ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.cost-management",
+        "icon": "calculator",
+        "sort_order": 11,
+        "meta": {
+          "module": "cost"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.cost-management.dashboard",
+            "path": "/apps/kuaizhizao/cost-management/dashboard",
+            "permission": "kuaizhizao:cost-management-dashboard:read",
+            "sort_order": 0
+          },
+          {
+            "title": "app.kuaizhizao.menu.cost-management.cost-calculations",
+            "path": "/apps/kuaizhizao/cost-management/cost-calculations",
+            "permission": "kuaizhizao:cost-management-cost-calculations:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaizhizao.menu.cost-management.cost-comparison",
+            "path": "/apps/kuaizhizao/cost-management/cost-comparison",
+            "permission": "kuaizhizao:cost-management-cost-comparison:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaizhizao.menu.cost-management.cost-report",
+            "path": "/apps/kuaizhizao/cost-management/cost-report",
+            "permission": "kuaizhizao:cost-management-cost-report:read",
+            "sort_order": 3
+          }
+        ]
       }
     ]
   },
@@ -1262,6 +1305,10 @@
     "kuaizhizao:customer-follow-up:submit",
     "kuaizhizao:customer-follow-up:update",
     "kuaizhizao:customer-follow-up:read",
+    "kuaizhizao:cost-management-dashboard:read",
+    "kuaizhizao:cost-management-cost-calculations:read",
+    "kuaizhizao:cost-management-cost-comparison:read",
+    "kuaizhizao:cost-management-cost-report:read",
     "kuaizhizao:delivery-notice:approve",
     "kuaizhizao:delivery-notice:audit",
     "kuaizhizao:delivery-notice:create",
@@ -1568,6 +1615,7 @@
     "kuaizhizao:performance-employee-configs:submit",
     "kuaizhizao:performance-employee-configs:update",
     "kuaizhizao:performance-employee-configs:read",
+    "kuaizhizao:performance-dashboard:read",
     "kuaizhizao:performance-holidays:approve",
     "kuaizhizao:performance-holidays:audit",
     "kuaizhizao:performance-holidays:create",

@@ -41,6 +41,11 @@ export interface LoginResponse {
   requires_tenant_selection?: boolean;
 }
 
+/** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */
+export function tenantNameFromLoginResponse(response: LoginResponse): string {
+  return response.user?.tenant_name?.trim() ?? '';
+}
+
 export interface TenantCheckResponse {
   exists: boolean;
   tenant_id?: number;

@@ -15,6 +15,37 @@ router = APIRouter(
 )
 service = ManagementReportService()
 
+@router.get("/finance-summary", summary="Finance center KPI summary")
+async def get_finance_summary(
+    current_user: Any = Depends(get_current_user),
+):
+    """财务中心：待审核收付款、逾期应收应付。"""
+    from apps.kuaicaiwu.models.receivable import Receivable
+    from apps.kuaicaiwu.models.payable import Payable
+    from apps.kuaicaiwu.models.receipt import Receipt
+    from apps.kuaicaiwu.models.payment import Payment
+    import asyncio
+    from datetime import date
+
+    tenant_id = current_user.tenant_id
+    today = date.today()
+    pending_review = ["待审核", "PENDING_REVIEW", "pending"]
+
+    r_pending, p_pending, r_overdue, p_overdue = await asyncio.gather(
+        Receipt.filter(tenant_id=tenant_id, review_status__in=pending_review, deleted_at__isnull=True).count(),
+        Payment.filter(tenant_id=tenant_id, review_status__in=pending_review, deleted_at__isnull=True).count(),
+        Receivable.filter(tenant_id=tenant_id, status="未收款", due_date__lt=today, deleted_at__isnull=True).count(),
+        Payable.filter(tenant_id=tenant_id, status="未付款", due_date__lt=today, deleted_at__isnull=True).count(),
+    )
+
+    return {
+        "pending_receipts": r_pending,
+        "pending_payments": p_pending,
+        "overdue_receivables": r_overdue,
+        "overdue_payables": p_overdue,
+    }
+
+
 @router.get("/kpis", summary="Financial KPIs (DSO, sales, gross margin)")
 async def get_kpis(
     days: int = Query(30, description="统计天数"),

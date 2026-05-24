@@ -117,7 +117,9 @@ export interface Tenant {
   settings: Record<string, any>;
   max_users: number;
   max_storage: number;
+  user_count?: number;
   expires_at?: string;
+  last_login_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -147,6 +149,13 @@ export interface TenantListResponse {
   page_size: number;
 }
 
+export interface TenantAdminAccountData {
+  username: string;
+  password: string;
+  full_name?: string;
+  phone?: string;
+}
+
 /**
  * 创建组织数据
  */
@@ -159,10 +168,7 @@ export interface CreateTenantData {
   max_users?: number;
   max_storage?: number;
   expires_at?: string;
-  /** 行业预设代码 (用于一键建账) */
-  industry_preset?: string | null;
-  /** 可选初始化项 key 列表。不传=全量，[]=仅必选 */
-  init_data_options?: string[] | null;
+  admin_account: TenantAdminAccountData;
 }
 
 /**

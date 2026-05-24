@@ -78,4 +78,47 @@ export const mesDashboardService = {
       method: 'GET',
     });
   },
+
+  getTodosByModule: async (module: string, limit = 8) => {
+    return apiRequest<{ items: import('../../../services/dashboard').TodoItem[]; total: number }>(
+      '/apps/kuaizhizao/dashboard/todos',
+      { method: 'GET', params: { limit, module } },
+    );
+  },
+
+  getPurchaseTrend: async () => {
+    return apiRequest<{ items: { date: string; amount: number; quantity: number }[] }>(
+      '/apps/kuaizhizao/dashboard/purchase-trend',
+      { method: 'GET' },
+    );
+  },
+
+  getManufacturingTrend: async () => {
+    return apiRequest<{ items: { date: string; output: number; qualified: number }[] }>(
+      '/apps/kuaizhizao/dashboard/manufacturing-trend',
+      { method: 'GET' },
+    );
+  },
+
+  getEquipmentTrend: async () => {
+    return apiRequest<{ items: { date: string; count: number }[] }>(
+      '/apps/kuaizhizao/dashboard/equipment-trend',
+      { method: 'GET' },
+    );
+  },
+
+  getWarehouseTrend: async () => {
+    return apiRequest<{ items: { date: string; in: number; out: number }[] }>(
+      '/apps/kuaizhizao/dashboard/warehouse-trend',
+      { method: 'GET' },
+    );
+  },
+
+  getCostSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/cost-summary', { method: 'GET' });
+  },
+
+  getPerformanceSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/performance-summary', { method: 'GET' });
+  },
 };

@@ -26,8 +26,15 @@ from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
     MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
+    MaterialBulkVariantRequest,
+    MaterialGenerateVariantsRequest,
+    MaterialGenerateVariantsResponse,
+    MaterialMaterializeVariantRequest,
+    MaterialMaterializeVariantResponse,
     MaterialBatchDeleteRequest, MaterialBatchDeleteResponse,
     MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
+    MaterialBatchUpdateProcessRouteRequest, MaterialBatchUpdateSourceTypeRequest,
+    MaterialBatchFieldUpdateResponse,
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
@@ -1470,6 +1477,16 @@ async def list_materials(
         alias="sortOrder",
         description="asc 或 desc；未传时 main_code 为 asc，其余字段默认 desc",
     ),
+    tree_view: Optional[bool] = Query(
+        False,
+        alias="treeView",
+        description="树形列表：主物料为父行，属性 SKU 为 children；分页按主行计数",
+    ),
+    masters_only: Optional[bool] = Query(
+        False,
+        alias="mastersOnly",
+        description="仅返回主物料行（排除属性 SKU，code≠main_code 的行）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -1506,6 +1523,8 @@ async def list_materials(
         sort_by,
         sort_order,
         no_group,
+        tree_view,
+        masters_only,
     )
 
 
@@ -1527,6 +1546,46 @@ async def bulk_update_material_tracking(
     """
     try:
         return await MaterialService.bulk_update_material_tracking(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-variant",
+    response_model=MaterialBulkTrackingResponse,
+    summary="Bulk update material variant management",
+)
+async def bulk_update_material_variant(
+    data: MaterialBulkVariantRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量开启/关闭属性管理（单次 SQL UPDATE；不批量写入属性值）。
+    """
+    try:
+        return await MaterialService.bulk_update_material_variant(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/materialize-variant",
+    response_model=MaterialMaterializeVariantResponse,
+    summary="Materialize variant combo to SKU row",
+)
+async def materialize_variant_combo(
+    data: MaterialMaterializeVariantRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    将临时属性组合物化为属性 SKU 行：先查找已有组合，不存在则创建。
+    """
+    try:
+        return await MaterialService.materialize_variant_combo(tenant_id, data)
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -1565,6 +1624,44 @@ async def bulk_move_materials_group(
     """
     try:
         return await MaterialService.bulk_move_material_group(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-process-route",
+    response_model=MaterialBatchFieldUpdateResponse,
+    summary="Batch update material process route",
+)
+async def bulk_update_material_process_route(
+    data: MaterialBatchUpdateProcessRouteRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量更新物料绑定的工艺路线（单次 SQL UPDATE）。
+    """
+    try:
+        return await MaterialService.bulk_update_material_process_route(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-source-type",
+    response_model=MaterialBatchFieldUpdateResponse,
+    summary="Batch update material source type",
+)
+async def bulk_update_material_source_type(
+    data: MaterialBatchUpdateSourceTypeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量更新物料来源类型（单次 SQL UPDATE）。
+    """
+    try:
+        return await MaterialService.bulk_update_material_source_type(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -1695,6 +1792,48 @@ async def get_material(
         return result
     except NotFoundError as e:
         raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
+
+
+@router.get(
+    "/{material_uuid}/variants",
+    response_model=List[MaterialResponse],
+    summary="List variant SKU rows for master material",
+)
+async def list_material_variants(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """获取主物料下所有属性 SKU 行（预组合）。"""
+    try:
+        return await MaterialService.get_material_variants(
+            tenant_id=tenant_id,
+            master_material_uuid=material_uuid,
+        )
+    except NotFoundError as e:
+        raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
+    except ValidationError as e:
+        raise _http_error(status.HTTP_400_BAD_REQUEST, str(e), tenant_id=tenant_id)
+
+
+@router.post(
+    "/{material_uuid}/generate-variants",
+    response_model=MaterialGenerateVariantsResponse,
+    summary="Generate variant SKUs from enum attribute Cartesian product",
+)
+async def generate_material_variants(
+    material_uuid: str,
+    data: MaterialGenerateVariantsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """按枚举属性笛卡尔积批量生成属性 SKU 行（提前组合）。"""
+    try:
+        return await MaterialService.generate_variant_skus(tenant_id, material_uuid, data)
+    except NotFoundError as e:
+        raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
+    except ValidationError as e:
+        raise _http_error(status.HTTP_400_BAD_REQUEST, str(e), tenant_id=tenant_id)
 
 
 @router.put("/{material_uuid}", response_model=MaterialResponse, summary="Update material")

@@ -32,6 +32,7 @@ import {
   Tooltip,
   Table,
   Skeleton,
+  Form,
 } from 'antd'
 import {
   EditOutlined,
@@ -51,6 +52,9 @@ import {
   FilePdfOutlined,
   SwapOutlined,
   RedoOutlined,
+  NodeIndexOutlined,
+  PartitionOutlined,
+  ClusterOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -95,6 +99,8 @@ import {
 } from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
+import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
+import { isVariantSkuMaterial, isVariantMasterMaterial, scalarAttrDisplay } from '../../components/MaterialVariantCombinationsTable'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
 import {
   fabricationMaterialNeedsRawMaterialSetup,
@@ -104,8 +110,35 @@ import {
 import type { FabricationMaterialRef } from '../../utils/fabricationRawMaterial'
 import { QRCodeGenerator } from '../../../../components/qrcode'
 
+/** SKU 子行列表单元格：不重复展示主物料字段 */
+function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
+  return isVariantSkuMaterial(record) ? null : node
+}
+
+function renderSkuVariantAttributes(record: Material): React.ReactNode {
+  const attrs = (record.variantAttributes ?? (record as any).variant_attributes ?? {}) as Record<
+    string,
+    unknown
+  >
+  const entries = Object.entries(attrs).filter(
+    ([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0),
+  )
+  if (!entries.length) return '—'
+  return (
+    <Space size={[4, 4]} wrap>
+      {entries.map(([key, val]) => (
+        <Tag key={key}>
+          {key}: {scalarAttrDisplay(val)}
+        </Tag>
+      ))}
+    </Space>
+  )
+}
+
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
+import { processRouteApi } from '../../services/process'
+import type { ProcessRoute } from '../../types/process'
 import {
   formatMaterialGroupLabel,
   formatMaterialGroupHoverTitle,
@@ -116,6 +149,7 @@ import {
   type MaterialGroupCreate,
   type MaterialGroupUpdate,
   type MaterialBulkTrackingPayload,
+  type MaterialBulkVariantPayload,
   type StandardPartsPresetCatalog,
 } from '../../types/material'
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
@@ -124,6 +158,13 @@ import { SecureImage } from '../../../../components/secure-image'
 import FilePreviewModal from '../../../../components/file-preview'
 import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services/file'
 import { batchImport } from '../../../../utils/batchOperations'
+import {
+  buildMaterialImportColumnIndex,
+  ensureMasterVariantManaged,
+  materialToSkuCreatePayload,
+  parseMaterialImportRows,
+  resolveMasterMaterialForImport,
+} from '../../utils/materialImport'
 import { downloadFile } from '../../../../utils'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
@@ -297,6 +338,17 @@ const MaterialsManagementPage: React.FC = () => {
   const [batchMoveGroupOpen, setBatchMoveGroupOpen] = useState(false)
   const [batchMoveGroupId, setBatchMoveGroupId] = useState<number | undefined>(undefined)
   const [batchMoveGroupSubmitting, setBatchMoveGroupSubmitting] = useState(false)
+  const [batchProcessRouteOpen, setBatchProcessRouteOpen] = useState(false)
+  const [batchProcessRouteId, setBatchProcessRouteId] = useState<number | undefined>(undefined)
+  const [batchProcessRouteSubmitting, setBatchProcessRouteSubmitting] = useState(false)
+  const [processRoutesForBulk, setProcessRoutesForBulk] = useState<ProcessRoute[]>([])
+  const [processRoutesForBulkLoading, setProcessRoutesForBulkLoading] = useState(false)
+  const [batchSourceTypeOpen, setBatchSourceTypeOpen] = useState(false)
+  const [batchSourceTypeValue, setBatchSourceTypeValue] = useState<string | undefined>(undefined)
+  const [batchSourceTypeSubmitting, setBatchSourceTypeSubmitting] = useState(false)
+  const [batchVariantModalOpen, setBatchVariantModalOpen] = useState(false)
+  const [batchVariantSubmitting, setBatchVariantSubmitting] = useState(false)
+  const [bulkVariantMode, setBulkVariantMode] = useState<'enable' | 'disable'>('enable')
   const [rewriteMainCodesOpen, setRewriteMainCodesOpen] = useState(false)
   const [rewriteMainCodesSubmitting, setRewriteMainCodesSubmitting] = useState(false)
   const [rewriteMainCodesScope, setRewriteMainCodesScope] = useState<'selected' | 'group'>('selected')
@@ -1159,6 +1211,153 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [selectedRowKeys, batchMoveGroupId, messageApi, t])
 
+  const handleOpenBatchProcessRoute = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchProcessRouteId(undefined)
+    setBatchProcessRouteOpen(true)
+    setProcessRoutesForBulkLoading(true)
+    processRouteApi
+      .list({ limit: 1000, isActive: true })
+      .then((result) => {
+        const list = Array.isArray(result) ? result : result?.data ?? []
+        setProcessRoutesForBulk(list)
+      })
+      .catch(() => {
+        messageApi.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'))
+        setProcessRoutesForBulk([])
+      })
+      .finally(() => setProcessRoutesForBulkLoading(false))
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchProcessRoute = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchProcessRouteSubmitting(true)
+    try {
+      const uuids = selectedRowKeys.map((k) => String(k))
+      const res = await materialApi.batchUpdateProcessRoute(
+        uuids,
+        batchProcessRouteId ?? null,
+      )
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.batchProcessRouteSuccess', { count: res.updated_count }),
+        )
+      }
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (notFound > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.batchProcessRouteNotFound', { count: notFound }),
+        )
+      }
+      setBatchProcessRouteOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.batchProcessRouteFailed'))
+    } finally {
+      setBatchProcessRouteSubmitting(false)
+    }
+  }, [selectedRowKeys, batchProcessRouteId, messageApi, t])
+
+  const handleOpenBatchSourceType = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchSourceTypeValue(undefined)
+    setBatchSourceTypeOpen(true)
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchSourceType = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    if (!batchSourceTypeValue) {
+      messageApi.warning(t('app.master-data.materials.batchSourceTypeSelectRequired'))
+      return
+    }
+    setBatchSourceTypeSubmitting(true)
+    try {
+      const uuids = selectedRowKeys.map((k) => String(k))
+      const res = await materialApi.batchUpdateSourceType(uuids, batchSourceTypeValue)
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.batchSourceTypeSuccess', { count: res.updated_count }),
+        )
+      }
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (notFound > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.batchSourceTypeNotFound', { count: notFound }),
+        )
+      }
+      setBatchSourceTypeOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.batchSourceTypeFailed'))
+    } finally {
+      setBatchSourceTypeSubmitting(false)
+    }
+  }, [selectedRowKeys, batchSourceTypeValue, messageApi, t])
+
+  const handleOpenBatchVariantModal = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBulkVariantMode('enable')
+    setBatchVariantModalOpen(true)
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchVariant = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return Promise.reject()
+    }
+
+    const payload: MaterialBulkVariantPayload = {
+      material_uuids: selectedRowKeys.map((k) => String(k)),
+      variantManaged: bulkVariantMode === 'enable',
+    }
+
+    setBatchVariantSubmitting(true)
+    try {
+      const res = await materialApi.bulkUpdateVariant(payload)
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.batchVariantSuccess', { count: res.updated_count }),
+        )
+      }
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (notFound > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.batchVariantNotFound', { count: notFound }),
+        )
+      }
+      setBatchVariantModalOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      const detailMsg =
+        typeof detail === 'string'
+          ? detail
+          : detail?.message ?? (typeof detail === 'object' ? detail?.detail : undefined)
+      messageApi.error(detailMsg || e?.message || t('app.master-data.materials.batchVariantFailed'))
+      throw e
+    } finally {
+      setBatchVariantSubmitting(false)
+    }
+  }, [selectedRowKeys, bulkVariantMode, messageApi, t])
+
   const handleOpenRewriteMainCodes = useCallback(() => {
     if (selectedRowKeys.length > 0) {
       setRewriteMainCodesScope('selected')
@@ -1217,58 +1416,26 @@ const MaterialsManagementPage: React.FC = () => {
       return
     }
 
-    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n || (h || '').trim() === n)
-    const idx = {
-      code: col('物料编号') >= 0 ? col('物料编号') : col('编号'),
-      name: col('物料名称') >= 0 ? col('物料名称') : col('名称'),
-      unit: col('基础单位') >= 0 ? col('基础单位') : col('单位'),
-      spec: col('规格') >= 0 ? col('规格') : -1,
-      type: col('物料类型') >= 0 ? col('物料类型') : -1,
-      group: col('分组编号') >= 0 ? col('分组编号') : col('分组') >= 0 ? col('分组') : col(t('app.master-data.materials.materialGroup')) >= 0 ? col(t('app.master-data.materials.materialGroup')) : -1,
-    }
-
-    if (idx.name < 0 || idx.unit < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '物料名称、基础单位', headers: headers.join(', ') }))
+    const idx = buildMaterialImportColumnIndex(headers, t('app.master-data.materials.materialGroup'))
+    const hasMasterCols = idx.name >= 0 && idx.unit >= 0
+    const hasSkuCols = idx.masterMainCode >= 0 && idx.variantAttrs >= 0
+    if (!hasMasterCols && !hasSkuCols) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: '主物料：物料名称、基础单位；SKU：主编码、属性组合',
+          headers: headers.join(', '),
+        }),
+      )
       return
     }
 
     const groups = await materialGroupApi.list({ limit: 1000 })
-    const errors: Array<{ row: number; message: string }> = []
-    const toImport: MaterialCreate[] = []
-
-    rows.forEach((row: any[], i: number) => {
-      const rowNum = i + 3
-      const name = (row[idx.name] ?? '').toString().trim()
-      const unit = (row[idx.unit] ?? '').toString().trim()
-      if (!name) {
-        errors.push({ row: rowNum, message: t('app.master-data.materials.nameRequired', { defaultValue: '物料名称不能为空' }) })
-        return
-      }
-      if (!unit) {
-        errors.push({ row: rowNum, message: '基础单位不能为空' })
-        return
-      }
-
-      const code = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : undefined
-      const spec = idx.spec >= 0 ? (row[idx.spec] ?? '').toString().trim() : undefined
-      const matType = idx.type >= 0 ? (row[idx.type] ?? '').toString().trim() : undefined
-      const groupCode = idx.group >= 0 ? (row[idx.group] ?? '').toString().trim() : undefined
-      let groupId: number | undefined
-      if (groupCode) {
-        const g = (Array.isArray(groups) ? groups : []).find((x: any) => (x.code || '').trim() === groupCode.trim())
-        groupId = g?.id
-      }
-
-      toImport.push({
-        mainCode: code || undefined,
-        name,
-        baseUnit: unit,
-        specification: spec || undefined,
-        sourceType: matType || undefined,
-        groupId,
-        isActive: true,
-      })
-    })
+    const groupList = Array.isArray(groups) ? groups : []
+    const { items: parsedItems, errors } = parseMaterialImportRows(
+      rows,
+      idx,
+      (groupCode) => groupList.find((x: any) => (x.code || '').trim() === groupCode.trim())?.id,
+    )
 
     if (errors.length > 0) {
       Modal.warning({
@@ -1277,51 +1444,161 @@ const MaterialsManagementPage: React.FC = () => {
         content: (
           <div>
             <p>{t('app.master-data.validationFailedIntro')}</p>
-            <List size="small" dataSource={errors} renderItem={(e) => (
-              <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.message })}</Typography.Text></List.Item>
-            )} />
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(e) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.rowError', { row: e.row, message: e.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
           </div>
         ),
       })
       return
     }
 
-    if (toImport.length === 0) {
+    if (parsedItems.length === 0) {
       messageApi.warning(t('app.master-data.importAllEmpty'))
       return
     }
 
+    const masterItems = parsedItems.filter((x) => x.kind === 'master')
+    const skuItems = parsedItems.filter((x) => x.kind === 'sku')
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    let successCount = 0
+
     try {
-      const result = await batchImport({
-        items: toImport,
-        importFn: async (item) => materialApi.create(item),
-        title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
-        concurrency: 5,
-      })
-      if (result.failureCount > 0) {
+      if (masterItems.length > 0) {
+        const masterResult = await batchImport({
+          items: masterItems,
+          importFn: async (item) => materialApi.create(item.data),
+          title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
+          concurrency: 5,
+        })
+        successCount += masterResult.successCount
+        importErrors.push(
+          ...masterResult.errors.map((e) => ({
+            row: masterItems[e.row - 1]?.rowNum ?? e.row,
+            error: e.error,
+          })),
+        )
+        for (const created of masterResult.successItems) {
+          const mc =
+            created?.mainCode ??
+            (created as any)?.main_code ??
+            (created as any)?.code
+          if (mc) {
+            masterCache.set(String(mc).trim(), created as Material)
+          }
+        }
+        for (const item of masterItems) {
+          const hint = item.mainCodeHint?.trim()
+          if (hint && masterCache.has(hint)) continue
+          const created = masterResult.successItems.find((m: Material) => {
+            const mc = m?.mainCode ?? (m as any)?.main_code
+            return hint && mc === hint
+          })
+          if (created && hint) {
+            masterCache.set(hint, created as Material)
+          }
+        }
+      }
+
+      if (skuItems.length > 0) {
+        const skuPayloads: Array<{ rowNum: number; data: MaterialCreate }> = []
+        for (const sku of skuItems) {
+          let master = await resolveMasterMaterialForImport(sku.masterMainCode, masterCache)
+          if (!master) {
+            importErrors.push({
+              row: sku.rowNum,
+              error: `未找到主编码为 ${sku.masterMainCode} 的主物料，请先导入主物料或确认已启用属性管理`,
+            })
+            continue
+          }
+          if (!master.variantManaged || !isVariantMasterMaterial(master)) {
+            try {
+              master = await ensureMasterVariantManaged(master)
+              masterCache.set(sku.masterMainCode.trim(), master)
+            } catch (e: unknown) {
+              importErrors.push({
+                row: sku.rowNum,
+                error: e instanceof Error ? e.message : '主物料启用属性管理失败',
+              })
+              continue
+            }
+          }
+          skuPayloads.push({
+            rowNum: sku.rowNum,
+            data: materialToSkuCreatePayload(master, sku.variantAttributes),
+          })
+        }
+
+        if (skuPayloads.length > 0) {
+          const skuResult = await batchImport({
+            items: skuPayloads,
+            importFn: async (item) => materialApi.create(item.data),
+            title: t('app.master-data.materials.importSkuTitle', { defaultValue: '正在导入属性 SKU' }),
+            concurrency: 5,
+          })
+          successCount += skuResult.successCount
+          importErrors.push(
+            ...skuResult.errors.map((e, i) => ({
+              row:
+                (skuResult.failureItems[i] as { rowNum?: number })?.rowNum ??
+                skuPayloads[e.row - 1]?.rowNum ??
+                e.row,
+              error: e.error,
+            })),
+          )
+        }
+      }
+
+      const failureCount = importErrors.length
+      if (failureCount > 0) {
         Modal.warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
-              <p><strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong></p>
-              {result.errors.length > 0 && (
-                <List size="small" dataSource={result.errors} renderItem={(e) => (
-                  <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.error })}</Typography.Text></List.Item>
-                )} />
+              <p>
+                <strong>
+                  {t('app.master-data.importPartialResultIntro', {
+                    success: successCount,
+                    failure: failureCount,
+                  })}
+                </strong>
+              </p>
+              {importErrors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={importErrors}
+                  renderItem={(e) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.master-data.rowError', { row: e.row, message: e.error })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
               )}
             </div>
           ),
         })
       } else {
-        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }))
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
       }
-      if (result.successCount > 0) {
+
+      if (successCount > 0) {
         actionRef.current?.reload()
         loadMaterialGroups()
       }
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.importFailed'))
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
     }
   }
 
@@ -1537,10 +1814,16 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.materialCode'),
         dataIndex: ['mainCode', 'code'],
-        width: 150,
+        width: 220,
         fixed: 'left',
         render: (_, record) => {
-          const val = (record as any).mainCode || (record as any).code || '-'
+          if (isVariantSkuMaterial(record)) {
+            const val = (record as any).code || '-'
+            if (val === '-') return <Typography.Text>{val}</Typography.Text>
+            return <Typography.Text copyable={{ text: String(val) }}>{val}</Typography.Text>
+          }
+          const val =
+            (record as any).mainCode ?? (record as any).main_code ?? (record as any).code ?? '-'
           if (val === '-') return <Typography.Text>{val}</Typography.Text>
           return <Typography.Text copyable={{ text: String(val) }}>{val}</Typography.Text>
         },
@@ -1548,8 +1831,14 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.materialName'),
         dataIndex: 'name',
-        width: 200,
+        width: 280,
         sorter: true,
+        render: (_, record) => {
+          if (isVariantSkuMaterial(record)) {
+            return renderSkuVariantAttributes(record)
+          }
+          return record.name || '-'
+        },
       },
       {
         title: t('app.master-data.materials.productImage'),
@@ -1557,6 +1846,7 @@ const MaterialsManagementPage: React.FC = () => {
         width: 100,
         hideInSearch: true,
         render: (_, record) => {
+          if (isVariantSkuMaterial(record)) return null
           const images = (record as any).images || [];
           if (images.length > 0) {
             const firstImage = images[0];
@@ -1596,7 +1886,7 @@ const MaterialsManagementPage: React.FC = () => {
           },
           {} as Record<number, { text: string }>
         ),
-        render: (_, record) => getMaterialGroupName(record.groupId),
+        render: (_, record) => renderMasterCell(record, getMaterialGroupName(record.groupId)),
       },
       {
         title: t('app.master-data.materials.processRoute'),
@@ -1604,7 +1894,10 @@ const MaterialsManagementPage: React.FC = () => {
         width: 140,
         hideInSearch: true,
         render: (_, record) =>
-          (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
+          renderMasterCell(
+            record,
+            (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
+          ),
       },
       {
         title: t('app.master-data.materials.sourceType'),
@@ -1623,6 +1916,7 @@ const MaterialsManagementPage: React.FC = () => {
           allowClear: true,
         },
         render: (_, record) => {
+          if (isVariantSkuMaterial(record)) return null
           const st = (record as any).sourceType ?? (record as any).source_type
           const option = sourceTypeOptions.find(opt => opt.value === st)
           return option ? option.label : st || '-'
@@ -1633,6 +1927,7 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'specification',
         width: 150,
         ellipsis: true,
+        render: (_, record) => renderMasterCell(record, record.specification || '-'),
       },
       {
         title: t('app.master-data.materials.baseUnit'),
@@ -1652,6 +1947,7 @@ const MaterialsManagementPage: React.FC = () => {
           allowClear: true,
         },
         render: (_, record) => {
+          if (isVariantSkuMaterial(record)) return null
           const option = baseUnitOptions.find(opt => opt.value === record.baseUnit)
           return option ? option.label : record.baseUnit || '-'
         },
@@ -1661,32 +1957,39 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'batchManaged',
         width: 100,
         hideInSearch: true,
-        render: (_, record) => (
-          <Tag color={record.batchManaged ? 'blue' : 'default'}>
-            {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterCell(
+            record,
+            <Tag color={record.batchManaged ? 'blue' : 'default'}>
+              {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            </Tag>,
+          ),
       },
       {
         title: t('app.master-data.materials.variantManaged'),
         dataIndex: 'variantManaged',
         width: 100,
         hideInSearch: true,
-        render: (_, record) => (
-          <Tag color={record.variantManaged ? 'purple' : 'default'}>
-            {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        ),
+        render: (_, record) => {
+          if (isVariantSkuMaterial(record)) return null
+          return (
+            <Tag color={record.variantManaged ? 'purple' : 'default'}>
+              {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            </Tag>
+          )
+        },
       },
       {
         title: t('app.master-data.materials.brand'),
         dataIndex: 'brand',
         width: 120,
+        render: (_, record) => renderMasterCell(record, record.brand || '-'),
       },
       {
         title: t('app.master-data.materials.model'),
         dataIndex: 'model',
         width: 120,
+        render: (_, record) => renderMasterCell(record, record.model || '-'),
       },
       {
         title: t('app.master-data.materials.enabledStatus'),
@@ -1697,11 +2000,13 @@ const MaterialsManagementPage: React.FC = () => {
           true: { text: t('app.master-data.materials.enabled'), status: 'Success' },
           false: { text: t('app.master-data.materials.disabled'), status: 'Default' },
         },
-        render: (_, record) => (
-          <Tag color={record.isActive ? 'success' : 'default'}>
-            {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterCell(
+            record,
+            <Tag color={record.isActive ? 'success' : 'default'}>
+              {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
+            </Tag>,
+          ),
       },
       {
         title: t('app.master-data.materials.createTime'),
@@ -1710,6 +2015,7 @@ const MaterialsManagementPage: React.FC = () => {
         valueType: 'dateTime',
         hideInSearch: true,
         sorter: true,
+        render: (_, record) => renderMasterCell(record, (record as any).createdAt ?? '-'),
       },
       {
         title: t('app.master-data.materials.action'),
@@ -1885,6 +2191,24 @@ const MaterialsManagementPage: React.FC = () => {
                           icon: <TagsOutlined />,
                           onClick: () => handleOpenBatchSerialModal(),
                         },
+                        {
+                          key: 'batchProcessRoute',
+                          label: t('app.master-data.materials.batchProcessRoute'),
+                          icon: <NodeIndexOutlined />,
+                          onClick: () => handleOpenBatchProcessRoute(),
+                        },
+                        {
+                          key: 'batchSourceType',
+                          label: t('app.master-data.materials.batchSourceType'),
+                          icon: <PartitionOutlined />,
+                          onClick: () => handleOpenBatchSourceType(),
+                        },
+                        {
+                          key: 'batchVariant',
+                          label: t('app.master-data.materials.batchVariantToolbar'),
+                          icon: <ClusterOutlined />,
+                          onClick: () => handleOpenBatchVariantModal(),
+                        },
                       ]}
                     />
                   </Space>
@@ -1978,7 +2302,7 @@ const MaterialsManagementPage: React.FC = () => {
                 }
 
                 try {
-                  const { items, total } = await materialApi.list(apiParams)
+                  const { items, total } = await materialApi.list({ ...apiParams, treeView: true })
                   const enriched = await enrichRecordsWithCustomFields(items || [])
                   return {
                     data: enriched,
@@ -1996,6 +2320,7 @@ const MaterialsManagementPage: React.FC = () => {
                 }
                 }}
                 rowKey="uuid"
+                defaultExpandAllRows
                 showAdvancedSearch={true}
                 toolBarRender={() => []}
                 rowSelection={{
@@ -2011,8 +2336,23 @@ const MaterialsManagementPage: React.FC = () => {
                 t('app.master-data.materials.specification'),
                 t('app.master-data.materials.sourceType'),
                 t('app.master-data.materials.materialGroup'),
+                t('app.master-data.materials.importRowType', { defaultValue: '行类型' }),
+                t('app.master-data.materials.importMasterMainCode', { defaultValue: '主编码' }),
+                t('app.master-data.materials.importVariantAttrs', { defaultValue: '属性组合' }),
+                t('app.master-data.materials.importVariantManaged', { defaultValue: '启用属性管理' }),
                 ]}
-                importExampleRow={['MAT-WX-E001', '无锡精工电控单元', '个', 'SK-WX-001', 'Buy', 'DEPT001']}
+                importExampleRow={[
+                  'CP0001',
+                  '皮条',
+                  '件',
+                  '',
+                  'Make',
+                  'CP',
+                  '主物料',
+                  '',
+                  '',
+                  '是',
+                ]}
                 importFieldMap={{
                 [t('app.master-data.materials.materialCode')]: 'mainCode',
                 [t('app.master-data.materials.materialName')]: 'name',
@@ -2020,6 +2360,10 @@ const MaterialsManagementPage: React.FC = () => {
                 [t('app.master-data.materials.specification')]: 'specification',
                 [t('app.master-data.materials.sourceType')]: 'sourceType',
                 [t('app.master-data.materials.materialGroup')]: 'groupCode',
+                [t('app.master-data.materials.importRowType', { defaultValue: '行类型' })]: 'rowType',
+                [t('app.master-data.materials.importMasterMainCode', { defaultValue: '主编码' })]: 'masterMainCode',
+                [t('app.master-data.materials.importVariantAttrs', { defaultValue: '属性组合' })]: 'variantAttributes',
+                [t('app.master-data.materials.importVariantManaged', { defaultValue: '启用属性管理' })]: 'variantManaged',
                 }}
                 importFieldRules={{
                 name: { required: true },
@@ -2082,12 +2426,7 @@ const MaterialsManagementPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title={
-          <Space>
-            <SwapOutlined style={{ color: token.colorPrimary }} />
-            <span>{t('app.master-data.materials.batchMoveGroupTitle')}</span>
-          </Space>
-        }
+        title={t('app.master-data.materials.batchMoveGroupTitle')}
         open={batchMoveGroupOpen}
         onCancel={() => {
           if (!batchMoveGroupSubmitting) setBatchMoveGroupOpen(false)
@@ -2131,12 +2470,140 @@ const MaterialsManagementPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title={
-          <Space>
-            <TagsOutlined style={{ color: token.colorPrimary }} />
-            <span>{t('app.master-data.materials.batchTrackingTitle')}</span>
-          </Space>
-        }
+        title={t('app.master-data.materials.batchProcessRouteTitle')}
+        open={batchProcessRouteOpen}
+        onCancel={() => {
+          if (!batchProcessRouteSubmitting) setBatchProcessRouteOpen(false)
+        }}
+        onOk={handleConfirmBatchProcessRoute}
+        confirmLoading={batchProcessRouteSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchProcessRouteHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('app.master-data.materials.batchProcessRouteSelect')}
+            </Typography.Text>
+            <Select
+              showSearch
+              allowClear
+              placeholder={t('app.master-data.source.selectProcessRoute')}
+              style={{ width: '100%' }}
+              value={batchProcessRouteId}
+              onChange={(v) => setBatchProcessRouteId(v as number | undefined)}
+              loading={processRoutesForBulkLoading}
+              options={processRoutesForBulk.map((r) => ({
+                label: `${r.code} ${r.name}`.trim(),
+                value: r.id,
+              }))}
+              optionFilterProp="label"
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+              {t('app.master-data.materials.batchProcessRouteClearHint')}
+            </Typography.Text>
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.batchSourceTypeTitle')}
+        open={batchSourceTypeOpen}
+        onCancel={() => {
+          if (!batchSourceTypeSubmitting) setBatchSourceTypeOpen(false)
+        }}
+        onOk={handleConfirmBatchSourceType}
+        confirmLoading={batchSourceTypeSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchSourceTypeHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('app.master-data.materials.batchSourceTypeSelect')}
+            </Typography.Text>
+            <Select
+              showSearch
+              placeholder={t('app.master-data.materialForm.sourceTypePlaceholder')}
+              style={{ width: '100%' }}
+              value={batchSourceTypeValue}
+              onChange={(v) => setBatchSourceTypeValue(v)}
+              options={sourceTypeOptions}
+              optionFilterProp="label"
+            />
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.batchVariantTitle')}
+        open={batchVariantModalOpen}
+        onCancel={() => {
+          if (!batchVariantSubmitting) setBatchVariantModalOpen(false)
+        }}
+        onOk={handleConfirmBatchVariant}
+        confirmLoading={batchVariantSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchVariantHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('app.master-data.materials.batchVariantMode')}
+            </Typography.Text>
+            <Segmented
+              block
+              value={bulkVariantMode}
+              onChange={(v) => setBulkVariantMode(v as 'enable' | 'disable')}
+              disabled={batchVariantSubmitting}
+              options={[
+                { label: t('app.master-data.materials.batchVariantEnable'), value: 'enable' },
+                { label: t('app.master-data.materials.batchVariantDisable'), value: 'disable' },
+              ]}
+            />
+          </div>
+          {bulkVariantMode === 'enable' && (
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              {t('app.master-data.materials.batchVariantEnableHint')}
+            </Typography.Paragraph>
+          )}
+          {bulkVariantMode === 'disable' && (
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              {t('app.master-data.materials.batchVariantDisableHint')}
+            </Typography.Paragraph>
+          )}
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.batchTrackingTitle')}
         open={batchSerialModalOpen}
         onCancel={() => {
           if (!batchSerialSubmitting) setBatchSerialModalOpen(false)
@@ -2709,8 +3176,6 @@ const MaterialsManagementPage: React.FC = () => {
                   (currentMaterial as any).defaultSerialRuleId ?? (currentMaterial as any).default_serial_rule_id,
                 variantManaged:
                   currentMaterial.variantManaged ?? (currentMaterial as any).variant_managed,
-                variantAttributes:
-                  currentMaterial.variantAttributes ?? (currentMaterial as any).variant_attributes,
                 description: currentMaterial.description,
                 brand: currentMaterial.brand,
                 model: currentMaterial.model,
@@ -2804,6 +3269,19 @@ const MaterialsManagementPage: React.FC = () => {
               />
             </div>
           ) : null
+        }
+        lines={
+          currentMaterial ? (
+            <MaterialVariantSkusPanel
+              masterMaterial={currentMaterial}
+              onRefresh={() => actionRef.current?.reload()}
+            />
+          ) : null
+        }
+        linesTitle={t('app.master-data.materials.variantSkusSection', '属性 SKU（预组合）')}
+        linesVisible={
+          !!currentMaterial?.variantManaged ||
+          !!(currentMaterial?.variantAttributes ?? (currentMaterial as any)?.variant_attributes)
         }
       />
 

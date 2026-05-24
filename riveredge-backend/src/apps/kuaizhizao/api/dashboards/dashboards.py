@@ -54,6 +54,36 @@ class TodoListResponse(BaseModel):
     total: int = Field(0, description="总数")
 
 
+# 模块中心待办：按 todo id 前缀过滤
+MODULE_TODO_ID_PREFIXES: dict[str, tuple[str, ...]] = {
+    "sales": ("shipment_notice_", "sales_return_", "sales_delivery_"),
+    "purchase": ("purchase_requisition_", "purchase_return_", "receipt_notice_", "purchase_receipt_"),
+    "manufacturing": (
+        "work_order_", "exception_material_", "production_return_",
+        "production_picking_", "material_call_", "exception_delay_",
+    ),
+    "warehouse": (
+        "inventory_alert_", "purchase_receipt_", "finished_goods_receipt_",
+        "other_inbound_", "other_outbound_", "sales_delivery_",
+        "material_borrow_", "material_return_",
+    ),
+    "quality": (
+        "inspection_incoming_", "inspection_process_",
+        "inspection_finished_", "exception_quality_",
+    ),
+    "equipment": ("equipment_fault_",),
+}
+
+
+def _filter_todos_by_module(items: List[TodoItem], module: Optional[str]) -> List[TodoItem]:
+    if not module:
+        return items
+    prefixes = MODULE_TODO_ID_PREFIXES.get(module.strip().lower())
+    if not prefixes:
+        return items
+    return [t for t in items if any(t.id.startswith(p) for p in prefixes)]
+
+
 class StatisticsResponse(BaseModel):
     """统计数据响应"""
     production: dict = Field(default_factory=dict, description="生产统计")
@@ -73,6 +103,10 @@ async def get_todos(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    module: Optional[str] = Query(
+        None,
+        description="模块过滤：sales/purchase/manufacturing/warehouse/quality/equipment",
+    ),
 ) -> TodoListResponse:
     """
     获取待办事项列表
@@ -649,6 +683,9 @@ async def get_todos(
         {"high": 0, "critical": 0, "medium": 1, "low": 2}.get((x.priority or "medium").lower(), 3),
         x.created_at
     ))
+
+    if module:
+        todos = _filter_todos_by_module(todos, module)
 
     return TodoListResponse(
         items=todos[:limit],
@@ -2790,6 +2827,208 @@ async def get_warehouse_trend(
     ]
 
     return {"items": items}
+
+
+@router.get("/purchase-trend", summary="Purchase order daily trend")
+@cache_by_kwargs(namespace="dashboard:purchase_trend", ttl=60)
+async def get_purchase_trend(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+):
+    """采购订单按日金额/数量趋势（本月默认）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    start_dt, end_dt, start_date, end_date = _resolve_month_range(date_start, date_end)
+    rows = await PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        status__in=PURCHASE_ORDER_ACTIVE_STATUS,
+        order_date__gte=start_date,
+        order_date__lte=end_date,
+    ).values_list("order_date", "total_amount", "total_quantity")
+
+    bucket: dict = {}
+    for od, amt, qty in rows:
+        if not od:
+            continue
+        d = od.strftime("%m-%d") if hasattr(od, "strftime") else str(od)[5:10]
+        sort_key = od.strftime("%Y-%m-%d") if hasattr(od, "strftime") else str(od)
+        b = bucket.setdefault(sort_key, {"date": d, "amount": 0.0, "quantity": 0.0, "_sort": sort_key})
+        b["amount"] += float(amt or 0)
+        b["quantity"] += float(qty or 0)
+
+    items = [
+        {"date": b["date"], "amount": round(b["amount"], 2), "quantity": round(b["quantity"], 2)}
+        for b in sorted(bucket.values(), key=lambda x: x["_sort"])
+    ]
+    return {"items": items}
+
+
+@router.get("/manufacturing-trend", summary="Manufacturing output daily trend")
+@cache_by_kwargs(namespace="dashboard:manufacturing_trend", ttl=60)
+async def get_manufacturing_trend(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+):
+    """制造产出按日趋势：成品入库数量 + 报工合格数。"""
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+
+    now = datetime.now()
+    start_dt = (
+        datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    end_dt = (
+        datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
+        if date_end else now.replace(hour=23, minute=59, second=59, microsecond=0)
+    )
+
+    fg_rows = await FinishedGoodsReceipt.filter(
+        tenant_id=tenant_id,
+        status="已入库",
+        receipt_time__gte=start_dt,
+        receipt_time__lte=end_dt,
+        deleted_at__isnull=True,
+    ).values_list("receipt_time", "total_quantity")
+
+    rep_rows = await ReportingRecord.filter(
+        tenant_id=tenant_id,
+        reported_at__gte=start_dt,
+        reported_at__lte=end_dt,
+    ).values_list("reported_at", "qualified_quantity")
+
+    bucket: dict = {}
+
+    def _add(dt, qty: float, key: str):
+        if not dt:
+            return
+        d = dt.strftime("%m-%d")
+        sk = dt.strftime("%Y-%m-%d")
+        b = bucket.setdefault(sk, {"date": d, "output": 0.0, "qualified": 0.0, "_sort": sk})
+        b[key] += float(qty or 0)
+
+    for dt, qty in fg_rows:
+        _add(dt, qty, "output")
+    for dt, qty in rep_rows:
+        _add(dt, qty, "qualified")
+
+    items = [
+        {"date": b["date"], "output": round(b["output"], 2), "qualified": round(b["qualified"], 2)}
+        for b in sorted(bucket.values(), key=lambda x: x["_sort"])
+    ]
+    return {"items": items}
+
+
+@router.get("/equipment-trend", summary="Equipment fault daily trend")
+@cache_by_kwargs(namespace="dashboard:equipment_trend", ttl=60)
+async def get_equipment_trend(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+):
+    """设备故障报修按日计数趋势。"""
+    from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+
+    now = datetime.now()
+    start_dt = (
+        datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    end_dt = (
+        datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
+        if date_end else now.replace(hour=23, minute=59, second=59, microsecond=0)
+    )
+
+    rows = await EquipmentFault.filter(
+        tenant_id=tenant_id,
+        created_at__gte=start_dt,
+        created_at__lte=end_dt,
+        deleted_at__isnull=True,
+    ).values_list("created_at")
+
+    bucket: dict = {}
+    for (dt,) in rows:
+        if not dt:
+            continue
+        sk = dt.strftime("%Y-%m-%d")
+        bucket[sk] = bucket.get(sk, 0) + 1
+
+    items = [
+        {"date": datetime.strptime(sk, "%Y-%m-%d").strftime("%m-%d"), "count": cnt, "_sort": sk}
+        for sk, cnt in sorted(bucket.items())
+    ]
+    for it in items:
+        it.pop("_sort", None)
+    return {"items": items}
+
+
+@router.get("/performance-summary", summary="Performance center summary")
+@cache_by_kwargs(namespace="dashboard:performance_summary", ttl=60)
+async def get_performance_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """绩效中心 KPI：待确认汇总、本月已确认、技能配置数。"""
+    from apps.master_data.models.performance import Skill
+    from apps.master_data.models.employee_performance import PerformanceSummary
+
+    pending = await PerformanceSummary.filter(
+        tenant_id=tenant_id,
+        status__in=["draft", "calculated", "草稿", "已计算"],
+        deleted_at__isnull=True,
+    ).count()
+    confirmed = await PerformanceSummary.filter(
+        tenant_id=tenant_id,
+        status__in=["confirmed", "已确认"],
+        deleted_at__isnull=True,
+    ).count()
+    skills = await Skill.filter(tenant_id=tenant_id, deleted_at__isnull=True).count()
+
+    return {
+        "pending_summaries": pending,
+        "confirmed_summaries": confirmed,
+        "skill_records": skills,
+    }
+
+
+@router.get("/cost-summary", summary="Cost center summary")
+@cache_by_kwargs(namespace="dashboard:cost_summary", ttl=60)
+async def get_cost_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """成本中心 KPI：待核算、已审核核算、本月核算次数。"""
+    from apps.kuaicaiwu.models.cost_calculation import CostCalculation
+
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    pending = await CostCalculation.filter(
+        tenant_id=tenant_id,
+        calculation_status__in=["草稿", "draft"],
+        deleted_at__isnull=True,
+    ).count()
+    approved = await CostCalculation.filter(
+        tenant_id=tenant_id,
+        calculation_status__in=["已审核", "已核算", "approved"],
+        deleted_at__isnull=True,
+    ).count()
+    month_count = await CostCalculation.filter(
+        tenant_id=tenant_id,
+        created_at__gte=month_start,
+        deleted_at__isnull=True,
+    ).count()
+
+    return {
+        "pending_calculations": pending,
+        "approved_calculations": approved,
+        "month_calculations": month_count,
+    }
 
 
 async def get_dashboard(

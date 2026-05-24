@@ -9,14 +9,17 @@ from datetime import datetime
 from loguru import logger
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.functions import Max, Count
 
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
+from infra.models.user import User
+from core.models.login_log import LoginLog
 from infra.models.tenant_config import TenantConfig
 from infra.models.tenant_activity_log import TenantActivityLog
 from infra.schemas.tenant import TenantCreate, TenantUpdate
 from infra.domain.query_filter import get_tenant_queryset
 from infra.domain.package_config import get_package_config
-from infra.exceptions.exceptions import tenant_name_already_exists, TenantError
+from infra.exceptions.exceptions import tenant_name_already_exists, TenantError, ValidationError
 
 
 class TenantService:
@@ -217,6 +220,12 @@ class TenantService:
         total = await query.count()
         offset = (page - 1) * page_size
         items = await query.offset(offset).limit(page_size).all()
+
+        last_login_map = await self._get_tenant_last_login_map([t.id for t in items])
+        user_count_map = await self._get_tenant_user_count_map([t.id for t in items])
+        for tenant in items:
+            setattr(tenant, "last_login_at", last_login_map.get(tenant.id))
+            setattr(tenant, "user_count", user_count_map.get(tenant.id, 0))
         
         return {
             'items': items,
@@ -224,6 +233,34 @@ class TenantService:
             'page': page,
             'page_size': page_size
         }
+
+    async def _get_tenant_last_login_map(self, tenant_ids: List[int]) -> Dict[int, datetime]:
+        """批量查询各组织最后登录时间（取成功登录日志的最新时间）。"""
+        if not tenant_ids:
+            return {}
+
+        rows = await LoginLog.filter(
+            tenant_id__in=tenant_ids,
+            login_status="success",
+        ).group_by("tenant_id").annotate(last_login_at=Max("created_at")).values(
+            "tenant_id", "last_login_at"
+        )
+
+        return {row["tenant_id"]: row["last_login_at"] for row in rows}
+
+    async def _get_tenant_user_count_map(self, tenant_ids: List[int]) -> Dict[int, int]:
+        """批量查询各组织已使用用户数（未删除用户）。"""
+        if not tenant_ids:
+            return {}
+
+        rows = await User.filter(
+            tenant_id__in=tenant_ids,
+            deleted_at__isnull=True,
+        ).group_by("tenant_id").annotate(user_count=Count("id")).values(
+            "tenant_id", "user_count"
+        )
+
+        return {row["tenant_id"]: row["user_count"] for row in rows}
     
     async def update_tenant(
         self,
@@ -306,33 +343,50 @@ class TenantService:
         skip_tenant_filter: bool = True
     ) -> bool:
         """
-        删除组织（软删除）
-        
-        将组织状态设置为 SUSPENDED，而不是真正删除数据。
-        
+        删除组织
+
+        仅已暂停且无业务单据的组织允许删除；否则抛出 ValidationError。
+        删除时将组织从系统中物理移除。
+
         Args:
             tenant_id: 组织 ID
             skip_tenant_filter: 是否跳过组织过滤（默认为 True）
-            
+
         Returns:
             bool: 如果删除成功则返回 True，否则返回 False
+
+        Raises:
+            ValidationError: 组织仍存在业务单据时抛出
         """
         tenant = await self.get_tenant_by_id(tenant_id, skip_tenant_filter=skip_tenant_filter)
         if not tenant:
             return False
-        
-        # 软删除：将状态设置为 SUSPENDED
-        tenant.status = TenantStatus.SUSPENDED
-        await tenant.save()
-        
-        # 记录活动日志：组织删除（软删除）
+
+        if tenant.status != TenantStatus.SUSPENDED:
+            raise ValidationError("仅已暂停状态的组织可删除，请先停用组织")
+
+        from infra.services.tenant_business_document_service import (
+            TenantBusinessDocumentService,
+        )
+
+        summary = await TenantBusinessDocumentService.summarize_business_documents(tenant_id)
+        if summary["total"] > 0:
+            raise ValidationError(
+                TenantBusinessDocumentService.format_blocking_message(tenant.name, summary)
+            )
+
+        tenant_name = tenant.name
+        tenant_domain = tenant.domain
+
         await self._log_activity(
             tenant_id=tenant_id,
             action="delete",
-            description=f"组织删除（软删除）：{tenant.name} (域名: {tenant.domain})",
+            description=f"组织删除：{tenant_name} (域名: {tenant_domain})",
             operator_id=None,
             operator_name=None,
         )
+
+        await tenant.delete()
         
         return True
     
@@ -388,14 +442,14 @@ class TenantService:
         if not tenant:
             return None
         
-        tenant.status = TenantStatus.INACTIVE
+        tenant.status = TenantStatus.SUSPENDED
         await tenant.save()
         
-        # 记录活动日志：组织停用
+        # 记录活动日志：组织停用（已暂停）
         await self._log_activity(
             tenant_id=tenant_id,
             action="deactivate",
-            description=f"组织停用：{tenant.name} (域名: {tenant.domain})",
+            description=f"组织停用（已暂停）：{tenant.name} (域名: {tenant.domain})",
             operator_id=None,
             operator_name=None,
         )
@@ -554,7 +608,7 @@ class TenantService:
 
         Args:
             tenant_id: 组织 ID
-            init_data_options: 可选初始化项 key 列表。None 表示全量（必选+全部可选），[] 表示仅必选
+            init_data_options: 可选初始化项 key 列表。None 或 [] 表示仅加载系统级必选数据
             current_user_id: 当前用户ID（部门/职位/角色等预设需要，可选）
         """
         from core.services.tenant.tenant_init_data_service import TenantInitDataService
@@ -562,6 +616,16 @@ class TenantService:
 
         # 设置组织上下文，确保初始化过程中的查询使用正确的 tenant_id
         set_current_tenant_id(tenant_id)
+
+        # 站点名称与组织名称一致（创建时写入，非运行时兜底）
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if tenant:
+            from core.schemas.site_setting import SiteSettingUpdate
+            from core.services.system.site_setting_service import SiteSettingService
+            await SiteSettingService.update_settings(
+                tenant_id,
+                SiteSettingUpdate(settings={"site_name": tenant.name}),
+            )
 
         # 1. 执行必选初始化
         try:
@@ -586,11 +650,8 @@ class TenantService:
                 import traceback
                 logger.error(traceback.format_exc())
         else:
-            if init_data_options is None:
-                # 向后兼容：未指定时执行全部可选项
-                optional_keys = [i["key"] for i in TenantInitDataService.INIT_ITEMS_OPTIONAL]
-            else:
-                optional_keys = init_data_options
+            # 未指定或未勾选时仅加载系统级必选数据，业务预置须显式勾选或选择行业预设
+            optional_keys = init_data_options or []
 
             if optional_keys:
                 try:
@@ -614,4 +675,11 @@ class TenantService:
                 logger.info(f"组织 {tenant_id} 初始化完成，已同步 {count} 个应用菜单")
         except Exception as e:
             logger.warning(f"组织 {tenant_id} 菜单同步失败（不中断流程）: {e}")
+
+        # 4. 自动应用默认初始化设置（时区/货币/语言等），跳过初始化向导
+        try:
+            from infra.services.init_wizard_service import InitWizardService
+            await InitWizardService().apply_default_init_settings(tenant_id)
+        except Exception as e:
+            logger.warning(f"组织 {tenant_id} 自动完成初始化向导失败（不中断流程）: {e}")
 

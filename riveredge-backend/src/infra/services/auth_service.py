@@ -47,6 +47,96 @@ class AuthService:
     
     提供用户认证相关的业务逻辑处理。
     """
+
+    @staticmethod
+    async def _active_tenant_id_set(tenant_ids: set[int]) -> set[int]:
+        """返回仍处于激活状态的组织 ID 集合。"""
+        if not tenant_ids:
+            return set()
+        active = await Tenant.filter(
+            id__in=tenant_ids,
+            status=TenantStatus.ACTIVE,
+        ).values_list("id", flat=True)
+        return set(active)
+
+    @staticmethod
+    async def _filter_users_with_active_tenant(users: list[User]) -> list[User]:
+        """剔除所属组织已删除或未激活的用户，避免孤儿账号参与登录。"""
+        if not users:
+            return []
+        tenant_ids = {u.tenant_id for u in users if u.tenant_id is not None}
+        if not tenant_ids:
+            return users
+        active_ids = await AuthService._active_tenant_id_set(tenant_ids)
+        return [u for u in users if u.tenant_id is None or u.tenant_id in active_ids]
+
+    async def _lookup_users_by_account(
+        self,
+        username_or_phone: str,
+        tenant_id: Optional[int] = None,
+    ) -> list[User]:
+        """按账号查找未删除的活跃用户（不按组织状态过滤）。"""
+        q = Q(username=username_or_phone) | Q(phone=username_or_phone)
+        queryset = User.filter(q, is_active=True, deleted_at__isnull=True)
+        if tenant_id is not None:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return await queryset.all()
+
+    async def _resolve_login_user(
+        self,
+        username_or_phone: str,
+        password: str,
+        tenant_id: Optional[int] = None,
+    ) -> User:
+        """
+        解析登录用户：先校验密码，再要求所属组织存在且为激活状态。
+
+        避免「密码正确但组织未激活/已删除」被误报为用户名或密码错误。
+        """
+        all_users = await self._lookup_users_by_account(username_or_phone, tenant_id)
+        if not all_users:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误",
+            )
+
+        matched = [u for u in all_users if verify_password(password, u.password_hash)]
+        if not matched:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误",
+            )
+
+        valid = await self._filter_users_with_active_tenant(matched)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
+            )
+
+        if tenant_id is not None:
+            for u in valid:
+                if u.tenant_id == tenant_id:
+                    return u
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="用户不属于指定的组织",
+            )
+
+        return valid[0]
+
+    async def _find_login_candidate_users(
+        self,
+        username_or_phone: str,
+        tenant_id: Optional[int] = None,
+    ) -> list[User]:
+        """按账号查找可登录用户，且所属组织必须存在且为激活状态。"""
+        q = Q(username=username_or_phone) | Q(phone=username_or_phone)
+        queryset = User.filter(q, is_active=True, deleted_at__isnull=True)
+        if tenant_id is not None:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        users = await queryset.all()
+        return await self._filter_users_with_active_tenant(users)
     
     async def register(
         self,
@@ -492,7 +582,6 @@ class AuthService:
 
         # 若指定了 tenant_id，先校验组织状态
         if data.tenant_id is not None:
-            from infra.models.tenant import Tenant, TenantStatus
             target_tenant = await Tenant.get_or_none(id=data.tenant_id)
             if not target_tenant:
                 raise HTTPException(
@@ -513,40 +602,34 @@ class AuthService:
             deleted_at__isnull=True
         )
 
-        # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
+        # 如果不是系统级超级管理员，按账号解析登录用户
         if not user:
-            if data.tenant_id is not None:
-                user = await User.filter(
-                    Q(username=data.username) | Q(phone=data.username),
-                    tenant_id=data.tenant_id,
-                    deleted_at__isnull=True
-                ).first()
-            else:
-                candidates = await User.filter(
-                    Q(username=data.username) | Q(phone=data.username),
-                    is_active=True,
-                    deleted_at__isnull=True
-                ).all()
-                user = None
-                for u in candidates:
-                    if verify_password(data.password, u.password_hash):
-                        user = u
-                        break
-                if not user and candidates:
-                    u = candidates[0]
-                    if request:
-                        asyncio.create_task(self._log_login_attempt(
-                            tenant_id=u.tenant_id,
-                            user_id=u.id,
-                            username=data.username,
-                            login_status="failed",
-                            failure_reason="用户名或密码错误",
-                            request=request
-                        ))
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="用户名或密码错误"
-                    )
+            try:
+                user = await self._resolve_login_user(
+                    data.username,
+                    data.password,
+                    data.tenant_id,
+                )
+            except HTTPException as exc:
+                if request and exc.status_code == status.HTTP_401_UNAUTHORIZED:
+                    asyncio.create_task(self._log_login_attempt(
+                        tenant_id=data.tenant_id,
+                        user_id=None,
+                        username=data.username,
+                        login_status="failed",
+                        failure_reason="用户名或密码错误",
+                        request=request,
+                    ))
+                elif request and exc.status_code == status.HTTP_403_FORBIDDEN:
+                    asyncio.create_task(self._log_login_attempt(
+                        tenant_id=data.tenant_id,
+                        user_id=None,
+                        username=data.username,
+                        login_status="failed",
+                        failure_reason=str(exc.detail),
+                        request=request,
+                    ))
+                raise
         
         if not user:
             if request:
@@ -563,57 +646,19 @@ class AuthService:
                 detail="用户名或密码错误"
             )
         
-        # 验证密码
-        if not verify_password(data.password, user.password_hash):
-            if request:
-                asyncio.create_task(self._log_login_attempt(
-                    tenant_id=user.tenant_id,
-                    user_id=user.id,
-                    username=data.username,
-                    login_status="failed",
-                    failure_reason="用户名或密码错误",
-                    request=request
-                ))
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
-        
-        # 检查用户是否激活
-        if not user.is_active:
-            if request:
-                asyncio.create_task(self._log_login_attempt(
-                    tenant_id=user.tenant_id,
-                    user_id=user.id,
-                    username=data.username,
-                    login_status="failed",
-                    failure_reason="用户未激活",
-                    request=request
-                ))
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="用户未激活"
-            )
-        
         is_infra_admin = user.is_infra_admin
         
-        if data.tenant_id is not None and not is_infra_admin:
-            if user.tenant_id != data.tenant_id:
-                if request:
-                    asyncio.create_task(self._log_login_attempt(
-                        tenant_id=user.tenant_id,
-                        user_id=user.id,
-                        username=data.username,
-                        login_status="failed",
-                        failure_reason="用户不属于指定的组织",
-                        request=request
-                    ))
+        final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
+
+        if not is_infra_admin and final_tenant_id is not None:
+            active_tenant = await Tenant.get_or_none(
+                id=final_tenant_id, status=TenantStatus.ACTIVE
+            )
+            if not active_tenant:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="用户不属于指定的组织"
+                    detail="所属组织不存在或已停用，无法登录",
                 )
-        
-        final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
         
         # 6. 生成登录结果
         result = await self.generate_login_result(user, request, final_tenant_id)
@@ -663,23 +708,28 @@ class AuthService:
         from infra.config.infra_config import infra_settings as settings
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
-        # 3. 构建用户组织列表
+        # 3. 构建用户组织列表（仅包含所属组织仍有效且激活的账号）
         user_tenants_list = []
         if not is_infra_admin:
-            from infra.models.tenant import Tenant, TenantStatus
-            from tortoise.queryset import Q
             q = Q(username=user.username)
             if user.phone:
                 q = q | Q(phone=user.phone)
             users_with_same_username = await User.filter(
                 q,
                 is_active=True,
-                deleted_at__isnull=True
+                deleted_at__isnull=True,
             ).all()
-            
-            tenant_ids = [u.tenant_id for u in users_with_same_username if u.tenant_id is not None]
+            users_with_same_username = await self._filter_users_with_active_tenant(
+                users_with_same_username
+            )
+
+            tenant_ids = [
+                u.tenant_id for u in users_with_same_username if u.tenant_id is not None
+            ]
             if tenant_ids:
-                tenants_queryset = await Tenant.filter(id__in=tenant_ids, status=TenantStatus.ACTIVE).all()
+                tenants_queryset = await Tenant.filter(
+                    id__in=tenant_ids, status=TenantStatus.ACTIVE
+                ).all()
                 user_tenants_list = [
                     {
                         "id": tenant.id,
@@ -691,7 +741,9 @@ class AuthService:
                     for tenant in tenants_queryset
                 ]
             elif final_tenant_id:
-                tenant = await Tenant.get_or_none(id=final_tenant_id, status=TenantStatus.ACTIVE)
+                tenant = await Tenant.get_or_none(
+                    id=final_tenant_id, status=TenantStatus.ACTIVE
+                )
                 if tenant:
                     user_tenants_list = [
                         {
@@ -704,7 +756,35 @@ class AuthService:
                     ]
 
         requires_tenant_selection = len(user_tenants_list) > 1
-        
+
+        tenant_name = None
+        if final_tenant_id is not None:
+            tenant = await Tenant.get_or_none(
+                id=final_tenant_id, status=TenantStatus.ACTIVE
+            )
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="所属组织不存在或已停用，无法登录",
+                )
+            tenant_name = tenant.name
+            if not user_tenants_list and not is_infra_admin:
+                user_tenants_list = [
+                    {
+                        "id": tenant.id,
+                        "uuid": str(tenant.uuid),
+                        "name": tenant.name,
+                        "domain": tenant.domain,
+                        "status": tenant.status.value,
+                    }
+                ]
+
+        if final_tenant_id is not None and not tenant_name:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="所属组织不存在或已停用，无法登录",
+            )
+
         # 4. 获取权限和扩展信息
         from core.services.authorization.user_permission_service import UserPermissionService
         from core.services.authorization.permission_version_service import PermissionVersionService
@@ -740,6 +820,7 @@ class AuthService:
                 "full_name": user.full_name,
                 "avatar": user.avatar,
                 "tenant_id": final_tenant_id,
+                "tenant_name": tenant_name,
                 "is_infra_admin": user.is_infra_admin,
                 "is_tenant_admin": user.is_tenant_admin,
                 "permissions": permissions,
@@ -752,6 +833,10 @@ class AuthService:
             "default_tenant_id": final_tenant_id,
             "requires_tenant_selection": requires_tenant_selection,
         }
+
+        from datetime import datetime, timezone
+        user.last_login = datetime.now(timezone.utc)
+        await user.save(update_fields=["last_login", "updated_at"])
 
         # 5. 记录登录日志和活动
         if request:

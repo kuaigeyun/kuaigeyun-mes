@@ -49,6 +49,8 @@ const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
 // 供应链页面
 const CustomersPage = lazy(() => import('./pages/supply-chain/customers'));
 const SuppliersPage = lazy(() => import('./pages/supply-chain/suppliers'));
+const CustomerPriceBooksPage = lazy(() => import('./pages/supply-chain/customer-price-books'));
+const SupplierPriceBooksPage = lazy(() => import('./pages/supply-chain/supplier-price-books'));
 
 const MasterDataApp: React.FC = () => {
   const { t } = useTranslation();
@@ -91,6 +93,8 @@ const MasterDataApp: React.FC = () => {
       {/* 供应链路由 */}
       <Route path="supply-chain/customers" element={withPageSuspense(CustomersPage)} />
       <Route path="supply-chain/suppliers" element={withPageSuspense(SuppliersPage)} />
+      <Route path="supply-chain/customer-price-books" element={withPageSuspense(CustomerPriceBooksPage)} />
+      <Route path="supply-chain/supplier-price-books" element={withPageSuspense(SupplierPriceBooksPage)} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={

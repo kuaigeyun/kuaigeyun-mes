@@ -143,6 +143,8 @@ export interface Material {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+  /** 树形列表：属性 SKU 子行 */
+  children?: Material[];
 }
 
 // 编号映射类型定义
@@ -288,6 +290,10 @@ export interface MaterialListParams {
   /** 后端：main_code | name | created_at | updated_at */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  /** 树形列表：主物料为父行，属性 SKU 为 children */
+  treeView?: boolean;
+  /** 仅主物料（排除属性 SKU 行），用于下拉选择等 */
+  mastersOnly?: boolean;
 }
 
 export interface MaterialListResponse {
@@ -302,6 +308,40 @@ export interface MaterialBulkTrackingPayload {
   default_batch_rule_id?: number | null;
   serial_managed?: boolean;
   default_serial_rule_id?: number | null;
+}
+
+/** POST /materials/batch-variant */
+export interface MaterialBulkVariantPayload {
+  material_uuids: string[];
+  variantManaged: boolean;
+}
+
+/** POST /materials/{uuid}/generate-variants */
+export interface MaterialGenerateVariantsPayload {
+  attributeNames?: string[];
+  skipExisting?: boolean;
+}
+
+export interface MaterialGenerateVariantsResult {
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  createdUuids: string[];
+  message: string;
+}
+
+/** POST /materials/materialize-variant */
+export interface MaterialMaterializeVariantPayload {
+  masterMaterialUuid?: string;
+  mainCode?: string;
+  variantAttributes: Record<string, unknown>;
+  createIfMissing?: boolean;
+}
+
+export interface MaterialMaterializeVariantResult {
+  material: Material;
+  created: boolean;
+  matchedExisting: boolean;
 }
 
 export interface MaterialBulkTrackingResult {
@@ -324,6 +364,19 @@ export interface MaterialBatchDeleteResult {
 
 /** POST /materials/batch-move-group */
 export interface MaterialBatchMoveGroupResult {
+  updated_count: number;
+  requested_count: number;
+  not_found_uuids?: string[];
+}
+
+/** POST /materials/batch-process-route | batch-source-type */
+export interface MaterialBatchFieldUpdatePayload {
+  material_uuids: string[];
+  processRouteId?: number | null;
+  sourceType?: string;
+}
+
+export interface MaterialBatchFieldUpdateResult {
   updated_count: number;
   requested_count: number;
   not_found_uuids?: string[];

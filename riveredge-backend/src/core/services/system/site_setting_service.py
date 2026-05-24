@@ -5,7 +5,12 @@
 新租户未设置 site_name、site_logo 时，自动回退到平台级设置。
 """
 
+from datetime import datetime, timezone
 from typing import Dict, Any
+
+from loguru import logger
+from tortoise.exceptions import IntegrityError
+
 from core.models.site_setting import SiteSetting
 from core.schemas.site_setting import SiteSettingUpdate
 
@@ -37,6 +42,34 @@ class SiteSettingService:
     """
     
     @staticmethod
+    async def _active_settings_for_tenant(tenant_id: int) -> list[SiteSetting]:
+        return await SiteSetting.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+
+    @staticmethod
+    async def _canonical_settings(rows: list[SiteSetting]) -> SiteSetting:
+        """同一租户仅保留最早一条；历史并发脏数据软删其余。"""
+        if not rows:
+            raise ValueError("rows must not be empty")
+        canonical = rows[0]
+        if len(rows) == 1:
+            return canonical
+
+        now = datetime.now(timezone.utc)
+        for duplicate in rows[1:]:
+            duplicate.deleted_at = now
+            await duplicate.save(update_fields=["deleted_at", "updated_at"])
+        logger.warning(
+            "站点设置 tenant_id={} 存在 {} 条重复记录，已保留 id={} 并软删其余",
+            canonical.tenant_id,
+            len(rows),
+            canonical.id,
+        )
+        return canonical
+
+    @staticmethod
     async def get_settings(tenant_id: int) -> SiteSetting:
         """
         获取站点设置（如果不存在则创建）
@@ -47,16 +80,20 @@ class SiteSettingService:
         Returns:
             SiteSetting: 站点设置对象
         """
-        settings = await SiteSetting.get_or_none(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-        if not settings:
-            settings = await SiteSetting.create(
+        rows = await SiteSettingService._active_settings_for_tenant(tenant_id)
+        if rows:
+            return await SiteSettingService._canonical_settings(rows)
+
+        try:
+            return await SiteSetting.create(
                 tenant_id=tenant_id,
                 settings={"security": {**_DEFAULT_SITE_SECURITY}},
             )
-        return settings
+        except IntegrityError:
+            rows = await SiteSettingService._active_settings_for_tenant(tenant_id)
+            if rows:
+                return await SiteSettingService._canonical_settings(rows)
+            raise
     
     @staticmethod
     async def get_settings_with_platform_fallback(tenant_id: int) -> Dict[str, Any]:

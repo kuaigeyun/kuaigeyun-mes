@@ -66,7 +66,6 @@ class UserCreate(UserBase):
         is_tenant_admin: 是否为组织管理员（默认 False）
     """
     
-    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 

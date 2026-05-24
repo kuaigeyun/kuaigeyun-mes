@@ -230,6 +230,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
+                "apps.master_data.models.partner_price_book",  # 客户供应商价格本
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
                 "apps.master_data.models.employee_performance",  # 员工绩效模型（配置、计件单价、工时单价、KPI、汇总）
                 "apps.master_data.models.product",  # 产品模型
