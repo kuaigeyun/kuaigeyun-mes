@@ -1088,7 +1088,7 @@ async def bulk_withdraw_sales_orders(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """批量撤回销售订单 (待审核 -> 草稿)"""
+    """批量撤回销售订单 (已提交 → 草稿：待审核或免审已生效)"""
     try:
         return await sales_order_service.bulk_withdraw_sales_orders(
             tenant_id=tenant_id,

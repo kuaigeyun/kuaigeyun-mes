@@ -134,6 +134,28 @@ export function isAuditedStatus(status: string | undefined): boolean {
   return n === DocumentStatus.AUDITED || n === DocumentStatus.CONFIRMED;
 }
 
+/** 是否已确认/已生效（提交免审直达等） */
+export function isConfirmedStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  const s = String(status).trim();
+  const n = normalizeStatus(s);
+  return n === DocumentStatus.CONFIRMED || s === '已确认' || s === '已生效';
+}
+
+/** 是否已审核（不含已确认/已生效） */
+export function isStrictlyAuditedStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  if (isConfirmedStatus(status)) return false;
+  const s = String(status).trim();
+  const n = normalizeStatus(s);
+  return n === DocumentStatus.AUDITED || s === '已审核';
+}
+
+/** 撤回提交：待审核，或免审提交后的已确认/已生效 */
+export function canWithdrawSubmittedOrder(status: string | undefined): boolean {
+  return isPendingReviewStatus(status) || isConfirmedStatus(status);
+}
+
 /** 获取 status 展示文本 */
 export function getStatusLabel(status: string | undefined): string {
   if (!status) return '-';

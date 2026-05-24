@@ -2977,6 +2977,8 @@ export default {
   'app.kuaizhizao.salesOrder.batchClose': '批量关闭',
   'app.kuaizhizao.salesOrder.batchCloseConfirmTitle': '确认批量关闭',
   'app.kuaizhizao.salesOrder.batchCloseConfirmDescription': '关闭后剩余未交货/未执行部分将不再继续履约，确定关闭选中的 {{count}} 条销售订单吗？',
+  'app.kuaizhizao.salesOrder.batchWithdrawNotAllowed': '当前选中订单不可撤回（仅「待审核」「已生效」可撤回至草稿；「已审核」请用「批量反审核」）。',
+  'app.kuaizhizao.salesOrder.batchUnapproveOnlyAudited': '「批量反审核」用于撤销审核（已审核 → 待审核）。',
   'app.kuaizhizao.salesOrder.lifecycleConfirmed': '已确认',
   'app.kuaizhizao.salesOrder.importHeaderCustomerId': '客户ID',
   'app.kuaizhizao.salesOrder.importHeaderSalesmanId': '销售员ID',

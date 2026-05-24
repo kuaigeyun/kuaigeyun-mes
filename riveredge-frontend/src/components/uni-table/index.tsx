@@ -639,6 +639,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowSelectionChange?: (selectedRowKeys: React.Key[]) => void
   /**
+   * 表格当前页数据变更（含 TanStack 缓存命中路径；用于列表页同步选中行解析等副作用）
+   */
+  onTableDataChange?: (data: T[]) => void
+  /**
    * 选中的行键数组（用于受控模式，例如在外部清除选中状态）
    */
   selectedRowKeys?: React.Key[]
@@ -1081,6 +1085,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   afterSearchButtons,
   enableRowSelection = false,
   onRowSelectionChange,
+  onTableDataChange,
   selectedRowKeys: selectedRowKeysProp,
   rowSelectionGetCheckboxProps,
   enableRowEdit = false,
@@ -1214,6 +1219,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /** 父组件常写内联 request，避免其引用每帧变化触发 ProTable 重复拉数 */
   const requestRef = useRef(request)
   requestRef.current = request
+  const onTableDataChangeRef = useRef(onTableDataChange)
+  onTableDataChangeRef.current = onTableDataChange
 
   /**
    * 自动启用 TanStack Query 缓存：
@@ -1954,6 +1961,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       // 仅在数据引用变化时 setState（结合 TanStack 结构共享，避免无变更渲染）
       if (result.data) {
         setTableData((prev) => (prev === result.data ? prev : result.data))
+        onTableDataChangeRef.current?.(result.data as T[])
       }
 
       return result
@@ -2167,6 +2175,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const buildHeaderActions = () => {
     return buildLeftActions()
   }
+
+  /** 选中行变化时需重算左侧工具栏（下推/编辑等依赖 selectedRowKeys） */
+  const memoizedHeaderActions = React.useMemo(
+    () => buildHeaderActions() || undefined,
+    [
+      selectedRowKeys,
+      headerActions,
+      toolBarActionsBeforeCreate,
+      toolBarActionsAfterCreate,
+      toolBarActions,
+      toolBarActionsAfterDelete,
+      toolBarActionsAfterBatch,
+      showCreateButton,
+      showDeleteButton,
+      showEditButton,
+      restProps.toolBarRender,
+    ],
+  )
 
   /**
    * 处理行选择变化（与 ProTable `rowSelection.selectedRowKeys` 受控联动，保证点行勾选与勾选列一致）
@@ -2491,6 +2517,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {
           white-space: nowrap;
         }
+        /* 工具栏置于表头 tooltip 之上，避免排序提示挡住批量操作等按钮 */
+        .uni-table-container .ant-pro-table-list-toolbar {
+          position: relative;
+          z-index: 3;
+        }
+        /* 排序提示默认向下弹出（见 showSorterTooltip），避免遮挡上方工具栏 */
+        .uni-table-container .ant-table-thead .ant-table-column-sorters-tooltip-target-sorter .ant-table-column-sorter {
+          margin-inline-start: 4px;
+        }
         /* 未限高（natural-height）：纵向滚动由 UniTable 统一关闭，覆盖 global.less 全局表格规则 */
         .uni-table-container.uni-table-natural-height .ant-pro-table,
         .uni-table-container.uni-table-natural-height .ant-pro-card,
@@ -2651,7 +2686,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             >
               <ProTable<T>
               key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}-${columnsStatePatchEpoch}`}
-              headerTitle={buildHeaderActions() || headerTitle || undefined}
+              headerTitle={memoizedHeaderActions || headerTitle || undefined}
               actionRef={actionRefForProTable}
               formRef={formRef}
               columns={effectiveTableColumns}
@@ -2800,6 +2835,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
                 return {
                   ...otherProps,
+                  showSorterTooltip:
+                    (otherProps as { showSorterTooltip?: boolean | Record<string, unknown> }).showSorterTooltip ?? {
+                      target: 'sorter-icon',
+                      placement: 'bottom',
+                    },
                   ...(proTableBodyScrollYEnabled && userSticky !== undefined ? { sticky: userSticky } : {}),
                   ...(mergedOnRow ? { onRow: mergedOnRow } : {}),
                   ...(useVirtual ? { virtual: true } : userVirtual !== undefined ? { virtual: userVirtual } : {}),

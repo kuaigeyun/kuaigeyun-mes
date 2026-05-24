@@ -5,6 +5,7 @@
  */
 
 import dayjs from 'dayjs';
+import { canWithdrawSubmittedOrder, isStrictlyAuditedStatus } from '../constants/documentStatus';
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
@@ -521,6 +522,22 @@ function applyShippableLifecycleHint(record: SalesOrder, result: LifecycleResult
 
 export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
   return applyShippableLifecycleHint(record, computeSalesOrderLifecycle(record, auditRequired));
+}
+
+/** 批量撤回：撤销提交（生命周期「待审核」「已生效」） */
+export function canWithdrawSalesOrderRecord(record: SalesOrder, auditRequired = true): boolean {
+  if (isSalesOrderClosed(record)) return false;
+  const stage = (getSalesOrderLifecycle(record, auditRequired).stageName ?? '').trim();
+  if (stage === '待审核' || stage === '已生效') return true;
+  return canWithdrawSubmittedOrder(record.status);
+}
+
+/** 批量反审核：撤销审核（生命周期「已审核」） */
+export function canUnapproveSalesOrderRecord(record: SalesOrder, auditRequired = true): boolean {
+  if (isSalesOrderClosed(record)) return false;
+  const stage = (getSalesOrderLifecycle(record, auditRequired).stageName ?? '').trim();
+  if (stage === '已审核') return true;
+  return isStrictlyAuditedStatus(record.status);
 }
 
 /** 销售订单是否已关闭（剩余执行已终止） */

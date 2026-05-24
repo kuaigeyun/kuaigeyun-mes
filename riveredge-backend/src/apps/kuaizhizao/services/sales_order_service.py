@@ -608,6 +608,13 @@ class SalesOrderService:
             deleted_at__isnull=True,
         )
 
+    async def _is_order_pushed_to_computation(self, tenant_id: int, order: SalesOrder) -> bool:
+        """订单是否已下推需求计算（planning 字段或关联 Demand）。"""
+        if getattr(order, "planning_pushed_to_computation", False):
+            return True
+        demand = await self._get_linked_demand(tenant_id, order.id)
+        return bool(demand and demand.pushed_to_computation)
+
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
         """
         历史兼容占位：销售订单不再自动同步到需求池（Demand）。
@@ -639,6 +646,36 @@ class SalesOrderService:
     def _is_draft(self, status: str) -> bool:
         """判断是否草稿（兼容中英文状态）"""
         return normalize_status(status or "") == DemandStatus.DRAFT.value
+
+    def _is_confirmed(self, status: Optional[str]) -> bool:
+        """是否已确认/已生效（提交免审直达，或确认后的状态）"""
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DemandStatus.CONFIRMED.value or raw in ("已确认", "已生效")
+
+    def _is_strictly_audited_status(self, status: Optional[str]) -> bool:
+        """是否已审核（不含已确认/已生效）"""
+        if self._is_confirmed(status):
+            return False
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DemandStatus.AUDITED.value or raw in LEGACY_AUDITED_VALUES
+
+    def _can_withdraw_submitted_order(self, order: SalesOrder) -> bool:
+        """撤回 = 撤销提交：待审核、已生效（与 lifecycle 展示一致）"""
+        if self._is_pending_review_status(order.status) or self._is_confirmed(order.status):
+            return True
+        try:
+            from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
+
+            lifecycle = get_sales_order_lifecycle(
+                order,
+                pushed_to_computation=bool(getattr(order, "planning_pushed_to_computation", False)),
+            )
+            stage = str(lifecycle.get("current_stage_name") or "").strip()
+            return stage in ("待审核", "已生效")
+        except Exception:
+            return False
 
     def _is_pending_review_status(self, status: Optional[str]) -> bool:
         raw = str(status or "").strip()
@@ -1845,21 +1882,20 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        # 已审核、已驳回 均可反审核。若检测到 status 与 review_status 不同步，先修复再继续
+        # 反审核 = 撤销审核：仅「已审核」，不含已确认/已生效
         can_unapprove = (
-            self._is_audited(order.status)
-            or self._is_review_approved(order.review_status)
+            self._is_strictly_audited_status(order.status)
             or self._is_rejected_status(order.status)
         )
         if not can_unapprove:
-            raise BusinessLogicError(f"只能反审核已审核或已驳回的订单，当前: status={order.status}, review_status={order.review_status}")
+            raise BusinessLogicError(
+                f"只能反审核已审核或已驳回的订单，当前: status={order.status}, review_status={order.review_status}"
+            )
 
-        # 不同步时自动修复
-        if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
-            order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
-        elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(review_status=ReviewStatus.APPROVED)
+        if self._is_strictly_audited_status(order.status) and not self._is_review_approved(order.review_status):
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                review_status=ReviewStatus.APPROVED
+            )
             order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
         # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
@@ -2594,15 +2630,21 @@ class SalesOrderService:
         sales_order_id: int,
         withdrawn_by: int,
     ) -> SalesOrderResponse:
-        """撤回已提交的销售订单"""
+        """撤回已提交的销售订单（待审核/已生效 → 草稿）"""
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_pending_review_status(order.status):
-            raise BusinessLogicError(f"只能撤回待审核的订单，当前: {order.status}")
+        if not self._can_withdraw_submitted_order(order):
+            raise BusinessLogicError(
+                f"只能撤回已提交且未审核的订单（待审核或已生效），当前: {order.status}"
+            )
+        self._assert_order_executable(order)
+        if await self._is_order_pushed_to_computation(tenant_id, order):
+            raise BusinessLogicError("订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交")
 
+        prev_status = order.status
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 status=DemandStatus.DRAFT,
@@ -2612,6 +2654,17 @@ class SalesOrderService:
                 review_time=None,
                 review_remarks=None,
                 updated_by=withdrawn_by,
+            )
+            from apps.common.base_service import AppBaseService
+            withdrawer_name = await AppBaseService().get_user_name(withdrawn_by)
+            await self._log_state_transition(
+                tenant_id,
+                sales_order_id,
+                prev_status,
+                DemandStatus.DRAFT,
+                withdrawn_by,
+                withdrawer_name,
+                "撤回提交",
             )
         await self._sync_demand_if_exists(tenant_id, sales_order_id, withdrawn_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
