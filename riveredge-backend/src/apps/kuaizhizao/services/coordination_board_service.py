@@ -1264,7 +1264,6 @@ class CoordinationBoardService:
             so_items = await SalesOrderItem.filter(
                 tenant_id=tenant_id,
                 sales_order_id=sales_order_id,
-                deleted_at__isnull=True,
             ).all()
             for item in so_items:
                 qty = float(item.order_quantity or 0)
@@ -1352,7 +1351,6 @@ class CoordinationBoardService:
         so_items = await SalesOrderItem.filter(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
         ).all()
         for item in so_items:
             qty = float(item.order_quantity or 0)

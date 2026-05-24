@@ -824,7 +824,6 @@ class SalesOrderService:
         order_items = await SalesOrderItem.filter(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
         ).all()
         if not order_items:
             return False, None
@@ -881,7 +880,6 @@ class SalesOrderService:
         order_items = await SalesOrderItem.filter(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
         ).all()
         if not order_items:
             return

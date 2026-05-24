@@ -1252,7 +1252,6 @@ class ReportService:
                     item_query = SalesOrderItem.filter(
                         tenant_id=tenant_id,
                         sales_order_id__in=list(active_order_ids),
-                        deleted_at__isnull=True,
                         remaining_quantity__gt=0,
                     )
                     if material_ids:
