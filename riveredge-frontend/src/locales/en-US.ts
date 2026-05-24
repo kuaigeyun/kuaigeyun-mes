@@ -8240,6 +8240,7 @@ export default {
   'pages.dashboard.phoneLabel': 'Phone',
   'pages.dashboard.lastLoginLabel': 'Last login',
   'pages.dashboard.workplaceTips': 'Tips',
+  'pages.dashboard.usageTipsTitle': 'Usage Tips',
   'pages.dashboard.statInventoryAlert': 'Inventory alerts',
   'pages.dashboard.unitAlert': 'items',
   'pages.dashboard.statQualitySummary': 'Quality overview',

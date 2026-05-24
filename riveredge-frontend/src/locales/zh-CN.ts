@@ -8247,6 +8247,7 @@ export default {
   'pages.dashboard.phoneLabel': '手机',
   'pages.dashboard.lastLoginLabel': '上次登录',
   'pages.dashboard.workplaceTips': '操作提示',
+  'pages.dashboard.usageTipsTitle': '系统使用小提示',
   'pages.dashboard.statInventoryAlert': '库存预警',
   'pages.dashboard.unitAlert': '条',
   'pages.dashboard.statQualitySummary': '质量概览',

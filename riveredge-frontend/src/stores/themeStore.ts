@@ -3,7 +3,8 @@
  *
  * 从 userPreferenceStore 读取主题，合并站点默认，计算 resolved 供 ConfigProvider 使用。
  * 主题数据源：userPreferenceStore.preferences（theme / theme_config）
- * 解析顺序：站点配置 <- 用户偏好 <- 默认值
+ * 解析顺序：DEFAULT <- 站点 theme_config <- 用户 preferences（数据库，经 fetchPreferences）
+ * 首帧：localStorage 缓存（rehydrateFromStorage）仅作占位，登录后以 API 为准覆盖
  */
 
 import { create } from 'zustand';

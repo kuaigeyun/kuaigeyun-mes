@@ -154,7 +154,6 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       <div
         className="quick-entry-icon__title"
         style={{
-          fontSize: '12px',
           color: token.colorText,
           fontWeight: 400,
           textAlign: 'center',

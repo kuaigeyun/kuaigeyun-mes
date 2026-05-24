@@ -3530,17 +3530,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important;
           padding-inline: 0 !important;
         }
-        /* 左侧菜单区背景色 - 与顶栏和标签栏保持一致 */
-        /* 浅色模式下，如果设置了自定义背景色，则使用自定义背景色；否则使用默认背景色（与顶栏一致） */
-        /* 深色模式下，始终使用默认深色背景 */
-        /* 强制覆盖 ProLayout 的 navTheme 默认背景色 */
+        /* 左侧菜单区背景色 - 仅主侧栏（ant-pro-sider），不影响页面内嵌 Sider（如配置中心参数分类） */
         .ant-pro-layout .ant-pro-sider,
-        .ant-pro-layout .ant-layout-sider,
         .ant-pro-layout .ant-pro-sider-menu,
         .ant-pro-layout .ant-pro-sider .ant-layout-sider,
         .ant-pro-layout .ant-pro-sider .ant-layout-sider-children,
         .ant-pro-layout[data-theme="light"] .ant-pro-sider,
-        .ant-pro-layout[data-theme="light"] .ant-layout-sider,
         .ant-pro-layout[data-theme="light"] .ant-pro-sider-menu {
           background: ${siderBgColor} !important;
         }

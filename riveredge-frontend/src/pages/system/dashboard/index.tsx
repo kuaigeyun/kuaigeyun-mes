@@ -30,7 +30,6 @@ import {
   ClockCircleOutlined,
   RightOutlined,
   ShopOutlined,
-  CopyOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -87,6 +86,7 @@ import DashboardKpiPanel, {
   type DashboardTimeRange,
 } from './DashboardKpiPanel';
 import DashboardOperationCardsPanel from './DashboardOperationCardsPanel';
+import { DashboardUsageTipsCarousel } from './DashboardUsageTipsCarousel';
 import {
   getDashboardTopBarCardBorder,
   getDashboardTopBarCardShadow,
@@ -997,7 +997,7 @@ export default function DashboardPage() {
             t={t}
             onWeatherChange={setWeatherForDashboard}
           />
-          {/* 右侧下区：快捷入口（高度自适应）+ 版本号 */}
+          {/* 右侧下区：快捷入口 + 使用小提示/版本 */}
           <div
             className="dashboard-right-bottom-section"
             style={{
@@ -1024,37 +1024,14 @@ export default function DashboardPage() {
                 return menu ? renderQuickEntryMenuIcon(menu) : <ShopOutlined />;
               }}
             />
-            <Card
-              size="small"
-              style={{
-                borderRadius: dashboardCardRadius,
-                boxShadow: dashboardCardShadow,
-                flexShrink: 0,
-              }}
-              styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
-            >
-              <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                <Space size={4} align="center" wrap>
-                  <Text type="secondary" style={{ fontSize: 14 }}>
-                    {t('pages.dashboard.versionLabel')}
-                  </Text>
-                  <span className="dashboard-version-badge">
-                    {(platformVersion?.git_commit || '').trim() || '—'}
-                  </span>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CopyOutlined />}
-                    disabled={!(platformVersion?.git_commit || '').trim()}
-                    onClick={copyPlatformCommit}
-                    aria-label={t('pages.dashboard.copyCommitAria')}
-                  />
-                </Space>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
-                </Text>
-              </Space>
-            </Card>
+            <DashboardUsageTipsCarousel
+              t={t}
+              cardRadius={dashboardCardRadius}
+              cardShadow={dashboardCardShadow}
+              gitCommit={platformVersion?.git_commit}
+              buildTimeDisplay={buildTimeDisplay}
+              onCopyCommit={copyPlatformCommit}
+            />
           </div>
 
         </Col>

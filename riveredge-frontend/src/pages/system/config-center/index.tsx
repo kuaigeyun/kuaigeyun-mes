@@ -711,7 +711,11 @@ const ConfigCenterPage: React.FC = () => {
 
     return (
       <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
-        <Sider width={200} style={{ background: token.colorBgContainer, borderRadius: 8, padding: '16px 0' }}>
+        <Sider
+          width={200}
+          className="config-center-category-sider"
+          style={{ background: token.colorBgContainer, borderRadius: 8, padding: '16px 0' }}
+        >
           <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
             <Space>{icon}<Text strong>{t('pages.system.configCenter.categoryTitle')}</Text></Space>
           </div>

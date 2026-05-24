@@ -156,7 +156,7 @@ interface UserPreferenceState {
   syncTablePreference: (tableId: string, state: Record<string, any>) => Promise<void>;
   /** 登出时调用：仅清空内存状态，不删本地缓存（各账户缓存按 key 多存一份） */
   clearForLogout: () => void;
-  /** 同步从当前账户缓存恢复偏好，用于登录后立即生效、避免等接口再刷新 */
+  /** 同步从当前账户缓存恢复偏好，用于登录后首帧展示；不标记 initialized，后续仍须 fetchPreferences 以数据库为准 */
   rehydrateFromStorage: () => void;
 }
 
@@ -207,7 +207,8 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         purgeLegacyTableColumnPreferences();
         const cached = stripUiTablesFromPreferences(readCachedPreferencesForCurrentUser());
         if (Object.keys(cached).length === 0) return;
-        set((s) => ({ ...s, preferences: cached, initialized: true }));
+        // 仅恢复本地缓存供首帧展示；initialized 仅在 fetchPreferences 完成后置 true，避免跳过 API 拉取
+        set((s) => ({ ...s, preferences: cached }));
         syncTableColumnsToLocalStorage(cached);
       },
 

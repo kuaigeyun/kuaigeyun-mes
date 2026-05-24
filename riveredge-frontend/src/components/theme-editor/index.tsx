@@ -197,7 +197,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     { color: '#f5f5f5', label: '灰白', category: 'light' },
     { color: '#f0f0f0', label: '中灰', category: 'light' },
     { color: '#fafbfc', label: '蓝灰', category: 'light' },
-    { color: '#f0f2f5', label: '浅蓝灰', category: 'light' },
+    { color: '#D4D4D4', label: '银灰', category: 'light' },
   ]
     .map(item => ({
       ...item,
