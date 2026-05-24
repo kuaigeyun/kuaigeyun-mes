@@ -29,6 +29,7 @@ from .cost import (
 )
 from .management_report import router as management_report_router
 from .finance_settlement import router as settlement_router
+from .finance.partner_statements import router as partner_statements_router
 
 router = APIRouter(tags=["App · Kuaicaiwu · Overview"])
 
@@ -53,6 +54,7 @@ router.include_router(cost_optimization_router)
 router.include_router(cost_report_router)
 router.include_router(management_report_router)
 router.include_router(settlement_router)
+router.include_router(partner_statements_router)
 
 
 @router.get("/health")

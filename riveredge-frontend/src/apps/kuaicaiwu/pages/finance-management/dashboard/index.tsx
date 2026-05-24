@@ -79,7 +79,8 @@ const FinanceCenterDashboard: React.FC = () => {
     { key: 'payment', title: '付款单', icon: <CreditCardOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />, path: '/apps/kuaicaiwu/finance-management/payments' },
     { key: 'ar', title: '应收管理', icon: <WalletOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaicaiwu/finance-management/receivables' },
     { key: 'ap', title: '应付管理', icon: <FileTextOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaicaiwu/finance-management/payables' },
-    { key: 'settle', title: '对账结算', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaicaiwu/finance-management/settlement' },
+    { key: 'settle', title: '往来核销', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaicaiwu/finance-management/settlement' },
+    { key: 'partner-stmt', title: '往来对账', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/kuaicaiwu/finance-management/partner-statements' },
   ];
 
   const agingData = useMemo(() => {

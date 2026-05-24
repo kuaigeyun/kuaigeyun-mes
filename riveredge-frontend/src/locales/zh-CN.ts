@@ -1843,6 +1843,7 @@ export default {
   'app.kuaicaiwu.menu.finance-management.payments': '付款单',
   'app.kuaicaiwu.menu.finance-management.sales-invoices': '销售发票',
   'app.kuaicaiwu.menu.finance-management.settlement': '往来核销',
+  'app.kuaicaiwu.menu.finance-management.partner-statements': '往来对账',
   'app.kuaicaiwu.menu.finance-management.invoices': '发票列表',
   'app.kuaicaiwu.menu.cost-management': '成本管理',
   'app.kuaicaiwu.menu.cost-management.dashboard': '成本中心',

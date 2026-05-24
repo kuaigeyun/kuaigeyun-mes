@@ -39,10 +39,19 @@ export function formatSalesInvoiceTypeZh(raw: string | undefined | null): string
   return t;
 }
 
-/** 列表/确认框：系统编号为 UUID 时显示 #id */
+/** 列表/确认框：系统编号为 UUID 时显示 #id（历史数据；新单据应已使用 SI 业务编码） */
 export function displaySalesInvoiceListCode(r: SalesInvoiceCodeRow): string {
   if (isUuidInvoiceCode(r.invoice_code)) return `#${r.id}`;
   return String(r.invoice_code ?? '—');
+}
+
+const SALES_INVOICE_NON_DELETABLE_STATUSES = new Set(['已审核', '已开票', '已作废', '已红冲']);
+
+/** 是否允许物理删除（与后端 delete 接口一致） */
+export function canDeleteSalesInvoice(record: { status?: string | null }): boolean {
+  const st = String(record.status || '').trim();
+  if (!st) return false;
+  return !SALES_INVOICE_NON_DELETABLE_STATUSES.has(st);
 }
 
 /** 详情页标题：销售发票 + 发票号码（无号码时不展示内部序号） */

@@ -6,6 +6,7 @@
 
 import uuid
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 from tortoise.transactions import in_transaction
 from tortoise.functions import Sum
 
@@ -31,8 +32,12 @@ class InvoiceService(AppBaseService[Invoice]):
         if not is_enabled:
             raise BusinessLogicError("发票节点未启用，无法创建发票")
         async with in_transaction():
-            # 单据系统编号：全局唯一即可，使用 UUID，不依赖编码规则 INVOICE_CODE
-            code = str(uuid.uuid4())
+            category = (data.category or "IN").strip().upper()
+            if category == "OUT":
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "SALES_INVOICE_CODE", prefix=f"SI{today}")
+            else:
+                code = str(uuid.uuid4())
             invoice_data = data.model_dump(exclude={'items'})
             invoice = await Invoice.create(
                 tenant_id=tenant_id,

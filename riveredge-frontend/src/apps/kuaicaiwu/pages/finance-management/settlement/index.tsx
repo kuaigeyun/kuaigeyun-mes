@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
-import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Tabs } from 'antd';
+import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { settlementService } from '../../../services/finance/settlement';
 import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
@@ -21,6 +22,10 @@ const SettlementPage: React.FC = () => {
   const [selectedPayable, setSelectedPayable] = useState<Record<string, unknown> | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<Record<string, unknown> | null>(null);
   const [settleAmount, setSettleAmount] = useState<number>(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  /** 双栏列表仅表格视图，不展示 UniView 切换 */
+  const tableOnlyViewTypes = ['table'] as const;
 
   const handleManualSettleReceivable = async () => {
     if (!selectedReceivable || !selectedReceipt || settleAmount <= 0) {
@@ -176,6 +181,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="待核销应收单"
             actionRef={receivableActionRef}
             rowKey="id"
+            viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
@@ -202,6 +208,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="可用收款单"
             actionRef={receiptActionRef}
             rowKey="id"
+            viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
             search={false}
             scroll={{ x: 560 }}
@@ -268,6 +275,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="待核销应付单"
             actionRef={payableActionRef}
             rowKey="id"
+            viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
@@ -294,6 +302,7 @@ const SettlementPage: React.FC = () => {
             headerTitle="可用付款单"
             actionRef={paymentActionRef}
             rowKey="id"
+            viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"
             search={false}
             scroll={{ x: 560 }}
@@ -346,23 +355,66 @@ const SettlementPage: React.FC = () => {
     </>
   );
 
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    setSelectedReceivable(null);
+    setSelectedReceipt(null);
+    setSelectedPayable(null);
+    setSelectedPayment(null);
+  };
+
+  const tabBarExtraContent = useMemo(
+    () => (
+      <Button type="default" icon={<QuestionCircleOutlined />} onClick={() => setHelpOpen(true)}>
+        帮助
+      </Button>
+    ),
+    [],
+  );
+
   return (
-    <ListPageTemplate>
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => {
-          setActiveTab(key);
-          setSelectedReceivable(null);
-          setSelectedReceipt(null);
-          setSelectedPayable(null);
-          setSelectedPayment(null);
-        }}
-        items={[
+    <>
+      <MultiTabListPageTemplate
+        activeTabKey={activeTab}
+        onTabChange={handleTabChange}
+        preserveMounted
+        tabBarExtraContent={tabBarExtraContent}
+        tabs={[
           { key: 'receivable', label: '应收核销', children: receivableSettlement },
           { key: 'payable', label: '应付核销', children: payableSettlement },
         ]}
       />
-    </ListPageTemplate>
+
+      <Modal
+        title="往来核销帮助"
+        open={helpOpen}
+        onCancel={() => setHelpOpen(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setHelpOpen(false)}>
+            知道了
+          </Button>,
+        ]}
+        width={560}
+      >
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+          <div>
+            <Typography.Text strong>应收核销</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+              将「有余额的收款单」手动匹配到「有待收金额的应收单」。左侧选择应收单，右侧匹配收款单，确认核销金额即可。
+              若已在应收详情登记收款并自动核销，或单据已全部结清，则列表不会显示数据。
+            </Typography.Paragraph>
+          </div>
+          <Divider style={{ margin: 0 }} />
+          <div>
+            <Typography.Text strong>应付核销</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+              将「有余额的付款单」手动匹配到「有待付金额的应付单」。操作方式与应收核销相同。
+              若已在应付详情登记付款并自动核销，或单据已全部结清，则列表不会显示数据。
+            </Typography.Paragraph>
+          </div>
+        </Space>
+      </Modal>
+    </>
   );
 };
 

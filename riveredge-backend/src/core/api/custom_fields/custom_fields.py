@@ -23,6 +23,7 @@ from core.services.system.installed_feature_scope import (
     get_installed_application_codes,
     is_page_path_in_installed_apps,
 )
+from core.services.custom_field.custom_field_page_discovery import apply_manifest_display_overlay
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
@@ -134,7 +135,8 @@ async def list_custom_field_pages(
     获取自定义字段功能页面配置列表
     
     返回系统中所有支持自定义字段的功能页面配置，用于在自定义字段页面展示和配置。
-    以 core.config.custom_field_pages 中的配置为唯一数据源，保证列表完整。
+    以 core.config.custom_field_pages 为完整数据源（含 table_name 等技术字段），
+    展示名称（page_name、table_name_label、module）优先与各应用 manifest.custom_field_pages 对齐。
     仅返回路由归属应用已在当前租户安装并启用的页面。
     
     Returns:
@@ -144,7 +146,7 @@ async def list_custom_field_pages(
 
     installed = await get_installed_application_codes(tenant_id)
     return [
-        CustomFieldPageConfigResponse(**p)
+        CustomFieldPageConfigResponse(**apply_manifest_display_overlay(dict(p)))
         for p in CUSTOM_FIELD_PAGES
         if is_page_path_in_installed_apps(p.get("page_path"), installed)
     ]

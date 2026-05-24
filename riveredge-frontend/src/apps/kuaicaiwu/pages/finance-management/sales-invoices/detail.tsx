@@ -29,6 +29,7 @@ import {
   formatSalesInvoiceTabTitle,
   formatSalesInvoiceTypeZh,
   INVOICE_TYPE_OPTIONS,
+  canDeleteSalesInvoice,
 } from '../../../utils/salesInvoiceUi';
 
 interface SalesInvoiceLine {
@@ -177,6 +178,20 @@ const SalesInvoiceDetailPage: React.FC = () => {
     });
   };
 
+  const remove = () => {
+    if (!id || !data) return;
+    Modal.confirm({
+      title: '删除销售发票',
+      content: `确定删除该发票？已审核、已作废或已红冲的发票不能删除。`,
+      okType: 'danger',
+      onOk: async () => {
+        await apiRequest(`/apps/kuaicaiwu/sales-invoices/${id}`, { method: 'DELETE' });
+        message.success('删除成功');
+        navigate('/apps/kuaicaiwu/finance-management/sales-invoices');
+      },
+    });
+  };
+
   const openVoid = () => {
     voidReasonRef.current = '';
     reasonFieldKeyRef.current += 1;
@@ -265,6 +280,11 @@ const SalesInvoiceDetailPage: React.FC = () => {
       {editable ? (
         <Button danger onClick={openVoid}>
           作废
+        </Button>
+      ) : null}
+      {canDeleteSalesInvoice(data) ? (
+        <Button danger onClick={remove}>
+          删除
         </Button>
       ) : null}
       {showRedLetterBtn ? (

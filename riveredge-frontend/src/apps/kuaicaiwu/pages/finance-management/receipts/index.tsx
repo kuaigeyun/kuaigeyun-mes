@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { EyeOutlined, CheckOutlined, StopOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckOutlined, StopOutlined, PlusOutlined, DownOutlined, DeleteOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
@@ -18,6 +18,7 @@ import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { receivableService } from '../../../services/finance/receivable';
+import { receiptService } from '../../../services/finance/receipt';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface ReceiptVoucher {
@@ -195,8 +196,25 @@ const ReceiptsPage: React.FC = () => {
       content: `确定要作废收款单 ${record.receipt_code} 吗？已核销的收款单不能作废。`,
       onOk: async () => {
         try {
-          await apiRequest(`/apps/kuaicaiwu/receipts/${record.id}/cancel`, { method: 'POST' });
+          await receiptService.cancelReceipt(record.id);
           messageApi.success('作废成功');
+          actionRef.current?.reload();
+        } catch (e: any) {
+          messageApi.error(e?.message || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleDelete = async (record: ReceiptVoucher) => {
+    Modal.confirm({
+      title: '删除收款单',
+      content: `确定删除收款单 ${record.receipt_code}？已确认的收款单不能删除，请使用作废。`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await receiptService.deleteReceipt(record.id);
+          messageApi.success('删除成功');
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.message || '操作失败');
@@ -320,6 +338,11 @@ const ReceiptsPage: React.FC = () => {
             record.status !== 'Cancelled' && record.settled_amount === 0 ? (
               <Button key="ca" type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancel(record)}>
                 作废
+              </Button>
+            ) : null,
+            record.status !== 'Confirmed' ? (
+              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                删除
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],

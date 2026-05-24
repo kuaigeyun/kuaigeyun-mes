@@ -77,6 +77,10 @@ export const HeaderQuickEntryPopover: React.FC<HeaderQuickEntryPopoverProps> = (
     </div>
   );
 
+  const headerIconColor = isLightModeLightBg
+    ? 'rgba(0, 0, 0, 0.85)'
+    : 'rgba(255, 255, 255, 0.85)';
+
   const trigger = (
     <span
       role="button"
@@ -91,7 +95,7 @@ export const HeaderQuickEntryPopover: React.FC<HeaderQuickEntryPopoverProps> = (
         borderRadius: token.borderRadius,
         cursor: 'pointer',
         flexShrink: 0,
-        color: token.colorText,
+        color: headerIconColor,
         fontSize: 18,
         transition: 'background 0.2s ease',
       }}

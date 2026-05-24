@@ -42,6 +42,8 @@ const MonthlySettlementPage = lazy(() => import('./pages/cost-management/monthly
 const FinanceCenterDashboard = lazy(() => import('./pages/finance-management/dashboard'));
 const ManagementDashboard = lazy(() => import('./pages/management-dashboard'));
 const SettlementPage = lazy(() => import('./pages/finance-management/settlement'));
+const PartnerStatementsPage = lazy(() => import('./pages/finance-management/partner-statements'));
+const PartnerStatementDetailPage = lazy(() => import('./pages/finance-management/partner-statements/detail'));
 
 const KuaicaiwuApp: React.FC = () => {
   return (
@@ -61,6 +63,8 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/receipts" element={withPageSuspense(ReceiptsPage)} />
       <Route path="finance-management/payments" element={withPageSuspense(PaymentsPage)} />
       <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
+      <Route path="finance-management/partner-statements" element={withPageSuspense(PartnerStatementsPage)} />
+      <Route path="finance-management/partner-statements/:id" element={withPageSuspense(PartnerStatementDetailPage)} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />

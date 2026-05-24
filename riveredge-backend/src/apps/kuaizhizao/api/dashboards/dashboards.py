@@ -2068,20 +2068,36 @@ async def get_menu_badge_counts(
         counts["inspection_plan"] = 0
 
     try:
-        # 财务核算：应收/应付待审核 + 逾期 + 对账单待确认
+        # 往来核销：与 settlement 页 pending_settlement / unsettled_only 列表口径一致
         from apps.kuaicaiwu.models.receivable import Receivable
         from apps.kuaicaiwu.models.payable import Payable
-        from apps.kuaicaiwu.models.partner_statement import PartnerStatement
-        
-        c1 = await Receivable.filter(tenant_id=tenant_id, review_status__in=["待审核", "PENDING_REVIEW"], deleted_at__isnull=True).count()
-        c2 = await Receivable.filter(tenant_id=tenant_id, status="未收款", due_date__lt=now_date, deleted_at__isnull=True).count()
-        c3 = await Payable.filter(tenant_id=tenant_id, review_status__in=["待审核", "PENDING_REVIEW"], deleted_at__isnull=True).count()
-        c4 = await PartnerStatement.filter(tenant_id=tenant_id, status__in=["Draft", "待确认"], deleted_at__isnull=True).count()
-        
+        from apps.kuaicaiwu.models.receipt import Receipt
+        from apps.kuaicaiwu.models.payment import Payment
+
+        recv_pending = await Receivable.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, remaining_amount__gt=0,
+        ).count()
+        pay_pending = await Payable.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, remaining_amount__gt=0,
+        ).count()
+        recv_voucher = await Receipt.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, unsettled_amount__gt=0,
+        ).exclude(status="Cancelled").count()
+        pay_voucher = await Payment.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, unsettled_amount__gt=0,
+        ).exclude(status="Cancelled").count()
+        recv_overdue = await Receivable.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            remaining_amount__gt=0,
+            due_date__lt=now_date,
+            due_date__isnull=False,
+        ).count()
+
         counts["finance_settlement"] = {
-            "overdue": c2,
-            "pending": c1 + c3 + c4,
-            "in_progress": 0
+            "overdue": recv_overdue,
+            "pending": recv_pending + pay_pending,
+            "in_progress": recv_voucher + pay_voucher,
         }
     except Exception as e:
         logger.warning(f"menu-badge-counts finance_settlement: {e}")

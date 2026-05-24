@@ -2528,6 +2528,42 @@
       "auto_generate": true,
       "rule_code": "PRODUCTION_PLAN_CODE",
       "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-equipment-management-equipment",
+      "page_name": "设备台账",
+      "page_path": "/apps/kuaizhizao/equipment-management/equipment",
+      "code_field": "code",
+      "code_field_label": "设备编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "EQUIPMENT_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-equipment-management-mold",
+      "page_name": "模具台账",
+      "page_path": "/apps/kuaizhizao/equipment-management/molds",
+      "code_field": "code",
+      "code_field_label": "模具编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "MOLD_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-equipment-management-tool",
+      "page_name": "工装台账",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-ledger",
+      "code_field": "code",
+      "code_field_label": "工装编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "TOOL_CODE",
+      "allow_manual_edit": true
     }
   ],
   "custom_field_pages": [

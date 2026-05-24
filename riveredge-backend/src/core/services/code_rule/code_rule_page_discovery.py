@@ -5,10 +5,8 @@
 支持从应用清单中提取页面配置，实现动态页面发现。
 """
 
-import json
 import logging
 import time
-from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from core.services.application.application_service import ApplicationService
 
@@ -18,60 +16,91 @@ logger = logging.getLogger(__name__)
 _PAGES_CACHE: Optional[Tuple[List[Dict[str, Any]], float]] = None
 _PAGES_CACHE_TTL = 300  # 秒
 
+# manifest 展示字段覆盖缓存（page_name / code_field_label / module 等）
+_MANIFEST_OVERLAY_CACHE: Optional[Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]], float]] = None
+
+# 从 manifest 覆盖到硬编码配置的展示字段（技术字段如 rule_code 仍保留硬编码）
+DISPLAY_OVERLAY_FIELDS = ("page_name", "code_field_label", "module", "module_icon")
+
+
+def _normalize_page_path(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+    normalized = path.rstrip("/")
+    return normalized or "/"
+
+
+def build_manifest_display_overlay() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """从各应用 manifest.code_rule_pages 构建展示字段覆盖表（按 page_code 与 page_path）。"""
+    by_code: Dict[str, Dict[str, Any]] = {}
+    by_path: Dict[str, Dict[str, Any]] = {}
+
+    for manifest in ApplicationService._scan_plugin_manifests():
+        app_name = manifest.get("name")
+        for cfg in manifest.get("code_rule_pages") or []:
+            page_code = cfg.get("page_code")
+            if not page_code:
+                continue
+
+            entry: Dict[str, Any] = {}
+            for field in DISPLAY_OVERLAY_FIELDS:
+                value = cfg.get(field)
+                if value is not None:
+                    entry[field] = value
+            if "module" not in entry and app_name:
+                entry["module"] = app_name
+
+            by_code[page_code] = {**by_code.get(page_code, {}), **entry}
+            page_path = _normalize_page_path(cfg.get("page_path"))
+            if page_path:
+                by_path[page_path] = {**by_path.get(page_path, {}), **entry}
+
+    return by_code, by_path
+
+
+def get_manifest_display_overlay() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    global _MANIFEST_OVERLAY_CACHE
+    now = time.time()
+    if _MANIFEST_OVERLAY_CACHE is not None:
+        by_code, by_path, cached_at = _MANIFEST_OVERLAY_CACHE
+        if now - cached_at < _PAGES_CACHE_TTL:
+            return by_code, by_path
+
+    by_code, by_path = build_manifest_display_overlay()
+    _MANIFEST_OVERLAY_CACHE = (by_code, by_path, now)
+    return by_code, by_path
+
+
+def apply_manifest_display_overlay(page: Dict[str, Any]) -> Dict[str, Any]:
+    """将 manifest 中的展示名称覆盖到硬编码页面配置（按 page_code，page_path 优先）。"""
+    result = dict(page)
+    by_code, by_path = get_manifest_display_overlay()
+
+    page_code = result.get("page_code")
+    page_path = _normalize_page_path(result.get("page_path"))
+
+    overlay: Dict[str, Any] = {}
+    if page_code and page_code in by_code:
+        overlay.update(by_code[page_code])
+    elif page_path and page_path in by_path:
+        # page_path 仅作 page_code 未在 manifest 中声明时的回退（如 page_code 命名不一致）
+        overlay.update(by_path[page_path])
+
+    for field, value in overlay.items():
+        if value is not None:
+            result[field] = value
+
+    return result
+
 
 class CodeRulePageDiscoveryService:
     """编码规则页面发现服务"""
     
     @staticmethod
-    def _get_plugins_directory() -> Path:
-        """
-        获取插件目录路径（统一使用前端 manifest 为单一来源，支持 APPS_MANIFEST_DIR）
-        
-        Returns:
-            Path: 插件目录路径（riveredge-frontend/src/apps）
-        """
-        return ApplicationService._get_plugins_directory()
-    
-    @staticmethod
     def _scan_app_manifests() -> List[Dict[str, Any]]:
-        """
-        扫描应用目录，读取所有应用的 manifest.json 文件
-        
-        Returns:
-            List[Dict[str, Any]]: 应用清单列表
-        """
-        plugins_dir = CodeRulePageDiscoveryService._get_plugins_directory()
-        manifests = []
-        
-        if not plugins_dir.exists():
-            logger.warning(f"插件目录不存在: {plugins_dir}")
-            return manifests
-        
-        # 遍历 src/apps 目录下的所有子目录
-        for app_dir in plugins_dir.iterdir():
-            if not app_dir.is_dir():
-                continue
-            
-            # 查找 manifest.json 文件
-            manifest_file = app_dir / "manifest.json"
-            if not manifest_file.exists():
-                continue
-            
-            try:
-                # 读取 manifest.json
-                with open(manifest_file, 'r', encoding='utf-8') as f:
-                    manifest_data = json.load(f)
-                
-                # 添加应用目录路径信息
-                manifest_data['_app_dir'] = str(app_dir)
-                manifests.append(manifest_data)
-            except (json.JSONDecodeError, IOError) as e:
-                # 忽略无法读取的 manifest.json
-                logger.warning(f"警告: 无法读取应用 {app_dir.name} 的 manifest.json: {e}")
-                continue
-        
-        return manifests
-    
+        """扫描应用目录，读取所有应用的 manifest.json（后端 src/apps 为单一来源）。"""
+        return ApplicationService._scan_plugin_manifests()
+
     @staticmethod
     def discover_pages() -> List[Dict[str, Any]]:
         """

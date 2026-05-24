@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Alert, Input, theme, Space, Collapse, Spin } from 'antd';
 import { SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import {
   createCodeRule,
   updateCodeRule,
@@ -34,6 +35,11 @@ import {
   CodeRuleComponentService,
 } from '../../../../utils/codeRuleComponent';
 import { getCodeRulePageConfigsKey } from '../../../../utils/codeRulePage';
+import {
+  buildMenuPathNameMap,
+  enrichPagesWithMenuNames,
+} from '../../../../utils/featurePageDisplay';
+import { getNavigationMenuTree } from '../../../../services/menu';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 // 去除未使用的 Text, Paragraph
@@ -128,6 +134,24 @@ const CodeRuleListPage: React.FC = () => {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [enableAllLoading, setEnableAllLoading] = useState(false);
   const [restoreSingleLoading, setRestoreSingleLoading] = useState(false);
+
+  const { data: menuTree } = useQuery({
+    queryKey: ['navigationMenuTree'],
+    queryFn: () => getNavigationMenuTree(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const menuPathNameMap = useMemo(
+    () => buildMenuPathNameMap(menuTree || [], t),
+    [menuTree, t],
+  );
+
+  const displayPageConfigs = useMemo(
+    () => enrichPagesWithMenuNames(pageConfigs, menuPathNameMap, t),
+    [pageConfigs, menuPathNameMap, t],
+  );
 
   // 页面规则配置表单状态
   const pageRuleFormRef = useRef<ProFormInstance>();
@@ -505,12 +529,12 @@ const CodeRuleListPage: React.FC = () => {
    * 一次遍历同时完成过滤 + 按模块分组，避免 O(模块数 × 页面数) 的二次过滤
    */
   const groupedPages = useMemo(() => {
-    if (!pageConfigs || pageConfigs.length === 0) {
+    if (!displayPageConfigs || displayPageConfigs.length === 0) {
       return [] as { module: string; pages: CodeRulePageConfig[] }[];
     }
     const keyword = pageSearchValue.trim().toLowerCase();
     const groups = new Map<string, CodeRulePageConfig[]>();
-    for (const page of pageConfigs) {
+    for (const page of displayPageConfigs) {
       if (!page) continue;
       if (keyword) {
         const hit =
@@ -530,12 +554,12 @@ const CodeRuleListPage: React.FC = () => {
       }
     }
     return Array.from(groups, ([module, pages]) => ({ module, pages }));
-  }, [pageConfigs, pageSearchValue]);
+  }, [displayPageConfigs, pageSearchValue]);
 
   const selectedPage = useMemo(() => {
     if (!selectedPageCode) return undefined;
-    return pageConfigs.find(page => page.pageCode === selectedPageCode);
-  }, [pageConfigs, selectedPageCode]);
+    return displayPageConfigs.find(page => page.pageCode === selectedPageCode);
+  }, [displayPageConfigs, selectedPageCode]);
 
   /**
    * 稳定的回调引用，配合 PageListItem 的 React.memo 实现按需重渲染

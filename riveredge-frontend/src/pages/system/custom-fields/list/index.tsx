@@ -9,9 +9,10 @@
  * - 右侧：选中页面的自定义字段列表和配置
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { useQuery } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, theme } from 'antd';
@@ -32,6 +33,11 @@ import {
   CustomFieldPageConfig,
 } from '../../../../services/customField';
 import { getApplicationList } from '../../../../services/application';
+import { getNavigationMenuTree } from '../../../../services/menu';
+import {
+  buildMenuPathNameMap,
+  enrichPagesWithMenuNames,
+} from '../../../../utils/featurePageDisplay';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
@@ -117,6 +123,24 @@ const CustomFieldListPage: React.FC = () => {
   // 页面配置状态
   const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
+
+  const { data: menuTree } = useQuery({
+    queryKey: ['navigationMenuTree'],
+    queryFn: () => getNavigationMenuTree(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const menuPathNameMap = useMemo(
+    () => buildMenuPathNameMap(menuTree || [], t),
+    [menuTree, t],
+  );
+
+  const displayPageConfigs = useMemo(
+    () => enrichPagesWithMenuNames(pageConfigs, menuPathNameMap, t),
+    [pageConfigs, menuPathNameMap, t],
+  );
 
   /**
    * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
@@ -645,7 +669,7 @@ const CustomFieldListPage: React.FC = () => {
                 name="associated_table"
                 label={t('field.customField.associatedTable')}
                 rules={[{ required: true, message: t('field.customField.associatedTableRequired') }]}
-                options={getTableNameOptions(pageConfigs)}
+                options={getTableNameOptions(displayPageConfigs)}
                 placeholder={t('field.customField.associatedTablePlaceholder')}
                 extra={t('field.customField.associatedTableExtra')}
                 fieldProps={{
@@ -868,24 +892,24 @@ const CustomFieldListPage: React.FC = () => {
 
   // 获取过滤后的页面列表和选中的页面配置
   const filteredPages = React.useMemo(() => {
-    if (!pageSearchValue) return pageConfigs;
+    if (!pageSearchValue) return displayPageConfigs;
     const searchLower = pageSearchValue.toLowerCase();
-    return (pageConfigs || []).filter(
+    return (displayPageConfigs || []).filter(
       page =>
         page.pageName.toLowerCase().includes(searchLower) ||
         page.pagePath.toLowerCase().includes(searchLower) ||
         page.tableName.toLowerCase().includes(searchLower)
     );
-  }, [pageConfigs, pageSearchValue]);
+  }, [displayPageConfigs, pageSearchValue]);
 
   const selectedPage = React.useMemo(() => {
     if (!selectedPageCode) return null;
-    return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
-  }, [pageConfigs, selectedPageCode]);
+    return displayPageConfigs.find(page => page.pageCode === selectedPageCode) || null;
+  }, [displayPageConfigs, selectedPageCode]);
 
   const modules = React.useMemo(() => {
-    return Array.from(new Set(pageConfigs.map(p => p.module)));
-  }, [pageConfigs]);
+    return Array.from(new Set(displayPageConfigs.map(p => p.module)));
+  }, [displayPageConfigs]);
 
   /**
    * 详情列定义

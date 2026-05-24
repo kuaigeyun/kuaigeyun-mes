@@ -7,7 +7,7 @@
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from loguru import logger
 
@@ -28,6 +28,7 @@ from apps.kuaicaiwu.schemas.finance import (
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
@@ -38,6 +39,12 @@ from infra.services.business_config_service import BusinessConfigService
 router = APIRouter(prefix="/sales-invoices", tags=["App · Kuaicaiwu · Finance"])
 business_config_service = BusinessConfigService()
 receivable_service = ReceivableService()
+invoice_service = InvoiceService()
+
+
+async def _generate_sales_invoice_code(tenant_id: int) -> str:
+    today = datetime.now().strftime("%Y%m%d")
+    return await invoice_service.generate_code(tenant_id, "SALES_INVOICE_CODE", prefix=f"SI{today}")
 
 
 def _http_exception_with_trace(
@@ -234,7 +241,7 @@ async def create_sales_invoice(
     tenant_id: int = Depends(get_current_tenant)
 ):
     """创建销售发票"""
-    code = str(uuid.uuid4())
+    code = await _generate_sales_invoice_code(tenant_id)
     invoice = await Invoice.create(
         tenant_id=tenant_id,
         invoice_code=code,
@@ -499,7 +506,7 @@ async def create_red_letter_sales_invoice(
         excl = Decimal(orig.amount_excluding_tax or 0)
         tax = Decimal(orig.tax_amount or 0)
         tot = Decimal(orig.total_amount or 0)
-        code = str(uuid.uuid4())
+        code = await _generate_sales_invoice_code(tenant_id)
         desc = (orig.description or "").strip()
         tail = f"\n红冲原发票#{orig.id}（{orig.invoice_code}）：{reason}"
         new_inv = await Invoice.create(

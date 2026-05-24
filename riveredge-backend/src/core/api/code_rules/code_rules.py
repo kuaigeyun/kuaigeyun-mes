@@ -28,6 +28,7 @@ from core.services.system.installed_feature_scope import (
     get_installed_application_codes,
     is_page_path_in_installed_apps,
 )
+from core.services.code_rule.code_rule_page_discovery import apply_manifest_display_overlay
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/code-rules", tags=["Core · Code Rules"])
@@ -106,8 +107,8 @@ async def list_code_rule_pages(
     获取编码规则功能页面配置列表
     
     返回系统中所有有编码字段的功能页面配置，用于在编码规则页面展示和配置。
-    以 core.config.code_rule_pages.CODE_RULE_PAGES 为唯一数据源，保证列表完整
-    （各应用 manifest 中若未配置 code_rule_pages 会导致发现结果不全，故不再优先使用发现）。
+    以 core.config.code_rule_pages.CODE_RULE_PAGES 为完整数据源（含 rule_code 等技术字段），
+    展示名称（page_name、code_field_label、module）优先与各应用 manifest.code_rule_pages 对齐。
     仅返回路由归属应用已在当前租户安装并启用的页面。
     
     Returns:
@@ -120,7 +121,7 @@ async def list_code_rule_pages(
     for page in CODE_RULE_PAGES:
         if not is_page_path_in_installed_apps(page.get("page_path"), installed):
             continue
-        p = dict(page)
+        p = apply_manifest_display_overlay(dict(page))
         p["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(p.get("page_code", ""))
         result.append(CodeRulePageConfigResponse(**p))
     return result
@@ -159,6 +160,7 @@ async def get_page_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"页面配置不存在: {page_code}"
         )
+    page_config = apply_manifest_display_overlay(page_config)
     installed = await get_installed_application_codes(tenant_id)
     if not is_page_path_in_installed_apps(page_config.get("page_path"), installed):
         raise HTTPException(

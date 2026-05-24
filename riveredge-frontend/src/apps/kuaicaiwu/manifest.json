@@ -65,6 +65,12 @@
             "path": "/apps/kuaicaiwu/finance-management/settlement",
             "permission": "kuaicaiwu:settlement:read",
             "sort_order": 7
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.partner-statements",
+            "path": "/apps/kuaicaiwu/finance-management/partner-statements",
+            "permission": "kuaicaiwu:partner-statement:read",
+            "sort_order": 8
           }
         ]
       },
@@ -168,6 +174,12 @@
     "kuaicaiwu:settlement:revoke",
     "kuaicaiwu:settlement:submit",
     "kuaicaiwu:settlement:update",
+    "kuaicaiwu:partner-statement:read",
+    "kuaicaiwu:partner-statement:create",
+    "kuaicaiwu:partner-statement:update",
+    "kuaicaiwu:partner-statement:delete",
+    "kuaicaiwu:partner-statement:export",
+    "kuaicaiwu:partner-statement:print",
     "kuaicaiwu:cost-rule:audit",
     "kuaicaiwu:cost-rule:create",
     "kuaicaiwu:cost-rule:delete",

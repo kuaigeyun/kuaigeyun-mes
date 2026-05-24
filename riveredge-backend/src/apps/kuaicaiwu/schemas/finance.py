@@ -325,9 +325,9 @@ class SalesInvoiceBase(BaseSchema):
     invoice_date: date = Field(..., description="开票日期")
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
     tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
-    invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
-    tax_amount: Decimal = Field(..., ge=0, description="税额")
-    total_amount: Decimal = Field(..., ge=0, description="价税合计")
+    invoice_amount: Decimal = Field(..., description="不含税金额（红字发票为负）")
+    tax_amount: Decimal = Field(..., description="税额（红字发票为负）")
+    total_amount: Decimal = Field(..., description="价税合计（红字发票为负）")
     receivable_id: Optional[int] = Field(None, description="关联应收单ID")
     receivable_code: Optional[str] = Field(None, max_length=50, description="关联应收单编码")
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
@@ -336,7 +336,10 @@ class SalesInvoiceBase(BaseSchema):
 
 class SalesInvoiceCreate(SalesInvoiceBase):
     """销售发票创建schema"""
-    pass
+
+    invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
+    tax_amount: Decimal = Field(..., ge=0, description="税额")
+    total_amount: Decimal = Field(..., ge=0, description="价税合计")
 
 
 class SalesInvoiceUpdate(BaseSchema):
@@ -411,3 +414,91 @@ class SalesInvoiceDetailResponse(SalesInvoiceResponse):
     """销售发票详情（含明细行）"""
 
     items: List[SalesInvoiceLineResponse] = Field(default_factory=list)
+
+
+# === 往来对账单 ===
+
+class PartnerStatementLineResponse(BaseSchema):
+    date: str
+    doc_type: str
+    doc_code: str
+    summary: Optional[str] = None
+    debit: float = 0
+    credit: float = 0
+    balance: float = 0
+
+
+class PartnerStatementSummaryResponse(BaseSchema):
+    opening_balance: float
+    debit_total: float
+    credit_total: float
+    closing_balance: float
+
+
+class PartnerStatementPreviewResponse(BaseSchema):
+    partner_id: int
+    partner_name: str
+    partner_type: str
+    start_date: str
+    end_date: str
+    company_name: str
+    balance_label: str
+    summary: PartnerStatementSummaryResponse
+    lines: List[PartnerStatementLineResponse]
+    partner_snapshot: dict = Field(default_factory=dict)
+
+
+class PartnerStatementCreate(BaseSchema):
+    partner_id: int
+    partner_type: str = Field(..., description="Customer 或 Supplier")
+    statement_period: str = Field(..., description="YYYY-MM")
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class PartnerStatementMarkSentRequest(BaseSchema):
+    channel: str = Field(..., description="export/print/wechat_manual/email_manual/other")
+    notes: Optional[str] = None
+
+
+class PartnerStatementDisputeRequest(BaseSchema):
+    reason: str = Field(..., min_length=1)
+
+
+class PartnerStatementResponse(BaseSchema):
+    id: int
+    statement_code: str
+    partner_id: int
+    partner_name: str
+    partner_type: str
+    statement_period: str
+    start_date: date
+    end_date: date
+    opening_balance: Decimal
+    debit_total: Decimal
+    credit_total: Decimal
+    closing_balance: Decimal
+    status: str
+    company_name: Optional[str] = None
+    transaction_details: Optional[dict] = None
+    confirmed_at: Optional[datetime] = None
+    confirmed_by: Optional[int] = None
+    sent_at: Optional[datetime] = None
+    sent_by: Optional[int] = None
+    sent_channel: Optional[str] = None
+    dispute_reason: Optional[str] = None
+    disputed_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    created_by: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PartnerStatementListResponse(BaseSchema):
+    items: List[PartnerStatementResponse]
+    total: int
+    skip: int
+    limit: int

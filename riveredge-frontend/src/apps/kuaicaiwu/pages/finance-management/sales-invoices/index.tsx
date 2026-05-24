@@ -20,7 +20,7 @@ import {
   INVOICE_TYPE_OPTIONS,
   formatSalesInvoiceTypeZh,
   displaySalesInvoiceListCode,
-  isUuidInvoiceCode,
+  canDeleteSalesInvoice,
 } from '../../../utils/salesInvoiceUi';
 import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../../kuaizhizao/services/sales-order';
@@ -309,25 +309,21 @@ const SalesInvoicesPage: React.FC = () => {
 
   const columns: ProColumns<SalesInvoice>[] = [
     {
-      title: '发票编号',
-      dataIndex: 'invoice_code',
-      width: 120,
-      fixed: 'left',
-      render: (_, r) => {
-        const shown = displaySalesInvoiceListCode(r);
-        const copyText = isUuidInvoiceCode(r.invoice_code) ? shown : String(r.invoice_code ?? '');
-        return (
-          <Typography.Text copyable={copyText ? { text: copyText } : false} ellipsis={{ tooltip: shown }}>
-            {shown}
-          </Typography.Text>
-        );
-      },
-    },
-    {
       title: '发票号码',
       dataIndex: 'invoice_number',
       width: 160,
-      render: (_, r) => (r.invoice_number?.trim() ? r.invoice_number : '—'),
+      fixed: 'left',
+      render: (_, r) => {
+        const shown = r.invoice_number?.trim() || '—';
+        const canLink = !!r.invoice_number?.trim();
+        return canLink ? (
+          <Typography.Text copyable={{ text: shown }} ellipsis={{ tooltip: shown }}>
+            <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${r.id}`)}>{shown}</a>
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        );
+      },
     },
     {
       title: '客户名称',
@@ -460,7 +456,7 @@ const SalesInvoicesPage: React.FC = () => {
                 审核
               </Button>
             ) : null,
-            ['未审核', 'DRAFT'].includes(String(record.status || '')) ? (
+            canDeleteSalesInvoice(record) ? (
               <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
                 删除
               </Button>

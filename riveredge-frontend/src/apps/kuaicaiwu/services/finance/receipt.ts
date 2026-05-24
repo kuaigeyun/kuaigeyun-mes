@@ -43,4 +43,10 @@ export const receiptService = {
       method: 'POST',
     });
   },
+
+  deleteReceipt: (id: number) => {
+    return apiRequest<void>(`${RECEIPT_API}/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };

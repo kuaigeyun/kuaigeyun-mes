@@ -1839,6 +1839,7 @@ export default {
   'app.kuaicaiwu.menu.finance-management.payments': 'Payment Vouchers',
   'app.kuaicaiwu.menu.finance-management.sales-invoices': 'Sales Invoices',
   'app.kuaicaiwu.menu.finance-management.settlement': 'Settlement',
+  'app.kuaicaiwu.menu.finance-management.partner-statements': 'Partner Statements',
   'app.kuaicaiwu.menu.finance-management.invoices': 'Invoices',
   'app.kuaicaiwu.menu.cost-management': 'Cost Management',
   'app.kuaicaiwu.menu.cost-management.dashboard': 'Cost Center',
