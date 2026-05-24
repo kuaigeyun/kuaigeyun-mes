@@ -10,7 +10,7 @@ import {
   AlertOutlined,
 } from '@ant-design/icons';
 import { managementReportService } from '../../../services/management-report';
-import { apiRequest } from '../../../../services/api';
+import { apiRequest } from '../../../../../services/api';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,

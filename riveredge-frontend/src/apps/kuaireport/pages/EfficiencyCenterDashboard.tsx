@@ -7,7 +7,7 @@ import {
   LineChartOutlined,
   FileSearchOutlined,
 } from '@ant-design/icons';
-import { apiRequest } from '../../../../services/api';
+import { apiRequest } from '../../../services/api';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -15,8 +15,8 @@ import {
   ModuleActionPanel,
   ModuleChartPanel,
   ModuleChartRow,
-} from '../../../kuaizhizao/components/module-center';
-import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
+} from '../../kuaizhizao/components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef } from '../../kuaizhizao/components/module-center';
 const TimingColumn = lazy(async () => {
   const { Column } = await import('@ant-design/charts');
   return { default: (props: React.ComponentProps<typeof Column>) => <Column {...props} /> };
