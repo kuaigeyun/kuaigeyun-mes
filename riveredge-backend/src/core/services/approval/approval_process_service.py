@@ -144,6 +144,78 @@ class ApprovalProcessService:
         }
     
     @staticmethod
+    async def get_approval_process_by_code(
+        tenant_id: int,
+        code: str,
+    ) -> Optional[ApprovalProcess]:
+        """按 code 获取审批流程（不受已安装应用范围过滤）。"""
+        return await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=code,
+            deleted_at__isnull=True,
+        ).first()
+
+    @staticmethod
+    async def _sync_inngest_workflow(approval_process: ApprovalProcess) -> None:
+        """按 is_active 同步异步工作流注册状态。"""
+        if approval_process.inngest_workflow_id:
+            await unregister_approval_workflow(approval_process.inngest_workflow_id)
+            approval_process.inngest_workflow_id = None
+        if approval_process.is_active:
+            inngest_config = ApprovalProcessService.convert_proflow_to_inngest(
+                approval_process.nodes
+            )
+            workflow_id = await register_approval_workflow(approval_process, inngest_config)
+            approval_process.inngest_workflow_id = workflow_id
+        await approval_process.save()
+
+    @staticmethod
+    async def set_audit_switch_active(
+        tenant_id: int,
+        code: str,
+        is_active: bool,
+    ) -> ApprovalProcess:
+        """
+        配置中心审核开关：按 code 启用/关闭审批流程。
+
+        数据库中已存在（含迁移预置、默认关闭）则直接更新 is_active；
+        不存在且需要开启时，按预设节点创建。
+        """
+        process = await ApprovalProcessService.get_approval_process_by_code(tenant_id, code)
+        if process:
+            process.is_active = is_active
+            await process.save()
+            await ApprovalProcessService._sync_inngest_workflow(process)
+            return process
+
+        if not is_active:
+            raise NotFoundError(f"审批流程 {code} 不存在")
+
+        preset = next(
+            (item for item in ApprovalProcessService.PRESET_APPROVAL_PROCESSES if item["code"] == code),
+            None,
+        )
+        if preset:
+            data = ApprovalProcessCreate(
+                name=preset["name"],
+                code=preset["code"],
+                description=preset.get("description"),
+                nodes=preset["nodes"],
+                config=preset.get("config", {}),
+                is_active=True,
+            )
+        else:
+            data = ApprovalProcessCreate(
+                name=ApprovalProcessService.CANONICAL_PROCESS_NAMES.get(code, f"{code}_audit"),
+                code=code,
+                description="单据审核开关（配置中心创建）",
+                nodes=ApprovalProcessService._simple_nodes("审核"),
+                config={},
+                is_active=True,
+            )
+        return await ApprovalProcessService.create_approval_process(tenant_id, data)
+
+    @staticmethod
     async def create_approval_process(
         tenant_id: int,
         data: ApprovalProcessCreate
@@ -221,6 +293,7 @@ class ApprovalProcessService:
         limit: int = 100,
         is_active: Optional[bool] = None,
         installed_app_codes: Optional[Set[str]] = None,
+        for_audit_config: bool = False,
     ) -> List[ApprovalProcess]:
         """
         获取审批流程列表
@@ -243,7 +316,11 @@ class ApprovalProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if installed_app_codes is not None and "kuaizhizao" not in installed_app_codes:
+        if (
+            not for_audit_config
+            and installed_app_codes is not None
+            and "kuaizhizao" not in installed_app_codes
+        ):
             from core.services.system.installed_feature_scope import (
                 KUAIZHIZAO_APPROVAL_PROCESS_CODES,
             )

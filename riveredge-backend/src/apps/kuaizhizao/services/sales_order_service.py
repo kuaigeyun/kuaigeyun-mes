@@ -12,6 +12,7 @@ from collections import defaultdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 from loguru import logger
 
@@ -955,6 +956,32 @@ class SalesOrderService:
                 tenant_id, sales_order_data.order_date
             )
 
+        try:
+            return await self._create_sales_order_in_tx(
+                tenant_id=tenant_id,
+                sales_order_data=sales_order_data,
+                created_by=created_by,
+            )
+        except IntegrityError:
+            sales_order_data.order_code = await self._generate_order_code(
+                tenant_id, sales_order_data.order_date
+            )
+            try:
+                return await self._create_sales_order_in_tx(
+                    tenant_id=tenant_id,
+                    sales_order_data=sales_order_data,
+                    created_by=created_by,
+                )
+            except IntegrityError as e:
+                raise ValidationError("销售订单编码已存在，请关闭弹窗后重新新建") from e
+
+    async def _create_sales_order_in_tx(
+        self,
+        tenant_id: int,
+        sales_order_data: SalesOrderCreate,
+        created_by: int,
+    ) -> SalesOrderResponse:
+        """创建销售订单（事务内）。"""
         async with in_transaction():
             self._validate_sales_order_non_negative(
                 discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),

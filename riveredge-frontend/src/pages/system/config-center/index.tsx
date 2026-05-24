@@ -26,8 +26,7 @@ import { getMessageConfigList, type MessageConfig } from '../../../services/mess
 import { getMessageTemplateList, type MessageTemplate } from '../../../services/messageTemplate';
 import {
   getApprovalProcessList,
-  createApprovalProcess,
-  updateApprovalProcess,
+  setAuditSwitchActive,
   type ApprovalProcess,
 } from '../../../services/approvalProcess';
 import { getUserList, type User } from '../../../services/user';
@@ -230,7 +229,7 @@ const ConfigCenterPage: React.FC = () => {
 
   const { data: approvalProcessList, refetch: refetchApprovalProcessList } = useQuery({
     queryKey: APPROVAL_PROCESS_LIST_QUERY_KEY,
-    queryFn: () => getApprovalProcessList({ limit: 500 }),
+    queryFn: () => getApprovalProcessList({ limit: 500, for_audit_config: true }),
     staleTime: 30_000,
   });
   const { data: usersRes } = useQuery({
@@ -425,24 +424,7 @@ const ConfigCenterPage: React.FC = () => {
 
   const handleToggleAuditProcess = async (code: string, checked: boolean) => {
     try {
-      const exists = approvalProcessByCode.get(code);
-      if (exists) {
-        await updateApprovalProcess(exists.uuid, { is_active: checked });
-      } else if (checked) {
-        const switchMeta = AUDIT_SWITCH_ITEMS.find((item) => item.code === code);
-        const processName = switchMeta ? renderText(switchMeta.labelKey, `${code}_audit`) : `${code}_audit`;
-        await createApprovalProcess({
-          code,
-          name: processName,
-          description: '单据审核开关（配置中心创建）',
-          nodes: {
-            nodes: [{ id: 'start', type: 'start', position: { x: 250, y: 50 }, data: { label: '开始' } }, { id: 'end', type: 'end', position: { x: 250, y: 350 }, data: { label: '结束' } }],
-            edges: [{ source: 'start', target: 'end' }],
-          },
-          config: {},
-          is_active: true,
-        });
-      }
+      await setAuditSwitchActive(code, checked);
       await refetchApprovalProcessList();
       messageApi.success(t('pages.system.configCenter.auditSwitch.updateSuccess'));
     } catch (error: any) {

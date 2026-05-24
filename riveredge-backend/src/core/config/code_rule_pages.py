@@ -1305,5 +1305,7 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     ),
     "SETTLEMENT_CODE": ("apps.kuaicaiwu.models.settlement", "Settlement", "settlement_code"),
     "kuaicaiwu-finance-settlement": ("apps.kuaicaiwu.models.settlement", "Settlement", "settlement_code"),
+    "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
+    "kuaizhizao-sales-order": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
 }
 

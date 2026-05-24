@@ -668,7 +668,11 @@ const SalesOrdersPage: React.FC = () => {
     if (autoGenerate && ruleCode) {
       setEffectiveRuleCode(ruleCode);
       try {
-        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+        const codeResponse = await testGenerateCode({
+          rule_code: ruleCode,
+          check_duplicate: true,
+          entity_type: 'sales_order',
+        });
         const preview = codeResponse.code;
         setPreviewCode(preview ?? null);
         formRef.current?.setFieldsValue({ order_code: preview ?? '' });
@@ -1071,20 +1075,23 @@ const SalesOrdersPage: React.FC = () => {
         return { uid: f.uid, name: f.name, status: 'done', url: f.url };
       });
 
-      // 如果是直接提交，先生成正式编号（如果配置了规则）
+      // 新建时若启用编号规则，保存草稿/提交均正式占号，避免预览编号重复导致创建失败
       const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-order');
-      if (
-        !isDraft &&
+      const shouldAutoGenerateCode =
         !isEdit &&
         ruleCodeToUse &&
         (isAutoGenerateEnabled('kuaizhizao-sales-order') || effectiveRuleCode) &&
-        (values.order_code === previewCode || !values.order_code)
-      ) {
+        (values.order_code === previewCode || !values.order_code);
+      if (shouldAutoGenerateCode) {
         try {
-          const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
+          const codeResponse = await generateCode({
+            rule_code: ruleCodeToUse,
+            context: values.order_date ? { order_date: values.order_date } : undefined,
+          });
           values.order_code = codeResponse.code;
         } catch (error: any) {
-          console.warn('正式生成订单编号失败，使用预览编号:', error);
+          messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.generateCodeFailed', '生成订单编号失败'));
+          return;
         }
       }
 

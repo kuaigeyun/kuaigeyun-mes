@@ -13,6 +13,7 @@ from core.schemas.approval_process import (
     ApprovalProcessCreate,
     ApprovalProcessUpdate,
     ApprovalProcessResponse,
+    AuditSwitchToggleRequest,
 )
 from core.services.approval.approval_process_service import ApprovalProcessService
 from core.api.deps.deps import get_current_tenant
@@ -101,6 +102,7 @@ async def list_approval_processes(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    for_audit_config: bool = Query(False, description="配置中心审核设置：返回全部审核开关流程"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -124,6 +126,7 @@ async def list_approval_processes(
             limit=limit,
             is_active=is_active,
             installed_app_codes=await get_installed_application_codes(tenant_id),
+            for_audit_config=for_audit_config,
         )
     except Exception as e:
         logger.exception(
@@ -151,6 +154,35 @@ async def list_approval_processes(
                 e,
             )
     return result
+
+
+@router.put("/audit-switch/{code}", response_model=ApprovalProcessResponse)
+async def toggle_audit_switch(
+    code: str,
+    data: AuditSwitchToggleRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    配置中心审核开关：按流程 code 启用/关闭审批流程。
+    """
+    try:
+        approval_process = await ApprovalProcessService.set_audit_switch_active(
+            tenant_id=tenant_id,
+            code=code,
+            is_active=data.is_active,
+        )
+        return _to_response_model(approval_process)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
 
 @router.get("/{uuid}", response_model=ApprovalProcessResponse)

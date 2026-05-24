@@ -25,6 +25,8 @@ export interface ApprovalProcessListParams {
   skip?: number;
   limit?: number;
   is_active?: boolean;
+  /** 配置中心审核设置：返回全部审核开关流程（不受已安装应用过滤） */
+  for_audit_config?: boolean;
 }
 
 export interface CreateApprovalProcessData {
@@ -86,6 +88,16 @@ export async function updateApprovalProcess(approvalProcessUuid: string, data: U
 export async function loadPresetApprovalProcesses(): Promise<{ created: number; message: string }> {
   return apiRequest<{ created: number; message: string }>('/core/approval-processes/load-preset', {
     method: 'POST',
+  });
+}
+
+/**
+ * 配置中心审核开关：按 code 启用/关闭审批流程
+ */
+export async function setAuditSwitchActive(code: string, is_active: boolean): Promise<ApprovalProcess> {
+  return apiRequest<ApprovalProcess>(`/core/approval-processes/audit-switch/${encodeURIComponent(code)}`, {
+    method: 'PUT',
+    data: { is_active },
   });
 }
 

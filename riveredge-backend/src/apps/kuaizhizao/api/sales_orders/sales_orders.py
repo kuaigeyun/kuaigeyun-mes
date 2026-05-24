@@ -91,7 +91,7 @@ async def create_sales_order(
     except ValidationError as e:
         raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders", tenant_id)
     except Exception as e:
-        logger.error(f"创建销售订单失败: {e}")
+        logger.exception("创建销售订单失败: {}", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建销售订单失败", "/sales-orders", tenant_id)
 
 

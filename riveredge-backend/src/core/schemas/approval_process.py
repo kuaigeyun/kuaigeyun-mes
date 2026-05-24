@@ -49,6 +49,11 @@ class ApprovalProcessUpdate(BaseModel):
         return normalize_optional_json_object_field(v)
 
 
+class AuditSwitchToggleRequest(BaseModel):
+    """配置中心审核开关"""
+    is_active: bool = Field(..., description="是否启用审核")
+
+
 class ApprovalProcessResponse(ApprovalProcessBase):
     """审批流程响应 Schema"""
     uuid: UUID = Field(..., description="审批流程UUID")
