@@ -784,12 +784,49 @@ cmd_status() {
     fi
 }
 
+pgdg_apt_base_url() {
+    if [ "${USE_MIRROR}" = "1" ]; then
+        echo "https://mirrors.aliyun.com/postgresql/repos/apt"
+    else
+        echo "https://apt.postgresql.org/pub/repos/apt"
+    fi
+}
+
+install_postgresql_pgdg() {
+    local pgdg_base codename key_path
+    if [ ! -f /etc/debian_version ]; then
+        log_error "PostgreSQL PGDG 安装仅支持 Debian/Ubuntu"
+        return 1
+    fi
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    codename="${VERSION_CODENAME:-}"
+    [ -n "$codename" ] || { log_error "无法检测 VERSION_CODENAME"; return 1; }
+
+    pgdg_base="$(pgdg_apt_base_url)"
+    key_path="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
+    log_info "配置 PGDG 源: ${pgdg_base} (${codename}-pgdg)"
+    sudo apt update || return 1
+    sudo apt install -y ca-certificates curl gnupg postgresql-common || return 1
+    sudo install -d /usr/share/postgresql-common/pgdg
+    curl -fsSL "${pgdg_base}/ACCC4CF8.asc" | sudo tee "$key_path" > /dev/null || return 1
+    echo "deb [signed-by=${key_path}] ${pgdg_base} ${codename}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+    sudo apt update || return 1
+    sudo apt install -y postgresql-15 postgresql-contrib-15 || return 1
+    log_ok "PostgreSQL 15 已安装"
+}
+
 run_install_component() {
     local comp=$1 status=$2
     [ "$status" = "ok" ] && return 0
     if [ "$comp" = "caddy" ]; then
         log_info "安装 caddy..."
         install_caddy_bundled || return 1
+        return 0
+    fi
+    if [ "$comp" = "postgresql" ] && [ -f /etc/debian_version ] && ! is_windows_gitbash; then
+        log_info "安装 postgresql..."
+        install_postgresql_pgdg || return 1
         return 0
     fi
     local cmd
