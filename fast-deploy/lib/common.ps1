@@ -476,17 +476,26 @@ function New-Caddyfile {
     Write-LogOk '已生成 Caddyfile'
 }
 
+function Get-CaddyBundledAssetUrl {
+    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/caddyserver/caddy/releases/latest' -UseBasicParsing
+    $tag = $release.tag_name
+    $version = $tag -replace '^v', ''
+    return "https://github.com/caddyserver/caddy/releases/download/$tag/caddy_${version}_windows_amd64.zip"
+}
+
 function Install-CaddyBundled {
     $toolsDir = Join-Path $script:FastDeployDir '.tools\caddy'
     New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
     $zipPath = Join-Path $env:TEMP 'caddy_windows_amd64.zip'
-    $url = 'https://github.com/caddyserver/caddy/releases/latest/download/caddy_windows_amd64.zip'
+    $url = Get-CaddyBundledAssetUrl
     Write-LogInfo "下载 Caddy: $url"
     Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
     Expand-Archive -Path $zipPath -DestinationPath $toolsDir -Force
     Remove-Item $zipPath -Force
+    $exe = Join-Path $toolsDir 'caddy.exe'
+    if (-not (Test-Path $exe)) { throw 'Caddy 下载后未找到 caddy.exe' }
     $env:PATH = (Join-Path $toolsDir '') + ';' + $env:PATH
-    Write-LogOk "Caddy 已安装到 $toolsDir\caddy.exe"
+    Write-LogOk "Caddy 已安装到 $exe"
 }
 
 function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$ArgumentList, [hashtable]$EnvVars) {

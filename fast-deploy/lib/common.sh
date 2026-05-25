@@ -781,6 +781,11 @@ cmd_status() {
 run_install_component() {
     local comp=$1 status=$2
     [ "$status" = "ok" ] && return 0
+    if [ "$comp" = "caddy" ]; then
+        log_info "安装 caddy..."
+        install_caddy_bundled || return 1
+        return 0
+    fi
     local cmd
     cmd="$(get_install_command "$comp")"
     [ -n "$cmd" ] || { log_error "无 $comp 的安装命令"; return 1; }
@@ -790,12 +795,6 @@ run_install_component() {
     fi
     log_info "安装 $comp..."
     log_info "执行: $cmd"
-    if [ "$comp" = "caddy" ]; then
-        if is_windows_gitbash || [[ "$(uname -s)" == "Darwin" ]] || [[ "$cmd" == *"从 https"* ]] || [[ "$cmd" == *"github.com"* ]]; then
-            install_caddy_bundled || return 1
-            return 0
-        fi
-    fi
     if is_windows_gitbash; then
         cmd.exe //c "$cmd" || {
             log_error "$comp 安装失败，请用管理员 Git Bash 重试，或手动执行: $cmd"
@@ -809,26 +808,51 @@ run_install_component() {
     }
 }
 
+caddy_github_latest_tag() {
+    curl -fsSL "https://api.github.com/repos/caddyserver/caddy/releases/latest" \
+        | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])'
+}
+
+caddy_bundled_asset_url() {
+    local tag version os arch ext
+    tag="$(caddy_github_latest_tag)"
+    version="${tag#v}"
+    if is_windows_gitbash; then
+        os="windows"
+        arch="amd64"
+        ext="zip"
+    else
+        os="linux"
+        arch="amd64"
+        if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
+            arch="arm64"
+        fi
+        ext="tar.gz"
+    fi
+    echo "https://github.com/caddyserver/caddy/releases/download/${tag}/caddy_${version}_${os}_${arch}.${ext}"
+}
+
 install_caddy_bundled() {
     local tools_dir="$FAST_DEPLOY_DIR/.tools/caddy"
     mkdir -p "$tools_dir"
+    local url archive
+    url="$(caddy_bundled_asset_url)"
+    log_info "下载 Caddy: $url"
     if is_windows_gitbash; then
-        local zip_path="$tools_dir/caddy.zip"
-        local url="https://github.com/caddyserver/caddy/releases/latest/download/caddy_windows_amd64.zip"
-        log_info "下载 Caddy: $url"
-        curl -fsSL "$url" -o "$zip_path"
-        unzip -o "$zip_path" -d "$tools_dir" caddy.exe
-        rm -f "$zip_path"
+        archive="$tools_dir/caddy.zip"
+        curl -fsSL "$url" -o "$archive"
+        unzip -o "$archive" -d "$tools_dir" caddy.exe
+        rm -f "$archive"
+        [ -f "$tools_dir/caddy.exe" ] || { log_error "Caddy 下载后未找到 caddy.exe"; return 1; }
         chmod +x "$tools_dir/caddy.exe"
         log_ok "Caddy 已安装到 $tools_dir/caddy.exe"
         return 0
     fi
-    local url="https://github.com/caddyserver/caddy/releases/latest/download/caddy_linux_amd64.tar.gz"
-    if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
-        url="https://github.com/caddyserver/caddy/releases/latest/download/caddy_linux_arm64.tar.gz"
-    fi
-    log_info "下载 Caddy: $url"
-    curl -fsSL "$url" | tar -xz -C "$tools_dir" caddy
+    archive="$tools_dir/caddy.tar.gz"
+    curl -fsSL "$url" -o "$archive"
+    tar -xzf "$archive" -C "$tools_dir" caddy
+    rm -f "$archive"
+    [ -f "$tools_dir/caddy" ] || { log_error "Caddy 下载后未找到 caddy 二进制"; return 1; }
     chmod +x "$tools_dir/caddy"
     log_ok "Caddy 已安装到 $tools_dir/caddy"
 }
@@ -862,9 +886,7 @@ cmd_install() {
     run_install_component uv "$(check_uv)" || true
     run_install_component postgresql "$(check_postgres)" || true
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        if [ "$(check_caddy)" != "ok" ]; then
-            run_install_component caddy "missing" || install_caddy_bundled || true
-        fi
+        run_install_component caddy "$(check_caddy)" || return 1
     fi
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check || exit 1
