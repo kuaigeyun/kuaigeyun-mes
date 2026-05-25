@@ -122,7 +122,7 @@ import json, sys
 path, comp, plat, mirror = sys.argv[1:5]
 with open(path, encoding="utf-8") as f:
     data = json.load(f)
-if mirror == "1" and comp not in ("node", "python", "postgresql") and plat in ("ubuntu22", "linux"):
+if mirror == "1" and comp not in ("node", "python", "postgresql", "caddy") and plat in ("ubuntu22", "linux"):
     if comp in data.get("scripts_cn", {}):
         print(data["scripts_cn"][comp])
         sys.exit(0)
@@ -816,13 +816,70 @@ install_postgresql_pgdg() {
     log_ok "PostgreSQL 15 已安装"
 }
 
+caddy_apt_deb_base() {
+    if [ "${USE_MIRROR}" = "1" ]; then
+        echo "https://mirrors.china.12306.work/repository/caddy/stable/deb/debian"
+    else
+        echo "https://dl.cloudsmith.io/public/caddy/stable/deb/debian"
+    fi
+}
+
+caddy_gpg_url() {
+    if [ "${USE_MIRROR}" = "1" ]; then
+        echo "https://getiot.tech/public/caddy/stable/gpg.key"
+    else
+        echo "https://dl.cloudsmith.io/public/caddy/stable/gpg.key"
+    fi
+}
+
+install_caddy_apt() {
+    local apt_base gpg_url keyring=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    apt_base="$(caddy_apt_deb_base)"
+    gpg_url="$(caddy_gpg_url)"
+    log_info "配置 Caddy apt 源: ${apt_base}"
+    sudo apt update || return 1
+    sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl ca-certificates gnupg || return 1
+    curl -fsSL "$gpg_url" | sudo gpg --dearmor -o "$keyring" || return 1
+    sudo chmod o+r "$keyring"
+    echo "deb [signed-by=${keyring}] ${apt_base} any-version main" | sudo tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
+    sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+    sudo apt update || return 1
+    sudo apt install -y caddy || return 1
+    if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl stop caddy 2>/dev/null || true
+        sudo systemctl disable caddy 2>/dev/null || true
+    fi
+    command -v caddy >/dev/null 2>&1 || { log_error "apt 安装后未找到 caddy"; return 1; }
+    log_ok "Caddy 已通过 apt 安装: $(command -v caddy)"
+}
+
 run_install_component() {
     local comp=$1 status=$2
     [ "$status" = "ok" ] && return 0
     if [ "$comp" = "caddy" ]; then
         log_info "安装 caddy..."
-        install_caddy_bundled || return 1
-        return 0
+        if is_windows_gitbash; then
+            local cmd="winget install -e --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements"
+            log_info "执行: $cmd"
+            cmd.exe //c "$cmd" || {
+                log_error "caddy 安装失败，请手动执行: $cmd"
+                return 1
+            }
+            return 0
+        elif [ -f /etc/debian_version ]; then
+            install_caddy_apt || return 1
+            return 0
+        elif [[ "$(uname -s)" == "Darwin" ]]; then
+            if command -v brew >/dev/null 2>&1; then
+                brew install caddy || return 1
+                log_ok "Caddy 已通过 Homebrew 安装"
+                return 0
+            fi
+            log_error "macOS 请先安装 Homebrew 后执行: brew install caddy"
+            return 1
+        fi
+        log_error "不支持的平台，请手动安装 Caddy"
+        return 1
     fi
     if [ "$comp" = "postgresql" ] && [ -f /etc/debian_version ] && ! is_windows_gitbash; then
         log_info "安装 postgresql..."
@@ -849,55 +906,6 @@ run_install_component() {
         log_error "$comp 安装失败，请手动执行: $cmd"
         return 1
     }
-}
-
-caddy_github_latest_tag() {
-    curl -fsSL "https://api.github.com/repos/caddyserver/caddy/releases/latest" \
-        | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])'
-}
-
-caddy_bundled_asset_url() {
-    local tag version os arch ext
-    tag="$(caddy_github_latest_tag)"
-    version="${tag#v}"
-    if is_windows_gitbash; then
-        os="windows"
-        arch="amd64"
-        ext="zip"
-    else
-        os="linux"
-        arch="amd64"
-        if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
-            arch="arm64"
-        fi
-        ext="tar.gz"
-    fi
-    echo "https://github.com/caddyserver/caddy/releases/download/${tag}/caddy_${version}_${os}_${arch}.${ext}"
-}
-
-install_caddy_bundled() {
-    local tools_dir="$FAST_DEPLOY_DIR/.tools/caddy"
-    mkdir -p "$tools_dir"
-    local url archive
-    url="$(caddy_bundled_asset_url)"
-    log_info "下载 Caddy: $url"
-    if is_windows_gitbash; then
-        archive="$tools_dir/caddy.zip"
-        curl -fsSL "$url" -o "$archive"
-        unzip -o "$archive" -d "$tools_dir" caddy.exe
-        rm -f "$archive"
-        [ -f "$tools_dir/caddy.exe" ] || { log_error "Caddy 下载后未找到 caddy.exe"; return 1; }
-        chmod +x "$tools_dir/caddy.exe"
-        log_ok "Caddy 已安装到 $tools_dir/caddy.exe"
-        return 0
-    fi
-    archive="$tools_dir/caddy.tar.gz"
-    curl -fsSL "$url" -o "$archive"
-    tar -xzf "$archive" -C "$tools_dir" caddy
-    rm -f "$archive"
-    [ -f "$tools_dir/caddy" ] || { log_error "Caddy 下载后未找到 caddy 二进制"; return 1; }
-    chmod +x "$tools_dir/caddy"
-    log_ok "Caddy 已安装到 $tools_dir/caddy"
 }
 
 cmd_check() {

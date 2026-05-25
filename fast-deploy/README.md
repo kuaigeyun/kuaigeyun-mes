@@ -75,7 +75,7 @@ update     # 拉代码 + 迁移 + 重启
 
 ## 镜像与环境变量
 
-默认 **`USE_MIRROR=1`**（清华 uv 源 + npmmirror npm 源；PostgreSQL 走阿里云 PGDG 镜像；Caddy 走 GitHub bundled）。Node/Python 仍走官方安装以保证版本。
+默认 **`USE_MIRROR=1`**（清华 uv 源 + npmmirror npm 源；PostgreSQL 走阿里云 PGDG 镜像；Caddy 走 apt 安装，国内镜像加速）。Node/Python 仍走官方安装以保证版本。
 
 ```bash
 USE_MIRROR=0 ./fast-deploy/deploy.sh install   # 禁用国内镜像

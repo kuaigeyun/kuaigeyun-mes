@@ -106,7 +106,7 @@ $env:PATH = Get-EnhancedPath
 function Get-InstallCommand([string]$component) {
     if (-not (Test-Path $script:InstallScriptsJson)) { return '' }
     $json = Get-Content $script:InstallScriptsJson -Raw | ConvertFrom-Json
-    if ($script:UseMirror -and $component -notin @('node', 'python', 'postgresql') -and $json.scripts_cn.$component) {
+    if ($script:UseMirror -and $component -notin @('node', 'python', 'postgresql', 'caddy') -and $json.scripts_cn.$component) {
         return $json.scripts_cn.$component
     }
     $plat = 'windows'
@@ -485,26 +485,13 @@ function New-Caddyfile {
     Write-LogOk '已生成 Caddyfile'
 }
 
-function Get-CaddyBundledAssetUrl {
-    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/caddyserver/caddy/releases/latest' -UseBasicParsing
-    $tag = $release.tag_name
-    $version = $tag -replace '^v', ''
-    return "https://github.com/caddyserver/caddy/releases/download/$tag/caddy_${version}_windows_amd64.zip"
-}
-
-function Install-CaddyBundled {
-    $toolsDir = Join-Path $script:FastDeployDir '.tools\caddy'
-    New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
-    $zipPath = Join-Path $env:TEMP 'caddy_windows_amd64.zip'
-    $url = Get-CaddyBundledAssetUrl
-    Write-LogInfo "下载 Caddy: $url"
-    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
-    Expand-Archive -Path $zipPath -DestinationPath $toolsDir -Force
-    Remove-Item $zipPath -Force
-    $exe = Join-Path $toolsDir 'caddy.exe'
-    if (-not (Test-Path $exe)) { throw 'Caddy 下载后未找到 caddy.exe' }
-    $env:PATH = (Join-Path $toolsDir '') + ';' + $env:PATH
-    Write-LogOk "Caddy 已安装到 $exe"
+function Install-Caddy {
+    $cmd = 'winget install -e --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements'
+    Write-LogInfo "安装 caddy..."
+    Write-LogInfo "执行: $cmd"
+    cmd.exe /c $cmd
+    if ($LASTEXITCODE -ne 0) { throw "caddy 安装失败，请手动执行: $cmd" }
+    Write-LogOk "Caddy 已通过 winget 安装"
 }
 
 function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$ArgumentList, [hashtable]$EnvVars) {
@@ -715,7 +702,7 @@ function Install-Component([string]$Component, [string]$Status) {
     if ($Status -eq 'ok') { return }
     $cmd = Get-InstallCommand $Component
     if ($Component -eq 'caddy') {
-        Install-CaddyBundled
+        Install-Caddy
         return
     }
     if ([string]::IsNullOrWhiteSpace($cmd) -or $cmd -like '*从 https*') {
