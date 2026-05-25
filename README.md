@@ -217,12 +217,15 @@
 
 ## 快速开始
 
-**环境**：Node.js 22、Python 3.12、PostgreSQL 15、Redis 6
+**环境**：Node.js 22、Python 3.12、PostgreSQL 15
+
+**命令行快速部署**（Git Bash 一条命令，自动判平台/国内镜像/配置向导）：见 [fast-deploy/README.md](fast-deploy/README.md)。
 
 ```bash
 git clone <repository-url>
 cd riveredge
-./Launch.dev.sh
+./fast-deploy/deploy.sh          # 生产
+./fast-deploy/deploy.sh dev      # 开发
 ```
 
 使用部署面板可图形化完成环境检测、配置与一键启动，详见 [部署面板使用指南](docs/部署面板使用指南.md)。

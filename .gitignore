@@ -112,3 +112,8 @@ docs/optimize/
 
 # ===== 定制化应用（不入库）：规划文档、客户资料、独立移动端工程等 =====
 riveredge-adapt/
+
+# ===== fast-deploy 本地生成物 =====
+fast-deploy/caddy/
+fast-deploy/.tools/
+fast-deploy/deploy.env

@@ -1,0 +1,86 @@
+# RiverEdge Caddy 配置模板（由 fast-deploy 脚本渲染）
+# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}}
+# 实际生成文件：fast-deploy/caddy/Caddyfile
+
+# 禁用 admin API 避免与系统 Caddy 端口 2019 冲突
+{
+    admin off
+}
+
+# 地址: {{ADDR}}
+{{ADDR}} {
+    encode gzip zstd
+
+    handle /api/* {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /static/* {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /docs* {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /redoc* {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /openapi.json {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /health {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /mobile* {
+        header Content-Type "text/plain; charset=utf-8"
+        respond "RiverEdge 移动端请使用官方安卓应用。API 与 Web 管理端共用域名下的 /api。" 200
+    }
+    handle {
+        root * {{FRONTEND_ROOT}}
+        try_files {path} /index.html
+        file_server
+        header /assets/* Cache-Control "public, max-age=31536000, immutable"
+        header / Cache-Control "no-cache"
+        header /index.html Cache-Control "no-cache"
+    }
+}
