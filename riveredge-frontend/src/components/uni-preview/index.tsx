@@ -2,33 +2,60 @@ import React, { useEffect, useRef } from 'react';
 import { Alert, Spin } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 
-export interface UniPdfPreviewProps {
+export interface PreviewOverlayToolButtonProps {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  title?: string;
+}
+
+/** 全屏预览顶栏工具按钮（PDF / 3D / CAD 共用样式） */
+export const PreviewOverlayToolButton: React.FC<PreviewOverlayToolButtonProps> = ({
+  children,
+  onClick,
+  active,
+  title,
+}) => (
+  <button
+    type="button"
+    title={title}
+    onClick={onClick}
+    style={{
+      border: `1px solid ${active ? '#5b8def' : '#3a404b'}`,
+      background: active ? 'rgba(91, 141, 239, 0.18)' : 'transparent',
+      color: '#e5e7eb',
+      borderRadius: 6,
+      padding: '4px 10px',
+      cursor: 'pointer',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      fontSize: 13,
+      lineHeight: 1.4,
+    }}
+  >
+    {children}
+  </button>
+);
+
+export interface UniPreviewOverlayProps {
   open: boolean;
   onClose: () => void;
   title?: string;
-  src?: string;
-  loading?: boolean;
-  error?: string;
-  emptyMessage?: string;
   inset?: number;
-  onDownload?: () => void;
-  onPrint?: () => void;
+  extra?: React.ReactNode;
+  children: React.ReactNode;
 }
 
-export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
+/** 全屏预览壳层（文件管理 PDF 预览同款） */
+export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
   open,
   onClose,
-  title = 'PDF 预览',
-  src,
-  loading = false,
-  error = '',
-  emptyMessage = '当前文件暂不支持在线预览',
+  title = '预览',
   inset = 16,
-  onDownload,
-  onPrint,
+  extra,
+  children,
 }) => {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -39,19 +66,6 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
   }, [open, onClose]);
 
   if (!open) return null;
-
-  const handlePrint = () => {
-    if (onPrint) {
-      onPrint();
-      return;
-    }
-    try {
-      iframeRef.current?.contentWindow?.focus();
-      iframeRef.current?.contentWindow?.print();
-    } catch {
-      window.print();
-    }
-  };
 
   return (
     <div
@@ -88,40 +102,20 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 16, fontWeight: 500 }}>{title}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {onDownload ? (
-              <button
-                type="button"
-                onClick={onDownload}
-                style={{
-                  border: '1px solid #3a404b',
-                  background: 'transparent',
-                  color: '#e5e7eb',
-                  borderRadius: 6,
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                }}
-              >
-                下载
-              </button>
-            ) : null}
-            {onPrint ? (
-              <button
-                type="button"
-                onClick={handlePrint}
-                style={{
-                  border: '1px solid #3a404b',
-                  background: 'transparent',
-                  color: '#e5e7eb',
-                  borderRadius: 6,
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                }}
-              >
-                打印
-              </button>
-            ) : null}
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 500,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              marginRight: 12,
+            }}
+          >
+            {title}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {extra}
             <span
               onClick={onClose}
               style={{
@@ -142,40 +136,122 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
             </span>
           </span>
         </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          {loading ? (
-            <div
-              style={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#0f1115',
-              }}
-            >
-              <Spin />
-            </div>
-          ) : error ? (
-            <Alert type="error" message={error} showIcon />
-          ) : src ? (
-            <iframe
-              ref={iframeRef}
-              src={src}
-              title={title}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                background: '#fff',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <Alert type="warning" showIcon message={emptyMessage} />
-          )}
-        </div>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
       </div>
     </div>
   );
 };
 
+export interface UniPdfPreviewProps {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  src?: string;
+  loading?: boolean;
+  error?: string;
+  emptyMessage?: string;
+  inset?: number;
+  onDownload?: () => void;
+  onPrint?: () => void;
+}
+
+export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
+  open,
+  onClose,
+  title = 'PDF 预览',
+  src,
+  loading = false,
+  error = '',
+  emptyMessage = '当前文件暂不支持在线预览',
+  inset = 16,
+  onDownload,
+  onPrint,
+}) => {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const handlePrint = () => {
+    if (onPrint) {
+      onPrint();
+      return;
+    }
+    try {
+      iframeRef.current?.contentWindow?.focus();
+      iframeRef.current?.contentWindow?.print();
+    } catch {
+      window.print();
+    }
+  };
+
+  const toolbar = (
+    <>
+      {onDownload ? (
+        <button
+          type="button"
+          onClick={onDownload}
+          style={{
+            border: '1px solid #3a404b',
+            background: 'transparent',
+            color: '#e5e7eb',
+            borderRadius: 6,
+            padding: '4px 10px',
+            cursor: 'pointer',
+          }}
+        >
+          下载
+        </button>
+      ) : null}
+      {onPrint ? (
+        <button
+          type="button"
+          onClick={handlePrint}
+          style={{
+            border: '1px solid #3a404b',
+            background: 'transparent',
+            color: '#e5e7eb',
+            borderRadius: 6,
+            padding: '4px 10px',
+            cursor: 'pointer',
+          }}
+        >
+          打印
+        </button>
+      ) : null}
+    </>
+  );
+
+  return (
+    <UniPreviewOverlay open={open} onClose={onClose} title={title} inset={inset} extra={toolbar}>
+      {loading ? (
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#0f1115',
+          }}
+        >
+          <Spin />
+        </div>
+      ) : error ? (
+        <Alert type="error" message={error} showIcon />
+      ) : src ? (
+        <iframe
+          ref={iframeRef}
+          src={src}
+          title={title}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            background: '#fff',
+            display: 'block',
+            flex: 1,
+          }}
+        />
+      ) : (
+        <Alert type="warning" showIcon message={emptyMessage} />
+      )}
+    </UniPreviewOverlay>
+  );
+};

@@ -1,5 +1,6 @@
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico']);
 const STEP_EXTENSIONS = new Set(['stp', 'step']);
+const CAD2D_EXTENSIONS = new Set(['dwg', 'dxf']);
 
 export type FilePreviewSource = {
   fileName?: string;
@@ -38,5 +39,30 @@ export function isStepFile(source: FilePreviewSource): boolean {
     /\.(stp|step)$/i.test(name) ||
     mime.includes('step') ||
     mime.includes('model/step')
+  );
+}
+
+export function isDwgFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = (source.fileType ?? (source as { file_type?: string }).file_type ?? '').toLowerCase();
+  const name = (source.fileName ?? (source as { original_name?: string }).original_name ?? '').toLowerCase();
+  return ext === 'dwg' || /\.dwg$/i.test(name) || mime.includes('acad') || mime === 'application/dwg';
+}
+
+export function isDxfFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = (source.fileType ?? (source as { file_type?: string }).file_type ?? '').toLowerCase();
+  const name = (source.fileName ?? (source as { original_name?: string }).original_name ?? '').toLowerCase();
+  return ext === 'dxf' || /\.dxf$/i.test(name) || mime.includes('dxf') || mime === 'image/vnd.dxf';
+}
+
+export function isCad2dFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const name = (source.fileName ?? (source as { original_name?: string }).original_name ?? '').toLowerCase();
+  return (
+    CAD2D_EXTENSIONS.has(ext) ||
+    /\.(dwg|dxf)$/i.test(name) ||
+    isDwgFile(source) ||
+    isDxfFile(source)
   );
 }

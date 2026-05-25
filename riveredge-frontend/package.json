@@ -18,7 +18,7 @@
         "test:coverage": "vitest --coverage",
         "test:run": "vitest run",
         "install:all": "npm install",
-        "postinstall": "patch-package --patch-dir static/patch-package",
+        "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs",
         "clean": "rm -rf node_modules"
     },
     "engines": {
@@ -44,6 +44,7 @@
         "@formily/react": "^2.3.7",
         "@iconify-json/fluent-color": "^1.2.21",
         "@iconify/react": "^6.0.2",
+        "@mlightcad/libredwg-web": "^0.7.1",
         "@react-three/drei": "^9.117.0",
         "@react-three/fiber": "^8.18.0",
         "@simplewebauthn/browser": "^13.3.0",
@@ -58,6 +59,7 @@
         "ahooks": "^3.9.6",
         "antd": "^6.1.0",
         "dayjs": "1.11.13",
+        "dxf-parser": "^1.1.2",
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.1.1",
         "framer-motion": "11.5.4",

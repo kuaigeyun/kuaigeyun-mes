@@ -167,6 +167,7 @@ export default defineConfig({
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
             if (id.includes('occt-import-js')) return 'vendor-occt';
+            if (id.includes('@mlightcad/libredwg-web')) return 'vendor-libredwg';
             if (id.includes('echarts')) return 'vendor-echarts';
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
             if (id.includes('html2canvas')) return 'vendor-html2canvas';
@@ -319,6 +320,7 @@ export default defineConfig({
       'html2canvas',
       'jspdf',
       'occt-import-js',
+      '@mlightcad/libredwg-web',
     ],
     force: false,
     esbuildOptions: {

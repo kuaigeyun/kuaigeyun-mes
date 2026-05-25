@@ -2,12 +2,13 @@
  * STEP/STP 预览容器：拉取文件 + 解析 + 三维渲染
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { startTransition, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Spin } from 'antd';
 import { getFilePreview } from '../../services/file';
-import { parseStepFileFromUrl, type OcctMesh } from '../../utils/stepFileLoader';
-import { StepModelViewer } from './StepModelViewer';
+import { parseStepFileFromUrl, preloadStepOcctModule, STEP_PREVIEW_TESSELLATION, type OcctMesh } from '../../utils/stepFileLoader';
+import { yieldToMain } from '../../utils/yieldToMain';
+import { StepModelViewer, type StepModelViewerRef } from './StepModelViewer';
 
 export interface StepPreviewPaneProps {
   fileUuid?: string;
@@ -16,6 +17,9 @@ export interface StepPreviewPaneProps {
   fileExtension?: string;
   height?: number | string;
   showEdges?: boolean;
+  /** 大图预览：显示 drei 视角方块等原生控件 */
+  showControls?: boolean;
+  viewerRef?: React.Ref<StepModelViewerRef>;
 }
 
 export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
@@ -25,11 +29,17 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
   fileExtension,
   height = '100%',
   showEdges = false,
+  showControls = false,
+  viewerRef,
 }) => {
   const { t } = useTranslation();
   const [meshes, setMeshes] = useState<OcctMesh[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    preloadStepOcctModule();
+  }, []);
 
   useEffect(() => {
     if (!fileUuid && !fileUrl) {
@@ -44,6 +54,7 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
       setLoading(true);
       setError('');
       setMeshes(null);
+      await yieldToMain();
       try {
         let url = fileUrl;
         if (!url && fileUuid) {
@@ -53,8 +64,15 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
           }
           url = preview.preview_url;
         }
-        const result = await parseStepFileFromUrl(url!);
-        if (!cancelled) setMeshes(result.meshes);
+        const result = await parseStepFileFromUrl(url!, {
+          includeAssembly: false,
+          tessellation: STEP_PREVIEW_TESSELLATION,
+        });
+        if (!cancelled) {
+          startTransition(() => {
+            if (!cancelled) setMeshes(result.meshes);
+          });
+        }
       } catch (e: unknown) {
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : t('app.master-data.drawings.previewFailed');
@@ -104,5 +122,13 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
     );
   }
 
-  return <StepModelViewer meshes={meshes} height={height} showEdges={showEdges} />;
+  return (
+    <StepModelViewer
+      ref={viewerRef}
+      meshes={meshes}
+      height={height}
+      showEdges={showEdges}
+      showGizmo={showControls}
+    />
+  );
 };

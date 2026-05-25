@@ -117,6 +117,9 @@ async def _to_response(tenant_id: int, drawing: EngineeringDrawing) -> Engineeri
         "created_by": drawing.created_by,
         "created_at": drawing.created_at,
         "updated_at": drawing.updated_at,
+        "linked_bom_material_id": drawing.linked_bom_material_id,
+        "linked_bom_version": drawing.linked_bom_version,
+        "last_step_bom_import_at": drawing.last_step_bom_import_at,
         "file": await _file_brief(tenant_id, drawing.file_uuid),
         "supplementary_files": supp_files or None,
     }

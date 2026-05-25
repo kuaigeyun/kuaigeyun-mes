@@ -104,6 +104,9 @@ class EngineeringDrawingResponse(EngineeringDrawingBase):
     created_by: Optional[int] = Field(None, alias="createdBy")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
+    linked_bom_material_id: Optional[int] = Field(None, alias="linkedBomMaterialId")
+    linked_bom_version: Optional[str] = Field(None, alias="linkedBomVersion")
+    last_step_bom_import_at: Optional[datetime] = Field(None, alias="lastStepBomImportAt")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
@@ -123,5 +126,58 @@ class EngineeringDrawingRevisionCreate(BaseModel):
     file_uuid: Optional[str] = Field(None, alias="fileUuid", description="新版主文件 UUID")
     supplementary_file_uuids: Optional[List[str]] = Field(None, alias="supplementaryFileUuids")
     description: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class StepBomEdgeInput(BaseModel):
+    parent_key: str = Field(..., alias="parentKey", description="父节点 key，顶层为 root")
+    child_key: str = Field(..., alias="childKey")
+    child_name: str = Field(..., alias="childName")
+    quantity: int = Field(1, ge=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class StepBomNodeInput(BaseModel):
+    key: str
+    name: str
+    has_children: bool = Field(False, alias="hasChildren")
+    material_id: Optional[int] = Field(None, alias="materialId")
+    material_code: Optional[str] = Field(None, alias="materialCode")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class DrawingStepBomImportRequest(BaseModel):
+    root_material_id: int = Field(..., alias="rootMaterialId")
+    version: str = Field("1.0", max_length=50)
+    default_group_id: int = Field(..., alias="defaultGroupId")
+    default_unit: str = Field("个", alias="defaultUnit", max_length=20)
+    create_missing_materials: bool = Field(True, alias="createMissingMaterials")
+    material_code_prefix: str = Field("STP-", alias="materialCodePrefix", max_length=20)
+    edges: List[StepBomEdgeInput] = Field(..., min_length=1)
+    nodes: List[StepBomNodeInput] = Field(..., min_length=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class StepBomMaterialBrief(BaseModel):
+    id: int
+    uuid: str
+    main_code: str = Field(..., alias="mainCode")
+    name: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class DrawingStepBomImportResponse(BaseModel):
+    root_material_id: int = Field(..., alias="rootMaterialId")
+    version: str
+    bom_items_created: int = Field(..., alias="bomItemsCreated")
+    materials_created: List[StepBomMaterialBrief] = Field(default_factory=list, alias="materialsCreated")
+    materials_matched: int = Field(..., alias="materialsMatched")
+    bom_designer_path: str = Field(..., alias="bomDesignerPath")
+    drawing: EngineeringDrawingResponse
 
     model_config = ConfigDict(populate_by_name=True)

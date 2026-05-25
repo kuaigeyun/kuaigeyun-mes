@@ -57,6 +57,9 @@ export interface EngineeringDrawing {
   description?: string;
   releasedAt?: string;
   obsoleteReason?: string;
+  linkedBomMaterialId?: number;
+  linkedBomVersion?: string;
+  lastStepBomImportAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -101,6 +104,42 @@ export interface EngineeringDrawingListParams {
 export interface EngineeringDrawingListResponse {
   data: EngineeringDrawing[];
   total: number;
+}
+
+export interface StepBomEdgePayload {
+  parentKey: string;
+  childKey: string;
+  childName: string;
+  quantity: number;
+}
+
+export interface StepBomNodePayload {
+  key: string;
+  name: string;
+  hasChildren: boolean;
+  materialId?: number;
+  materialCode?: string;
+}
+
+export interface DrawingStepBomImportRequest {
+  rootMaterialId: number;
+  version?: string;
+  defaultGroupId: number;
+  defaultUnit?: string;
+  createMissingMaterials?: boolean;
+  materialCodePrefix?: string;
+  edges: StepBomEdgePayload[];
+  nodes: StepBomNodePayload[];
+}
+
+export interface DrawingStepBomImportResponse {
+  rootMaterialId: number;
+  version: string;
+  bomItemsCreated: number;
+  materialsCreated: Array<{ id: number; uuid: string; mainCode: string; name: string }>;
+  materialsMatched: number;
+  bomDesignerPath: string;
+  drawing: EngineeringDrawing;
 }
 
 export const drawingApi = {
@@ -150,5 +189,16 @@ export const drawingApi = {
   }): Promise<EngineeringDrawing[]> => {
     const res = await api.get<EngineeringDrawing[]>('/apps/master-data/process/drawings/by-context', { params });
     return (res ?? []).map(normalizeDrawing);
+  },
+
+  importStepBom: async (
+    uuid: string,
+    data: DrawingStepBomImportRequest,
+  ): Promise<DrawingStepBomImportResponse> => {
+    const res = await api.post<DrawingStepBomImportResponse>(
+      `/apps/master-data/process/drawings/${uuid}/import-step-bom`,
+      data,
+    );
+    return { ...res, drawing: normalizeDrawing(res.drawing) };
   },
 };

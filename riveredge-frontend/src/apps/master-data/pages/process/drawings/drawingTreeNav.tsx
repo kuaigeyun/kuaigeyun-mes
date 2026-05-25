@@ -7,17 +7,15 @@ import type { DataNode } from 'antd/es/tree';
 import type { TFunction } from 'i18next';
 import {
   AppstoreOutlined,
+  AuditOutlined,
   BlockOutlined,
   BranchesOutlined,
   BuildOutlined,
   CheckCircleOutlined,
   EditOutlined,
   FileOutlined,
-  FlagOutlined,
-  InboxOutlined,
-  NodeIndexOutlined,
+  ProductOutlined,
   StopOutlined,
-  TagsOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 import type { DrawingStatus, DrawingType } from '../../../services/drawing';
@@ -34,10 +32,10 @@ export const DRAWING_NAV_MODES: {
   color: string;
   labelKey: string;
 }[] = [
-  { mode: 'type', icon: TagsOutlined, color: '#1890ff', labelKey: 'app.master-data.drawings.tree.byType' },
-  { mode: 'status', icon: FlagOutlined, color: '#52c41a', labelKey: 'app.master-data.drawings.tree.byStatus' },
-  { mode: 'material', icon: InboxOutlined, color: '#fa8c16', labelKey: 'app.master-data.drawings.tree.byMaterial' },
-  { mode: 'route', icon: NodeIndexOutlined, color: '#722ed1', labelKey: 'app.master-data.drawings.tree.byRoute' },
+  { mode: 'type', icon: AppstoreOutlined, color: '#1890ff', labelKey: 'app.master-data.drawings.tree.byType' },
+  { mode: 'status', icon: AuditOutlined, color: '#52c41a', labelKey: 'app.master-data.drawings.tree.byStatus' },
+  { mode: 'material', icon: ProductOutlined, color: '#fa8c16', labelKey: 'app.master-data.drawings.tree.byMaterial' },
+  { mode: 'route', icon: BranchesOutlined, color: '#722ed1', labelKey: 'app.master-data.drawings.tree.byRoute' },
 ];
 
 const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other'];
@@ -131,7 +129,7 @@ export function buildDrawingNavTree(
       .map((m) => ({
         key: `material:${m.uuid}`,
         title: `${m.code} ${m.name}`.trim(),
-        icon: <InboxOutlined />,
+        icon: <ProductOutlined />,
         isLeaf: true,
       }));
 

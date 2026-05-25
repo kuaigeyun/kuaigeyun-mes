@@ -1,12 +1,23 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Spin, Alert, Image } from 'antd';
+import {
+  BorderOutlined,
+  CompressOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getFileByUuid, getFilePreview } from '../../services/file';
-import { UniPdfPreview } from '../uni-preview';
-import { getFileExt, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
+import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
+import type { StepModelViewerRef } from '../step-preview/StepModelViewer';
 
 const StepPreviewPane = lazy(() =>
   import('../step-preview/StepPreviewPane').then((m) => ({ default: m.StepPreviewPane })),
+);
+const DwgPreviewPane = lazy(() =>
+  import('../dwg-preview/DwgPreviewPane').then((m) => ({ default: m.DwgPreviewPane })),
 );
 
 type FilePreviewSource = {
@@ -43,6 +54,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [stepShowEdges, setStepShowEdges] = useState(true);
+  const stepViewerRef = useRef<StepModelViewerRef>(null);
+  const dwgViewerRef = useRef<DwgSvgViewerRef>(null);
 
   const initialSource = useMemo<FilePreviewSource>(
     () => ({ fileName, fileType, fileExtension }),
@@ -77,10 +91,10 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isImage = isImageFile(fileSource);
   const isPdf = isPdfFile(fileSource);
   const isStep = isStepFile(fileSource);
-  const isDwgLike = getFileExt(fileSource) === 'dwg' || getFileExt(fileSource) === 'dxf';
+  const isCad2d = isCad2dFile(fileSource);
 
   useEffect(() => {
-    if (!open || isStep) return;
+    if (!open || isStep || isCad2d) return;
     let cancelled = false;
 
     const run = async () => {
@@ -113,7 +127,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, fileUuid, url, isStep, t]);
+  }, [open, fileUuid, url, isStep, isCad2d, t]);
 
   useEffect(() => {
     if (!open || !previewUrl || !isPdf) {
@@ -157,28 +171,71 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     };
   }, [open, previewUrl, isPdf]);
 
+  const appendPdfViewerParams = (src: string) => {
+    if (!src) return src;
+    const hash = src.includes('#') ? src.slice(src.indexOf('#') + 1) : '';
+    const params = new URLSearchParams(hash);
+    params.set('toolbar', '1');
+    params.set('navpanes', '0');
+    return `${src.split('#')[0]}#${params.toString()}`;
+  };
+
+  const stepToolbar = (
+    <>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewFitView')}
+        onClick={() => stepViewerRef.current?.resetView()}
+      >
+        <CompressOutlined />
+        {t('app.master-data.drawings.previewFitView')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewToggleEdges')}
+        active={stepShowEdges}
+        onClick={() => setStepShowEdges((value) => !value)}
+      >
+        <BorderOutlined />
+        {t('app.master-data.drawings.previewToggleEdges')}
+      </PreviewOverlayToolButton>
+    </>
+  );
+
+  const dwgToolbar = (
+    <>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomOut')}
+        onClick={() => dwgViewerRef.current?.zoomOut()}
+      >
+        <ZoomOutOutlined />
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewFitView')}
+        onClick={() => dwgViewerRef.current?.fitToView()}
+      >
+        <CompressOutlined />
+        {t('app.master-data.drawings.previewFitView')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomIn')}
+        onClick={() => dwgViewerRef.current?.zoomIn()}
+      >
+        <ZoomInOutlined />
+      </PreviewOverlayToolButton>
+    </>
+  );
+
   if (open && isStep) {
     return (
-      <Modal
-        title={title || fileName || t('app.master-data.drawings.preview')}
+      <UniPreviewOverlay
         open={open}
-        onCancel={onClose}
-        footer={null}
-        width={width}
-        style={{ top: 16 }}
-        destroyOnHidden
-        styles={{ body: { minHeight: typeof height === 'number' ? `${height}px` : height, padding: 0 } }}
+        onClose={onClose}
+        title={title || fileName || t('app.master-data.drawings.preview')}
+        inset={16}
+        extra={stepToolbar}
       >
         <Suspense
           fallback={
-            <div
-              style={{
-                minHeight: typeof height === 'number' ? `${height}px` : height,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} />
             </div>
           }
@@ -188,11 +245,42 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             fileUrl={url}
             fileName={fileSource.fileName}
             fileExtension={fileSource.fileExtension}
-            height={typeof height === 'number' ? `${height}px` : height}
-            showEdges
+            height="100%"
+            showEdges={stepShowEdges}
+            showControls
+            viewerRef={stepViewerRef}
           />
         </Suspense>
-      </Modal>
+      </UniPreviewOverlay>
+    );
+  }
+
+  if (open && isCad2d) {
+    return (
+      <UniPreviewOverlay
+        open={open}
+        onClose={onClose}
+        title={title || fileName || t('app.master-data.drawings.preview')}
+        inset={16}
+        extra={dwgToolbar}
+      >
+        <Suspense
+          fallback={
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin tip={t('app.master-data.drawings.dwgPreviewLoading')} />
+            </div>
+          }
+        >
+          <DwgPreviewPane
+            fileUuid={fileUuid}
+            fileUrl={url}
+            fileName={fileSource.fileName}
+            fileExtension={fileSource.fileExtension}
+            height="100%"
+            viewerRef={dwgViewerRef}
+          />
+        </Suspense>
+      </UniPreviewOverlay>
     );
   }
 
@@ -219,10 +307,10 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           open={open}
           onClose={onClose}
           title={title || fileName || t('app.master-data.drawings.preview')}
-          src={pdfBlobUrl || previewUrl}
+          src={appendPdfViewerParams(pdfBlobUrl || previewUrl)}
           loading={loading || pdfLoading}
           error={error}
-          emptyMessage={isDwgLike ? t('app.master-data.drawings.previewDwgHint') : t('app.master-data.drawings.previewUnsupported')}
+          emptyMessage={t('app.master-data.drawings.previewUnsupported')}
           inset={16}
         />
       ) : null}
@@ -267,7 +355,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <Alert
               type="warning"
               showIcon
-              message={isDwgLike ? t('app.master-data.drawings.previewDwgHint') : t('app.master-data.drawings.previewUnsupported')}
+              message={t('app.master-data.drawings.previewUnsupported')}
             />
           )}
         </Modal>

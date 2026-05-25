@@ -8,6 +8,8 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
 
 from apps.master_data.schemas.drawing_schemas import (
+    DrawingStepBomImportRequest,
+    DrawingStepBomImportResponse,
     EngineeringDrawingCreate,
     EngineeringDrawingListResponse,
     EngineeringDrawingObsoleteRequest,
@@ -16,6 +18,7 @@ from apps.master_data.schemas.drawing_schemas import (
     EngineeringDrawingUpdate,
 )
 from apps.master_data.services.drawing_service import DrawingService
+from apps.master_data.services.drawing_step_bom_service import DrawingStepBomService
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.services.business.code_generation_service import CodeGenerationService
@@ -178,6 +181,20 @@ async def create_revision(
 ):
     try:
         return await DrawingService.create_revision(tenant_id, drawing_uuid, body, created_by=current_user.id)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/import-step-bom", response_model=DrawingStepBomImportResponse, response_model_by_alias=True, summary="Import BOM from STP assembly structure")
+async def import_step_bom(
+    drawing_uuid: str,
+    body: DrawingStepBomImportRequest,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await DrawingStepBomService.import_step_bom(tenant_id, drawing_uuid, body)
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:

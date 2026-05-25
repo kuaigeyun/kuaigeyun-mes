@@ -4,12 +4,16 @@
 
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Empty, Image, Spin } from 'antd';
+import { Alert, Empty, Image, Spin, theme } from 'antd';
 import { getFileByUuid, getFilePreview } from '../../../services/file';
-import { getFileExt, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../../utils/filePreviewKind';
+import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../../utils/filePreviewKind';
+import { preloadStepOcctModule } from '../../../utils/stepFileLoader';
 
 const StepPreviewPane = lazy(() =>
   import('../../../components/step-preview/StepPreviewPane').then((m) => ({ default: m.StepPreviewPane })),
+);
+const DwgPreviewPane = lazy(() =>
+  import('../../../components/dwg-preview/DwgPreviewPane').then((m) => ({ default: m.DwgPreviewPane })),
 );
 
 export interface DrawingInlinePreviewProps {
@@ -25,9 +29,9 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   fileName,
   fileExtension,
   fileType,
-  height = '100%',
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,9 +74,14 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   const isImage = isImageFile(fileSource);
   const isPdf = isPdfFile(fileSource);
   const isStep = isStepFile(fileSource);
+  const isCad2d = isCad2dFile(fileSource);
 
   useEffect(() => {
-    if (!fileUuid || isStep) {
+    if (fileUuid && isStep) preloadStepOcctModule();
+  }, [fileUuid, isStep]);
+
+  useEffect(() => {
+    if (!fileUuid || isStep || isCad2d) {
       setPreviewUrl('');
       setError('');
       return;
@@ -102,18 +111,32 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [fileUuid, isStep, t]);
+  }, [fileUuid, isStep, isCad2d, t]);
 
   const boxStyle: React.CSSProperties = {
-    height,
-    minHeight: 280,
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
     display: 'flex',
     flexDirection: 'column',
-    border: '1px solid var(--ant-color-border)',
-    borderRadius: 8,
+    border: `1px solid ${token.colorBorder}`,
+    borderRadius: token.borderRadiusLG,
     overflow: 'hidden',
-    background: 'var(--ant-color-bg-container)',
+    background: token.colorBgContainer,
   };
+
+  const contentStyle: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  };
+
+  const wrapPreview = (content: React.ReactNode) => (
+    <div style={boxStyle}>
+      <div style={contentStyle}>{content}</div>
+    </div>
+  );
 
   if (!fileUuid) {
     return (
@@ -128,85 +151,100 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   }
 
   if (metaLoading) {
-    return (
-      <div style={{ ...boxStyle, alignItems: 'center', justifyContent: 'center' }}>
+    return wrapPreview(
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
-      </div>
+      </div>,
     );
   }
 
   if (isStep) {
-    return (
-      <div style={boxStyle}>
-        <Suspense
-          fallback={
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
-            </div>
-          }
-        >
-          <StepPreviewPane
-            fileUuid={fileUuid}
-            fileName={fileSource.fileName}
-            fileExtension={fileSource.fileExtension}
-            height="100%"
-          />
-        </Suspense>
-      </div>
+    return wrapPreview(
+      <Suspense
+        fallback={
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+          </div>
+        }
+      >
+        <StepPreviewPane
+          fileUuid={fileUuid}
+          fileName={fileSource.fileName}
+          fileExtension={fileSource.fileExtension}
+          height="100%"
+        />
+      </Suspense>,
+    );
+  }
+
+  if (isCad2d) {
+    return wrapPreview(
+      <Suspense
+        fallback={
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spin size="large" tip={t('app.master-data.drawings.dwgPreviewLoading')} />
+          </div>
+        }
+      >
+        <DwgPreviewPane
+          fileUuid={fileUuid}
+          fileName={fileSource.fileName}
+          fileExtension={fileSource.fileExtension}
+          height="100%"
+        />
+      </Suspense>,
     );
   }
 
   if (loading && !previewUrl) {
-    return (
-      <div style={{ ...boxStyle, alignItems: 'center', justifyContent: 'center' }}>
+    return wrapPreview(
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Spin size="large" />
-      </div>
+      </div>,
     );
   }
 
   if (error) {
-    return (
-      <div style={{ ...boxStyle, padding: 16 }}>
+    return wrapPreview(
+      <div style={{ padding: 16 }}>
         <Alert type="error" message={error} showIcon />
-      </div>
+      </div>,
     );
   }
 
   if (isImage && previewUrl) {
-    return (
-      <div style={{ ...boxStyle, padding: 8, alignItems: 'center', justifyContent: 'center' }}>
+    return wrapPreview(
+      <div style={{ flex: 1, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Image
           src={previewUrl}
           alt={fileName || 'drawing'}
           style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
         />
-      </div>
+      </div>,
     );
   }
 
   if (isPdf && previewUrl) {
-    return (
-      <div style={boxStyle}>
-        <iframe
-          src={previewUrl}
-          title={fileName || t('app.master-data.drawings.preview')}
-          style={{ flex: 1, width: '100%', border: 'none' }}
-        />
-      </div>
+    return wrapPreview(
+      <iframe
+        src={previewUrl}
+        title={fileName || t('app.master-data.drawings.preview')}
+        style={{ flex: 1, width: '100%', border: 'none' }}
+      />,
     );
   }
 
-  return (
-    <div style={boxStyle}>
-      {previewUrl ? (
-        <iframe
-          src={previewUrl}
-          title={fileName || t('app.master-data.drawings.preview')}
-          style={{ flex: 1, width: '100%', border: 'none' }}
-        />
-      ) : (
+  return wrapPreview(
+    previewUrl ? (
+      <iframe
+        src={previewUrl}
+        title={fileName || t('app.master-data.drawings.preview')}
+        style={{ flex: 1, width: '100%', border: 'none' }}
+      />
+    ) : (
+      <div style={{ padding: 16 }}>
         <Alert type="warning" showIcon message={t('app.master-data.drawings.previewUnsupported')} />
-      )}
-    </div>
+      </div>
+    ),
   );
 };

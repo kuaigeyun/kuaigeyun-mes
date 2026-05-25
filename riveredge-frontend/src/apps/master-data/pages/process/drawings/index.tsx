@@ -2,10 +2,11 @@
  * 工程图纸管理页面（两栏：左导航树 + 右表/预览）
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd';
+import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
@@ -17,6 +18,8 @@ import {
   SendOutlined,
   StopOutlined,
   BranchesOutlined,
+  ExpandOutlined,
+  PartitionOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -29,7 +32,7 @@ import {
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
-import { DrawingInlinePreview } from '../../../components/DrawingInlinePreview';
+import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
 import { materialApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
@@ -54,6 +57,7 @@ import {
   treeKeyBelongsToMode,
   type DrawingNavMode,
 } from './drawingTreeNav';
+import { isStepFile } from '../../../../../utils/filePreviewKind';
 
 const STATUS_COLOR: Record<DrawingStatus, string> = {
   Draft: 'default',
@@ -61,8 +65,126 @@ const STATUS_COLOR: Record<DrawingStatus, string> = {
   Obsolete: 'warning',
 };
 
+function canImportStepBom(record: EngineeringDrawing): boolean {
+  if (record.drawingType !== 'assembly') return false;
+  if (!record.file) return false;
+  return isStepFile({
+    fileName: record.file.originalName,
+    fileExtension: record.file.fileExtension,
+  });
+}
+
+function bomDesignerPath(materialId: number, version: string): string {
+  return `/apps/master-data/process/engineering-bom/designer?materialId=${materialId}&version=${encodeURIComponent(version)}`;
+}
+
+const LazyDrawingInlinePreview = lazy(() =>
+  import('../../../components/DrawingInlinePreview').then((m) => ({ default: m.DrawingInlinePreview })),
+);
+
+type InlinePreviewPaneProps = {
+  file: FileBrief | null;
+  activeDrawing: EngineeringDrawing | null;
+  previewPending: boolean;
+  onOpenLargePreview: () => void;
+  onOpenStepBom: (drawing: EngineeringDrawing) => void;
+};
+
+const InlinePreviewPane = React.memo(function InlinePreviewPane({
+  file,
+  activeDrawing,
+  previewPending,
+  onOpenLargePreview,
+  onOpenStepBom,
+}: InlinePreviewPaneProps) {
+  const { t } = useTranslation();
+  const showStepBom = activeDrawing && canImportStepBom(activeDrawing);
+  const showLarge = !!activeDrawing?.file?.uuid;
+
+  return (
+    <div
+      style={{
+        flex: '1 1 0',
+        minWidth: 0,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {(showStepBom || showLarge) && (
+        <div
+          className="pro-table-button-container"
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            marginBottom: 16,
+            minHeight: 32,
+          }}
+        >
+          <Space.Compact style={{ flexShrink: 0 }}>
+            {showStepBom && (
+              <Button icon={<PartitionOutlined />} onClick={() => onOpenStepBom(activeDrawing!)}>
+                {t('app.master-data.drawings.importStepBom')}
+              </Button>
+            )}
+            {showLarge && (
+              <Button icon={<ExpandOutlined />} onClick={onOpenLargePreview}>
+                {t('app.master-data.drawings.openLargePreview')}
+              </Button>
+            )}
+          </Space.Compact>
+        </div>
+      )}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          contain: 'layout paint style',
+        }}
+      >
+        {previewPending && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'color-mix(in srgb, var(--ant-color-bg-container) 72%, transparent)',
+              pointerEvents: 'none',
+            }}
+          >
+            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+          </div>
+        )}
+        <Suspense
+          fallback={
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+            </div>
+          }
+        >
+          <LazyDrawingInlinePreview
+            fileUuid={file?.uuid}
+            fileName={file?.originalName}
+            fileExtension={file?.fileExtension}
+            height="100%"
+          />
+        </Suspense>
+      </div>
+    </div>
+  );
+});
+
 const DrawingsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const screens = Grid.useBreakpoint();
   const showInlinePreview = !!screens.lg;
@@ -91,9 +213,13 @@ const DrawingsPage: React.FC = () => {
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileBrief | null>(null);
+  const [largePreviewOpen, setLargePreviewOpen] = useState(false);
 
   const [selectedRowUuid, setSelectedRowUuid] = useState<string | null>(null);
   const [inlinePreviewFile, setInlinePreviewFile] = useState<FileBrief | null>(null);
+  const [selectedDrawing, setSelectedDrawing] = useState<EngineeringDrawing | null>(null);
+  const [stepBomOpen, setStepBomOpen] = useState(false);
+  const [stepBomDrawing, setStepBomDrawing] = useState<EngineeringDrawing | null>(null);
 
   treeFilterRef.current = treeFilter;
 
@@ -150,51 +276,67 @@ const DrawingsPage: React.FC = () => {
     [navMode, t, materialsNav, routesNav, treeSearch],
   );
 
-  const handleNavModeChange = (mode: DrawingNavMode) => {
+  const handleNavModeChange = useCallback((mode: DrawingNavMode) => {
     setNavMode(mode);
     setTreeSearch('');
     const currentKey = String(selectedTreeKeys[0] ?? DRAWING_TREE_ALL_KEY);
     if (!treeKeyBelongsToMode(currentKey, mode)) {
       setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
-      setTreeFilter({});
-      actionRef.current?.reload();
+      treeFilterRef.current = {};
+      startTransition(() => {
+        setTreeFilter({});
+        actionRef.current?.reload();
+      });
     }
-  };
+  }, [selectedTreeKeys]);
 
-  const navModeBar = (
-    <div className="drawing-nav-mode-bar" role="tablist" aria-label={t('app.master-data.drawings.tree.navModes')}>
-      {DRAWING_NAV_MODES.map(({ mode, icon: Icon, color, labelKey }) => {
-        const active = navMode === mode;
-        return (
-          <Tooltip key={mode} title={t(labelKey)}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={active}
-              className={`drawing-nav-mode-btn${active ? ' drawing-nav-mode-btn-active' : ''}`}
-              onClick={() => handleNavModeChange(mode)}
-            >
-              <Icon style={{ fontSize: 16, color: active ? color : undefined }} />
-            </button>
-          </Tooltip>
-        );
-      })}
-    </div>
+  const navModeBar = useMemo(
+    () => (
+      <div className="drawing-nav-mode-bar" role="tablist" aria-label={t('app.master-data.drawings.tree.navModes')}>
+        {DRAWING_NAV_MODES.map(({ mode, icon: Icon, color, labelKey }) => {
+          const active = navMode === mode;
+          return (
+            <Tooltip key={mode} title={t(labelKey)}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`drawing-nav-mode-btn${active ? ' drawing-nav-mode-btn-active' : ''}`}
+                onClick={() => handleNavModeChange(mode)}
+              >
+                <Icon style={{ fontSize: 16, color: active ? color : undefined }} />
+              </button>
+            </Tooltip>
+          );
+        })}
+      </div>
+    ),
+    [navMode, t, handleNavModeChange],
   );
 
-  const handleTreeSelect = (keys: React.Key[]) => {
-    if (!keys.length) return;
-    const key = String(keys[0]);
-    if (key.endsWith(':empty')) return;
-    setSelectedTreeKeys(keys);
-    const inferredMode = inferNavModeFromTreeKey(key);
-    if (inferredMode && inferredMode !== navMode) {
-      setNavMode(inferredMode);
-    }
-    const nextFilter = parseDrawingTreeKey(key);
-    setTreeFilter(nextFilter);
-    actionRef.current?.reload();
-  };
+  const handleTreeSelect = useCallback(
+    (keys: React.Key[]) => {
+      if (!keys.length) return;
+      const key = String(keys[0]);
+      if (key.endsWith(':empty')) return;
+
+      const nextFilter = parseDrawingTreeKey(key);
+      const inferredMode = inferNavModeFromTreeKey(key);
+
+      // 优先更新树选中态，避免被右侧表格/预览重渲染阻塞
+      setSelectedTreeKeys(keys);
+
+      startTransition(() => {
+        treeFilterRef.current = nextFilter;
+        setTreeFilter(nextFilter);
+        if (inferredMode && inferredMode !== navMode) {
+          setNavMode(inferredMode);
+        }
+        actionRef.current?.reload();
+      });
+    },
+    [navMode],
+  );
 
   const openPreview = (file?: FileBrief | null) => {
     if (!file?.uuid) return;
@@ -206,12 +348,23 @@ const DrawingsPage: React.FC = () => {
     setPreviewOpen(true);
   };
 
-  const selectRowForPreview = (record: EngineeringDrawing) => {
+  const selectRowForPreview = useCallback((record: EngineeringDrawing) => {
     setSelectedRowUuid(record.uuid);
-    if (showInlinePreview && record.file?.uuid) {
-      setInlinePreviewFile(normalizeFileBrief(record.file) ?? record.file);
-    }
-  };
+    startTransition(() => {
+      setSelectedDrawing(record);
+      if (showInlinePreview && record.file?.uuid) {
+        setInlinePreviewFile(normalizeFileBrief(record.file) ?? record.file);
+      }
+    });
+  }, [showInlinePreview]);
+
+  const deferredPreviewFile = useDeferredValue(inlinePreviewFile);
+  const previewPending = inlinePreviewFile?.uuid !== deferredPreviewFile?.uuid;
+
+  const openStepBomWizard = useCallback((record: EngineeringDrawing) => {
+    setStepBomDrawing(record);
+    setStepBomOpen(true);
+  }, []);
 
   const loadDetail = async (uuid: string) => {
     const reqId = ++detailReqRef.current;
@@ -231,10 +384,10 @@ const DrawingsPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditUuid(null);
     setModalVisible(true);
-  };
+  }, []);
 
   useNewShortcut(handleCreate);
 
@@ -305,9 +458,21 @@ const DrawingsPage: React.FC = () => {
         dataIndex: 'file',
         render: (_, r) =>
           r.file ? (
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(r.file)}>
-              {r.file.originalName}
-            </Button>
+            <Space direction="vertical" size={0}>
+              <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(r.file)}>
+                {r.file.originalName}
+              </Button>
+              {canImportStepBom(r) && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<PartitionOutlined />}
+                  onClick={() => openStepBomWizard(r)}
+                >
+                  {t('app.master-data.drawings.importStepBom')}
+                </Button>
+              )}
+            </Space>
           ) : (
             '-'
           ),
@@ -334,6 +499,28 @@ const DrawingsPage: React.FC = () => {
         render: (_, r) => (r.materialUuids?.length ? r.materialUuids.join(', ') : '-'),
       },
       {
+        title: t('app.master-data.drawings.linkedBom'),
+        dataIndex: 'linkedBomVersion',
+        render: (_, r) => {
+          if (!r.linkedBomMaterialId || !r.linkedBomVersion) return '-';
+          return (
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              onClick={() => navigate(bomDesignerPath(r.linkedBomMaterialId!, r.linkedBomVersion!))}
+            >
+              v{r.linkedBomVersion}
+            </Button>
+          );
+        },
+      },
+      {
+        title: t('app.master-data.drawings.lastStepBomImportAt'),
+        dataIndex: 'lastStepBomImportAt',
+        valueType: 'dateTime',
+      },
+      {
         title: t('app.master-data.drawings.routes'),
         dataIndex: 'processRouteUuids',
         render: (_, r) => (r.processRouteUuids?.length ? r.processRouteUuids.join(', ') : '-'),
@@ -349,7 +536,7 @@ const DrawingsPage: React.FC = () => {
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
-    [t, showInlinePreview],
+    [t, showInlinePreview, navigate, openStepBomWizard],
   );
 
   const columns: ProColumns<EngineeringDrawing>[] = useMemo(
@@ -396,6 +583,28 @@ const DrawingsPage: React.FC = () => {
         render: (_, r) => <Tag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</Tag>,
       },
       {
+        title: t('app.master-data.drawings.linkedBom'),
+        dataIndex: 'linkedBomVersion',
+        search: false,
+        width: 96,
+        render: (_, r) => {
+          if (!r.linkedBomMaterialId || !r.linkedBomVersion) return '-';
+          return (
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(bomDesignerPath(r.linkedBomMaterialId!, r.linkedBomVersion!));
+              }}
+            >
+              v{r.linkedBomVersion}
+            </Button>
+          );
+        },
+      },
+      {
         title: t('app.master-data.drawings.file'),
         dataIndex: ['file', 'originalName'],
         ellipsis: true,
@@ -419,7 +628,7 @@ const DrawingsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 280,
+        width: 320,
         fixed: 'right' as const,
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, record) => (
@@ -472,82 +681,116 @@ const DrawingsPage: React.FC = () => {
                 {t('app.master-data.drawings.preview')}
               </Button>
             )}
+            {canImportStepBom(record) && (
+              <Button
+                type="link"
+                size="small"
+                icon={<PartitionOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openStepBomWizard(record);
+                }}
+              >
+                {t('app.master-data.drawings.importStepBom')}
+              </Button>
+            )}
           </Space>
         ),
       },
     ],
-    [t, messageApi, detail?.uuid, showInlinePreview],
+    [t, messageApi, detail?.uuid, showInlinePreview, navigate, openStepBomWizard],
   );
 
   const tableQueryKey = useMemo(
     () => [
       'apps.master-data.pages.process.drawings',
       navMode,
-      selectedTreeKeys[0] ?? DRAWING_TREE_ALL_KEY,
+      treeFilter.drawingType ?? '',
+      treeFilter.status ?? '',
+      treeFilter.materialUuid ?? '',
+      treeFilter.processRouteUuid ?? '',
     ],
-    [navMode, selectedTreeKeys],
+    [navMode, treeFilter],
   );
 
   const tableScrollOffsetPx =
     LIST_PAGE_TABLE_SCROLL.BASE_OFFSET_PX + 2 * LIST_PAGE_TABLE_SCROLL.GAP_PX;
 
-  const tableBlock = (
-    <div
-      style={{
-        flex: showInlinePreview ? '3 1 0' : 1,
-        minWidth: 0,
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
-      }}
-    >
-      <UniTable<EngineeringDrawing>
-        actionRef={actionRef}
-        rowKey="uuid"
-        columnPersistenceId="apps.master-data.pages.process.drawings"
-        tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
-        columns={columns}
-        headerTitle={t('app.master-data.menu.process.drawings')}
-        beforeSearchButtons={
-          <Tooltip title={leftPanelCollapsed ? t('app.master-data.drawings.expandNav') : t('app.master-data.drawings.collapseNav')}>
-            <Button
-              icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setLeftPanelCollapsed((v) => !v)}
-            />
-          </Tooltip>
-        }
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('common.create') + NEW_SHORTCUT_HINT}
-          </Button>,
-        ]}
-        request={async (params) => {
-          try {
-            const tf = treeFilterRef.current;
-            const res = await drawingApi.list({
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              keyword: params.keyword as string | undefined,
-              status: (params.status as DrawingStatus | undefined) ?? tf.status,
-              drawingType: (params.drawingType as DrawingType | undefined) ?? tf.drawingType,
-              materialUuid: tf.materialUuid,
-              processRouteUuid: tf.processRouteUuid,
-            });
-            return { data: res.data ?? [], success: true, total: res.total ?? 0 };
-          } catch (err: any) {
-            messageApi.error(err?.message || t('app.master-data.drawings.listFailed'));
-            return { data: [], success: false, total: 0 };
-          }
+  const handleOpenLargePreview = useCallback(() => {
+    if (inlinePreviewFile?.uuid) setLargePreviewOpen(true);
+  }, [inlinePreviewFile?.uuid]);
+
+  const tableBlock = useMemo(
+    () => (
+      <div
+        style={{
+          flex: showInlinePreview ? '3 1 0' : 1,
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         }}
-        scroll={{ x: 1200 }}
-        onRow={(record) => ({
-          onClick: () => selectRowForPreview(record),
-          style: { cursor: 'pointer' },
-        })}
-        rowClassName={(record) => (record.uuid === selectedRowUuid ? 'ant-table-row-selected' : '')}
-      />
-    </div>
+      >
+        <UniTable<EngineeringDrawing>
+          actionRef={actionRef}
+          rowKey="uuid"
+          columnPersistenceId="apps.master-data.pages.process.drawings"
+          tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
+          columns={columns}
+          headerTitle={t('app.master-data.menu.process.drawings')}
+          beforeSearchButtons={
+            <Tooltip title={leftPanelCollapsed ? t('app.master-data.drawings.expandNav') : t('app.master-data.drawings.collapseNav')}>
+              <Button
+                icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setLeftPanelCollapsed((v) => !v)}
+              />
+            </Tooltip>
+          }
+          toolBarRender={() => [
+            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+              {t('common.create') + NEW_SHORTCUT_HINT}
+            </Button>,
+          ]}
+          request={async (params) => {
+            try {
+              const tf = treeFilterRef.current;
+              const res = await drawingApi.list({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                keyword: params.keyword as string | undefined,
+                status: (params.status as DrawingStatus | undefined) ?? tf.status,
+                drawingType: (params.drawingType as DrawingType | undefined) ?? tf.drawingType,
+                materialUuid: tf.materialUuid,
+                processRouteUuid: tf.processRouteUuid,
+              });
+              return { data: res.data ?? [], success: true, total: res.total ?? 0 };
+            } catch (err: any) {
+              messageApi.error(err?.message || t('app.master-data.drawings.listFailed'));
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          scroll={{ x: 1200 }}
+          onRow={(record) => ({
+            onClick: () => selectRowForPreview(record),
+            style: { cursor: 'pointer' },
+          })}
+          rowClassName={(record) => (record.uuid === selectedRowUuid ? 'ant-table-row-selected' : '')}
+        />
+      </div>
+    ),
+    [
+      showInlinePreview,
+      tableScrollOffsetPx,
+      tableQueryKey,
+      columns,
+      t,
+      leftPanelCollapsed,
+      handleCreate,
+      messageApi,
+      selectedRowUuid,
+      selectRowForPreview,
+    ],
   );
 
   return (
@@ -591,26 +834,13 @@ const DrawingsPage: React.FC = () => {
             >
               {tableBlock}
               {showInlinePreview && (
-                <div
-                  style={{
-                    flex: '1 1 0',
-                    minWidth: 0,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
-                  <Typography.Text type="secondary" style={{ fontSize: 12, paddingLeft: 4 }}>
-                    {t('app.master-data.drawings.inlinePreview')}
-                  </Typography.Text>
-                  <DrawingInlinePreview
-                    fileUuid={inlinePreviewFile?.uuid}
-                    fileName={inlinePreviewFile?.originalName}
-                    fileExtension={inlinePreviewFile?.fileExtension}
-                    height="100%"
-                  />
-                </div>
+                <InlinePreviewPane
+                  file={deferredPreviewFile}
+                  activeDrawing={selectedDrawing}
+                  previewPending={previewPending}
+                  onOpenLargePreview={handleOpenLargePreview}
+                  onOpenStepBom={openStepBomWizard}
+                />
               )}
             </div>
           ),
@@ -641,19 +871,42 @@ const DrawingsPage: React.FC = () => {
         }}
       />
 
-      {!showInlinePreview && (
-        <FilePreviewModal
-          open={previewOpen}
-          onClose={() => {
-            setPreviewOpen(false);
-            setPreviewFile(null);
-          }}
-          fileUuid={previewFile?.uuid}
-          fileName={previewFile?.originalName}
-          fileExtension={previewFile?.fileExtension}
-          title={previewFile?.originalName || t('app.master-data.drawings.preview')}
-        />
-      )}
+      <FilePreviewModal
+        open={(!showInlinePreview && previewOpen) || largePreviewOpen}
+        onClose={() => {
+          setPreviewOpen(false);
+          setLargePreviewOpen(false);
+          if (!showInlinePreview) setPreviewFile(null);
+        }}
+        fileUuid={largePreviewOpen ? inlinePreviewFile?.uuid : previewFile?.uuid}
+        fileName={largePreviewOpen ? inlinePreviewFile?.originalName : previewFile?.originalName}
+        fileExtension={largePreviewOpen ? inlinePreviewFile?.fileExtension : previewFile?.fileExtension}
+        title={
+          (largePreviewOpen ? inlinePreviewFile?.originalName : previewFile?.originalName) ||
+          t('app.master-data.drawings.preview')
+        }
+        width="calc(100vw - 32px)"
+        height="calc(100vh - 32px)"
+      />
+
+      <StepBomImportWizard
+        open={stepBomOpen}
+        drawingUuid={stepBomDrawing?.uuid ?? ''}
+        drawing={stepBomDrawing ?? undefined}
+        onClose={() => {
+          setStepBomOpen(false);
+          setStepBomDrawing(null);
+        }}
+        onSuccess={(result) => {
+          actionRef.current?.reload();
+          if (detail?.uuid === result.drawing.uuid) {
+            setDetail(result.drawing);
+          }
+          if (selectedDrawing?.uuid === result.drawing.uuid) {
+            setSelectedDrawing(result.drawing);
+          }
+        }}
+      />
     </>
   );
 };

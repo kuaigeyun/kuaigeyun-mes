@@ -265,9 +265,10 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       onFinish={handleSubmit}
       isEdit={isEdit}
       loading={formLoading}
-      width={MODAL_CONFIG.LARGE_WIDTH}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
       layout="vertical"
+      grid
       initialValues={{ revision: 'A', drawingType: 'part' }}
     >
       <ProFormText
@@ -276,12 +277,14 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         rules={[{ required: true }]}
         disabled={isEdit}
         fieldProps={{ maxLength: 50 }}
+        colProps={{ span: 12 }}
       />
       <ProFormText
         name="name"
         label={t('app.master-data.drawings.name')}
         rules={[{ required: true }]}
         fieldProps={{ maxLength: 200 }}
+        colProps={{ span: 12 }}
       />
       <ProFormText
         name="revision"
@@ -289,12 +292,14 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         rules={[{ required: true }]}
         disabled={isEdit}
         fieldProps={{ maxLength: 20 }}
+        colProps={{ span: 12 }}
       />
       <ProFormSelect
         name="drawingType"
         label={t('app.master-data.drawings.type')}
         options={drawingTypeOptions}
         rules={[{ required: true }]}
+        colProps={{ span: 12 }}
       />
       <ProFormUploadButton
         name="mainFile"
@@ -302,11 +307,13 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         max={1}
         fieldProps={makeUploadFieldProps(false)}
         rules={[{ required: true, message: t('app.master-data.drawings.fileRequired') }]}
+        colProps={{ span: 12 }}
       />
       <ProFormUploadButton
         name="supplementaryFiles"
         label={t('app.master-data.drawings.uploadSupplementary')}
         fieldProps={makeUploadFieldProps(true)}
+        colProps={{ span: 12 }}
       />
       <ProFormSelect
         name="materialUuids"
@@ -315,6 +322,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         options={materialOptions}
         showSearch
         fieldProps={{ optionFilterProp: 'label' }}
+        colProps={{ span: 12 }}
       />
       <ProFormSelect
         name="processRouteUuids"
@@ -323,6 +331,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         options={routeOptions}
         showSearch
         fieldProps={{ optionFilterProp: 'label' }}
+        colProps={{ span: 12 }}
       />
       <ProFormSelect
         name="operationUuids"
@@ -331,8 +340,14 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         options={operationOptions}
         showSearch
         fieldProps={{ optionFilterProp: 'label' }}
+        colProps={{ span: 12 }}
       />
-      <ProFormTextArea name="description" label={t('app.master-data.drawings.description')} fieldProps={{ rows: 3 }} />
+      <ProFormTextArea
+        name="description"
+        label={t('app.master-data.drawings.description')}
+        fieldProps={{ rows: 3 }}
+        colProps={{ span: 24 }}
+      />
     </FormModalTemplate>
   );
 };
