@@ -7,7 +7,7 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,9 @@ import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, Mo
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
@@ -836,14 +838,16 @@ const SalesReturnsPage: React.FC = () => {
         onConfirm={appendItemsFromMaterials}
       />
 
-      <UniImport
-        visible={importModalVisible}
-        onCancel={() => setImportModalVisible(false)}
-        onConfirm={handleImport}
-        title="导入销售退货明细"
-        headers={['物料编号', '退货数量', '单价', '批次号', '备注']}
-        exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
-      />
+      <Suspense fallback={null}>
+        <LazyUniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleImport}
+          title="导入销售退货明细"
+          headers={['物料编号', '退货数量', '单价', '批次号', '备注']}
+          exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
+        />
+      </Suspense>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate

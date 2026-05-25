@@ -35,6 +35,7 @@ import {
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
+import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
 
 function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -50,22 +51,6 @@ function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<stri
     }
   }
   return out;
-}
-
-function extractSqlNamedParams(sql: string): string[] {
-  const masked = sql.replace(/::/g, '__PG_CAST__');
-  const set = new Set<string>();
-  let m: RegExpExecArray | null;
-  const reColon = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
-  while ((m = reColon.exec(masked)) !== null) {
-    const name = m[1];
-    if (name && !name.startsWith('__PG')) set.add(name);
-  }
-  const reAt = /(?<!@)@([a-zA-Z_][a-zA-Z0-9_]*)/g;
-  while ((m = reAt.exec(masked)) !== null) {
-    set.add(m[1]);
-  }
-  return [...set];
 }
 
 const OutputRecordDocumentsPage: React.FC = () => {

@@ -8,7 +8,7 @@
  * @date 2026-01-27
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
@@ -18,7 +18,9 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
@@ -3509,14 +3511,16 @@ const SalesOrdersPage: React.FC = () => {
             setMaterialPickerOpen(false);
           }}
         />
-        <UniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleItemImport}
-          title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-        />
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={handleItemImport}
+            title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
+            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+            exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+          />
+        </Suspense>
       </FormModalTemplate>
 
       <CustomerFormModal

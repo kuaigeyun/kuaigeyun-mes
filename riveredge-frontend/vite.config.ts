@@ -1,8 +1,10 @@
 /// <reference types="vitest" />
-import { defineConfig, normalizePath } from 'vite'
+import { defineConfig, normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { platform } from 'os'
+import fs from 'node:fs'
+import path from 'node:path'
 import type { ProxyOptions } from 'vite'
 
 // 主入口配置
@@ -14,6 +16,49 @@ const srcPath = resolve(__dirname, 'src')
 /** Windows 上别名替换需统一为正斜杠，否则 `@/…` 经 alias 后混用 `\\` 与 `/` 可能导致 Rollup 无法解析 */
 const srcRootPosix = normalizePath(srcPath)
 
+
+/** Safari < 16.4 不支持 (?<!#) 负向回顾；Univer engine-formula 模块初始化时会 new RegExp 抛错。 */
+function fixUniverSafariLookbehindPlugin(): Plugin {
+  let outDir = '';
+  const patch = (code: string) => code.replace(/\(\(\?\<!#\)\.\)\*/g, '[^\\]]*?');
+  return {
+    name: 'fix-univer-safari-lookbehind',
+    apply: 'build',
+    enforce: 'post',
+    configResolved(config) {
+      outDir = path.isAbsolute(config.build.outDir)
+        ? config.build.outDir
+        : path.resolve(config.root, config.build.outDir);
+    },
+    transform(code, id) {
+      const normalizedId = id.replace(/\\/g, '/');
+      if (!normalizedId.includes('@univerjs/') || !code.includes('(?<!#)')) {
+        return null;
+      }
+      const patched = patch(code);
+      if (patched === code) return null;
+      return { code: patched, map: null };
+    },
+    generateBundle(_outputOptions, bundle) {
+      for (const item of Object.values(bundle)) {
+        if (item.type !== 'chunk' || !item.code.includes('(?<!#)')) continue;
+        item.code = patch(item.code);
+      }
+    },
+    closeBundle() {
+      const assetsDir = path.join(outDir, 'assets');
+      if (!fs.existsSync(assetsDir)) return;
+      for (const name of fs.readdirSync(assetsDir)) {
+        if (!name.endsWith('.js')) continue;
+        const fp = path.join(assetsDir, name);
+        const code = fs.readFileSync(fp, 'utf8');
+        if (!code.includes('(?<!#)')) continue;
+        const patched = patch(code);
+        if (patched !== code) fs.writeFileSync(fp, patched, 'utf8');
+      }
+    },
+  };
+}
 
 export default defineConfig({
   base: '/',
@@ -229,6 +274,7 @@ export default defineConfig({
     } : undefined,
   },
   plugins: [
+    fixUniverSafariLookbehindPlugin(),
     // occt-import-js 为 Emscripten CJS，Vite 动态 import 不会自动补 default export
     {
       name: 'occt-import-js-esm-bridge',

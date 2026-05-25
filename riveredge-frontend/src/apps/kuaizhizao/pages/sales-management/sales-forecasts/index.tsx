@@ -7,7 +7,7 @@
  * @date 2026-02-02
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined } from '@ant-design/icons'
@@ -24,7 +24,9 @@ import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail'
-import { UniImport } from '../../../../../components/uni-import'
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+)
 import type { Material } from '../../../../master-data/types/material'
 import {
   listSalesForecasts,
@@ -1646,14 +1648,16 @@ export default function SalesForecastsPage() {
         )}
       </DetailDrawerTemplate>
 
-    <UniImport
-      visible={importModalVisible}
-      onCancel={() => setImportModalVisible(false)}
-      onConfirm={handleImport}
-      title={t('app.kuaizhizao.salesForecast.importTitle') || '导入销售预测明细'}
-      headers={['物料编号', '预测数量', '预测日期', '备注']}
-      exampleRow={['MAT001', '100', '2026-03-01', '备注说明']}
-    />
+    <Suspense fallback={null}>
+      <LazyUniImport
+        visible={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        onConfirm={handleImport}
+        title={t('app.kuaizhizao.salesForecast.importTitle') || '导入销售预测明细'}
+        headers={['物料编号', '预测数量', '预测日期', '备注']}
+        exampleRow={['MAT001', '100', '2026-03-01', '备注说明']}
+      />
+    </Suspense>
     </>
   )
 }

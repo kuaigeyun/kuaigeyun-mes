@@ -8,7 +8,7 @@
  * @date 2026-02-22
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
@@ -19,7 +19,9 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
@@ -1255,14 +1257,16 @@ const ShipmentNoticesPage: React.FC = () => {
         }}
       />
 
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleFormLineImport}
-        title="导入通知明细"
-        headers={[...NOTICE_ITEM_IMPORT_HEADERS]}
-        exampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
-      />
+      <Suspense fallback={null}>
+        <LazyUniImport
+          visible={importVisible}
+          onCancel={() => setImportVisible(false)}
+          onConfirm={handleFormLineImport}
+          title="导入通知明细"
+          headers={[...NOTICE_ITEM_IMPORT_HEADERS]}
+          exampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
+        />
+      </Suspense>
     </>
   );
 };

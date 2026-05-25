@@ -22,7 +22,21 @@ function copyRecursive(src, dest) {
   }
 }
 
+/** @univerjs/engine-formula 含 (?<!#) 负向回顾，Safari < 16.4 模块加载即报错 */
+function patchSafariLookbehindInAssets(assetsDir) {
+  if (!fs.existsSync(assetsDir)) return;
+  const re = /\(\(\?\<!#\)\.\)\*/g;
+  for (const name of fs.readdirSync(assetsDir)) {
+    if (!name.endsWith('.js')) continue;
+    const fp = path.join(assetsDir, name);
+    const code = fs.readFileSync(fp, 'utf8');
+    if (!code.includes('(?<!#)')) continue;
+    fs.writeFileSync(fp, code.replace(re, '[^\\]]*?'), 'utf8');
+  }
+}
+
 if (fs.existsSync(srcDist)) {
+  patchSafariLookbehindInAssets(path.join(srcDist, 'assets'));
   if (fs.existsSync(rootDist)) fs.rmSync(rootDist, { recursive: true });
   fs.renameSync(srcDist, rootDist);
   console.log('Moved src/dist -> dist');
