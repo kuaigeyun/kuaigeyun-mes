@@ -343,27 +343,52 @@ env_needs_configure() {
     return 1
 }
 
+resolve_psql() {
+    local bin v
+    for bin in /usr/lib/postgresql/*/bin/psql; do
+        [ -x "$bin" ] 2>/dev/null || continue
+        v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
+        [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
+    done
+    command -v psql 2>/dev/null || echo "psql"
+}
+
+detect_postgres_port() {
+    if command -v pg_lsclusters >/dev/null 2>&1; then
+        local port
+        port="$(pg_lsclusters -h 2>/dev/null | awk 'NR>1 && $1+0>=15 && $4=="online"{print $3; exit}')"
+        [ -n "$port" ] && { echo "$port"; return; }
+        port="$(pg_lsclusters -h 2>/dev/null | awk 'NR>1 && $4=="online"{print $3; exit}')"
+        [ -n "$port" ] && { echo "$port"; return; }
+    fi
+    echo "5432"
+}
+
 test_db_connection() {
-    local host port user pass dbname
+    local psql_bin host port user pass dbname err
+    psql_bin="$(resolve_psql)"
     host="$(read_env_value DB_HOST || echo localhost)"
-    port="$(read_env_value DB_PORT || echo 5432)"
+    port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
     user="$(read_env_value DB_USER || echo postgres)"
     pass="$(read_env_value DB_PASSWORD)"
     dbname="$(read_env_value DB_NAME || echo riveredge)"
     export PGPASSWORD="$pass"
-    if psql -h "$host" -p "$port" -U "$user" -d "$dbname" -c "SELECT 1" >/dev/null 2>&1; then
+    if "$psql_bin" -h "$host" -p "$port" -U "$user" -d "$dbname" -c "SELECT 1" >/dev/null 2>&1; then
         unset PGPASSWORD
         return 0
     fi
-    if psql -h "$host" -p "$port" -U "$user" -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+    if "$psql_bin" -h "$host" -p "$port" -U "$user" -d postgres -c "SELECT 1" >/dev/null 2>&1; then
         if [ "$host" = "localhost" ] || [ "$host" = "127.0.0.1" ]; then
-            psql -h "$host" -p "$port" -U "$user" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" 2>/dev/null | grep -q 1 || \
-                psql -h "$host" -p "$port" -U "$user" -d postgres -c "CREATE DATABASE \"${dbname}\";" >/dev/null 2>&1
+            "$psql_bin" -h "$host" -p "$port" -U "$user" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" 2>/dev/null | grep -q 1 || \
+                "$psql_bin" -h "$host" -p "$port" -U "$user" -d postgres -c "CREATE DATABASE \"${dbname}\";" >/dev/null 2>&1
         fi
         unset PGPASSWORD
         return 0
     fi
+    err="$("$psql_bin" -h "$host" -p "$port" -U "$user" -d postgres -c "SELECT 1" 2>&1)" || true
     unset PGPASSWORD
+    log_error "连接 ${user}@${host}:${port}/${dbname} 失败: ${err##*$'\n'}"
+    log_error "常见原因: 端口不对(PG15 常为 5433)、密码与本机 postgres 不一致、服务未启动"
     return 1
 }
 
@@ -379,7 +404,7 @@ cmd_configure() {
     fi
     load_deploy_env
 
-    local db_user db_host db_name db_pass admin_pass jwt server_ip detected_ip input base_url
+    local db_user db_host db_port db_name db_pass admin_pass jwt server_ip detected_ip input base_url
 
     db_user="$(read_env_value DB_USER || true)"
     [ -z "$db_user" ] && db_user="postgres"
@@ -393,6 +418,12 @@ cmd_configure() {
     db_host="${input:-$db_host}"
     set_env_value DB_HOST "$db_host"
 
+    db_port="$(read_env_value DB_PORT || true)"
+    [ -z "$db_port" ] && db_port="$(detect_postgres_port)"
+    read -rp "PostgreSQL 端口 [${db_port}]: " input
+    db_port="${input:-$db_port}"
+    set_env_value DB_PORT "$db_port"
+
     db_name="$(read_env_value DB_NAME || true)"
     [ -z "$db_name" ] && db_name="riveredge"
     read -rp "数据库名 [${db_name}]: " input
@@ -405,6 +436,7 @@ cmd_configure() {
         [ ${#db_pass} -lt 1 ] && { log_error "DB_PASSWORD 不能为空"; exit 1; }
         set_env_value DB_PASSWORD "$db_pass"
     else
+        log_info "将使用 .env 中已有 DB_PASSWORD（若连接失败请重新输入本机 postgres 密码）"
         read -rsp "PostgreSQL 密码 [已配置，回车跳过 / 输入新密码]: " input; echo
         if [ -n "$input" ]; then
             set_env_value DB_PASSWORD "$input"
@@ -461,11 +493,10 @@ cmd_configure() {
 
     log_info "测试数据库连接..."
     if ! test_db_connection; then
-        log_error "数据库连接失败，请确认 PostgreSQL 已启动且 DB_* 配置正确"
         exit 1
     fi
     log_ok "配置完成"
-    echo "  数据库: ${db_user}@${db_host}/${db_name}"
+    echo "  数据库: ${db_user}@${db_host}:${db_port}/${db_name}"
     echo "  超管账号: infra_admin"
     if [ "$DEPLOY_MODE" = "prod" ]; then
         echo "  访问地址: http://${server_ip}:${PROXY_PORT}"
