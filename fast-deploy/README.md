@@ -48,7 +48,7 @@ RiverEdge › 你好，我将引导你完成 RiverEdge 的检测、安装与启�
 | PostgreSQL 主机 | 本地 `localhost`，远程填 IP |
 | PostgreSQL 端口 | 自动检测 PG15 集群（常为 5432 或 5433） |
 | 数据库名 | 默认 `riveredge` |
-| PostgreSQL 密码 | 必填（本机 postgres 密码） |
+| PostgreSQL 密码 | 手动填写已知密码，或本机 localhost 下「强制重置」（会改库内用户密码，需输入 yes 确认） |
 | 平台超管密码 | 登录用户 `infra_admin` |
 | 服务器 IP | **自动检测**本机局域网 IP，回车确认 |
 

@@ -392,6 +392,106 @@ test_db_connection() {
     return 1
 }
 
+postgres_can_local_reset() {
+    local host=${1:-localhost}
+    { [ "$host" = "localhost" ] || [ "$host" = "127.0.0.1" ]; } || return 1
+    case "$(uname -s)" in
+        Linux|Darwin) ;;
+        *) return 1 ;;
+    esac
+    command -v sudo >/dev/null 2>&1 || return 1
+    return 0
+}
+
+postgres_sql_escape() {
+    local s=$1
+    s="${s//\\/\\\\}"
+    s="${s//\'/\'\'}"
+    printf '%s' "$s"
+}
+
+postgres_run_alter_password() {
+    local db_user=$1 db_port=$2 new_pass=$3
+    local sql escaped
+    escaped="$(postgres_sql_escape "$new_pass")"
+    sql="ALTER USER \"${db_user}\" WITH PASSWORD '${escaped}';"
+    if sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+        return 0
+    fi
+    sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1
+}
+
+configure_postgres_password_manual() {
+    local db_pass input
+    db_pass="$(read_env_value DB_PASSWORD || true)"
+    if [ -z "$db_pass" ]; then
+        read -rsp "PostgreSQL 密码 (DB_PASSWORD): " db_pass; echo
+        [ ${#db_pass} -lt 1 ] && { log_error "DB_PASSWORD 不能为空"; exit 1; }
+        set_env_value DB_PASSWORD "$db_pass"
+    else
+        read -rsp "PostgreSQL 密码 [已配置，回车跳过 / 输入新密码]: " input; echo
+        if [ -n "$input" ]; then
+            set_env_value DB_PASSWORD "$input"
+        fi
+    fi
+}
+
+configure_postgres_password_reset() {
+    local db_user=$1 db_host=$2 db_port=$3
+    local confirm new_pass new_pass2
+
+    if ! postgres_can_local_reset "$db_host"; then
+        log_error "强制重置仅支持本机 localhost（Linux/macOS + sudo -u postgres）"
+        exit 1
+    fi
+
+    echo ""
+    log_warn "━━ 强制重置密码 · 风险须知 ━━"
+    echo "  · 将修改 PostgreSQL 用户「${db_user}」的登录密码"
+    echo "  · 使用旧密码的其他应用、脚本、副本/从库连接将立即失效"
+    echo "  · 需 sudo 以系统 postgres 用户执行，无法用于远程数据库主机"
+    echo "  · 若不确定影响范围，请选择「手动填写」模式"
+    echo ""
+    read -rp "确认强制重置请输入 yes: " confirm
+    [ "$confirm" = "yes" ] || { log_error "已取消强制重置"; exit 1; }
+
+    read -rsp "新的 PostgreSQL 密码: " new_pass; echo
+    [ ${#new_pass} -lt 1 ] && { log_error "密码不能为空"; exit 1; }
+    read -rsp "再次确认新密码: " new_pass2; echo
+    [ "$new_pass" = "$new_pass2" ] || { log_error "两次输入的密码不一致"; exit 1; }
+
+    log_info "正在重置 PostgreSQL 用户 ${db_user}@${db_host}:${db_port} 的密码..."
+    if ! postgres_run_alter_password "$db_user" "$db_port" "$new_pass"; then
+        log_error "密码重置失败，请确认 PostgreSQL 已启动且 sudo -u postgres psql 可用"
+        exit 1
+    fi
+    set_env_value DB_PASSWORD "$new_pass"
+    log_ok "密码已重置并写入 .env"
+}
+
+configure_postgres_password() {
+    local db_user db_host db_port mode
+    db_user="$(read_env_value DB_USER || echo postgres)"
+    db_host="$(read_env_value DB_HOST || echo localhost)"
+    db_port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
+
+    echo ""
+    log_info "PostgreSQL 密码配置方式:"
+    echo "  1) 手动填写 — 使用你已知的数据库密码连接"
+    if postgres_can_local_reset "$db_host"; then
+        echo "  2) 强制重置 — 将本机 ${db_user} 用户密码改为你设置的新密码（有风险，见下文）"
+        read -rp "请选择 [1/2] (默认 1): " mode
+    else
+        echo "  （本机 localhost 以外或当前系统不支持强制重置，请选手动填写）"
+        mode=1
+    fi
+    mode="${mode:-1}"
+    case "$mode" in
+        2) configure_postgres_password_reset "$db_user" "$db_host" "$db_port" ;;
+        *) configure_postgres_password_manual ;;
+    esac
+}
+
 cmd_configure() {
     log_info "配置应用环境..."
     apply_cn_mirrors
@@ -430,18 +530,7 @@ cmd_configure() {
     db_name="${input:-$db_name}"
     set_env_value DB_NAME "$db_name"
 
-    db_pass="$(read_env_value DB_PASSWORD || true)"
-    if [ -z "$db_pass" ]; then
-        read -rsp "PostgreSQL 密码 (DB_PASSWORD): " db_pass; echo
-        [ ${#db_pass} -lt 1 ] && { log_error "DB_PASSWORD 不能为空"; exit 1; }
-        set_env_value DB_PASSWORD "$db_pass"
-    else
-        log_info "将使用 .env 中已有 DB_PASSWORD（若连接失败请重新输入本机 postgres 密码）"
-        read -rsp "PostgreSQL 密码 [已配置，回车跳过 / 输入新密码]: " input; echo
-        if [ -n "$input" ]; then
-            set_env_value DB_PASSWORD "$input"
-        fi
-    fi
+    configure_postgres_password
 
     admin_pass="$(read_env_value PLATFORM_SUPERADMIN_PASSWORD || true)"
     if [ -z "$admin_pass" ]; then

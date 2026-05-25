@@ -296,6 +296,84 @@ function Test-DbConnection {
     }
 }
 
+function Test-PostgresCanLocalReset([string]$DbHost) {
+    if ($DbHost -ne 'localhost' -and $DbHost -ne '127.0.0.1') { return $false }
+    if ($IsLinux) { return $true }
+    if ($env:OS -ne 'Windows_NT' -and (Get-Command sudo -ErrorAction SilentlyContinue)) { return $true }
+    return $false
+}
+
+function Set-PostgresPasswordManual {
+    if ([string]::IsNullOrWhiteSpace((Read-EnvValue 'DB_PASSWORD'))) {
+        $sec = Read-Host 'PostgreSQL 密码 (DB_PASSWORD)' -AsSecureString
+        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+        $dbPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+        if ([string]::IsNullOrWhiteSpace($dbPass)) { throw 'DB_PASSWORD 不能为空' }
+        Set-EnvValue 'DB_PASSWORD' $dbPass
+    } else {
+        $sec = Read-Host 'PostgreSQL 密码 [已配置，回车跳过 / 输入新密码]' -AsSecureString
+        if ($sec.Length -gt 0) {
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+            Set-EnvValue 'DB_PASSWORD' ([Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr))
+        }
+    }
+}
+
+function Reset-PostgresPasswordLocal {
+    param([string]$DbUser, [string]$DbHost, [string]$DbPort)
+    if (-not (Test-PostgresCanLocalReset $DbHost)) {
+        throw '强制重置仅支持本机 localhost（Linux + sudo -u postgres）'
+    }
+    Write-LogWarn '━━ 强制重置密码 · 风险须知 ━━'
+    Write-Host "  · 将修改 PostgreSQL 用户「${DbUser}」的登录密码"
+    Write-Host '  · 使用旧密码的其他应用、脚本、副本/从库连接将立即失效'
+    Write-Host '  · 需 sudo 以系统 postgres 用户执行，无法用于远程数据库主机'
+    Write-Host '  · 若不确定影响范围，请选择「手动填写」模式'
+    Write-Host ''
+    $confirm = Read-Host '确认强制重置请输入 yes'
+    if ($confirm -ne 'yes') { throw '已取消强制重置' }
+    $sec1 = Read-Host '新的 PostgreSQL 密码' -AsSecureString
+    $sec2 = Read-Host '再次确认新密码' -AsSecureString
+    $b1 = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec1)
+    $b2 = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec2)
+    $pass1 = [Runtime.InteropServices.Marshal]::PtrToStringAuto($b1)
+    $pass2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto($b2)
+    if ([string]::IsNullOrWhiteSpace($pass1)) { throw '密码不能为空' }
+    if ($pass1 -ne $pass2) { throw '两次输入的密码不一致' }
+    $escaped = $pass1 -replace "'", "''"
+    $sql = "ALTER USER `"$DbUser`" WITH PASSWORD '$escaped';"
+    Write-LogInfo "正在重置 PostgreSQL 用户 ${DbUser}@${DbHost}:${DbPort} 的密码..."
+    bash -lc "sudo -u postgres psql -p '$DbPort' -d postgres -v ON_ERROR_STOP=1 -c `"$sql`"" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        bash -lc "sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c `"$sql`""
+        if ($LASTEXITCODE -ne 0) { throw '密码重置失败，请确认 PostgreSQL 已启动且 sudo -u postgres psql 可用' }
+    }
+    Set-EnvValue 'DB_PASSWORD' $pass1
+    Write-LogOk '密码已重置并写入 .env'
+}
+
+function Invoke-PostgresPasswordSetup {
+    $dbUser = Read-EnvValue 'DB_USER'; if (-not $dbUser) { $dbUser = 'postgres' }
+    $dbHost = Read-EnvValue 'DB_HOST'; if (-not $dbHost) { $dbHost = 'localhost' }
+    $dbPort = Read-EnvValue 'DB_PORT'; if (-not $dbPort) { $dbPort = '5432' }
+    Write-Host ''
+    Write-LogInfo 'PostgreSQL 密码配置方式:'
+    Write-Host '  1) 手动填写 — 使用你已知的数据库密码连接'
+    if (Test-PostgresCanLocalReset $dbHost) {
+        Write-Host "  2) 强制重置 — 将本机 ${dbUser} 用户密码改为你设置的新密码（有风险，见下文）"
+        $mode = Read-Host '请选择 [1/2] (默认 1)'
+    } else {
+        Write-Host '  （当前环境不支持强制重置，请选手动填写）'
+        $mode = '1'
+    }
+    if ([string]::IsNullOrWhiteSpace($mode)) { $mode = '1' }
+    if ($mode -eq '2') {
+        Reset-PostgresPasswordLocal $dbUser $dbHost $dbPort
+    } else {
+        Set-PostgresPasswordManual
+    }
+}
+
 function Invoke-Configure {
     Write-LogInfo '配置应用环境...'
     Apply-CN-Mirrors
@@ -323,19 +401,7 @@ function Invoke-Configure {
     if (-not [string]::IsNullOrWhiteSpace($inputName)) { $dbName = $inputName }
     Set-EnvValue 'DB_NAME' $dbName
 
-    if ([string]::IsNullOrWhiteSpace((Read-EnvValue 'DB_PASSWORD'))) {
-        $sec = Read-Host 'PostgreSQL 密码 (DB_PASSWORD)' -AsSecureString
-        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-        $dbPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-        if ([string]::IsNullOrWhiteSpace($dbPass)) { throw 'DB_PASSWORD 不能为空' }
-        Set-EnvValue 'DB_PASSWORD' $dbPass
-    } else {
-        $sec = Read-Host 'PostgreSQL 密码 [已配置，直接回车跳过]' -AsSecureString
-        if ($sec.Length -gt 0) {
-            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-            Set-EnvValue 'DB_PASSWORD' ([Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr))
-        }
-    }
+    Invoke-PostgresPasswordSetup
 
     if ([string]::IsNullOrWhiteSpace((Read-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD'))) {
         $sec = Read-Host '平台超级管理员密码 (登录用户名 infra_admin)' -AsSecureString
