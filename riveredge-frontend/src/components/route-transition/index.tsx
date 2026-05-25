@@ -9,8 +9,9 @@ export function RouteTransition({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        flex: 1,
+        flex: '1 1 auto',
         minHeight: 0,
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         width: '100%',

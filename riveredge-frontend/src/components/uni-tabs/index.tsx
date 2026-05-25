@@ -1302,7 +1302,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-bottom: -1px !important;
         }
         .uni-tabs-content {
-          flex: 1;
+          flex: 1 1 auto;
           display: flex;
           flex-direction: column;
           overflow-y: auto;
@@ -1315,10 +1315,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-left: ${isFullscreen ? '16px' : '0'} !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;
+          box-sizing: border-box !important;
           /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距）。
-             全屏时四边等距 16px，因此垂直需扣减 32px。 */
+             全屏时四边等距 16px，因此垂直需扣减 32px。
+             min-height 与 height 同步：Safari 26.x beta 在 max-height + flex 子项 min-height:0 组合下
+             会把普通页主内容区坍缩为 0（运营看板因有 min-height 保底而正常）。 */
           height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
           max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
+          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, 56px) - ${isFullscreen ? '32px' : '16px'}) !important;
           /* 彻底隐藏滚动条且不占用空间 */
           scrollbar-width: none !important;
           -ms-overflow-style: none !important;
@@ -1328,15 +1332,28 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: hidden !important;
         }
 
-        /* 运营看板（非全屏）：至少占满视口 − 顶栏 − 标签栏；border-box 内含上下各 16px padding */
-        ${!isFullscreen
-          ? `
-        .uni-tabs-content.uni-tabs-content-business-board {
-          box-sizing: border-box !important;
-          min-height: calc(100vh - var(--header-height) - var(--tabs-height) - 16px)  !important;
+        /* 普通业务页：占满内容区高度，避免 Safari 26 flex 子项高度坍缩 */
+        .uni-tabs-content-page-outer {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+          box-sizing: border-box;
+          padding: 0 16px;
         }
-        `
-          : ''}
+        .uni-tabs-content-page-outer.uni-tabs-content-page-outer--flush {
+          padding: 0;
+        }
+        .uni-tabs-content-page-inner {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+        }
         .uni-tabs-content::-webkit-scrollbar {
           display: block !important;
           width: 6px !important;
@@ -1749,8 +1766,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
 
         .uni-tabs-content {
-          flex: 1;
-          min-height: 0;
+          flex: 1 1 auto;
           display: flex;
           flex-direction: column;
           overflow-y: auto;
@@ -1977,25 +1993,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             </div>
           ) : (
             <div
-              style={{
-                /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
-                padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
-                width: '100%',
-                flex: 1,
-                minHeight: 0,
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
+              className={`uni-tabs-content-page-outer${isDashboardOrAnalysisPage ? ' uni-tabs-content-page-outer--flush' : ''}`}
             >
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
+              <div className="uni-tabs-content-page-inner">
                 <RouteTransition>{children}</RouteTransition>
               </div>
             </div>
