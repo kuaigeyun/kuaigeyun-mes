@@ -177,8 +177,8 @@ wizard_env_scan() {
 
 wizard_read_password_twice() {
     local prompt=$1 p1 p2
-    read -rsp "${prompt}: " p1; echo
-    read -rsp "再次确认: " p2; echo
+    read -rsp "${prompt}: " p1; echo >&2
+    read -rsp "再次确认: " p2; echo >&2
     if [ "$p1" != "$p2" ]; then
         wizard_say_fail "两次密码不一致"
         return 1
@@ -217,6 +217,10 @@ wizard_collect_local_db_config() {
     wizard_say "请预先设定数据库密码（安装 PostgreSQL 后将自动应用，无需事后再改）"
     db_pass="$(wizard_read_password_twice "PostgreSQL 密码")" || return 1
     set_env_value DB_PASSWORD "$db_pass"
+    if ! env_value_nonempty DB_PASSWORD; then
+        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}"
+        return 1
+    fi
     wizard_say_ok "本地库规划: ${db_user}@localhost:${db_port}/${db_name}"
 }
 
@@ -249,6 +253,10 @@ wizard_collect_remote_db_config() {
 
     db_pass="$(wizard_read_password_twice "PostgreSQL 密码")" || return 1
     set_env_value DB_PASSWORD "$db_pass"
+    if ! env_value_nonempty DB_PASSWORD; then
+        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}"
+        return 1
+    fi
 
     wizard_say "正在测试远程数据库连接..."
     if test_db_connection; then
@@ -274,7 +282,11 @@ wizard_collect_admin_config() {
         return 1
     fi
     set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
-    wizard_say_ok "超管账号: ${admin_user}"
+    if ! env_value_nonempty PLATFORM_SUPERADMIN_PASSWORD; then
+        wizard_say_fail "超管密码未能写入 ${ENV_FILE}，请检查文件权限"
+        return 1
+    fi
+    wizard_say_ok "超管账号: ${admin_user}（密码已写入 .env）"
 }
 
 wizard_collect_server_access() {

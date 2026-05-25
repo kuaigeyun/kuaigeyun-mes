@@ -305,17 +305,16 @@ read_env_value() {
     grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//'
 }
 
+# 安全写入 .env（避免 sed 对 / & 换行等字符失败，导致密码未写入）
 set_env_value() {
     local key=$1 val=$2
-    if grep -qE "^${key}=" "$ENV_FILE" 2>/dev/null; then
-        if [[ "$(uname -s)" == "Darwin" ]]; then
-            sed -i '' "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
-        else
-            sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
-        fi
-    else
-        echo "${key}=${val}" >> "$ENV_FILE"
-    fi
+    ensure_env_file
+    _env_file_python_set "$key" "$val" "$ENV_FILE"
+}
+
+env_value_nonempty() {
+    local key=$1
+    [ -n "$(read_env_value "$key" 2>/dev/null || true)" ]
 }
 
 read_deploy_env_value() {
@@ -327,15 +326,7 @@ read_deploy_env_value() {
 set_deploy_env_value() {
     local key=$1 val=$2
     [ -f "$DEPLOY_ENV_FILE" ] || cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
-    if grep -qE "^${key}=" "$DEPLOY_ENV_FILE" 2>/dev/null; then
-        if [[ "$(uname -s)" == "Darwin" ]]; then
-            sed -i '' "s|^${key}=.*|${key}=${val}|" "$DEPLOY_ENV_FILE"
-        else
-            sed -i "s|^${key}=.*|${key}=${val}|" "$DEPLOY_ENV_FILE"
-        fi
-    else
-        echo "${key}=${val}" >> "$DEPLOY_ENV_FILE"
-    fi
+    _env_file_python_set "$key" "$val" "$DEPLOY_ENV_FILE"
 }
 
 admin_config_complete() {
@@ -396,8 +387,8 @@ db_config_complete() {
 
 read_password_twice() {
     local prompt=$1 p1 p2
-    read -rsp "${prompt}: " p1; echo
-    read -rsp "再次确认: " p2; echo
+    read -rsp "${prompt}: " p1; echo >&2
+    read -rsp "再次确认: " p2; echo >&2
     if [ "$p1" != "$p2" ]; then
         log_error "两次密码不一致"
         return 1
@@ -615,6 +606,45 @@ configure_postgres_password() {
 generate_jwt_secret() {
     python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null \
         || python -c 'import secrets; print(secrets.token_urlsafe(32))'
+}
+
+resolve_python() {
+    local py
+    for py in python3 python; do
+        command -v "$py" >/dev/null 2>&1 || continue
+        if "$py" -c 'import sys' >/dev/null 2>&1; then
+            command -v "$py"
+            return 0
+        fi
+    done
+    echo "python3"
+}
+
+_env_file_python_set() {
+    local key=$1 val=$2 path=$3 py
+    py="$(resolve_python)"
+    "$py" - "$key" "$val" "$path" <<'PY'
+import sys
+key, val, path = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+except FileNotFoundError:
+    lines = []
+prefix = key + "="
+out, found = [], False
+for line in lines:
+    if line.startswith(prefix):
+        if not found:
+            out.append(prefix + val)
+            found = True
+    else:
+        out.append(line)
+if not found:
+    out.append(prefix + val)
+with open(path, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(out) + "\n")
+PY
 }
 
 apply_app_config() {

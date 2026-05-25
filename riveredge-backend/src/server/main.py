@@ -188,21 +188,42 @@ async def lifespan(app: FastAPI):
         return_exceptions=False,
     )
 
-    # 确保平台超级管理员存在（表为空时从 .env 创建）
+    # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
     try:
         from infra.models.infra_superadmin import InfraSuperAdmin
         from infra.config.infra_config import infra_settings
-        existing = await InfraSuperAdmin.get_or_none()
-        if not existing and infra_settings.infra_superadmin_PASSWORD:
-            admin = await InfraSuperAdmin.create(
-                uuid=str(uuid.uuid4()),
-                username=infra_settings.infra_superadmin_USERNAME,
-                email=infra_settings.infra_superadmin_EMAIL or f"{infra_settings.infra_superadmin_USERNAME}@riveredge.cn",
-                password_hash=InfraSuperAdmin.hash_password(infra_settings.infra_superadmin_PASSWORD),
-                full_name=infra_settings.infra_superadmin_FULL_NAME or "平台超级管理员",
-                is_active=True,
-            )
-            logger.info(f"✅ 已创建平台超级管理员: {admin.username}")
+        pwd = (infra_settings.infra_superadmin_PASSWORD or "").strip()
+        if not pwd:
+            logger.warning("PLATFORM_SUPERADMIN_PASSWORD 未设置，跳过平台超级管理员初始化")
+        else:
+            username = infra_settings.infra_superadmin_USERNAME
+            email = infra_settings.infra_superadmin_EMAIL or f"{username}@riveredge.cn"
+            full_name = infra_settings.infra_superadmin_FULL_NAME or "平台超级管理员"
+            existing = await InfraSuperAdmin.get_or_none()
+            if not existing:
+                admin = await InfraSuperAdmin.create(
+                    uuid=str(uuid.uuid4()),
+                    username=username,
+                    email=email,
+                    password_hash=InfraSuperAdmin.hash_password(pwd),
+                    full_name=full_name,
+                    is_active=True,
+                )
+                logger.info(f"✅ 已创建平台超级管理员: {admin.username}")
+            elif not existing.verify_password(pwd):
+                if existing.last_login is None:
+                    existing.password_hash = InfraSuperAdmin.hash_password(pwd)
+                    if existing.username != username:
+                        existing.username = username
+                    existing.email = email
+                    existing.full_name = full_name
+                    await existing.save()
+                    logger.info(f"✅ 已同步平台超级管理员密码: {existing.username}")
+                else:
+                    logger.info(
+                        "平台超级管理员已登录过，不以 .env 覆盖密码；"
+                        "若需重置请使用「修改配置」更新 .env 后手动改密，或清空 last_login 后重启"
+                    )
     except Exception as e:
         logger.warning(f"确保平台超级管理员时出错: {e}")
 
