@@ -6,7 +6,7 @@ import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, 
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip } from 'antd';
+import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
@@ -28,6 +28,7 @@ import {
   TwoColumnLayout,
   flushDrawerOpen,
   LIST_PAGE_TABLE_SCROLL,
+  TWO_COLUMN_LAYOUT,
 } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
@@ -98,31 +99,39 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
   onOpenStepBom,
 }: InlinePreviewPaneProps) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const showStepBom = activeDrawing && canImportStepBom(activeDrawing);
   const showLarge = !!activeDrawing?.file?.uuid;
 
   return (
     <div
+      className="drawings-inline-preview-pane"
       style={{
         flex: '1 1 0',
-        minWidth: 0,
+        minWidth: 280,
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
+        borderLeft: `1px solid ${token.colorBorder}`,
+        background: token.colorFillAlter,
+        overflow: 'hidden',
       }}
     >
-      {(showStepBom || showLarge) && (
-        <div
-          className="pro-table-button-container"
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            marginBottom: 16,
-            minHeight: 32,
-          }}
-        >
+      <div
+        className="drawings-inline-preview-header"
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          height: TWO_COLUMN_LAYOUT.PANEL_HEADER_HEIGHT,
+          padding: '8px 12px',
+          boxSizing: 'border-box',
+          borderBottom: `1px solid ${token.colorBorder}`,
+          background: token.colorFillAlter,
+        }}
+      >
+        {(showStepBom || showLarge) && (
           <Space.Compact style={{ flexShrink: 0 }}>
             {showStepBom && (
               <Button icon={<PartitionOutlined />} onClick={() => onOpenStepBom(activeDrawing!)}>
@@ -135,9 +144,10 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
               </Button>
             )}
           </Space.Compact>
-        </div>
-      )}
+        )}
+      </div>
       <div
+        className="drawings-inline-preview-body"
         style={{
           flex: 1,
           minHeight: 0,
@@ -145,6 +155,7 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
           flexDirection: 'column',
           position: 'relative',
           contain: 'layout paint style',
+          background: token.colorBgContainer,
         }}
       >
         {previewPending && (
@@ -175,6 +186,7 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
             fileName={file?.originalName}
             fileExtension={file?.fileExtension}
             height="100%"
+            chromeless
           />
         </Suspense>
       </div>
@@ -723,12 +735,15 @@ const DrawingsPage: React.FC = () => {
   const tableBlock = useMemo(
     () => (
       <div
+        className="drawings-table-pane"
         style={{
           flex: showInlinePreview ? '3 1 0' : 1,
           minWidth: 0,
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
+          padding: showInlinePreview ? '0 0 8px 8px' : '0 8px 8px',
+          boxSizing: 'border-box',
           ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         }}
       >
@@ -795,6 +810,22 @@ const DrawingsPage: React.FC = () => {
 
   return (
     <>
+      <style>{`
+        .drawings-table-pane .pro-table-button-container {
+          height: ${TWO_COLUMN_LAYOUT.PANEL_HEADER_HEIGHT}px;
+          box-sizing: border-box;
+          padding: 8px;
+          margin-top: 0;
+          margin-bottom: 16px;
+          border-bottom: 1px solid var(--ant-color-border);
+          align-items: center;
+          line-height: 32px;
+          flex-wrap: nowrap;
+        }
+        .drawings-main-split .drawings-inline-preview-pane {
+          align-self: stretch;
+        }
+      `}</style>
       <TwoColumnLayout
         leftPanel={{
           collapsed: leftPanelCollapsed,
@@ -822,14 +853,12 @@ const DrawingsPage: React.FC = () => {
           contentPadding: 0,
           content: (
             <div
+              className="drawings-main-split"
               style={{
                 display: 'flex',
                 flexDirection: showInlinePreview ? 'row' : 'column',
-                gap: showInlinePreview ? 8 : 0,
                 height: '100%',
                 minHeight: 0,
-                padding: 8,
-                boxSizing: 'border-box',
               }}
             >
               {tableBlock}

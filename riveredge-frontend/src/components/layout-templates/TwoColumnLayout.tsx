@@ -292,7 +292,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               borderBottom: `1px solid ${token.colorBorder}`,
               display: 'flex',
               alignItems: 'center',
-              height: '48px',
+              height: TWO_COLUMN_LAYOUT.PANEL_HEADER_HEIGHT,
               boxSizing: 'border-box',
               lineHeight: '32px',
             }}
@@ -376,7 +376,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              height: '48px',
+              height: TWO_COLUMN_LAYOUT.PANEL_HEADER_HEIGHT,
               boxSizing: 'border-box',
               lineHeight: '32px',
             }}

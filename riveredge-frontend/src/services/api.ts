@@ -453,7 +453,21 @@ export async function apiRequest<T = any>(
       if (data && typeof data === 'object') {
         // 如果是统一错误格式 { success: false, error: ... }
         if (data.success === false && data.error) {
-          const errorMessage = data.error.message || data.error.details || '请求失败';
+          let errorMessage = data.error.message || data.error.details || '请求失败';
+          if (data.error.code === 'VALIDATION_ERROR' && Array.isArray(data.error.details)) {
+            const validationMsg = formatApiErrorDetail(data.error.details);
+            if (validationMsg) {
+              errorMessage = validationMsg;
+            }
+          } else if (
+            typeof data.error.details === 'object' &&
+            data.error.details !== null &&
+            !Array.isArray(data.error.details) &&
+            data.error.details.message &&
+            (errorMessage === '服务器内部错误' || errorMessage === '请求失败')
+          ) {
+            errorMessage = String(data.error.details.message);
+          }
           const error = new Error(errorMessage) as any;
           error.response = { data, status: response.status };
           throw error;

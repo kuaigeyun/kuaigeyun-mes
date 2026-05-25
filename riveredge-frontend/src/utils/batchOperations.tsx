@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Modal, Progress, message } from 'antd';
+import { getApiErrorMessage } from './errorHandler';
 
 /**
  * 批量导入配置
@@ -103,7 +104,7 @@ export async function batchImport<T = any>(
         const data = await importFn(item, index);
         return { success: true, data };
       } catch (error: any) {
-        lastError = error?.message || error?.detail || '未知错误';
+        lastError = getApiErrorMessage(error, '未知错误');
         if (attempt < retryCount - 1) {
           // 指数退避
           await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));

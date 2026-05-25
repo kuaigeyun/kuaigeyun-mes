@@ -22,6 +22,8 @@ export interface DrawingInlinePreviewProps {
   fileExtension?: string;
   fileType?: string;
   height?: number | string;
+  /** 由外层容器提供边框时设为 true */
+  chromeless?: boolean;
 }
 
 export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
@@ -29,6 +31,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   fileName,
   fileExtension,
   fileType,
+  chromeless = false,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -113,17 +116,25 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
     };
   }, [fileUuid, isStep, isCad2d, t]);
 
-  const boxStyle: React.CSSProperties = {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    border: `1px solid ${token.colorBorder}`,
-    borderRadius: token.borderRadiusLG,
-    overflow: 'hidden',
-    background: token.colorBgContainer,
-  };
+  const boxStyle: React.CSSProperties = chromeless
+    ? {
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }
+    : {
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        border: `1px solid ${token.colorBorder}`,
+        borderRadius: token.borderRadiusLG,
+        overflow: 'hidden',
+        background: token.colorBgContainer,
+      };
 
   const contentStyle: React.CSSProperties = {
     flex: 1,
