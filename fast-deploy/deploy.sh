@@ -2,8 +2,9 @@
 # RiverEdge 统一部署入口（Git Bash / Linux / macOS）
 #
 # 用法:
-#   ./fast-deploy/deploy.sh              # 生产一键部署（默认国内镜像）
-#   ./fast-deploy/deploy.sh dev          # 开发模式（Vite 热重载）
+#   ./fast-deploy/deploy.sh              # 7 阶段智能部署向导（生产）
+#   ./fast-deploy/deploy.sh dev          # 开发模式向导
+#   ./fast-deploy/deploy.sh wizard       # 显式进入向导
 #   ./fast-deploy/deploy.sh configure    # 仅配置向导
 #   ./fast-deploy/deploy.sh stop|status|update|...
 #
@@ -33,18 +34,20 @@ SUBCMD="${1:-}"
 case "$SUBCMD" in
     dev)
         export DEPLOY_MODE=dev
+        export WIZARD_MODE_LOCKED=1
         shift
         SUBCMD="${1:-}"
         ;;
     prod)
         export DEPLOY_MODE=prod
+        export WIZARD_MODE_LOCKED=1
         shift
         SUBCMD="${1:-}"
         ;;
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="check install configure migrate build start stop status update deploy"
+KNOWN_CMDS="wizard check install configure migrate build start stop status update deploy"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;
@@ -59,6 +62,9 @@ if [ -n "$SUBCMD" ] && ! is_known_cmd "$SUBCMD"; then
 fi
 
 log_banner() {
+    if [ -z "${SUBCMD:-}" ] || [ "${SUBCMD:-}" = "wizard" ] || [ "${SUBCMD:-}" = "deploy" ]; then
+        return 0
+    fi
     echo ""
     echo "========================================"
     echo " RiverEdge fast-deploy"

@@ -999,24 +999,7 @@ cmd_update_prod() {
 }
 
 cmd_default() {
-    apply_cn_mirrors
-    if ! cmd_check; then
-        log_warn "环境未就绪，尝试 install..."
-        cmd_install || {
-            log_error "依赖安装未完成，请根据上方 WARN 修复后重试"
-            exit 1
-        }
-    fi
-    if env_needs_configure; then
-        cmd_configure
-    fi
-    if [ "$DEPLOY_MODE" = "dev" ]; then
-        cmd_start_dev
-    else
-        cmd_migrate
-        [ -f "$FRONTEND_DIR/dist/index.html" ] || cmd_build
-        cmd_start_prod
-    fi
+    cmd_wizard
 }
 
 fd_dispatch() {
@@ -1040,11 +1023,14 @@ fd_dispatch() {
         update)
             if [ "$DEPLOY_MODE" = "dev" ]; then cmd_update_dev; else cmd_update_prod; fi
             ;;
-        ""|deploy) cmd_default ;;
+        wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: check | install | configure | migrate | build | start | stop | status | update | deploy"
+            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update"
             exit 1
             ;;
     esac
 }
+
+# shellcheck source=lib/wizard.sh
+source "$FAST_DEPLOY_DIR/lib/wizard.sh"
