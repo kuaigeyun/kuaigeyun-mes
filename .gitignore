@@ -106,6 +106,11 @@ riveredge-backend/tests/config_gates/**/*.pyc
 htmlcov/
 .pytest_cache/
 .tox/
+riveredge-frontend/e2e/.env
+riveredge-frontend/e2e/.auth/
+riveredge-frontend/playwright-report/
+riveredge-frontend/test-results/
+riveredge-frontend/blob-report/
 
 # ===== 审计报告（本地保留，Git 忽略） =====
 docs/optimize/

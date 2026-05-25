@@ -112,12 +112,12 @@ get_install_platform_key() {
     esac
 }
 
-# 从 install-scripts.json 读取安装命令
-get_install_command() {
-    local component="$1"
-    local platform
-    platform="$(get_install_platform_key)"
-    python3 - "$INSTALL_SCRIPTS_JSON" "$component" "$platform" "$USE_MIRROR" <<'PY'
+# 从 install-scripts.json 读取安装命令（Windows 无 Python 时用 PowerShell 解析）
+_get_install_command_python() {
+    local component="$1" platform="$2" py
+    for py in python3.12 python3 python; do
+        command -v "$py" >/dev/null 2>&1 || continue
+        "$py" - "$INSTALL_SCRIPTS_JSON" "$component" "$platform" "$USE_MIRROR" <<'PY'
 import json, sys
 path, comp, plat, mirror = sys.argv[1:5]
 with open(path, encoding="utf-8") as f:
@@ -130,6 +130,50 @@ scripts = data.get("scripts", {}).get(comp, {})
 cmd = scripts.get(plat) or scripts.get("linux") or scripts.get("windows") or ""
 print(cmd)
 PY
+        return 0
+    done
+    return 1
+}
+
+_get_install_command_powershell() {
+    local component="$1" platform="$2" json_path ps_path
+    json_path="$INSTALL_SCRIPTS_JSON"
+    if command -v cygpath >/dev/null 2>&1; then
+        ps_path="$(cygpath -w "$json_path")"
+    else
+        ps_path="$json_path"
+    fi
+    ps_path="${ps_path//\'/''}"
+    powershell.exe -NoProfile -Command "
+        \$ErrorActionPreference = 'Stop'
+        \$data = Get-Content -LiteralPath '$ps_path' -Raw -Encoding UTF8 | ConvertFrom-Json
+        \$comp = '$component'
+        \$plat = '$platform'
+        if ('$USE_MIRROR' -eq '1' -and \$comp -notin @('node','python','postgresql','caddy') -and \$plat -in @('ubuntu22','linux') -and \$data.scripts_cn.PSObject.Properties.Name -contains \$comp) {
+            Write-Output \$data.scripts_cn.\$comp
+            exit 0
+        }
+        \$scripts = \$data.scripts.\$comp
+        if (\$null -eq \$scripts) { exit 1 }
+        \$cmd = \$scripts.\$plat
+        if (-not \$cmd) { \$cmd = \$scripts.linux }
+        if (-not \$cmd) { \$cmd = \$scripts.windows }
+        if (\$cmd) { Write-Output \$cmd }
+    " 2>/dev/null
+}
+
+get_install_command() {
+    local component="$1"
+    local platform
+    platform="$(get_install_platform_key)"
+    if is_windows_gitbash; then
+        _get_install_command_powershell "$component" "$platform"
+        return
+    fi
+    _get_install_command_python "$component" "$platform" || {
+        log_error "需要 python3 读取 install-scripts.json"
+        return 1
+    }
 }
 
 resolve_uv() {
@@ -305,11 +349,33 @@ read_env_value() {
     grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//'
 }
 
-# 安全写入 .env（避免 sed 对 / & 换行等字符失败，导致密码未写入）
+# 安全写入 .env（纯 shell，避免 sed 对 / & 等特殊字符失败；不依赖 Python，向导阶段 2 即可写入）
+_env_file_set() {
+    local key=$1 val=$2 path=$3
+    local prefix="${key}=" tmp dir found=0
+    dir="$(dirname "$path")"
+    mkdir -p "$dir"
+    tmp="$(mktemp "${dir}/.env-set.XXXXXX" 2>/dev/null || mktemp -t env-set.XXXXXX)"
+    if [ -f "$path" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" == "${prefix}"* ]] && [ "$found" -eq 0 ]; then
+                printf '%s%s\n' "$prefix" "$val" >> "$tmp"
+                found=1
+            else
+                printf '%s\n' "$line" >> "$tmp"
+            fi
+        done < "$path"
+    fi
+    if [ "$found" -eq 0 ]; then
+        printf '%s%s\n' "$prefix" "$val" >> "$tmp"
+    fi
+    mv "$tmp" "$path"
+}
+
 set_env_value() {
     local key=$1 val=$2
     ensure_env_file
-    _env_file_python_set "$key" "$val" "$ENV_FILE"
+    _env_file_set "$key" "$val" "$ENV_FILE"
 }
 
 env_value_nonempty() {
@@ -326,7 +392,7 @@ read_deploy_env_value() {
 set_deploy_env_value() {
     local key=$1 val=$2
     [ -f "$DEPLOY_ENV_FILE" ] || cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
-    _env_file_python_set "$key" "$val" "$DEPLOY_ENV_FILE"
+    _env_file_set "$key" "$val" "$DEPLOY_ENV_FILE"
 }
 
 admin_config_complete() {
@@ -604,47 +670,24 @@ configure_postgres_password() {
 }
 
 generate_jwt_secret() {
-    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null \
-        || python -c 'import secrets; print(secrets.token_urlsafe(32))'
-}
-
-resolve_python() {
-    local py
-    for py in python3 python; do
+    local secret py
+    if command -v openssl >/dev/null 2>&1; then
+        secret="$(openssl rand -base64 32 2>/dev/null | tr -d '\n\r=')"
+        if [ -n "$secret" ]; then
+            echo "$secret"
+            return 0
+        fi
+    fi
+    for py in python3.12 python3 python; do
         command -v "$py" >/dev/null 2>&1 || continue
-        if "$py" -c 'import sys' >/dev/null 2>&1; then
-            command -v "$py"
+        secret="$("$py" -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || true)"
+        if [ -n "$secret" ]; then
+            echo "$secret"
             return 0
         fi
     done
-    echo "python3"
-}
-
-_env_file_python_set() {
-    local key=$1 val=$2 path=$3 py
-    py="$(resolve_python)"
-    "$py" - "$key" "$val" "$path" <<'PY'
-import sys
-key, val, path = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    with open(path, encoding="utf-8") as f:
-        lines = f.read().splitlines()
-except FileNotFoundError:
-    lines = []
-prefix = key + "="
-out, found = [], False
-for line in lines:
-    if line.startswith(prefix):
-        if not found:
-            out.append(prefix + val)
-            found = True
-    else:
-        out.append(line)
-if not found:
-    out.append(prefix + val)
-with open(path, "w", encoding="utf-8", newline="\n") as f:
-    f.write("\n".join(out) + "\n")
-PY
+    log_error "无法生成 JWT 密钥（需要 openssl 或 Python）"
+    return 1
 }
 
 apply_app_config() {

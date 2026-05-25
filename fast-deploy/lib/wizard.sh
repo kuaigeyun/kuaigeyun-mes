@@ -218,7 +218,7 @@ wizard_collect_local_db_config() {
     db_pass="$(wizard_read_password_twice "PostgreSQL 密码")" || return 1
     set_env_value DB_PASSWORD "$db_pass"
     if ! env_value_nonempty DB_PASSWORD; then
-        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}"
+        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}，请确认 riveredge-backend 目录可写"
         return 1
     fi
     wizard_say_ok "本地库规划: ${db_user}@localhost:${db_port}/${db_name}"
@@ -254,7 +254,7 @@ wizard_collect_remote_db_config() {
     db_pass="$(wizard_read_password_twice "PostgreSQL 密码")" || return 1
     set_env_value DB_PASSWORD "$db_pass"
     if ! env_value_nonempty DB_PASSWORD; then
-        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}"
+        wizard_say_fail "数据库密码未能写入 ${ENV_FILE}，请确认 riveredge-backend 目录可写"
         return 1
     fi
 
@@ -283,7 +283,7 @@ wizard_collect_admin_config() {
     fi
     set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
     if ! env_value_nonempty PLATFORM_SUPERADMIN_PASSWORD; then
-        wizard_say_fail "超管密码未能写入 ${ENV_FILE}，请检查文件权限"
+        wizard_say_fail "超管密码未能写入 ${ENV_FILE}，请确认 riveredge-backend 目录可写"
         return 1
     fi
     wizard_say_ok "超管账号: ${admin_user}（密码已写入 .env）"

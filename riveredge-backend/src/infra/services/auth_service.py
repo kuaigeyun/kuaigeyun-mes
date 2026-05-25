@@ -36,6 +36,7 @@ from infra.domain.tenant_context import set_current_tenant_id
 from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
+from core.services.authorization.role_service import RoleService
 
 
 
@@ -47,6 +48,28 @@ class AuthService:
     
     提供用户认证相关的业务逻辑处理。
     """
+
+    @staticmethod
+    def _is_default_tenant(tenant: Tenant) -> bool:
+        """是否为系统默认组织（domain=default）。"""
+        return (tenant.domain or "").strip().lower() == "default"
+
+    @staticmethod
+    async def _ensure_user_has_guest_role(user_id: int, tenant_id: int) -> None:
+        """为默认组织用户绑定已存在的 GUEST（体验用户）角色（幂等）。"""
+        from core.models.user_role import UserRole
+
+        guest_role = await RoleService.get_guest_role(tenant_id)
+        if not guest_role:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="默认组织未配置 GUEST（体验用户）角色，请联系管理员",
+            )
+        exists = await UserRole.filter(user_id=user_id, role_id=guest_role.id).exists()
+        if exists:
+            return
+        await UserRole.create(user_id=user_id, role_id=guest_role.id)
+        await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user_id)
 
     @staticmethod
     async def _active_tenant_id_set(tenant_ids: set[int]) -> set[int]:
@@ -440,6 +463,9 @@ class AuthService:
             is_tenant_admin=False,
         )
         user = await user_service.create_user(user_data, tenant_id=tenant_id)
+
+        if self._is_default_tenant(tenant):
+            await self._ensure_user_has_guest_role(user.id, tenant_id)
         
         return {
             "success": True,
@@ -1024,6 +1050,8 @@ class AuthService:
             # 验证 guest_user 是否创建成功
             if not guest_user:
                 raise ValueError("创建体验账户失败：user_service.create_user 返回 None")
+
+            await self._ensure_user_has_guest_role(guest_user.id, default_tenant.id)
             
             # 3. 生成 Token（包含 tenant_id）
             logger.info(f"开始生成 Token: user_id={guest_user.id}, username={guest_user.username}, tenant_id={default_tenant.id}")

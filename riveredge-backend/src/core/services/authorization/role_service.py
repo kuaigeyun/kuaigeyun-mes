@@ -731,6 +731,8 @@ class RoleService:
         "EMPLOYEE": DataScopeType.SELF,
     }
 
+    GUEST_ROLE_CODE = "GUEST"
+
     @staticmethod
     def _resource_from_permission_code(code: str) -> str | None:
         parts = [x for x in (code or "").strip().lower().split(":") if x]
@@ -988,6 +990,16 @@ class RoleService:
             "soft_deleted": soft_deleted_count,
             "permission_synced": permission_synced_count,
         }
+
+    @staticmethod
+    async def get_guest_role(tenant_id: int) -> Optional[Role]:
+        """查找默认组织的体验用户 (GUEST) 角色（不自动创建）。"""
+        return await Role.filter(
+            tenant_id=tenant_id,
+            code__iexact=RoleService.GUEST_ROLE_CODE,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).first()
 
     @staticmethod
     async def load_preset_sme(
