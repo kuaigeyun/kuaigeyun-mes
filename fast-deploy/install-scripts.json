@@ -1,0 +1,34 @@
+{
+  "scripts": {
+    "node": {
+      "windows": "winget install OpenJS.NodeJS.LTS --accept-package-agreements",
+      "linux": "sudo apt update && sudo apt install -y nodejs npm || sudo dnf install -y nodejs npm",
+      "ubuntu22": "sudo rm -f /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null; sudo apt update && sudo apt install -y ca-certificates curl gnupg && sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && echo 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main' | sudo tee /etc/apt/sources.list.d/nodesource.list && sudo apt update && sudo apt install -y nodejs"
+    },
+    "python": {
+      "windows": "winget install Python.Python.3.12 --accept-package-agreements",
+      "linux": "sudo apt install -y python3.12 python3.12-venv python3-pip || sudo dnf install -y python3.12",
+      "ubuntu22": "sudo rm -f /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null; sudo apt update && sudo apt install -y software-properties-common && sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update && sudo apt install -y python3.12 python3.12-venv && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12"
+    },
+    "uv": {
+      "windows": "powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"",
+      "linux": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+      "ubuntu22": "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    },
+    "postgresql": {
+      "windows": "winget install PostgreSQL.PostgreSQL --accept-package-agreements",
+      "linux": "sudo apt install -y postgresql postgresql-contrib || sudo dnf install -y postgresql-server postgresql-contrib",
+      "ubuntu22": "fast-deploy 在 Debian/Ubuntu 上由 install_postgresql_pgdg 安装（USE_MIRROR=1 时走阿里云 PGDG 镜像）"
+    },
+    "caddy": {
+      "windows": "winget install -e --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements",
+      "linux": "fast-deploy 在 Debian/Ubuntu 上由 install_caddy_apt 安装（USE_MIRROR=1 时走国内 apt 镜像）",
+      "ubuntu22": "fast-deploy 在 Debian/Ubuntu 上由 install_caddy_apt 安装（USE_MIRROR=1 时走国内 apt 镜像）"
+    }
+  },
+  "scripts_cn": {
+    "node": "sudo apt update && sudo apt install -y nodejs npm",
+    "python": "sudo apt update && sudo apt install -y python3 python3-venv python3-pip",
+    "uv": "pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple uv 2>/dev/null || python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple uv"
+  }
+}

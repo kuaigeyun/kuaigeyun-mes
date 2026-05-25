@@ -5,7 +5,7 @@ set -euo pipefail
 
 FAST_DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="$(cd "$FAST_DEPLOY_DIR/.." && pwd)"
-INSTALL_SCRIPTS_JSON="$PROJECT_ROOT/riveredge-panel/install-scripts.json"
+INSTALL_SCRIPTS_JSON="$FAST_DEPLOY_DIR/install-scripts.json"
 BACKEND_DIR="$PROJECT_ROOT/riveredge-backend"
 FRONTEND_DIR="$PROJECT_ROOT/riveredge-frontend"
 ENV_FILE="$BACKEND_DIR/.env"

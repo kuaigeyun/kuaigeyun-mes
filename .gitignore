@@ -34,17 +34,8 @@ riveredge-frontend/.vite/
 *.log
 .logs/
 
-# ===== Panel 编译产物（绝不入库，每个 ~10MB，曾撑爆远端配额） =====
-# 仅 panel-source/ 源码与 scripts/ 入库；编译产物在目标环境自行 build
-riveredge-panel/riveredge-panel
-riveredge-panel/riveredge-panel.exe
-riveredge-panel/riveredge-panel-linux-amd64
-riveredge-panel/riveredge-panel-linux-arm64
-riveredge-panel/riveredge-panel-windows-amd64.exe
-riveredge-panel/riveredge-panel-windows-amd64.exe~
-riveredge-panel/riveredge-panel-darwin-amd64
-riveredge-panel/riveredge-panel-darwin-arm64
-riveredge-panel/panel/
+# ===== 部署面板（本地/独立维护，不入库） =====
+riveredge-panel/
 
 # ===== 环境与密钥 =====
 .env
@@ -82,15 +73,11 @@ Build.web.sh
 bin/
 deploy/
 scripts/
-# 根目录 scripts/ 会忽略各子项目下的 scripts/；必须保留以下两条，否则 riveredge-panel/scripts/ 无法提交
-!riveredge-panel/scripts/
-!riveredge-panel/scripts/**
+# 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
 !riveredge-frontend/scripts/
 # 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
 !riveredge-frontend/src/pages/infra/scripts/
 !riveredge-frontend/src/pages/infra/scripts/**
-riveredge-panel/diagnose.sh
-riveredge-panel/fix-and-start.sh
 
 # ===== 后端脚本与测试（不推送） =====
 riveredge-backend/scripts/

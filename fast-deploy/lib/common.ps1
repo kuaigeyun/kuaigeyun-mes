@@ -16,7 +16,7 @@ $script:LogsDir = Join-Path $script:ProjectRoot '.logs'
 $script:CaddyDir = Join-Path $script:FastDeployDir 'caddy'
 $script:Caddyfile = Join-Path $script:CaddyDir 'Caddyfile'
 $script:CaddyTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.template'
-$script:InstallScriptsJson = Join-Path $script:ProjectRoot 'riveredge-panel\install-scripts.json'
+$script:InstallScriptsJson = Join-Path $script:FastDeployDir 'install-scripts.json'
 
 if (-not $env:DEPLOY_MODE) { $env:DEPLOY_MODE = 'prod' }
 $script:DeployMode = $env:DEPLOY_MODE
