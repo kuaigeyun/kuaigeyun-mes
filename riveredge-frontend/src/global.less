@@ -669,6 +669,81 @@ code {
   border-bottom-color: color-mix(in srgb, var(--ant-color-border) 72%, var(--ant-color-text) 28%) !important;
 }
 
+/* 图纸管理：四种分类模式切换栏 */
+.drawing-nav-mode-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0 0;
+}
+
+.drawing-nav-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 6px;
+  background: var(--ant-color-bg-container);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+
+  &:hover {
+    border-color: var(--ant-color-primary);
+    background: var(--ant-color-primary-bg);
+  }
+}
+
+.drawing-nav-mode-btn-active {
+  border-color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ant-color-primary) 24%, transparent);
+}
+
+/* 图纸管理导航树：紧凑行高 + 图标与标题同行 */
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-treenode {
+  height: auto !important;
+  min-height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 2px 0 !important;
+  margin: 2px 4px !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-switcher {
+  width: 0 !important;
+  margin: 0 !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  flex: 1;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  line-height: 1.5 !important;
+  min-height: 24px !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle {
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-title {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 /* 排除弹窗中的树组件 */
 .ant-popover .ant-tree .ant-tree-treenode,
 .ant-pro-table-column-setting-list .ant-tree .ant-tree-treenode,

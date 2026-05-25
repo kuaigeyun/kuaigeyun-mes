@@ -1,7 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Modal, Spin, Alert, Image } from 'antd';
-import { getFilePreview } from '../../services/file';
+import { useTranslation } from 'react-i18next';
+import { getFileByUuid, getFilePreview } from '../../services/file';
 import { UniPdfPreview } from '../uni-preview';
+import { getFileExt, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+
+const StepPreviewPane = lazy(() =>
+  import('../step-preview/StepPreviewPane').then((m) => ({ default: m.StepPreviewPane })),
+);
 
 type FilePreviewSource = {
   fileUuid?: string;
@@ -19,15 +25,6 @@ export interface FilePreviewModalProps extends FilePreviewSource {
   height?: string | number;
 }
 
-const getExt = (source: FilePreviewSource): string => {
-  if (source.fileExtension) return String(source.fileExtension).toLowerCase();
-  if (source.fileName?.includes('.')) return source.fileName.split('.').pop()!.toLowerCase();
-  if (source.fileType?.includes('/')) return source.fileType.split('/').pop()!.toLowerCase();
-  return '';
-};
-
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico']);
-
 const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   open,
   onClose,
@@ -40,14 +37,50 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   width = '88vw',
   height = '72vh',
 }) => {
+  const { t } = useTranslation();
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
+  const initialSource = useMemo<FilePreviewSource>(
+    () => ({ fileName, fileType, fileExtension }),
+    [fileName, fileType, fileExtension],
+  );
+  const [fileSource, setFileSource] = useState<FilePreviewSource>(initialSource);
+
   useEffect(() => {
-    if (!open) return;
+    setFileSource(initialSource);
+  }, [initialSource]);
+
+  useEffect(() => {
+    if (!open || !fileUuid || getFileExt(initialSource)) return;
+    let cancelled = false;
+    void getFileByUuid(fileUuid)
+      .then((f) => {
+        if (cancelled) return;
+        setFileSource({
+          fileName: f.original_name,
+          fileExtension: f.file_extension,
+          fileType: f.file_type,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setFileSource(initialSource);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, fileUuid, initialSource]);
+
+  const isImage = isImageFile(fileSource);
+  const isPdf = isPdfFile(fileSource);
+  const isStep = isStepFile(fileSource);
+  const isDwgLike = getFileExt(fileSource) === 'dwg' || getFileExt(fileSource) === 'dxf';
+
+  useEffect(() => {
+    if (!open || isStep) return;
     let cancelled = false;
 
     const run = async () => {
@@ -59,15 +92,18 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           return;
         }
         if (!fileUuid) {
-          throw new Error('缺少文件标识');
+          throw new Error(t('app.master-data.drawings.previewFailed'));
         }
         const preview = await getFilePreview(fileUuid);
         if (!preview?.preview_url || preview.supported === false) {
-          throw new Error('当前文件暂不支持在线预览');
+          throw new Error(t('app.master-data.drawings.previewUnsupported'));
         }
         if (!cancelled) setPreviewUrl(preview.preview_url);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || '文件预览失败');
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : t('app.master-data.drawings.previewFailed');
+          setError(msg);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -77,15 +113,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, fileUuid, url]);
-
-  const ext = useMemo(
-    () => getExt({ fileName, fileType, fileExtension }),
-    [fileName, fileType, fileExtension]
-  );
-  const isImage = IMAGE_EXTENSIONS.has(ext) || (fileType || '').toLowerCase().startsWith('image/');
-  const isPdf = ext === 'pdf' || (fileType || '').toLowerCase() === 'application/pdf';
-  const isDwgLike = ext === 'dwg' || ext === 'dxf';
+  }, [open, fileUuid, url, isStep, t]);
 
   useEffect(() => {
     if (!open || !previewUrl || !isPdf) {
@@ -100,7 +128,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       try {
         const response = await fetch(previewUrl, { method: 'GET' });
         if (!response.ok) {
-          throw new Error(`PDF 预览加载失败: ${response.status}`);
+          throw new Error(`PDF load failed: ${response.status}`);
         }
         const blob = await response.blob();
         objectUrl = URL.createObjectURL(blob);
@@ -108,7 +136,6 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           setPdfBlobUrl(objectUrl);
         }
       } catch {
-        // 回退到原始 URL，让浏览器自行处理
         if (!cancelled) {
           setPdfBlobUrl('');
         }
@@ -129,6 +156,45 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setPdfBlobUrl('');
     };
   }, [open, previewUrl, isPdf]);
+
+  if (open && isStep) {
+    return (
+      <Modal
+        title={title || fileName || t('app.master-data.drawings.preview')}
+        open={open}
+        onCancel={onClose}
+        footer={null}
+        width={width}
+        style={{ top: 16 }}
+        destroyOnHidden
+        styles={{ body: { minHeight: typeof height === 'number' ? `${height}px` : height, padding: 0 } }}
+      >
+        <Suspense
+          fallback={
+            <div
+              style={{
+                minHeight: typeof height === 'number' ? `${height}px` : height,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} />
+            </div>
+          }
+        >
+          <StepPreviewPane
+            fileUuid={fileUuid}
+            fileUrl={url}
+            fileName={fileSource.fileName}
+            fileExtension={fileSource.fileExtension}
+            height={typeof height === 'number' ? `${height}px` : height}
+            showEdges
+          />
+        </Suspense>
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -152,18 +218,18 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         <UniPdfPreview
           open={open}
           onClose={onClose}
-          title={title || fileName || '文件预览'}
+          title={title || fileName || t('app.master-data.drawings.preview')}
           src={pdfBlobUrl || previewUrl}
           loading={loading || pdfLoading}
           error={error}
-          emptyMessage={isDwgLike ? 'DWG 预览取决于后端转换/浏览器支持' : '当前文件暂不支持在线预览'}
+          emptyMessage={isDwgLike ? t('app.master-data.drawings.previewDwgHint') : t('app.master-data.drawings.previewUnsupported')}
           inset={16}
         />
       ) : null}
 
       {!isImage && !isPdf ? (
         <Modal
-          title={title || fileName || '文件预览'}
+          title={title || fileName || t('app.master-data.drawings.preview')}
           open={open}
           onCancel={onClose}
           footer={null}
@@ -189,7 +255,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           ) : previewUrl ? (
             <iframe
               src={previewUrl}
-              title={title || fileName || '文件预览'}
+              title={title || fileName || t('app.master-data.drawings.preview')}
               style={{
                 width: '100%',
                 height: '100%',
@@ -201,7 +267,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <Alert
               type="warning"
               showIcon
-              message={isDwgLike ? 'DWG 预览取决于后端转换/浏览器支持' : '当前文件暂不支持在线预览'}
+              message={isDwgLike ? t('app.master-data.drawings.previewDwgHint') : t('app.master-data.drawings.previewUnsupported')}
             />
           )}
         </Modal>

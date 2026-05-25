@@ -266,6 +266,18 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     ],
   },
   {
+    pageCode: 'master-data-process-drawing',
+    pageName: '图纸管理',
+    pagePath: '/apps/master-data/process/drawings',
+    codeField: 'code',
+    codeFieldLabel: '图号',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: true,
+    ruleCode: 'ENGINEERING_DRAWING_CODE',
+    allowManualEdit: true,
+  },
+  {
     pageCode: 'master-data-engineering-bom',
     pageName: '物料清单BOM',
     pagePath: '/apps/master-data/process/engineering-bom',

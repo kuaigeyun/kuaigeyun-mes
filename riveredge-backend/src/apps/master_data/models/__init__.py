@@ -13,6 +13,7 @@ from .material_batch import MaterialBatch
 from .material_serial import MaterialSerial
 from .process import DefectType, Operation, ProcessRoute, SOP
 from .process_route_change import ProcessRouteChange
+from .drawing import EngineeringDrawing
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
@@ -46,6 +47,7 @@ __all__ = [
     "ProcessRoute",
     "SOP",
     "ProcessRouteChange",
+    "EngineeringDrawing",
     "Customer",
     "Supplier",
     "Holiday",

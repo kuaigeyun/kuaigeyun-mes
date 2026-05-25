@@ -12,6 +12,7 @@ from apps.master_data.api.warehouse import router as warehouse_router
 from apps.master_data.api.material import router as material_router
 from apps.master_data.api.batch_serial_rules import router as batch_serial_rules_router
 from apps.master_data.api.process import router as process_router
+from apps.master_data.api.drawings import router as drawings_router
 from apps.master_data.api.supply_chain import router as supply_chain_router
 from apps.master_data.api.partner_price_book import router as partner_price_book_router
 from apps.master_data.api.performance import router as performance_router
@@ -30,6 +31,7 @@ router.include_router(warehouse_router)
 router.include_router(batch_serial_rules_router)
 router.include_router(material_router)
 router.include_router(process_router)
+router.include_router(drawings_router)
 router.include_router(supply_chain_router)
 router.include_router(partner_price_book_router)
 router.include_router(performance_router)

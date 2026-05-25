@@ -65,6 +65,7 @@
         "lottie-react": "^2.4.1",
         "lucide-react": "^0.556.0",
         "lunar-javascript": "^1.7.7",
+        "occt-import-js": "^0.0.23",
         "pinyin-pro": "^3.19.0",
         "qrcode.react": "^4.2.0",
         "rc-field-form": "^1.44.0",

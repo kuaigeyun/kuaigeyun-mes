@@ -42,6 +42,7 @@ const SerialsPage = lazy(() => import('./pages/materials/serials'));
 const DefectTypesPage = lazy(() => import('./pages/process/defect-types'));
 const OperationsPage = lazy(() => import('./pages/process/operations'));
 const ProcessRoutesPage = lazy(() => import('./pages/process/routes'));
+const DrawingsPage = lazy(() => import('./pages/process/drawings'));
 const SOPPage = lazy(() => import('./pages/process/sop'));
 const ESOPDesignerPage = lazy(() => import('./pages/process/sop/designer'));
 const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
@@ -83,6 +84,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/defect-types" element={withPageSuspense(DefectTypesPage)} />
       <Route path="process/operations" element={withPageSuspense(OperationsPage)} />
       <Route path="process/routes" element={withPageSuspense(ProcessRoutesPage)} />
+      <Route path="process/drawings" element={withPageSuspense(DrawingsPage)} />
       <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
       <Route path="process/engineering-bom/designer" element={withPageSuspense(BOMDesignerPage)} />
       <Route path="process/sop" element={withPageSuspense(SOPPage)} />

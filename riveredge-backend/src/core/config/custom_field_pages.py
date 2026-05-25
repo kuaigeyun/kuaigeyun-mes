@@ -144,6 +144,15 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
         "module_icon": "database",
     },
     {
+        "page_code": "master-data-process-drawing",
+        "page_name": "图纸管理",
+        "page_path": "/apps/master-data/process/drawings",
+        "table_name": "apps_master_data_engineering_drawings",
+        "table_name_label": "工程图纸表",
+        "module": "主数据管理",
+        "module_icon": "database",
+    },
+    {
         "page_code": "master-data-manufacturing-bom",
         "page_name": "标准操作SOP",
         "page_path": "/apps/master-data/process/sop",

@@ -291,6 +291,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         ]
     },
     {
+        "page_code": "master-data-process-drawing",
+        "page_name": "图纸管理",
+        "page_path": "/apps/master-data/process/drawings",
+        "code_field": "code",
+        "code_field_label": "图号",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": True,
+        "rule_code": "ENGINEERING_DRAWING_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "master-data-engineering-bom",
         "page_name": "物料清单BOM",
         "page_path": "/apps/master-data/process/engineering-bom",
@@ -1232,6 +1244,8 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-defect-type": ("apps.master_data.models.process", "DefectType", "code"),
     "OPERATION_CODE": ("apps.master_data.models.process", "Operation", "code"),
     "master-data-process-operation": ("apps.master_data.models.process", "Operation", "code"),
+    "ENGINEERING_DRAWING_CODE": ("apps.master_data.models.drawing", "EngineeringDrawing", "code"),
+    "master-data-process-drawing": ("apps.master_data.models.drawing", "EngineeringDrawing", "code"),
     "MASTER_DATA_FACTORY_PLANT": ("apps.master_data.models.factory", "Plant", "code"),
     "master-data-factory-plant": ("apps.master_data.models.factory", "Plant", "code"),
     "MASTER_DATA_FACTORY_WORKSHOP": ("apps.master_data.models.factory", "Workshop", "code"),

@@ -20,6 +20,7 @@ export default defineConfig({
   // ⚠️ 优化：设置根目录为src目录，因为index.html在src目录下
   root: srcPath, // src目录
   publicDir: resolve(__dirname, 'static'),
+  assetsInclude: ['**/*.wasm'],
   // 服务器配置 - 优化稳定性
   server: {
     // 使用 0.0.0.0 监听所有接口，确保 localhost 和 127.0.0.1 均可访问
@@ -146,6 +147,9 @@ export default defineConfig({
   build: {
     // 输出到项目根目录的 dist，与面板/Caddy 期望的 riveredge-frontend/dist 一致
     outDir: resolve(__dirname, 'dist'),
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     // 单块告警阈值（KB），拆分后各块仍可能较大
     chunkSizeWarningLimit: 800,
     // 生产环境配置
@@ -162,6 +166,7 @@ export default defineConfig({
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
+            if (id.includes('occt-import-js')) return 'vendor-occt';
             if (id.includes('echarts')) return 'vendor-echarts';
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
             if (id.includes('html2canvas')) return 'vendor-html2canvas';
@@ -223,6 +228,24 @@ export default defineConfig({
     } : undefined,
   },
   plugins: [
+    // occt-import-js 为 Emscripten CJS，Vite 动态 import 不会自动补 default export
+    {
+      name: 'occt-import-js-esm-bridge',
+      enforce: 'post',
+      transform(code, id) {
+        const normalizedId = id.replace(/\\/g, '/');
+        if (!normalizedId.includes('occt-import-js/dist/occt-import-js.js')) {
+          return null;
+        }
+        if (code.includes('export default occtimportjs')) {
+          return null;
+        }
+        return {
+          code: `${code}\nexport default occtimportjs;\nexport { occtimportjs };\n`,
+          map: null,
+        };
+      },
+    },
     // 登录页 MPA：开发环境 /login 映射到 login.html（独立入口、无静态骨架；与 Caddy 生产配置一致）
     {
       name: 'login-mpa-rewrite',
@@ -295,6 +318,7 @@ export default defineConfig({
       'xlsx',
       'html2canvas',
       'jspdf',
+      'occt-import-js',
     ],
     force: false,
     esbuildOptions: {

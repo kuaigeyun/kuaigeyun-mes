@@ -236,6 +236,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.product",  # 产品模型
                 "apps.master_data.models.bom_change",  # BOM变更记录
                 "apps.master_data.models.process_route_change",  # 工艺路线变更记录
+                "apps.master_data.models.drawing",  # 工程图纸
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型
                 "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
