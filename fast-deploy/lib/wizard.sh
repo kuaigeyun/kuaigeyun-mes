@@ -288,14 +288,34 @@ wizard_collect_admin_config() {
 }
 
 wizard_collect_server_access() {
-    local detected_ip server_ip input
+    local detected_ip server_ip input choice
     load_deploy_env
     detected_ip="$(detect_server_ip)"
     server_ip="$(read_deploy_env_value SERVER_IP || true)"
-    [ -z "$server_ip" ] && server_ip="$detected_ip"
-    wizard_say "浏览器访问本系统时使用的服务器 IP（已检测: ${detected_ip}）"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 服务器 IP [${server_ip}]: ")" input
-    server_ip="${input:-$server_ip}"
+
+    wizard_say "浏览器访问本系统时使用的服务器 IP"
+    echo "    已检测: ${detected_ip}"
+    if [ -n "$server_ip" ] && [ "$server_ip" != "$detected_ip" ]; then
+        echo "    已配置: ${server_ip}"
+    fi
+    echo ""
+    echo "    1) 使用检测到的 IP (${detected_ip})"
+    echo "    2) 手动输入"
+    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
+    case "${choice:-1}" in
+        2|manual|input)
+            read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请输入服务器 IP: ")" input
+            input="$(echo "$input" | tr -d '[:space:]')"
+            if [ -z "$input" ]; then
+                wizard_say_fail "服务器 IP 不能为空"
+                return 1
+            fi
+            server_ip="$input"
+            ;;
+        *)
+            server_ip="$detected_ip"
+            ;;
+    esac
     set_deploy_env_value SERVER_IP "$server_ip"
     if [ "$DEPLOY_MODE" = "prod" ]; then
         wizard_say_ok "Web 访问: http://${server_ip}:${PROXY_PORT}"
