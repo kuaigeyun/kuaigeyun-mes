@@ -122,7 +122,7 @@ import json, sys
 path, comp, plat, mirror = sys.argv[1:5]
 with open(path, encoding="utf-8") as f:
     data = json.load(f)
-if mirror == "1" and comp not in ("node", "python") and plat in ("ubuntu22", "linux"):
+if mirror == "1" and comp not in ("node", "python", "postgresql") and plat in ("ubuntu22", "linux"):
     if comp in data.get("scripts_cn", {}):
         print(data["scripts_cn"][comp])
         sys.exit(0)
@@ -201,12 +201,18 @@ check_npm() {
 }
 
 check_postgres() {
-    if command -v psql >/dev/null 2>&1; then
-        local v
-        v="$(psql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
-        if version_ge "$v" "15.0"; then echo "ok"; else echo "old:$v"; fi
-        return
-    fi
+    local v="" bin best=""
+    for bin in psql /usr/lib/postgresql/*/bin/psql; do
+        [ -x "$bin" ] 2>/dev/null || continue
+        v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
+        [ -n "$v" ] || continue
+        if version_ge "$v" "15.0"; then
+            echo "ok"
+            return
+        fi
+        best="$v"
+    done
+    [ -n "$best" ] && { echo "old:$best"; return; }
     echo "missing"
 }
 
@@ -884,7 +890,11 @@ cmd_install() {
     run_install_component node "$(check_node)" || true
     run_install_component python "$(check_python)" || true
     run_install_component uv "$(check_uv)" || true
-    run_install_component postgresql "$(check_postgres)" || true
+    local pg_st
+    pg_st="$(check_postgres)"
+    if [ "$pg_st" != "ok" ]; then
+        run_install_component postgresql "$pg_st" || return 1
+    fi
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
     fi
@@ -916,7 +926,10 @@ cmd_default() {
     apply_cn_mirrors
     if ! cmd_check; then
         log_warn "环境未就绪，尝试 install..."
-        cmd_install
+        cmd_install || {
+            log_error "依赖安装未完成，请根据上方 WARN 修复后重试"
+            exit 1
+        }
     fi
     if env_needs_configure; then
         cmd_configure
@@ -934,7 +947,10 @@ fd_dispatch() {
     local cmd="${1:-}"
     case "$cmd" in
         check)     cmd_check ;;
-        install)   cmd_install ;;
+        install)
+            cmd_install
+            log_info "install 仅安装系统依赖；完整部署请执行: ./fast-deploy/deploy.sh"
+            ;;
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;
         build)     cmd_build ;;

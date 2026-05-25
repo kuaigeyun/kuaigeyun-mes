@@ -106,7 +106,7 @@ $env:PATH = Get-EnhancedPath
 function Get-InstallCommand([string]$component) {
     if (-not (Test-Path $script:InstallScriptsJson)) { return '' }
     $json = Get-Content $script:InstallScriptsJson -Raw | ConvertFrom-Json
-    if ($script:UseMirror -and $component -notin @('node', 'python') -and $json.scripts_cn.$component) {
+    if ($script:UseMirror -and $component -notin @('node', 'python', 'postgresql') -and $json.scripts_cn.$component) {
         return $json.scripts_cn.$component
     }
     $plat = 'windows'
@@ -163,12 +163,21 @@ function Test-CheckNpm {
 }
 
 function Test-CheckPostgres {
-    if (-not (Get-Command psql -ErrorAction SilentlyContinue)) { return 'missing' }
-    $out = psql --version
-    if ($out -match '(\d+\.\d+)') {
-        $v = $Matches[1]
-        if (Test-VersionGe $v '15.0') { return 'ok' } else { return "old:$v" }
+    $best = $null
+    $candidates = @('psql')
+    if ($IsLinux -or $env:OS -ne 'Windows_NT') {
+        $candidates += Get-ChildItem -Path '/usr/lib/postgresql/*/bin/psql' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
     }
+    foreach ($bin in $candidates) {
+        if (-not (Get-Command $bin -ErrorAction SilentlyContinue) -and -not (Test-Path $bin)) { continue }
+        $out = & $bin --version 2>$null
+        if ($out -match '(\d+\.\d+)') {
+            $v = $Matches[1]
+            if (Test-VersionGe $v '15.0') { return 'ok' }
+            $best = $v
+        }
+    }
+    if ($best) { return "old:$best" }
     return 'missing'
 }
 
