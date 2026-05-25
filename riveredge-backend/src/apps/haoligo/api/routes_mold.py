@@ -9,7 +9,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tortoise import timezone
-from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
@@ -774,35 +773,29 @@ async def create_mold(
             detail=f"模具代号「{mold_code}」已存在，请使用其他代号",
         )
 
-    try:
-        row = await HaoligoMold.create(
-            tenant_id=tenant_id,
-            mold_code=mold_code,
-            name=name,
-            unit=(body.unit or "").strip(),
-            mold_capacity=body.mold_capacity,
-            service_life_years=body.service_life_years,
-            usable_times=body.usable_times,
-            usable_yield=body.usable_yield,
-            maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
-            maintenance_cycle_by_days=body.maintenance_cycle_by_days,
-            allow_repeated_borrow=body.allow_repeated_borrow,
-            purchase_vendor_name=((body.purchase_vendor_name or "").strip() or None),
-            status=body.status,
-            total_manufacture_qty=body.total_manufacture_qty,
-            outsource_vendor_code=body.outsource_vendor_code,
-            outsource_vendor_name=body.outsource_vendor_name,
-            erp_material_code=body.erp_material_code,
-            remark=body.remark,
-            ledger_source=MOLD_LEDGER_SOURCE_MANUAL,
-            used_times=0,
-            used_yield=Decimal("0"),
-        )
-    except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"模具代号「{mold_code}」已存在，请使用其他代号",
-        ) from exc
+    row = await HaoligoMold.create(
+        tenant_id=tenant_id,
+        mold_code=mold_code,
+        name=name,
+        unit=(body.unit or "").strip(),
+        mold_capacity=body.mold_capacity,
+        service_life_years=body.service_life_years,
+        usable_times=body.usable_times,
+        usable_yield=body.usable_yield,
+        maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
+        maintenance_cycle_by_days=body.maintenance_cycle_by_days,
+        allow_repeated_borrow=body.allow_repeated_borrow,
+        purchase_vendor_name=((body.purchase_vendor_name or "").strip() or None),
+        status=body.status,
+        total_manufacture_qty=body.total_manufacture_qty,
+        outsource_vendor_code=body.outsource_vendor_code,
+        outsource_vendor_name=body.outsource_vendor_name,
+        erp_material_code=body.erp_material_code,
+        remark=body.remark,
+        ledger_source=MOLD_LEDGER_SOURCE_MANUAL,
+        used_times=0,
+        used_yield=Decimal("0"),
+    )
     return MoldOut.model_validate(row)
 
 

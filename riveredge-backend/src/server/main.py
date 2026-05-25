@@ -794,35 +794,11 @@ app.include_router(plugin_manager_router, prefix="/api/v1/core")
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
 # 以下应用静态注册，确保 API 始终可用（动态注册可能因应用未安装或 DB 未就绪而失败）
 # master-data：基础数据（仓库、物料、工序、工厂等）
-_MASTER_DATA_API_PREFIX = "/api/v1/apps/master-data"
-
-
-def _master_data_router_has_drawings(router) -> bool:
-    for route in router.routes:
-        path = getattr(route, "path", "") or ""
-        if "drawings" in path:
-            return True
-    return False
-
-
 try:
     from apps.master_data.api.router import router as master_data_router
-
-    app.include_router(master_data_router, prefix=_MASTER_DATA_API_PREFIX)
-    if not _master_data_router_has_drawings(master_data_router):
-        from apps.master_data.api.drawings import router as master_data_drawings_router
-
-        app.include_router(master_data_drawings_router, prefix=_MASTER_DATA_API_PREFIX)
-        logger.info("✅ 已独立挂载 master-data 工程图纸 API（/process/drawings）")
+    app.include_router(master_data_router, prefix="/api/v1/apps/master-data")
 except ImportError as e:
     logger.warning(f"⚠️ 无法加载 master-data 路由: {e}")
-    try:
-        from apps.master_data.api.drawings import router as master_data_drawings_router
-
-        app.include_router(master_data_drawings_router, prefix=_MASTER_DATA_API_PREFIX)
-        logger.info("✅ master-data 聚合路由不可用，已独立挂载工程图纸 API")
-    except ImportError as e2:
-        logger.warning(f"⚠️ 无法加载 master-data drawings 路由: {e2}")
 # kuaireport：报表/大屏
 try:
     from apps.kuaireport.api.router import router as kuaireport_router

@@ -78,7 +78,6 @@ import { executeDatasetQuery, getDatasetList } from '../../../../../services/dat
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   MOLD_LEDGER_STATUSES,
   MOLD_LEDGER_STATUS_SET,
@@ -815,7 +814,7 @@ const MoldLedgerPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e) {
-      messageApi.error(getApiErrorMessage(e, '保存失败'));
+      messageApi.error((e as Error).message || '保存失败');
       throw e;
     } finally {
       setFormLoading(false);
