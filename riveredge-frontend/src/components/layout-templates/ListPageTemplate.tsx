@@ -20,6 +20,7 @@ import {
   toListPageStatCardsPreferenceSegment,
 } from './listPageStatCardsContext';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { useThemeStore } from '../../stores/themeStore';
 
 
 /**
@@ -118,6 +119,8 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   tableScrollLayout = 'list',
 }) => {
   const { token } = AntdTheme.useToken();
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isPlainTheme = themeStyle === 'plain';
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md && screens.xs;
   const location = useLocation();
@@ -235,7 +238,9 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     content: {
                       fontSize: '24px',
                       fontWeight: 600,
-                      ...card.valueStyle,
+                      ...(isPlainTheme
+                        ? { color: token.colorText }
+                        : card.valueStyle),
                       position: 'relative',
                       zIndex: 2,
                     },
@@ -255,8 +260,9 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                   </div>
                 )}
 
-                {card.backgroundChart && (
+                {!isPlainTheme && card.backgroundChart && (
                   <div
+                    className="list-page-stat-card__bg-chart"
                     style={{
                       position: 'absolute',
                       bottom: -18,

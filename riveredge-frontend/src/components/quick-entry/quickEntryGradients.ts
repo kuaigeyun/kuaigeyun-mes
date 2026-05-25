@@ -1,6 +1,17 @@
 /** 快捷入口图标背景渐变（与工作台 QuickEntryGrid 一致） */
+export type QuickEntryThemeStyle = 'vivid' | 'plain';
 
-export function generateQuickEntryGradient(index: number, isDark: boolean): string {
+export function generateQuickEntryGradient(
+  index: number,
+  isDark: boolean,
+  themeStyle: QuickEntryThemeStyle = 'vivid',
+): string {
+  if (themeStyle === 'plain') {
+    return isDark
+      ? 'var(--ant-color-fill-secondary, #2a2a2a)'
+      : 'var(--ant-color-fill-tertiary, #f5f5f5)';
+  }
+
   if (isDark) {
     const darkGradients = [
       'linear-gradient(135deg, #0A4A8F 0%, #06305C 100%)',
@@ -48,8 +59,24 @@ function parseGradientColors(gradient: string): [string, string] {
 }
 
 /** 工序卡 header 配色（与快捷入口图标色板一致，按 index 循环） */
-export function getQuickEntryHeaderColors(index: number, isDark: boolean) {
-  const gradient = generateQuickEntryGradient(index, isDark);
+export function getQuickEntryHeaderColors(
+  index: number,
+  isDark: boolean,
+  themeStyle: QuickEntryThemeStyle = 'vivid',
+  colorPrimary = '#1677ff',
+  colorPrimaryBg = '#e6f4ff',
+) {
+  if (themeStyle === 'plain') {
+    return {
+      solid: colorPrimary,
+      soft: colorPrimary,
+      nameBackground: colorPrimary,
+      progressBackground: colorPrimaryBg,
+      progressText: colorPrimary,
+    };
+  }
+
+  const gradient = generateQuickEntryGradient(index, isDark, 'vivid');
   const [solid, soft] = parseGradientColors(gradient);
   return {
     solid,

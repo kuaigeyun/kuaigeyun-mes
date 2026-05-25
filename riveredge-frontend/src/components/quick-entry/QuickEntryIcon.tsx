@@ -25,6 +25,8 @@ export interface QuickEntryIconProps {
   onClick?: () => void;
   /** 背景渐变色（可选，用于不同功能的不同颜色） */
   gradient?: string;
+  /** 简约主题：灰底 + 主色图标 */
+  plain?: boolean;
   /** 是否可编辑模式 */
   editable?: boolean;
   /** 删除事件（编辑模式下） */
@@ -41,6 +43,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   title,
   onClick,
   gradient,
+  plain = false,
   editable = false,
   onDelete,
   onContextDelete,
@@ -48,10 +51,11 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   const { token } = useToken();
 
   const bgColor = gradient || token.colorPrimary;
+  const glyphColor = plain ? token.colorPrimary : '#ffffff';
 
   return (
     <div
-      className="quick-entry-icon"
+      className={['quick-entry-icon', plain ? 'quick-entry-icon--plain' : ''].filter(Boolean).join(' ')}
       style={{
         position: 'relative',
         width: '100%',
@@ -101,7 +105,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           className="quick-entry-icon__glyph"
           style={{
             fontSize: QUICK_ENTRY_ICON_FONT_SIZE,
-            color: '#ffffff',
+            color: glyphColor,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

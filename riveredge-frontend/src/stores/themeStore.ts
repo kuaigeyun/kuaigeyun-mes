@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
+/** 主题风格：多彩（全量配色）/ 简约（主色 + 灰阶） */
+export type ThemeStyle = 'vivid' | 'plain';
+
 export interface ThemeConfig {
   colorPrimary?: string;
   borderRadius?: number;
@@ -35,6 +38,7 @@ export interface ThemeConfig {
   siderBgColor?: string;
   headerBgColor?: string;
   tabsBgColor?: string;
+  themeStyle?: ThemeStyle;
 }
 
 export interface ResolvedTheme {
@@ -47,9 +51,14 @@ export interface ResolvedTheme {
     colorSplit?: string;
   };
   isDark: boolean;
+  themeStyle: ThemeStyle;
   siderBgColor: string;
   headerBgColor: string;
   tabsBgColor: string;
+}
+
+export function normalizeThemeStyle(value: unknown): ThemeStyle {
+  return value === 'plain' ? 'plain' : 'vivid';
 }
 
 /** 接口/缓存可能返回字符串数字，Ant Design token 需要 number */
@@ -64,6 +73,7 @@ function normalizeThemeConfig(c: ThemeConfig): ThemeConfig {
   return {
     ...c,
     compact: false,
+    themeStyle: normalizeThemeStyle(c.themeStyle),
     fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
     borderRadius: clampFinite(br, 0, 24, DEFAULT_CONFIG.borderRadius),
   };
@@ -96,6 +106,8 @@ function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedThe
   const baseAlgorithm = effectiveMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
   const algorithm = baseAlgorithm;
   const isDark = effectiveMode === 'dark';
+  const themeStyle = normalizeThemeStyle(config.themeStyle);
+  const isPlain = themeStyle === 'plain';
 
   return {
     algorithm,
@@ -107,9 +119,10 @@ function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedThe
       colorSplit: isDark ? '#262626' : '#f0f0f0',
     },
     isDark,
-    siderBgColor: isDark ? '' : (config.siderBgColor || '').trim(),
-    headerBgColor: (config.headerBgColor || '').trim(),
-    tabsBgColor: (config.tabsBgColor || '').trim(),
+    themeStyle,
+    siderBgColor: isPlain ? '' : isDark ? '' : (config.siderBgColor || '').trim(),
+    headerBgColor: isPlain ? '' : (config.headerBgColor || '').trim(),
+    tabsBgColor: isPlain ? '' : (config.tabsBgColor || '').trim(),
   };
 }
 
@@ -131,6 +144,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   const applyDocumentThemeAttrs = (resolved: ResolvedTheme) => {
     document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', resolved.isDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme-style', resolved.themeStyle);
   };
 
   /** 用站点+用户合并结果整体覆盖 config（与 initFromApi 成功分支一致，不叠旧 store） */
@@ -189,6 +203,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   if (typeof document !== 'undefined') {
     document.documentElement.style.colorScheme = initialResolved.isDark ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', initialResolved.isDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme-style', initialResolved.themeStyle);
   }
 
   return {

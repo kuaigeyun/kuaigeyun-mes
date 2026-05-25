@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Card, Row, Col, Progress, Table, Tag, Typography, Space, Spin, Empty, 
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
@@ -24,6 +24,8 @@ import { Column } from '@ant-design/charts';
 import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview';
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
+import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const { Text } = Typography;
 
@@ -115,213 +117,77 @@ const ProductionControlTower: React.FC = () => {
     }
   };
 
-  const kpiCardBodyStyle: React.CSSProperties = {
-    padding: '16px 20px',
-    minHeight: 140,
-    display: 'flex',
-    alignItems: 'center',
-  };
-
-  const kpiSideBlock = (items: { label: string; value: string | number }[]) => (
-    <div style={{
-      marginLeft: 'auto',
-      paddingLeft: 20,
-      borderLeft: '1px solid rgba(255, 255, 255, 0.2)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-      minWidth: 100
-    }}>
-      {items.map((it, idx) => (
-        <div key={idx}>
-          <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', marginBottom: 2 }}>{it.label}</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{it.value}</div>
-        </div>
-      ))}
-    </div>
+  const kpiShortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      { key: 'demand', title: '需求运算', icon: <RocketOutlined style={{ fontSize: 20, color: '#1890ff' }} />, path: '/apps/kuaizhizao/plan-management/demand-computation' },
+      { key: 'scheduling', title: '主生产排程', icon: <AppstoreOutlined style={{ fontSize: 20, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/plan-management/scheduling' },
+      { key: 'plans', title: '生产计划', icon: <ScheduleOutlined style={{ fontSize: 20, color: '#722ed1' }} />, path: '/apps/kuaizhizao/plan-management/production-plans' },
+      { key: 'work-orders', title: '工单下放', icon: <SafetyOutlined style={{ fontSize: 20, color: '#52c41a' }} />, path: '/apps/kuaizhizao/production-execution/work-orders' },
+      { key: 'shortage', title: '缺料预警', icon: <AlertOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />, path: '/apps/kuaizhizao/plan-management/reports/material-shortage-alert' },
+      { key: 'reporting', title: '报工看板', icon: <DashboardOutlined style={{ fontSize: 20, color: '#13c2c2' }} />, path: '/apps/kuaizhizao/production-execution/reporting' },
+    ],
+    [],
   );
 
-  const shortcuts = [
-    {
-      title: '需求运算',
-      icon: <RocketOutlined style={{ fontSize: 20, color: '#1890ff' }} />,
-      path: '/apps/kuaizhizao/plan-management/demand-computation',
-    },
-    {
-      title: '主生产排程',
-      icon: <AppstoreOutlined style={{ fontSize: 20, color: '#fa8c16' }} />,
-      path: '/apps/kuaizhizao/plan-management/scheduling',
-    },
-    {
-      title: '生产计划',
-      icon: <ScheduleOutlined style={{ fontSize: 20, color: '#722ed1' }} />,
-      path: '/apps/kuaizhizao/plan-management/production-plans',
-    },
-    {
-      title: '工单下放',
-      icon: <SafetyOutlined style={{ fontSize: 20, color: '#52c41a' }} />,
-      path: '/apps/kuaizhizao/production-execution/work-orders',
-    },
-    {
-      title: '缺料预警',
-      icon: <AlertOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />,
-      path: '/apps/kuaizhizao/plan-management/reports/material-shortage-alert',
-    },
-    {
-      title: '报工看板',
-      icon: <DashboardOutlined style={{ fontSize: 20, color: '#13c2c2' }} />,
-      path: '/apps/kuaizhizao/production-execution/reporting',
-    },
-  ];
+  const kpis: ModuleKpiDef[] = useMemo(
+    () => [
+      {
+        key: 'plans',
+        title: '生产计划总数',
+        value: s?.stats?.total_count ?? 0,
+        subtitle: '所有层级计划累计',
+        icon: <AuditOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+        boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
+        onClick: () => navigate('/apps/kuaizhizao/plan-management/production-plans'),
+        sideMetrics: [
+          { label: '待审核', value: s?.stats?.pending_review_count ?? 0 },
+          { label: '已下达', value: s?.stats?.executed_count ?? 0 },
+        ],
+      },
+      {
+        key: 'risks',
+        title: '交付风险预控',
+        value: s?.total_risk_count ?? 0,
+        subtitle: '含延期与产能瓶颈风险',
+        icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+        boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
+        sideMetrics: [
+          { label: '逾期计划', value: s?.stats?.overdue_plans_count ?? 0 },
+          { label: '延期单据', value: delayedCount },
+        ],
+      },
+      {
+        key: 'readiness',
+        title: '平均齐套进度',
+        value: `${avgReadiness}%`,
+        subtitle: `在制工单 ${s?.total_wip_count ?? 0} 个`,
+        icon: <CheckCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+        boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)',
+        sideMetrics: [
+          { label: '欠料工单', value: notFullyKitted },
+          { label: '预计齐套', value: Math.max(0, readinessList.length - notFullyKitted) },
+        ],
+      },
+    ],
+    [avgReadiness, delayedCount, navigate, notFullyKitted, readinessList.length, s],
+  );
 
   return (
-    <div style={{ padding: 0, overflow: 'visible' }}>
+    <div className="plan-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
       <Spin spinning={loading && !s}>
         <Row gutter={[16, 16]}>
           
           {/* KPI 区 */}
           <Col span={24}>
-            <Row gutter={[16, 16]} align="stretch">
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  hoverable
-                  onClick={() => navigate('/apps/kuaizhizao/plan-management/production-plans')}
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
-                    boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <AuditOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>生产计划总数</div>
-                      <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.stats?.total_count ?? 0}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        所有层级计划累计
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      { label: '待审核', value: s?.stats?.pending_review_count ?? 0 },
-                      { label: '已下达', value: s?.stats?.executed_count ?? 0 },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  hoverable
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
-                    boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>交付风险预控</div>
-                      <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.total_risk_count ?? 0}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        含延期与产能瓶颈风险
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      { label: '逾期计划', value: s?.stats?.overdue_plans_count ?? 0 },
-                      { label: '延期单据', value: delayedCount },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  hoverable
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
-                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <CheckCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>平均齐套进度</div>
-                      <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {avgReadiness}%
-                      </div>
-                      <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        在制工单 {s?.total_wip_count ?? 0} 个
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      { label: '欠料工单', value: notFullyKitted },
-                      { label: '预计齐套', value: Math.max(0, readinessList.length - notFullyKitted) },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-            </Row>
+            <ModuleKpiRow items={kpis} />
           </Col>
 
           {/* 快捷按钮 (6 宫格) */}
           <Col span={24}>
-            <Row gutter={[16, 16]}>
-              {shortcuts.map((sc) => (
-                <Col xs={12} sm={8} md={4} key={sc.title}>
-                  <Card
-                    hoverable
-                    onClick={() => navigate(sc.path)}
-                    styles={{ body: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 } }}
-                    style={{ borderRadius: token.borderRadius }}
-                  >
-                    <div style={{
-                      width: 40, height: 40, borderRadius: token.borderRadiusSM,
-                      background: 'rgba(0,0,0,0.04)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {sc.icon}
-                    </div>
-                    <Text strong style={{ fontSize: 15 }}>{sc.title}</Text>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
+            <ModuleShortcutGrid items={kpiShortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />
           </Col>
 
           {/* 执行协调 */}

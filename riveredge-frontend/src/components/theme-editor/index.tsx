@@ -5,13 +5,14 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover } from 'antd';
+import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover, Segmented } from 'antd';
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
-import { useThemeStore } from '../../stores/themeStore';
+import { useThemeStore, type ThemeStyle } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 import '../layout-templates/drawerSlideMotion.css';
@@ -104,6 +105,7 @@ interface ThemeEditorProps {
 }
 
 const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken(); // 获取当前实际使用的主题 token
   const themeDrawerFloatingWrapper = useMemo(
     () => getDrawerFloatingWrapperStyle('right', token),
@@ -139,6 +141,16 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     { color: '#722ed1', label: '紫色' },        // 紫色系
     { color: '#fa8c16', label: '橙色' },        // 警告色
     { color: '#f5222d', label: '红色' },        // 错误色
+  ];
+
+  /** 简约模式：低饱和商务主色 */
+  const presetPlainColors = [
+    { color: '#1677ff', label: '商务蓝' },
+    { color: '#2f54eb', label: '靛蓝' },
+    { color: '#434343', label: '石墨灰' },
+    { color: '#595959', label: '中性灰' },
+    { color: '#006d75', label: '深青' },
+    { color: '#1d39c4', label: '藏青' },
   ];
 
   /**
@@ -210,6 +222,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [siderBgColorValue, setSiderBgColorValue] = useState<string>('');
   const [headerBgColorValue, setHeaderBgColorValue] = useState<string>('');
   const [tabsBgColorValue, setTabsBgColorValue] = useState<string>('');
+  const [themeStyleValue, setThemeStyleValue] = useState<ThemeStyle>('vivid');
+
+  const activePresetColors = themeStyleValue === 'plain' ? presetPlainColors : presetColors;
+  const isPlainStyle = themeStyleValue === 'plain';
 
   /**
    * 规范化颜色值为字符串格式（用于 ColorPicker 的 value 属性）
@@ -335,6 +351,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const currentFontSize = Math.min(20, Math.max(12, parseDim(applied.fontSize, token.fontSize ?? 14)));
 
       const tabsPersistence = 'tabs_persistence' in prefs ? Boolean(prefs.tabs_persistence) : false;
+      const loadedThemeStyle = applied.themeStyle === 'plain' ? 'plain' : 'vivid';
+      setThemeStyleValue(loadedThemeStyle);
 
       const formValues = {
         colorPrimary: colorPrimaryValue,
@@ -346,6 +364,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         colorMode: userThemeMode,
         tabsPersistence,
         layoutMode: 'mix',
+        themeStyle: loadedThemeStyle,
       };
 
       form.setFieldsValue(formValues);
@@ -438,6 +457,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setColorMode(changedValues.colorMode);
     }
 
+    if (changedValues.themeStyle) {
+      setThemeStyleValue(changedValues.themeStyle);
+      useThemeStore.getState().applyTheme(allValues.colorMode || colorMode, {
+        themeStyle: changedValues.themeStyle,
+      });
+    }
+
     // 布局模式固定为 'mix'，不需要处理
 
     applyPreviewTheme(allValues, allValues.colorMode);
@@ -504,6 +530,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 确保 tabsBgColor 是字符串格式（支持 rgba 格式的透明度）
       let tabsBgColorValue = normalizeBackgroundColor(values.tabsBgColor, '') || '';
 
+      const savingThemeStyle = (values.themeStyle as ThemeStyle) || themeStyleValue || 'vivid';
+      const savingPlain = savingThemeStyle === 'plain';
+
       // 使用用户最终选择的颜色值
       const themeConfig: any = {
         colorPrimary: colorPrimaryValue,
@@ -512,35 +541,34 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         compact: false,
         layoutMode: 'mix', // 固定使用 MIX 布局模式
         theme: values.colorMode, // 保存当前颜色模式，用于 App.tsx 同步加载
+        themeStyle: savingThemeStyle,
       };
 
 
-      // 保存左侧菜单栏背景色（仅在浅色模式下保存，包括空字符串，用于清除自定义背景色）
-      if (values.colorMode === 'light' || (!values.colorMode && colorMode === 'light')) {
+      // 保存左侧菜单栏背景色（仅多彩 + 浅色模式）
+      if (!savingPlain && (values.colorMode === 'light' || (!values.colorMode && colorMode === 'light'))) {
         if (siderBgColorValue) {
           themeConfig.siderBgColor = siderBgColorValue;
         } else {
-          // 如果为空，也保存空字符串，表示使用默认背景色
           themeConfig.siderBgColor = '';
         }
       } else {
-        // 深色模式下，不保存自定义背景色（使用深色模式的默认背景色）
         themeConfig.siderBgColor = '';
       }
 
-      // 保存顶栏背景色（浅色和深色模式都支持，支持透明度）
-      if (headerBgColorValue) {
-        themeConfig.headerBgColor = headerBgColorValue;
+      if (!savingPlain) {
+        if (headerBgColorValue) {
+          themeConfig.headerBgColor = headerBgColorValue;
+        } else {
+          themeConfig.headerBgColor = '';
+        }
+        if (tabsBgColorValue) {
+          themeConfig.tabsBgColor = tabsBgColorValue;
+        } else {
+          themeConfig.tabsBgColor = '';
+        }
       } else {
-        // 如果为空，也保存空字符串，表示使用默认背景色
         themeConfig.headerBgColor = '';
-      }
-
-      // 保存标签栏背景色（浅色和深色模式都支持，支持透明度）
-      if (tabsBgColorValue) {
-        themeConfig.tabsBgColor = tabsBgColorValue;
-      } else {
-        // 如果为空，也保存空字符串，表示使用默认背景色
         themeConfig.tabsBgColor = '';
       }
 
@@ -549,9 +577,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         borderRadius: values.borderRadius ?? 6,
         fontSize: values.fontSize ?? 14,
         compact: false,
-        siderBgColor: siderBgColorValue || '',
-        headerBgColor: headerBgColorValue || '',
-        tabsBgColor: tabsBgColorValue || '',
+        themeStyle: savingThemeStyle,
+        siderBgColor: savingPlain ? '' : siderBgColorValue || '',
+        headerBgColor: savingPlain ? '' : headerBgColorValue || '',
+        tabsBgColor: savingPlain ? '' : tabsBgColorValue || '',
       };
 
       const themeMode = (values.colorMode as 'light' | 'dark' | 'auto') || 'light';
@@ -636,6 +665,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         siderBgColor: '',
         headerBgColor: '',
         tabsBgColor: '',
+        themeStyle: 'vivid' as ThemeStyle,
       };
 
       // 2. 更新本地表单和状态
@@ -645,12 +675,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setSiderBgColorValue('');
       setHeaderBgColorValue('');
       setTabsBgColorValue('');
+      setThemeStyleValue('vivid');
 
       form.setFieldsValue({
         ...defaultThemeConfig,
         colorMode: 'light',
         tabsPersistence: true,
         layoutMode: 'mix',
+        themeStyle: 'vivid',
       });
 
       // 3. 清除相关本地存储
@@ -765,8 +797,37 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               fontSize: 14,
               colorMode: 'light',
               layoutMode: 'mix',
+              themeStyle: 'vivid',
             }}
           >
+            {/* 主题风格 */}
+            <Card
+              size="small"
+              title={t('ui.theme.style.label')}
+              style={{ marginBottom: 16 }}
+              styles={{ body: { padding: '16px' } }}
+            >
+              <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
+                <Segmented
+                  block
+                  options={[
+                    { label: t('ui.theme.style.vivid'), value: 'vivid' },
+                    { label: t('ui.theme.style.plain'), value: 'plain' },
+                  ]}
+                  value={themeStyleValue}
+                  onChange={(value) => {
+                    const next = value as ThemeStyle;
+                    form.setFieldValue('themeStyle', next);
+                    setThemeStyleValue(next);
+                    handleValuesChange({ themeStyle: next }, form.getFieldsValue());
+                  }}
+                />
+              </Form.Item>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
+              </Text>
+            </Card>
+
             {/* 颜色模式 */}
             <Card
               size="small"
@@ -928,7 +989,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <div>
                   <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
                   <Space wrap size={10}>
-                    {presetColors.map((preset, index) => (
+                    {activePresetColors.map((preset, index) => (
                       <Tooltip key={index} title={preset.label || preset.color} placement="top">
                         <div
                           style={{
@@ -990,8 +1051,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </div>
             </Card>
 
-            {/* 左侧菜单栏设置（仅浅色模式支持自定义背景色） */}
-            {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {/* 左侧菜单栏设置（多彩 + 浅色模式） */}
+            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={
@@ -1141,8 +1202,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </Card>
             )}
 
-            {/* 顶栏设置（仅浅色模式支持自定义背景色） */}
-            {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {/* 顶栏设置（多彩 + 浅色模式） */}
+            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={
@@ -1243,8 +1304,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </Card>
             )}
 
-            {/* 标签栏设置（仅浅色模式支持自定义背景色） */}
-            {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {/* 标签栏设置（多彩 + 浅色模式） */}
+            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={

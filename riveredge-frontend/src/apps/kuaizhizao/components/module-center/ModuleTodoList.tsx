@@ -2,7 +2,9 @@ import React from 'react';
 import { Empty, List, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { useThemeStore } from '../../../../stores/themeStore';
 import type { ModuleTodoItem } from './types';
+import { isModuleDashboardPlain } from './moduleDashboardTheme';
 
 const { Text } = Typography;
 
@@ -21,6 +23,7 @@ export function ModuleTodoList({
   emptyText?: string;
 }) {
   const navigate = useNavigate();
+  const plain = isModuleDashboardPlain(useThemeStore((s) => s.resolved.themeStyle));
 
   if (!items.length) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
@@ -41,7 +44,10 @@ export function ModuleTodoList({
                 <Text strong style={{ fontSize: 13 }}>
                   {item.title}
                 </Text>
-                <Tag color={PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default'} bordered={false}>
+                <Tag
+                  color={plain ? 'default' : (PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default')}
+                  bordered={false}
+                >
                   {item.priority === 'high' || item.priority === 'critical' ? '紧急' : '待办'}
                 </Tag>
               </span>

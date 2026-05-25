@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
-  Card, Row, Col, Progress, Typography, Tag, Spin,
+  Row, Col, Progress, Typography, Tag, Spin,
   Segmented, Button, Empty, Tooltip, Badge, theme
 } from 'antd';
 import { useRequest } from 'ahooks';
@@ -37,8 +37,17 @@ import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
 import { AmountDisplay } from '../../../../../components/permission';
 import { useGlobalStore } from '../../../../../stores/globalStore';
+import { useThemeStore } from '../../../../../stores/themeStore';
 import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
 import { getStatusDisplay } from '../../../constants/documentStatus';
+import {
+  ModuleKpiRow,
+  ModuleShortcutGrid,
+  isModuleDashboardPlain,
+  resolveModuleRankBadgeStyle,
+  resolveModuleFollowUpIconColors,
+} from '../../../components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -96,13 +105,15 @@ function isPendingDeliveryOrder(order: { status?: string; delivery_progress?: nu
 const SalesDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { token } = theme.useToken();
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isPlain = isModuleDashboardPlain(themeStyle);
   const currentUser = useGlobalStore((s) => s.currentUser);
   const showMoney = canViewKuaizhizaoPricing(currentUser);
 
   // 看板控制状态
   const [trendType, setTrendType] = useState<'revenue' | 'quantity'>(showMoney ? 'revenue' : 'quantity');
   const [rankType, setRankType] = useState<'products' | 'customers'>('products');
-  const trendChartColor = trendType === 'revenue' ? token.colorPrimary : '#52c41a';
+  const trendChartColor = isPlain || trendType === 'revenue' ? token.colorPrimary : '#52c41a';
   const trendChartAxis = useMemo(
     () => ({
       x: {
@@ -214,7 +225,7 @@ const SalesDashboard: React.FC = () => {
             <Progress
               percent={record.delivery_progress || 0}
               size="small"
-              strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
+              strokeColor={isPlain ? token.colorPrimary : { '0%': '#108ee9', '100%': '#87d068' }}
               style={{ margin: 0 }}
             />
             <span style={{ fontSize: 10, color: token.colorTextTertiary }}>
@@ -227,7 +238,7 @@ const SalesDashboard: React.FC = () => {
         </div>
       );
     },
-    [navigate, token.colorBorderSecondary, token.colorTextTertiary],
+    [isPlain, navigate, token.colorBorderSecondary, token.colorPrimary, token.colorTextTertiary],
   );
 
   useEffect(() => {
@@ -327,9 +338,7 @@ const SalesDashboard: React.FC = () => {
 
   // 渲染排行徽章
   const renderRankBadge = (rank: number) => {
-    const colors = ['#f5222d', '#fa8c16', '#fadb14'];
-    const bg = rank <= 3 ? `linear-gradient(135deg, ${colors[rank - 1]} 0%, #fff 180%)` : '#e8e8e8';
-    const color = rank <= 3 ? '#fff' : '#595959';
+    const style = resolveModuleRankBadgeStyle(rank, isPlain, token);
     return (
       <span style={{
         width: 22,
@@ -338,11 +347,11 @@ const SalesDashboard: React.FC = () => {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: bg,
-        color: color,
+        background: style.background,
+        color: style.color,
         fontWeight: 700,
         fontSize: 11,
-        boxShadow: rank <= 3 ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+        boxShadow: style.boxShadow,
       }}>
         {rank}
       </span>
@@ -352,26 +361,22 @@ const SalesDashboard: React.FC = () => {
   // 跟进类型图标
   const getFollowUpIcon = (code?: string) => {
     const c = String(code || '').toUpperCase();
-    let bg = '#8c8c8c';
+    const { bg, fg } = resolveModuleFollowUpIconColors(code, isPlain, token);
     let icon = <MessageOutlined style={{ display: 'block', fontSize: 12 }} />;
-    
+
     if (c.includes('PHONE') || c.includes('电话')) {
-      bg = '#1890ff';
       icon = <PhoneOutlined style={{ display: 'block', fontSize: 12 }} />;
     } else if (c.includes('MEETING') || c.includes('拜访') || c.includes('现场')) {
-      bg = '#fa8c16';
       icon = <UserOutlined style={{ display: 'block', fontSize: 12 }} />;
     } else if (c.includes('EMAIL') || c.includes('邮件')) {
-      bg = '#fadb14';
       icon = <MailOutlined style={{ display: 'block', fontSize: 12 }} />;
     } else if (c.includes('WECHAT') || c.includes('微信') || c.includes('IM') || c.includes('沟通')) {
-      bg = '#52c41a';
       icon = <WechatOutlined style={{ display: 'block', fontSize: 12 }} />;
     }
-    
+
     return (
-      <div 
-        style={{ 
+      <div
+        style={{
           backgroundColor: bg,
           display: 'inline-flex',
           alignItems: 'center',
@@ -381,232 +386,111 @@ const SalesDashboard: React.FC = () => {
           minWidth: 24,
           maxWidth: 24,
           borderRadius: '50%',
-          color: '#fff',
-          flexShrink: 0
-        }} 
+          color: fg,
+          flexShrink: 0,
+          ...(isPlain ? { border: `1px solid ${token.colorPrimaryBorder}` } : {}),
+        }}
       >
         {icon}
       </div>
     );
   };
 
-  /** 与仓储看板统一的 KPI 卡片样式 */
-  const kpiCardBodyStyle: React.CSSProperties = {
-    padding: '16px 24px',
-    color: '#fff',
-    minHeight: 140,
-    display: 'flex',
-    alignItems: 'center',
-    flex: 1,
-  };
-
-  const kpiSideBlock = (lines: { label: string; value: React.ReactNode }[]) => (
-    <div
-      style={{
-        flexShrink: 0,
-        paddingLeft: 18,
-        marginLeft: 8,
-        borderLeft: '1px solid rgba(255, 255, 255, 0.28)',
-        minWidth: 82,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        gap: 8,
-      }}
-    >
-      {lines.map((line) => (
-        <div key={String(line.label)}>
-          <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', lineHeight: 1.25 }}>{line.label}</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.25, marginTop: 2 }}>{line.value}</div>
-        </div>
-      ))}
-    </div>
+  const kpis: ModuleKpiDef[] = useMemo(
+    () => [
+      {
+        key: 'quotations',
+        title: '待处理报价',
+        value: s?.pending_quotations ?? 0,
+        subtitle: '含草稿与待审核状态单据',
+        icon: <FileTextOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+        boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
+        onClick: () => navigate('/apps/kuaizhizao/sales-management/quotations'),
+        sideMetrics: [{ label: '本月新增', value: s?.new_quotations_this_month ?? 0 }],
+      },
+      {
+        key: 'shipments',
+        title: '待发货订单',
+        value: s?.pending_shipments ?? 0,
+        subtitle: s?.overdue_shipments > 0 ? `含 ${s.overdue_shipments} 单已逾期` : '全部订单在交期内',
+        icon: <SendOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+        boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
+        onClick: () => navigate('/apps/kuaizhizao/sales-management/sales-orders?status=approved'),
+        sideMetrics: [{ label: '已逾期', value: s?.overdue_shipments ?? 0 }],
+      },
+      {
+        key: 'revenue',
+        title: '本月销售额 (元)',
+        value: (
+          <AmountDisplay
+            resource="sales_order"
+            value={s?.total_amount != null ? Number(s.total_amount) : null}
+            prefix=""
+            suffix=""
+            style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}
+          />
+        ),
+        icon: <RiseOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+        boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)',
+        progress: s?.achievement_rate ?? 0,
+        sideMetrics: [
+          {
+            label: '上月完成',
+            value: showMoney ? `${((s?.total_amount_last_month ?? 0) / 10000).toFixed(1)}w` : '***',
+          },
+          { label: '达成率', value: `${s?.achievement_rate ?? 0}%` },
+        ],
+      },
+    ],
+    [navigate, s, showMoney],
   );
 
-  const shortcuts = [
-    {
-      title: '新建报价',
-      icon: <FileDoneOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
-      path: '/apps/kuaizhizao/sales-management/quotations',
-    },
-    {
-      title: '销售订单',
-      icon: <SolutionOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
-      path: '/apps/kuaizhizao/sales-management/sales-orders',
-    },
-    {
-      title: '客户跟进',
-      icon: <CustomerServiceOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
-      path: '/apps/kuaizhizao/sales-management/customer-follow-ups',
-    },
-    {
-      title: '客户管理',
-      icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
-      path: '/apps/master-data/supply-chain/customers',
-    },
-  ];
+  const moduleShortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'quote',
+        title: '新建报价',
+        icon: <FileDoneOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
+        path: '/apps/kuaizhizao/sales-management/quotations',
+      },
+      {
+        key: 'orders',
+        title: '销售订单',
+        icon: <SolutionOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
+        path: '/apps/kuaizhizao/sales-management/sales-orders',
+      },
+      {
+        key: 'follow-up',
+        title: '客户跟进',
+        icon: <CustomerServiceOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
+        path: '/apps/kuaizhizao/sales-management/customer-follow-ups',
+      },
+      {
+        key: 'customers',
+        title: '客户管理',
+        icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/master-data/supply-chain/customers',
+      },
+    ],
+    [],
+  );
 
 
   return (
-    <div style={{ padding: 0, overflow: 'visible' }}>
+    <div className="sales-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
       <Spin spinning={summaryLoading && !s}>
         <Row gutter={[16, 16]}>
           {/* KPI 区 */}
           <Col span={24}>
-            <Row gutter={[18, 18]} align="stretch">
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  hoverable
-                  onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
-                    boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <FileTextOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>待处理报价</div>
-                      <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.pending_quotations ?? 0}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        含草稿与待审核状态单据
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      { label: '本月新增', value: s?.new_quotations_this_month ?? 0 },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  hoverable
-                  onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders?status=approved')}
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
-                    boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <SendOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>待发货订单</div>
-                      <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.pending_shipments ?? 0}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
-                        {s?.overdue_shipments > 0 ? `含 ${s.overdue_shipments} 单已逾期` : '全部订单在交期内'}
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      { label: '已逾期', value: <span style={{ color: s?.overdue_shipments > 0 ? '#fff' : 'rgba(255,255,255,0.7)' }}>{s?.overdue_shipments ?? 0}</span> },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-              <Col xs={24} lg={8} style={{ display: 'flex' }}>
-                <Card
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    borderRadius: token.borderRadiusLG,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
-                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)',
-                  }}
-                  styles={{ body: { ...kpiCardBodyStyle } }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: token.borderRadius,
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <RiseOutlined style={{ fontSize: 24, color: '#fff' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>本月销售额 (元)</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        <AmountDisplay
-                           resource="sales_order"
-                           value={s?.total_amount != null ? Number(s.total_amount) : null}
-                           prefix=""
-                           suffix=""
-                           style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}
-                        />
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        <Progress
-                          percent={s?.achievement_rate ?? 0}
-                          showInfo={false}
-                          strokeColor="#fff"
-                          railColor="rgba(255, 255, 255, 0.2)"
-                          size={6}
-                        />
-                      </div>
-                    </div>
-                    {kpiSideBlock([
-                      {
-                        label: '上月完成',
-                        value: showMoney
-                          ? `${((s?.total_amount_last_month ?? 0) / 10000).toFixed(1)}w`
-                          : '***',
-                      },
-                      { label: '达成率', value: (s?.achievement_rate ?? 0) + '%' },
-                    ])}
-                  </div>
-                </Card>
-              </Col>
-            </Row>
+            <ModuleKpiRow items={kpis} />
           </Col>
 
           {/* 快捷功能 */}
           <Col span={24}>
-            <Row gutter={[16, 16]}>
-              {shortcuts.map((sc) => (
-                <Col xs={12} sm={12} md={6} key={sc.path}>
-                  <Card
-                    hoverable
-                    onClick={() => navigate(sc.path)}
-                    styles={{ body: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 } }}
-                    style={{ borderRadius: token.borderRadius }}
-                  >
-                    <div style={{
-                      width: 40, height: 40, borderRadius: token.borderRadiusSM,
-                      background: 'rgba(0,0,0,0.04)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {sc.icon}
-                    </div>
-                    <Text strong style={{ fontSize: 14 }}>{sc.title}</Text>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
+            <ModuleShortcutGrid items={moduleShortcuts} />
           </Col>
 
           {/* 工作台 Row 1: 任务、交期、 CRM 动态 */}
@@ -626,8 +510,8 @@ const SalesDashboard: React.FC = () => {
                 <div
                   onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}
                   style={{
-                    background: token.colorWarningBg,
-                    border: `1px solid ${token.colorWarningBorder}`,
+                    background: isPlain ? token.colorPrimaryBg : token.colorWarningBg,
+                    border: `1px solid ${isPlain ? token.colorPrimaryBorder : token.colorWarningBorder}`,
                     borderRadius: token.borderRadius,
                     padding: '8px 10px',
                     marginBottom: 10,
@@ -638,16 +522,16 @@ const SalesDashboard: React.FC = () => {
                     transition: 'all 0.3s',
                   }}
                 >
-                  <ExclamationCircleOutlined style={{ color: token.colorWarning, fontSize: 16 }} />
+                  <ExclamationCircleOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 16 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text strong style={{ color: token.colorWarningText, fontSize: 12, lineHeight: 1.35 }}>
+                    <Text strong style={{ color: isPlain ? token.colorText : token.colorWarningText, fontSize: 12, lineHeight: 1.35 }}>
                       您有待审核报价单
                     </Text>
-                    <div style={{ fontSize: 11, color: token.colorWarningText, marginTop: 1, lineHeight: 1.35, opacity: 0.85 }}>
+                    <div style={{ fontSize: 11, color: isPlain ? token.colorTextSecondary : token.colorWarningText, marginTop: 1, lineHeight: 1.35, opacity: 0.85 }}>
                       共有 {s.pending_quotations} 份报价单处于待审核状态，请尽快处理。
                     </div>
                   </div>
-                  <RightOutlined style={{ color: token.colorWarning, fontSize: 11, flexShrink: 0 }} />
+                  <RightOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 11, flexShrink: 0 }} />
                 </div>
               )}
 
@@ -915,10 +799,7 @@ const SalesDashboard: React.FC = () => {
                           </div>
                           <Progress
                             percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map(p => p.quantity || 1))) * 100))}
-                            strokeColor={{
-                              '0%': token.colorPrimary,
-                              '100%': '#52c41a',
-                            }}
+                            strokeColor={isPlain ? token.colorPrimary : { '0%': token.colorPrimary, '100%': '#52c41a' }}
                             showInfo={false}
                             size={[100, 6]}
                           />
@@ -942,10 +823,7 @@ const SalesDashboard: React.FC = () => {
                           </div>
                           <Progress
                             percent={Math.min(100, Math.round((item.amount / Math.max(...topCustomers.map(c => c.amount || 1))) * 100))}
-                            strokeColor={{
-                              '0%': '#722ed1',
-                              '100%': '#ff4d4f',
-                            }}
+                            strokeColor={isPlain ? token.colorPrimary : { '0%': '#722ed1', '100%': '#ff4d4f' }}
                             showInfo={false}
                             size={[100, 6]}
                           />

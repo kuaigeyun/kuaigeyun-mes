@@ -623,10 +623,21 @@ export default function App() {
 
 
   const resolved = useThemeStore((s) => s.resolved);
-  const finalThemeConfig = React.useMemo(
-    () => ({ algorithm: resolved.algorithm, token: resolved.token }),
-    [resolved.algorithm, resolved.token]
-  );
+  const finalThemeConfig = React.useMemo(() => {
+    const plainSemanticTokens =
+      resolved.themeStyle === 'plain'
+        ? {
+            colorSuccess: resolved.isDark ? '#8c8c8c' : '#595959',
+            colorWarning: resolved.isDark ? '#8c8c8c' : '#595959',
+            colorError: resolved.isDark ? '#8c8c8c' : '#595959',
+            colorInfo: resolved.token.colorPrimary,
+          }
+        : {};
+    return {
+      algorithm: resolved.algorithm,
+      token: { ...resolved.token, ...plainSemanticTokens },
+    };
+  }, [resolved.algorithm, resolved.isDark, resolved.themeStyle, resolved.token]);
 
   // 响应式布局优化：针对小屏设备（平板/手机）自动缩小组件尺寸和边距
   const [screenSize, setScreenSize] = React.useState({

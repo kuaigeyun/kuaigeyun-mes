@@ -6,3 +6,9 @@ export { ModuleShortcutGrid } from './ModuleShortcutGrid';
 export { ModuleActionPanel } from './ModuleActionPanel';
 export { ModuleTodoList } from './ModuleTodoList';
 export { ModuleChartPanel, ModuleChartRow } from './ModuleChartPanel';
+export {
+  isModuleDashboardPlain,
+  resolveModuleKpiVisual,
+  resolveModuleRankBadgeStyle,
+  resolveModuleFollowUpIconColors,
+} from './moduleDashboardTheme';

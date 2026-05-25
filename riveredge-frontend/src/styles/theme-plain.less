@@ -1,0 +1,165 @@
+/**
+ * 简约主题（data-theme-style="plain"）全局弱化：语义色、装饰渐变、生命周期等
+ */
+
+[data-theme-style='plain'] {
+  /* Tag：保留 default/processing（主色），其余语义 Tag 灰阶化 */
+  .ant-tag-success,
+  .ant-tag-green {
+    color: var(--ant-color-text-secondary) !important;
+    background: var(--ant-color-fill-quaternary) !important;
+    border-color: var(--ant-color-border-secondary) !important;
+  }
+
+  .ant-tag-warning,
+  .ant-tag-gold,
+  .ant-tag-orange {
+    color: var(--ant-color-text-secondary) !important;
+    background: var(--ant-color-fill-quaternary) !important;
+    border-color: var(--ant-color-border-secondary) !important;
+  }
+
+  .ant-tag-error,
+  .ant-tag-red,
+  .ant-tag-volcano {
+    color: var(--ant-color-text-secondary) !important;
+    background: var(--ant-color-fill-quaternary) !important;
+    border-color: var(--ant-color-border-secondary) !important;
+  }
+
+  /* 生命周期：完成态与警告提示灰阶 */
+  .uni-lifecycle-stepper,
+  .uni-lifecycle {
+    --uni-lc-done-solid: var(--ant-color-text-tertiary);
+    --uni-lc-done-label: var(--ant-color-text-secondary);
+  }
+
+  .uni-lifecycle-stepper__next-icon-wrap {
+    background: var(--ant-color-fill-quaternary);
+    color: var(--ant-color-text-secondary);
+  }
+
+  /* 工作台 KPI 渐变 → 浅灰底 */
+  .dashboard-kpi-cell {
+    background: var(--ant-color-fill-quaternary) !important;
+  }
+
+  /* 工作台使用提示：简约模式用主色副色（primary-bg） */
+  .dashboard-usage-tips__top {
+    background: var(--ant-color-primary-bg) !important;
+    border-bottom: 1px solid var(--ant-color-primary-border, color-mix(in srgb, var(--ant-color-primary) 22%, transparent));
+  }
+
+  .dashboard-usage-tips__decor-circle {
+    opacity: 1 !important;
+    background: color-mix(in srgb, var(--ant-color-primary) 14%, transparent) !important;
+  }
+
+  .dashboard-usage-tips__decor-circle--sm {
+    background: color-mix(in srgb, var(--ant-color-primary) 10%, transparent) !important;
+  }
+
+  .dashboard-usage-tips__icon {
+    color: var(--ant-color-primary) !important;
+  }
+
+  .dashboard-usage-tips__text {
+    color: var(--ant-color-text) !important;
+  }
+
+  .dashboard-workplace-tip-card {
+    background: var(--ant-color-bg-container) !important;
+    border-color: var(--ant-color-border-secondary) !important;
+  }
+
+  /* WIP 操作卡语义色 */
+  .dashboard-wip-operation-card__metric-value--success,
+  .dashboard-wip-operation-card__metric-value--danger,
+  .dashboard-wip-operation-card__metric-value--primary {
+    color: var(--ant-color-text) !important;
+  }
+
+  .dashboard-feed-item__stat--ok,
+  .dashboard-feed-item__stat--bad {
+    color: var(--ant-color-text-secondary) !important;
+  }
+
+  /* 列表页指标卡背景趋势图隐藏（数值色由 ListPageTemplate 处理） */
+  .list-page-stat-card__bg-chart {
+    display: none !important;
+  }
+
+  /* 工作台：快捷入口灰底 + 主色图标 */
+  .quick-entry-icon--plain .quick-entry-icon__box {
+    background: var(--ant-color-fill-tertiary) !important;
+    box-shadow: none !important;
+    border: 1px solid var(--ant-color-border-secondary);
+  }
+
+  [data-theme='dark'] .quick-entry-icon--plain .quick-entry-icon__box {
+    background: var(--ant-color-fill-secondary) !important;
+  }
+
+  /* 在制工序卡：简约模式 header 主色副色底 + 主色进度 */
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head {
+    background: var(--ant-color-primary-bg) !important;
+  }
+
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-fill {
+    opacity: 1;
+  }
+
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--primary,
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--success,
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--danger {
+    color: var(--ant-color-text) !important;
+  }
+
+  /* 日历「今天」弱化为主色描边，不用大面积色块 */
+  .dashboard-cwc-cell--today {
+    background: var(--ant-color-fill-quaternary) !important;
+    color: var(--ant-color-text) !important;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--ant-color-primary) !important;
+  }
+
+  /* 待办「处理」按钮：默认描边，减少强主色块 */
+  .dashboard-todo-item__action.ant-btn-primary {
+    background: transparent !important;
+    color: var(--ant-color-primary) !important;
+    border-color: var(--ant-color-primary) !important;
+    box-shadow: none !important;
+  }
+
+  .dashboard-todo-item__action.ant-btn-primary:hover {
+    background: var(--ant-color-primary-bg) !important;
+    color: var(--ant-color-primary) !important;
+    border-color: var(--ant-color-primary) !important;
+  }
+
+  /* KPI 面板时间筛选：选中态不过饱和 */
+  .dashboard-kpi-panel-segmented.ant-segmented .ant-segmented-item-selected {
+    color: var(--ant-color-text) !important;
+  }
+
+  /* 模块看板（销售中心、仓储看板等） */
+  .module-kpi-card--plain .module-kpi-card__icon-wrap .anticon,
+  .module-kpi-card--plain .module-kpi-card__icon-wrap svg {
+    color: var(--ant-color-primary) !important;
+  }
+
+  .module-kpi-card--plain .module-kpi-card__value,
+  .module-kpi-card--plain .module-kpi-card__value * {
+    color: var(--ant-color-primary) !important;
+  }
+
+  .module-shortcut-grid--plain .module-shortcut-grid__icon-wrap .anticon,
+  .module-shortcut-grid--plain .module-shortcut-grid__icon-wrap svg {
+    color: var(--ant-color-primary) !important;
+  }
+
+  .sales-module-dashboard .ant-pro-card .anticon[style*='color'],
+  .plan-module-dashboard .ant-pro-card .anticon[style*='color'] {
+    color: var(--ant-color-primary) !important;
+  }
+}

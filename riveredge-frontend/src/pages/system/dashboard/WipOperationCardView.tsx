@@ -3,9 +3,11 @@
  */
 
 import React, { useMemo } from 'react';
+import { theme } from 'antd';
 import type { TFunction } from 'i18next';
 import type { ProcessProgressItem } from '../../../services/dashboard';
 import { getQuickEntryHeaderColors } from '../../../components/quick-entry/quickEntryGradients';
+import { useThemeStore } from '../../../stores/themeStore';
 
 function formatQty(value: number): string {
   if (Number.isInteger(value)) return String(value);
@@ -27,10 +29,20 @@ export function WipOperationCardView({
   t,
   onClick,
 }: WipOperationCardViewProps) {
+  const { token } = theme.useToken();
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isPlain = themeStyle === 'plain';
   const completed = item.completed_quantity ?? 0;
   const headerColors = useMemo(
-    () => getQuickEntryHeaderColors(colorIndex, isDark),
-    [colorIndex, isDark],
+    () =>
+      getQuickEntryHeaderColors(
+        colorIndex,
+        isDark,
+        themeStyle,
+        token.colorPrimary,
+        token.colorPrimaryBg,
+      ),
+    [colorIndex, isDark, themeStyle, token.colorPrimary, token.colorPrimaryBg],
   );
   const progressPct = Math.min(100, Math.max(0, Math.round(item.current_progress ?? 0)));
   const nameOnFill = progressPct >= 28;
@@ -38,7 +50,9 @@ export function WipOperationCardView({
   return (
     <button
       type="button"
-      className="dashboard-wip-operation-card"
+      className={['dashboard-wip-operation-card', isPlain ? 'dashboard-wip-operation-card--plain' : '']
+        .filter(Boolean)
+        .join(' ')}
       onClick={onClick}
       disabled={!onClick}
     >
@@ -57,7 +71,13 @@ export function WipOperationCardView({
           <span
             className="dashboard-wip-operation-card__head-name"
             style={{
-              color: nameOnFill ? '#fff' : headerColors.solid,
+              color: isPlain
+                ? nameOnFill
+                  ? '#fff'
+                  : token.colorPrimary
+                : nameOnFill
+                  ? '#fff'
+                  : headerColors.solid,
             }}
             title={item.process_name}
           >
@@ -65,7 +85,15 @@ export function WipOperationCardView({
           </span>
           <span
             className="dashboard-wip-operation-card__head-progress"
-            style={{ color: progressPct >= 92 ? '#fff' : headerColors.solid }}
+            style={{
+              color: isPlain
+                ? progressPct >= 92
+                  ? '#fff'
+                  : token.colorPrimary
+                : progressPct >= 92
+                  ? '#fff'
+                  : headerColors.solid,
+            }}
           >
             {t('pages.dashboard.wipOperationCurrentProgress', { value: progressPct })}
           </span>

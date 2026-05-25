@@ -13,7 +13,8 @@ import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { DataNode } from 'antd/es/tree';
 import { QuickEntryIcon } from './QuickEntryIcon';
-import { generateQuickEntryGradient } from './quickEntryGradients';
+import { generateQuickEntryGradient, type QuickEntryThemeStyle } from './quickEntryGradients';
+import { useThemeStore } from '../../stores/themeStore';
 
 const { useToken } = theme;
 
@@ -66,6 +67,8 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
 }) => {
   const { token } = useToken();
   const navigate = useNavigate();
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle) as QuickEntryThemeStyle;
+  const isPlain = themeStyle === 'plain';
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
 
@@ -215,7 +218,12 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                       navigate(item.menu_path);
                     }
                   }}
-                  gradient={item.gradient || generateQuickEntryGradient(index, isDark)}
+                  gradient={
+                    isPlain
+                      ? generateQuickEntryGradient(index, isDark, 'plain')
+                      : item.gradient || generateQuickEntryGradient(index, isDark, 'vivid')
+                  }
+                  plain={isPlain}
                   editable={configModalVisible}
                   onDelete={() => handleDeleteItem(item.menu_uuid)}
                   onContextDelete={() => handleDeleteByContextMenu(item)}

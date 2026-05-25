@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Card, Typography, theme } from 'antd';
+import { useThemeStore } from '../../../stores/themeStore';
 
 const { Text } = Typography;
 const { useToken } = theme;
@@ -33,7 +34,11 @@ export function resolveDashboardKpiMainColor(
   rawNumeric: number | undefined | null,
   isDark: boolean,
   token: ReturnType<typeof theme.useToken>['token'],
+  themeStyle: 'vivid' | 'plain' = 'vivid',
 ): string {
+  if (themeStyle === 'plain') {
+    return isDark ? 'var(--ant-colorText, rgba(255,255,255,0.85))' : token.colorText;
+  }
   if (!semantic) {
     return isDark ? 'var(--ant-colorText)' : '#18181b';
   }
@@ -135,7 +140,8 @@ function KpiStackBody({
   mainNumeric,
 }: Omit<DashboardKpiRichCardProps, 'gradient' | 'onClick' | 'embedded'>) {
   const { token } = useToken();
-  const mainColor = resolveDashboardKpiMainColor(mainSemantic, mainNumeric, !!isDark, token);
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const mainColor = resolveDashboardKpiMainColor(mainSemantic, mainNumeric, !!isDark, token, themeStyle);
 
   return (
     <div className="dashboard-kpi-cell-inner">

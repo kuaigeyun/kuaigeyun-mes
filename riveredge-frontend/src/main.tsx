@@ -6,6 +6,7 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './app'
 import './global.less'
+import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
 import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 

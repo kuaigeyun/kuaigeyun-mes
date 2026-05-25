@@ -14,7 +14,14 @@ import { Column, Area, Chart } from '@ant-design/charts';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { businessBoardChartTheme } from './chartTheme';
+import {
+  businessBoardChartTheme,
+  businessBoardVividHud,
+  buildBusinessBoardPlainHud,
+  getBusinessBoardWarehouseChartColors,
+  type BusinessBoardHud,
+} from './chartTheme';
+import { useThemeStore } from '../../../../stores/themeStore';
 import { SYSTEM_VIEWPORT_OFFSETS, getViewportHeightExpr } from '../../../../components/layout-templates/constants';
 import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
 import { getFilePreview, uploadFile } from '../../../../services/file';
@@ -42,25 +49,19 @@ const { Title } = Typography;
 /** 中心 HUD 默认配图（未上传自定义图时使用） */
 const DEFAULT_HERO_TEXTURE = '/img/dashboard.png';
 
-/** ===== 配色（对齐参考图：深海军蓝 + 亮青） ===== */
-const hud = {
-  bgDeep: '#06162d', // 稍微调亮的底色
-  bgMid: '#0a1f3d',
-  bgPanel: 'rgba(8, 26, 54, 0.72)',
-  bgPanelTop: 'rgba(12, 36, 70, 0.78)',
-  cyan: '#00d0ff', 
-  cyanSoft: '#7ee7ff', 
-  cyanDim: 'rgba(0, 208, 255, 0.22)',
-  borderLine: 'rgba(0, 208, 255, 0.35)',
-  platformBlue: '#0095ff', 
-  amber: '#fbbf24',
-  emerald: '#34d399',
-  rose: '#fb7185',
-  violet: '#a78bfa',
-  textPrimary: '#e0f7ff',
-  textSoft: '#9fb8d0',
-  textDim: '#5c7798',
-} as const;
+const BusinessBoardHudContext = React.createContext<BusinessBoardHud>(businessBoardVividHud);
+
+/** 供本文件内 HUD 子组件读取当前调色板（由 BusinessBoardHudRoot 同步） */
+let boardHudSnapshot: BusinessBoardHud = businessBoardVividHud;
+const getBoardHud = (): BusinessBoardHud => boardHudSnapshot;
+
+const BusinessBoardHudRoot: React.FC<{ hud: BusinessBoardHud; children: React.ReactNode }> = ({
+  hud,
+  children,
+}) => {
+  boardHudSnapshot = hud;
+  return <BusinessBoardHudContext.Provider value={hud}>{children}</BusinessBoardHudContext.Provider>;
+};
 
 const clockFont =
   '"JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", ui-monospace, monospace';
@@ -156,8 +157,8 @@ const HudPanel: React.FC<HudPanelProps> = ({ children, style, flex, variant = 'l
       <>
         {/* 上边框悬浮装饰梁 */}
         <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: 12, zIndex: 5 }}>
-          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${hud.cyan}44, transparent)`, clipPath: 'polygon(0 0, 100% 0, 96% 100%, 4% 100%)' }} />
-          <div style={{ position: 'absolute', left: '35%', right: '35%', top: 0, height: 2, background: hud.cyan, boxShadow: `0 0 10px ${hud.cyan}` }} />
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${getBoardHud().cyan}44, transparent)`, clipPath: 'polygon(0 0, 100% 0, 96% 100%, 4% 100%)' }} />
+          <div style={{ position: 'absolute', left: '35%', right: '35%', top: 0, height: 2, background: getBoardHud().cyan, boxShadow: `0 0 10px ${getBoardHud().cyan}` }} />
         </div>
         <div aria-hidden style={{ position: 'absolute', bottom: 0, left: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
           <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
@@ -263,17 +264,17 @@ const HudTitle: React.FC<HudTitleProps> = ({ title, suffix, right }) => (
     <span
       aria-hidden
       style={{
-        color: hud.cyan,
+        color: getBoardHud().cyan,
         fontSize: 14,
         fontWeight: 700,
-        textShadow: `0 0 8px ${hud.cyan}`,
+        textShadow: `0 0 8px ${getBoardHud().cyan}`,
       }}
     >
       «
     </span>
     <span
       style={{
-        color: hud.textPrimary,
+        color: getBoardHud().textPrimary,
         fontSize: 14,
         fontWeight: 700,
         letterSpacing: 0.5,
@@ -283,7 +284,7 @@ const HudTitle: React.FC<HudTitleProps> = ({ title, suffix, right }) => (
       {title}
     </span>
     {suffix ? (
-      <span style={{ color: hud.textDim, fontSize: 13, marginLeft: 4 }}>{suffix}</span>
+      <span style={{ color: getBoardHud().textDim, fontSize: 13, marginLeft: 4 }}>{suffix}</span>
     ) : null}
     {right ? <span style={{ marginLeft: 'auto' }}>{right}</span> : null}
   </div>
@@ -302,7 +303,7 @@ interface TechBadgeProps {
 const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
   label,
   value,
-  color = hud.cyan,
+  color = getBoardHud().cyan,
   unit,
   align = 'left',
   delay = 0,
@@ -366,7 +367,7 @@ const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
         position: 'relative',
         zIndex: 2,
         fontSize: 13, 
-        color: hud.textSoft, 
+        color: getBoardHud().textSoft, 
         letterSpacing: 1, 
         textTransform: 'uppercase', 
         marginBottom: 2,
@@ -394,7 +395,7 @@ const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
         }}>
           {value}
         </span>
-        {unit && <span style={{ fontSize: 11, color: hud.textSoft, fontWeight: 500 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 11, color: getBoardHud().textSoft, fontWeight: 500 }}>{unit}</span>}
       </div>
     </div>
   );
@@ -427,7 +428,7 @@ const HudPowerCore: React.FC<{ textureUrl: string }> = ({ textureUrl }) => {
       {/* 核心 1：背景数字环境 (点云球体) */}
       <points ref={pointsRef}>
         <sphereGeometry args={[2.2, 64, 64]} />
-        <pointsMaterial size={0.02} color={hud.cyan} transparent opacity={0.2} />
+        <pointsMaterial size={0.02} color={getBoardHud().cyan} transparent opacity={0.2} />
       </points>
 
       {/* 核心 2：核心大图展示 - 物理嵌套在地球内部 (深度对齐) */}
@@ -505,8 +506,8 @@ const HudHero: React.FC<HudHeroProps> = ({
     <div style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
       <Canvas camera={{ position: [0, 0, 8], fov: 32 }}>
         <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 10]} intensity={1.5} color={hud.cyan} />
-        <pointLight position={[-10, -10, -10]} intensity={1} color={hud.platformBlue} />
+        <pointLight position={[10, 10, 10]} intensity={1.5} color={getBoardHud().cyan} />
+        <pointLight position={[-10, -10, -10]} intensity={1} color={getBoardHud().platformBlue} />
         <Suspense fallback={null}>
           <HudPowerCore key={centerTextureUrl} textureUrl={centerTextureUrl} />
         </Suspense>
@@ -525,9 +526,9 @@ const HudHero: React.FC<HudHeroProps> = ({
         flexDirection: 'column',
         gap: 24,
       }}>
-        <div style={{ marginBottom: 0 }}><TechBadge label={labels.inProgressWo} value={inProgressWo} color={hud.cyan} align="left" /></div>
-        <div style={{ marginLeft: -40 }}><TechBadge label={labels.avgCycle} value={avgCycle.toFixed(1)} color={hud.platformBlue} unit={labels.unitDays} align="left" /></div>
-        <div style={{ marginTop: 0 }}><TechBadge label={labels.reworkOrders} value={reworkCount} color={hud.rose} align="left" /></div>
+        <div style={{ marginBottom: 0 }}><TechBadge label={labels.inProgressWo} value={inProgressWo} color={getBoardHud().cyan} align="left" /></div>
+        <div style={{ marginLeft: -40 }}><TechBadge label={labels.avgCycle} value={avgCycle.toFixed(1)} color={getBoardHud().platformBlue} unit={labels.unitDays} align="left" /></div>
+        <div style={{ marginTop: 0 }}><TechBadge label={labels.reworkOrders} value={reworkCount} color={getBoardHud().rose} align="left" /></div>
       </div>
 
       {/* 右侧集群 */}
@@ -542,9 +543,9 @@ const HudHero: React.FC<HudHeroProps> = ({
         gap: 24,
         alignItems: 'flex-end'
       }}>
-        <div style={{ marginBottom: 0 }}><TechBadge label={labels.pendingSchedule} value={pendingSchedule} color={hud.cyan} align="right" /></div>
-        <div style={{ marginRight: -40 }}><TechBadge label={labels.onTimeDelivery} value={onTimeDelivery.toFixed(1)} color={hud.platformBlue} unit="%" align="right" /></div>
-        <div style={{ marginTop: 0 }}><TechBadge label={labels.qualifiedRate} value={qualifiedRate.toFixed(1)} color={hud.emerald} unit="%" align="right" /></div>
+        <div style={{ marginBottom: 0 }}><TechBadge label={labels.pendingSchedule} value={pendingSchedule} color={getBoardHud().cyan} align="right" /></div>
+        <div style={{ marginRight: -40 }}><TechBadge label={labels.onTimeDelivery} value={onTimeDelivery.toFixed(1)} color={getBoardHud().platformBlue} unit="%" align="right" /></div>
+        <div style={{ marginTop: 0 }}><TechBadge label={labels.qualifiedRate} value={qualifiedRate.toFixed(1)} color={getBoardHud().emerald} unit="%" align="right" /></div>
       </div>
 
       {/* 中央黄金位置（成品产出，区间成品入库数量） */}
@@ -577,12 +578,12 @@ const HudHero: React.FC<HudHeroProps> = ({
           color: '#fff', 
           fontWeight: 900, 
           fontFamily: clockFont, 
-          textShadow: `0 0 30px ${hud.emerald}`,
+          textShadow: `0 0 30px ${getBoardHud().emerald}`,
           lineHeight: 1.1
         }}>
           {formatCompact(todayOutput)}
         </div>
-        <div style={{ fontSize: 10, color: hud.textDim, marginTop: 4 }}>FINISHED_GOODS_INBOUND_QTY</div>
+        <div style={{ fontSize: 10, color: getBoardHud().textDim, marginTop: 4 }}>FINISHED_GOODS_INBOUND_QTY</div>
       </div>
     </div>
 
@@ -627,21 +628,21 @@ interface StatTileProps {
   color?: string;
   unit?: string;
 }
-const StatTile: React.FC<StatTileProps> = ({ label, value, color = hud.cyan, unit }) => (
+const StatTile: React.FC<StatTileProps> = ({ label, value, color = getBoardHud().cyan, unit }) => (
   <div
     style={{
       flex: 1,
       minWidth: 0,
       padding: '8px 10px',
       background: 'linear-gradient(160deg, rgba(10, 32, 64, 0.7), rgba(4, 15, 34, 0.7))',
-      border: `1px solid ${hud.borderLine}`,
+      border: `1px solid ${getBoardHud().borderLine}`,
       boxShadow: `inset 0 0 14px rgba(0, 130, 210, 0.12)`,
       display: 'flex',
       flexDirection: 'column',
       gap: 2,
     }}
   >
-    <span style={{ fontSize: 13, color: hud.textSoft, letterSpacing: 0.3 }}>{label}</span>
+    <span style={{ fontSize: 13, color: getBoardHud().textSoft, letterSpacing: 0.3 }}>{label}</span>
     <span
       style={{
         fontSize: 22,
@@ -656,7 +657,7 @@ const StatTile: React.FC<StatTileProps> = ({ label, value, color = hud.cyan, uni
       }}
     >
       {value}
-      {unit ? <span style={{ fontSize: 11, color: hud.textSoft, fontWeight: 500 }}>{unit}</span> : null}
+      {unit ? <span style={{ fontSize: 11, color: getBoardHud().textSoft, fontWeight: 500 }}>{unit}</span> : null}
     </span>
   </div>
 );
@@ -672,7 +673,7 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span style={{ color: hud.textDim }}>{emptyText}</span>}
+          description={<span style={{ color: getBoardHud().textDim }}>{emptyText}</span>}
         />
       </div>
     );
@@ -720,10 +721,10 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
             unqualified > qualified ? 'risk' : unqualified > 0 ? 'warn' : 'info';
           const dotColor =
             level === 'risk'
-              ? hud.rose
+              ? getBoardHud().rose
               : level === 'warn'
-                ? hud.amber
-                : hud.cyan;
+                ? getBoardHud().amber
+                : getBoardHud().cyan;
           const timeText = it.created_at ? dayjs(it.created_at).format('MM-DD HH:mm') : '';
           return (
             <div
@@ -752,7 +753,7 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
               />
               <span
                 style={{
-                  color: hud.textSoft,
+                  color: getBoardHud().textSoft,
                   fontFamily: clockFont,
                   fontSize: 11,
                   flexShrink: 0,
@@ -762,7 +763,7 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
               </span>
               <span
                 style={{
-                  color: hud.textPrimary,
+                  color: getBoardHud().textPrimary,
                   fontWeight: 600,
                   flex: 1,
                   minWidth: 0,
@@ -773,11 +774,11 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
               >
                 {it.operator_name} · {it.process_name} · {it.work_order_no}
               </span>
-              <span style={{ color: hud.emerald, fontFamily: clockFont, fontSize: 13 }}>
+              <span style={{ color: getBoardHud().emerald, fontFamily: clockFont, fontSize: 13 }}>
                 ✓{qualified}
               </span>
               {unqualified > 0 && (
-                <span style={{ color: hud.rose, fontFamily: clockFont, fontSize: 13 }}>
+                <span style={{ color: getBoardHud().rose, fontFamily: clockFont, fontSize: 13 }}>
                   ×{unqualified}
                 </span>
               )}
@@ -833,9 +834,9 @@ const HeaderDecoration: React.FC<{ children: React.ReactNode }> = ({ children })
         </radialGradient>
         <linearGradient id="hud-line-glow" x1="0" x2="1" y1="0" y2="0">
           <stop offset="0" stopColor="transparent" />
-          <stop offset="0.3" stopColor={hud.cyan} stopOpacity="0.8" />
+          <stop offset="0.3" stopColor={getBoardHud().cyan} stopOpacity="0.8" />
           <stop offset="0.5" stopColor="#ffffff" />
-          <stop offset="0.7" stopColor={hud.cyan} stopOpacity="0.8" />
+          <stop offset="0.7" stopColor={getBoardHud().cyan} stopOpacity="0.8" />
           <stop offset="1" stopColor="transparent" />
         </linearGradient>
       </defs>
@@ -849,28 +850,28 @@ const HeaderDecoration: React.FC<{ children: React.ReactNode }> = ({ children })
       </g>
       
       {/* 装饰边框内线 */}
-      <polyline points="0,55 440,55 490,72 1110,72 1160,55 1600,55" fill="none" stroke={hud.cyanSoft} strokeOpacity="0.2" strokeWidth="1" />
+      <polyline points="0,55 440,55 490,72 1110,72 1160,55 1600,55" fill="none" stroke={getBoardHud().cyanSoft} strokeOpacity="0.2" strokeWidth="1" />
       
       {/* 斜线切角装饰（左） */}
-      <polygon points="455,60 480,75 470,75 445,60" fill={hud.cyan} opacity="0.9" />
-      <polygon points="465,60 490,75 480,75 455,60" fill={hud.cyan} opacity="0.4" />
-      <polygon points="475,60 500,75 490,75 465,60" fill={hud.cyan} opacity="0.15" />
+      <polygon points="455,60 480,75 470,75 445,60" fill={getBoardHud().cyan} opacity="0.9" />
+      <polygon points="465,60 490,75 480,75 455,60" fill={getBoardHud().cyan} opacity="0.4" />
+      <polygon points="475,60 500,75 490,75 465,60" fill={getBoardHud().cyan} opacity="0.15" />
       
       {/* 斜线切角装饰（右） */}
-      <polygon points="1145,60 1120,75 1130,75 1155,60" fill={hud.cyan} opacity="0.9" />
-      <polygon points="1135,60 1110,75 1120,75 1145,60" fill={hud.cyan} opacity="0.4" />
-      <polygon points="1125,60 1100,75 1110,75 1135,60" fill={hud.cyan} opacity="0.15" />
+      <polygon points="1145,60 1120,75 1130,75 1155,60" fill={getBoardHud().cyan} opacity="0.9" />
+      <polygon points="1135,60 1110,75 1120,75 1145,60" fill={getBoardHud().cyan} opacity="0.4" />
+      <polygon points="1125,60 1100,75 1110,75 1135,60" fill={getBoardHud().cyan} opacity="0.15" />
 
       {/* 顶部脉冲指示栏 */}
-      <rect x="700" y="0" width="200" height="3" fill={hud.cyan} style={{ animation: 'headerPulseLine 2s ease-in-out infinite' }} />
+      <rect x="700" y="0" width="200" height="3" fill={getBoardHud().cyan} style={{ animation: 'headerPulseLine 2s ease-in-out infinite' }} />
       <rect x="760" y="3" width="80" height="2" fill="#ffffff" opacity="0.6" style={{ animation: 'headerFlash 3s infinite' }} />
 
       {/* 点阵和刻度装饰 */}
       {Array.from({ length: 15 }).map((_, i) => (
-        <rect key={`tickL-${i}`} x={300 + i * 8} y="56" width="3" height="4" fill={hud.cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
+        <rect key={`tickL-${i}`} x={300 + i * 8} y="56" width="3" height="4" fill={getBoardHud().cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
       ))}
       {Array.from({ length: 15 }).map((_, i) => (
-        <rect key={`tickR-${i}`} x={1300 - i * 8} y="56" width="3" height="4" fill={hud.cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
+        <rect key={`tickR-${i}`} x={1300 - i * 8} y="56" width="3" height="4" fill={getBoardHud().cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
       ))}
     </svg>
     {children}
@@ -1217,7 +1218,20 @@ const BusinessBoardPage: React.FC = () => {
     [t],
   );
 
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const colorPrimary = useThemeStore((s) => s.resolved.token.colorPrimary) || '#1890ff';
+  const isPlainBoard = themeStyle === 'plain';
+  const boardHudPalette = useMemo(
+    () => (isPlainBoard ? buildBusinessBoardPlainHud(colorPrimary) : businessBoardVividHud),
+    [isPlainBoard, colorPrimary],
+  );
+  const warehouseChartColors = useMemo(
+    () => getBusinessBoardWarehouseChartColors(isPlainBoard, colorPrimary),
+    [isPlainBoard, colorPrimary],
+  );
+
   return (
+    <BusinessBoardHudRoot hud={boardHudPalette}>
     <div
       ref={containerRef}
       style={{
@@ -1234,12 +1248,14 @@ const BusinessBoardPage: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        background: `
+        background: isPlainBoard
+          ? `linear-gradient(180deg, ${getBoardHud().bgDeep} 0%, ${getBoardHud().bgMid} 100%)`
+          : `
           radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 136, 255, 0.22), transparent 85%),
           radial-gradient(circle at 50% 50%, rgba(0, 136, 255, 0.05), transparent 70%),
-          linear-gradient(180deg, ${hud.bgDeep} 0%, ${hud.bgDeep} 100%)
+          linear-gradient(180deg, ${getBoardHud().bgDeep} 0%, ${getBoardHud().bgDeep} 100%)
         `,
-        backgroundColor: hud.bgDeep,
+        backgroundColor: getBoardHud().bgDeep,
         boxSizing: 'border-box',
         borderRadius: isFullscreen ? 0 : token.borderRadiusLG || token.borderRadius,
       }}
@@ -1535,33 +1551,33 @@ const BusinessBoardPage: React.FC = () => {
               <StatTile
                 label={t('dashboard.businessBoard.sales.pendingQuotation')}
                 value={sales?.pending_quotations ?? '—'}
-                color={hud.cyan}
+                color={getBoardHud().cyan}
               />
               <StatTile
                 label={t('dashboard.businessBoard.sales.pendingShipment')}
                 value={sales?.pending_shipments ?? '—'}
-                color={hud.amber}
+                color={getBoardHud().amber}
               />
               <StatTile
                 label={t('dashboard.businessBoard.sales.overdueShipment')}
                 value={sales?.overdue_shipments ?? '—'}
-                color={hud.rose}
+                color={getBoardHud().rose}
               />
               <StatTile
                 label={t('dashboard.businessBoard.sales.achievementRate')}
                 value={sales ? sales.achievement_rate.toFixed(1) : '—'}
                 unit="%"
-                color={hud.emerald}
+                color={getBoardHud().emerald}
               />
             </div>
             <div style={{ ...chartHost, minHeight: 220, marginTop: 0 }}>
-              <div style={{ fontSize: 10, color: hud.textDim, marginBottom: 8, letterSpacing: 2 }}>PRODUCT_SALES_RANKING_TOP10</div>
+              <div style={{ fontSize: 10, color: getBoardHud().textDim, marginBottom: 8, letterSpacing: 2 }}>PRODUCT_SALES_RANKING_TOP10</div>
               <div style={{ height: '100%', width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
                   {(() => {
                     if (salesTop10.length === 0) {
                       return (
-                        <div style={{ textAlign: 'center', color: hud.textDim, padding: '24px 0', fontSize: 13 }}>
+                        <div style={{ textAlign: 'center', color: getBoardHud().textDim, padding: '24px 0', fontSize: 13 }}>
                           {t('common.noData', { defaultValue: '暂无数据' })}
                         </div>
                       );
@@ -1569,19 +1585,19 @@ const BusinessBoardPage: React.FC = () => {
                     const maxQty = Math.max(1, ...salesTop10.map((x) => x.quantity));
                     return salesTop10.map((item, idx) => (
                       <div key={`${item.material_id}-${item.material_code || idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 18, fontSize: 13, color: hud.textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
+                        <div style={{ width: 18, fontSize: 13, color: getBoardHud().textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <span style={{ fontSize: 13, color: hud.textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
-                            <span style={{ fontSize: 13, color: hud.cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
+                            <span style={{ fontSize: 13, color: getBoardHud().textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
+                            <span style={{ fontSize: 13, color: getBoardHud().cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
                           </div>
                           <div style={{ height: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
                             <div
                               style={{
                                 height: '100%',
                                 width: `${(item.quantity / maxQty) * 100}%`,
-                                background: `linear-gradient(90deg, ${hud.cyan}33, ${hud.cyan})`,
-                                boxShadow: `0 0 10px ${hud.cyan}66`,
+                                background: `linear-gradient(90deg, ${getBoardHud().cyan}33, ${getBoardHud().cyan})`,
+                                boxShadow: `0 0 10px ${getBoardHud().cyan}66`,
                                 borderRadius: 2,
                                 transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
                               }}
@@ -1610,32 +1626,32 @@ const BusinessBoardPage: React.FC = () => {
               <StatTile
                 label={t('dashboard.businessBoard.purchase.pendingRequisition')}
                 value={purchase?.pending_requisitions ?? '—'}
-                color={hud.cyan}
+                color={getBoardHud().cyan}
               />
               <StatTile
                 label={t('dashboard.businessBoard.purchase.urgent')}
                 value={purchase?.urgent_requisitions ?? '—'}
-                color={hud.rose}
+                color={getBoardHud().rose}
               />
               <StatTile
                 label={t('dashboard.businessBoard.purchase.pendingReceipt')}
                 value={purchase?.pending_receipts ?? '—'}
-                color={hud.amber}
+                color={getBoardHud().amber}
               />
               <StatTile
                 label={t('dashboard.businessBoard.purchase.overdueReceipt')}
                 value={purchase?.overdue_receipts ?? '—'}
-                color={hud.rose}
+                color={getBoardHud().rose}
               />
             </div>
             <div style={{ ...chartHost, minHeight: 220, marginTop: 0 }}>
-              <div style={{ fontSize: 10, color: hud.textDim, marginBottom: 8, letterSpacing: 2 }}>RAW_MATERIAL_PURCHASE_TOP10</div>
+              <div style={{ fontSize: 10, color: getBoardHud().textDim, marginBottom: 8, letterSpacing: 2 }}>RAW_MATERIAL_PURCHASE_TOP10</div>
               <div style={{ height: '100%', width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
                   {(() => {
                     if (purchaseTop10.length === 0) {
                       return (
-                        <div style={{ textAlign: 'center', color: hud.textDim, padding: '24px 0', fontSize: 13 }}>
+                        <div style={{ textAlign: 'center', color: getBoardHud().textDim, padding: '24px 0', fontSize: 13 }}>
                           {t('common.noData', { defaultValue: '暂无数据' })}
                         </div>
                       );
@@ -1643,19 +1659,19 @@ const BusinessBoardPage: React.FC = () => {
                     const maxQty = Math.max(1, ...purchaseTop10.map((x) => x.quantity));
                     return purchaseTop10.map((item, idx) => (
                       <div key={`${item.material_id}-${item.material_code || idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 18, fontSize: 13, color: hud.textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
+                        <div style={{ width: 18, fontSize: 13, color: getBoardHud().textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <span style={{ fontSize: 13, color: hud.textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
-                            <span style={{ fontSize: 13, color: hud.cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
+                            <span style={{ fontSize: 13, color: getBoardHud().textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
+                            <span style={{ fontSize: 13, color: getBoardHud().cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
                           </div>
                           <div style={{ height: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 2, overflow: 'hidden' }}>
                             <div
                               style={{
                                 height: '100%',
                                 width: `${(item.quantity / maxQty) * 100}%`,
-                                background: `linear-gradient(90deg, ${hud.cyan}33, ${hud.cyan})`,
-                                boxShadow: `0 0 10px ${hud.cyan}66`,
+                                background: `linear-gradient(90deg, ${getBoardHud().cyan}33, ${getBoardHud().cyan})`,
+                                boxShadow: `0 0 10px ${getBoardHud().cyan}66`,
                                 borderRadius: 2,
                                 transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
                               }}
@@ -1704,8 +1720,8 @@ const BusinessBoardPage: React.FC = () => {
               title="执行中工单实时监控" 
               right={
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                   <span style={{ fontSize: 10, color: hud.cyan, opacity: 0.8, fontFamily: clockFont }}>PAGE {woPage + 1}/{Math.ceil(allWorkOrders.length / WO_PAGE_SIZE)}</span>
-                   <span style={{ fontSize: 10, color: hud.cyan, fontFamily: clockFont }}>TOTAL: {allWorkOrders.length.toString().padStart(2, '0')}</span>
+                   <span style={{ fontSize: 10, color: getBoardHud().cyan, opacity: 0.8, fontFamily: clockFont }}>PAGE {woPage + 1}/{Math.ceil(allWorkOrders.length / WO_PAGE_SIZE)}</span>
+                   <span style={{ fontSize: 10, color: getBoardHud().cyan, fontFamily: clockFont }}>TOTAL: {allWorkOrders.length.toString().padStart(2, '0')}</span>
                 </div>
               } 
             />
@@ -1730,10 +1746,10 @@ const BusinessBoardPage: React.FC = () => {
                 >
                   {/* 左侧：工单 & 产品 & 计划数 (占 42%) */}
                   <div style={{ flex: '0 0 42%', display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <span style={{ fontSize: 13, background: hud.cyan, color: hud.bgDeep, fontWeight: 'bold', padding: '2px 6px', borderRadius: 2, fontFamily: clockFont, whiteSpace: 'nowrap' }}>{wo.id}</span>
+                    <span style={{ fontSize: 13, background: getBoardHud().cyan, color: getBoardHud().bgDeep, fontWeight: 'bold', padding: '2px 6px', borderRadius: 2, fontFamily: clockFont, whiteSpace: 'nowrap' }}>{wo.id}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: 13, color: hud.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.product}</span>
-                      <span style={{ fontSize: 13, color: hud.textDim, whiteSpace: 'nowrap' }}>[ 计划: <span style={{ color: hud.cyan, fontWeight: 'bold', fontFamily: clockFont }}>{wo.planned}</span> ]</span>
+                      <span style={{ fontSize: 13, color: getBoardHud().textPrimary, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.product}</span>
+                      <span style={{ fontSize: 13, color: getBoardHud().textDim, whiteSpace: 'nowrap' }}>[ 计划: <span style={{ color: getBoardHud().cyan, fontWeight: 'bold', fontFamily: clockFont }}>{wo.planned}</span> ]</span>
                     </div>
                   </div>
 
@@ -1784,7 +1800,7 @@ const BusinessBoardPage: React.FC = () => {
                               width: 24,
                               height: 24,
                               borderRadius: '50%',
-                              background: hud.bgDeep,
+                              background: getBoardHud().bgDeep,
                               border: `2px solid ${PENDING_COLOR}`,
                               boxSizing: 'border-box',
                             }} />
@@ -1793,17 +1809,17 @@ const BusinessBoardPage: React.FC = () => {
                               width: 24,
                               height: 24,
                               borderRadius: '50%',
-                              background: isDone ? COMPLETED_GREEN : hud.bgDeep,
-                              border: `2px solid ${isPending ? PENDING_COLOR : (isDone ? COMPLETED_GREEN : hud.cyan)}`,
+                              background: isDone ? COMPLETED_GREEN : getBoardHud().bgDeep,
+                              border: `2px solid ${isPending ? PENDING_COLOR : (isDone ? COMPLETED_GREEN : getBoardHud().cyan)}`,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               boxSizing: 'border-box'
                             }}>
                               {isDone ? (
-                                <span style={{ color: hud.bgDeep, fontSize: 13, fontWeight: 'bold' }}>✓</span>
+                                <span style={{ color: getBoardHud().bgDeep, fontSize: 13, fontWeight: 'bold' }}>✓</span>
                               ) : isActive ? (
-                                <span style={{ color: hud.cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
+                                <span style={{ color: getBoardHud().cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
                               ) : null}
                             </div>
                           )}
@@ -1812,10 +1828,10 @@ const BusinessBoardPage: React.FC = () => {
                             color: placeholder
                               ? 'transparent'
                               : isPending
-                                ? hud.textDim
+                                ? getBoardHud().textDim
                                 : isActive
-                                  ? hud.cyan
-                                  : (isDone ? COMPLETED_GREEN : hud.textSoft),
+                                  ? getBoardHud().cyan
+                                  : (isDone ? COMPLETED_GREEN : getBoardHud().textSoft),
                             textAlign: 'center',
                             whiteSpace: 'nowrap',
                             userSelect: 'none'
@@ -1864,7 +1880,7 @@ const BusinessBoardPage: React.FC = () => {
                     <div style={{ width: 10, height: 2, background: '#fb7185' }} />
                     <span style={{ color: '#fb7185' }}>出</span>
                   </div>
-                  <span style={{ fontSize: 13, color: hud.cyan, fontFamily: clockFont, marginLeft: 4 }}>LO_TREND</span>
+                  <span style={{ fontSize: 13, color: getBoardHud().cyan, fontFamily: clockFont, marginLeft: 4 }}>LO_TREND</span>
                 </div>
               }
             />
@@ -1880,38 +1896,38 @@ const BusinessBoardPage: React.FC = () => {
               <StatTile
                 label="总库存"
                 value={warehouseSummary ? formatCompact(warehouseSummary.total_stock) : '—'}
-                color={hud.cyan}
+                color={getBoardHud().cyan}
               />
               <StatTile
                 label="在库批次"
                 value={warehouseSummary?.in_stock_batches ?? '—'}
                 unit="批"
-                color={hud.emerald}
+                color={getBoardHud().emerald}
               />
               <StatTile
                 label="待入库"
                 value={warehouseSummary?.pending_inbound ?? '—'}
                 unit="单"
-                color={hud.amber}
+                color={getBoardHud().amber}
               />
               <StatTile
                 label="待出库"
                 value={warehouseSummary?.pending_outbound ?? '—'}
                 unit="单"
-                color={hud.rose}
+                color={getBoardHud().rose}
               />
             </div>
             {(() => {
               const inData = warehouseTrend.map((p) => ({ time: p.date, val: p.in }));
               const outData = warehouseTrend.map((p) => ({ time: p.date, val: p.out }));
-              const COLOR_IN = '#0095ff';
-              const COLOR_OUT = '#fb7185';
+              const COLOR_IN = warehouseChartColors.colorIn;
+              const COLOR_OUT = warehouseChartColors.colorOut;
 
               const chartHeight = isFullscreen ? 360 : 220;
 
               if (warehouseTrend.length === 0) {
                 return (
-                  <div style={{ width: '100%', height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: hud.textDim, fontSize: 13 }}>
+                  <div style={{ width: '100%', height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getBoardHud().textDim, fontSize: 13 }}>
                     {t('common.noData', { defaultValue: '暂无数据' })}
                   </div>
                 );
@@ -1941,8 +1957,8 @@ const BusinessBoardPage: React.FC = () => {
                     style={{
                       fill: (datum: any) =>
                         datum.type === 'IN'
-                          ? 'l(270) 0:#0095ff 1:rgba(0,149,255,0.12)'
-                          : 'l(270) 0:#fb7185 1:rgba(251,113,133,0.12)',
+                          ? `l(270) 0:${COLOR_IN} 1:${COLOR_IN}22`
+                          : `l(270) 0:${COLOR_OUT} 1:${COLOR_OUT}22`,
                       stroke: (datum: any) => (datum.type === 'IN' ? COLOR_IN : COLOR_OUT),
                       lineWidth: 0.8,
                       strokeOpacity: 0.85,
@@ -1992,9 +2008,9 @@ const BusinessBoardPage: React.FC = () => {
                     alignItems: 'center',
                     gap: 6,
                     padding: '2px 8px',
-                    border: `1px solid ${hud.emerald}55`,
+                    border: `1px solid ${getBoardHud().emerald}55`,
                     background: 'rgba(52, 211, 153, 0.08)',
-                    color: hud.emerald,
+                    color: getBoardHud().emerald,
                     fontSize: 10,
                     fontWeight: 700,
                     letterSpacing: 1,
@@ -2005,8 +2021,8 @@ const BusinessBoardPage: React.FC = () => {
                       width: 6,
                       height: 6,
                       borderRadius: '50%',
-                      background: hud.emerald,
-                      boxShadow: `0 0 6px ${hud.emerald}`,
+                      background: getBoardHud().emerald,
+                      boxShadow: `0 0 6px ${getBoardHud().emerald}`,
                     }}
                   />
                   {t('dashboard.businessBoard.live')}
@@ -2032,10 +2048,10 @@ const BusinessBoardPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderTop: `1px solid ${hud.borderLine}`,
+          borderTop: `1px solid ${getBoardHud().borderLine}`,
           background: 'linear-gradient(180deg, transparent, rgba(0, 229, 255, 0.05))',
           fontSize: 10,
-          color: hud.textDim,
+          color: getBoardHud().textDim,
           letterSpacing: 0.5,
           fontFamily: clockFont,
         }}
@@ -2046,6 +2062,7 @@ const BusinessBoardPage: React.FC = () => {
         <span>{currentTime}</span>
       </div>
     </div>
+    </BusinessBoardHudRoot>
   );
 };
 

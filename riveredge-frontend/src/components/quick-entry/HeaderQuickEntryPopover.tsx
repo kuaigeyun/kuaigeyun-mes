@@ -31,6 +31,8 @@ export const HeaderQuickEntryPopover: React.FC<HeaderQuickEntryPopoverProps> = (
   const navigate = useNavigate();
   const { t } = useTranslation();
   const isDark = useThemeStore((s) => s.resolved.isDark);
+  const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isPlain = themeStyle === 'plain';
 
   const dashboardQuickEntriesRaw = useUserPreferenceStore(
     (s) => s.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined,
@@ -66,7 +68,12 @@ export const HeaderQuickEntryPopover: React.FC<HeaderQuickEntryPopoverProps> = (
               key={item.menu_uuid}
               icon={item.menu_icon}
               title={item.menu_name}
-              gradient={item.gradient || generateQuickEntryGradient(index, isDark)}
+              gradient={
+                isPlain
+                  ? generateQuickEntryGradient(index, isDark, 'plain')
+                  : item.gradient || generateQuickEntryGradient(index, isDark, 'vivid')
+              }
+              plain={isPlain}
               onClick={() => {
                 if (item.menu_path) navigate(item.menu_path);
               }}
