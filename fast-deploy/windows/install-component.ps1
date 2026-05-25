@@ -202,19 +202,91 @@ function Install-Uv {
     Write-Ok 'uv installed'
 }
 
+function Read-BackendEnvValue([string]$Key, [string]$Default = '') {
+    $backendEnv = Join-Path (Split-Path $FastDeployDir -Parent) 'riveredge-backend\.env'
+    if (-not (Test-Path $backendEnv)) { return $Default }
+    foreach ($line in Get-Content $backendEnv) {
+        if ($line -match "^${Key}=(.*)$") {
+            return $Matches[1].Trim('"').Trim("'")
+        }
+    }
+    return $Default
+}
+
+function Get-PostgresqlInstallerInfo([int]$Major = 16) {
+    $builds = @{
+        16 = @{ Ver = '16.8-1'; File = 'postgresql-16.8-1-windows-x64.exe' }
+        17 = @{ Ver = '17.4-1'; File = 'postgresql-17.4-1-windows-x64.exe' }
+    }
+    if ($builds.ContainsKey($Major)) {
+        return $builds[$Major].File, "https://get.enterprisedb.com/postgresql/$($builds[$Major].File)"
+    }
+    $file = "postgresql-$Major.8-1-windows-x64.exe"
+    return $file, "https://get.enterprisedb.com/postgresql/$file"
+}
+
+function Start-PostgresqlWindowsService {
+    $services = @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'postgresql*' })
+    foreach ($svc in $services) {
+        Write-Info "starting service: $($svc.Name)"
+        if ($svc.Status -ne 'Running') {
+            Start-Service -Name $svc.Name -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -Seconds 3
+}
+
+function Install-PostgresqlEdb {
+    $superpass = Read-BackendEnvValue 'DB_PASSWORD' ''
+    if ([string]::IsNullOrWhiteSpace($superpass)) {
+        Write-Info 'DB_PASSWORD not in .env yet, using temporary superuser password (will be applied in bootstrap)'
+        $superpass = 'riveredge_pg_setup'
+    }
+    $port = Read-BackendEnvValue 'DB_PORT' '5432'
+
+    $file, $url = Get-PostgresqlInstallerInfo 16
+    $tmpdir = Get-InstallTempDir
+    $exe = Join-Path $tmpdir $file
+
+    Write-Info "download: $url"
+    Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+
+    Write-Info "silent PostgreSQL install (port $port)..."
+    $args = @(
+        '--mode', 'unattended',
+        '--unattendedmodeui', 'none',
+        '--superpassword', $superpass,
+        '--serverport', $port,
+        '--install_runtimes', '1',
+        '--enable_acledit', '0'
+    )
+    $proc = Start-Process -FilePath $exe -ArgumentList $args -Wait -PassThru
+    if ($proc.ExitCode -ne 0) {
+        throw "PostgreSQL installer failed (exit $($proc.ExitCode)). Try running Git Bash as Administrator."
+    }
+    Start-PostgresqlWindowsService
+}
+
 function Install-Postgresql {
     if (Invoke-WingetInstall @('-e', '--id', 'PostgreSQL.PostgreSQL', '--accept-package-agreements', '--accept-source-agreements')) {
+        Start-PostgresqlWindowsService
         Write-Ok 'PostgreSQL installed via winget'
         return
     }
 
-    Write-Err @(
-        'winget unavailable; cannot auto-install PostgreSQL.',
-        'Options:',
-        '  1) Install App Installer from Microsoft Store, then retry',
-        '  2) Download from https://www.postgresql.org/download/windows/',
-        '  3) Choose remote database in wizard stage 2 to skip local PG'
-    ) -join [Environment]::NewLine
+    Write-Info 'winget unavailable, installing PostgreSQL 16 via EDB installer...'
+    try {
+        Install-PostgresqlEdb
+    } catch {
+        Write-Err @(
+            "PostgreSQL install failed: $($_.Exception.Message)",
+            'Options:',
+            '  1) Run Git Bash as Administrator and retry',
+            '  2) Download from https://www.postgresql.org/download/windows/',
+            '  3) Choose remote database in wizard stage 2 to skip local PG'
+        ) -join [Environment]::NewLine
+    }
+    Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
 }
 
 function Install-Caddy {

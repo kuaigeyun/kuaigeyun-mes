@@ -277,7 +277,17 @@ check_npm() {
 
 check_postgres() {
     local v="" bin best=""
-    for bin in psql /usr/lib/postgresql/*/bin/psql; do
+    local candidates=(psql)
+    if is_windows_gitbash; then
+        refresh_windows_path
+        candidates=(
+            "/c/Program Files/PostgreSQL/17/bin/psql.exe"
+            "/c/Program Files/PostgreSQL/16/bin/psql.exe"
+            "/c/Program Files/PostgreSQL/15/bin/psql.exe"
+            psql
+        )
+    fi
+    for bin in "${candidates[@]}" /usr/lib/postgresql/*/bin/psql; do
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
         [ -n "$v" ] || continue
@@ -531,11 +541,19 @@ ELSE
   ALTER ROLE \"${db_user}\" WITH PASSWORD '${escaped}';
 END IF;
 END \$\$;"
-        sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "$sql" 2>/dev/null || \
-            sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "$sql" || return 1
+        if is_windows_gitbash; then
+            postgres_psql_local "$db_port" -v ON_ERROR_STOP=1 -c "$sql" || return 1
+        else
+            sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "$sql" 2>/dev/null || \
+                sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "$sql" || return 1
+        fi
     fi
 
-    if ! sudo -u postgres psql -p "$db_port" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
+    if is_windows_gitbash; then
+        if ! postgres_psql_local "$db_port" -tc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
+            postgres_psql_local "$db_port" -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";" || return 1
+        fi
+    elif ! sudo -u postgres psql -p "$db_port" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
         if ! sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";" 2>/dev/null; then
             sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";" || return 1
         fi
@@ -553,6 +571,18 @@ END \$\$;"
 
 resolve_psql() {
     local bin v
+    if is_windows_gitbash; then
+        refresh_windows_path
+        for bin in \
+            "/c/Program Files/PostgreSQL/17/bin/psql.exe" \
+            "/c/Program Files/PostgreSQL/16/bin/psql.exe" \
+            "/c/Program Files/PostgreSQL/15/bin/psql.exe"
+        do
+            [ -x "$bin" ] || continue
+            v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
+            [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
+        done
+    fi
     for bin in /usr/lib/postgresql/*/bin/psql; do
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
@@ -561,7 +591,30 @@ resolve_psql() {
     command -v psql 2>/dev/null || echo "psql"
 }
 
+postgres_psql_local() {
+    local port=$1
+    shift
+    local psql_bin pass
+    psql_bin="$(resolve_psql)"
+    if is_windows_gitbash; then
+        pass="$(read_env_value DB_PASSWORD || true)"
+        export PGPASSWORD="$pass"
+        "$psql_bin" -h localhost -p "$port" -U postgres -d postgres "$@"
+        local rc=$?
+        unset PGPASSWORD
+        return $rc
+    fi
+    sudo -u postgres psql -p "$port" -d postgres "$@" 2>/dev/null || sudo -u postgres psql -d postgres "$@"
+}
+
 detect_postgres_port() {
+    local from_env
+    from_env="$(read_env_value DB_PORT 2>/dev/null || true)"
+    [ -n "$from_env" ] && { echo "$from_env"; return; }
+    if is_windows_gitbash; then
+        echo "5432"
+        return
+    fi
     if command -v pg_lsclusters >/dev/null 2>&1; then
         local port
         port="$(pg_lsclusters -h 2>/dev/null | awk 'NR>1 && $1+0>=15 && $4=="online"{print $3; exit}')"
@@ -620,9 +673,26 @@ postgres_sql_escape() {
 
 postgres_run_alter_password() {
     local db_user=$1 db_port=$2 new_pass=$3
-    local sql escaped
+    local sql escaped psql_bin
     escaped="$(postgres_sql_escape "$new_pass")"
     sql="ALTER USER \"${db_user}\" WITH PASSWORD '${escaped}';"
+    if is_windows_gitbash; then
+        psql_bin="$(resolve_psql)"
+        local pass
+        pass="$(read_env_value DB_PASSWORD || true)"
+        export PGPASSWORD="$pass"
+        if "$psql_bin" -h localhost -p "$db_port" -U "$db_user" -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+            unset PGPASSWORD
+            return 0
+        fi
+        export PGPASSWORD="$new_pass"
+        if "$psql_bin" -h localhost -p "$db_port" -U "$db_user" -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+            unset PGPASSWORD
+            return 0
+        fi
+        unset PGPASSWORD
+        return 1
+    fi
     if sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
         return 0
     fi
