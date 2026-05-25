@@ -234,6 +234,18 @@ check_port() {
     return 1
 }
 
+wait_for_backend_health() {
+    local retries=0
+    while [ $retries -lt "$BACKEND_START_TIMEOUT" ]; do
+        if curl -sf "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        retries=$((retries + 1))
+    done
+    return 1
+}
+
 kill_port() {
     local port=$1
     if ! check_port "$port"; then return 0; fi
@@ -661,6 +673,50 @@ print_configure_summary() {
     fi
 }
 
+configure_prompt_database_edit() {
+    local db_user db_host db_port db_name db_target input db_pass
+    db_target="$(read_env_value DB_TARGET || true)"
+    [ -z "$db_target" ] && db_target="local"
+    log_info "当前数据库模式: ${db_target} (local=本地 / remote=远程)"
+    read -rp "数据库部署 [local/remote，回车保持]: " input
+    if [ -n "$input" ]; then
+        case "$input" in
+            remote|2) set_env_value DB_TARGET "remote" ;;
+            *) set_env_value DB_TARGET "local"; set_env_value DB_HOST "localhost" ;;
+        esac
+    fi
+    db_target="$(read_env_value DB_TARGET || echo local)"
+
+    db_user="$(read_env_value DB_USER || echo postgres)"
+    read -rp "PostgreSQL 用户名 [${db_user}]: " input
+    db_user="${input:-$db_user}"
+    set_env_value DB_USER "$db_user"
+
+    if [ "$db_target" = "remote" ]; then
+        db_host="$(read_env_value DB_HOST || true)"
+        read -rp "PostgreSQL 主机 [${db_host}]: " input
+        db_host="${input:-$db_host}"
+        set_env_value DB_HOST "$db_host"
+    else
+        set_env_value DB_HOST "localhost"
+    fi
+
+    db_port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
+    read -rp "PostgreSQL 端口 [${db_port}]: " input
+    db_port="${input:-$db_port}"
+    set_env_value DB_PORT "$db_port"
+
+    db_name="$(read_env_value DB_NAME || echo riveredge)"
+    read -rp "数据库名 [${db_name}]: " input
+    db_name="${input:-$db_name}"
+    set_env_value DB_NAME "$db_name"
+
+    read -rsp "PostgreSQL 密码 [回车跳过 / 输入新密码]: " input; echo
+    if [ -n "$input" ]; then
+        set_env_value DB_PASSWORD "$input"
+    fi
+}
+
 cmd_configure() {
     log_info "配置应用环境..."
     apply_cn_mirrors
@@ -672,7 +728,13 @@ cmd_configure() {
 
     local db_user db_host db_port db_name admin_pass admin_user input detected_ip server_ip
 
-    if db_config_complete; then
+    if db_config_complete && [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" = "1" ]; then
+        configure_prompt_database_edit
+        db_user="$(read_env_value DB_USER)"
+        db_host="$(read_env_value DB_HOST)"
+        db_port="$(read_env_value DB_PORT)"
+        db_name="$(read_env_value DB_NAME)"
+    elif db_config_complete; then
         log_info "数据库已在向导/此前步骤配置，跳过数据库问答"
         db_user="$(read_env_value DB_USER)"
         db_host="$(read_env_value DB_HOST)"
@@ -754,7 +816,7 @@ sync_backend_deps() {
         export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
         export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
         "$(resolve_uv)" sync --no-install-project
-    )
+    ) || { log_error "Python 依赖同步失败"; exit 1; }
 }
 
 cmd_migrate() {
@@ -821,11 +883,36 @@ gen_caddyfile() {
     log_ok "已生成 Caddyfile"
 }
 
-ensure_linux_caddy_ready() {
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet caddy 2>/dev/null; then
-        log_error "systemd caddy.service 正在运行，与本项目冲突。请执行: sudo systemctl stop caddy && sudo systemctl disable caddy"
-        exit 1
+stop_system_caddy() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
     fi
+    if ! systemctl list-unit-files caddy.service >/dev/null 2>&1; then
+        return 0
+    fi
+    if systemctl is-active --quiet caddy 2>/dev/null || systemctl is-enabled --quiet caddy 2>/dev/null; then
+        log_info "停止系统 caddy.service（apt 安装后会自启，与本项目 Caddyfile 冲突）..."
+        sudo systemctl stop caddy || {
+            log_error "无法停止 caddy.service，请执行: sudo systemctl stop caddy"
+            return 1
+        }
+        sudo systemctl disable caddy || {
+            log_error "无法禁用 caddy.service 自启，请执行: sudo systemctl disable caddy"
+            return 1
+        }
+        sleep 1
+        if systemctl is-active --quiet caddy 2>/dev/null; then
+            log_error "caddy.service 仍在运行，请执行: sudo systemctl stop caddy && sudo systemctl disable caddy"
+            return 1
+        fi
+        log_ok "系统 caddy.service 已停止并禁用自启"
+    fi
+    return 0
+}
+
+ensure_linux_caddy_ready() {
+    load_deploy_env
+    stop_system_caddy || exit 1
     local caddy_bin
     caddy_bin="$(resolve_caddy)"
     [ -n "$caddy_bin" ] || { log_error "未安装 Caddy，请运行: $0 install"; exit 1; }
@@ -924,11 +1011,12 @@ start_backend_prod() {
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
     )
-    sleep 3
-    curl -sf "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null || {
-        log_error "后端启动失败，查看 $LOGS_DIR/backend.log"
+    log_info "等待后端就绪（最多 ${BACKEND_START_TIMEOUT}s，首次启动可能较慢）..."
+    if ! wait_for_backend_health; then
+        log_error "后端启动超时或未通过 /health 检查，查看 $LOGS_DIR/backend.log"
+        [ -f "$LOGS_DIR/backend.log" ] && tail -30 "$LOGS_DIR/backend.log" >&2
         exit 1
-    }
+    fi
     log_ok "后端已启动"
 }
 
@@ -978,6 +1066,8 @@ start_caddy_prod() {
         log_info "Caddy 已在运行"
         return 0
     fi
+    stop_service caddy
+    kill_port "$PROXY_PORT"
     log_info "启动 Caddy (:${PROXY_PORT})..."
     nohup "$caddy_bin" run --config "$CADDYFILE" >> "$LOGS_DIR/caddy.log" 2>&1 &
     echo $! > "$LOGS_DIR/caddy.pid"
@@ -1116,10 +1206,7 @@ install_caddy_apt() {
     sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
     sudo apt update || return 1
     sudo apt install -y caddy || return 1
-    if command -v systemctl >/dev/null 2>&1; then
-        sudo systemctl stop caddy 2>/dev/null || true
-        sudo systemctl disable caddy 2>/dev/null || true
-    fi
+    stop_system_caddy || return 1
     command -v caddy >/dev/null 2>&1 || { log_error "apt 安装后未找到 caddy"; return 1; }
     log_ok "Caddy 已通过 apt 安装: $(command -v caddy)"
 }

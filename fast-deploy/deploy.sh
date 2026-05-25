@@ -2,7 +2,7 @@
 # RiverEdge 统一部署入口（Git Bash / Linux / macOS）
 #
 # 用法:
-#   ./fast-deploy/deploy.sh              # 7 阶段智能部署向导（生产）
+#   ./fast-deploy/deploy.sh              # 智能向导（全新安装 / 修改配置 / 更新系统）
 #   ./fast-deploy/deploy.sh dev          # 开发模式向导
 #   ./fast-deploy/deploy.sh wizard       # 显式进入向导
 #   ./fast-deploy/deploy.sh configure    # 仅配置向导

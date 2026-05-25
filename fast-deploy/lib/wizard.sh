@@ -42,9 +42,46 @@ wizard_banner() {
     echo -e "${WIZARD_BOLD}║      RiverEdge 智能部署向导             ║${WIZARD_RESET}"
     echo -e "${WIZARD_BOLD}╚════════════════════════════════════════╝${WIZARD_RESET}"
     echo ""
-    wizard_say "你好，我将引导你完成 RiverEdge 的检测、安装与启动。"
-    wizard_say "阶段 2 填写数据库、超管账号与访问 IP 后，其余步骤将自动执行。"
+    wizard_say "你好，我将引导你完成 RiverEdge 的部署与维护。"
     echo ""
+}
+
+wizard_intent_label() {
+    case "${WIZARD_INTENT:-fresh}" in
+        configure) echo "修改配置" ;;
+        update) echo "更新系统" ;;
+        *) echo "全新安装" ;;
+    esac
+}
+
+wizard_ask_intent() {
+    if [ -n "${WIZARD_INTENT:-}" ]; then
+        wizard_say_ok "操作: $(wizard_intent_label)"
+        return 0
+    fi
+    wizard_say "请选择本次操作："
+    echo "    1) 全新安装 — 环境检测、依赖安装、配置与启动"
+    echo "    2) 修改配置 — 调整数据库、超管账号、访问 IP 等"
+    echo "    3) 更新系统 — 拉取最新代码、迁移并重启服务"
+    local choice
+    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 输入 1 / 2 / 3 [默认 1]: ")" choice
+    case "${choice:-1}" in
+        2|config|configure) export WIZARD_INTENT=configure ;;
+        3|update) export WIZARD_INTENT=update ;;
+        *) export WIZARD_INTENT=fresh ;;
+    esac
+    wizard_say_ok "已选择: $(wizard_intent_label)"
+    case "$WIZARD_INTENT" in
+        configure)
+            wizard_say "将逐项展示当前配置，回车保持原值（密码可回车跳过）"
+            ;;
+        update)
+            wizard_say "将拉取代码、执行迁移并按当前模式重启服务"
+            ;;
+        *)
+            wizard_say "阶段 2 填写数据库、超管账号与访问 IP 后，其余步骤将自动执行"
+            ;;
+    esac
 }
 
 wizard_runtime_label() {
@@ -402,6 +439,14 @@ wizard_install_deps() {
         wizard_say "正在安装 ${name}${hint:+（${hint}）}，请稍候..."
         if run_install_component "$comp" "$status" >>"$log" 2>&1; then
             wizard_say_ok "${name} 已安装完成"
+            if [ "$comp" = "caddy" ]; then
+                stop_system_caddy >>"$log" 2>&1 || {
+                    wizard_say_fail "Caddy 已安装但无法停止系统服务"
+                    tail -15 "$log" >&2
+                    return 1
+                }
+                wizard_say_ok "系统 caddy.service 已停止，将在项目启动时使用项目 Caddyfile"
+            fi
         else
             wizard_say_fail "${name} 安装失败"
             wizard_say "详见日志末尾："
@@ -434,22 +479,110 @@ wizard_apply_config() {
     wizard_say_ok "应用配置已就绪"
 }
 
-wizard_deploy_app() {
-    if [ "$DEPLOY_MODE" = "dev" ]; then
-        wizard_say "开发模式：启动后端、Worker 与 Vite 前端..."
-        cmd_start_dev
+wizard_show_log_tail() {
+    local file=$1 lines=${2:-40} title=${3:-日志末尾}
+    [ -f "$file" ] || return 0
+    echo "" >&2
+    echo -e "${WIZARD_RED}--- ${title} (${file}) ---${WIZARD_RESET}" >&2
+    tail -n "$lines" "$file" >&2
+    echo -e "${WIZARD_RED}--- ---${WIZARD_RESET}" >&2
+}
+
+wizard_show_deploy_failure() {
+    local step=$1 log=$2
+    wizard_say_fail "系统安装失败 · 步骤: ${step}"
+    wizard_say "完整日志: ${log}"
+    wizard_show_log_tail "$log" 40 "安装日志末尾"
+    case "$step" in
+        start_prod|start_dev)
+            wizard_show_log_tail "$LOGS_DIR/backend.log" 30 "后端日志"
+            wizard_show_log_tail "$LOGS_DIR/caddy.log" 20 "Caddy 日志"
+            wizard_show_log_tail "$LOGS_DIR/worker.log" 15 "Worker 日志"
+            ;;
+    esac
+    echo "" >&2
+    wizard_say "修复后可单独重试:"
+    echo "    ./fast-deploy/deploy.sh migrate   # 仅迁移"
+    echo "    ./fast-deploy/deploy.sh build     # 仅构建前端"
+    echo "    ./fast-deploy/deploy.sh start     # 仅启动服务"
+    echo "" >&2
+}
+
+wizard_run_deploy_step() {
+    local step=$1 label=$2 log=$3 rc
+    shift 3
+    wizard_say "${label}..."
+    set +e
+    "$@" 2>&1 | tee -a "$log"
+    rc=${PIPESTATUS[0]}
+    set -e
+    if [ "$rc" -eq 0 ]; then
+        wizard_say_ok "${label} — 完成"
         return 0
     fi
-    wizard_say "生产模式：执行数据库迁移..."
-    cmd_migrate
+    wizard_show_deploy_failure "$step" "$log"
+    return 1
+}
+
+wizard_deploy_app() {
+    ensure_logs_dir
+    local log="$LOGS_DIR/wizard-deploy.log"
+    : >"$log"
+
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        wizard_say "开发模式：迁移并启动后端、Worker 与 Vite 前端..."
+        wizard_say "详细日志: ${log}"
+        wizard_run_deploy_step start_dev "启动开发环境" "$log" cmd_start_dev || return 1
+        return 0
+    fi
+
+    wizard_say "生产模式：迁移 → 构建（如需）→ 启动服务"
+    wizard_say "详细日志: ${log}"
+    echo ""
+
+    wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
+
     if [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
-        wizard_say "正在构建前端（首次可能较慢）..."
-        cmd_build
+        wizard_run_deploy_step build "构建 Web 前端（首次可能较慢）" "$log" cmd_build || return 1
     else
         wizard_say_ok "前端 dist 已存在，跳过构建"
     fi
-    wizard_say "正在启动生产服务..."
-    cmd_start_prod
+
+    wizard_run_deploy_step start_prod "启动生产服务（后端 + Worker + Caddy）" "$log" cmd_start_prod || return 1
+}
+
+wizard_git_pull() {
+    local branch="${GIT_BRANCH:-develop}"
+    log_info "拉取代码 (origin/${branch})..."
+    (
+        cd "$PROJECT_ROOT"
+        git fetch origin
+        git checkout "$branch"
+        git pull origin "$branch"
+    )
+}
+
+wizard_update_app() {
+    ensure_logs_dir
+    load_deploy_env
+    local log="$LOGS_DIR/wizard-update.log" branch="${GIT_BRANCH:-develop}"
+    : >"$log"
+
+    wizard_say "更新分支: origin/${branch}"
+    wizard_say "详细日志: ${log}"
+    echo ""
+
+    wizard_run_deploy_step pull "拉取最新代码" "$log" wizard_git_pull || return 1
+    wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
+
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1
+        wizard_run_deploy_step build "构建 Web 前端" "$log" cmd_build || return 1
+        wizard_run_deploy_step start "启动生产服务" "$log" cmd_start_prod || return 1
+    else
+        wizard_run_deploy_step stop "停止开发服务" "$log" cmd_stop_dev || return 1
+        wizard_run_deploy_step start "启动开发环境" "$log" cmd_start_dev || return 1
+    fi
 }
 
 wizard_show_summary() {
@@ -489,8 +622,8 @@ wizard_show_summary() {
     echo ""
 }
 
-cmd_wizard() {
-    wizard_banner
+cmd_wizard_fresh() {
+    WIZARD_TOTAL_STAGES=8
 
     wizard_stage 1 "系统识别"
     wizard_detect_system
@@ -526,8 +659,50 @@ cmd_wizard() {
     fi
 
     wizard_stage 7 "系统安装"
-    wizard_deploy_app
+    wizard_deploy_app || exit 1
 
     wizard_stage 8 "安装完成"
     wizard_show_summary
+}
+
+cmd_wizard_configure() {
+    WIZARD_TOTAL_STAGES=3
+
+    wizard_stage 1 "系统识别"
+    wizard_detect_system
+    wizard_ask_mode
+
+    wizard_stage 2 "修改配置"
+    ensure_logs_dir
+    load_deploy_env
+    apply_cn_mirrors
+    CONFIGURE_ALLOW_DB_EDIT=1 cmd_configure
+
+    wizard_stage 3 "完成"
+    wizard_show_summary
+}
+
+cmd_wizard_update() {
+    WIZARD_TOTAL_STAGES=3
+
+    wizard_stage 1 "系统识别"
+    wizard_detect_system
+    wizard_ask_mode
+
+    wizard_stage 2 "更新系统"
+    wizard_update_app || exit 1
+
+    wizard_stage 3 "完成"
+    wizard_show_summary
+}
+
+cmd_wizard() {
+    wizard_banner
+    wizard_ask_intent
+
+    case "${WIZARD_INTENT:-fresh}" in
+        configure) cmd_wizard_configure ;;
+        update) cmd_wizard_update ;;
+        *) cmd_wizard_fresh ;;
+    esac
 }

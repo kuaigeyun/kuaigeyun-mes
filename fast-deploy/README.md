@@ -11,7 +11,15 @@ cd riveredge
 
 子命令 `check / install / configure / ...` 仍可用于单步操作。
 
-## 智能部署向导（8 阶段）
+## 向导入口（第一步三选一）
+
+| 选项 | 说明 |
+|:----:|------|
+| **1) 全新安装** | 8 阶段完整流程（环境检测 → 安装规划 → 依赖安装 → 启动） |
+| **2) 修改配置** | 逐项修改数据库、超管、访问 IP（回车保持原值） |
+| **3) 更新系统** | 拉取代码 → 迁移 → 构建（生产）→ 重启服务 |
+
+## 全新安装（8 阶段）
 
 | 阶段 | 名称 | 说明 |
 |:----:|------|------|
@@ -21,7 +29,7 @@ cd riveredge
 | 4 | 环境准备 | 初始化目录、加载 deploy.env、启用国内镜像 |
 | 5 | 环境软件安装 | 安装前列出待装组件，逐项安装并提示完成 |
 | 6 | 应用配置 | 自动写入 JWT / BASE_URL / CORS，验证数据库连接（无交互） |
-| 7 | 系统安装 | 迁移 → 构建 → 启动 |
+| 7 | 系统安装 | 迁移 → 构建 → 启动（失败时自动打印日志末尾，见 `.logs/wizard-deploy.log`） |
 | 8 | 安装完成 | 展示访问地址、账号与常用命令 |
 
 向导输出形如对话：
@@ -126,7 +134,7 @@ WIZARD_TYPING=0 ./fast-deploy/deploy.sh        # 关闭对话逐行延迟
 1. **install 后 check 仍失败**：重开终端刷新 PATH。
 2. **数据库连接失败**：确认端口（PG15 常为 5433）、本机 postgres 密码正确。
 3. **8080 无法访问**：查看 `.logs/caddy.log`；确认已 build 且有 `riveredge-frontend/dist/index.html`。
-4. **Linux Caddy 冲突**：`sudo systemctl stop caddy && sudo systemctl disable caddy`。
+4. **Linux Caddy 冲突**：安装后会自动 `stop + disable` 系统 `caddy.service`；若仍冲突可执行 `sudo systemctl mask caddy`。
 
 ## 与现有脚本
 
