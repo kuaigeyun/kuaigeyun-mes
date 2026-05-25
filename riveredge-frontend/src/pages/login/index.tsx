@@ -37,8 +37,7 @@ import {
 } from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
-import { getDefaultTenantHomePath } from '../../stores/configStore';
-import { getTenantBackendHome } from '../../services/menu';
+import { resolvePostLoginHomePath } from '../../utils/tenantHomePath';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
@@ -124,17 +123,6 @@ export default function LoginPage() {
       })
       .catch(() => {});
   }, [queryClient]);
-
-  const resolvePostLoginHomePath = useCallback(async (): Promise<string> => {
-    const fallbackPath = getDefaultTenantHomePath();
-    try {
-      const backendHome = await getTenantBackendHome();
-      const customPath = backendHome?.path?.trim();
-      return customPath || fallbackPath;
-    } catch {
-      return fallbackPath;
-    }
-  }, []);
 
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(() =>
     readPlatformSettingsPublicCache(),

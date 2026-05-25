@@ -66,9 +66,9 @@ export function formatCategoryDisplayName(
   c: Pick<CategoryRow, 'level1_category' | 'level2_category' | 'name'>,
 ): string {
   const l1 = (c.level1_category ?? '').trim();
-  const l2 = (c.level2_category ?? c.name ?? '').trim();
-  if (l1 && l2) return `${l1} / ${l2}`;
-  return l2 || c.name;
+  const l2 = (c.level2_category ?? '').trim();
+  if (l1 && l2 && l1 !== l2) return `${l1} / ${l2}`;
+  return l2 || l1 || (c.name ?? '').trim();
 }
 
 export function formatCategoryLabel(c: Pick<CategoryRow, 'code' | 'level1_category' | 'level2_category' | 'name'>): string {

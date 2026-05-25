@@ -2243,7 +2243,7 @@ export default {
   'app.haoligo.equipment.documents.boolNo': 'No',
   'app.haoligo.equipment.documents.colParamCode': 'Inspection no.',
   'app.haoligo.equipment.documents.colParamName': 'Item name',
-  'app.haoligo.equipment.documents.colParamRequirement': 'Requirement',
+  'app.haoligo.equipment.documents.colParamRequirement': 'Inspection note',
   'app.haoligo.equipment.documents.colResult': 'Result',
   'app.haoligo.equipment.documents.colRemark': 'Remark',
   'app.haoligo.equipment.documents.resultNormal': 'Normal',

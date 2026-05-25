@@ -25,7 +25,8 @@ import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
-import { useConfigStore, getDefaultTenantHomePath } from './stores/configStore';
+import { useConfigStore } from './stores/configStore';
+import RedirectToTenantHome from './components/redirect-to-tenant-home';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
@@ -407,9 +408,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户登录后，如果访问的是登录页，重定向到系统默认首页（可关闭系统级仪表盘）
+      // 普通用户已登录仍访问登录页：由 RedirectToTenantHome 异步解析自定义首页，禁止同步落应用中心
       if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-        return getDefaultTenantHomePath();
+        return 'TENANT_HOME';
       }
     }
 
@@ -446,6 +447,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   if (shouldRedirect) {
+    if (redirectTarget === 'TENANT_HOME') {
+      return <RedirectToTenantHome />;
+    }
     return <Navigate to={redirectTarget} replace />;
   }
 

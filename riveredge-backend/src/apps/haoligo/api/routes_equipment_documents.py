@@ -22,6 +22,7 @@ from apps.haoligo.constants.equipment_sheet_rule_codes import (
 )
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
+    HaoligoInspectionParam,
     HaoligoInspectionParamSet,
     HaoligoInspectionParamSetItem,
     HaoligoPatrolRoute,
@@ -359,6 +360,41 @@ async def _load_inspection_set_items(tenant_id: int, set_id: int):
     )
 
 
+def _spot_check_line_instruction(
+    param,
+    *,
+    value_type: str,
+    snapshot_requirement: Optional[str] = None,
+) -> Optional[str]:
+    """点检说明：快照优先，否则点检项 requirement；文本类无 requirement 时用 default_value。"""
+    snap = (snapshot_requirement or "").strip() or None
+    if snap:
+        return snap
+    if not param:
+        return None
+    req = (getattr(param, "requirement", None) or "").strip() or None
+    if req:
+        return req
+    vt = (value_type or getattr(param, "value_type", None) or "numeric") or "numeric"
+    if vt == "text":
+        dv = (getattr(param, "default_value", None) or "").strip()
+        return dv or None
+    return None
+
+
+def _spot_check_initial_measured_value(param, value_type: str) -> Optional[str]:
+    """预览/建单时的实测初值：文本类且 default 已作为点检说明展示时不预填实测。"""
+    if not param or not getattr(param, "default_value", None):
+        return None
+    vt = (value_type or getattr(param, "value_type", None) or "numeric") or "numeric"
+    if vt == "text" and not (getattr(param, "requirement", None) or "").strip():
+        return None
+    try:
+        return _normalize_measured_value(vt, param.default_value)
+    except ValueError:
+        return None
+
+
 class SpotCheckPreviewLineOut(BaseModel):
     inspection_param_id: Optional[int] = None
     param_code: str
@@ -522,13 +558,22 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
             .order_by("sort_order", "id")
             .all()
         )
+        param_ids = [ln.inspection_param_id for ln in lns if ln.inspection_param_id]
+        param_map: dict = {}
+        if param_ids:
+            params = await tenant_alive(HaoligoInspectionParam, row.tenant_id).filter(id__in=param_ids).all()
+            param_map = {p.id: p for p in params}
         lines_out = [
             SpotCheckLineOut(
                 id=ln.id,
                 inspection_param_id=ln.inspection_param_id,
                 param_code=ln.param_code,
                 param_name=ln.param_name,
-                param_requirement=ln.param_requirement,
+                param_requirement=_spot_check_line_instruction(
+                    param_map.get(ln.inspection_param_id) if ln.inspection_param_id else None,
+                    value_type=ln.value_type,
+                    snapshot_requirement=ln.param_requirement,
+                ),
                 sort_order=ln.sort_order,
                 value_type=ln.value_type,
                 unit=ln.unit,
@@ -582,18 +627,13 @@ async def preview_spot_check_lines(
     for it in items:
         p = it.param
         vtype = (p.value_type if p else "numeric") or "numeric"
-        default_mv: Optional[str] = None
-        if p and p.default_value:
-            try:
-                default_mv = _normalize_measured_value(vtype, p.default_value)
-            except ValueError:
-                default_mv = None
+        default_mv = _spot_check_initial_measured_value(p, vtype)
         lines.append(
             SpotCheckPreviewLineOut(
                 inspection_param_id=p.id if p else None,
                 param_code=p.code if p else "",
                 param_name=p.name if p else "",
-                param_requirement=(p.requirement if p else None) or None,
+                param_requirement=_spot_check_line_instruction(p, value_type=vtype),
                 sort_order=it.sort_order,
                 value_type=vtype,
                 unit=p.unit if p else None,
@@ -704,17 +744,12 @@ async def create_spot_check(
             p = it.param
             code = p.code if p else ""
             name = p.name if p else ""
-            requirement = (p.requirement if p else None) or None
-            pid = p.id if p else None
             vtype = (p.value_type if p else None) or "numeric"
+            requirement = _spot_check_line_instruction(p, value_type=vtype)
+            pid = p.id if p else None
             num_min = p.numeric_min if p else None
             num_max = p.numeric_max if p else None
-            initial_mv: Optional[str] = None
-            if p and p.default_value:
-                try:
-                    initial_mv = _normalize_measured_value(vtype, p.default_value)
-                except ValueError:
-                    initial_mv = None
+            initial_mv = _spot_check_initial_measured_value(p, vtype)
             line_result = spot_check_result_from_numeric_range(initial_mv, num_min, num_max) or "normal"
             await HaoligoEquipmentSpotCheckLine.create(
                 tenant_id=tenant_id,

@@ -294,7 +294,7 @@ class CategoryUpdate(BaseModel):
 def _category_display_name(level1: str, level2: str) -> str:
     l1 = (level1 or "").strip()
     l2 = (level2 or "").strip()
-    if l1 and l2:
+    if l1 and l2 and l1 != l2:
         return f"{l1} / {l2}"
     return l2 or l1
 

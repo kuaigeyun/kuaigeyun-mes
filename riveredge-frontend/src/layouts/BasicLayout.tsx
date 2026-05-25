@@ -132,7 +132,8 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
   }
 }
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore, resolveTenantHomePath, getDefaultTenantHomePath } from '../stores/configStore';
+import { useConfigStore, resolveTenantHomePath } from '../stores/configStore';
+import RedirectToTenantHome from '../components/redirect-to-tenant-home';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
@@ -385,9 +386,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台（关闭系统级仪表盘时落地应用中心）
+    // 普通用户登录后，如果访问的是登录页，异步解析租户有效首页（含自定义首页）
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <Navigate to={getDefaultTenantHomePath()} replace />;
+      return <RedirectToTenantHome />;
     }
   }
 

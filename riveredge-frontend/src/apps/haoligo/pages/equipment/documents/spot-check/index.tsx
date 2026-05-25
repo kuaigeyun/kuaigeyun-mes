@@ -610,10 +610,24 @@ const SpotCheckDocumentsPage: React.FC = () => {
             </Typography.Text>
           ) : null}
         </Flex>
-        {row.param_requirement ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
-            {t('app.haoligo.equipment.documents.colParamRequirement')}：{row.param_requirement}
-          </Typography.Text>
+        {row.param_requirement?.trim() ? (
+          <div
+            className="haoligo-spot-check-line-instruction"
+            style={{
+              marginTop: 8,
+              padding: '8px 10px',
+              background: 'var(--ant-color-fill-quaternary, rgba(0,0,0,0.02))',
+              borderRadius: 6,
+              border: '1px solid var(--ant-color-border-secondary, rgba(0,0,0,0.06))',
+            }}
+          >
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>
+              {t('app.haoligo.equipment.documents.colParamRequirement')}
+            </Typography.Text>
+            <Typography.Text style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>
+              {row.param_requirement.trim()}
+            </Typography.Text>
+          </div>
         ) : null}
 
         <Row gutter={[12, 8]} style={{ marginTop: 10 }}>

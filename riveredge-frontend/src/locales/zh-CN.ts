@@ -2247,7 +2247,7 @@ export default {
   'app.haoligo.equipment.documents.boolNo': '否',
   'app.haoligo.equipment.documents.colParamCode': '点检编号',
   'app.haoligo.equipment.documents.colParamName': '点检项名称',
-  'app.haoligo.equipment.documents.colParamRequirement': '点检要求',
+  'app.haoligo.equipment.documents.colParamRequirement': '点检说明',
   'app.haoligo.equipment.documents.colResult': '结果',
   'app.haoligo.equipment.documents.colRemark': '备注',
   'app.haoligo.equipment.documents.resultNormal': '正常',
