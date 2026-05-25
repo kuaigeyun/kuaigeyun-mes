@@ -324,9 +324,49 @@ wizard_plan_database() {
     wizard_say_ok "数据库规划已保存"
 }
 
+wizard_show_existing_env_summary() {
+    local db_target db_host db_port db_name db_user admin_user
+    db_target="$(read_env_value DB_TARGET || true)"
+    db_host="$(read_env_value DB_HOST || true)"
+    db_port="$(read_env_value DB_PORT || true)"
+    db_name="$(read_env_value DB_NAME || true)"
+    db_user="$(read_env_value DB_USER || true)"
+    admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
+    [ -z "$admin_user" ] && admin_user="infra_admin"
+    if [ "$db_target" = "remote" ]; then
+        echo "    数据库: 远程 ${db_user}@${db_host}:${db_port}/${db_name}"
+    else
+        echo "    数据库: 本地 ${db_user}@${db_host:-localhost}:${db_port}/${db_name}"
+    fi
+    echo "    超管: ${admin_user}"
+}
+
 wizard_plan_preinstall() {
     ensure_env_file
     load_deploy_env
+
+    if db_config_complete && admin_config_complete; then
+        wizard_say "检测到 riveredge-backend/.env 中已有完整配置："
+        wizard_show_existing_env_summary
+        echo ""
+        echo "    1) 使用已有配置继续"
+        echo "    2) 重新填写数据库与超管"
+        local choice
+        read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
+        case "${choice:-1}" in
+            2|reconfig|new)
+                wizard_say "将重新填写安装规划..."
+                ;;
+            *)
+                wizard_say_ok "已使用已有 .env 配置"
+                echo ""
+                wizard_collect_server_access || exit 1
+                wizard_say_ok "安装规划已全部保存，后续将自动安装，无需再输入"
+                return 0
+                ;;
+        esac
+    fi
+
     wizard_plan_database
     echo ""
     wizard_collect_admin_config || exit 1

@@ -72,46 +72,95 @@ function Get-NodeDistBase([bool]$Mirror) {
     return 'https://nodejs.org/dist'
 }
 
-function Install-Node {
-    if (Invoke-WingetInstall @('-e', '--id', 'OpenJS.NodeJS.LTS', '--accept-package-agreements', '--accept-source-agreements')) {
-        Write-Ok 'Node.js installed via winget'
-        return
-    }
-
-    Write-Info 'winget unavailable, installing Node.js 22 via MSI...'
-    $mirror = ($UseMirror -eq '1')
-    $base = Get-NodeDistBase $mirror
-    $arch = 'x64'
-    $ver = $null
-
+function Get-NodeReleaseVersion([bool]$Mirror) {
+    $base = Get-NodeDistBase $Mirror
     try {
-        $indexUrl = if ($mirror) { "$base/index.json" } else { 'https://nodejs.org/dist/index.json' }
+        $indexUrl = if ($Mirror) { "$base/index.json" } else { 'https://nodejs.org/dist/index.json' }
         $index = Invoke-RestMethod -Uri $indexUrl -UseBasicParsing
         $entry = $index | Where-Object { $_.version -match '^v22\.' -and $_.lts } | Select-Object -First 1
         if (-not $entry) {
             $entry = $index | Where-Object { $_.version -match '^v22\.' } | Select-Object -First 1
         }
-        if ($entry) { $ver = $entry.version.TrimStart('v') }
+        if ($entry) { return $entry.version.TrimStart('v') }
     } catch {
         Write-Info "node index fetch failed: $($_.Exception.Message)"
     }
+    return '22.14.0'
+}
 
-    if (-not $ver) { $ver = '22.14.0' }
-
-    $file = "node-v$ver-$arch.msi"
-    $url = "$base/v$ver/$file"
+function Install-NodeMsi([string]$Ver, [bool]$Mirror) {
+    $base = Get-NodeDistBase $Mirror
+    $file = "node-v$Ver-x64.msi"
+    $url = "$base/v$Ver/$file"
     $tmpdir = Get-InstallTempDir
     $msi = Join-Path $tmpdir $file
 
     Write-Info "download: $url"
     Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
 
-    Write-Info 'silent MSI install...'
-    $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', $msi, '/qn', 'ADDLOCAL=ALL') -Wait -PassThru
-    if ($proc.ExitCode -ne 0) {
-        Write-Err "Node.js MSI failed (exit $($proc.ExitCode)). Manual: $url"
+    $argSets = @(
+        @('/i', $msi, '/qn', 'ADDLOCAL=ALL', 'ALLUSERS=2', 'MSIINSTALLPERUSER=1'),
+        @('/i', $msi, '/qn', 'ADDLOCAL=ALL')
+    )
+    foreach ($args in $argSets) {
+        Write-Info "MSI install: $($args -join ' ')"
+        $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -Wait -PassThru
+        if ($proc.ExitCode -eq 0) { return $true }
+        Write-Info "MSI exit $($proc.ExitCode) (1603 = permission/conflict; will try next method)"
     }
-    Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
+    return $false
+}
+
+function Install-NodePortable([string]$Ver, [bool]$Mirror) {
+    $base = Get-NodeDistBase $Mirror
+    $folder = "node-v$Ver-win-x64"
+    $file = "$folder.zip"
+    $url = "$base/v$Ver/$file"
+    $tmpdir = Get-InstallTempDir
+    $zip = Join-Path $tmpdir $file
+    $extract = Join-Path $tmpdir 'node-extract'
+    $toolsDir = Join-Path $FastDeployDir '.tools\node'
+
+    Write-Info "download portable: $url"
+    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+
+    if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+    Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+    $inner = Get-ChildItem $extract -Directory | Select-Object -First 1
+    if (-not $inner) { throw 'node zip has no root directory' }
+
+    if (Test-Path $toolsDir) { Remove-Item $toolsDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+    Copy-Item -Path (Join-Path $inner.FullName '*') -Destination $toolsDir -Recurse -Force
+
+    $nodeExe = Join-Path $toolsDir 'node.exe'
+    if (-not (Test-Path $nodeExe)) { throw 'node.exe not found after portable extract' }
+}
+
+function Install-Node {
+    if (Invoke-WingetInstall @('-e', '--id', 'OpenJS.NodeJS.LTS', '--accept-package-agreements', '--accept-source-agreements')) {
+        Write-Ok 'Node.js installed via winget'
+        return
+    }
+
+    $mirror = ($UseMirror -eq '1')
+    $ver = Get-NodeReleaseVersion $mirror
+
+    Write-Info "winget unavailable, installing Node.js $ver ..."
+    if (Install-NodeMsi $ver $mirror) {
+        Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
+        return
+    }
+
+    Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
+    try {
+        Install-NodePortable $ver $mirror
+    } catch {
+        Write-Err "Node.js install failed: $($_.Exception.Message). Manual: https://nodejs.org/"
+    }
+    $nodeExe = Join-Path (Join-Path $FastDeployDir '.tools\node') 'node.exe'
+    Write-Ok "Node.js $ver portable: $nodeExe"
 }
 
 function Get-PythonInstallerUrl([bool]$Mirror, [string]$Version = '3.12.9') {

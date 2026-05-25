@@ -69,7 +69,8 @@ refresh_windows_path() {
         "/c/Program Files/PostgreSQL/17/bin" \
         "/c/Program Files/PostgreSQL/16/bin" \
         "/c/Program Files/PostgreSQL/15/bin" \
-        "$FAST_DEPLOY_DIR/.tools/caddy"
+        "$FAST_DEPLOY_DIR/.tools/caddy" \
+        "$FAST_DEPLOY_DIR/.tools/node"
     do
         [ -d "$p" ] && PATH="$p:$PATH"
     done

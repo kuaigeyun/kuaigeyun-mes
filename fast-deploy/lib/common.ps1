@@ -93,7 +93,8 @@ function Get-EnhancedPath {
         "$env:ProgramFiles\PostgreSQL\15\bin",
         "$env:ProgramFiles\PostgreSQL\16\bin",
         "$env:ProgramFiles\PostgreSQL\17\bin",
-        (Join-Path $script:FastDeployDir '.tools\caddy')
+        (Join-Path $script:FastDeployDir '.tools\caddy'),
+        (Join-Path $script:FastDeployDir '.tools\node')
     )
     foreach ($p in $extra) {
         if ($p -and (Test-Path $p) -and ($paths -notcontains $p)) { $paths = @($p) + $paths }
