@@ -38,9 +38,7 @@ wizard_stage() {
 
 wizard_banner() {
     echo ""
-    echo -e "${WIZARD_BOLD}╔════════════════════════════════════════╗${WIZARD_RESET}"
-    echo -e "${WIZARD_BOLD}║      RiverEdge 智能部署向导             ║${WIZARD_RESET}"
-    echo -e "${WIZARD_BOLD}╚════════════════════════════════════════╝${WIZARD_RESET}"
+    echo -e "${WIZARD_BOLD}━━━  RiverEdge · 智能部署向导  ━━━${WIZARD_RESET}"
     echo ""
     wizard_say "你好，我将引导你完成 RiverEdge 的部署与维护。"
     echo ""
@@ -614,9 +612,7 @@ wizard_show_summary() {
     fi
 
     echo ""
-    echo -e "${WIZARD_BOLD}╔════════════════════════════════════════╗${WIZARD_RESET}"
-    echo -e "${WIZARD_BOLD}║           部署完成 · 系统信息           ║${WIZARD_RESET}"
-    echo -e "${WIZARD_BOLD}╚════════════════════════════════════════╝${WIZARD_RESET}"
+    echo -e "${WIZARD_BOLD}━━━  部署完成 · 系统信息  ━━━${WIZARD_RESET}"
     echo ""
     wizard_say_ok "部署模式: $([ "$DEPLOY_MODE" = "dev" ] && echo "开发" || echo "生产")"
     wizard_say_ok "Web 访问: ${web_url}"

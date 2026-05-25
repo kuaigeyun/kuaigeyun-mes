@@ -766,6 +766,15 @@ function Invoke-Status {
 
 function Install-Component([string]$Component, [string]$Status) {
     if ($Status -eq 'ok') { return }
+    $psScript = Join-Path $script:FastDeployDir 'windows\install-component.ps1'
+    if (Test-Path $psScript) {
+        Write-LogInfo "Windows 安装 $Component（winget 或官方安装包）..."
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $psScript `
+            -Component $Component -UseMirror $script:UseMirror -FastDeployDir $script:FastDeployDir
+        if ($LASTEXITCODE -ne 0) { throw "${Component} 安装失败，详见上方日志" }
+        $env:PATH = Get-EnhancedPath
+        return
+    }
     $cmd = Get-InstallCommand $Component
     if ($Component -eq 'caddy') {
         Install-Caddy

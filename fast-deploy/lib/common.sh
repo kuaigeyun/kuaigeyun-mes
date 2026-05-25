@@ -56,6 +56,36 @@ is_windows_gitbash() {
     esac
 }
 
+# Windows 安装后补充常见路径（当前 Git Bash 会话内生效）
+refresh_windows_path() {
+    is_windows_gitbash || return 0
+    local p
+    for p in \
+        "/c/Program Files/nodejs" \
+        "/c/Program Files (x86)/nodejs" \
+        "$LOCALAPPDATA/Programs/Python/Python312" \
+        "$LOCALAPPDATA/Programs/Python/Python312/Scripts" \
+        "$USERPROFILE/.local/bin" \
+        "/c/Program Files/PostgreSQL/17/bin" \
+        "/c/Program Files/PostgreSQL/16/bin" \
+        "/c/Program Files/PostgreSQL/15/bin" \
+        "$FAST_DEPLOY_DIR/.tools/caddy"
+    do
+        [ -d "$p" ] && PATH="$p:$PATH"
+    done
+    export PATH
+}
+
+run_windows_install_component() {
+    local comp=$1
+    local ps_script="$FAST_DEPLOY_DIR/windows/install-component.ps1"
+    [ -f "$ps_script" ] || { log_error "缺少 $ps_script"; return 1; }
+    log_info "Windows 安装 $comp（winget 或官方安装包）..."
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script" \
+        -Component "$comp" -UseMirror "$USE_MIRROR" -FastDeployDir "$FAST_DEPLOY_DIR" || return 1
+    refresh_windows_path
+}
+
 apply_cn_mirrors() {
     [ "${USE_MIRROR}" = "0" ] && return 0
     export UV_INDEX_URL="${UV_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
@@ -1287,15 +1317,21 @@ install_caddy_apt() {
 run_install_component() {
     local comp=$1 status=$2
     [ "$status" = "ok" ] && return 0
+    if is_windows_gitbash; then
+        case "$comp" in
+            node|python|uv|postgresql|caddy)
+                run_windows_install_component "$comp" || {
+                    log_error "$comp 安装失败，详见上方日志"
+                    return 1
+                }
+                return 0
+                ;;
+        esac
+    fi
     if [ "$comp" = "caddy" ]; then
         log_info "安装 caddy..."
         if is_windows_gitbash; then
-            local cmd="winget install -e --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements"
-            log_info "执行: $cmd"
-            cmd.exe //c "$cmd" || {
-                log_error "caddy 安装失败，请手动执行: $cmd"
-                return 1
-            }
+            run_windows_install_component caddy || return 1
             return 0
         elif [ -f /etc/debian_version ]; then
             install_caddy_apt || return 1
@@ -1326,13 +1362,6 @@ run_install_component() {
     fi
     log_info "安装 $comp..."
     log_info "执行: $cmd"
-    if is_windows_gitbash; then
-        cmd.exe //c "$cmd" || {
-            log_error "$comp 安装失败，请用管理员 Git Bash 重试，或手动执行: $cmd"
-            return 1
-        }
-        return 0
-    fi
     bash -lc "$cmd" || {
         log_error "$comp 安装失败，请手动执行: $cmd"
         return 1
@@ -1365,7 +1394,7 @@ cmd_install() {
     apply_cn_mirrors
     log_info "安装缺失依赖（可能需要 sudo / 管理员权限）..."
     if is_windows_gitbash; then
-        log_info "Windows 环境：通过 cmd/winget 安装系统组件..."
+        log_info "Windows 环境：优先 winget，不可用时走官方安装包..."
     fi
     run_install_component node "$(check_node)" || true
     run_install_component python "$(check_python)" || true
