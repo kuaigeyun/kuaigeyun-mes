@@ -14,7 +14,6 @@ import {
   ProFormText,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
-import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import {
   App,
@@ -37,7 +36,8 @@ import {
 import { DeleteOutlined, EditOutlined, EyeOutlined, CodeSandboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
+import { uploadFile } from '../../../../../../services/file';
+import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
 import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
 import {
@@ -81,28 +81,6 @@ async function fetchAllTrialPurchaseOrderNosForPoPicker(): Promise<string[]> {
     if (res.items.length === 0 || res.items.length < limit || skip >= total) break;
   }
   return [...set];
-}
-
-function normUploadUuids(val: unknown): string[] {
-  if (!Array.isArray(val)) return [];
-  const out: string[] = [];
-  for (const item of val) {
-    const anyItem = item as { response?: { uuid?: string }; uid?: string };
-    const u = anyItem?.response?.uuid ?? (typeof anyItem?.uid === 'string' && /^[0-9a-f-]{36}$/i.test(anyItem.uid) ? anyItem.uid : null);
-    if (u) out.push(u);
-  }
-  return out;
-}
-
-function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
-  if (!uuids?.length) return [];
-  return uuids.map((uuid) => ({
-    uid: uuid,
-    name: '附件',
-    status: 'done',
-    url: getFileDownloadUrl(uuid),
-    response: { uuid },
-  }));
 }
 
 const MoldTrialSheetsPage: React.FC = () => {
@@ -480,8 +458,8 @@ const MoldTrialSheetsPage: React.FC = () => {
         mold_code: detail.mold_code ?? undefined,
         mold_name: detail.mold_name ?? undefined,
         trial_times: detail.trial_times ?? undefined,
-        result_attachments: uuidsToUploadFileList(detail.result_attachment_file_uuids),
-        inspection_attachments: uuidsToUploadFileList(detail.inspection_attachment_file_uuids),
+        result_attachments: await uuidsToSecureUploadFileList(detail.result_attachment_file_uuids),
+        inspection_attachments: await uuidsToSecureUploadFileList(detail.inspection_attachment_file_uuids),
         trial_result: detail.trial_result,
         sync_mold_status: true,
       });

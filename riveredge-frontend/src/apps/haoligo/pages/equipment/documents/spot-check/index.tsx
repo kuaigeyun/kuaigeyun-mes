@@ -106,6 +106,25 @@ function lineMatchKey(ln: { param_code: string; sort_order: number }) {
   return `${ln.param_code}::${ln.sort_order}`;
 }
 
+type EditSelectSeed = {
+  equipmentId: number;
+  equipmentLabel: string;
+  inspectionParamSetId?: number | null;
+  inspectionParamSetLabel?: string;
+};
+
+function mergeSelectOption(
+  opts: { label: string; value: number }[],
+  value: number | undefined | null,
+  label: string | undefined,
+): { label: string; value: number }[] {
+  if (value == null || !Number.isFinite(Number(value))) return opts;
+  const v = Number(value);
+  if (opts.some((o) => o.value === v)) return opts;
+  const lb = (label || '').trim() || `ID ${v}`;
+  return [{ label: lb, value: v }, ...opts];
+}
+
 const SpotCheckDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
@@ -122,6 +141,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const [lines, setLines] = useState<EquipmentSpotCheckLineRow[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
   const [planHint, setPlanHint] = useState<{ code: string; name: string } | null>(null);
+  const [editSelectSeed, setEditSelectSeed] = useState<EditSelectSeed | null>(null);
+  const [editFormInitialValues, setEditFormInitialValues] = useState<Record<string, unknown> | null>(null);
 
   const title = t('app.haoligo.menu.equipment.documents.spot-check');
   const reload = useCallback(() => actionRef.current?.reload(), []);
@@ -193,6 +214,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const openNew = () => {
     setDetailMode(false);
     setEditId(null);
+    setEditSelectSeed(null);
+    setEditFormInitialValues(null);
     setLines([]);
     setPlanHint(null);
     loadLinesSeqRef.current += 1;
@@ -224,10 +247,28 @@ const SpotCheckDocumentsPage: React.FC = () => {
             }
           : null,
       );
+      const equipmentLabel =
+        `${row.equipment_asset_code || ''} ${row.equipment_name || ''}`.trim() || `ID ${row.equipment_id}`;
+      const planLabel = `${row.inspection_param_set_code || ''} ${row.inspection_param_set_name || ''}`.trim();
+      setEditSelectSeed({
+        equipmentId: row.equipment_id,
+        equipmentLabel,
+        inspectionParamSetId: row.inspection_param_set_id,
+        inspectionParamSetLabel:
+          planLabel || (row.inspection_param_set_id ? `ID ${row.inspection_param_set_id}` : undefined),
+      });
+      const notifyIds = row.report_notify_user_ids || [];
+      setEditFormInitialValues({
+        equipment_id: row.equipment_id,
+        inspection_param_set_id: row.inspection_param_set_id ?? undefined,
+        recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+        applied_operational_status: row.applied_operational_status ?? undefined,
+        report_enabled: row.report_enabled,
+        report_notify_user_ids: notifyIds,
+      });
       setModalOpen(true);
-      setTimeout(async () => {
-        const notifyIds = row.report_notify_user_ids || [];
-        if (notifyIds.length) {
+      if (notifyIds.length) {
+        void (async () => {
           try {
             const res = await getUserList({ page: 1, page_size: 50, is_active: true });
             for (const uid of notifyIds) {
@@ -239,16 +280,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
           } catch {
             /* ignore */
           }
-        }
-        formRef.current?.setFieldsValue({
-          equipment_id: row.equipment_id,
-          inspection_param_set_id: row.inspection_param_set_id ?? undefined,
-          recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-          applied_operational_status: row.applied_operational_status ?? undefined,
-          report_enabled: row.report_enabled,
-          report_notify_user_ids: notifyIds,
-        });
-      }, 0);
+        })();
+      }
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
     } finally {
@@ -765,9 +798,22 @@ const SpotCheckDocumentsPage: React.FC = () => {
               : `${title} — ${t('app.haoligo.equipment.documents.btnNew')}`
         }
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => {
+          setModalOpen(false);
+          setEditSelectSeed(null);
+          setEditFormInitialValues(null);
+        }}
         afterOpenChange={(open) => {
-          if (open && editId == null && !detailMode) {
+          if (!open) {
+            setEditSelectSeed(null);
+            setEditFormInitialValues(null);
+            return;
+          }
+          if (editFormInitialValues) {
+            formRef.current?.setFieldsValue(editFormInitialValues);
+            return;
+          }
+          if (editId == null && !detailMode) {
             formRef.current?.setFieldsValue(getNewFormDefaults());
           }
         }}
@@ -790,12 +836,13 @@ const SpotCheckDocumentsPage: React.FC = () => {
       >
         <Spin spinning={formLoading} wrapperClassName="haoligo-spot-check-modal-spin">
           <ProForm
+            key={editId ?? 'new'}
             formRef={formRef}
             submitter={false}
             layout="vertical"
             disabled={detailMode}
             size="middle"
-            initialValues={editId == null && !detailMode ? getNewFormDefaults() : undefined}
+            initialValues={editFormInitialValues ?? (editId == null && !detailMode ? getNewFormDefaults() : undefined)}
           >
             <Row gutter={[16, 8]}>
               <Col xs={24} sm={12}>
@@ -825,12 +872,16 @@ const SpotCheckDocumentsPage: React.FC = () => {
                       }
                     },
                   }}
+                  params={{ editId, seedEquipmentId: editSelectSeed?.equipmentId }}
                   request={async ({ keyWords }) => {
                     const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
-                    return (res.items || []).map((e) => ({
+                    const opts = (res.items || []).map((e) => ({
                       label: `${e.asset_code} ${e.name}`,
                       value: e.id,
                     }));
+                    return editSelectSeed
+                      ? mergeSelectOption(opts, editSelectSeed.equipmentId, editSelectSeed.equipmentLabel)
+                      : opts;
                   }}
                 />
               </Col>
@@ -853,9 +904,17 @@ const SpotCheckDocumentsPage: React.FC = () => {
                       void loadInspectionLines({ setId: val ?? null });
                     },
                   }}
+                  params={{ editId, seedPlanId: editSelectSeed?.inspectionParamSetId }}
                   request={async () => {
                     const rows = await listInspectionParamSets();
-                    return (rows || []).map((s) => ({ label: `${s.code} ${s.name}`, value: s.id }));
+                    const opts = (rows || []).map((s) => ({ label: `${s.code} ${s.name}`, value: s.id }));
+                    return editSelectSeed
+                      ? mergeSelectOption(
+                          opts,
+                          editSelectSeed.inspectionParamSetId,
+                          editSelectSeed.inspectionParamSetLabel,
+                        )
+                      : opts;
                   }}
                 />
               </Col>
