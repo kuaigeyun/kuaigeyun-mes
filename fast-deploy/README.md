@@ -4,32 +4,37 @@
 
 ```bash
 cd riveredge
-./fast-deploy/deploy.sh              # 生产 · 7 阶段智能向导
+./fast-deploy/deploy.sh              # 生产 · 8 阶段智能向导
 ./fast-deploy/deploy.sh dev            # 开发模式（跳过模式选择）
 ./fast-deploy/deploy.sh wizard         # 显式进入向导
 ```
 
 子命令 `check / install / configure / ...` 仍可用于单步操作。
 
-## 智能部署向导（7 阶段）
+## 智能部署向导（8 阶段）
 
 | 阶段 | 名称 | 说明 |
 |:----:|------|------|
 | 1 | 系统识别 | 检测 Windows/Linux、架构、部署模式、镜像策略 |
-| 2 | 环境监测 | 扫描 Node / Python / uv / npm / PostgreSQL / Caddy |
-| 3 | 环境准备 | 初始化目录、加载 deploy.env、启用国内镜像 |
-| 4 | 环境软件安装 | 安装前列出待装组件，逐项安装并提示完成（日志 → `.logs/wizard-deps.log`） |
-| 5 | 系统配置 | 交互填写数据库、超管密码、服务器 IP |
-| 6 | 系统安装 | 迁移 → 构建 → 启动（dev 直接热重载启动） |
-| 7 | 安装完成 | 展示访问地址、账号与常用命令 |
+| 2 | 安装规划 | **安装前**一次性填写：数据库（本地/远程）、超管用户名密码、服务器 IP |
+| 3 | 环境监测 | 扫描 Node / Python / uv / npm / PostgreSQL / Caddy |
+| 4 | 环境准备 | 初始化目录、加载 deploy.env、启用国内镜像 |
+| 5 | 环境软件安装 | 安装前列出待装组件，逐项安装并提示完成 |
+| 6 | 应用配置 | 自动写入 JWT / BASE_URL / CORS，验证数据库连接（无交互） |
+| 7 | 系统安装 | 迁移 → 构建 → 启动 |
+| 8 | 安装完成 | 展示访问地址、账号与常用命令 |
 
 向导输出形如对话：
 
 ```
-RiverEdge › 你好，我将引导你完成 RiverEdge 的检测、安装与启动。
-━━━ 阶段 2/7 · 环境监测 ━━━
-  ✓ Node.js 22+ — 就绪
-  ! PostgreSQL 15+ — 版本 14.23，需要升级
+RiverEdge › 在安装依赖之前，请先确定数据库部署方式：
+    1) 本地安装 PostgreSQL
+    2) 使用远程数据库
+RiverEdge › 请设定平台超级管理员（首次登录使用）
+RiverEdge › 超管用户名 [infra_admin]:
+RiverEdge › 超管密码（至少 6 位）:
+RiverEdge › 浏览器访问本系统时使用的服务器 IP（已检测: 192.168.x.x）
+  ✓ 安装规划已全部保存，后续将自动安装，无需再输入
 ```
 
 ## 脚本对照
@@ -40,22 +45,23 @@ RiverEdge › 你好，我将引导你完成 RiverEdge 的检测、安装与启�
 | Linux 开发/生产 | [`linux/dev.sh`](linux/dev.sh) / [`linux/prod.sh`](linux/prod.sh) |
 | Windows PowerShell | [`windows/dev.ps1`](windows/dev.ps1) / [`windows/prod.ps1`](windows/prod.ps1) |
 
-## 配置向导（阶段 5）
+## 安装规划（阶段 2，安装前 · 唯一交互阶段）
 
 | 项 | 说明 |
 |----|------|
-| PostgreSQL 用户名 | 默认 `postgres` |
-| PostgreSQL 主机 | 本地 `localhost`，远程填 IP |
-| PostgreSQL 端口 | 自动检测 PG15 集群（常为 5432 或 5433） |
-| 数据库名 | 默认 `riveredge` |
-| PostgreSQL 密码 | 手动填写已知密码，或本机 localhost 下「强制重置」（会改库内用户密码，需输入 yes 确认） |
-| 平台超管密码 | 登录用户 `infra_admin` |
+| 数据库部署方式 | **本地安装 PG15** 或 **远程数据库**（远程则跳过本地 PG 安装） |
+| PostgreSQL 用户名/主机/端口/库名/密码 | 本地默认 `postgres` + `localhost`；远程按实际填写；密码必填 |
+| 平台超管用户名 | 默认 `infra_admin`，可自定义 |
+| 平台超管密码 | **至少 6 位**，安装前必填 |
 | 服务器 IP | **自动检测**本机局域网 IP，回车确认 |
 
-写入文件：
+填写完成后，阶段 3–8 **全自动**执行（安装依赖、初始化库、迁移、构建、启动），无需再输入。
 
-- 应用配置 → `riveredge-backend/.env`（含 `BASE_URL`、`CORS_ORIGINS`）
-- 部署配置 → `fast-deploy/deploy.env`（含 `SERVER_IP`、端口）
+`.env` 会写入 `DB_TARGET=local|remote`、完整 `DB_*`、`PLATFORM_SUPERADMIN_*`；`deploy.env` 写入 `SERVER_IP`。
+
+## 单独配置
+
+运行 `./fast-deploy/deploy.sh configure` 时可修改全部项（含数据库手动/强制重置模式）。
 
 ## 环境要求
 

@@ -326,21 +326,129 @@ set_deploy_env_value() {
     fi
 }
 
+admin_config_complete() {
+    local pass user
+    pass="$(read_env_value PLATFORM_SUPERADMIN_PASSWORD || true)"
+    user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
+    [ -z "$user" ] && user="infra_admin"
+    [ -n "$pass" ] && [ ${#pass} -ge 6 ] && [ -n "$user" ]
+}
+
+server_access_configured() {
+    [ -n "$(read_deploy_env_value SERVER_IP || true)" ]
+}
+
 env_needs_configure() {
     [ ! -f "$ENV_FILE" ] && return 0
-    local db_pass admin_pass jwt base_url
-    db_pass="$(read_env_value DB_PASSWORD || true)"
-    admin_pass="$(read_env_value PLATFORM_SUPERADMIN_PASSWORD || true)"
+    local jwt base_url
+    if ! db_config_complete; then
+        return 0
+    fi
+    if ! admin_config_complete; then
+        return 0
+    fi
+    if ! server_access_configured; then
+        return 0
+    fi
     jwt="$(read_env_value JWT_SECRET_KEY || true)"
-    if [ -z "$db_pass" ] || [ -z "$admin_pass" ] || [ "$jwt" = "your-secret-key-here-change-in-production" ] || [ -z "$jwt" ]; then
+    if [ -z "$jwt" ] || [ "$jwt" = "your-secret-key-here-change-in-production" ]; then
         return 0
     fi
     if [ "$DEPLOY_MODE" = "prod" ]; then
         base_url="$(read_env_value BASE_URL || true)"
         [ -z "$base_url" ] && return 0
-        [ -z "$(read_deploy_env_value SERVER_IP || true)" ] && return 0
     fi
     return 1
+}
+
+ensure_env_file() {
+    if [ ! -f "$ENV_FILE" ]; then
+        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
+    fi
+}
+
+db_target_is_remote() {
+    [ "$(read_env_value DB_TARGET 2>/dev/null || true)" = "remote" ]
+}
+
+db_config_complete() {
+    local pass host name user port target
+    target="$(read_env_value DB_TARGET || true)"
+    pass="$(read_env_value DB_PASSWORD || true)"
+    host="$(read_env_value DB_HOST || true)"
+    name="$(read_env_value DB_NAME || true)"
+    user="$(read_env_value DB_USER || true)"
+    port="$(read_env_value DB_PORT || true)"
+    [ -n "$target" ] && [ -n "$pass" ] && [ -n "$host" ] && [ -n "$name" ] && [ -n "$user" ] && [ -n "$port" ]
+}
+
+read_password_twice() {
+    local prompt=$1 p1 p2
+    read -rsp "${prompt}: " p1; echo
+    read -rsp "再次确认: " p2; echo
+    if [ "$p1" != "$p2" ]; then
+        log_error "两次密码不一致"
+        return 1
+    fi
+    if [ ${#p1} -lt 1 ]; then
+        log_error "密码不能为空"
+        return 1
+    fi
+    printf '%s' "$p1"
+}
+
+check_postgres_deploy() {
+    if db_target_is_remote; then
+        if test_db_connection; then echo "ok"; else echo "conn_failed"; fi
+        return
+    fi
+    check_postgres
+}
+
+postgres_bootstrap_local() {
+    local db_user db_pass db_name db_port psql_bin escaped sql
+    db_user="$(read_env_value DB_USER || echo postgres)"
+    db_pass="$(read_env_value DB_PASSWORD)"
+    db_name="$(read_env_value DB_NAME || echo riveredge)"
+    db_port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
+    psql_bin="$(resolve_psql)"
+
+    [ -n "$db_pass" ] || { log_error "DB_PASSWORD 未配置"; return 1; }
+
+    log_info "初始化本地 PostgreSQL (${db_user}@${db_port}/${db_name})..."
+
+    postgres_run_alter_password "postgres" "$db_port" "$db_pass" || {
+        log_error "设置 postgres 超级用户密码失败，请确认 PostgreSQL 已启动"
+        return 1
+    }
+
+    if [ "$db_user" != "postgres" ]; then
+        escaped="$(postgres_sql_escape "$db_pass")"
+        sql="DO \$\$ BEGIN
+IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${db_user}') THEN
+  CREATE ROLE \"${db_user}\" LOGIN PASSWORD '${escaped}' CREATEDB;
+ELSE
+  ALTER ROLE \"${db_user}\" WITH PASSWORD '${escaped}';
+END IF;
+END \$\$;"
+        sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "$sql" 2>/dev/null || \
+            sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "$sql" || return 1
+    fi
+
+    if ! sudo -u postgres psql -p "$db_port" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
+        if ! sudo -u postgres psql -p "$db_port" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";" 2>/dev/null; then
+            sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";" || return 1
+        fi
+    fi
+
+    export PGPASSWORD="$db_pass"
+    if ! "$psql_bin" -h localhost -p "$db_port" -U "$db_user" -d "$db_name" -c "SELECT 1" >/dev/null 2>&1; then
+        unset PGPASSWORD
+        log_error "数据库初始化后连接验证失败"
+        return 1
+    fi
+    unset PGPASSWORD
+    log_ok "本地 PostgreSQL 已就绪"
 }
 
 resolve_psql() {
@@ -492,72 +600,27 @@ configure_postgres_password() {
     esac
 }
 
-cmd_configure() {
-    log_info "配置应用环境..."
-    apply_cn_mirrors
-    if [ ! -f "$ENV_FILE" ]; then
-        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
-        log_info "已从 .env.example 创建 $ENV_FILE"
-    fi
-    if [ ! -f "$DEPLOY_ENV_FILE" ]; then
-        cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
-    fi
+generate_jwt_secret() {
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null \
+        || python -c 'import secrets; print(secrets.token_urlsafe(32))'
+}
+
+apply_app_config() {
+    local jwt server_ip detected_ip base_url admin_user
     load_deploy_env
 
-    local db_user db_host db_port db_name db_pass admin_pass jwt server_ip detected_ip input base_url
-
-    db_user="$(read_env_value DB_USER || true)"
-    [ -z "$db_user" ] && db_user="postgres"
-    read -rp "PostgreSQL 用户名 [${db_user}]: " input
-    db_user="${input:-$db_user}"
-    set_env_value DB_USER "$db_user"
-
-    db_host="$(read_env_value DB_HOST || true)"
-    [ -z "$db_host" ] && db_host="localhost"
-    read -rp "PostgreSQL 主机 [${db_host}] (本地填 localhost，远程填 IP): " input
-    db_host="${input:-$db_host}"
-    set_env_value DB_HOST "$db_host"
-
-    db_port="$(read_env_value DB_PORT || true)"
-    [ -z "$db_port" ] && db_port="$(detect_postgres_port)"
-    read -rp "PostgreSQL 端口 [${db_port}]: " input
-    db_port="${input:-$db_port}"
-    set_env_value DB_PORT "$db_port"
-
-    db_name="$(read_env_value DB_NAME || true)"
-    [ -z "$db_name" ] && db_name="riveredge"
-    read -rp "数据库名 [${db_name}]: " input
-    db_name="${input:-$db_name}"
-    set_env_value DB_NAME "$db_name"
-
-    configure_postgres_password
-
-    admin_pass="$(read_env_value PLATFORM_SUPERADMIN_PASSWORD || true)"
-    if [ -z "$admin_pass" ]; then
-        read -rsp "平台超级管理员密码 (登录用户名 infra_admin): " admin_pass; echo
-        [ ${#admin_pass} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
-        set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
-    else
-        read -rsp "平台超管密码 [已配置，回车跳过 / 输入新密码]: " input; echo
-        if [ -n "$input" ]; then
-            [ ${#input} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
-            set_env_value PLATFORM_SUPERADMIN_PASSWORD "$input"
-        fi
-    fi
+    admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
+    [ -z "$admin_user" ] && set_env_value PLATFORM_SUPERADMIN_USERNAME "infra_admin"
 
     jwt="$(read_env_value JWT_SECRET_KEY || true)"
     if [ -z "$jwt" ] || [ "$jwt" = "your-secret-key-here-change-in-production" ]; then
-        jwt="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+        jwt="$(generate_jwt_secret)"
         set_env_value JWT_SECRET_KEY "$jwt"
-        log_info "已自动生成 JWT_SECRET_KEY"
     fi
 
     detected_ip="$(detect_server_ip)"
     server_ip="$(read_deploy_env_value SERVER_IP || true)"
     [ -z "$server_ip" ] && server_ip="$detected_ip"
-    log_info "检测到本机 IP: ${detected_ip}"
-    read -rp "服务器 IP (浏览器访问地址) [${server_ip}]: " input
-    server_ip="${input:-$server_ip}"
     set_deploy_env_value SERVER_IP "$server_ip"
     load_deploy_env
 
@@ -579,19 +642,107 @@ cmd_configure() {
         set_env_value HOST "0.0.0.0"
         set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}"
     fi
+}
+
+print_configure_summary() {
+    local db_user db_host db_port db_name server_ip admin_user
+    db_user="$(read_env_value DB_USER || echo postgres)"
+    db_host="$(read_env_value DB_HOST || echo localhost)"
+    db_port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
+    db_name="$(read_env_value DB_NAME || echo riveredge)"
+    server_ip="$(read_deploy_env_value SERVER_IP || detect_server_ip)"
+    admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
+    echo "  数据库: ${db_user}@${db_host}:${db_port}/${db_name}"
+    echo "  超管账号: ${admin_user}"
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo "  访问地址: http://${server_ip}:${PROXY_PORT}"
+    else
+        echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
+    fi
+}
+
+cmd_configure() {
+    log_info "配置应用环境..."
+    apply_cn_mirrors
+    if [ ! -f "$ENV_FILE" ]; then
+        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
+        log_info "已从 .env.example 创建 $ENV_FILE"
+    fi
+    load_deploy_env
+
+    local db_user db_host db_port db_name admin_pass admin_user input detected_ip server_ip
+
+    if db_config_complete; then
+        log_info "数据库已在向导/此前步骤配置，跳过数据库问答"
+        db_user="$(read_env_value DB_USER)"
+        db_host="$(read_env_value DB_HOST)"
+        db_port="$(read_env_value DB_PORT)"
+        db_name="$(read_env_value DB_NAME)"
+    else
+        db_user="$(read_env_value DB_USER || true)"
+        [ -z "$db_user" ] && db_user="postgres"
+        read -rp "PostgreSQL 用户名 [${db_user}]: " input
+        db_user="${input:-$db_user}"
+        set_env_value DB_USER "$db_user"
+
+        db_host="$(read_env_value DB_HOST || true)"
+        [ -z "$db_host" ] && db_host="localhost"
+        read -rp "PostgreSQL 主机 [${db_host}] (本地填 localhost，远程填 IP): " input
+        db_host="${input:-$db_host}"
+        set_env_value DB_HOST "$db_host"
+
+        db_port="$(read_env_value DB_PORT || true)"
+        [ -z "$db_port" ] && db_port="$(detect_postgres_port)"
+        read -rp "PostgreSQL 端口 [${db_port}]: " input
+        db_port="${input:-$db_port}"
+        set_env_value DB_PORT "$db_port"
+
+        db_name="$(read_env_value DB_NAME || true)"
+        [ -z "$db_name" ] && db_name="riveredge"
+        read -rp "数据库名 [${db_name}]: " input
+        db_name="${input:-$db_name}"
+        set_env_value DB_NAME "$db_name"
+
+        configure_postgres_password
+    fi
+
+    admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
+    [ -z "$admin_user" ] && admin_user="infra_admin"
+    if ! admin_config_complete; then
+        read -rp "平台超级管理员用户名 [${admin_user}]: " input
+        admin_user="${input:-$admin_user}"
+        set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
+        read -rsp "平台超级管理员密码: " admin_pass; echo
+        [ ${#admin_pass} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
+        set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
+    else
+        read -rsp "平台超管密码 [已配置，回车跳过 / 输入新密码]: " input; echo
+        if [ -n "$input" ]; then
+            [ ${#input} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
+            set_env_value PLATFORM_SUPERADMIN_PASSWORD "$input"
+        fi
+        read -rp "平台超管用户名 [${admin_user}，回车跳过]: " input
+        if [ -n "$input" ]; then
+            set_env_value PLATFORM_SUPERADMIN_USERNAME "$input"
+        fi
+    fi
+
+    detected_ip="$(detect_server_ip)"
+    server_ip="$(read_deploy_env_value SERVER_IP || true)"
+    [ -z "$server_ip" ] && server_ip="$detected_ip"
+    log_info "检测到本机 IP: ${detected_ip}"
+    read -rp "服务器 IP (浏览器访问地址) [${server_ip}]: " input
+    server_ip="${input:-$server_ip}"
+    set_deploy_env_value SERVER_IP "$server_ip"
+
+    apply_app_config
 
     log_info "测试数据库连接..."
     if ! test_db_connection; then
         exit 1
     fi
     log_ok "配置完成"
-    echo "  数据库: ${db_user}@${db_host}:${db_port}/${db_name}"
-    echo "  超管账号: infra_admin"
-    if [ "$DEPLOY_MODE" = "prod" ]; then
-        echo "  访问地址: http://${server_ip}:${PROXY_PORT}"
-    else
-        echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
-    fi
+    print_configure_summary
 }
 
 sync_backend_deps() {
@@ -1038,7 +1189,11 @@ cmd_check() {
     st="$(check_python)"; [ "$st" = "ok" ] && log_ok "Python" || { log_warn "Python: $st"; failed=1; }
     st="$(check_uv)"; [ "$st" = "ok" ] && log_ok "uv" || { log_warn "uv: $st"; failed=1; }
     st="$(check_npm)"; [ "$st" = "ok" ] && log_ok "npm" || { log_warn "npm: $st"; failed=1; }
-    st="$(check_postgres)"; [ "$st" = "ok" ] && log_ok "PostgreSQL" || { log_warn "PostgreSQL: $st"; failed=1; }
+    if db_target_is_remote; then
+        st="$(check_postgres_deploy)"; [ "$st" = "ok" ] && log_ok "PostgreSQL (远程)" || { log_warn "PostgreSQL (远程): $st"; failed=1; }
+    else
+        st="$(check_postgres)"; [ "$st" = "ok" ] && log_ok "PostgreSQL" || { log_warn "PostgreSQL: $st"; failed=1; }
+    fi
     if [ "$need_caddy" -eq 1 ]; then
         st="$(check_caddy)"; [ "$st" = "ok" ] && log_ok "Caddy" || { log_warn "Caddy: $st"; failed=1; }
     fi
@@ -1055,10 +1210,17 @@ cmd_install() {
     run_install_component node "$(check_node)" || true
     run_install_component python "$(check_python)" || true
     run_install_component uv "$(check_uv)" || true
-    local pg_st
-    pg_st="$(check_postgres)"
-    if [ "$pg_st" != "ok" ]; then
-        run_install_component postgresql "$pg_st" || return 1
+    if db_target_is_remote; then
+        log_info "远程数据库模式 (DB_TARGET=remote)，跳过本地 PostgreSQL 安装"
+    else
+        local pg_st
+        pg_st="$(check_postgres)"
+        if [ "$pg_st" != "ok" ]; then
+            run_install_component postgresql "$pg_st" || return 1
+        fi
+        if db_config_complete; then
+            postgres_bootstrap_local || return 1
+        fi
     fi
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
