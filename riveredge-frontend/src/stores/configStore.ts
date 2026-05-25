@@ -220,6 +220,16 @@ export function getTenantHomePathFromConfigs(configs: Record<string, any> | null
   return configs?.enable_system_dashboard !== false ? TENANT_HOME_WORKPLACE : TENANT_HOME_FALLBACK;
 }
 
+/** 租户后台首页：自定义首页优先，否则系统默认（工作台 / 应用中心） */
+export function resolveTenantHomePath(
+  backendHomePath?: string | null,
+  configs?: Record<string, any> | null,
+): string {
+  const custom = backendHomePath?.trim();
+  if (custom) return custom;
+  return getTenantHomePathFromConfigs(configs ?? getPersistedConfigs() ?? {});
+}
+
 /** 登录后默认落地（持久化 configs；关闭「系统级仪表盘」时为应用中心） */
 export function getDefaultTenantHomePath(): string {
   return getTenantHomePathFromConfigs(getPersistedConfigs() ?? {});

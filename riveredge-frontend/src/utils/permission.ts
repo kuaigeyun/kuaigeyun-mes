@@ -129,32 +129,6 @@ export function hasResourceAction(
 /** 与后端 menu_resource_resolver 一致：分组占位权限不参与菜单可见性拦截 */
 const GENERIC_MENU_RESOURCES = new Set(['workspace', 'entry']);
 
-function extractAppCodeFromMenuPath(path?: string): string | null {
-  if (!path) return null;
-  const matched = path.match(/^\/apps\/([^/]+)/);
-  return matched ? matched[1].toLowerCase() : null;
-}
-
-function resolveAppCodeFromMenuItem(item: PermissionMenuItem): string | null {
-  const fromPath = extractAppCodeFromMenuPath(item.path);
-  if (fromPath) return fromPath;
-  for (const child of item.children ?? []) {
-    const code = resolveAppCodeFromMenuItem(child);
-    if (code) return code;
-  }
-  return null;
-}
-
-/** 用户是否拥有某应用下任意权限（菜单码与角色授权不完全一致时的兜底） */
-function userHasAnyAppPermission(user: CurrentUser, appCode: string): boolean {
-  const prefix = `${appCode.toLowerCase()}:`;
-  const userPerms = buildUserPermissionSet(user);
-  for (const p of userPerms) {
-    if (p.startsWith(prefix)) return true;
-  }
-  return false;
-}
-
 function isGenericMenuPermissionCode(code: string): boolean {
   const norm = normalizePermissionCode(code);
   if (!norm) return true;
@@ -268,10 +242,7 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
       if (permissionCodes?.length) {
         const required = permissionCodes.filter((c) => c && !isGenericMenuPermissionCode(c));
         if (required.length > 0 && !hasAnyMenuPermission(user, required)) {
-          const appCode = resolveAppCodeFromMenuItem(item);
-          if (!appCode || !userHasAnyAppPermission(user, appCode)) {
-            return null;
-          }
+          return null;
         }
       }
 

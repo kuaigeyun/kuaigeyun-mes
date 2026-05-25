@@ -18,5 +18,5 @@ class HaoligoMoldLedgerDatasetBinding(HaoligoTenantModel):
     mold_name_column = fields.CharField(max_length=128, null=True, description="结果集中模具名称列名")
     unit_column = fields.CharField(max_length=128, null=True, description="结果集中单位列名")
     mold_capacity_column = fields.CharField(
-        max_length=128, null=True, description="结果集中模具产能列名（可选；与 SQL 别名一致）"
+        max_length=128, null=True, description="结果集中单模产能列名（可选；与 SQL 别名一致）"
     )

@@ -26,6 +26,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   createCategory,
   deleteCategory,
+  formatCategoryLabel,
   listCategories,
   listInspectionParamSets,
   updateCategory,
@@ -42,6 +43,7 @@ const CategoriesPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
+  const [allCategories, setAllCategories] = useState<CategoryRow[]>([]);
   const [paramSets, setParamSets] = useState<InspectionParamSetRow[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -53,12 +55,18 @@ const CategoriesPage: React.FC = () => {
 
   const loadParamSets = useCallback(async () => {
     try {
-      const sets = await listInspectionParamSets();
+      const [sets, cats] = await Promise.all([listInspectionParamSets(), listCategories()]);
       setParamSets(sets);
+      setAllCategories(cats);
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
     }
   }, [messageApi, t]);
+
+  const level1Options = React.useMemo(() => {
+    const set = new Set(allCategories.map((c) => c.level1_category).filter(Boolean));
+    return [...set].sort().map((v) => ({ label: v, value: v }));
+  }, [allCategories]);
 
   useEffect(() => {
     void Promise.resolve().then(() => loadParamSets());
@@ -88,7 +96,8 @@ const CategoriesPage: React.FC = () => {
     setEditId(record.id);
     setFormInitialValues({
       code: record.code,
-      name: record.name,
+      level1_category: record.level1_category,
+      level2_category: record.level2_category,
       default_inspection_param_set_id: record.default_inspection_param_set_id ?? undefined,
     });
     setModalVisible(true);
@@ -97,7 +106,12 @@ const CategoriesPage: React.FC = () => {
   const handleDeleteOne = (record: CategoryTableRow) => {
     Modal.confirm({
       title: t('common.confirmDelete'),
-      content: t('app.haoligo.equipment.categories.deleteConfirm', { name: record.name, code: record.code }),
+      content: t('app.haoligo.equipment.categories.deleteConfirm', {
+        name: record.level1_category
+          ? `${record.level1_category} / ${record.level2_category}`
+          : record.level2_category,
+        code: record.code,
+      }),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -121,16 +135,22 @@ const CategoriesPage: React.FC = () => {
     setFormLoading(true);
     try {
       const setId = toSetId(values.default_inspection_param_set_id);
+      const level1Raw = values.level1_category;
+      const level1 =
+        (Array.isArray(level1Raw) ? String(level1Raw[0] ?? '') : String(level1Raw ?? '')).trim();
+      const level2 = String(values.level2_category ?? '').trim();
       if (isEdit && editId != null) {
         await updateCategory(editId, {
-          name: String(values.name ?? '').trim(),
+          level1_category: level1,
+          level2_category: level2,
           default_inspection_param_set_id: setId ?? null,
         });
         messageApi.success(t('app.haoligo.equipment.updateSuccess'));
       } else {
         const body: CategoryCreatePayload = {
           code: String(values.code ?? '').trim(),
-          name: String(values.name ?? '').trim(),
+          level1_category: level1,
+          level2_category: level2,
           default_inspection_param_set_id: setId ?? null,
         };
         await createCategory(body);
@@ -149,7 +169,8 @@ const CategoriesPage: React.FC = () => {
 
   const detailColumns: ProDescriptionsItemProps<CategoryTableRow>[] = [
     { title: t('app.haoligo.equipment.categories.colCode'), dataIndex: 'code' },
-    { title: t('app.haoligo.equipment.categories.colName'), dataIndex: 'name' },
+    { title: t('app.haoligo.equipment.categories.colLevel1'), dataIndex: 'level1_category', render: (_, r) => r.level1_category?.trim() || '—' },
+    { title: t('app.haoligo.equipment.categories.colLevel2'), dataIndex: 'level2_category' },
     {
       title: t('app.haoligo.equipment.categories.colDefaultSet'),
       dataIndex: 'default_set_label',
@@ -166,9 +187,16 @@ const CategoriesPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: t('app.haoligo.equipment.categories.colName'),
-      dataIndex: 'name',
-      width: 200,
+      title: t('app.haoligo.equipment.categories.colLevel1'),
+      dataIndex: 'level1_category',
+      width: 140,
+      ellipsis: true,
+      render: (_, r) => r.level1_category?.trim() || '—',
+    },
+    {
+      title: t('app.haoligo.equipment.categories.colLevel2'),
+      dataIndex: 'level2_category',
+      width: 160,
       ellipsis: true,
     },
     {
@@ -219,7 +247,8 @@ const CategoriesPage: React.FC = () => {
               const map = new Map<number, string>();
               sets.forEach((s) => map.set(s.id, `${s.code} · ${s.name}`));
               const codeQ = String(searchFormValues?.code ?? '').trim().toLowerCase();
-              const nameQ = String(searchFormValues?.name ?? '').trim().toLowerCase();
+              const level1Q = String(searchFormValues?.level1_category ?? '').trim().toLowerCase();
+              const level2Q = String(searchFormValues?.level2_category ?? '').trim().toLowerCase();
               let rows: CategoryTableRow[] = all.map((c) => ({
                 ...c,
                 default_set_label:
@@ -228,7 +257,8 @@ const CategoriesPage: React.FC = () => {
                     : '—',
               }));
               if (codeQ) rows = rows.filter((r) => r.code.toLowerCase().includes(codeQ));
-              if (nameQ) rows = rows.filter((r) => r.name.toLowerCase().includes(nameQ));
+              if (level1Q) rows = rows.filter((r) => r.level1_category.toLowerCase().includes(level1Q));
+              if (level2Q) rows = rows.filter((r) => r.level2_category.toLowerCase().includes(level2Q));
               const start = (current - 1) * pageSize;
               const slice = rows.slice(start, start + pageSize);
               return {
@@ -241,7 +271,7 @@ const CategoriesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 900 }}
+          scroll={{ x: 980 }}
         />
       </ListPageTemplate>
 
@@ -267,11 +297,25 @@ const CategoriesPage: React.FC = () => {
           disabled={isEdit}
           rules={[{ required: true, message: t('app.haoligo.equipment.categories.formCodeRequired') }]}
         />
+        <ProFormSelect
+          name="level1_category"
+          label={t('app.haoligo.equipment.categories.formLevel1')}
+          placeholder={t('app.haoligo.equipment.categories.formLevel1Ph')}
+          options={level1Options}
+          fieldProps={{
+            showSearch: true,
+            optionFilterProp: 'label',
+            mode: 'tags',
+            maxTagCount: 1,
+            tokenSeparators: [],
+            allowClear: true,
+          }}
+        />
         <ProFormText
-          name="name"
-          label={t('app.haoligo.equipment.categories.formName')}
-          placeholder={t('app.haoligo.equipment.categories.formNamePh')}
-          rules={[{ required: true, message: t('app.haoligo.equipment.categories.formNameRequired') }]}
+          name="level2_category"
+          label={t('app.haoligo.equipment.categories.formLevel2')}
+          placeholder={t('app.haoligo.equipment.categories.formLevel2Ph')}
+          rules={[{ required: true, message: t('app.haoligo.equipment.categories.formLevel2Required') }]}
         />
         <ProFormSelect
           name="default_inspection_param_set_id"

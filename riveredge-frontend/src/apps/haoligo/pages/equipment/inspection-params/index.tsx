@@ -15,6 +15,7 @@ import {
   ProFormDigit,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -110,6 +111,7 @@ const InspectionParamsPage: React.FC = () => {
     setFormInitialValues({
       code: record.code,
       name: record.name,
+      requirement: record.requirement ?? '',
       unit: record.unit ?? '',
       value_type: normalizeInspectionValueType(record.value_type),
       default_value:
@@ -168,6 +170,7 @@ const InspectionParamsPage: React.FC = () => {
     return {
       code: String(values.code ?? '').trim(),
       name: String(values.name ?? '').trim(),
+      requirement: String(values.requirement ?? '').trim() || null,
       unit: String(values.unit ?? '').trim() || null,
       value_type,
       default_value: normalizeDefaultValue(values),
@@ -183,6 +186,7 @@ const InspectionParamsPage: React.FC = () => {
         const payload = buildPayload(values);
         await updateInspectionParam(editId, {
           name: payload.name,
+          requirement: payload.requirement,
           unit: payload.unit,
           value_type: payload.value_type,
           default_value: payload.default_value,
@@ -208,6 +212,11 @@ const InspectionParamsPage: React.FC = () => {
     () => [
       { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code' },
       { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name' },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colRequirement'),
+        dataIndex: 'requirement',
+        render: (_, r) => r.requirement || '—',
+      },
       { title: t('app.haoligo.equipment.inspectionParams.colUnit'), dataIndex: 'unit', render: (_, r) => r.unit || '—' },
       {
         title: t('app.haoligo.equipment.inspectionParams.colValueType'),
@@ -246,8 +255,16 @@ const InspectionParamsPage: React.FC = () => {
 
   const columns: ProColumns<InspectionParamRow>[] = useMemo(
     () => [
-      { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
-      { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name', width: 200, ellipsis: true },
+      { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code', width: 120, ellipsis: true, fixed: 'left' },
+      { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name', width: 160, ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colRequirement'),
+        dataIndex: 'requirement',
+        width: 200,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => r.requirement || '—',
+      },
       { title: t('app.haoligo.equipment.inspectionParams.colUnit'), dataIndex: 'unit', width: 88, ellipsis: true, hideInSearch: true },
       {
         title: t('app.haoligo.equipment.inspectionParams.colValueType'),
@@ -317,6 +334,7 @@ const InspectionParamsPage: React.FC = () => {
           importHeaders={[
             t('app.haoligo.equipment.inspectionParams.importColCode'),
             t('app.haoligo.equipment.inspectionParams.importColName'),
+            t('app.haoligo.equipment.inspectionParams.importColRequirement'),
             t('app.haoligo.equipment.inspectionParams.importColUnit'),
             t('app.haoligo.equipment.inspectionParams.importColValueType'),
             t('app.haoligo.equipment.inspectionParams.importColDefaultValue'),
@@ -336,8 +354,9 @@ const InspectionParamsPage: React.FC = () => {
               }
               return -1;
             };
-            const codeIdx = getIdx('参数编码', '编码', 'code');
-            const nameIdx = getIdx('参数名称', '名称', 'name');
+            const codeIdx = getIdx('点检编号', '参数编码', '编码', 'code');
+            const nameIdx = getIdx('点检项名称', '参数名称', '名称', 'name');
+            const reqIdx = getIdx('点检要求', 'requirement');
             const unitIdx = getIdx('单位', 'unit');
             const vtIdx = getIdx('取值类型', '类型', 'value_type');
             const dvIdx = getIdx('默认值', 'default');
@@ -368,6 +387,7 @@ const InspectionParamsPage: React.FC = () => {
               items.push({
                 code,
                 name,
+                requirement: reqIdx >= 0 ? String(row[reqIdx] ?? '').trim() || null : null,
                 unit: unitIdx >= 0 ? String(row[unitIdx] ?? '').trim() || null : null,
                 value_type,
                 default_value,
@@ -419,7 +439,7 @@ const InspectionParamsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1020 }}
+          scroll={{ x: 1180 }}
         />
       </ListPageTemplate>
 
@@ -462,6 +482,13 @@ const InspectionParamsPage: React.FC = () => {
           placeholder={t('app.haoligo.equipment.inspectionParams.formNamePh')}
           colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formNameReq') }]}
+        />
+        <ProFormTextArea
+          name="requirement"
+          label={t('app.haoligo.equipment.inspectionParams.formRequirement')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formRequirementPh')}
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
+          fieldProps={{ rows: 2, showCount: true, maxLength: 500 }}
         />
         <ProFormText
           name="unit"

@@ -1,24 +1,41 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useConfigStore } from '../stores/configStore';
+import { useQuery } from '@tanstack/react-query';
+import { useConfigStore, resolveTenantHomePath } from '../stores/configStore';
+import { getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../services/menu';
+import { getTenantId, getToken } from '../utils/auth';
 
-/** 系统级仪表盘关闭时的默认落地页（侧栏首项「应用中心」） */
+/** 系统级仪表盘关闭时的兜底路径（无自定义首页时） */
 export const SYSTEM_DASHBOARD_FALLBACK_PATH = '/system/applications';
 
 /**
- * 站点设置「系统级仪表盘是否显示」关闭时，将系统仪表盘路由重定向到 {@link SYSTEM_DASHBOARD_FALLBACK_PATH}。
+ * 站点设置「系统级仪表盘是否显示」关闭时，将系统仪表盘路由重定向到租户有效首页：
+ * 自定义后台首页 → 应用中心（系统仪表盘已关闭时不再落工作台）。
  */
-export function useRedirectIfSystemDashboardOff(fallbackPath = SYSTEM_DASHBOARD_FALLBACK_PATH) {
+export function useRedirectIfSystemDashboardOff() {
   const navigate = useNavigate();
   const initialized = useConfigStore((s) => s.initialized);
-  const enabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
+  const configs = useConfigStore((s) => s.configs);
+  const enabled = configs.enable_system_dashboard !== false;
+  const tenantIdStr = getTenantId()?.toString() ?? null;
+  const { data: tenantBackendHome, isFetched: backendHomeFetched } = useQuery({
+    queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStr],
+    queryFn: getTenantBackendHome,
+    enabled: !!(getToken() && tenantIdStr),
+    staleTime: 60 * 1000,
+  });
+
+  const redirectPath = useMemo(
+    () => resolveTenantHomePath(tenantBackendHome?.path, configs),
+    [tenantBackendHome?.path, configs],
+  );
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || !backendHomeFetched) return;
     if (!enabled) {
-      navigate(fallbackPath, { replace: true });
+      navigate(redirectPath, { replace: true });
     }
-  }, [initialized, enabled, navigate, fallbackPath]);
+  }, [initialized, backendHomeFetched, enabled, navigate, redirectPath]);
 
-  return { initialized, enabled };
+  return { initialized: initialized && backendHomeFetched, enabled };
 }

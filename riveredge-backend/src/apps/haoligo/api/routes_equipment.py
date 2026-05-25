@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, List, Optional
@@ -97,6 +98,7 @@ class InspectionParamOut(BaseModel):
     uuid: str
     code: str
     name: str
+    requirement: Optional[str] = None
     unit: Optional[str] = None
     value_type: str = "numeric"
     default_value: Optional[str] = None
@@ -107,6 +109,7 @@ class InspectionParamOut(BaseModel):
 class InspectionParamCreate(BaseModel):
     code: str = Field(max_length=64)
     name: str = Field(max_length=200)
+    requirement: Optional[str] = Field(None, description="点检要求")
     unit: Optional[str] = Field(None, max_length=32)
     value_type: str = Field(default="numeric", max_length=32)
     default_value: Optional[str] = Field(None, description="默认值；空表示不预填")
@@ -116,6 +119,7 @@ class InspectionParamCreate(BaseModel):
 
 class InspectionParamUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
+    requirement: Optional[str] = Field(None, description="点检要求；传空字符串表示清除")
     unit: Optional[str] = Field(None, max_length=32)
     value_type: Optional[str] = Field(None, max_length=32)
     default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
@@ -128,6 +132,70 @@ def _normalize_inspection_param_default(value_type: str, raw: Optional[str]) -> 
     if raw is None:
         return None
     return _normalize_measured_value(value_type or "numeric", raw)
+
+
+def _normalize_inspection_value_type(raw: Optional[str]) -> str:
+    v = (raw or "numeric").strip().lower()
+    if v in ("text", "文本"):
+        return "text"
+    if v in ("boolean", "bool", "是否"):
+        return "boolean"
+    if v in ("multiselect", "multi_select", "multi", "多选"):
+        return "multiselect"
+    if v in ("numeric", "number", "数值"):
+        return "numeric"
+    return "numeric"
+
+
+def _auto_inspection_param_code(set_code: str, seq: int) -> str:
+    code = f"{set_code}-{seq:03d}"
+    if len(code) > 64:
+        raise ValueError(f"自动生成的点检编号过长（{code}），请缩短方案编码或手动填写点检编号")
+    return code
+
+
+async def _upsert_inspection_param_for_import(
+    tenant_id: int,
+    *,
+    code: str,
+    name: str,
+    requirement: Optional[str],
+    unit: Optional[str],
+    value_type: str,
+    default_value: Optional[str],
+    numeric_min: Optional[Decimal],
+    numeric_max: Optional[Decimal],
+) -> tuple[HaoligoInspectionParam, bool]:
+    vt = _normalize_inspection_value_type(value_type)
+    try:
+        norm_default = _normalize_inspection_param_default(vt, default_value)
+        lo, hi = normalize_numeric_range_bounds(vt, numeric_min, numeric_max)
+    except ValueError as e:
+        raise ValueError(str(e)) from e
+
+    row = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(code=code).first()
+    if row:
+        row.name = name.strip()
+        row.requirement = (requirement or "").strip() or None
+        row.unit = None if unit is None else (str(unit).strip() or None)
+        row.value_type = vt
+        row.numeric_min, row.numeric_max = lo, hi
+        row.default_value = norm_default
+        await row.save()
+        return row, False
+
+    row = await HaoligoInspectionParam.create(
+        tenant_id=tenant_id,
+        code=code,
+        name=name.strip(),
+        requirement=(requirement or "").strip() or None,
+        unit=None if unit is None else (str(unit).strip() or None),
+        value_type=vt,
+        default_value=norm_default,
+        numeric_min=lo,
+        numeric_max=hi,
+    )
+    return row, True
 
 
 class InspectionParamSetOut(BaseModel):
@@ -151,6 +219,32 @@ class InspectionParamSetCreateWithItems(BaseModel):
 
 class InspectionParamSetUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
+
+
+class InspectionParamSetImportRow(BaseModel):
+    set_code: str = Field(max_length=64, description="方案编码")
+    set_name: str = Field(max_length=200, description="方案名称")
+    param_code: Optional[str] = Field(None, max_length=64, description="点检编号；空则按 方案编码-001 自动生成")
+    param_name: str = Field(max_length=200, description="点检项名称")
+    requirement: Optional[str] = Field(None, description="点检要求")
+    value_type: str = Field(default="numeric", max_length=32)
+    default_value: Optional[str] = None
+    numeric_min: Optional[Decimal] = None
+    numeric_max: Optional[Decimal] = None
+    unit: Optional[str] = Field(None, max_length=32)
+    is_required: bool = True
+
+
+class InspectionParamSetImportBody(BaseModel):
+    rows: List[InspectionParamSetImportRow] = Field(min_length=1)
+
+
+class InspectionParamSetImportResult(BaseModel):
+    plans_created: int
+    plans_updated: int
+    params_created: int
+    params_updated: int
+    plan_codes: List[str]
 
 
 class SetItemCreate(BaseModel):
@@ -178,19 +272,31 @@ class CategoryOut(BaseModel):
     id: int
     uuid: str
     code: str
+    level1_category: str
+    level2_category: str
     name: str
     default_inspection_param_set_id: Optional[int] = None
 
 
 class CategoryCreate(BaseModel):
     code: str = Field(max_length=64)
-    name: str = Field(max_length=200)
+    level1_category: Optional[str] = Field(default="", max_length=200)
+    level2_category: str = Field(max_length=200)
     default_inspection_param_set_id: Optional[int] = None
 
 
 class CategoryUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=200)
+    level1_category: Optional[str] = Field(None, max_length=200)
+    level2_category: Optional[str] = Field(None, max_length=200)
     default_inspection_param_set_id: Optional[int] = None
+
+
+def _category_display_name(level1: str, level2: str) -> str:
+    l1 = (level1 or "").strip()
+    l2 = (level2 or "").strip()
+    if l1 and l2:
+        return f"{l1} / {l2}"
+    return l2 or l1
 
 
 def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
@@ -486,6 +592,7 @@ async def create_inspection_param(
         tenant_id=tenant_id,
         code=body.code.strip(),
         name=body.name.strip(),
+        requirement=(body.requirement or "").strip() or None,
         unit=body.unit,
         value_type=vt,
         default_value=default_value,
@@ -508,6 +615,9 @@ async def update_inspection_param(
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch:
         row.name = str(patch["name"] or "").strip()
+    if "requirement" in patch:
+        req = patch["requirement"]
+        row.requirement = None if req is None else (str(req).strip() or None)
     if "unit" in patch:
         u = patch["unit"]
         row.unit = None if u is None else (str(u).strip() or None)
@@ -628,6 +738,123 @@ async def create_inspection_param_set_with_items(
     if not row:
         await _not_found()
     return InspectionParamSetOut.model_validate(row)
+
+
+@router.post(
+    "/inspection-param-sets/import",
+    response_model=InspectionParamSetImportResult,
+    summary="导入点检方案（自动创建缺失点检项）",
+)
+async def import_inspection_param_sets(
+    body: InspectionParamSetImportBody,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    """按方案编码分组导入；点检编号留空时自动生成「方案编码-001」格式；已存在方案则覆盖明细。"""
+    groups: OrderedDict[str, list[InspectionParamSetImportRow]] = OrderedDict()
+    for row in body.rows:
+        set_code = row.set_code.strip()
+        if not set_code:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="方案编码不能为空")
+        param_name = row.param_name.strip()
+        if not param_name:
+            continue
+        if set_code not in groups:
+            groups[set_code] = []
+        groups[set_code].append(row)
+
+    if not groups:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="没有可导入的点检项行")
+
+    plans_created = 0
+    plans_updated = 0
+    params_created = 0
+    params_updated = 0
+    plan_codes: list[str] = []
+
+    async with in_transaction():
+        for set_code, plan_rows in groups.items():
+            set_name = next((r.set_name.strip() for r in plan_rows if r.set_name.strip()), "")
+            if not set_name:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"方案「{set_code}」缺少方案名称",
+                )
+
+            parent = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(code=set_code).first()
+            if parent:
+                parent.name = set_name
+                await parent.save()
+                await tenant_alive(HaoligoInspectionParamSetItem, tenant_id).filter(
+                    set_id=parent.id, deleted_at__isnull=True
+                ).update(deleted_at=timezone.now())
+                plans_updated += 1
+            else:
+                parent = await HaoligoInspectionParamSet.create(
+                    tenant_id=tenant_id, code=set_code, name=set_name
+                )
+                plans_created += 1
+
+            plan_codes.append(set_code)
+            seen_param_ids: set[int] = set()
+
+            for idx, line in enumerate(plan_rows):
+                raw_code = (line.param_code or "").strip()
+                param_code = raw_code or _auto_inspection_param_code(set_code, idx + 1)
+                if len(param_code) > 64:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"点检编号过长：{param_code}",
+                    )
+
+                try:
+                    param, created = await _upsert_inspection_param_for_import(
+                        tenant_id,
+                        code=param_code,
+                        name=line.param_name.strip(),
+                        requirement=line.requirement,
+                        unit=line.unit,
+                        value_type=line.value_type,
+                        default_value=line.default_value,
+                        numeric_min=line.numeric_min,
+                        numeric_max=line.numeric_max,
+                    )
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"方案「{set_code}」点检项「{line.param_name.strip()}」：{e}",
+                    ) from e
+
+                if created:
+                    params_created += 1
+                else:
+                    params_updated += 1
+
+                if param.id in seen_param_ids:
+                    continue
+                seen_param_ids.add(param.id)
+
+                try:
+                    await HaoligoInspectionParamSetItem.create(
+                        tenant_id=tenant_id,
+                        set_id=parent.id,
+                        param_id=param.id,
+                        sort_order=idx,
+                        is_required=line.is_required,
+                    )
+                except IntegrityError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"方案「{set_code}」明细重复：{param_code}",
+                    ) from exc
+
+    return InspectionParamSetImportResult(
+        plans_created=plans_created,
+        plans_updated=plans_updated,
+        params_created=params_created,
+        params_updated=params_updated,
+        plan_codes=plan_codes,
+    )
 
 
 @router.patch("/inspection-param-sets/{row_id}", response_model=InspectionParamSetOut, summary="更新点检参数集")
@@ -786,7 +1013,9 @@ async def list_categories(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
 ):
-    rows = await tenant_alive(HaoligoEquipmentCategory, tenant_id).order_by("code")
+    rows = await tenant_alive(HaoligoEquipmentCategory, tenant_id).order_by(
+        "level1_category", "level2_category", "code"
+    )
     return [CategoryOut.model_validate(r) for r in rows]
 
 
@@ -805,7 +1034,9 @@ async def create_category(
     row = await HaoligoEquipmentCategory.create(
         tenant_id=tenant_id,
         code=body.code.strip(),
-        name=body.name.strip(),
+        level1_category=(body.level1_category or "").strip(),
+        level2_category=body.level2_category.strip(),
+        name=_category_display_name(body.level1_category or "", body.level2_category),
         default_inspection_param_set_id=body.default_inspection_param_set_id,
     )
     return CategoryOut.model_validate(row)
@@ -821,8 +1052,12 @@ async def update_category(
     row = await tenant_alive(HaoligoEquipmentCategory, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    if body.name is not None:
-        row.name = body.name.strip()
+    if body.level1_category is not None:
+        row.level1_category = body.level1_category.strip()
+    if body.level2_category is not None:
+        row.level2_category = body.level2_category.strip()
+    if body.level1_category is not None or body.level2_category is not None:
+        row.name = _category_display_name(row.level1_category, row.level2_category)
     if body.default_inspection_param_set_id is not None:
         ps = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(
             id=body.default_inspection_param_set_id
@@ -855,6 +1090,10 @@ async def list_equipments(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     workshop_id: Optional[int] = Query(None),
+    level1_category: Optional[str] = Query(
+        None,
+        description="一级分类筛选；传 __none__ 表示仅未设置一级分类的设备",
+    ),
     keyword: Optional[str] = Query(None, description="模糊匹配代号或名称"),
     asset_code: Optional[str] = Query(None, description="设备代号模糊匹配"),
     name: Optional[str] = Query(None, description="设备名称模糊匹配"),
@@ -864,6 +1103,19 @@ async def list_equipments(
     qs = tenant_alive(HaoligoEquipment, tenant_id)
     if workshop_id is not None:
         qs = qs.filter(workshop_id=workshop_id)
+    if level1_category is not None:
+        lc = level1_category.strip()
+        if lc == "__none__":
+            cat_ids = await tenant_alive(HaoligoEquipmentCategory, tenant_id).filter(
+                Q(level1_category="") | Q(level1_category__isnull=True)
+            ).values_list("id", flat=True)
+        elif lc:
+            cat_ids = await tenant_alive(HaoligoEquipmentCategory, tenant_id).filter(
+                level1_category=lc
+            ).values_list("id", flat=True)
+        else:
+            cat_ids = []
+        qs = qs.filter(category_id__in=list(cat_ids))
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(Q(asset_code__icontains=k) | Q(name__icontains=k))

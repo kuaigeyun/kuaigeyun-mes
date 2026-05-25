@@ -739,7 +739,7 @@ const MoldLedgerPage: React.FC = () => {
     { title: '模具名称', dataIndex: 'name' },
     { title: '来源', dataIndex: 'ledger_source', render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source) },
     { title: '单位', dataIndex: 'unit', render: (_, r) => r.unit || '—' },
-    { title: '模具产能', dataIndex: 'mold_capacity' },
+    { title: '单模产能', dataIndex: 'mold_capacity' },
     {
       title: '允许重复领用',
       dataIndex: 'allow_repeated_borrow',
@@ -755,7 +755,7 @@ const MoldLedgerPage: React.FC = () => {
         </span>
       ),
     },
-    { title: '可用年限', dataIndex: 'service_life_years', render: (_, r) => r.service_life_years ?? '—' },
+    { title: '模具寿命', dataIndex: 'service_life_years', render: (_, r) => r.service_life_years ?? '—' },
     { title: '额定可用次数', dataIndex: 'usable_times', render: (_, r) => r.usable_times ?? '—' },
     { title: '已使用次数', dataIndex: 'used_times', render: (_, r) => r.used_times ?? 0 },
     { title: '额定可用产量', dataIndex: 'usable_yield', render: (_, r) => r.usable_yield ?? '—' },
@@ -834,7 +834,7 @@ const MoldLedgerPage: React.FC = () => {
       render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source),
     },
     { title: '单位', dataIndex: 'unit', width: 72, hideInSearch: true, render: (_, r) => r.unit || '—' },
-    { title: '模具产能', dataIndex: 'mold_capacity', width: 100, hideInSearch: true },
+    { title: '单模产能', dataIndex: 'mold_capacity', width: 100, hideInSearch: true },
     {
       title: '状态',
       dataIndex: 'status',
@@ -939,10 +939,10 @@ const MoldLedgerPage: React.FC = () => {
             '*模具代号',
             '*模具名称',
             '*单位',
-            '*模具产能',
+            '*单模产能',
             '状态',
             '允许重复领用',
-            '可用年限',
+            '模具寿命',
             '额定可用次数',
             '额定可用产量',
             '维修周期(依产量)',
@@ -968,14 +968,14 @@ const MoldLedgerPage: React.FC = () => {
             const codeIdx = getIdx('模具代号', '代号', 'code');
             const nameIdx = getIdx('模具名称', '名称', 'name');
             const unitIdx = getIdx('单位', 'unit');
-            const capIdx = getIdx('模具产能', '产能', 'capacity');
+            const capIdx = getIdx('单模产能', '模具产能', '产能', 'capacity');
             if (codeIdx < 0 || nameIdx < 0 || unitIdx < 0 || capIdx < 0) {
-              messageApi.error('导入表头需包含：模具代号、模具名称、单位、模具产能');
+              messageApi.error('导入表头需包含：模具代号、模具名称、单位、单模产能');
               return;
             }
             const statusIdx = getIdx('状态', 'status');
             const borrowIdx = getIdx('允许重复领用', '重复领用');
-            const yearsIdx = getIdx('可用年限', '年限');
+            const yearsIdx = getIdx('模具寿命', '可用年限', '年限');
             const timesIdx = getIdx('额定可用次数', '可用次数', '次数');
             const yieldIdx = getIdx('额定可用产量', '可用产量', '产量');
             const maintYIdx = getIdx('维修周期(依产量)', '依产量', 'maintenance_cycle_by_yield');
@@ -1179,18 +1179,18 @@ const MoldLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="mold_capacity"
-              label="模具产能"
-              placeholder="请输入模具产能"
+              label="单模产能"
+              placeholder="请输入单模产能"
               min={0}
               fieldProps={{ precision: 4, style: { width: '100%' } }}
-              rules={[{ required: true, message: '请输入模具产能' }]}
+              rules={[{ required: true, message: '请输入单模产能' }]}
             />
           </Col>
           <Col span={12}>
             <ProFormDigit
               name="service_life_years"
-              label="可用年限"
-              placeholder="请输入可用年限"
+              label="模具寿命"
+              placeholder="请输入模具寿命"
               min={0}
               fieldProps={{ precision: 0, style: { width: '100%' } }}
             />
@@ -1287,7 +1287,7 @@ const MoldLedgerPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="批量修改（状态 / 可用年限 / 额定可用次数 / 额定可用产量 / 维修周期）"
+        title="批量修改（状态 / 模具寿命 / 额定可用次数 / 额定可用产量 / 维修周期）"
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
@@ -1337,7 +1337,7 @@ const MoldLedgerPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="service_life_years" label="可用年限">
+              <Form.Item name="service_life_years" label="模具寿命">
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
               </Form.Item>
             </Col>
@@ -1382,7 +1382,7 @@ const MoldLedgerPage: React.FC = () => {
       >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div>
-            将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「模具产能列」则同时更新产能）；不存在则新增（默认状态「待用」；未配置产能列时新增产能为 0）。
+            将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「单模产能列」则同时更新单模产能）；不存在则新增（默认状态「待用」；未配置单模产能列时新增单模产能为 0）。
           </div>
           <Alert
             type="warning"
@@ -1497,7 +1497,7 @@ const MoldLedgerPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="mold_capacity_column" label="模具产能列">
+              <Form.Item name="mold_capacity_column" label="单模产能列">
                 <AutoComplete
                   allowClear
                   options={bindingColumnOptions}
@@ -1514,7 +1514,7 @@ const MoldLedgerPage: React.FC = () => {
           <Alert
             type="info"
             showIcon
-            message="同步时按「模具代号」匹配本系统台账：已存在则更新名称与单位；若配置了产能列则同时更新产能。不存在则新增（默认状态「待用」；未配置产能列时产能为 0）。请在数据集 SQL 中支持无参全量或分页拉取。"
+            message="同步时按「模具代号」匹配本系统台账：已存在则更新名称与单位；若配置了单模产能列则同时更新单模产能。不存在则新增（默认状态「待用」；未配置单模产能列时单模产能为 0）。请在数据集 SQL 中支持无参全量或分页拉取。"
           />
         </Form>
       </Modal>

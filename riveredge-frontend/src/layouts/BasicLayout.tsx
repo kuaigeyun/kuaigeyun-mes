@@ -132,7 +132,7 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
   }
 }
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore, getDefaultTenantHomePath } from '../stores/configStore';
+import { useConfigStore, resolveTenantHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
@@ -903,8 +903,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
   const siteLogoValue = (useConfigStore((s) => (s.getConfig('site_logo', '') as string)?.trim()) || '') || '';
   const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
-  const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
-  const systemHomePath = systemDashboardEnabled ? '/system/dashboard/workplace' : '/system/applications';
+  const configs = useConfigStore((s) => s.configs);
 
   const tenantIdStrForHome = getTenantId()?.toString() ?? null;
   const { data: tenantBackendHome } = useQuery({
@@ -914,11 +913,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 60 * 1000,
   });
 
-  const effectiveSystemHomePath = useMemo(() => {
-    const custom = tenantBackendHome?.path?.trim();
-    if (custom) return custom;
-    return systemHomePath;
-  }, [tenantBackendHome?.path, systemHomePath]);
+  const effectiveSystemHomePath = useMemo(
+    () => resolveTenantHomePath(tenantBackendHome?.path, configs),
+    [tenantBackendHome?.path, configs],
+  );
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);

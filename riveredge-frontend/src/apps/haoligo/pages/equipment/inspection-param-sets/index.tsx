@@ -33,15 +33,18 @@ import {
   createInspectionParamSetWithItems,
   deleteInspectionParamSet,
   deleteInspectionParamSetItem,
+  importInspectionParamSets,
   listInspectionParamSetItems,
   listInspectionParamSets,
   listInspectionParams,
   updateInspectionParamSet,
   updateInspectionParamSetItem,
   type InspectionParamRow,
+  type InspectionParamSetImportRowPayload,
   type InspectionParamSetItemRow,
   type InspectionParamSetRow,
 } from '../../../services/haoligo';
+import { normalizeInspectionValueType } from '../../../utils/inspectionParamValueType';
 
 const { Text, Title } = Typography;
 
@@ -65,6 +68,24 @@ type PendingLine = {
 
 function newTempId(): string {
   return `t-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function parseOptionalNumber(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseImportIsRequired(raw: unknown): boolean {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return true;
+  if (s.includes('否') || s === 'no' || s === 'false' || s === '0' || s === 'n') return false;
+  return true;
+}
+
+function cellText(raw: unknown): string {
+  if (raw == null) return '';
+  return String(raw).trim();
 }
 
 const InspectionParamSetsPage: React.FC = () => {
@@ -577,7 +598,114 @@ const InspectionParamSetsPage: React.FC = () => {
           showCreateButton
           createButtonText={t('app.haoligo.equipment.inspectionParamSets.btnNewPlan')}
           onCreate={() => void openCreateEditor()}
-          showImportButton={false}
+          showImportButton
+          importHeaders={[
+            t('app.haoligo.equipment.inspectionParamSets.importColSetCode'),
+            t('app.haoligo.equipment.inspectionParamSets.importColSetName'),
+            t('app.haoligo.equipment.inspectionParamSets.importColParamCode'),
+            t('app.haoligo.equipment.inspectionParamSets.importColParamName'),
+            t('app.haoligo.equipment.inspectionParamSets.importColRequirement'),
+            t('app.haoligo.equipment.inspectionParamSets.importColValueType'),
+            t('app.haoligo.equipment.inspectionParamSets.importColDefaultValue'),
+            t('app.haoligo.equipment.inspectionParamSets.importColNumericMin'),
+            t('app.haoligo.equipment.inspectionParamSets.importColNumericMax'),
+            t('app.haoligo.equipment.inspectionParamSets.importColUnit'),
+            t('app.haoligo.equipment.inspectionParamSets.importColRequired'),
+          ]}
+          onImport={async (data) => {
+            if (!data || data.length < 2) {
+              messageApi.warning(t('app.haoligo.equipment.importEmpty'));
+              return;
+            }
+            const headers = (data[0] || []).map((h: unknown) => String(h ?? '').trim());
+            const getIdx = (...keys: string[]) => {
+              for (const k of keys) {
+                const i = headers.findIndex(
+                  (h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()),
+                );
+                if (i >= 0) return i;
+              }
+              return -1;
+            };
+            const setCodeIdx = getIdx('方案编码', 'set_code', 'code');
+            const setNameIdx = getIdx('方案名称', 'set_name', 'name');
+            const paramCodeIdx = getIdx('点检编号', 'param_code', 'inspection no');
+            const paramNameIdx = getIdx('点检项名称', 'param_name', 'item name');
+            const reqIdx = getIdx('点检要求', 'requirement');
+            const vtIdx = getIdx('取值类型', 'value_type', 'value type');
+            const dvIdx = getIdx('默认值', 'default');
+            const minIdx = getIdx('取值下限', 'numeric_min', 'min');
+            const maxIdx = getIdx('取值上限', 'numeric_max', 'max');
+            const unitIdx = getIdx('单位', 'unit');
+            const requiredIdx = getIdx('是否必检', 'is_required', 'required');
+            if (setCodeIdx < 0 || setNameIdx < 0 || paramNameIdx < 0) {
+              messageApi.error(t('app.haoligo.equipment.inspectionParamSets.importErrorHeaders'));
+              return;
+            }
+
+            const rows: InspectionParamSetImportRowPayload[] = [];
+            let lastSetCode = '';
+            let lastSetName = '';
+            for (let i = 1; i < data.length; i++) {
+              const row = data[i] as unknown[];
+              if (!row || row.length === 0) continue;
+              const explicitSetCode = cellText(row[setCodeIdx]);
+              const explicitSetName = cellText(row[setNameIdx]);
+              if (explicitSetCode) {
+                if (explicitSetCode !== lastSetCode) {
+                  lastSetCode = explicitSetCode;
+                  lastSetName = explicitSetName;
+                } else if (explicitSetName) {
+                  lastSetName = explicitSetName;
+                }
+              }
+              const setCode = explicitSetCode || lastSetCode;
+              const setName = explicitSetName || lastSetName;
+              const paramName = cellText(row[paramNameIdx]);
+              if (!setCode || !setName || !paramName) continue;
+              const paramCodeRaw = paramCodeIdx >= 0 ? cellText(row[paramCodeIdx]) : '';
+              const rawVt = vtIdx >= 0 ? cellText(row[vtIdx]) : '';
+              const value_type = normalizeInspectionValueType(rawVt || 'numeric');
+              const defaultRaw = dvIdx >= 0 ? cellText(row[dvIdx]) : '';
+              let default_value: string | null = defaultRaw || null;
+              if (default_value && value_type === 'boolean') {
+                const dl = default_value.toLowerCase();
+                if (dl.includes('是') || dl === 'true' || dl === '1' || dl === 'yes') default_value = 'true';
+                else if (dl.includes('否') || dl === 'false' || dl === '0' || dl === 'no') default_value = 'false';
+              }
+              rows.push({
+                set_code: setCode,
+                set_name: setName,
+                param_code: paramCodeRaw || null,
+                param_name: paramName,
+                requirement: reqIdx >= 0 ? cellText(row[reqIdx]) || null : null,
+                value_type,
+                default_value,
+                numeric_min: minIdx >= 0 ? parseOptionalNumber(row[minIdx]) : null,
+                numeric_max: maxIdx >= 0 ? parseOptionalNumber(row[maxIdx]) : null,
+                unit: unitIdx >= 0 ? cellText(row[unitIdx]) || null : null,
+                is_required: requiredIdx >= 0 ? parseImportIsRequired(row[requiredIdx]) : true,
+              });
+            }
+            if (rows.length === 0) {
+              messageApi.warning(t('app.haoligo.equipment.importNoRows'));
+              return;
+            }
+            try {
+              const result = await importInspectionParamSets(rows);
+              messageApi.success(
+                t('app.haoligo.equipment.inspectionParamSets.importSuccess', {
+                  created: result.plans_created,
+                  updated: result.plans_updated,
+                  paramsCreated: result.params_created,
+                  paramsUpdated: result.params_updated,
+                }),
+              );
+              actionRef.current?.reload();
+            } catch (e) {
+              messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
+            }
+          }}
           showSyncButton
           onSync={() => {
             messageApi.info(t('app.haoligo.equipment.syncPlaceholder'));

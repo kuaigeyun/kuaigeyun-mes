@@ -12,7 +12,7 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
-import { useConfigStore, getDefaultTenantHomePath } from '../../stores/configStore';
+import { useConfigStore, resolveTenantHomePath } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
@@ -93,11 +93,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
   /** 站点默认租户首页（工作台 / 应用中心） */
-  const configDefaultTenantHomePath = useConfigStore((s) =>
-    s.configs.enable_system_dashboard !== false ? '/system/dashboard/workplace' : '/system/applications',
-  );
+  const configs = useConfigStore((s) => s.configs);
   const tenantIdStrForHome = getTenantId()?.toString() ?? null;
-  const { data: tenantBackendHome } = useQuery({
+  const { data: tenantBackendHome, isFetched: backendHomeFetched } = useQuery({
     queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStrForHome],
     queryFn: getTenantBackendHome,
     enabled: !!(getToken() && tenantIdStrForHome),
@@ -105,11 +103,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   });
 
   /** 固定标签栏首位「首页」：租户在菜单里配置的自定义后台首页优先，否则与站点默认一致（与 BasicLayout Logo 一致） */
-  const tenantHomePath = useMemo(() => {
-    const custom = tenantBackendHome?.path?.trim();
-    if (custom) return custom;
-    return configDefaultTenantHomePath;
-  }, [tenantBackendHome?.path, configDefaultTenantHomePath]);
+  const tenantHomePath = useMemo(
+    () => resolveTenantHomePath(tenantBackendHome?.path, configs),
+    [tenantBackendHome?.path, configs],
+  );
+
+  /** 关闭默认首页标签时尚未拉取自定义首页时，延后跳转避免误落应用中心 */
+  const pendingDefaultHomeCloseRef = useRef<string | null>(null);
 
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
@@ -145,18 +145,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               });
             }
           } else {
-            const hasWorkplace = validTabs.some((tab) => tab.key === getDefaultTenantHomePath());
-            if (!hasWorkplace) {
-              const wpPath = getDefaultTenantHomePath();
-              const wpTitle = findMenuTitleWithTranslation(wpPath, menuConfig, t);
-              validTabs.unshift({
-                key: wpPath,
-                path: wpPath,
-                label: wpTitle,
-                closable: false,
-                pinned: false,
-              });
-            }
+            // 首页标签由路由同步 effect 按 tenantHomePath 注入，不在此处写死工作台/应用中心
           }
           return validTabs;
         }
@@ -313,6 +302,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
+
+  useEffect(() => {
+    const pendingKey = pendingDefaultHomeCloseRef.current;
+    if (!pendingKey || !backendHomeFetched) return;
+    pendingDefaultHomeCloseRef.current = null;
+    const resolvedHome = resolveTenantHomePath(tenantBackendHome?.path, configs);
+    if (pendingKey !== resolvedHome) {
+      setActiveKey(resolvedHome);
+      navigateRef.current(resolvedHome);
+    }
+  }, [backendHomeFetched, tenantBackendHome?.path, configs]);
 
   /**
    * 租户后台首页路径变化时：移除旧首页标签、去掉与当前模式冲突的默认路径标签，并把新首页固定到第一位且不可关闭。
@@ -568,6 +568,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   };
 
   /**
+   * 解析关闭默认首页占位标签后应跳转的有效首页（需等自定义首页 API 返回后再决定，避免误跳应用中心）
+   */
+  const resolveHomeAfterClose = useCallback(
+    (closedKey: string): string | 'pending' | null => {
+      if (!isTenantDefaultHomePath(closedKey)) return null;
+      if (!backendHomeFetched) return 'pending';
+      const resolvedHome = resolveTenantHomePath(tenantBackendHome?.path, configs);
+      return closedKey !== resolvedHome ? resolvedHome : null;
+    },
+    [backendHomeFetched, tenantBackendHome?.path, configs],
+  );
+
+  /**
    * 处理标签关闭
    */
   const handleTabClose = (targetKey: string) => {
@@ -576,16 +589,26 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     // 如果关闭的是当前激活的标签，切换到相邻标签
     if (targetKey === activeKey) {
-      if (newTabs.length > 0) {
+      const homeAfterClose = resolveHomeAfterClose(targetKey);
+      if (homeAfterClose === 'pending') {
+        pendingDefaultHomeCloseRef.current = targetKey;
+        removeTab(targetKey);
+        return;
+      }
+      if (typeof homeAfterClose === 'string') {
+        setActiveKey(homeAfterClose);
+        navigate(homeAfterClose);
+      } else if (newTabs.length > 0) {
         // 优先切换到右侧标签，如果没有则切换到左侧
         const nextTab = newTabs[targetIndex] || newTabs[targetIndex - 1] || newTabs[0];
         if (nextTab) {
           setActiveKey(nextTab.key);
           navigate(nextTab.key);
         }
-      } else {
-        // 如果没有标签了，跳转到工作台
+      } else if (backendHomeFetched) {
         navigate(tenantHomePath);
+      } else {
+        pendingDefaultHomeCloseRef.current = targetKey;
       }
     }
 

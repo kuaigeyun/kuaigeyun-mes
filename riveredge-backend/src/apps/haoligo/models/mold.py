@@ -23,10 +23,10 @@ class HaoligoMold(HaoligoTenantModel):
         max_digits=18,
         decimal_places=4,
         default=Decimal("0"),
-        description="模具产能",
+        description="单模产能",
     )
     processing_time_min = fields.IntField(null=True, description="加工时间（分钟）：领用单与对应还入单创建时间之差的累计，由系统根据单据自动重算")
-    service_life_years = fields.IntField(null=True, description="可用年限（年）")
+    service_life_years = fields.IntField(null=True, description="模具寿命（年）")
     usable_times = fields.IntField(null=True, description="额定可用次数（还入单不再扣减）")
     usable_yield = fields.DecimalField(
         max_digits=18,

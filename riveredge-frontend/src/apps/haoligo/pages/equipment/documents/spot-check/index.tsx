@@ -87,6 +87,7 @@ function previewLineToDraft(pl: EquipmentSpotCheckPreviewLine): EquipmentSpotChe
     inspection_param_id: pl.inspection_param_id,
     param_code: pl.param_code,
     param_name: pl.param_name,
+    param_requirement: pl.param_requirement ?? null,
     sort_order: pl.sort_order,
     value_type: pl.value_type,
     unit: pl.unit,
@@ -609,6 +610,11 @@ const SpotCheckDocumentsPage: React.FC = () => {
             </Typography.Text>
           ) : null}
         </Flex>
+        {row.param_requirement ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
+            {t('app.haoligo.equipment.documents.colParamRequirement')}：{row.param_requirement}
+          </Typography.Text>
+        ) : null}
 
         <Row gutter={[12, 8]} style={{ marginTop: 10 }}>
           <Col span={12}>

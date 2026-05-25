@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -34,6 +35,8 @@ import {
 import {
   createEquipment,
   deleteEquipment,
+  formatCategoryDisplayName,
+  formatCategoryLabel,
   getEquipment,
   listCategories,
   listEquipments,
@@ -90,6 +93,7 @@ const EquipmentLedgerPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<EquipmentRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [level1Filter, setLevel1Filter] = useState<string>('__all__');
 
   const loadLookups = useCallback(async () => {
     try {
@@ -112,12 +116,41 @@ const EquipmentLedgerPage: React.FC = () => {
     void loadLookups();
   }, [loadLookups]);
 
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [level1Filter]);
+
+  const level1SegmentOptions = useMemo(() => {
+    const opts: { label: string; value: string }[] = [
+      { label: t('app.haoligo.equipment.ledger.categoryFilterAll'), value: '__all__' },
+    ];
+    const seen = new Set<string>();
+    let hasUncategorized = false;
+    for (const c of categories) {
+      const l1 = (c.level1_category ?? '').trim();
+      if (!l1) {
+        hasUncategorized = true;
+        continue;
+      }
+      if (seen.has(l1)) continue;
+      seen.add(l1);
+      opts.push({ label: l1, value: l1 });
+    }
+    if (hasUncategorized) {
+      opts.push({
+        label: t('app.haoligo.equipment.ledger.categoryFilterUncategorized'),
+        value: '__none__',
+      });
+    }
+    return opts;
+  }, [categories, t]);
+
   const workshopOptions = useMemo(
     () => workshops.map((w) => ({ label: `${w.code} · ${w.name}`, value: w.id })),
     [workshops],
   );
   const categoryOptions = useMemo(
-    () => categories.map((c) => ({ label: `${c.code} · ${c.name}`, value: c.id })),
+    () => categories.map((c) => ({ label: formatCategoryLabel(c), value: c.id })),
     [categories],
   );
   const manufacturerOptions = useMemo(
@@ -342,7 +375,7 @@ const EquipmentLedgerPage: React.FC = () => {
         dataIndex: 'category_id',
         render: (_, r) => {
           const c = catMap.get(r.category_id);
-          return c ? `${c.code} · ${c.name}` : r.category_id;
+          return c ? formatCategoryDisplayName(c) : r.category_id;
         },
       },
       {
@@ -350,7 +383,7 @@ const EquipmentLedgerPage: React.FC = () => {
         dataIndex: 'workshop_id',
         render: (_, r) => {
           const w = wsMap.get(r.workshop_id);
-          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+          return w ? w.name : r.workshop_id;
         },
       },
       {
@@ -359,7 +392,7 @@ const EquipmentLedgerPage: React.FC = () => {
         render: (_, r) => {
           if (r.manufacturer_id == null) return dash;
           const m = mfrMap.get(r.manufacturer_id);
-          return m ? `${m.code} · ${m.name}` : r.manufacturer_id;
+          return m ? m.name : r.manufacturer_id;
         },
       },
       {
@@ -368,7 +401,7 @@ const EquipmentLedgerPage: React.FC = () => {
         render: (_, r) => {
           if (r.inspection_param_set_id == null) return dash;
           const s = setMap.get(r.inspection_param_set_id);
-          return s ? `${s.code} · ${s.name}` : r.inspection_param_set_id;
+          return s ? s.name : r.inspection_param_set_id;
         },
       },
       {
@@ -410,7 +443,7 @@ const EquipmentLedgerPage: React.FC = () => {
         ellipsis: true,
         render: (_, r) => {
           const c = catMap.get(r.category_id);
-          return c ? `${c.code} · ${c.name}` : r.category_id;
+          return c ? formatCategoryDisplayName(c) : r.category_id;
         },
       },
       {
@@ -429,7 +462,7 @@ const EquipmentLedgerPage: React.FC = () => {
         ellipsis: true,
         render: (_, r) => {
           const w = wsMap.get(r.workshop_id);
-          return w ? `${w.code} · ${w.name}` : r.workshop_id;
+          return w ? w.name : r.workshop_id;
         },
       },
       {
@@ -441,7 +474,7 @@ const EquipmentLedgerPage: React.FC = () => {
         render: (_, r) => {
           if (r.manufacturer_id == null) return dash;
           const m = mfrMap.get(r.manufacturer_id);
-          return m ? `${m.code} · ${m.name}` : r.manufacturer_id;
+          return m ? m.name : r.manufacturer_id;
         },
       },
       {
@@ -453,7 +486,7 @@ const EquipmentLedgerPage: React.FC = () => {
         render: (_, r) => {
           if (r.inspection_param_set_id == null) return dash;
           const s = setMap.get(r.inspection_param_set_id);
-          return s ? `${s.code} · ${s.name}` : r.inspection_param_set_id;
+          return s ? s.name : r.inspection_param_set_id;
         },
       },
       {
@@ -521,6 +554,18 @@ const EquipmentLedgerPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
+          beforeSearchButtons={
+            level1SegmentOptions.length > 1 ? (
+              <ThemedSegmented
+                key="equipment-level1-filter"
+                surfaceBackground
+                size="middle"
+                value={level1Filter}
+                onChange={(v) => setLevel1Filter(String(v))}
+                options={level1SegmentOptions}
+              />
+            ) : null
+          }
           showCreateButton
           createButtonText={t('app.haoligo.equipment.ledger.createBtn')}
           onCreate={handleCreate}
@@ -634,6 +679,10 @@ const EquipmentLedgerPage: React.FC = () => {
               const res = await listEquipments({
                 skip,
                 limit: pageSize,
+                level1_category:
+                  level1Filter === '__all__'
+                    ? undefined
+                    : level1Filter,
                 workshop_id:
                   searchFormValues?.workshop_id != null && searchFormValues?.workshop_id !== ''
                     ? Number(searchFormValues.workshop_id)

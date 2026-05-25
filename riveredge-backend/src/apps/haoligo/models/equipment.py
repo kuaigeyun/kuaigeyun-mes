@@ -57,8 +57,9 @@ class HaoligoInspectionParam(HaoligoTenantModel):
         unique_together = [("tenant_id", "code")]
         indexes = [("tenant_id",), ("code",)]
 
-    code = fields.CharField(max_length=64, description="参数编码")
-    name = fields.CharField(max_length=200, description="参数名称")
+    code = fields.CharField(max_length=64, description="点检编号")
+    name = fields.CharField(max_length=200, description="点检项名称")
+    requirement = fields.TextField(null=True, description="点检要求")
     unit = fields.CharField(max_length=32, null=True, description="单位")
     value_type = fields.CharField(max_length=32, default="numeric", description="取值类型：numeric/text/boolean/multiselect")
     default_value = fields.TextField(null=True, description="默认值（文本存储，创建设备点检单时预填实测值）")
@@ -111,7 +112,9 @@ class HaoligoEquipmentCategory(HaoligoTenantModel):
         indexes = [("tenant_id",), ("code",)]
 
     code = fields.CharField(max_length=64, description="类别编码")
-    name = fields.CharField(max_length=200, description="类别名称")
+    level1_category = fields.CharField(max_length=200, default="", description="一级分类")
+    level2_category = fields.CharField(max_length=200, description="二级分类（原类别名称）")
+    name = fields.CharField(max_length=200, description="展示名称（有一级时为 一级/二级，否则为二级）")
     default_inspection_param_set = fields.ForeignKeyField(
         "models.HaoligoInspectionParamSet",
         related_name="categories_default",

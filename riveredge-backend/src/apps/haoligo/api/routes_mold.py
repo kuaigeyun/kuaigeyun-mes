@@ -269,7 +269,7 @@ def _serialize_ledger_binding(row: Optional[HaoligoMoldLedgerDatasetBinding]) ->
 
 
 def _decimal_from_dataset_cell(val) -> Decimal:
-    """将数据集单元格解析为模具产能（非数字或空视为 0）。"""
+    """将数据集单元格解析为单模产能（非数字或空视为 0）。"""
     if val is None:
         return Decimal("0")
     if isinstance(val, Decimal):
@@ -329,7 +329,7 @@ async def put_mold_ledger_dataset_binding(
     return _serialize_ledger_binding(row)
 
 
-@router.post("/ledger/sync-from-dataset", response_model=MoldLedgerSyncOut, summary="从绑定数据集同步模具代号/名称/单位/产能")
+@router.post("/ledger/sync-from-dataset", response_model=MoldLedgerSyncOut, summary="从绑定数据集同步模具代号/名称/单位/单模产能")
 async def sync_mold_ledger_from_dataset(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -432,7 +432,7 @@ async def sync_mold_ledger_from_dataset(
 @router.post(
     "/batch-lifecycle",
     response_model=MoldBatchLifecycleOut,
-    summary="批量更新可用年限/额定次数与产量/维修周期或状态",
+    summary="批量更新模具寿命/额定次数与产量/维修周期或状态",
 )
 async def batch_update_mold_lifecycle(
     body: MoldBatchLifecycleBody,
@@ -480,7 +480,7 @@ async def list_molds(
     status_filter: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(
         None,
-        description="模糊匹配：模具代号、名称、单位、购买/外协厂商与代号、ERP 物料编码、备注；纯数字时额外精确匹配模具产能与总制造数量",
+        description="模糊匹配：模具代号、名称、单位、购买/外协厂商与代号、ERP 物料编码、备注；纯数字时额外精确匹配单模产能与总制造数量",
     ),
 ):
     stf = (status_filter or "").strip() or None

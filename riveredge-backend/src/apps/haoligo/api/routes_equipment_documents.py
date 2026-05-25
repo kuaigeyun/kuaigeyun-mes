@@ -363,6 +363,7 @@ class SpotCheckPreviewLineOut(BaseModel):
     inspection_param_id: Optional[int] = None
     param_code: str
     param_name: str
+    param_requirement: Optional[str] = None
     sort_order: int
     value_type: str
     unit: Optional[str] = None
@@ -386,6 +387,7 @@ class SpotCheckLineOut(BaseModel):
     inspection_param_id: Optional[int] = None
     param_code: str
     param_name: str
+    param_requirement: Optional[str] = None
     sort_order: int = 0
     value_type: str = "numeric"
     unit: Optional[str] = None
@@ -526,6 +528,7 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
                 inspection_param_id=ln.inspection_param_id,
                 param_code=ln.param_code,
                 param_name=ln.param_name,
+                param_requirement=ln.param_requirement,
                 sort_order=ln.sort_order,
                 value_type=ln.value_type,
                 unit=ln.unit,
@@ -590,6 +593,7 @@ async def preview_spot_check_lines(
                 inspection_param_id=p.id if p else None,
                 param_code=p.code if p else "",
                 param_name=p.name if p else "",
+                param_requirement=(p.requirement if p else None) or None,
                 sort_order=it.sort_order,
                 value_type=vtype,
                 unit=p.unit if p else None,
@@ -700,6 +704,7 @@ async def create_spot_check(
             p = it.param
             code = p.code if p else ""
             name = p.name if p else ""
+            requirement = (p.requirement if p else None) or None
             pid = p.id if p else None
             vtype = (p.value_type if p else None) or "numeric"
             num_min = p.numeric_min if p else None
@@ -717,6 +722,7 @@ async def create_spot_check(
                 inspection_param_id=pid,
                 param_code=code,
                 param_name=name,
+                param_requirement=requirement,
                 sort_order=it.sort_order,
                 value_type=vtype,
                 unit=(p.unit if p else None) or None,

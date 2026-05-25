@@ -56,8 +56,23 @@ export interface CategoryRow {
   id: number;
   uuid: string;
   code: string;
+  level1_category: string;
+  level2_category: string;
   name: string;
   default_inspection_param_set_id?: number | null;
+}
+
+export function formatCategoryDisplayName(
+  c: Pick<CategoryRow, 'level1_category' | 'level2_category' | 'name'>,
+): string {
+  const l1 = (c.level1_category ?? '').trim();
+  const l2 = (c.level2_category ?? c.name ?? '').trim();
+  if (l1 && l2) return `${l1} / ${l2}`;
+  return l2 || c.name;
+}
+
+export function formatCategoryLabel(c: Pick<CategoryRow, 'code' | 'level1_category' | 'level2_category' | 'name'>): string {
+  return `${c.code} · ${formatCategoryDisplayName(c)}`;
 }
 
 export function listCategories(): Promise<CategoryRow[]> {
@@ -66,12 +81,14 @@ export function listCategories(): Promise<CategoryRow[]> {
 
 export type CategoryCreatePayload = {
   code: string;
-  name: string;
+  level1_category?: string;
+  level2_category: string;
   default_inspection_param_set_id?: number | null;
 };
 
 export type CategoryUpdatePayload = {
-  name?: string;
+  level1_category?: string;
+  level2_category?: string;
   default_inspection_param_set_id?: number | null;
 };
 
@@ -116,6 +133,7 @@ export type EquipmentUpdatePayload = {
 
 export function listEquipments(params?: {
   workshop_id?: number;
+  level1_category?: string;
   keyword?: string;
   asset_code?: string;
   name?: string;
@@ -258,6 +276,7 @@ export interface InspectionParamRow {
   uuid: string;
   code: string;
   name: string;
+  requirement?: string | null;
   unit?: string | null;
   value_type: string;
   default_value?: string | null;
@@ -268,6 +287,7 @@ export interface InspectionParamRow {
 export type InspectionParamCreatePayload = {
   code: string;
   name: string;
+  requirement?: string | null;
   unit?: string | null;
   value_type?: string;
   default_value?: string | null;
@@ -277,6 +297,7 @@ export type InspectionParamCreatePayload = {
 
 export type InspectionParamUpdatePayload = {
   name?: string;
+  requirement?: string | null;
   unit?: string | null;
   value_type?: string;
   default_value?: string | null;
@@ -327,6 +348,32 @@ export function deleteInspectionParamSet(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/inspection-param-sets/${rowId}`, { method: 'DELETE' });
 }
 
+export type InspectionParamSetImportRowPayload = {
+  set_code: string;
+  set_name: string;
+  param_code?: string | null;
+  param_name: string;
+  requirement?: string | null;
+  value_type?: string;
+  default_value?: string | null;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
+  unit?: string | null;
+  is_required?: boolean;
+};
+
+export type InspectionParamSetImportResult = {
+  plans_created: number;
+  plans_updated: number;
+  params_created: number;
+  params_updated: number;
+  plan_codes: string[];
+};
+
+export function importInspectionParamSets(rows: InspectionParamSetImportRowPayload[]): Promise<InspectionParamSetImportResult> {
+  return apiRequest(`${PREFIX}/equipment/inspection-param-sets/import`, { method: 'POST', data: { rows } });
+}
+
 export interface InspectionParamSetItemRow {
   id: number;
   param_id: number;
@@ -372,6 +419,7 @@ export interface EquipmentSpotCheckLineRow {
   inspection_param_id?: number | null;
   param_code: string;
   param_name: string;
+  param_requirement?: string | null;
   sort_order: number;
   value_type: string;
   unit?: string | null;
@@ -434,6 +482,7 @@ export interface EquipmentSpotCheckPreviewLine {
   inspection_param_id?: number | null;
   param_code: string;
   param_name: string;
+  param_requirement?: string | null;
   sort_order: number;
   value_type: string;
   unit?: string | null;
@@ -1063,7 +1112,7 @@ export function deleteMold(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/molds/${rowId}`, { method: 'DELETE' });
 }
 
-/** 模具台账 ↔ 数据集关联（同步代号/名称/单位；可选映射模具产能） */
+/** 模具台账 ↔ 数据集关联（同步代号/名称/单位；可选映射单模产能） */
 export interface MoldLedgerDatasetBindingPayload {
   dataset_uuid?: string | null;
   mold_code_column?: string | null;
