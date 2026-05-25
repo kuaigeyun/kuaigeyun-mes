@@ -39,7 +39,7 @@ wizard_stage() {
 wizard_banner() {
     echo ""
     echo -e "${WIZARD_BOLD}╔════════════════════════════════════════╗${WIZARD_RESET}"
-    echo -e "${WIZARD_BOLD}║      RiverEdge 智能部署向导              ║${WIZARD_RESET}"
+    echo -e "${WIZARD_BOLD}║      RiverEdge 智能部署向导             ║${WIZARD_RESET}"
     echo -e "${WIZARD_BOLD}╚════════════════════════════════════════╝${WIZARD_RESET}"
     echo ""
     wizard_say "你好，我将引导你完成 RiverEdge 的检测、安装与启动。"
@@ -128,7 +128,13 @@ wizard_env_scan() {
 }
 
 wizard_prepare_env() {
-    wizard_say "正在初始化部署目录与镜像配置..."
+    wizard_say "本阶段将完成以下准备："
+    echo "    · 创建日志目录"
+    echo "    · 加载或生成 deploy.env"
+    if [ "${USE_MIRROR}" = "1" ]; then
+        echo "    · 启用国内镜像 (uv / npm)"
+    fi
+    wizard_say "开始执行..."
     ensure_logs_dir
     load_deploy_env
     apply_cn_mirrors
@@ -138,18 +144,99 @@ wizard_prepare_env() {
     fi
     wizard_say_ok "日志目录: ${LOGS_DIR}"
     wizard_say_ok "部署配置: ${DEPLOY_ENV_FILE}"
+    wizard_say_ok "环境准备已完成"
+}
+
+wizard_component_display_name() {
+    case "$1" in
+        node) echo "Node.js 22+" ;;
+        python) echo "Python 3.12+" ;;
+        uv) echo "uv" ;;
+        postgresql) echo "PostgreSQL 15+" ;;
+        caddy) echo "Caddy" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+wizard_install_reason() {
+    local st=$1
+    case "$st" in
+        missing) echo "未安装" ;;
+        old:*) echo "当前 ${st#old:}，需升级" ;;
+        *) echo "$st" ;;
+    esac
+}
+
+wizard_install_method_hint() {
+    case "$1" in
+        node|python) echo "官方源安装" ;;
+        uv) echo "官方安装脚本" ;;
+        postgresql)
+            if [ "${USE_MIRROR}" = "1" ]; then echo "阿里云 PGDG 镜像"; else echo "PGDG 官方源"; fi
+            ;;
+        caddy)
+            if [ "${USE_MIRROR}" = "1" ]; then echo "apt 国内镜像"; else echo "apt 官方源"; fi
+            ;;
+        *) echo "" ;;
+    esac
 }
 
 wizard_install_deps() {
     ensure_logs_dir
     local log="$LOGS_DIR/wizard-deps.log"
-    wizard_say "正在静默安装缺失的系统软件（可能需要 sudo 权限）..."
-    wizard_say "详细安装日志: ${log}"
-    if cmd_install >>"$log" 2>&1; then
-        wizard_say_ok "系统依赖安装完成"
+    : >"$log"
+
+    local -a plan=()
+    local st comp status name hint item
+
+    st="$(check_node)"; [ "$st" != "ok" ] && plan+=("node:$st")
+    st="$(check_python)"; [ "$st" != "ok" ] && plan+=("python:$st")
+    st="$(check_uv)"; [ "$st" != "ok" ] && plan+=("uv:$st")
+    st="$(check_postgres)"; [ "$st" != "ok" ] && plan+=("postgresql:$st")
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        st="$(check_caddy)"; [ "$st" != "ok" ] && plan+=("caddy:$st")
+    fi
+
+    if [ "${#plan[@]}" -eq 0 ]; then
+        wizard_say_ok "所有依赖已就绪，无需安装"
         return 0
     fi
-    wizard_say_fail "依赖安装失败，请查看日志末尾："
+
+    wizard_say "以下组件需要安装或升级（可能需要 sudo / 管理员权限）："
+    for item in "${plan[@]}"; do
+        comp="${item%%:*}"
+        status="${item#*:}"
+        hint="$(wizard_install_method_hint "$comp")"
+        echo "    · $(wizard_component_display_name "$comp") — $(wizard_install_reason "$status")${hint:+ · ${hint}}"
+    done
+    wizard_say "安装过程可能较慢，完成后会逐项提示；详细日志: ${log}"
+    echo ""
+
+    [ -f "$INSTALL_SCRIPTS_JSON" ] || { wizard_say_fail "缺少 $INSTALL_SCRIPTS_JSON"; return 1; }
+    apply_cn_mirrors
+
+    for item in "${plan[@]}"; do
+        comp="${item%%:*}"
+        status="${item#*:}"
+        name="$(wizard_component_display_name "$comp")"
+        hint="$(wizard_install_method_hint "$comp")"
+        wizard_say "正在安装 ${name}${hint:+（${hint}）}，请稍候..."
+        if run_install_component "$comp" "$status" >>"$log" 2>&1; then
+            wizard_say_ok "${name} 已安装完成"
+        else
+            wizard_say_fail "${name} 安装失败"
+            wizard_say "详见日志末尾："
+            tail -15 "$log" >&2
+            return 1
+        fi
+    done
+
+    wizard_say "正在复核环境，确认所有依赖就绪..."
+    if cmd_check >>"$log" 2>&1; then
+        wizard_say_ok "环境软件安装全部完成"
+        return 0
+    fi
+    wizard_say_fail "环境复核未通过"
     tail -15 "$log" >&2
     return 1
 }

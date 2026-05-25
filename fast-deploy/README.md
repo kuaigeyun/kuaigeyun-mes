@@ -18,7 +18,7 @@ cd riveredge
 | 1 | 系统识别 | 检测 Windows/Linux、架构、部署模式、镜像策略 |
 | 2 | 环境监测 | 扫描 Node / Python / uv / npm / PostgreSQL / Caddy |
 | 3 | 环境准备 | 初始化目录、加载 deploy.env、启用国内镜像 |
-| 4 | 环境软件安装 | 静默安装缺失依赖（日志 → `.logs/wizard-deps.log`） |
+| 4 | 环境软件安装 | 安装前列出待装组件，逐项安装并提示完成（日志 → `.logs/wizard-deps.log`） |
 | 5 | 系统配置 | 交互填写数据库、超管密码、服务器 IP |
 | 6 | 系统安装 | 迁移 → 构建 → 启动（dev 直接热重载启动） |
 | 7 | 安装完成 | 展示访问地址、账号与常用命令 |
