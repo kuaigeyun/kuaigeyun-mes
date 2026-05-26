@@ -1,4 +1,4 @@
-# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="48" align="absmiddle" /> 快格云制造
+# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="36" align="absmiddle" /> 快格云制造
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
