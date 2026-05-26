@@ -89,11 +89,11 @@ const OQCInspectionPage: React.FC = () => {
   return (
     <PermissionGuard
       permission="kuaizhizao:quality-management-oqc-inspection:read"
-      fallback={<Empty description="暂无OQC查看权限" style={{ marginTop: 120 }} />}
+      fallback={<Empty description="暂无出货检验查看权限" style={{ marginTop: 120 }} />}
     >
       <ListPageTemplate>
         <UniTable<OQCInspection>
-          headerTitle="OQC 出货检验"
+          headerTitle="出货检验"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -102,7 +102,7 @@ const OQCInspectionPage: React.FC = () => {
             canCreate
               ? [
                   <Button key="create" type="primary" onClick={() => setCreateVisible(true)}>
-                    新建OQC
+                    新建出货检验
                   </Button>,
                 ]
               : []
@@ -120,7 +120,7 @@ const OQCInspectionPage: React.FC = () => {
         />
 
         <FormModalTemplate
-          title="新建 OQC 检验单"
+          title="新建出货检验单"
           open={createVisible}
           width={MODAL_CONFIG.LARGE_WIDTH}
           formRef={createFormRef}
@@ -134,7 +134,7 @@ const OQCInspectionPage: React.FC = () => {
               return false;
             }
             await qualityImprovementApi.oqc.create(values);
-            messageApi.success('OQC 检验单已创建');
+            messageApi.success('出货检验单已创建');
             setCreateVisible(false);
             actionRef.current?.reload();
           }}
@@ -148,7 +148,7 @@ const OQCInspectionPage: React.FC = () => {
         </FormModalTemplate>
 
         <FormModalTemplate
-          title={`执行 OQC 检验 - ${currentRow?.inspection_code || ''}`}
+          title={`执行出货检验 - ${currentRow?.inspection_code || ''}`}
           open={conductVisible}
           width={MODAL_CONFIG.LARGE_WIDTH}
           formRef={conductFormRef}

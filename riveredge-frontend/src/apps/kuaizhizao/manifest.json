@@ -638,7 +638,7 @@
           {
             "title": "app.kuaizhizao.menu.quality-management.traceability",
             "path": "/apps/kuaizhizao/quality-management/traceability",
-            "sort_order": 4,
+            "sort_order": 5,
             "meta": {
               "module": "quality"
             },
@@ -647,7 +647,7 @@
           {
             "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
             "path": "/apps/kuaizhizao/quality-management/inspection-plans",
-            "sort_order": 5,
+            "sort_order": 9,
             "meta": {
               "module": "quality"
             },
@@ -674,7 +674,7 @@
           {
             "title": "app.kuaizhizao.menu.quality-management.oqc-inspection",
             "path": "/apps/kuaizhizao/quality-management/oqc-inspection",
-            "sort_order": 8,
+            "sort_order": 4,
             "meta": {
               "module": "quality"
             },
@@ -683,7 +683,7 @@
           {
             "title": "app.kuaizhizao.menu.quality-management.spc-monitor",
             "path": "/apps/kuaizhizao/quality-management/spc-monitor",
-            "sort_order": 9,
+            "sort_order": 8,
             "meta": {
               "module": "quality"
             },

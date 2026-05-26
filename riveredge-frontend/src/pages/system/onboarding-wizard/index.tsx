@@ -325,7 +325,7 @@ const OnboardingWizardPage: React.FC = () => {
     },
     'quality': {
       data: '检验标准 (AQL)、质检方案、检验项目字典',
-      docs: '来料检验单 (IQC)、过程检验单 (PQC)、成品检验单 (OQC)',
+      docs: '来料检验单 (IQC)、过程检验单 (PQC)、出货检验单',
       value: '全生命周期质量追溯，一键生成质检报告，从源头卡死不良品。'
     },
     'equipment': {
@@ -397,7 +397,7 @@ const OnboardingWizardPage: React.FC = () => {
     'quality': [
       { id: 'qa_standard', name: '制定检验标准', description: '设置物料与产品的 AQL 与抽样方案', required: true, jump_path: '/apps/master-data/quality/standards' },
       { id: 'qa_iqc', name: '来料检验 (IQC)', description: '对外协或采购回来的物料进行质检', required: true, jump_path: '/apps/kuaizhizao/quality-control/iqc' },
-      { id: 'qa_oqc', name: '成品检验 (OQC)', description: '对即将发货的成品进行最终出厂前检验', required: true, jump_path: '/apps/kuaizhizao/quality-control/oqc' }
+      { id: 'qa_oqc', name: '出货检验', description: '对即将发货的成品进行最终出厂前检验', required: true, jump_path: '/apps/kuaizhizao/quality-control/oqc' }
     ],
     'equipment': [
       { id: 'eq_ledger', name: '建立设备台账', description: '对全厂机器设备进行一物一码建档', required: true, jump_path: '/apps/master-data/equipment/ledger' },
