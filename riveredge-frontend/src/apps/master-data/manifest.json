@@ -37,15 +37,15 @@
             "sort_order": 2
           },
           {
-            "title": "app.master-data.menu.factory.workstations",
-            "path": "/apps/master-data/factory/workstations",
-            "permission": "master-data:factory:workstation:read",
-            "sort_order": 3
-          },
-          {
             "title": "app.master-data.menu.factory.work-centers",
             "path": "/apps/master-data/factory/work-centers",
             "permission": "master-data:factory:work-center:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.factory.workstations",
+            "path": "/apps/master-data/factory/workstations",
+            "permission": "master-data:factory:workstation:read",
             "sort_order": 4
           },
           {
@@ -507,16 +507,6 @@
       "auto_generate": false
     },
     {
-      "page_code": "master-data-factory-workstation",
-      "page_name": "工位管理",
-      "page_path": "/apps/master-data/factory/workstations",
-      "code_field": "code",
-      "code_field_label": "工位编号",
-      "module": "主数据管理",
-      "module_icon": "database",
-      "auto_generate": false
-    },
-    {
       "page_code": "master-data-factory-work-center",
       "page_name": "工作中心",
       "page_path": "/apps/master-data/factory/work-centers",
@@ -527,6 +517,16 @@
       "auto_generate": true,
       "rule_code": "WORK_CENTER_CODE",
       "skip_date": true
+    },
+    {
+      "page_code": "master-data-factory-workstation",
+      "page_name": "工位管理",
+      "page_path": "/apps/master-data/factory/workstations",
+      "code_field": "code",
+      "code_field_label": "工位编号",
+      "module": "主数据管理",
+      "module_icon": "database",
+      "auto_generate": false
     },
     {
       "page_code": "master-data-factory-work-group",

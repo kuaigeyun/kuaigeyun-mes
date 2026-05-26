@@ -1,0 +1,21 @@
+/**
+ * 主内容区路由切换：极轻 opacity 过渡，避免位移带来的迟滞感。
+ */
+.riveredge-route-transition {
+  animation: riveredge-route-in 0.12s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@keyframes riveredge-route-in {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .riveredge-route-transition {
+    animation: none;
+  }
+}

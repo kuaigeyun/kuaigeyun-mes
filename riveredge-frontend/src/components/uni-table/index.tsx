@@ -1434,8 +1434,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       return col
     })
-    return applyUniTableColumnWidthPolicy(mapped, tableData.length === 0)
-  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled, tableData.length])
+    // 列宽策略保持稳定，不随空表/有数据态切换，避免固定列在首次加载与刷新时抖动
+    return applyUniTableColumnWidthPolicy(mapped, false)
+  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled])
 
   // 全项目统一策略：结构化列保留页面 width；主文本列由 applyUniTableColumnWidthPolicy 释放 width；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
@@ -2270,19 +2271,53 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ],
   }), [memoizedRightActions, restProps.toolbar?.actions])
 
+  const normalizedUserRowSelection = React.useMemo(() => {
+    const userRowSelection = (restProps as { rowSelection?: unknown }).rowSelection
+    if (!userRowSelection || typeof userRowSelection !== 'object') {
+      return userRowSelection as
+        | ({
+            columnWidth?: number
+          } & Record<string, unknown>)
+        | undefined
+    }
+    const rowSelectionObj = userRowSelection as {
+      columnWidth?: number
+    } & Record<string, unknown>
+    if (rowSelectionObj.columnWidth != null) return rowSelectionObj
+    return {
+      ...rowSelectionObj,
+      columnWidth: UNI_TABLE_SELECTION_COL_WIDTH,
+    }
+  }, [restProps])
+
   const memoizedRowSelection = React.useMemo(
     () =>
       enableRowSelection
         ? {
+            ...(normalizedUserRowSelection && typeof normalizedUserRowSelection === 'object'
+              ? normalizedUserRowSelection
+              : {}),
             type: 'checkbox' as const,
+            columnWidth:
+              normalizedUserRowSelection &&
+              typeof normalizedUserRowSelection === 'object' &&
+              normalizedUserRowSelection.columnWidth != null
+                ? normalizedUserRowSelection.columnWidth
+                : UNI_TABLE_SELECTION_COL_WIDTH,
             selectedRowKeys,
             onChange: handleRowSelectionChange,
             ...(rowSelectionGetCheckboxProps
               ? { getCheckboxProps: rowSelectionGetCheckboxProps }
               : {}),
           }
-        : undefined,
-    [enableRowSelection, selectedRowKeys, handleRowSelectionChange, rowSelectionGetCheckboxProps],
+        : normalizedUserRowSelection,
+    [
+      enableRowSelection,
+      normalizedUserRowSelection,
+      selectedRowKeys,
+      handleRowSelectionChange,
+      rowSelectionGetCheckboxProps,
+    ],
   )
 
   const memoizedEditable = React.useMemo(() => (
@@ -2343,8 +2378,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const isEmptyTable = tableData.length === 0
   const emptyTableHasFixedColumns =
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
-  const tableHasRowSelection =
-    enableRowSelection || !!(restProps as { rowSelection?: unknown }).rowSelection
+  const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
 
   const proTableBodyScrollYEnabled = React.useMemo(() => {
     if (allowCustomScrollY && restTableScrollY != null) return true
@@ -2403,7 +2437,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .forEach((el) => {
           el.style.overflowY = 'hidden'
           el.style.maxHeight = 'none'
-          el.style.scrollbarGutter = 'auto'
+          el.style.scrollbarGutter = 'stable'
           if (isEmptyTable && !emptyTableHasFixedColumns) {
             el.style.setProperty('overflow-x', 'hidden', 'important')
           } else {
@@ -2549,7 +2583,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container.uni-table-natural-height .ant-table-header {
           overflow-y: hidden !important;
           max-height: none !important;
-          scrollbar-gutter: auto !important;
+          scrollbar-gutter: stable !important;
           flex: none !important;
         }
         .uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
@@ -2728,6 +2762,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   search,
                   pagination: _omitPagination,
                   scroll: userScroll,
+                  rowSelection: _omitRowSelection,
                   components: userComponents,
                   virtual: userVirtual,
                   tableAlertRender: _omitTableAlertRender,

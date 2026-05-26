@@ -5,9 +5,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { workCenterApi, workstationApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
@@ -16,6 +16,7 @@ import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workCenterFormSchema } from '../schemas/workCenter';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { WorkstationFormModal } from './WorkstationFormModal';
 
 const PAGE_CODE = 'master-data-factory-work-center';
 const CUSTOM_FIELD_TABLE = 'master_data_factory_work_centers';
@@ -35,11 +36,13 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [workstations, setWorkstations] = useState<Workstation[]>([]);
+  const [workstationQuickCreateVisible, setWorkstationQuickCreateVisible] = useState(false);
 
   const {
     customFields,
@@ -52,17 +55,18 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
 
   const isEdit = Boolean(editUuid);
 
-  useEffect(() => {
-    const loadWorkstations = async () => {
-      try {
-        const result = await workstationApi.list({ limit: 1000, is_active: true });
-        setWorkstations(factoryListItems(result));
-      } catch (error) {
-        console.error('加载工位列表失败:', error);
-      }
-    };
-    loadWorkstations();
+  const reloadWorkstations = React.useCallback(async () => {
+    try {
+      const result = await workstationApi.list({ limit: 1000, is_active: true });
+      setWorkstations(factoryListItems(result));
+    } catch (error) {
+      console.error('加载工位列表失败:', error);
+    }
   }, []);
+
+  useEffect(() => {
+    reloadWorkstations();
+  }, [reloadWorkstations]);
 
   useEffect(() => {
     if (!open) return;
@@ -170,7 +174,22 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
     resetFieldValues();
   };
 
+  const handleWorkstationQuickCreateSuccess = (workstation: Workstation) => {
+    setWorkstations((prev) => {
+      if (prev.some((ws) => ws.id === workstation.id)) return prev;
+      return [...prev, workstation];
+    });
+    const currentIds: number[] = formRef.current?.getFieldValue('workstationIds') ?? [];
+    const nextIds = currentIds.includes(workstation.id)
+      ? currentIds
+      : [...currentIds, workstation.id];
+    formRef.current?.setFieldsValue({ workstationIds: nextIds });
+    setWorkstationQuickCreateVisible(false);
+    void reloadWorkstations();
+  };
+
   return (
+    <>
     <FormModalTemplate
       title={isEdit ? t('field.workCenter.editTitle') : t('field.workCenter.createTitle')}
       open={open}
@@ -197,7 +216,24 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
             value: ws.id,
           })),
         }}
+        dropdownEnhanceMap={{
+          workstationIds: {
+            quickCreate: {
+              label: t('field.workCenter.quickAddWorkstation'),
+              onClick: () => setWorkstationQuickCreateVisible(true),
+            },
+          },
+        }}
       />
     </FormModalTemplate>
+
+    <WorkstationFormModal
+      open={workstationQuickCreateVisible}
+      editUuid={null}
+      onClose={() => setWorkstationQuickCreateVisible(false)}
+      onSuccess={handleWorkstationQuickCreateSuccess}
+      zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+    />
+    </>
   );
 };

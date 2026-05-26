@@ -3635,6 +3635,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
           border-right-color: var(--riveredge-menu-primary-color) !important;
         }
+        /* 子菜单项选中背景切换：短促 ease-out，覆盖 antd 默认 background / title-content 慢过渡 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item {
+          transition:
+            background 0.07s cubic-bezier(0.33, 1, 0.68, 1),
+            background-color 0.07s cubic-bezier(0.33, 1, 0.68, 1),
+            color 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item .ant-menu-title-content {
+          transition: color 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item::after,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item::after {
+          transition:
+            transform 0.07s cubic-bezier(0.33, 1, 0.68, 1),
+            opacity 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
         /* 隐藏子菜单中的图标（只保留一级菜单的图标） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
@@ -3684,7 +3702,43 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
-        /* ==================== 菜单动画 - 使用 Ant Design 默认 ==================== */
+        /* ==================== 侧栏菜单动效：更短、更利落（仅作用于侧栏，不影响主题切换全局 0s 规则） ==================== */
+        .ant-pro-layout .ant-pro-sider .ant-motion-collapse,
+        .ant-pro-layout .ant-pro-sider .ant-motion-collapse-legacy-active {
+          transition:
+            height 0.15s cubic-bezier(0.33, 1, 0.68, 1),
+            opacity 0.1s ease !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-submenu-title {
+          transition:
+            background-color 0.12s cubic-bezier(0.33, 1, 0.68, 1),
+            color 0.12s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow::before,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow::after {
+          transition: transform 0.12s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider {
+          transition:
+            width 0.18s cubic-bezier(0.33, 1, 0.68, 1),
+            min-width 0.18s cubic-bezier(0.33, 1, 0.68, 1),
+            max-width 0.18s cubic-bezier(0.33, 1, 0.68, 1),
+            flex 0.18s cubic-bezier(0.33, 1, 0.68, 1) !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ant-pro-layout .ant-pro-sider .ant-motion-collapse,
+          .ant-pro-layout .ant-pro-sider .ant-motion-collapse-legacy-active,
+          .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-item,
+          .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-submenu-title,
+          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item,
+          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-title-content,
+          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item::after,
+          .ant-pro-layout .ant-pro-sider.ant-layout-sider {
+            transition: none !important;
+          }
+        }
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
         .ant-pro-layout .ant-pro-layout-header .ant-space,
         .ant-pro-layout .ant-layout-header .ant-space {

@@ -25,6 +25,8 @@ export interface WorkstationFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (workstation: Workstation) => void;
+  /** 嵌套于其他 Modal 时使用，确保叠层正确 */
+  zIndex?: number;
 }
 
 export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
@@ -32,6 +34,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -191,6 +194,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
       initialValues={{ isActive: true }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={workstationFormSchema}

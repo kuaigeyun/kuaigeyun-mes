@@ -800,34 +800,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               themeStyle: 'vivid',
             }}
           >
-            {/* 主题风格 */}
-            <Card
-              size="small"
-              title={t('ui.theme.style.label')}
-              style={{ marginBottom: 16 }}
-              styles={{ body: { padding: '16px' } }}
-            >
-              <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
-                <Segmented
-                  block
-                  options={[
-                    { label: t('ui.theme.style.vivid'), value: 'vivid' },
-                    { label: t('ui.theme.style.plain'), value: 'plain' },
-                  ]}
-                  value={themeStyleValue}
-                  onChange={(value) => {
-                    const next = value as ThemeStyle;
-                    form.setFieldValue('themeStyle', next);
-                    setThemeStyleValue(next);
-                    handleValuesChange({ themeStyle: next }, form.getFieldsValue());
-                  }}
-                />
-              </Form.Item>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
-              </Text>
-            </Card>
-
             {/* 颜色模式 */}
             <Card
               size="small"
@@ -963,6 +935,34 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   </div>
                 </div>
               </Form.Item>
+            </Card>
+
+            {/* 主题风格 */}
+            <Card
+              size="small"
+              title={t('ui.theme.style.label')}
+              style={{ marginBottom: 16 }}
+              styles={{ body: { padding: '16px' } }}
+            >
+              <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
+                <Segmented
+                  block
+                  options={[
+                    { label: t('ui.theme.style.vivid'), value: 'vivid' },
+                    { label: t('ui.theme.style.plain'), value: 'plain' },
+                  ]}
+                  value={themeStyleValue}
+                  onChange={(value) => {
+                    const next = value as ThemeStyle;
+                    form.setFieldValue('themeStyle', next);
+                    setThemeStyleValue(next);
+                    handleValuesChange({ themeStyle: next }, form.getFieldsValue());
+                  }}
+                />
+              </Form.Item>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
+              </Text>
             </Card>
 
             {/* 主题颜色 */}
