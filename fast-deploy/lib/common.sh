@@ -368,8 +368,30 @@ check_caddy() {
     [ -n "$c" ] && echo "ok" || echo "missing"
 }
 
+# Caddy 在 Windows 以原生 exe 运行，需 C:/... 路径（不能是 Git Bash 的 /c/...）
+caddy_native_path() {
+    local p=$1
+    if is_windows_gitbash; then
+        if command -v cygpath >/dev/null 2>&1; then
+            cygpath -m "$p"
+            return
+        fi
+        if [[ "$p" == /[a-zA-Z]/* ]]; then
+            local drive="${p:1:1}"
+            drive="$(echo "$drive" | tr 'a-z' 'A-Z')"
+            echo "${drive}:${p:2}"
+            return
+        fi
+    fi
+    echo "$p"
+}
+
 check_port() {
     local port=$1
+    if is_windows_gitbash; then
+        netstat -an 2>/dev/null | grep -qiE "[:\.]${port}[[:space:]].*LISTENING" && return 0
+        return 1
+    fi
     if command -v ss >/dev/null 2>&1; then
         ss -ltn 2>/dev/null | grep -q ":${port} " && return 0
     elif command -v lsof >/dev/null 2>&1; then
@@ -1113,7 +1135,8 @@ gen_caddyfile() {
 
     local addr backend_addr frontend_root
     backend_addr="127.0.0.1:${BACKEND_PORT}"
-    frontend_root="$FRONTEND_DIR/dist"
+    frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
+    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
 
     if [ -n "$CADDY_DOMAIN" ]; then
         if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
@@ -1316,16 +1339,18 @@ start_worker_prod() {
 start_caddy_prod() {
     ensure_linux_caddy_ready
     gen_caddyfile
-    local caddy_bin
+    local caddy_bin caddy_config
     caddy_bin="$(resolve_caddy)"
+    caddy_config="$(caddy_native_path "$CADDYFILE")"
     if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
         log_info "Caddy 已在运行"
+        verify_caddy_serving || exit 1
         return 0
     fi
     stop_service caddy
     kill_port "$PROXY_PORT"
     log_info "启动 Caddy (:${PROXY_PORT})..."
-    nohup "$caddy_bin" run --config "$CADDYFILE" >> "$LOGS_DIR/caddy.log" 2>&1 &
+    nohup "$caddy_bin" run --config "$caddy_config" >> "$LOGS_DIR/caddy.log" 2>&1 &
     echo $! > "$LOGS_DIR/caddy.pid"
     sleep 2
     kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null || {
@@ -1333,7 +1358,26 @@ start_caddy_prod() {
         tail -20 "$LOGS_DIR/caddy.log" >&2
         exit 1
     }
+    check_port "$PROXY_PORT" || {
+        log_error "Caddy 未监听端口 ${PROXY_PORT}，查看 $LOGS_DIR/caddy.log"
+        tail -20 "$LOGS_DIR/caddy.log" >&2
+        exit 1
+    }
+    verify_caddy_serving || exit 1
     log_ok "Caddy 已启动"
+}
+
+verify_caddy_serving() {
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PROXY_PORT}/" 2>/dev/null || echo "000")"
+    if [ "$code" = "200" ]; then
+        return 0
+    fi
+    log_error "Web 入口 http://127.0.0.1:${PROXY_PORT}/ 返回 HTTP ${code}（期望 200）"
+    log_error "Caddyfile: $CADDYFILE"
+    log_error "前端 dist: $FRONTEND_DIR/dist/index.html"
+    [ -f "$LOGS_DIR/caddy.log" ] && tail -20 "$LOGS_DIR/caddy.log" >&2
+    return 1
 }
 
 cmd_start_dev() {
