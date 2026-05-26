@@ -14,24 +14,58 @@
 
 **移动端**：![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo) ![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?style=flat-square&logo=react) ![Ant Design RN](https://img.shields.io/badge/Ant%20Design%20RN-5-0170FE?style=flat-square&logo=antdesign) ![Expo Router](https://img.shields.io/badge/Expo%20Router-6-000020?style=flat-square)
 
-面向离散制造场景的轻量级 MES。基于 RiverEdge 多租户 SaaS 内核，采用统一需求模型驱动计划与执行，支持 MTS / MTO 一体化运行。
+为离散制造企业打造的轻量级 MES：以统一需求模型贯通“销售-计划-执行-仓储”，帮助企业在可控成本下快速上线并持续扩展。
 
 ---
 
-## 价值主张
+## 15 秒了解快格云制造
+
+**一句话价值**：用一套可渐进实施的制造系统，替代 Excel + 纸单 + 多系统割裂流程。
+
+**适合谁**
+- 10–200 人离散制造企业
+- 多品种小批量，按单/按库混合生产
+- 需要先跑通核心执行，再逐步扩展全流程协同
+
+**你将获得**
+- **更快上线**：模块化启用，先核心后扩展，避免一次性重投入
+- **更稳交付**：需求、工单、采购、报工、出入库同主线管理，减少断点与返工
+- **更好管理**：全链路可追溯、可审计，数据可用于复盘、改善与经营决策
+
+---
+
+## 立即体验与接入
+
+- **在线演示**：<https://kuaigeyun.com>（支持免注册体验）
+- **部署入口**：[`fast-deploy/deploy.sh`](fast-deploy/README.md)（Windows / Linux）
+- **完整文档**：[`docs/部署指南.md`](docs/部署指南.md)
+
+## 微信沟通反馈群
+
+<img src="docs/screenshots/wechat/wechat.png" alt="微信沟通反馈群" width="280" />
+
+---
+
+## 为什么选择快格云制造
 
 - **统一业务主线**：销售预测/销售订单统一进入 `Demand`，贯通需求计算、工单/采购、执行与出入库。
-- **模块化上线**：插件化应用按需启用，支持从“最小可用”到“全流程协同”分阶段落地。
-- **低运维复杂度**：默认 PostgreSQL + Taskiq，无 Redis 依赖；`fast-deploy` 支持 Windows / Linux 快速部署。
-- **高适配性**：业务蓝图、流程开关、自定义字段、打印与报表设计能力内建，适配多工厂差异流程。
+- **可渐进上线**：插件化应用按需启用，支持从最小可用到全流程协同的分阶段实施。
+- **低运维负担**：默认 PostgreSQL + Taskiq，无 Redis 依赖；部署路径标准化。
+- **高配置灵活性**：业务蓝图、流程开关、自定义字段、打印与报表能力内建，适配多工厂差异流程。
+- **可追溯与可审计**：从需求到执行全链路留痕，便于交付核对、异常定位与持续改进。
 
 ---
 
-## 适用场景
+## 目录
 
-- 10–200 人离散制造企业，多品种小批量，典型流程为按单/按库混合生产。
-- 需要以系统替代 Excel 与纸单，优先建设工单、报工、领料、入库、追溯等核心执行闭环。
-- 需要在不引入重型实施成本的前提下，逐步扩展到采购、质量、设备、绩效与经营分析。
+- [15 秒了解快格云制造](#15-秒了解快格云制造)
+- [立即体验与接入](#立即体验与接入)
+- [为什么选择快格云制造](#为什么选择快格云制造)
+- [核心能力](#核心能力)
+- [插件应用矩阵](#插件应用矩阵)
+- [技术架构](#技术架构)
+- [快速开始](#快速开始)
+- [文档导航](#文档导航)
 
 ---
 
@@ -81,22 +115,8 @@
 | 后端 | FastAPI + Tortoise ORM + PostgreSQL + Taskiq |
 | 部署与架构 | 多租户 SaaS、插件化架构、Caddy 反向代理 |
 
-- 3D 拓扑模型素材： [Kenney City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial)（CC0）
+- 3D 拓扑模型素材：[Kenney City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial)（CC0）
 - 第三方资源与许可：见 [NOTICE](NOTICE) 与系统内“关于 → 版权声明”
-
----
-
-## 演示环境
-
-- 地址：<https://kuaigeyun.com>
-- 体验：支持免注册体验，也可自行注册用户/租户
-- 说明：演示环境持续迭代，功能与数据不作为生产承诺
-
----
-
-## 微信沟通反馈群
-
-<img src="docs/screenshots/wechat/wechat.png" alt="微信沟通反馈群" width="280" />
 
 ---
 
