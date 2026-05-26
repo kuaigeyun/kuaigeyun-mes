@@ -274,9 +274,9 @@ wizard_collect_admin_config() {
     admin_user="${input:-$admin_user}"
     set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
 
-    admin_pass="$(wizard_read_password_twice "超管密码（至少 6 位）")" || return 1
-    if [ ${#admin_pass} -lt 6 ]; then
-        wizard_say_fail "超管密码至少 6 位"
+    admin_pass="$(wizard_read_password_twice "超管密码（至少 8 位）")" || return 1
+    if [ ${#admin_pass} -lt 8 ]; then
+        wizard_say_fail "超管密码至少 8 位"
         return 1
     fi
     set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"

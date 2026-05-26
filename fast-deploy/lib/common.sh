@@ -1032,12 +1032,12 @@ cmd_configure() {
         admin_user="${input:-$admin_user}"
         set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
         read -rsp "平台超级管理员密码: " admin_pass; echo
-        [ ${#admin_pass} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
+        [ ${#admin_pass} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
         set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
     else
         read -rsp "平台超管密码 [已配置，回车跳过 / 输入新密码]: " input; echo
         if [ -n "$input" ]; then
-            [ ${#input} -lt 6 ] && { log_error "超管密码至少 6 位"; exit 1; }
+            [ ${#input} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
             set_env_value PLATFORM_SUPERADMIN_PASSWORD "$input"
         fi
         read -rp "平台超管用户名 [${admin_user}，回车跳过]: " input

@@ -453,14 +453,14 @@ function Invoke-Configure {
         $sec = Read-Host '平台超级管理员密码 (登录用户名 infra_admin)' -AsSecureString
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
         $adminPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-        if ($adminPass.Length -lt 6) { throw '超管密码至少 6 位' }
+        if ($adminPass.Length -lt 8) { throw '超管密码至少 8 位' }
         Set-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD' $adminPass
     } else {
         $sec = Read-Host '平台超管密码 [已配置，直接回车跳过]' -AsSecureString
         if ($sec.Length -gt 0) {
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
             $adminPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-            if ($adminPass.Length -lt 6) { throw '超管密码至少 6 位' }
+            if ($adminPass.Length -lt 8) { throw '超管密码至少 8 位' }
             Set-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD' $adminPass
         }
     }
