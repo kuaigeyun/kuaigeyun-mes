@@ -23,6 +23,10 @@ $script:DeployMode = $env:DEPLOY_MODE
 $script:UseMirror = ($env:USE_MIRROR -ne '0')
 $script:BackendStartTimeout = 30
 
+# Windows 默认 GBK，aerich 读 pyproject.toml（UTF-8）会 UnicodeDecodeError
+if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = '1' }
+if (-not $env:PYTHONIOENCODING) { $env:PYTHONIOENCODING = 'utf-8' }
+
 function Write-LogInfo($msg)  { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] INFO: $msg" -ForegroundColor Cyan }
 function Write-LogWarn($msg)  { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] WARN: $msg" -ForegroundColor Yellow }
 function Write-LogOk($msg)    { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] OK: $msg" -ForegroundColor Green }

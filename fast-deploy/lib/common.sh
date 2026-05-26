@@ -56,6 +56,12 @@ is_windows_gitbash() {
     esac
 }
 
+# Windows Git Bash 默认 locale 为 GBK，aerich 读 pyproject.toml（UTF-8 中文注释）会 UnicodeDecodeError
+if is_windows_gitbash; then
+    export PYTHONUTF8="${PYTHONUTF8:-1}"
+    export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
+fi
+
 # Windows 安装后补充常见路径（当前 Git Bash 会话内生效）
 refresh_windows_path() {
     is_windows_gitbash || return 0
