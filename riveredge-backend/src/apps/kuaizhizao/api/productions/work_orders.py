@@ -497,7 +497,7 @@ async def analyze_delay_reasons(
     )
 
 
-@router.get("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="Get work order")
+@router.get("/work-orders/{work_order_id:int}", response_model=WorkOrderResponse, summary="Get work order")
 async def get_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -647,7 +647,7 @@ async def get_work_order_picking_confirmation_status(
     }
 
 
-@router.put("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="Update work order")
+@router.put("/work-orders/{work_order_id:int}", response_model=WorkOrderResponse, summary="Update work order")
 async def update_work_order(
     work_order_id: int,
     work_order: WorkOrderUpdate,
@@ -706,7 +706,7 @@ async def batch_update_work_order_operation_dates(
     return {"success": True, "message": "更新成功"}
 
 
-@router.delete("/work-orders/{work_order_id}", summary="Delete work order")
+@router.delete("/work-orders/{work_order_id:int}", summary="Delete work order")
 async def delete_work_order(
     work_order_id: int,
     current_user: User = Depends(get_current_user),

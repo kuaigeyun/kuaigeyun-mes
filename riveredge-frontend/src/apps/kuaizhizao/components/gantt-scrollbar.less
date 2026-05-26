@@ -6,8 +6,12 @@
 @scrollbar-thumb-hover: rgba(0, 0, 0, 0.06);
 
 .gantt-chart-wrapper {
+  position: relative;
+  max-height: var(--gantt-max-height, 62vh);
+  overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: @scrollbar-thumb transparent;
+  contain: layout paint;
 }
 
 /* 尺寸与轨道 */
@@ -43,4 +47,69 @@
 .gantt-chart-wrapper ::-webkit-scrollbar-corner,
 .gantt-chart-wrapper *::-webkit-scrollbar-corner {
   background: transparent !important;
+}
+
+/* Delfoi 风格：当前时间竖线 */
+.gantt-now-line {
+  position: absolute;
+  top: 0;
+  bottom: auto;
+  width: 2px;
+  background: rgba(22, 119, 255, 0.75);
+  z-index: 999;
+  pointer-events: none;
+}
+
+.gantt-now-line-label {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 12px;
+  color: #1677ff;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(22, 119, 255, 0.35);
+  border-radius: 2px;
+  padding: 0 4px;
+  line-height: 18px;
+}
+
+/* 尝试覆盖任务条颜色：兼容多种 DOM 命名 */
+.gantt-task-yellow,
+.gantt-task-yellow .wx-task,
+.gantt-task-yellow .wx-task-bar,
+.wx-task.gantt-task-yellow,
+.wx-task.gantt-task-yellow .wx-task-bar {
+  background: #fadb14 !important;
+  border-color: #fadb14 !important;
+  color: #1f1f1f !important;
+}
+
+.gantt-task-red,
+.gantt-task-red .wx-task,
+.gantt-task-red .wx-task-bar,
+.wx-task.gantt-task-red,
+.wx-task.gantt-task-red .wx-task-bar {
+  background: #ff4d4f !important;
+  border-color: #ff4d4f !important;
+  color: #fff !important;
+}
+
+.gantt-task-blue,
+.gantt-task-blue .wx-task,
+.gantt-task-blue .wx-task-bar,
+.wx-task.gantt-task-blue,
+.wx-task.gantt-task-blue .wx-task-bar {
+  background: #1677ff !important;
+  border-color: #1677ff !important;
+  color: #fff !important;
+}
+
+.gantt-task-gray,
+.gantt-task-gray .wx-task,
+.gantt-task-gray .wx-task-bar,
+.wx-task.gantt-task-gray,
+.wx-task.gantt-task-gray .wx-task-bar {
+  background: #bfbfbf !important;
+  border-color: #bfbfbf !important;
+  color: #1f1f1f !important;
 }

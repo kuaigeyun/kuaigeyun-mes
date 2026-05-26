@@ -61,6 +61,14 @@ export interface GanttTask {
   level?: GanttTaskLevel;
   /** 工序所属工单 ID（工序级时有值） */
   work_order_id?: number;
+  /** 任务条颜色（库支持时生效） */
+  color?: string;
+  /** 任务条文本色（库支持时生效） */
+  textColor?: string;
+  /** 甘特库样式类（库支持时生效） */
+  css?: string;
+  /** 兼容部分库字段命名 */
+  class?: string;
 }
 
 export type ViewMode = 'day' | 'week' | 'month';

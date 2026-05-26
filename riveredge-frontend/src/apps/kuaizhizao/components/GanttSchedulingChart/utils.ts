@@ -8,6 +8,20 @@ import dayjs from 'dayjs';
 const DEFAULT_START = 8; // 08:00
 const DEFAULT_END = 17; // 17:00
 
+function resolveTaskVisual(wo: WorkOrderForGantt, end: Date): { css: string; color: string; textColor: string } {
+  if (wo.is_frozen) {
+    return { css: 'gantt-task-gray', color: '#bfbfbf', textColor: '#1f1f1f' };
+  }
+  const isOverdue = end.getTime() < Date.now() && wo.status !== 'completed';
+  if (isOverdue || wo.priority === 'urgent') {
+    return { css: 'gantt-task-red', color: '#ff4d4f', textColor: '#ffffff' };
+  }
+  if (wo.status === 'in_progress') {
+    return { css: 'gantt-task-blue', color: '#1677ff', textColor: '#ffffff' };
+  }
+  return { css: 'gantt-task-yellow', color: '#fadb14', textColor: '#1f1f1f' };
+}
+
 /**
  * 工单转换为 Gantt Task
  */
@@ -54,6 +68,7 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
   const text = subtitle
     ? `${frozenPrefix}${baseText}${scoreSuffix}\n${subtitle}`
     : `${frozenPrefix}${baseText}${scoreSuffix}`;
+  const visual = resolveTaskVisual(wo, end);
 
   return {
     id: wo.id,
@@ -70,6 +85,10 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
     assigned_equipment_name: eq,
     assigned_mold_name: mold,
     assigned_tool_name: tool,
+    css: visual.css,
+    class: visual.css,
+    color: visual.color,
+    textColor: visual.textColor,
   };
 }
 
@@ -123,6 +142,7 @@ export function operationToGanttTask(
   ].filter(Boolean) as string[];
   const subtitle = resourceParts.length > 0 ? resourceParts.join(' | ') : undefined;
   const text = subtitle ? `${baseText}\n${subtitle}` : baseText;
+  const visual = resolveTaskVisual(wo, end);
 
   return {
     id: `op-${op.id}`,
@@ -141,6 +161,10 @@ export function operationToGanttTask(
     assigned_tool_name: op.assigned_tool_name || undefined,
     level: 'operation',
     work_order_id: wo.id,
+    css: visual.css,
+    class: visual.css,
+    color: visual.color,
+    textColor: visual.textColor,
   };
 }
 

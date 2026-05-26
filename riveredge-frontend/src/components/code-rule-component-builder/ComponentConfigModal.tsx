@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Form, theme } from 'antd';
 import { ProForm, ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormRadio } from '@ant-design/pro-components';
 import {
@@ -32,6 +33,7 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
   onCancel,
 }) => {
   const { token } = theme.useToken();
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [formValues, setFormValues] = useState<Partial<CodeRuleComponent>>(component);
 
@@ -59,50 +61,50 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
           <>
             <ProFormDigit
               name="digits"
-              label="计数位数"
-              rules={[{ required: true, message: '请输入计数位数' }]}
+              label={t('components.codeRuleComponentConfig.autoCounter.digits')}
+              rules={[{ required: true, message: t('components.codeRuleComponentConfig.autoCounter.digitsRequired') }]}
               fieldProps={{ min: 2, max: 12 }}
               initialValue={(component as AutoCounterComponent).digits}
-              extra="计数位数范围：2-12"
+              extra={t('components.codeRuleComponentConfig.autoCounter.digitsExtra')}
             />
             <ProFormSwitch
               name="fixed_width"
-              label="位数固定"
+              label={t('components.codeRuleComponentConfig.autoCounter.fixedWidth')}
               initialValue={(component as AutoCounterComponent).fixed_width}
-              extra="开启后显示固定位数，如00001；关闭后显示实际位数，如1"
+              extra={t('components.codeRuleComponentConfig.autoCounter.fixedWidthExtra')}
             />
             <ProFormSelect
               name="reset_cycle"
-              label="重置周期"
-              rules={[{ required: true, message: '请选择重置周期' }]}
+              label={t('components.codeRuleComponentConfig.autoCounter.resetCycle')}
+              rules={[{ required: true, message: t('components.codeRuleComponentConfig.autoCounter.resetCycleRequired') }]}
               options={[
-                { label: '不自动重置', value: 'never' },
-                { label: '每日重置', value: 'daily' },
-                { label: '每月重置', value: 'monthly' },
-                { label: '每年重置', value: 'yearly' },
+                { label: t('components.codeRuleComponent.resetCycle.never'), value: 'never' },
+                { label: t('components.codeRuleComponent.resetCycle.daily'), value: 'daily' },
+                { label: t('components.codeRuleComponent.resetCycle.monthly'), value: 'monthly' },
+                { label: t('components.codeRuleComponent.resetCycle.yearly'), value: 'yearly' },
               ]}
               initialValue={(component as AutoCounterComponent).reset_cycle}
-              extra="重置周期是指流水号重新计数的条件"
+              extra={t('components.codeRuleComponentConfig.autoCounter.resetCycleExtra')}
             />
             <ProFormDigit
               name="initial_value"
-              label="初始值"
-              rules={[{ required: true, message: '请输入初始值' }]}
+              label={t('components.codeRuleComponentConfig.autoCounter.initialValue')}
+              rules={[{ required: true, message: t('components.codeRuleComponentConfig.autoCounter.initialValueRequired') }]}
               fieldProps={{ min: 0 }}
               initialValue={(component as AutoCounterComponent).initial_value}
-              extra="计数的初始数值，也就是从哪一个数字开始计数"
+              extra={t('components.codeRuleComponentConfig.autoCounter.initialValueExtra')}
             />
             <ProFormSelect
               name="scope_fields"
-              label="隔离字段 (分类计数)"
+              label={t('components.codeRuleComponentConfig.autoCounter.scopeFields')}
               mode="multiple"
               options={availableFields.map(field => ({
                 label: `${field.field_label} (${field.field_name})`,
                 value: field.field_name,
               }))}
-              placeholder="选择按哪些字段隔离计数"
+              placeholder={t('components.codeRuleComponentConfig.autoCounter.scopeFieldsPlaceholder')}
               initialValue={(component as AutoCounterComponent).scope_fields}
-              extra="例如：如果选择“部门”字段，则不同部门的流水号相互独立（如销售部0001，市场部0001）"
+              extra={t('components.codeRuleComponentConfig.autoCounter.scopeFieldsExtra')}
             />
           </>
         );
@@ -112,31 +114,31 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
           <>
             <ProFormRadio.Group
               name="format_type"
-              label="格式类型"
-              rules={[{ required: true, message: '请选择格式类型' }]}
+              label={t('components.codeRuleComponentConfig.date.formatType')}
+              rules={[{ required: true, message: t('components.codeRuleComponentConfig.date.formatTypeRequired') }]}
               options={[
-                { label: '预定义格式', value: 'preset' },
-                { label: '自定义格式', value: 'custom' },
+                { label: t('components.codeRuleComponentConfig.date.formatTypePreset'), value: 'preset' },
+                { label: t('components.codeRuleComponentConfig.date.formatTypeCustom'), value: 'custom' },
               ]}
               initialValue={(component as DateComponent).format_type}
             />
             {(formValues as DateComponent).format_type === 'preset' || (component as DateComponent).format_type === 'preset' ? (
               <ProFormSelect
                 name="preset_format"
-                label="预定义格式"
-                rules={[{ required: true, message: '请选择预定义格式' }]}
+                label={t('components.codeRuleComponentConfig.date.presetFormat')}
+                rules={[{ required: true, message: t('components.codeRuleComponentConfig.date.presetFormatRequired') }]}
                 options={DATE_PRESET_FORMATS}
                 initialValue={(component as DateComponent).preset_format}
-                extra="选择预定义的日期格式"
+                extra={t('components.codeRuleComponentConfig.date.presetFormatExtra')}
               />
             ) : (
               <ProFormText
                 name="custom_format"
-                label="自定义格式"
-                rules={[{ required: true, message: '请输入自定义格式' }]}
-                placeholder="例如：yMd 表示年月日，yyyyMMdd 表示4位年+2位月+2位日"
+                label={t('components.codeRuleComponentConfig.date.customFormat')}
+                rules={[{ required: true, message: t('components.codeRuleComponentConfig.date.customFormatRequired') }]}
+                placeholder={t('components.codeRuleComponentConfig.date.customFormatPlaceholder')}
                 initialValue={(component as DateComponent).custom_format}
-                extra="使用 y 表示年，M 表示月，d 表示日。例如：yMd 表示年月日"
+                extra={t('components.codeRuleComponentConfig.date.customFormatExtra')}
               />
             )}
           </>
@@ -146,11 +148,11 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
         return (
           <ProFormText
             name="text"
-            label="固定字符"
-            rules={[{ required: true, message: '请输入固定字符' }]}
-            placeholder="请输入要添加的字符"
+            label={t('components.codeRuleComponentConfig.fixedText.text')}
+            rules={[{ required: true, message: t('components.codeRuleComponentConfig.fixedText.textRequired') }]}
+            placeholder={t('components.codeRuleComponentConfig.fixedText.textPlaceholder')}
             initialValue={(component as FixedTextComponent).text}
-            extra="用于区分不同业务的流水号"
+            extra={t('components.codeRuleComponentConfig.fixedText.textExtra')}
           />
         );
 
@@ -158,15 +160,15 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
         return (
           <ProFormSelect
             name="field_name"
-            label="表单字段"
-            rules={[{ required: true, message: '请选择表单字段' }]}
+            label={t('components.codeRuleComponentConfig.formField.fieldName')}
+            rules={[{ required: true, message: t('components.codeRuleComponentConfig.formField.fieldNameRequired') }]}
             options={availableFields.map(field => ({
               label: `${field.field_label} (${field.field_name})`,
               value: field.field_name,
             }))}
-            placeholder="请选择要引用的表单字段"
+            placeholder={t('components.codeRuleComponentConfig.formField.fieldNamePlaceholder')}
             initialValue={(component as FormFieldComponent).field_name}
-            extra="选择要添加到流水号中的表单字段"
+            extra={t('components.codeRuleComponentConfig.formField.fieldNameExtra')}
           />
         );
 
@@ -176,13 +178,14 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
   };
 
   const getTitle = () => {
-    const typeLabels: Record<string, string> = {
-      auto_counter: '自动计数',
-      date: '提交日期',
-      fixed_text: '固定字符',
-      form_field: '表单字段',
+    const typeLabelKeyMap: Record<string, string> = {
+      auto_counter: 'components.codeRuleComponent.type.autoCounter',
+      date: 'components.codeRuleComponent.type.date',
+      fixed_text: 'components.codeRuleComponent.type.fixedText',
+      form_field: 'components.codeRuleComponent.type.formField',
     };
-    return `配置${typeLabels[component.type] || '组件'}`;
+    const name = t(typeLabelKeyMap[component.type] || 'components.codeRuleComponentConfig.component');
+    return t('components.codeRuleComponentConfig.modalTitle', { name });
   };
 
   return (

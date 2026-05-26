@@ -259,7 +259,7 @@ const CodeRuleListPage: React.FC = () => {
           });
         }
       } catch (error) {
-        window.console.error('加载规则失败:', error);
+        window.console.error('Failed to load rule:', error);
         resetPageRuleForm(pageCode, currentConfigs);
       }
     } else {
@@ -286,7 +286,7 @@ const CodeRuleListPage: React.FC = () => {
       // 后端直接返回数组
       return Array.isArray(response) ? response : [];
     } catch (error: unknown) {
-      window.console.error('获取编号规则列表失败:', error);
+      window.console.error('Failed to fetch code rule list:', error);
       return [];
     }
   };
@@ -318,7 +318,7 @@ const CodeRuleListPage: React.FC = () => {
       }
       return rules;
     } catch (error) {
-      window.console.error('加载编号规则列表失败:', error);
+      window.console.error('Failed to load code rule list:', error);
       return [];
     }
   };
@@ -358,7 +358,7 @@ const CodeRuleListPage: React.FC = () => {
             return defaultPage;
           });
         } catch (error) {
-          console.error('加载功能页面配置失败:', error);
+          console.error('Failed to load feature page configs:', error);
           nextConfigs = pages;
         }
       }
@@ -377,7 +377,7 @@ const CodeRuleListPage: React.FC = () => {
         }
       }
     } catch (error) {
-      window.console.error('加载页面配置列表失败:', error);
+      window.console.error('Failed to load page config list:', error);
       messageApi.error(t('pages.system.codeRules.loadPageConfigFailed'));
     } finally {
       setPageConfigsLoading(false);
@@ -437,7 +437,7 @@ const CodeRuleListPage: React.FC = () => {
         } catch (updateError: any) {
           // 更新失败，显示错误信息
           const errorMessage = updateError?.message || updateError?.error?.message || String(updateError);
-          console.error('更新规则失败:', updateError);
+          console.error('Failed to update rule:', updateError);
           messageApi.error(`${t('pages.system.codeRules.updateRuleFailed')}: ${errorMessage}`);
           throw updateError;
         }
@@ -466,13 +466,13 @@ const CodeRuleListPage: React.FC = () => {
                 messageApi.success(t('pages.system.codeRules.updateRuleSuccess'));
               } catch (updateError: any) {
                 const updateErrorMessage = updateError?.message || updateError?.error?.message || String(updateError);
-                console.error('更新规则失败:', updateError);
+                console.error('Failed to update rule:', updateError);
                 messageApi.error(`${t('pages.system.codeRules.updateRuleFailed')}: ${updateErrorMessage}`);
                 throw updateError;
               }
             } else {
               // 如果还是找不到，可能是数据库约束问题或其他原因
-              console.error('规则代码已存在但无法找到:', {
+              console.error('Rule code exists but cannot be found:', {
                 ruleCode: values.code,
                 allRulesCount: reloadRules.length,
                 allRuleCodes: reloadRules.map(r => r.code),
@@ -483,7 +483,7 @@ const CodeRuleListPage: React.FC = () => {
             }
           } else {
             // 其他错误直接抛出
-            console.error('创建规则失败:', createError);
+            console.error('Failed to create rule:', createError);
             messageApi.error(`${t('pages.system.codeRules.createRuleFailed')}: ${errorMessage}`);
             throw createError;
           }
@@ -519,7 +519,7 @@ const CodeRuleListPage: React.FC = () => {
       const err = error as Error;
       const errorMessage = err?.message || t('pages.system.codeRules.saveRuleFailed');
       messageApi.error(errorMessage);
-      window.console.error('保存规则失败:', error);
+      window.console.error('Failed to save rule:', error);
     } finally {
       setPageRuleFormLoading(false);
     }
@@ -953,4 +953,3 @@ const CodeRuleListPage: React.FC = () => {
 };
 
 export default CodeRuleListPage;
-

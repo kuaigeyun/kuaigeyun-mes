@@ -135,22 +135,22 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
   // 预设主题颜色（B端主流配色）
   const presetColors = [
-    { color: '#1890ff', label: '经典蓝' },      // Ant Design 默认蓝
-    { color: '#13c2c2', label: '青蓝' },        // 青色系
-    { color: '#52c41a', label: '绿色' },        // 成功色
-    { color: '#722ed1', label: '紫色' },        // 紫色系
-    { color: '#fa8c16', label: '橙色' },        // 警告色
-    { color: '#f5222d', label: '红色' },        // 错误色
+    { color: '#1890ff', labelKey: 'components.themeEditor.presetColor.classicBlue', label: '经典蓝' },      // Ant Design 默认蓝
+    { color: '#13c2c2', labelKey: 'components.themeEditor.presetColor.cyanBlue', label: '青蓝' },        // 青色系
+    { color: '#52c41a', labelKey: 'components.themeEditor.presetColor.green', label: '绿色' },        // 成功色
+    { color: '#722ed1', labelKey: 'components.themeEditor.presetColor.purple', label: '紫色' },        // 紫色系
+    { color: '#fa8c16', labelKey: 'components.themeEditor.presetColor.orange', label: '橙色' },        // 警告色
+    { color: '#f5222d', labelKey: 'components.themeEditor.presetColor.red', label: '红色' },        // 错误色
   ];
 
   /** 简约模式：低饱和商务主色 */
   const presetPlainColors = [
-    { color: '#1677ff', label: '商务蓝' },
-    { color: '#2f54eb', label: '靛蓝' },
-    { color: '#434343', label: '石墨灰' },
-    { color: '#595959', label: '中性灰' },
-    { color: '#006d75', label: '深青' },
-    { color: '#1d39c4', label: '藏青' },
+    { color: '#1677ff', labelKey: 'components.themeEditor.presetPlainColor.businessBlue', label: '商务蓝' },
+    { color: '#2f54eb', labelKey: 'components.themeEditor.presetPlainColor.indigo', label: '靛蓝' },
+    { color: '#434343', labelKey: 'components.themeEditor.presetPlainColor.graphiteGray', label: '石墨灰' },
+    { color: '#595959', labelKey: 'components.themeEditor.presetPlainColor.neutralGray', label: '中性灰' },
+    { color: '#006d75', labelKey: 'components.themeEditor.presetPlainColor.deepTeal', label: '深青' },
+    { color: '#1d39c4', labelKey: 'components.themeEditor.presetPlainColor.navy', label: '藏青' },
   ];
 
   /**
@@ -175,13 +175,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   // 深色按从深到浅排序（亮度从低到高）
   const presetSiderAndHeaderColors = [
     // 浅色系（3个）
-    { color: '#ffffff', label: '纯白', category: 'light' },
-    { color: '#fafafa', label: '浅灰', category: 'light' },
-    { color: '#f5f5f5', label: '灰白', category: 'light' },
+    { color: '#ffffff', labelKey: 'components.themeEditor.presetBgColor.pureWhite', label: '纯白', category: 'light' },
+    { color: '#fafafa', labelKey: 'components.themeEditor.presetBgColor.lightGray', label: '浅灰', category: 'light' },
+    { color: '#f5f5f5', labelKey: 'components.themeEditor.presetBgColor.offWhite', label: '灰白', category: 'light' },
     // 深色系（3个）
-    { color: '#001529', label: '深蓝', category: 'dark' },
-    { color: '#141414', label: '深黑', category: 'dark' },
-    { color: '#1f1f1f', label: '深灰', category: 'dark' },
+    { color: '#001529', labelKey: 'components.themeEditor.presetBgColor.deepBlue', label: '深蓝', category: 'dark' },
+    { color: '#141414', labelKey: 'components.themeEditor.presetBgColor.deepBlack', label: '深黑', category: 'dark' },
+    { color: '#1f1f1f', labelKey: 'components.themeEditor.presetBgColor.deepGray', label: '深灰', category: 'dark' },
   ]
     .map(item => ({
       ...item,
@@ -204,12 +204,12 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
   // 标签栏的预设颜色（6个浅色，按颜色深度排序，从浅到深）
   const presetTabsColors = [
-    { color: '#ffffff', label: '纯白', category: 'light' },
-    { color: '#fafafa', label: '浅灰', category: 'light' },
-    { color: '#f5f5f5', label: '灰白', category: 'light' },
-    { color: '#f0f0f0', label: '中灰', category: 'light' },
-    { color: '#fafbfc', label: '蓝灰', category: 'light' },
-    { color: '#D4D4D4', label: '银灰', category: 'light' },
+    { color: '#ffffff', labelKey: 'components.themeEditor.presetTabsBgColor.pureWhite', label: '纯白', category: 'light' },
+    { color: '#fafafa', labelKey: 'components.themeEditor.presetTabsBgColor.lightGray', label: '浅灰', category: 'light' },
+    { color: '#f5f5f5', labelKey: 'components.themeEditor.presetTabsBgColor.offWhite', label: '灰白', category: 'light' },
+    { color: '#f0f0f0', labelKey: 'components.themeEditor.presetTabsBgColor.midGray', label: '中灰', category: 'light' },
+    { color: '#fafbfc', labelKey: 'components.themeEditor.presetTabsBgColor.blueGray', label: '蓝灰', category: 'light' },
+    { color: '#D4D4D4', labelKey: 'components.themeEditor.presetTabsBgColor.silverGray', label: '银灰', category: 'light' },
   ]
     .map(item => ({
       ...item,
@@ -378,7 +378,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
     } catch (error: any) {
-      message.error(error?.message || '加载主题配置失败');
+      message.error(error?.message || t('components.themeEditor.message.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -481,9 +481,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // applyTheme 会更新 themeStore 并持久化到 userPreferenceStore
       useThemeStore.getState().applyTheme(mode, {});
 
-      message.success('颜色模式已切换');
+      message.success(t('components.themeEditor.message.colorModeSwitched'));
     } catch (error: any) {
-      message.error(error?.message || '切换失败');
+      message.error(error?.message || t('components.themeEditor.message.switchFailed'));
     }
   };
 
@@ -611,7 +611,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             current.tabs_persistence = tabsPersistenceValue;
             useUserPreferenceStore.setState({ preferences: current });
             useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
-            message.warning('主题已应用；当前无法保存到服务器（可能尚未完成租户初始化），仅对当前会话有效。');
+            message.warning(t('components.themeEditor.message.appliedButNotSaved'));
           } else {
             throw prefError;
           }
@@ -633,7 +633,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         console.warn('Failed to save site theme settings:', error);
       }
 
-      message.success('主题配置已应用');
+      message.success(t('components.themeEditor.message.applied'));
 
       // 调用回调
       if (onThemeUpdate) {
@@ -644,7 +644,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       onClose();
     } catch (error: any) {
       console.error('Theme save error:', error);
-      message.error(error?.message || '保存失败');
+      message.error(error?.message || t('components.themeEditor.message.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -713,7 +713,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 6. 应用本地预览
       applyPreviewTheme(defaultThemeConfig, 'light');
 
-      message.success('已恢复默认配置并关闭面板');
+      message.success(t('components.themeEditor.message.resetDone'));
 
       // 7. 关闭面板（根据用户需求：点击恢复默认后关闭抽屉）
       if (onClose) {
@@ -721,7 +721,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       }
     } catch (error: any) {
       console.error('Reset failed:', error);
-      message.error('恢复默认配置失败');
+      message.error(t('components.themeEditor.message.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -744,8 +744,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       }}
       title={
         <div>
-          <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>个性化主题</div>
-          <Text type="secondary" style={{ fontSize: 12 }}>自定义您的界面外观，让工作更舒适</Text>
+          <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>{t('components.themeEditor.title')}</div>
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('components.themeEditor.subtitle')}</Text>
         </div>
       }
       open={open}
@@ -759,7 +759,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             onClick={handleReset}
             loading={loading}
           >
-            恢复默认
+            {t('components.themeEditor.action.reset')}
           </Button>
           <Button
             type="primary"
@@ -767,7 +767,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             onClick={handleSave}
             loading={saving}
           >
-            保存设置
+            {t('components.themeEditor.action.save')}
           </Button>
         </Space>
       }
@@ -849,7 +849,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                         display: 'block',
                       }}
                     />
-                    <div style={{ fontWeight: 500, fontSize: 14 }}>浅色模式</div>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{t('components.themeEditor.colorMode.light')}</div>
                   </div>
 
                   {/* 深色模式 */}
@@ -890,7 +890,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                         display: 'block',
                       }}
                     />
-                    <div style={{ fontWeight: 500, fontSize: 14 }}>深色模式</div>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{t('components.themeEditor.colorMode.dark')}</div>
                   </div>
 
                   {/* 跟随系统 */}
@@ -931,7 +931,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                         display: 'block',
                       }}
                     />
-                    <div style={{ fontWeight: 500, fontSize: 14 }}>跟随系统</div>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{t('components.themeEditor.colorMode.auto')}</div>
                   </div>
                 </div>
               </Form.Item>
@@ -970,8 +970,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               size="small"
               title={
                 <TitleWithHint
-                  title="主题颜色"
-                  hint="选择您喜欢的主题颜色，这将应用于按钮、链接和选中状态等界面元素"
+                  title={t('ui.theme.color')}
+                  hint={t('components.themeEditor.primaryColor.hint')}
                 />
               }
               style={{ marginBottom: 16 }}
@@ -987,10 +987,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 }}
               >
                 <div>
-                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
                   <Space wrap size={10}>
                     {activePresetColors.map((preset, index) => (
-                      <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                      <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
                         <div
                           style={{
                             width: 32,
@@ -1029,7 +1029,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
                 <Form.Item
                   name="colorPrimary"
-                  label="自定义颜色"
+                  label={t('components.themeEditor.common.customColor')}
                   style={{ marginBottom: 0 }}
                   getValueFromEvent={(color) => {
                     return normalizeColorValue(color, '#1890ff');
@@ -1057,9 +1057,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 size="small"
                 title={
                   <TitleWithHint
-                    title="左侧菜单栏"
-                    hint="自定义左侧菜单栏的背景颜色"
-                    inlineTip="提示：仅在浅色模式下生效"
+                    title={t('components.themeEditor.siderBg.title')}
+                    hint={t('components.themeEditor.siderBg.hint')}
+                    inlineTip={t('components.themeEditor.lightModeOnly')}
                   />
                 }
                 style={{ marginBottom: 16 }}
@@ -1075,11 +1075,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   }}
                 >
                   <div>
-                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
                     <Space wrap size={10}>
                       {presetSiderAndHeaderColors
                         .map((preset, index) => (
-                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                          <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
                             <div
                               style={{
                                 width: 32,
@@ -1119,7 +1119,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
                   <Form.Item
                   name="siderBgColor"
-                  label="自定义颜色"
+                  label={t('components.themeEditor.common.customColor')}
                   style={{ marginBottom: 0 }}
                   getValueFromEvent={(color) => {
                     if (!color) return '';
@@ -1208,9 +1208,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 size="small"
                 title={
                   <TitleWithHint
-                    title="顶栏背景色"
-                    hint="自定义顶栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
-                    inlineTip="提示：仅在浅色模式下生效"
+                    title={t('components.themeEditor.headerBg.title')}
+                    hint={t('components.themeEditor.headerBg.hint')}
+                    inlineTip={t('components.themeEditor.lightModeOnly')}
                   />
                 }
                 style={{ marginBottom: 16 }}
@@ -1226,11 +1226,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   }}
                 >
                   <div>
-                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
                     <Space wrap size={10}>
                       {presetSiderAndHeaderColors
                         .map((preset, index) => (
-                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                          <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
                             <div
                               style={{
                                 width: 32,
@@ -1270,7 +1270,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
                   <Form.Item
                     name="headerBgColor"
-                    label="自定义颜色"
+                    label={t('components.themeEditor.common.customColor')}
                     style={{ marginBottom: 0 }}
                     getValueFromEvent={(color) => {
                       if (!color) return '';
@@ -1310,9 +1310,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 size="small"
                 title={
                   <TitleWithHint
-                    title="标签栏背景色"
-                    hint="自定义标签栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
-                    inlineTip="提示：仅在浅色模式下生效"
+                    title={t('components.themeEditor.tabsBg.title')}
+                    hint={t('components.themeEditor.tabsBg.hint')}
+                    inlineTip={t('components.themeEditor.lightModeOnly')}
                   />
                 }
                 style={{ marginBottom: 16 }}
@@ -1328,11 +1328,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   }}
                 >
                   <div>
-                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
                     <Space wrap size={10}>
                       {presetTabsColors
                         .map((preset, index) => (
-                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                          <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
                             <div
                               style={{
                                 width: 32,
@@ -1372,7 +1372,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
                   <Form.Item
                     name="tabsBgColor"
-                    label="自定义颜色"
+                    label={t('components.themeEditor.common.customColor')}
                     style={{ marginBottom: 0 }}
                     getValueFromEvent={(color) => {
                       if (!color) return '';
@@ -1411,8 +1411,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               size="small"
               title={
                 <TitleWithHint
-                  title="界面样式"
-                  hint="调整界面的圆角和间距，让界面更符合您的使用习惯"
+                  title={t('components.themeEditor.interface.title')}
+                  hint={t('components.themeEditor.interface.hint')}
                 />
               }
               style={{ marginBottom: 16 }}
@@ -1422,9 +1422,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 name="borderRadius"
                 label={
                   <div>
-                    <div>圆角大小</div>
+                    <div>{t('components.themeEditor.borderRadius.label')}</div>
                     <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      控制按钮、卡片等元素的圆角程度（{form.getFieldValue('borderRadius') || 6}px）
+                      {t('components.themeEditor.borderRadius.desc', { value: form.getFieldValue('borderRadius') || 6 })}
                     </Text>
                   </div>
                 }
@@ -1433,10 +1433,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   min={0}
                   max={16}
                   marks={{
-                    0: '直角',
-                    6: '适中',
-                    12: '圆润',
-                    16: '很圆',
+                    0: t('components.themeEditor.borderRadius.mark.0'),
+                    6: t('components.themeEditor.borderRadius.mark.6'),
+                    12: t('components.themeEditor.borderRadius.mark.12'),
+                    16: t('components.themeEditor.borderRadius.mark.16'),
                   }}
                 />
               </Form.Item>
@@ -1447,8 +1447,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               size="small"
               title={
                 <TitleWithHint
-                  title="文字设置"
-                  hint="调整文字大小，让阅读更舒适"
+                  title={t('components.themeEditor.typography.title')}
+                  hint={t('components.themeEditor.typography.hint')}
                 />
               }
               style={{ marginBottom: 16 }}
@@ -1458,9 +1458,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 name="fontSize"
                 label={
                   <div>
-                    <div>字体大小</div>
+                    <div>{t('components.themeEditor.fontSize.label')}</div>
                     <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      调整界面文字的基础大小（{form.getFieldValue('fontSize') || 14}px）
+                      {t('components.themeEditor.fontSize.desc', { value: form.getFieldValue('fontSize') || 14 })}
                     </Text>
                   </div>
                 }
@@ -1469,11 +1469,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   min={12}
                   max={20}
                   marks={{
-                    12: '小',
-                    14: '标准',
-                    16: '大',
-                    18: '很大',
-                    20: '特大',
+                    12: t('components.themeEditor.fontSize.mark.12'),
+                    14: t('components.themeEditor.fontSize.mark.14'),
+                    16: t('components.themeEditor.fontSize.mark.16'),
+                    18: t('components.themeEditor.fontSize.mark.18'),
+                    20: t('components.themeEditor.fontSize.mark.20'),
                   }}
                 />
               </Form.Item>
@@ -1484,8 +1484,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               size="small"
               title={
                 <TitleWithHint
-                  title="主题配置"
-                  hint="调整主题相关的配置选项"
+                  title={t('components.themeEditor.config.title')}
+                  hint={t('components.themeEditor.config.hint')}
                 />
               }
               style={{ marginBottom: 16 }}
@@ -1493,7 +1493,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             >
               <Form.Item
                 name="tabsPersistence"
-                label="标签栏持久化"
+                label={t('components.themeEditor.tabsPersistence.label')}
                 valuePropName="checked"
               >
                 <div>
@@ -1502,7 +1502,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     form.setFieldsValue({ tabsPersistence: checked });
                   }} />
                   <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                    重新进入系统时，自动恢复上次未关闭的标签页
+                    {t('components.themeEditor.tabsPersistence.desc')}
                   </Text>
                 </div>
               </Form.Item>
@@ -1511,7 +1511,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           </Form>
 
           <Divider style={{ margin: '24px 0' }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>实时预览</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('components.themeEditor.preview.title')}</Text>
           </Divider>
 
           <ConfigProvider theme={previewTheme || undefined}>
@@ -1521,19 +1521,19 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             >
               <div style={{ marginBottom: 20 }}>
                 <Text strong style={{ fontSize: 13, marginBottom: 12, display: 'block' }}>
-                  按钮样式预览
+                  {t('components.themeEditor.preview.buttonSection')}
                 </Text>
                 <Space wrap>
-                  <Button type="primary">主要按钮</Button>
-                  <Button>默认按钮</Button>
-                  <Button type="dashed">虚线按钮</Button>
-                  <Button type="link">链接按钮</Button>
+                  <Button type="primary">{t('components.themeEditor.preview.button.primary')}</Button>
+                  <Button>{t('components.themeEditor.preview.button.default')}</Button>
+                  <Button type="dashed">{t('components.themeEditor.preview.button.dashed')}</Button>
+                  <Button type="link">{t('components.themeEditor.preview.button.link')}</Button>
                 </Space>
               </div>
 
               <div style={{ marginBottom: 20 }}>
                 <Text strong style={{ fontSize: 13, marginBottom: 12, display: 'block' }}>
-                  文字样式预览
+                  {t('components.themeEditor.preview.textSection')}
                 </Text>
                 <Card
                   size="small"
@@ -1542,16 +1542,16 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     borderRadius: `${previewTheme?.token?.borderRadius || 6}px`,
                   }}
                 >
-                  <div style={{ marginBottom: 8, fontWeight: 500 }}>这是一段预览文本</div>
+                  <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('components.themeEditor.preview.sampleText')}</div>
                   <div style={{ fontSize: `${(previewTheme?.token?.fontSize || 14) - 2}px`, opacity: 0.65 }}>
-                    当前字体大小：{previewTheme?.token?.fontSize || 14}px，圆角大小：{previewTheme?.token?.borderRadius || 6}px
+                    {t('components.themeEditor.preview.current', { fontSize: previewTheme?.token?.fontSize || 14, borderRadius: previewTheme?.token?.borderRadius || 6 })}
                   </div>
                 </Card>
               </div>
 
               <div>
                 <Text strong style={{ fontSize: 13, marginBottom: 12, display: 'block' }}>
-                  主题色预览
+                  {t('components.themeEditor.preview.colorSection')}
                 </Text>
                 <div style={{
                   width: '100%',

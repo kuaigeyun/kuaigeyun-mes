@@ -4,7 +4,7 @@
 提供有限产能启发式排程与优化入口。
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Set
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 from tortoise.transactions import in_transaction
@@ -87,6 +87,37 @@ class AdvancedSchedulingService(BaseService):
                 total += (end - due).total_seconds() / 3600.0
         return round(total, 3)
 
+    @staticmethod
+    def _derive_setup_family(work_order: WorkOrder, operations: List[WorkOrderOperation]) -> str:
+        """换型族：优先用产品编码前缀，其次首工序编码。"""
+        product_code = str(getattr(work_order, "product_code", "") or "").strip()
+        if product_code:
+            for sep in ("-", "_", "/"):
+                if sep in product_code:
+                    return product_code.split(sep)[0].upper()
+            return product_code[:6].upper()
+        for op in operations:
+            op_code = str(getattr(op, "operation_code", "") or "").strip()
+            if op_code:
+                return op_code[:6].upper()
+        return "DEFAULT"
+
+    @staticmethod
+    def _is_in_freeze_window(work_order: WorkOrder, freeze_anchor: datetime) -> bool:
+        if not work_order.planned_start_date:
+            return False
+        return work_order.planned_start_date <= freeze_anchor
+
+    @staticmethod
+    def _infer_bottleneck_centers(work_orders: List[WorkOrder], top_n: int = 1) -> Set[int]:
+        counts: Dict[int, int] = defaultdict(int)
+        for wo in work_orders:
+            wc = int(wo.work_center_id or wo.workshop_id or 0)
+            if wc > 0:
+                counts[wc] += 1
+        ranked = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        return {wc for wc, _ in ranked[:top_n]}
+
     async def intelligent_scheduling(
         self,
         tenant_id: int,
@@ -161,23 +192,37 @@ class AdvancedSchedulingService(BaseService):
 
         objective = constraints.get("optimize_objective", "min_makespan")
         horizon_days = int(constraints.get("scheduling_window_days", 14))
+        rolling_horizon_days = int(constraints.get("rolling_horizon_days", horizon_days))
+        freeze_horizon_days = int(constraints.get("freeze_horizon_days", 2))
         daily_capacity_hours = float(constraints.get("daily_capacity_hours", 24.0))
+        setup_changeover_hours = float(constraints.get("setup_changeover_hours", 1.0))
+        consider_setup_family = bool(constraints.get("consider_setup_family", True))
+        bottleneck_first = bool(constraints.get("bottleneck_first", True))
+        explicit_bottlenecks = {
+            int(x) for x in (constraints.get("bottleneck_work_center_ids") or []) if int(x) > 0
+        }
+        bottleneck_centers = explicit_bottlenecks or self._infer_bottleneck_centers(work_orders, top_n=1)
+        freeze_anchor = self._normalize_shift_start(datetime.now() + timedelta(days=freeze_horizon_days))
 
         def _sort_tuple(wo: WorkOrder) -> Tuple:
-            if wo.is_frozen:
-                return (0, wo.planned_start_date or datetime.min, 0.0)
+            wc_id = int(wo.work_center_id or wo.workshop_id or 0)
+            bottleneck_rank = 0 if (bottleneck_first and wc_id in bottleneck_centers) else 1
+            if wo.is_frozen or self._is_in_freeze_window(wo, freeze_anchor):
+                return (-1, wo.planned_start_date or datetime.min, 0.0)
             score = float(score_map.get(wo.id) or self._get_priority_score(wo, constraints))
             due = wo.planned_end_date or datetime.max
             if objective == "min_tardiness":
-                return (1, due, -score)
-            return (1, -score, due)
+                return (bottleneck_rank, due, -score)
+            return (bottleneck_rank, -score, due)
 
         sorted_orders = sorted(work_orders, key=_sort_tuple)
         resource_next_available: Dict[str, datetime] = {}
         work_center_daily_usage: Dict[Tuple[int, date], float] = defaultdict(float)
+        work_center_last_family: Dict[int, str] = {}
         scheduled_orders: List[Dict[str, Any]] = []
         unscheduled_orders: List[Dict[str, Any]] = []
         conflicts: List[Dict[str, Any]] = []
+        setup_changeover_count = 0
 
         now_anchor = self._normalize_shift_start(datetime.now())
 
@@ -187,13 +232,13 @@ class AdvancedSchedulingService(BaseService):
             due_date = work_order.planned_end_date
             base_start = self._normalize_shift_start(work_order.planned_start_date or now_anchor)
 
-            if work_order.is_frozen:
+            if work_order.is_frozen or self._is_in_freeze_window(work_order, freeze_anchor):
                 if not (work_order.planned_start_date and work_order.planned_end_date):
                     unscheduled_orders.append(
                         {
                             "work_order_id": work_order.id,
                             "work_order_code": work_order.code,
-                            "reason": "冻结工单缺少计划起止时间，无法参与排程",
+                            "reason": "冻结窗口内工单缺少计划起止时间，无法参与排程",
                         }
                     )
                     continue
@@ -207,12 +252,14 @@ class AdvancedSchedulingService(BaseService):
                         "delay_days": 0,
                         "estimated_hours": estimated_hours,
                         "due_date": due_date,
-                        "frozen": True,
+                        "frozen": bool(work_order.is_frozen),
+                        "frozen_window_locked": bool(not work_order.is_frozen),
                     }
                 )
                 continue
 
             work_center_id = int(work_order.work_center_id or work_order.workshop_id or 0)
+            setup_family = self._derive_setup_family(work_order, operations)
             resource_keys = [f"wc:{work_center_id}"]
             if constraints.get("consider_equipment", True):
                 for op in operations:
@@ -232,13 +279,18 @@ class AdvancedSchedulingService(BaseService):
                         resource_keys.append(f"tool:{int(op.assigned_tool_id)}")
             resource_keys = sorted(set(resource_keys))
 
-            candidate_start = base_start
-            window_end = base_start + timedelta(days=horizon_days)
+            candidate_start = max(base_start, freeze_anchor)
+            window_end = freeze_anchor + timedelta(days=rolling_horizon_days)
             placed = False
             while candidate_start <= window_end:
                 max_resource_start = max([candidate_start] + [resource_next_available.get(k, candidate_start) for k in resource_keys])
                 slot_start = self._normalize_shift_start(max_resource_start)
-                slot_end = self._add_work_hours(slot_start, estimated_hours, daily_capacity_hours)
+                effective_hours = estimated_hours
+                if consider_setup_family:
+                    last_family = work_center_last_family.get(work_center_id)
+                    if last_family and last_family != setup_family:
+                        effective_hours += setup_changeover_hours
+                slot_end = self._add_work_hours(slot_start, effective_hours, daily_capacity_hours)
 
                 # 工作中心日负荷约束（24h 时等价无限，不额外限制）
                 if daily_capacity_hours < 24:
@@ -264,6 +316,11 @@ class AdvancedSchedulingService(BaseService):
                 # 命中可用槽位
                 for key in resource_keys:
                     resource_next_available[key] = slot_end
+                if consider_setup_family:
+                    prev_family = work_center_last_family.get(work_center_id)
+                    if prev_family and prev_family != setup_family:
+                        setup_changeover_count += 1
+                    work_center_last_family[work_center_id] = setup_family
                 if daily_capacity_hours < 24:
                     day_cursor = slot_start
                     while day_cursor < slot_end:
@@ -287,6 +344,8 @@ class AdvancedSchedulingService(BaseService):
                         "scheduled_date": slot_start.date(),
                         "delay_days": delay_days,
                         "estimated_hours": estimated_hours,
+                        "effective_hours": effective_hours,
+                        "setup_family": setup_family,
                         "due_date": due_date,
                     }
                 )
@@ -294,7 +353,7 @@ class AdvancedSchedulingService(BaseService):
                 break
 
             if not placed:
-                reason = f"排程窗口 {horizon_days} 天内无可用产能或关键资源"
+                reason = f"滚动窗口 {rolling_horizon_days} 天内无可用产能或关键资源"
                 unscheduled_orders.append(
                     {
                         "work_order_id": work_order.id,
@@ -309,6 +368,7 @@ class AdvancedSchedulingService(BaseService):
                         "work_order_code": work_order.code,
                         "work_center_id": work_center_id,
                         "resource_keys": resource_keys,
+                        "setup_family": setup_family,
                         "message": reason,
                     }
                 )
@@ -322,6 +382,10 @@ class AdvancedSchedulingService(BaseService):
                 "scheduled_count": len(scheduled_orders),
                 "unscheduled_count": len(unscheduled_orders),
                 "scheduling_rate": len(scheduled_orders) / len(work_orders) if work_orders else 0.0,
+                "bottleneck_work_centers": sorted(list(bottleneck_centers)),
+                "freeze_horizon_days": freeze_horizon_days,
+                "rolling_horizon_days": rolling_horizon_days,
+                "setup_changeover_count": setup_changeover_count,
             },
         }
 
@@ -563,4 +627,107 @@ class AdvancedSchedulingService(BaseService):
             },
             "conflict_count": len(result.get("conflicts") or []),
             "unscheduled_count": len(result.get("unscheduled_orders") or []),
+        }
+
+    async def reschedule_impacted_orders(
+        self,
+        tenant_id: int,
+        trigger_type: str,
+        seed_work_order_ids: List[int],
+        updated_by: Optional[int] = None,
+        lookahead_hours: Optional[int] = None,
+        apply_results: bool = True,
+    ) -> Dict[str, Any]:
+        """异常驱动局部重排：仅重排受影响工作中心在短窗口内的工单。"""
+        seeds = [int(x) for x in seed_work_order_ids if int(x) > 0]
+        if not seeds:
+            return {
+                "trigger_type": trigger_type,
+                "seed_work_order_ids": [],
+                "impacted_work_order_ids": [],
+                "result": {
+                    "scheduled_orders": [],
+                    "unscheduled_orders": [],
+                    "conflicts": [],
+                    "statistics": {
+                        "total_orders": 0,
+                        "scheduled_count": 0,
+                        "unscheduled_count": 0,
+                        "scheduling_rate": 0.0,
+                    },
+                },
+            }
+
+        from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
+
+        cfg = await SchedulingConfigService().get_default_config(tenant_id)
+        constraints = self._build_constraints(cfg.constraints if cfg else None)
+        local_hours = int(lookahead_hours or constraints.get("local_reschedule_hours", 72))
+        window_end = datetime.now() + timedelta(hours=local_hours)
+
+        seed_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=seeds,
+            deleted_at__isnull=True,
+        ).all()
+        impacted_wcs = {
+            int(wo.work_center_id or wo.workshop_id or 0)
+            for wo in seed_orders
+            if int(wo.work_center_id or wo.workshop_id or 0) > 0
+        }
+        if not impacted_wcs:
+            impacted_wcs = {0}
+        impacted_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=["draft", "released"],
+            work_center_id__in=list(impacted_wcs),
+            deleted_at__isnull=True,
+        ).filter(
+            planned_start_date__isnull=True
+        ).all()
+        timed_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=["draft", "released"],
+            work_center_id__in=list(impacted_wcs),
+            planned_start_date__isnull=False,
+            planned_start_date__lte=window_end,
+            deleted_at__isnull=True,
+        ).all()
+        impacted_map = {int(wo.id): wo for wo in impacted_orders + timed_orders}
+        impacted_ids = sorted(list(impacted_map.keys()))
+        if not impacted_ids:
+            return {
+                "trigger_type": trigger_type,
+                "seed_work_order_ids": seeds,
+                "impacted_work_order_ids": [],
+                "result": {
+                    "scheduled_orders": [],
+                    "unscheduled_orders": [],
+                    "conflicts": [],
+                    "statistics": {
+                        "total_orders": 0,
+                        "scheduled_count": 0,
+                        "unscheduled_count": 0,
+                        "scheduling_rate": 0.0,
+                    },
+                },
+            }
+
+        result = await self.intelligent_scheduling(
+            tenant_id=tenant_id,
+            work_order_ids=impacted_ids,
+            constraints=constraints,
+            apply_results=apply_results,
+            updated_by=updated_by,
+        )
+        result.setdefault("statistics", {})
+        result["statistics"]["trigger_type"] = trigger_type
+        result["statistics"]["seed_count"] = len(seeds)
+        result["statistics"]["impacted_count"] = len(impacted_ids)
+        result["statistics"]["lookahead_hours"] = local_hours
+        return {
+            "trigger_type": trigger_type,
+            "seed_work_order_ids": seeds,
+            "impacted_work_order_ids": impacted_ids,
+            "result": result,
         }

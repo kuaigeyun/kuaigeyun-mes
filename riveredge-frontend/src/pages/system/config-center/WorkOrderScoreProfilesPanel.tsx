@@ -2,6 +2,7 @@
  * APS-Lite 工单综合打分权重模板编辑
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Card, Col, InputNumber, Row, Select, Space, Typography } from 'antd';
 import { batchUpdateProcessParameters } from '../../../services/businessConfig';
 import { workOrderApi } from '../../../apps/kuaizhizao/services/work-order';
@@ -14,12 +15,12 @@ const WEIGHT_KEYS = [
   'plan_fidelity',
 ] as const;
 
-const WEIGHT_LABELS: Record<(typeof WEIGHT_KEYS)[number], string> = {
-  manual_priority: '人工优先级',
-  due_urgency: '交期紧迫度',
-  demand_urgency: '需求交期',
-  kitting_readiness: '齐套就绪',
-  plan_fidelity: '计划一致性',
+const WEIGHT_LABEL_KEYS: Record<(typeof WEIGHT_KEYS)[number], string> = {
+  manual_priority: 'pages.system.configCenter.scoreProfiles.weight.manual_priority',
+  due_urgency: 'pages.system.configCenter.scoreProfiles.weight.due_urgency',
+  demand_urgency: 'pages.system.configCenter.scoreProfiles.weight.demand_urgency',
+  kitting_readiness: 'pages.system.configCenter.scoreProfiles.weight.kitting_readiness',
+  plan_fidelity: 'pages.system.configCenter.scoreProfiles.weight.plan_fidelity',
 };
 
 type WeightMap = Record<(typeof WEIGHT_KEYS)[number], number>;
@@ -81,6 +82,7 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
   scoreProfiles,
   onSaved,
 }) => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const [profiles, setProfiles] = useState<Required<ScoreProfilesValue>>(DEFAULT_PROFILES);
   const [saving, setSaving] = useState(false);
@@ -110,7 +112,7 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
 
   const handleSave = async () => {
     if (schedulingSum <= 0 || pickingSum <= 0) {
-      message.error('各场景权重之和须大于 0');
+      message.error(t('pages.system.configCenter.scoreProfiles.sumMustBePositive'));
       return;
     }
     try {
@@ -126,21 +128,21 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
         const refreshResult: { refreshed?: number; work_order_count?: number; skipped?: boolean } =
           await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
         if (refreshResult?.skipped) {
-          message.success('打分权重模板已保存（综合打分未启用，跳过重算）');
+          message.success(t('pages.system.configCenter.scoreProfiles.savedSkippedRecalc'));
         } else {
           const woCount = refreshResult?.work_order_count ?? 0;
-          message.success(`打分权重模板已保存，已重算 ${woCount} 个工单的综合分`);
+          message.success(t('pages.system.configCenter.scoreProfiles.savedRecalcedCount', { count: woCount }));
         }
       } catch (refreshErr: any) {
         message.warning(
           refreshErr?.message
-            ? `权重已保存，但综合分重算失败：${refreshErr.message}`
-            : '权重已保存，但综合分重算失败，请稍后在排程页手动刷新',
+            ? t('pages.system.configCenter.scoreProfiles.savedButRecalcFailedWithReason', { reason: refreshErr.message })
+            : t('pages.system.configCenter.scoreProfiles.savedButRecalcFailed'),
         );
       }
       await onSaved?.();
     } catch (e: any) {
-      message.error(e?.message || '保存失败');
+      message.error(e?.message || t('pages.system.configCenter.scoreProfiles.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -160,7 +162,7 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
         {WEIGHT_KEYS.map((key) => (
           <Col key={key} xs={24} sm={12} md={8}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {WEIGHT_LABELS[key]}
+              {t(WEIGHT_LABEL_KEYS[key])}
             </Typography.Text>
             <InputNumber
               min={0}
@@ -174,14 +176,14 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
         ))}
         <Col xs={24} sm={12} md={8}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            齐套语义
+            {t('pages.system.configCenter.scoreProfiles.kittingSemantic')}
           </Typography.Text>
           <Select
             style={{ width: '100%', marginTop: 4 }}
             value={profiles[scenario].kitting_mode}
             options={[
-              { value: 'direct', label: '齐套高优先（排程开产）' },
-              { value: 'invert', label: '缺料多优先（备料）' },
+              { value: 'direct', label: t('pages.system.configCenter.scoreProfiles.kittingMode.direct') },
+              { value: 'invert', label: t('pages.system.configCenter.scoreProfiles.kittingMode.invert') },
             ]}
             onChange={(v) =>
               setProfiles((prev) => ({
@@ -193,7 +195,7 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
         </Col>
       </Row>
       <Typography.Text type={Math.abs(sum - 1) > 0.01 ? 'warning' : 'secondary'} style={{ fontSize: 12 }}>
-        权重合计 {sum.toFixed(2)}（保存后引擎会自动归一化）
+        {t('pages.system.configCenter.scoreProfiles.weightSum', { sum: sum.toFixed(2) })}
       </Typography.Text>
     </Card>
   );
@@ -201,25 +203,25 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
   return (
     <Card size="small" style={{ marginTop: 16 }}>
       <Space orientation="vertical" style={{ width: '100%' }} size={0}>
-        <Typography.Text strong>APS-Lite 综合打分权重模板</Typography.Text>
+        <Typography.Text strong>{t('pages.system.configCenter.scoreProfiles.title')}</Typography.Text>
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
-          分别配置排程（scheduling）与备料（picking）场景的维度权重；消费端包括甘特排序、配料中心与出库领料队列。
+          {t('pages.system.configCenter.scoreProfiles.desc')}
         </Typography.Paragraph>
       </Space>
       {renderProfileCard(
         'scheduling',
-        '排程场景 scheduling',
-        '用于智能排产、甘特默认序与控制塔风险参考。',
+        t('pages.system.configCenter.scoreProfiles.schedulingTitle'),
+        t('pages.system.configCenter.scoreProfiles.schedulingDesc'),
         schedulingSum,
       )}
       {renderProfileCard(
         'picking',
-        '备料场景 picking',
-        '用于配料中心提醒与出库管理生产领料排序（缺料多先备）。',
+        t('pages.system.configCenter.scoreProfiles.pickingTitle'),
+        t('pages.system.configCenter.scoreProfiles.pickingDesc'),
         pickingSum,
       )}
       <Button type="primary" loading={saving} onClick={handleSave}>
-        保存权重模板
+        {t('pages.system.configCenter.scoreProfiles.saveButton')}
       </Button>
     </Card>
   );

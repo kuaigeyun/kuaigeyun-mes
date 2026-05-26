@@ -113,77 +113,77 @@ const AUDIT_SWITCH_ITEMS: Array<{ code: string; labelKey: string; descKey: strin
 ];
 
 const NOTIFICATION_DOCUMENT_OPTIONS = [
-  { value: 'sales_order', label: '销售订单' },
-  { value: 'quotation', label: '报价单' },
-  { value: 'purchase_order', label: '采购订单' },
-  { value: 'work_order', label: '工单' },
-  { value: 'quality_inspection', label: '质检单' },
-  { value: 'quality_exception', label: '质量异常单' },
-  { value: 'equipment_fault', label: '设备故障单' },
-  { value: 'maintenance_order', label: '维保工单' },
-  { value: 'shipment_notice', label: '发货通知' },
-  { value: 'inbound', label: '入库单' },
-  { value: 'outbound', label: '出库单' },
+  { value: 'sales_order', labelKey: 'pages.system.configCenter.notification.document.sales_order', fallback: '销售订单' },
+  { value: 'quotation', labelKey: 'pages.system.configCenter.notification.document.quotation', fallback: '报价单' },
+  { value: 'purchase_order', labelKey: 'pages.system.configCenter.notification.document.purchase_order', fallback: '采购订单' },
+  { value: 'work_order', labelKey: 'pages.system.configCenter.notification.document.work_order', fallback: '工单' },
+  { value: 'quality_inspection', labelKey: 'pages.system.configCenter.notification.document.quality_inspection', fallback: '质检单' },
+  { value: 'quality_exception', labelKey: 'pages.system.configCenter.notification.document.quality_exception', fallback: '质量异常单' },
+  { value: 'equipment_fault', labelKey: 'pages.system.configCenter.notification.document.equipment_fault', fallback: '设备故障单' },
+  { value: 'maintenance_order', labelKey: 'pages.system.configCenter.notification.document.maintenance_order', fallback: '维保工单' },
+  { value: 'shipment_notice', labelKey: 'pages.system.configCenter.notification.document.shipment_notice', fallback: '发货通知' },
+  { value: 'inbound', labelKey: 'pages.system.configCenter.notification.document.inbound', fallback: '入库单' },
+  { value: 'outbound', labelKey: 'pages.system.configCenter.notification.document.outbound', fallback: '出库单' },
 ];
 
-const NOTIFICATION_ACTION_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+const NOTIFICATION_ACTION_OPTIONS: Record<string, Array<{ value: string; labelKey: string; fallback: string }>> = {
   sales_order: [
-    { value: 'submitted', label: '提交' },
-    { value: 'approved', label: '审核通过' },
-    { value: 'pushed_to_work_order', label: '下推工单' },
-    { value: 'delivery_delayed', label: '交期延误' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.sales_order.submitted', fallback: '提交' },
+    { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.sales_order.approved', fallback: '审核通过' },
+    { value: 'pushed_to_work_order', labelKey: 'pages.system.configCenter.notification.action.sales_order.pushed_to_work_order', fallback: '下推工单' },
+    { value: 'delivery_delayed', labelKey: 'pages.system.configCenter.notification.action.sales_order.delivery_delayed', fallback: '交期延误' },
   ],
   quotation: [
-    { value: 'submitted', label: '提交' },
-    { value: 'approved', label: '审核通过' },
-    { value: 'customer_confirmed', label: '客户确认' },
-    { value: 'converted_to_order', label: '转销售订单' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.quotation.submitted', fallback: '提交' },
+    { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quotation.approved', fallback: '审核通过' },
+    { value: 'customer_confirmed', labelKey: 'pages.system.configCenter.notification.action.quotation.customer_confirmed', fallback: '客户确认' },
+    { value: 'converted_to_order', labelKey: 'pages.system.configCenter.notification.action.quotation.converted_to_order', fallback: '转销售订单' },
   ],
   purchase_order: [
-    { value: 'submitted', label: '提交' },
-    { value: 'approved', label: '审核通过' },
-    { value: 'pushed_to_receipt', label: '下推收货' },
-    { value: 'delivery_delayed', label: '交期延误' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.purchase_order.submitted', fallback: '提交' },
+    { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.purchase_order.approved', fallback: '审核通过' },
+    { value: 'pushed_to_receipt', labelKey: 'pages.system.configCenter.notification.action.purchase_order.pushed_to_receipt', fallback: '下推收货' },
+    { value: 'delivery_delayed', labelKey: 'pages.system.configCenter.notification.action.purchase_order.delivery_delayed', fallback: '交期延误' },
   ],
   work_order: [
-    { value: 'released', label: '下达' },
-    { value: 'started', label: '开工' },
-    { value: 'completed', label: '完工' },
-    { value: 'reworked', label: '转返工' },
+    { value: 'released', labelKey: 'pages.system.configCenter.notification.action.work_order.released', fallback: '下达' },
+    { value: 'started', labelKey: 'pages.system.configCenter.notification.action.work_order.started', fallback: '开工' },
+    { value: 'completed', labelKey: 'pages.system.configCenter.notification.action.work_order.completed', fallback: '完工' },
+    { value: 'reworked', labelKey: 'pages.system.configCenter.notification.action.work_order.reworked', fallback: '转返工' },
   ],
   quality_inspection: [
-    { value: 'submitted', label: '提交' },
-    { value: 'approved', label: '审核通过' },
-    { value: 'rejected', label: '驳回' },
-    { value: 'abnormal_detected', label: '检出异常' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.submitted', fallback: '提交' },
+    { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.approved', fallback: '审核通过' },
+    { value: 'rejected', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.rejected', fallback: '驳回' },
+    { value: 'abnormal_detected', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.abnormal_detected', fallback: '检出异常' },
   ],
   quality_exception: [
-    { value: 'created', label: '新建异常' },
-    { value: 'assigned', label: '分派处理' },
-    { value: 'closed', label: '异常关闭' },
+    { value: 'created', labelKey: 'pages.system.configCenter.notification.action.quality_exception.created', fallback: '新建异常' },
+    { value: 'assigned', labelKey: 'pages.system.configCenter.notification.action.quality_exception.assigned', fallback: '分派处理' },
+    { value: 'closed', labelKey: 'pages.system.configCenter.notification.action.quality_exception.closed', fallback: '异常关闭' },
   ],
   equipment_fault: [
-    { value: 'reported', label: '故障报修' },
-    { value: 'assigned', label: '派工维修' },
-    { value: 'resolved', label: '故障恢复' },
+    { value: 'reported', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.reported', fallback: '故障报修' },
+    { value: 'assigned', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.assigned', fallback: '派工维修' },
+    { value: 'resolved', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.resolved', fallback: '故障恢复' },
   ],
   maintenance_order: [
-    { value: 'created', label: '新建维保' },
-    { value: 'started', label: '开始维保' },
-    { value: 'completed', label: '完成维保' },
+    { value: 'created', labelKey: 'pages.system.configCenter.notification.action.maintenance_order.created', fallback: '新建维保' },
+    { value: 'started', labelKey: 'pages.system.configCenter.notification.action.maintenance_order.started', fallback: '开始维保' },
+    { value: 'completed', labelKey: 'pages.system.configCenter.notification.action.maintenance_order.completed', fallback: '完成维保' },
   ],
   shipment_notice: [
-    { value: 'submitted', label: '提交' },
-    { value: 'confirmed', label: '确认发货' },
-    { value: 'delivery_delayed', label: '发货延误' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.shipment_notice.submitted', fallback: '提交' },
+    { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.shipment_notice.confirmed', fallback: '确认发货' },
+    { value: 'delivery_delayed', labelKey: 'pages.system.configCenter.notification.action.shipment_notice.delivery_delayed', fallback: '发货延误' },
   ],
   inbound: [
-    { value: 'submitted', label: '提交' },
-    { value: 'confirmed', label: '确认入库' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.inbound.submitted', fallback: '提交' },
+    { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.inbound.confirmed', fallback: '确认入库' },
   ],
   outbound: [
-    { value: 'submitted', label: '提交' },
-    { value: 'confirmed', label: '确认出库' },
+    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.outbound.submitted', fallback: '提交' },
+    { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.outbound.confirmed', fallback: '确认出库' },
   ],
 };
 
@@ -263,15 +263,17 @@ const ConfigCenterPage: React.FC = () => {
     () =>
       (usersRes?.items || []).map((u: User) => ({
         value: u.id,
-        label: `${u.full_name || u.username}${u.department?.name ? `（${u.department.name}）` : ''}`,
+        label: `${u.full_name || u.username}${u.department?.name ? (i18n.language?.startsWith('zh') ? `（${u.department.name}）` : ` (${u.department.name})`) : ''}`,
       })),
-    [usersRes]
+    [usersRes, i18n.language]
   );
   const BUILTIN_IN_APP_CHANNEL_UUID = '__builtin_internal_channel__';
   const channelOptions = useMemo(() => {
+    const builtInName = t('pages.system.configCenter.notification.channel.inApp');
+    const unknownLabel = t('pages.system.configCenter.notification.channel.unknown');
     const builtIn = {
       uuid: BUILTIN_IN_APP_CHANNEL_UUID,
-      name: '站内通知',
+      name: builtInName,
       code: 'IN_APP_DEFAULT',
       type: 'internal',
       is_active: true,
@@ -281,11 +283,11 @@ const ConfigCenterPage: React.FC = () => {
     const merged = hasInternal ? list : [builtIn as MessageConfig, ...list];
     return merged.map((it: any) => ({
       value: String(it.uuid || it.code),
-      label: String(it.name || it.code || '消息渠道'),
+      label: String(it.name || it.code || unknownLabel),
       code: String(it.code || ''),
       type: String(it.type || ''),
     }));
-  }, [messageChannels]);
+  }, [messageChannels, t, i18n.language]);
   const templateOptions = useMemo(
     () =>
       (Array.isArray(messageTemplates) ? messageTemplates : []).map((it: MessageTemplate) => ({
@@ -359,6 +361,19 @@ const ConfigCenterPage: React.FC = () => {
     if (i18n.exists(key)) return t(key);
     return fallback || key;
   };
+  const notificationDocumentOptions = useMemo(
+    () =>
+      NOTIFICATION_DOCUMENT_OPTIONS.map((it) => ({
+        value: it.value,
+        label: renderText(it.labelKey, it.fallback),
+      })),
+    [t, i18n.language]
+  );
+  const getNotificationActionOptions = (documentCode: string) =>
+    (NOTIFICATION_ACTION_OPTIONS[String(documentCode || '')] || []).map((it) => ({
+      value: it.value,
+      label: renderText(it.labelKey, it.fallback),
+    }));
   const toArrayValue = (value: any): string[] => {
     if (Array.isArray(value)) return value.map(v => String(v));
     if (typeof value === 'string') return value.split(',').map(v => v.trim()).filter(Boolean);
@@ -439,40 +454,18 @@ const ConfigCenterPage: React.FC = () => {
       : raw
         ? [raw]
         : [];
-    const documentLabel: Record<string, string> = {
-      sales_order: '销售订单',
-      purchase_order: '采购订单',
-      work_order: '工单',
-      quality_inspection: '质检单',
-      quality_exception: '质量异常单',
-      equipment_fault: '设备故障单',
-      maintenance_order: '维保工单',
+    const getDocumentLabel = (code: string) => {
+      const item = NOTIFICATION_DOCUMENT_OPTIONS.find((it) => it.value === code);
+      return item ? renderText(item.labelKey, item.fallback) : (code || '-');
     };
-    const actionLabel: Record<string, string> = {
-      submitted: '提交',
-      approved: '审核通过',
-      pushed_to_work_order: '下推工单',
-      delivery_delayed: '交期延误',
-      customer_confirmed: '客户确认',
-      converted_to_order: '转销售订单',
-      pushed_to_receipt: '下推收货',
-      released: '下达',
-      started: '开工',
-      completed: '完工',
-      reworked: '转返工',
-      confirmed: '确认',
-      rejected: '驳回',
-      abnormal_detected: '检出异常',
-      created: '新建',
-      assigned: '分派处理',
-      closed: '异常关闭',
-      reported: '故障报修',
-      resolved: '故障恢复',
+    const getActionLabel = (documentCode: string, actionCode: string) => {
+      const found = (NOTIFICATION_ACTION_OPTIONS[String(documentCode || '')] || []).find((it) => it.value === actionCode);
+      if (found) return renderText(found.labelKey, found.fallback);
+      return actionCode || '-';
     };
-    const scopeLabel: Record<string, string> = {
-      creator: '创建人',
-      salesman: '业务员',
-      follower: '跟单员',
+    const getScopeLabel = (code: string) => {
+      const key = `pages.system.configCenter.notification.scope.${code}`;
+      return i18n.exists(key) ? t(key) : code;
     };
     return list.map((rule: any, idx: number) => {
       const channelRefs = Array.isArray(rule?.channel_uuids)
@@ -481,16 +474,19 @@ const ConfigCenterPage: React.FC = () => {
           ? rule.channels
           : [];
       const channels = channelRefs.map((v: string) => channelNameByKey.get(String(v)) || String(v)).join(' + ') || '-';
-      const scopes = (Array.isArray(rule?.recipient_scopes) ? rule.recipient_scopes : []).map((v: string) => scopeLabel[v] || v).join(' + ');
+      const scopes = (Array.isArray(rule?.recipient_scopes) ? rule.recipient_scopes : []).map((v: string) => getScopeLabel(v)).join(' + ');
       const users = (Array.isArray(rule?.recipient_user_ids) ? rule.recipient_user_ids : []).length;
-      const recipients = [scopes, users > 0 ? `指定人员(${users})` : ''].filter(Boolean).join(' + ') || '-';
+      const recipients = [
+        scopes,
+        users > 0 ? t('pages.system.configCenter.notification.recipients.specifiedUsers', { count: users }) : '',
+      ].filter(Boolean).join(' + ') || '-';
       const templateKey = String(rule?.template_uuid || rule?.template || '');
       const template = templateNameByKey.get(templateKey) || templateKey || '-';
       return {
         id: String(rule?.id || rule?.code || idx + 1),
-        scene: rule?.scene_name || '已配置通知规则',
-        document: documentLabel[String(rule?.trigger_document || '')] || String(rule?.trigger_document || '-'),
-        action: actionLabel[String(rule?.trigger_action || '')] || String(rule?.trigger_action || '-'),
+        scene: rule?.scene_name || t('pages.system.configCenter.notification.scene.default'),
+        document: getDocumentLabel(String(rule?.trigger_document || '')) || String(rule?.trigger_document || '-'),
+        action: getActionLabel(String(rule?.trigger_document || ''), String(rule?.trigger_action || '')) || String(rule?.trigger_action || '-'),
         channels,
         recipients,
         template,
@@ -498,7 +494,7 @@ const ConfigCenterPage: React.FC = () => {
         raw: rule,
       };
     });
-  }, [bizRes, channelNameByKey, templateNameByKey]);
+  }, [bizRes, channelNameByKey, templateNameByKey, t, i18n, renderText]);
 
   const getExistingNotificationRules = () => {
     const raw = bizRes?.parameters?.notifications;
@@ -506,7 +502,7 @@ const ConfigCenterPage: React.FC = () => {
     if (raw) {
       return [{
         id: raw.id || `rule_${Date.now()}`,
-        scene_name: raw.scene_name || '已配置通知规则',
+        scene_name: raw.scene_name || t('pages.system.configCenter.notification.scene.default'),
         enabled: raw.enabled !== false,
         trigger_document: raw.trigger_document,
         trigger_action: raw.trigger_action,
@@ -525,7 +521,7 @@ const ConfigCenterPage: React.FC = () => {
       const existingRules = getExistingNotificationRules();
       const newRule = {
         id: `rule_${Date.now()}`,
-        scene_name: '已配置通知规则',
+        scene_name: t('pages.system.configCenter.notification.scene.default'),
         enabled: true,
         trigger_document: values.trigger_document || '',
         trigger_action: values.trigger_action || '',
@@ -538,7 +534,7 @@ const ConfigCenterPage: React.FC = () => {
       };
       const allowedActions = (NOTIFICATION_ACTION_OPTIONS[String(newRule.trigger_document)] || []).map(it => it.value);
       if (!allowedActions.includes(String(newRule.trigger_action))) {
-        throw new Error('触发动作与单据类型不匹配，请重新选择');
+        throw new Error(t('pages.system.configCenter.notification.error.actionMismatch'));
       }
       const nextRules =
         notificationModalMode === 'edit' && editingNotificationRuleId
@@ -551,13 +547,17 @@ const ConfigCenterPage: React.FC = () => {
           },
         },
       });
-      messageApi.success(notificationModalMode === 'edit' ? '通知规则已更新' : '通知规则已新增');
+      messageApi.success(
+        notificationModalMode === 'edit'
+          ? t('pages.system.configCenter.notification.message.updated')
+          : t('pages.system.configCenter.notification.message.created')
+      );
       setNotificationModalOpen(false);
       setNotificationModalMode('create');
       setEditingNotificationRuleId(null);
       await refetchBusinessConfig();
     } catch (error: any) {
-      if (!error?.errorFields) messageApi.error(error.message || '新增通知规则失败');
+      if (!error?.errorFields) messageApi.error(error.message || t('pages.system.configCenter.notification.message.createFailed'));
     } finally {
       setSaving(false);
     }
@@ -581,17 +581,19 @@ const ConfigCenterPage: React.FC = () => {
 
   const handleViewNotificationRule = (row: any) => {
     Modal.info({
-      title: '通知规则详情',
+      title: t('pages.system.configCenter.notification.modal.detailTitle'),
       width: 720,
       content: (
         <Descriptions column={2} size="small">
-          <Descriptions.Item label="场景">{row.scene}</Descriptions.Item>
-          <Descriptions.Item label="状态">{row.enabled ? '启用' : '停用'}</Descriptions.Item>
-          <Descriptions.Item label="单据类型">{row.document}</Descriptions.Item>
-          <Descriptions.Item label="触发动作">{row.action}</Descriptions.Item>
-          <Descriptions.Item label="通知渠道" span={2}>{row.channels}</Descriptions.Item>
-          <Descriptions.Item label="通知对象" span={2}>{row.recipients}</Descriptions.Item>
-          <Descriptions.Item label="消息模板" span={2}>{row.template}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.scene')}>{row.scene}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.status')}>
+            {row.enabled ? t('pages.system.configCenter.notification.status.enabled') : t('pages.system.configCenter.notification.status.disabled')}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.document')}>{row.document}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.action')}>{row.action}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.channels')} span={2}>{row.channels}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.recipients')} span={2}>{row.recipients}</Descriptions.Item>
+          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.template')} span={2}>{row.template}</Descriptions.Item>
         </Descriptions>
       ),
     });
@@ -599,8 +601,8 @@ const ConfigCenterPage: React.FC = () => {
 
   const handleDeleteNotificationRule = (row: any) => {
     Modal.confirm({
-      title: '删除通知规则',
-      content: '确定删除该条通知规则吗？',
+      title: t('pages.system.configCenter.notification.modal.deleteTitle'),
+      content: t('pages.system.configCenter.notification.modal.deleteConfirm'),
       onOk: async () => {
         try {
           const existingRules = getExistingNotificationRules();
@@ -610,10 +612,10 @@ const ConfigCenterPage: React.FC = () => {
               notifications: { rules: nextRules },
             },
           });
-          messageApi.success('通知规则已删除');
+          messageApi.success(t('pages.system.configCenter.notification.message.deleted'));
           await refetchBusinessConfig();
         } catch (error: any) {
-          messageApi.error(error?.message || '删除通知规则失败');
+          messageApi.error(error?.message || t('pages.system.configCenter.notification.message.deleteFailed'));
         }
       },
     });
@@ -624,9 +626,9 @@ const ConfigCenterPage: React.FC = () => {
       <Content style={{ padding: '14px 0 0 0', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div className="config-center-scrollable-content">
           <div style={{ marginBottom: 16 }}>
-            <Text strong style={{ fontSize: 16 }}>消息提醒</Text>
+            <Text strong style={{ fontSize: 16 }}>{t('pages.system.configCenter.notification.title')}</Text>
             <Paragraph type="secondary" style={{ marginTop: 4 }}>
-              当单据发生可配置动作时，通过可配置渠道通知指定人员。
+              {t('pages.system.configCenter.notification.desc')}
             </Paragraph>
           </div>
           <Spin spinning={loading}>
@@ -638,7 +640,7 @@ const ConfigCenterPage: React.FC = () => {
                 search={false}
                 options={false}
                 showCreateButton
-                createButtonText="新建通知规则"
+                createButtonText={t('pages.system.configCenter.notification.create')}
                 onCreate={() => {
                   notificationFormRef.current?.resetFields?.();
                   setNotificationModalInitialValues({});
@@ -647,21 +649,21 @@ const ConfigCenterPage: React.FC = () => {
                   setNotificationModalOpen(true);
                 }}
                 columns={[
-                  { title: '场景', dataIndex: 'scene', width: 180 },
-                  { title: '单据类型', dataIndex: 'document', width: 120 },
-                  { title: '消息模板', dataIndex: 'template', width: 220 },
-                  { title: '触发动作', dataIndex: 'action', width: 140 },
-                  { title: '通知渠道', dataIndex: 'channels', width: 180 },
-                  { title: '通知对象', dataIndex: 'recipients', width: 220 },
-                  { title: '状态', dataIndex: 'enabled', width: 90, render: (_: unknown, row: any) => (row.enabled ? '启用' : '停用') },
+                  { title: t('pages.system.configCenter.notification.column.scene'), dataIndex: 'scene', width: 180 },
+                  { title: t('pages.system.configCenter.notification.column.document'), dataIndex: 'document', width: 120 },
+                  { title: t('pages.system.configCenter.notification.column.template'), dataIndex: 'template', width: 220 },
+                  { title: t('pages.system.configCenter.notification.column.action'), dataIndex: 'action', width: 140 },
+                  { title: t('pages.system.configCenter.notification.column.channels'), dataIndex: 'channels', width: 180 },
+                  { title: t('pages.system.configCenter.notification.column.recipients'), dataIndex: 'recipients', width: 220 },
+                  { title: t('pages.system.configCenter.notification.column.status'), dataIndex: 'enabled', width: 90, render: (_: unknown, row: any) => (row.enabled ? t('pages.system.configCenter.notification.status.enabled') : t('pages.system.configCenter.notification.status.disabled')) },
                   {
-                    title: '操作',
+                    title: t('pages.system.configCenter.notification.column.actions'),
                     width: 220,
                     render: (_: any, row: any) => {
                       const actions: React.ReactNode[] = [
-                        <Button key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row)}>详情</Button>,
-                        <Button key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row)}>编辑</Button>,
-                        <Button key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>删除</Button>,
+                        <Button key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row)}>{t('pages.system.configCenter.notification.action.view')}</Button>,
+                        <Button key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row)}>{t('pages.system.configCenter.notification.action.edit')}</Button>,
+                        <Button key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>{t('pages.system.configCenter.notification.action.delete')}</Button>,
                       ];
                       return renderRowActionsOverflow(actions, `notification-rule-${row.id}`);
                     },
@@ -803,13 +805,13 @@ const ConfigCenterPage: React.FC = () => {
           { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
           { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
           { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
-          { key: 'notification', label: <Space><BellOutlined />消息提醒</Space>, children: renderNotificationTab() },
+          { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },
         ]}
         padding={24}
       />
 
       <FormModalTemplate
-        title={notificationModalMode === 'edit' ? '编辑通知规则' : '新建通知规则'}
+        title={notificationModalMode === 'edit' ? t('pages.system.configCenter.notification.modal.editTitle') : t('pages.system.configCenter.notification.modal.createTitle')}
         open={notificationModalOpen}
         onClose={() => {
           setNotificationModalOpen(false);
@@ -826,19 +828,21 @@ const ConfigCenterPage: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
           <ProFormSelect
             name="trigger_document"
-            label="单据类型"
-            rules={[{ required: true, message: '请选择单据类型' }]}
-            options={NOTIFICATION_DOCUMENT_OPTIONS}
+            label={t('pages.system.configCenter.notification.form.document')}
+            rules={[{ required: true, message: t('pages.system.configCenter.notification.form.documentRequired') }]}
+            options={notificationDocumentOptions}
           />
           <ProFormDependency name={['trigger_document']}>
             {({ trigger_document }) => (
               <ProFormSelect
                 name="trigger_action"
-                label="触发动作"
-                rules={[{ required: true, message: '请选择触发动作' }]}
-                options={NOTIFICATION_ACTION_OPTIONS[String(trigger_document || '')] || []}
+                label={t('pages.system.configCenter.notification.form.action')}
+                rules={[{ required: true, message: t('pages.system.configCenter.notification.form.actionRequired') }]}
+                options={getNotificationActionOptions(String(trigger_document || ''))}
                 fieldProps={{
-                  placeholder: trigger_document ? '请选择触发动作' : '请先选择单据类型',
+                  placeholder: trigger_document
+                    ? t('pages.system.configCenter.notification.form.actionPlaceholder')
+                    : t('pages.system.configCenter.notification.form.selectDocumentFirst'),
                   disabled: !trigger_document,
                 }}
               />
@@ -855,34 +859,34 @@ const ConfigCenterPage: React.FC = () => {
           </ProFormDependency>
           <ProFormSelect
             name="template"
-            label="消息模板"
+            label={t('pages.system.configCenter.notification.form.template')}
             options={templateOptions}
             initialValue={templateOptions[0]?.value}
           />
           <ProFormSelect
             name="channels"
-            label="通知渠道"
+            label={t('pages.system.configCenter.notification.form.channels')}
             mode="multiple"
             options={channelOptions}
             initialValue={[BUILTIN_IN_APP_CHANNEL_UUID]}
           />
           <ProFormSelect
             name="recipient_scopes"
-            label="通知角色"
+            label={t('pages.system.configCenter.notification.form.roles')}
             mode="multiple"
             options={[
-              { value: 'creator', label: '创建人' },
-              { value: 'salesman', label: '业务员' },
-              { value: 'follower', label: '跟单员' },
+              { value: 'creator', label: t('pages.system.configCenter.notification.scope.creator') },
+              { value: 'salesman', label: t('pages.system.configCenter.notification.scope.salesman') },
+              { value: 'follower', label: t('pages.system.configCenter.notification.scope.follower') },
             ]}
             initialValue={['salesman', 'follower']}
           />
           <ProFormSelect
             name="recipient_user_ids"
-            label="指定人员"
+            label={t('pages.system.configCenter.notification.form.specifiedUsers')}
             mode="multiple"
             options={userOptions}
-            fieldProps={{ placeholder: '可选：补充指定人员' }}
+            fieldProps={{ placeholder: t('pages.system.configCenter.notification.form.specifiedUsersPlaceholder') }}
           />
         </div>
       </FormModalTemplate>

@@ -625,7 +625,7 @@ const LanguageListPage: React.FC = () => {
                 total: response.total,
               };
             } catch (error: any) {
-              console.error('获取语言列表失败:', error);
+              console.error('Failed to fetch languages:', error);
               messageApi.error(error?.message || t('common.loadFailed'));
               return {
                 data: [],
@@ -830,4 +830,3 @@ const LanguageListPage: React.FC = () => {
 };
 
 export default LanguageListPage;
-

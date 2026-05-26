@@ -532,7 +532,7 @@ const DataDictionaryListPage: React.FC = () => {
               total: response.total,
             };
           } catch (error: any) {
-            console.error('获取数据字典列表失败:', error);
+            console.error('Failed to fetch data dictionaries:', error);
             messageApi.error(error?.message || t('common.loadFailed'));
             return {
               data: [],
@@ -701,4 +701,3 @@ const DataDictionaryListPage: React.FC = () => {
 };
 
 export default DataDictionaryListPage;
-

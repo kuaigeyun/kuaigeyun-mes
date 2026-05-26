@@ -36,6 +36,13 @@ export const mesDashboardService = {
     });
   },
 
+  // 获取计划可信度指标
+  getPlanReliability: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/plan-reliability', {
+      method: 'GET',
+    });
+  },
+
   // 获取生产实时播报
   getProductionBroadcast: async (limit = 10) => {
     return apiRequest('/apps/kuaizhizao/dashboard/production-broadcast', {

@@ -254,6 +254,8 @@ from apps.kuaizhizao.schemas.planning import (
     IntelligentSchedulingResponse,
     OptimizeScheduleRequest,
     OptimizeScheduleResponse,
+    ImpactedRescheduleRequest,
+    ImpactedRescheduleResponse,
     SchedulingScenarioCreate,
     SchedulingScenarioUpdate,
     SchedulingScenarioRunRequest,
@@ -1712,6 +1714,25 @@ async def optimize_schedule(
     return OptimizeScheduleResponse(**result)
 
 
+@router.post("/scheduling/recalculate-impacted", response_model=ImpactedRescheduleResponse, summary="Recalculate impacted schedule")
+async def recalculate_impacted_schedule(
+    request: ImpactedRescheduleRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ImpactedRescheduleResponse:
+    """异常/事件驱动的局部重排入口。"""
+    service = AdvancedSchedulingService()
+    result = await service.reschedule_impacted_orders(
+        tenant_id=tenant_id,
+        trigger_type=request.trigger_type,
+        seed_work_order_ids=request.work_order_ids,
+        updated_by=current_user.id,
+        lookahead_hours=request.lookahead_hours,
+        apply_results=request.apply_results,
+    )
+    return ImpactedRescheduleResponse(**result)
+
+
 @router.get("/scheduling/scenarios", response_model=SchedulingScenarioListResponse, summary="List scheduling scenarios")
 async def list_scheduling_scenarios(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -1842,7 +1863,7 @@ async def handle_material_shortage_exception(
     """
     处理缺料异常
     """
-    return await exception_service.handle_material_shortage_exception(
+    handled = await exception_service.handle_material_shortage_exception(
         tenant_id=tenant_id,
         exception_id=exception_id,
         handled_by=current_user.id,
@@ -1850,6 +1871,20 @@ async def handle_material_shortage_exception(
         alternative_material_id=alternative_material_id,
         remarks=remarks,
     )
+    try:
+        trigger_types = {"purchase", "substitute", "adjust_plan", "expedite", "increase_resources"}
+        work_order_id = handled.get("work_order_id") if isinstance(handled, dict) else getattr(handled, "work_order_id", None)
+        if action in trigger_types and work_order_id:
+            await AdvancedSchedulingService().reschedule_impacted_orders(
+                tenant_id=tenant_id,
+                trigger_type="material_shortage",
+                seed_work_order_ids=[int(work_order_id)],
+                updated_by=current_user.id,
+                apply_results=True,
+            )
+    except Exception as e:
+        logger.warning(f"缺料异常触发局部重排失败 exception_id={exception_id}: {e}")
+    return handled
 
 
 @router.post("/work-orders/{work_order_id}/detect-shortage", response_model=List[MaterialShortageExceptionResponse], summary="Detect work order shortage")
@@ -1903,13 +1938,27 @@ async def handle_delivery_delay_exception(
     """
     处理延期异常
     """
-    return await exception_service.handle_delivery_delay_exception(
+    handled = await exception_service.handle_delivery_delay_exception(
         tenant_id=tenant_id,
         exception_id=exception_id,
         handled_by=current_user.id,
         action=action,
         remarks=remarks,
     )
+    try:
+        trigger_types = {"adjust_plan", "increase_resources", "expedite"}
+        work_order_id = handled.get("work_order_id") if isinstance(handled, dict) else getattr(handled, "work_order_id", None)
+        if action in trigger_types and work_order_id:
+            await AdvancedSchedulingService().reschedule_impacted_orders(
+                tenant_id=tenant_id,
+                trigger_type="delivery_delay",
+                seed_work_order_ids=[int(work_order_id)],
+                updated_by=current_user.id,
+                apply_results=True,
+            )
+    except Exception as e:
+        logger.warning(f"延期异常触发局部重排失败 exception_id={exception_id}: {e}")
+    return handled
 
 
 @router.post("/work-orders/{work_order_id}/detect-delay", response_model=List[DeliveryDelayExceptionResponse], summary="Detect work order delay")

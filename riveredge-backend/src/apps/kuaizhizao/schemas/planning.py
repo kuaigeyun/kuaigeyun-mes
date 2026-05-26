@@ -324,6 +324,22 @@ class OptimizeScheduleResponse(BaseSchema):
     unscheduled_count: int = Field(0, description="未排产数量")
 
 
+class ImpactedRescheduleRequest(BaseSchema):
+    """异常驱动局部重排请求。"""
+    trigger_type: str = Field(..., description="触发类型（material_shortage/delivery_delay/breakdown/manual）")
+    work_order_ids: List[int] = Field(default_factory=list, description="触发工单ID")
+    lookahead_hours: Optional[int] = Field(None, ge=1, le=240, description="局部重排窗口小时")
+    apply_results: bool = Field(True, description="是否回写排程结果")
+
+
+class ImpactedRescheduleResponse(BaseSchema):
+    """异常驱动局部重排响应。"""
+    trigger_type: str = Field(..., description="触发类型")
+    seed_work_order_ids: List[int] = Field(default_factory=list, description="种子工单ID")
+    impacted_work_order_ids: List[int] = Field(default_factory=list, description="受影响工单ID")
+    result: IntelligentSchedulingResponse = Field(..., description="局部重排结果")
+
+
 class SchedulingScenarioBase(BaseSchema):
     """排程场景基础信息。"""
     name: str = Field(..., max_length=120, description="场景名称")

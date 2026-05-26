@@ -177,11 +177,11 @@ const CustomFieldListPage: React.FC = () => {
         const stillInList = selectedPageCode && pages.some((p) => p.pageCode === selectedPageCode);
         if (!stillInList) setSelectedPageCode(pages[0].pageCode);
       } else if (pages.length === 0) {
-        console.warn('⚠️ 未发现任何自定义字段页面配置，请检查应用的 manifest.json 是否包含 custom_field_pages 配置');
+        console.warn('No custom field page configs found. Please check whether the app manifest.json includes custom_field_pages.');
         messageApi.warning(t('field.customField.noPageConfig'));
       }
     } catch (error: any) {
-      console.error('❌ 加载页面配置列表失败:', error);
+      console.error('Failed to load page config list:', error);
       const errorMessage = error?.message || error?.error?.message || t('field.customField.pageConfigLoadFailed');
       messageApi.error(`${t('field.customField.pageConfigLoadFailed')}: ${errorMessage}`);
       // 即使失败也设置空数组，避免页面崩溃
@@ -1185,7 +1185,7 @@ const CustomFieldListPage: React.FC = () => {
                           total: response.total,
                         };
                       } catch (error: any) {
-                        console.error('获取自定义字段列表失败:', error);
+                        console.error('Failed to fetch custom fields:', error);
                         messageApi.error(error?.message || t('field.customField.listFetchFailed'));
                         return {
                           data: [],
@@ -1405,4 +1405,3 @@ const CustomFieldListPage: React.FC = () => {
 };
 
 export default CustomFieldListPage;
-

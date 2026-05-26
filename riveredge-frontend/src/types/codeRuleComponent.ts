@@ -76,6 +76,8 @@ export interface CodeRuleComponentsConfig {
  */
 export interface CodeRuleComponentDisplayInfo {
   type: CodeRuleComponentType;
+  labelKey: string;
+  descriptionKey: string;
   label: string;
   description: string;
   icon?: string;
@@ -89,6 +91,8 @@ export interface CodeRuleComponentDisplayInfo {
 export const CODE_RULE_COMPONENT_DISPLAY_INFO: Record<CodeRuleComponentType, CodeRuleComponentDisplayInfo> = {
   auto_counter: {
     type: 'auto_counter',
+    labelKey: 'components.codeRuleComponent.type.autoCounter',
+    descriptionKey: 'components.codeRuleComponent.typeDesc.autoCounter',
     label: '自动计数',
     description: '自动递增的数字部分',
     required: false,
@@ -96,6 +100,8 @@ export const CODE_RULE_COMPONENT_DISPLAY_INFO: Record<CodeRuleComponentType, Cod
   },
   date: {
     type: 'date',
+    labelKey: 'components.codeRuleComponent.type.date',
+    descriptionKey: 'components.codeRuleComponent.typeDesc.date',
     label: '提交日期',
     description: '数据的提交日期',
     required: false,
@@ -103,6 +109,8 @@ export const CODE_RULE_COMPONENT_DISPLAY_INFO: Record<CodeRuleComponentType, Cod
   },
   fixed_text: {
     type: 'fixed_text',
+    labelKey: 'components.codeRuleComponent.type.fixedText',
+    descriptionKey: 'components.codeRuleComponent.typeDesc.fixedText',
     label: '固定字符',
     description: '固定的文本或字符',
     required: false,
@@ -110,6 +118,8 @@ export const CODE_RULE_COMPONENT_DISPLAY_INFO: Record<CodeRuleComponentType, Cod
   },
   form_field: {
     type: 'form_field',
+    labelKey: 'components.codeRuleComponent.type.formField',
+    descriptionKey: 'components.codeRuleComponent.typeDesc.formField',
     label: '表单字段',
     description: '表单字段的值',
     required: false,
@@ -187,21 +197,31 @@ export function createDefaultFormFieldComponent(order: number = 0): FormFieldCom
 /**
  * 获取组件显示文本
  */
-export function getComponentDisplayText(component: CodeRuleComponent): string {
+export type CodeRuleTranslateFn = (key: string, options?: any) => string;
+
+export function getComponentDisplayText(component: CodeRuleComponent, t?: CodeRuleTranslateFn): string {
   const info = CODE_RULE_COMPONENT_DISPLAY_INFO[component.type];
   
   switch (component.type) {
     case 'auto_counter':
+      if (t) {
+        const reset = t(`components.codeRuleComponent.resetCycle.${component.reset_cycle}`);
+        return t('components.codeRuleComponent.display.autoCounter', { label: t(info.labelKey), digits: component.digits, reset });
+      }
       return `${info.label} ${component.digits}位数字, ${component.reset_cycle === 'never' ? '不自动重置' : `每${component.reset_cycle === 'daily' ? '日' : component.reset_cycle === 'monthly' ? '月' : '年'}重置`}`;
     case 'date':
       if (component.format_type === 'preset') {
+        if (t) return t('components.codeRuleComponent.display.datePreset', { label: t(info.labelKey), format: component.preset_format || 'YYYYMMDD' });
         return `${info.label} 格式: ${component.preset_format || 'YYYYMMDD'}`;
       } else {
+        if (t) return t('components.codeRuleComponent.display.dateCustom', { label: t(info.labelKey), format: component.custom_format || 'yMd' });
         return `${info.label} 格式: ${component.custom_format || 'yMd'}`;
       }
     case 'fixed_text':
+      if (t) return t('components.codeRuleComponent.display.fixedText', { label: t(info.labelKey), text: component.text || t('components.codeRuleComponent.placeholder.enterContent') });
       return `${info.label} ${component.text || '请输入内容'}`;
     case 'form_field':
+      if (t) return t('components.codeRuleComponent.display.formField', { label: t(info.labelKey), field: component.field_name || t('components.codeRuleComponent.placeholder.selectField') });
       return `${info.label} ${component.field_name || '请选择字段'}`;
     default:
       return info.label;

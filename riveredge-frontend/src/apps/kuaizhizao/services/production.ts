@@ -29,6 +29,13 @@ export interface SchedulingConstraints {
   consider_mold_tool: boolean;
   scheduling_window_days?: number;
   daily_capacity_hours?: number;
+  freeze_horizon_days?: number;
+  rolling_horizon_days?: number;
+  bottleneck_first?: boolean;
+  bottleneck_work_center_ids?: number[];
+  consider_setup_family?: boolean;
+  setup_changeover_hours?: number;
+  local_reschedule_hours?: number;
 }
 
 export interface SchedulingScenario {
@@ -449,6 +456,14 @@ export const advancedSchedulingApi = {
     };
   }) => {
     return apiRequest('/apps/kuaizhizao/scheduling/optimize', { method: 'POST', data });
+  },
+  recalculateImpacted: async (data: {
+    trigger_type: string;
+    work_order_ids: number[];
+    lookahead_hours?: number;
+    apply_results?: boolean;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling/recalculate-impacted', { method: 'POST', data });
   },
 };
 

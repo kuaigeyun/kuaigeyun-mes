@@ -1229,6 +1229,16 @@ class ManagementMetricsResponse(BaseModel):
     on_time_delivery_rate: float = Field(..., description="准交率（%）")
 
 
+class PlanReliabilityMetricsResponse(BaseModel):
+    """计划可信度指标响应"""
+    total_active_orders: int = Field(0, description="活跃工单数")
+    plan_stability_index: float = Field(0, description="计划稳定指数（0-100）")
+    schedule_adherence_rate: float = Field(0, description="按计划开工率（%）")
+    freeze_violation_count: int = Field(0, description="冻结违规次数")
+    rolling_adjustment_count_24h: int = Field(0, description="滚动窗计划调整次数（24h）")
+    reschedule_events_24h: int = Field(0, description="重排事件数（24h）")
+
+
 @router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="Management metrics")
 @cache_by_kwargs(namespace="dashboard:management_metrics", ttl=60)
 async def get_management_metrics(
@@ -1345,6 +1355,77 @@ async def get_management_metrics(
             average_production_cycle=0.0,
             on_time_delivery_rate=0.0,
         )
+
+
+@router.get("/plan-reliability", response_model=PlanReliabilityMetricsResponse, summary="Plan reliability metrics")
+@cache_by_kwargs(namespace="dashboard:plan_reliability", ttl=30)
+async def get_plan_reliability_metrics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PlanReliabilityMetricsResponse:
+    """获取计划可信度看板核心指标。"""
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    changed_since = now - timedelta(hours=24)
+    freeze_horizon_days = 2
+
+    active_query = WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["draft", "released", "in_progress"],
+        deleted_at__isnull=True,
+    )
+    total_active_orders = await active_query.count()
+
+    changed_recent_count = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["draft", "released"],
+        updated_at__gte=changed_since,
+        deleted_at__isnull=True,
+    ).count()
+    plan_stability_index = max(0.0, 1.0 - (changed_recent_count / max(total_active_orders, 1)))
+
+    adherence_orders = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["in_progress", "completed"],
+        planned_start_date__isnull=False,
+        actual_start_date__isnull=False,
+        deleted_at__isnull=True,
+    ).only("planned_start_date", "actual_start_date")
+    adherence_total = 0
+    adherence_hit = 0
+    for wo in adherence_orders:
+        adherence_total += 1
+        diff_hours = abs((wo.actual_start_date - wo.planned_start_date).total_seconds() / 3600.0)
+        if diff_hours <= 24:
+            adherence_hit += 1
+    schedule_adherence_rate = (adherence_hit / adherence_total * 100) if adherence_total else 0.0
+
+    freeze_violation_count = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        is_frozen=True,
+        frozen_at__isnull=False,
+        updated_at__gt=changed_since,
+        deleted_at__isnull=True,
+    ).count()
+
+    rolling_adjustment_count_24h = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["draft", "released"],
+        updated_at__gte=changed_since,
+        planned_start_date__gt=now + timedelta(days=freeze_horizon_days),
+        deleted_at__isnull=True,
+    ).count()
+
+    return PlanReliabilityMetricsResponse(
+        total_active_orders=total_active_orders,
+        plan_stability_index=round(plan_stability_index * 100, 2),
+        schedule_adherence_rate=round(schedule_adherence_rate, 2),
+        freeze_violation_count=int(freeze_violation_count),
+        rolling_adjustment_count_24h=int(rolling_adjustment_count_24h),
+        reschedule_events_24h=int(changed_recent_count),
+    )
 
 
 class ProductionBroadcastItem(BaseModel):

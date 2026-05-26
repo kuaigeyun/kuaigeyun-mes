@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   DndContext, 
   closestCenter, 
@@ -66,6 +67,7 @@ interface SortableComponentItemProps {
   onEdit: (component: CodeRuleComponent, index: number) => void;
   onDelete: (index: number) => void;
   canDelete: boolean;
+  t: (key: string, options?: any) => string;
 }
 
 const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
@@ -74,6 +76,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
   onEdit,
   onDelete,
   canDelete,
+  t,
 }) => {
   const { token } = theme.useToken();
   const {
@@ -123,10 +126,10 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 500, marginBottom: '4px' }}>
-          {getComponentDisplayText(component)}
+          {getComponentDisplayText(component, t)}
         </div>
         <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-          {info.description}
+          {t(info.descriptionKey, { defaultValue: info.description })}
         </div>
       </div>
       <Space>
@@ -136,7 +139,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
           icon={<EditOutlined />}
           onClick={() => onEdit(component, index)}
         >
-          编辑
+          {t('components.codeRuleComponentBuilder.action.edit')}
         </Button>
         {canDelete && (
           <Button
@@ -146,7 +149,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
             icon={<DeleteOutlined />}
             onClick={() => onDelete(index)}
           >
-            删除
+            {t('components.codeRuleComponentBuilder.action.delete')}
           </Button>
         )}
       </Space>
@@ -161,9 +164,10 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   value = [],
   onChange,
   availableFields = [],
-  title = '流水号规则',
+  title,
   defaultComponents,
 }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const [components, setComponents] = useState<CodeRuleComponent[]>(value);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -229,7 +233,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     if (!info.repeatable) {
       const exists = components.some(comp => comp.type === type);
       if (exists) {
-        message.warning(`${info.label}组件只能添加一个`);
+        message.warning(t('components.codeRuleComponentBuilder.warning.singleInstance', { name: t(info.labelKey, { defaultValue: info.label }) }));
         return;
       }
     }
@@ -238,7 +242,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     if (type === 'auto_counter') {
       const exists = components.some(comp => comp.type === 'auto_counter');
       if (exists) {
-        message.warning('自动计数组件只能添加一个');
+        message.warning(t('components.codeRuleComponentBuilder.warning.singleInstance', { name: t(info.labelKey, { defaultValue: info.label }) }));
         return;
       }
     }
@@ -268,7 +272,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     setEditingComponent(newComponent);
     setEditingIndex(newComponents.length - 1);
     setConfigModalVisible(true);
-  }, [components, handleComponentsChange]);
+  }, [components, handleComponentsChange, t]);
 
   // 处理编辑组件
   const handleEditComponent = useCallback((component: CodeRuleComponent, index: number) => {
@@ -284,13 +288,13 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     
     // 检查是否是必选组件
     if (info.required) {
-      message.warning(`${info.label}组件是必选的，不能删除`);
+      message.warning(t('components.codeRuleComponentBuilder.warning.requiredCannotDelete', { name: t(info.labelKey, { defaultValue: info.label }) }));
       return;
     }
 
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除"${info.label}"组件吗？`,
+      title: t('components.codeRuleComponentBuilder.modal.deleteTitle'),
+      content: t('components.codeRuleComponentBuilder.modal.deleteContent', { name: t(info.labelKey, { defaultValue: info.label }) }),
       onOk: () => {
         const newComponents = components.filter((_, i) => i !== index);
         // 重新排序
@@ -301,7 +305,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
         handleComponentsChange(reorderedComponents);
       },
     });
-  }, [components, handleComponentsChange]);
+  }, [components, handleComponentsChange, t]);
 
   // 处理保存组件配置
   const handleSaveComponentConfig = useCallback((updatedComponent: CodeRuleComponent) => {
@@ -335,7 +339,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   return (
     <div>
       <Card
-        title={title}
+        title={title ?? t('components.codeRuleComponentBuilder.title')}
         size="small"
       >
         <DndContext
@@ -357,6 +361,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
                   onEdit={handleEditComponent}
                   onDelete={handleDeleteComponent}
                   canDelete={!info.required}
+                  t={t}
                 />
               );
             })}
@@ -391,7 +396,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <EyeOutlined style={{ color: token.colorPrimary }} />
               <Text strong style={{ fontSize: '14px', color: token.colorPrimary }}>
-                编号预览
+                {t('components.codeRuleComponentBuilder.preview.title')}
               </Text>
             </div>
             <div style={{
@@ -408,7 +413,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               color: token.colorText,
               letterSpacing: '1px',
             }}>
-              {CodeRuleComponentService.previewComponents(components) || '请配置规则组件'}
+              {CodeRuleComponentService.previewComponents(components) || t('components.codeRuleComponentBuilder.preview.placeholder')}
             </div>
             <div style={{ 
               fontSize: '12px', 
@@ -418,7 +423,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               gap: '4px',
             }}>
               <Text type="secondary">
-                💡 这是根据当前配置生成的编号预览，实际生成时会使用真实的序号和日期
+                {t('components.codeRuleComponentBuilder.preview.hint')}
               </Text>
             </div>
           </Card>
@@ -453,6 +458,7 @@ interface AddComponentButtonProps {
 
 const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes, onAdd }) => {
   const { token } = theme.useToken();
+  const { t } = useTranslation();
 
   const addButtonProps = {
     type: 'dashed' as const,
@@ -463,7 +469,7 @@ const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes,
   if (availableTypes.length === 0) {
     return (
       <Button {...addButtonProps} disabled>
-        添加
+        {t('components.codeRuleComponentBuilder.action.add')}
       </Button>
     );
   }
@@ -474,9 +480,9 @@ const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes,
       key: type,
       label: (
         <div>
-          <div style={{ fontWeight: 500 }}>{info.label}</div>
+          <div style={{ fontWeight: 500 }}>{t(info.labelKey, { defaultValue: info.label })}</div>
           <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-            {info.description}
+            {t(info.descriptionKey, { defaultValue: info.description })}
           </div>
         </div>
       ),
@@ -487,7 +493,7 @@ const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes,
   return (
     <div style={{ width: '100%', display: 'block' }}>
       <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-        <Button {...addButtonProps} style={{ width: '100%' }}>添加</Button>
+        <Button {...addButtonProps} style={{ width: '100%' }}>{t('components.codeRuleComponentBuilder.action.add')}</Button>
       </Dropdown>
     </div>
   );

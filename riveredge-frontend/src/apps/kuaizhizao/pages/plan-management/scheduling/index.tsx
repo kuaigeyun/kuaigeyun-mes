@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography, Alert, InputNumber, Select, Input, Divider } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, InputNumber, Select, Input, Divider, Tour, Collapse } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -24,9 +24,14 @@ import {
   SchedulingObjective,
   SchedulingScenario,
 } from '../../../services/production';
+import { mesDashboardService } from '../../../services/dashboard';
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import type { ViewMode, WorkOrderForGantt, GanttTaskLevel } from '../../../components/GanttSchedulingChart/types';
 import dayjs from 'dayjs';
+import SchedulingHeaderBand from './components/SchedulingHeaderBand';
+import SchedulingDiagnosticsTabs from './components/SchedulingDiagnosticsTabs';
+import buildSchedulingGanttToolbar from './components/SchedulingGanttToolbar';
+import './delfoi-style.less';
 
 const GanttSchedulingChart = lazy(() => import('../../../components/GanttSchedulingChart'));
 
@@ -52,7 +57,22 @@ const DEFAULT_SCHEDULING_CONSTRAINTS = {
   consider_mold_tool: true,
   scheduling_window_days: 14,
   daily_capacity_hours: 24,
+  freeze_horizon_days: 2,
+  rolling_horizon_days: 14,
+  bottleneck_first: true,
+  bottleneck_work_center_ids: [] as number[],
+  consider_setup_family: true,
+  setup_changeover_hours: 1,
+  local_reschedule_hours: 72,
 } satisfies SchedulingConstraints;
+
+const SCHEDULING_OBJECTIVE_LABELS: Record<SchedulingObjective, string> = {
+  min_makespan: '最小完工时间',
+  min_total_time: '最小总时长',
+  min_setup_time: '最少换线时间',
+  min_tardiness: '最小延期',
+};
+const SCHEDULING_FULLSCREEN_TIP_SESSION_KEY = 'kuaizhizao.scheduling.fullscreen.tip.tour.v2.shown';
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -67,8 +87,9 @@ const SchedulingPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('week');
-  const [ganttTaskLevel, setGanttTaskLevel] = useState<GanttTaskLevel>('work_order');
+  const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('month');
+  const [ganttTaskLevel, setGanttTaskLevel] = useState<GanttTaskLevel>('operation');
+  const [fullscreenTourOpen, setFullscreenTourOpen] = useState(false);
   const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
   const [schedulingConstraints, setSchedulingConstraints] = useState(DEFAULT_SCHEDULING_CONSTRAINTS);
   const [configSaving, setConfigSaving] = useState(false);
@@ -80,6 +101,12 @@ const SchedulingPage: React.FC = () => {
   const [scenarios, setScenarios] = useState<SchedulingScenario[]>([]);
   const [activeScenarioId, setActiveScenarioId] = useState<number>();
   const [scenarioDraftName, setScenarioDraftName] = useState('');
+  const [bottleneckInput, setBottleneckInput] = useState('');
+  const [lastRunPayload, setLastRunPayload] = useState<{
+    statistics?: any;
+    unscheduled_orders?: Array<{ work_order_id: number; work_order_code: string; reason: string }>;
+    conflicts?: Array<{ type?: string; work_order_code?: string; message?: string }>;
+  } | null>(null);
 
   const selectedWorkOrderIds = useMemo(
     () => selectedRowKeys.map((k) => Number(k)).filter((n) => !Number.isNaN(n) && n > 0),
@@ -121,6 +148,29 @@ const SchedulingPage: React.FC = () => {
     }
   }, [filterWorkOrderIds]);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let attempts = 0;
+    try {
+      if (sessionStorage.getItem(SCHEDULING_FULLSCREEN_TIP_SESSION_KEY) === '1') return undefined;
+      timer = setInterval(() => {
+        attempts += 1;
+        const el = document.querySelector('.uni-tabs-fullscreen-button');
+        if (el) {
+          setFullscreenTourOpen(true);
+          if (timer) clearInterval(timer);
+        } else if (attempts >= 60 && timer) {
+          clearInterval(timer);
+        }
+      }, 200);
+    } catch {
+      // ignore storage failure
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
   // 加载默认排程配置（若有）
   useRequest(
     async () => {
@@ -128,6 +178,8 @@ const SchedulingPage: React.FC = () => {
       const config = res?.data;
       if (config?.constraints) {
         setSchedulingConstraints((prev) => ({ ...prev, ...config.constraints }));
+        const ids = config.constraints.bottleneck_work_center_ids || [];
+        setBottleneckInput(Array.isArray(ids) ? ids.join(',') : '');
       }
       return config;
     },
@@ -137,6 +189,10 @@ const SchedulingPage: React.FC = () => {
   const { data: scoreConfig } = useRequest(async () => workOrderApi.getScoreConfig(), {
     refreshDeps: [],
   });
+  const { data: planReliability, loading: planReliabilityLoading, run: refreshPlanReliability } = useRequest(
+    async () => mesDashboardService.getPlanReliability(),
+    { refreshDeps: [] }
+  );
 
   const dailyLoadPreview = useMemo(() => {
     const map = new Map<string, number>();
@@ -168,6 +224,66 @@ const SchedulingPage: React.FC = () => {
     return ids;
   }, [ganttWorkOrders]);
 
+  const topLegendMetrics = useMemo(() => {
+    const now = dayjs();
+    const freezeAnchor = dayjs().add(Number(schedulingConstraints.freeze_horizon_days || 0), 'day').endOf('day');
+    const manualFrozenCount = ganttWorkOrders.filter((wo) => Boolean(wo.is_frozen)).length;
+    const freezeWindowLockedCount = ganttWorkOrders.filter((wo) => {
+      if (wo.is_frozen || !wo.planned_start_date) return false;
+      return dayjs(wo.planned_start_date).isBefore(freezeAnchor) || dayjs(wo.planned_start_date).isSame(freezeAnchor);
+    }).length;
+    const totalLockedCount = manualFrozenCount + freezeWindowLockedCount;
+    const highRiskCount = ganttWorkOrders.filter((wo) => {
+      const overdue = wo.planned_end_date
+        ? dayjs(wo.planned_end_date).isBefore(now) && wo.status !== 'completed'
+        : false;
+      return overdue || wo.priority === 'urgent';
+    }).length;
+    const executableCount = Math.max(0, ganttWorkOrders.length - totalLockedCount);
+    const bottleneckCount = Array.isArray(lastRunPayload?.statistics?.bottleneck_work_centers)
+      ? lastRunPayload?.statistics?.bottleneck_work_centers?.length
+      : schedulingConstraints.bottleneck_work_center_ids.length;
+    const setupSwitchCount = Number(lastRunPayload?.statistics?.setup_changeover_count || 0);
+    return {
+      totalLockedCount,
+      manualFrozenCount,
+      freezeWindowLockedCount,
+      executableCount,
+      highRiskCount,
+      bottleneckCount,
+      setupSwitchCount,
+    };
+  }, [
+    ganttWorkOrders,
+    lastRunPayload?.statistics,
+    schedulingConstraints.bottleneck_work_center_ids,
+    schedulingConstraints.freeze_horizon_days,
+  ]);
+
+  const resourceViewStats = useMemo(() => {
+    const workCenterCount = new Set(ganttWorkOrders.map((wo) => wo.work_center_name).filter(Boolean)).size;
+    const equipmentSet = new Set<string>();
+    let taskCount = 0;
+    ganttWorkOrders.forEach((wo) => {
+      if (wo.assigned_equipment_name) equipmentSet.add(wo.assigned_equipment_name);
+      const ops = wo.operations || [];
+      if (ops.length > 0) {
+        taskCount += ops.length;
+        ops.forEach((op) => {
+          if (op.assigned_equipment_name) equipmentSet.add(op.assigned_equipment_name);
+        });
+      } else {
+        taskCount += 1;
+      }
+    });
+    return {
+      workCenterCount,
+      equipmentCount: equipmentSet.size,
+      taskCount,
+    };
+  }, [ganttWorkOrders]);
+
+
   const loadScenarios = useCallback(async () => {
     setScenarioLoading(true);
     try {
@@ -183,6 +299,75 @@ const SchedulingPage: React.FC = () => {
       setScenarioLoading(false);
     }
   }, [activeScenarioId, messageApi]);
+
+  const openScenarioModal = useCallback(async () => {
+    setScenarioModalOpen(true);
+    await loadScenarios();
+  }, [loadScenarios]);
+
+  const handleOptimize = useCallback(async () => {
+    try {
+      setOptimizing(true);
+      const objective = schedulingConstraints.optimize_objective || 'min_makespan';
+      const result = await advancedSchedulingApi.optimizeSchedule({
+        optimization_params: {
+          optimization_objective: objective,
+          max_iterations: 200,
+          convergence_threshold: 0.01,
+        },
+      });
+      messageApi.success(
+        `优化完成：迭代 ${result?.iterations ?? 0} 次，改进 ${(Number(result?.improvement || 0) * 100).toFixed(1)}%，冲突 ${result?.conflict_count ?? 0}，未排 ${result?.unscheduled_count ?? 0}`
+      );
+      setLastRunPayload((prev) => ({
+        statistics: {
+          ...(prev?.statistics || {}),
+          optimize_iterations: result?.iterations ?? 0,
+          optimize_improvement: result?.improvement ?? 0,
+          conflict_count: result?.conflict_count ?? 0,
+          unscheduled_count: result?.unscheduled_count ?? 0,
+        },
+        unscheduled_orders: prev?.unscheduled_orders || [],
+        conflicts: prev?.conflicts || [],
+      }));
+      actionRef.current?.reload();
+      refreshGantt();
+      refreshPlanReliability();
+    } catch (e: any) {
+      messageApi.error(e?.message || '优化排程失败');
+    } finally {
+      setOptimizing(false);
+    }
+  }, [messageApi, refreshGantt, refreshPlanReliability, schedulingConstraints.optimize_objective]);
+
+  const handleLocalReschedule = useCallback(async () => {
+    if (selectedWorkOrderIds.length === 0) {
+      messageApi.warning('请先选择需要局部重排的工单');
+      return;
+    }
+    try {
+      const result = await advancedSchedulingApi.recalculateImpacted({
+        trigger_type: 'manual',
+        work_order_ids: selectedWorkOrderIds,
+        lookahead_hours: schedulingConstraints.local_reschedule_hours || 72,
+        apply_results: true,
+      });
+      const stats = result?.result?.statistics || {};
+      messageApi.success(
+        `局部重排完成：影响 ${stats.impacted_count ?? result?.impacted_work_order_ids?.length ?? 0} 个工单，排产 ${stats.scheduled_count ?? 0}`
+      );
+      setLastRunPayload({
+        statistics: stats,
+        unscheduled_orders: result?.result?.unscheduled_orders || [],
+        conflicts: result?.result?.conflicts || [],
+      });
+      actionRef.current?.reload();
+      refreshGantt();
+      refreshPlanReliability();
+    } catch (e: any) {
+      messageApi.error(e?.message || '局部重排失败');
+    }
+  }, [messageApi, refreshGantt, refreshPlanReliability, schedulingConstraints.local_reschedule_hours, selectedWorkOrderIds]);
 
   /**
    * 处理智能排产
@@ -241,6 +426,11 @@ const SchedulingPage: React.FC = () => {
           ),
         });
       }
+      setLastRunPayload({
+        statistics: result.statistics,
+        unscheduled_orders: result.unscheduled_orders || [],
+        conflicts: result.conflicts || [],
+      });
 
       actionRef.current?.reload();
       refreshGantt();
@@ -251,9 +441,15 @@ const SchedulingPage: React.FC = () => {
 
   const handleGanttBatchUpdate = useCallback(
     async (updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>) => {
-      if (updates.length === 0) return;
+      const validUpdates = updates
+        .map((u) => ({
+          ...u,
+          work_order_id: Number((u as any).work_order_id),
+        }))
+        .filter((u) => Number.isInteger(u.work_order_id) && u.work_order_id > 0);
+      if (validUpdates.length === 0) return;
       try {
-        await workOrderApi.batchUpdateDates(updates);
+        await workOrderApi.batchUpdateDates(validUpdates);
         messageApi.success('排程已更新');
         actionRef.current?.reload();
         refreshGantt();
@@ -267,9 +463,15 @@ const SchedulingPage: React.FC = () => {
 
   const handleGanttBatchUpdateOperations = useCallback(
     async (updates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>) => {
-      if (updates.length === 0) return;
+      const validUpdates = updates
+        .map((u) => ({
+          ...u,
+          operation_id: Number((u as any).operation_id),
+        }))
+        .filter((u) => Number.isInteger(u.operation_id) && u.operation_id > 0);
+      if (validUpdates.length === 0) return;
       try {
-        await workOrderApi.batchUpdateOperationDates(updates);
+        await workOrderApi.batchUpdateOperationDates(validUpdates);
         messageApi.success('工序排程已更新');
         actionRef.current?.reload();
         refreshGantt();
@@ -381,8 +583,51 @@ const SchedulingPage: React.FC = () => {
     },
   ];
 
+  const ganttToolbarNodes = buildSchedulingGanttToolbar({
+    ganttTaskLevel,
+    ganttViewMode,
+    ganttWorkOrderCount: ganttWorkOrders.length,
+    resourceViewStats,
+    optimizing,
+    scenarioLoading,
+    onRefresh: refreshGantt,
+    onAutoSchedule: handleAutoSchedule,
+    onOptimize: handleOptimize,
+    onLocalReschedule: handleLocalReschedule,
+    onOpenScenario: openScenarioModal,
+    onTaskLevelChange: setGanttTaskLevel,
+    onViewModeChange: setGanttViewMode,
+  });
+
   return (
     <ListPageTemplate>
+      <Tour
+        open={fullscreenTourOpen}
+        onClose={() => {
+          setFullscreenTourOpen(false);
+          try {
+            sessionStorage.setItem(SCHEDULING_FULLSCREEN_TIP_SESSION_KEY, '1');
+          } catch {
+            // ignore storage failure
+          }
+        }}
+        placement="left"
+        steps={[
+          {
+            title: '建议全屏排程',
+            description: '点击这里进入全屏，可显著增加甘特图与调度操作空间。',
+            target: () => document.querySelector('.uni-tabs-fullscreen-button') as HTMLElement,
+          },
+        ]}
+      />
+      <SchedulingHeaderBand
+        constraints={schedulingConstraints}
+        selectedWorkOrderCount={selectedWorkOrderIds.length}
+        objectiveLabels={SCHEDULING_OBJECTIVE_LABELS}
+        legendMetrics={topLegendMetrics}
+        planReliabilityLoading={planReliabilityLoading}
+        planReliability={planReliability}
+      />
       {filterWorkOrderIds?.length ? (
         <Alert
           type="info"
@@ -397,223 +642,142 @@ const SchedulingPage: React.FC = () => {
           }
         />
       ) : null}
-      <UniTable
-        columnPersistenceId="apps.kuaizhizao.pages.plan-management.scheduling"
-        headerTitle="待排产工单"
-        actionRef={actionRef}
-        rowKey="id"
-        columns={columns}
-        showAdvancedSearch={true}
-        request={async (params: any) => {
-          const queryState = {
-            status: params.status,
-            code: params.code,
-            keyword: params.keyword,
-            workshop_id: params.workshop_id,
-            work_center_id: params.work_center_id,
-          };
-          setTableFilterState((prev) => {
-            const prevKey = JSON.stringify(prev);
-            const nextKey = JSON.stringify(queryState);
-            return prevKey === nextKey ? prev : queryState;
-          });
-          const res = await workOrderApi.list(
-            buildWorkOrderParams(queryState, {
-              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-              limit: params.pageSize ?? 20,
-            })
-          );
-          let data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
-          if (filterWorkOrderIds?.length) {
-            const idSet = new Set(filterWorkOrderIds);
-            data = data.filter((row: { id?: number }) => row.id != null && idSet.has(row.id));
-          }
-          const total = filterWorkOrderIds?.length
-            ? data.length
-            : (res?.total ?? (Array.isArray(data) ? data.length : 0));
-          return {
-            data: Array.isArray(data) ? data : [],
-            success: true,
-            total: typeof total === 'number' ? total : 0,
-          };
-        }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="auto-schedule"
-            type="primary"
-            icon={<ScheduleOutlined />}
-            onClick={handleAutoSchedule}
+      <div className="aps-main-layout">
+        <div className="aps-block aps-block-gantt">
+          <Card
+            style={{ marginTop: 16 }}
+            title={ganttToolbarNodes.title}
+            extra={ganttToolbarNodes.extra}
           >
-            智能排产
-          </Button>,
-          <Button
-            key="refresh-scores"
-            icon={<ReloadOutlined />}
-            onClick={async () => {
-              try {
-                await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
-                messageApi.success('权重分已触发重算');
-                actionRef.current?.reload();
-                refreshGantt();
-              } catch (e: any) {
-                messageApi.error(e?.message || '重算失败');
+            <Suspense
+              fallback={
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
+                  <Spin size="large" />
+                  <div style={{ color: 'var(--ant-color-primary)' }}>加载甘特图…</div>
+                </div>
               }
-            }}
-          >
-            重算权重分
-          </Button>,
-          <Button
-            key="config"
-            icon={<SettingOutlined />}
-            onClick={() => setConfigDrawerOpen(true)}
-          >
-            排程配置
-          </Button>,
-          <Button
-            key="scenario"
-            loading={scenarioLoading}
-            onClick={async () => {
-              setScenarioModalOpen(true);
-              await loadScenarios();
-            }}
-          >
-            场景沙盘
-          </Button>,
-          <Button
-            key="optimize"
-            loading={optimizing}
-            onClick={async () => {
-              try {
-                setOptimizing(true);
-                const objective = schedulingConstraints.optimize_objective || 'min_makespan';
-                const result = await advancedSchedulingApi.optimizeSchedule({
-                  optimization_params: {
-                    optimization_objective: objective,
-                    max_iterations: 200,
-                    convergence_threshold: 0.01,
-                  },
-                });
-                messageApi.success(
-                  `优化完成：迭代 ${result?.iterations ?? 0} 次，改进 ${(Number(result?.improvement || 0) * 100).toFixed(1)}%，冲突 ${result?.conflict_count ?? 0}，未排 ${result?.unscheduled_count ?? 0}`
-                );
-                actionRef.current?.reload();
-                refreshGantt();
-              } catch (e: any) {
-                messageApi.error(e?.message || '优化排程失败');
-              } finally {
-                setOptimizing(false);
-              }
-            }}
-          >
-            优化排产
-          </Button>,
-        ]}
-      />
-      {dailyLoadPreview.length > 0 && (
-        <Card size="small" style={{ marginTop: 16 }} title="近 7 日计划负荷（APS-Lite 只读预览）">
-          <Space orientation="vertical" style={{ width: '100%' }} size={8}>
-            {dailyLoadPreview.map((item) => (
-              <div key={item.day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Typography.Text style={{ width: 48 }}>{item.day}</Typography.Text>
-                <Progress
-                  percent={item.rate}
-                  size="small"
-                  style={{ flex: 1, margin: 0 }}
-                  status={item.rate >= 90 ? 'exception' : item.rate >= 70 ? 'active' : 'normal'}
-                />
-                <Typography.Text type="secondary" style={{ width: 72, textAlign: 'right' }}>
-                  {item.hours}h
-                </Typography.Text>
-              </div>
-            ))}
-          </Space>
-        </Card>
-      )}
-      <Card
-        style={{ marginTop: 16 }}
-        title={
-          <Space>
-            <ReloadOutlined onClick={refreshGantt} style={{ cursor: 'pointer' }} />
-            甘特图排产
-          </Space>
-        }
-        extra={
-          <Space>
-            <span>粒度：</span>
-            <Space.Compact>
-              <Button
-                type={ganttTaskLevel === 'work_order' ? 'primary' : 'default'}
-                size="small"
-                onClick={() => setGanttTaskLevel('work_order')}
-              >
-                工单
-              </Button>
-              <Button
-                type={ganttTaskLevel === 'operation' ? 'primary' : 'default'}
-                size="small"
-                onClick={() => setGanttTaskLevel('operation')}
-              >
-                工序
-              </Button>
-            </Space.Compact>
-            <span style={{ marginLeft: 8 }}>视图：</span>
-            <Space.Compact>
-              <Button
-                type={ganttViewMode === 'day' ? 'primary' : 'default'}
-                size="small"
-                onClick={() => setGanttViewMode('day')}
-              >
-                日
-              </Button>
-              <Button
-                type={ganttViewMode === 'week' ? 'primary' : 'default'}
-                size="small"
-                onClick={() => setGanttViewMode('week')}
-              >
-                周
-              </Button>
-              <Button
-                type={ganttViewMode === 'month' ? 'primary' : 'default'}
-                size="small"
-                onClick={() => setGanttViewMode('month')}
-              >
-                月
-              </Button>
-            </Space.Compact>
-          </Space>
-        }
-      >
-        <Suspense
-          fallback={
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
-              <Spin size="large" />
-              <div style={{ color: 'var(--ant-color-primary)' }}>加载甘特图…</div>
-            </div>
-          }
-        >
-          <GanttSchedulingChart
-            workOrders={ganttWorkOrders}
-            loading={ganttLoading}
-            viewMode={ganttViewMode}
-            taskLevel={ganttTaskLevel}
-            onViewModeChange={setGanttViewMode}
-            onBatchUpdate={handleGanttBatchUpdate}
-            onBatchUpdateOperations={handleGanttBatchUpdateOperations}
-            onRefresh={refreshGantt}
-            nonDraggableTaskIds={nonDraggableTaskIds}
-            onBlockedDragAttempt={(taskId) => {
-              const text = String(taskId);
-              if (text === lastBlockedTaskId) return;
-              setLastBlockedTaskId(text);
-              messageApi.warning('冻结工单禁止拖拽排程，请先解冻后调整');
-            }}
-          />
-        </Suspense>
-      </Card>
+            >
+              <GanttSchedulingChart
+                workOrders={ganttWorkOrders}
+                loading={ganttLoading}
+                viewMode={ganttViewMode}
+                taskLevel={ganttTaskLevel}
+                onViewModeChange={setGanttViewMode}
+                onBatchUpdate={handleGanttBatchUpdate}
+                onBatchUpdateOperations={handleGanttBatchUpdateOperations}
+                onRefresh={refreshGantt}
+                nonDraggableTaskIds={nonDraggableTaskIds}
+                onBlockedDragAttempt={(taskId) => {
+                  const text = String(taskId);
+                  if (text === lastBlockedTaskId) return;
+                  setLastBlockedTaskId(text);
+                  messageApi.warning('冻结工单禁止拖拽排程，请先解冻后调整');
+                }}
+              />
+            </Suspense>
+          </Card>
+        </div>
+        <div className="aps-block aps-block-support">
+          <Card size="small" style={{ marginTop: 12 }}>
+            <Collapse
+              ghost
+              className="aps-support-collapse"
+              defaultActiveKey={['diagnostics']}
+              items={[
+                {
+                  key: 'diagnostics',
+                  label: `排程诊断区（本次未排 ${lastRunPayload?.unscheduled_orders?.length || 0} / 冲突 ${lastRunPayload?.conflicts?.length || 0}）`,
+                  children: <SchedulingDiagnosticsTabs lastRunPayload={lastRunPayload} dailyLoadPreview={dailyLoadPreview} />,
+                },
+                {
+                  key: 'table',
+                  label: '工单工作池（筛选与批量操作）',
+                  children: (
+                    <UniTable
+                      columnPersistenceId="apps.kuaizhizao.pages.plan-management.scheduling"
+                      headerTitle="工单工作池"
+                      actionRef={actionRef}
+                      rowKey="id"
+                      columns={columns}
+                      showAdvancedSearch={true}
+                      request={async (params: any) => {
+                        const queryState = {
+                          status: params.status,
+                          code: params.code,
+                          keyword: params.keyword,
+                          workshop_id: params.workshop_id,
+                          work_center_id: params.work_center_id,
+                        };
+                        setTableFilterState((prev) => {
+                          const prevKey = JSON.stringify(prev);
+                          const nextKey = JSON.stringify(queryState);
+                          return prevKey === nextKey ? prev : queryState;
+                        });
+                        const res = await workOrderApi.list(
+                          buildWorkOrderParams(queryState, {
+                            skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+                            limit: params.pageSize ?? 20,
+                          })
+                        );
+                        let data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
+                        if (filterWorkOrderIds?.length) {
+                          const idSet = new Set(filterWorkOrderIds);
+                          data = data.filter((row: { id?: number }) => row.id != null && idSet.has(row.id));
+                        }
+                        const total = filterWorkOrderIds?.length
+                          ? data.length
+                          : (res?.total ?? (Array.isArray(data) ? data.length : 0));
+                        return {
+                          data: Array.isArray(data) ? data : [],
+                          success: true,
+                          total: typeof total === 'number' ? total : 0,
+                        };
+                      }}
+                      rowSelection={{
+                        selectedRowKeys,
+                        onChange: setSelectedRowKeys,
+                      }}
+                      toolBarRender={() => [
+                        <Button
+                          key="auto-schedule"
+                          type="primary"
+                          icon={<ScheduleOutlined />}
+                          onClick={handleAutoSchedule}
+                        >
+                          智能排产
+                        </Button>,
+                        <Button
+                          key="refresh-scores"
+                          icon={<ReloadOutlined />}
+                          onClick={async () => {
+                            try {
+                              await workOrderApi.batchRefreshScores({ scenarios: ['scheduling', 'picking'] });
+                              messageApi.success('权重分已触发重算');
+                              actionRef.current?.reload();
+                              refreshGantt();
+                            } catch (e: any) {
+                              messageApi.error(e?.message || '重算失败');
+                            }
+                          }}
+                        >
+                          重算权重分
+                        </Button>,
+                        <Button
+                          key="config"
+                          icon={<SettingOutlined />}
+                          onClick={() => setConfigDrawerOpen(true)}
+                        >
+                          排程配置
+                        </Button>,
+                      ]}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </div>
+      </div>
 
       <Modal
         title="场景沙盘"
@@ -748,7 +912,12 @@ const SchedulingPage: React.FC = () => {
         onCancel={() => setConfigDrawerOpen(false)}
         footer={
           <Space>
-            <Button onClick={() => setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS)}>
+            <Button
+              onClick={() => {
+                setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS);
+                setBottleneckInput('');
+              }}
+            >
               恢复默认
             </Button>
             <Button
@@ -825,6 +994,51 @@ const SchedulingPage: React.FC = () => {
                 }
               />
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>冻结窗口（天）</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={30}
+                value={schedulingConstraints.freeze_horizon_days}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    freeze_horizon_days: Number(v ?? DEFAULT_SCHEDULING_CONSTRAINTS.freeze_horizon_days),
+                  }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>滚动窗口（天）</span>
+              <InputNumber
+                size="small"
+                min={1}
+                max={120}
+                value={schedulingConstraints.rolling_horizon_days}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    rolling_horizon_days: Number(v || DEFAULT_SCHEDULING_CONSTRAINTS.rolling_horizon_days),
+                  }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>局部重排窗口（小时）</span>
+              <InputNumber
+                size="small"
+                min={1}
+                max={240}
+                value={schedulingConstraints.local_reschedule_hours}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    local_reschedule_hours: Number(v || DEFAULT_SCHEDULING_CONSTRAINTS.local_reschedule_hours),
+                  }))
+                }
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>人：考虑人员约束</span>
               <Switch
@@ -851,6 +1065,52 @@ const SchedulingPage: React.FC = () => {
               <Switch
                 checked={schedulingConstraints.consider_mold_tool}
                 onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_mold_tool: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>瓶颈优先排程</span>
+              <Switch
+                checked={schedulingConstraints.bottleneck_first}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, bottleneck_first: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>考虑换型族连续排产</span>
+              <Switch
+                checked={schedulingConstraints.consider_setup_family}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_setup_family: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>换型切换工时</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={12}
+                value={schedulingConstraints.setup_changeover_hours}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    setup_changeover_hours: Number(v ?? DEFAULT_SCHEDULING_CONSTRAINTS.setup_changeover_hours),
+                  }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span>瓶颈工作中心ID（逗号分隔，可空自动识别）</span>
+              <Input
+                size="small"
+                placeholder="如：101,102"
+                value={bottleneckInput}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setBottleneckInput(value);
+                  const ids = value
+                    .split(',')
+                    .map((s) => Number(s.trim()))
+                    .filter((n) => !Number.isNaN(n) && n > 0);
+                  setSchedulingConstraints((c) => ({ ...c, bottleneck_work_center_ids: ids }));
+                }}
               />
             </div>
           </Space>
