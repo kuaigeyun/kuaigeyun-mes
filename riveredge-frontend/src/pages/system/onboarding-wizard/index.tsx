@@ -556,8 +556,8 @@ const OnboardingWizardPage: React.FC = () => {
             { name: '厂区管理', description: '定义工厂的地理位置、厂区分布与基本信息', required: false, jump_path: '/apps/master-data/factory/plants', check_key: 'factory_plants' },
             { name: '车间管理', description: '划分工厂内部的生产车间，建立物理生产区域', required: true, jump_path: '/apps/master-data/factory/workshops', check_key: 'factory_workshops' },
             { name: '产线管理', description: '配置具体的生产线，支持多产线并行作业', required: true, jump_path: '/apps/master-data/factory/production-lines', check_key: 'factory_lines' },
-            { name: '工位管理', description: '定义产线上的最小作业单元（工位），实现精细化报工', required: true, jump_path: '/apps/master-data/factory/workstations', check_key: 'factory_stations' },
             { name: '工作中心', description: '聚合生产资源（人员/设备），作为排程与成本核算的核心单元', required: true, jump_path: '/apps/master-data/factory/work-centers', check_key: 'factory_work_centers' },
+            { name: '工位管理', description: '定义产线上的最小作业单元（工位），实现精细化报工', required: true, jump_path: '/apps/master-data/factory/workstations', check_key: 'factory_stations' },
             { name: '工作小组', description: '管理车间班组人员分配，支持计件工资与效率统计', required: true, jump_path: '/apps/master-data/factory/work-groups', check_key: 'factory_work_groups' },
           ]
         },

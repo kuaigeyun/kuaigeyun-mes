@@ -2,7 +2,8 @@
  * 统一菜单数据 Hook
  *
  * 平台级/系统级：使用原有 getMenuConfig 硬编号
- * 应用级 APP：数据库 getNavigationMenuTree() → 权限过滤 → 输出
+ * 应用级 APP：GET /core/menus/navigation-tree（顺序由后端 manifest 决定）→ 权限过滤 → 输出。
+ * 禁止在此对应用菜单按 sort_order 重排（见 .cursor/rules/no-fallback-patches.mdc）。
  *
  * 菜单显示层级（蓝图设置已下线）：
  * 1. 菜单管理：navigation-tree（任意登录用户可读），未入库或禁用则不返回（= 功能关闭）
@@ -39,15 +40,6 @@ function collectApplicationRoots(tree: MenuTree[]): MenuTree[] {
   return tree.filter(
     (m) => m.path?.startsWith('/apps/') || treeHasAppPath(m.children ?? []),
   );
-}
-
-function sortMenuTreeBySortOrder(nodes: MenuTree[]): MenuTree[] {
-  return [...nodes]
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((n) => ({
-      ...n,
-      children: n.children?.length ? sortMenuTreeBySortOrder(n.children) : [],
-    }));
 }
 
 /** 上线向导关闭时从侧栏/面包屑隐藏的菜单路径（与站点设置 enable_launch_wizard 联动） */
@@ -193,10 +185,7 @@ export function useUnifiedMenuData(
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
-    return collectApplicationRoots(tree).map((app) => ({
-      ...app,
-      children: app.children?.length ? sortMenuTreeBySortOrder(app.children) : [],
-    }));
+    return collectApplicationRoots(tree);
   }, [fullMenuTree]);
 
   // 蓝图下线后不再做业务配置过滤；菜单可见性完全由 is_active + 权限控制。

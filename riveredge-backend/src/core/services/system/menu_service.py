@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, TypedDict
 from tortoise.exceptions import IntegrityError
 import json
 import re
@@ -20,6 +20,13 @@ from core.services.application.application_service import ApplicationService
 from core.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
+
+
+class ManifestMenuSortIndex(TypedDict):
+    """manifest menu_config 排序索引：叶子用 path，分组用 title（与 core_menus.name 一致）。"""
+
+    by_path: Dict[str, int]
+    by_title: Dict[str, int]
 
 
 class MenuService:
@@ -152,25 +159,164 @@ class MenuService:
         return f"{tenant_id}:{key_type}"
     
     @staticmethod
-    def _sort_menu_tree_children_inplace(nodes: List[MenuTreeResponse]) -> None:
-        """
-        递归按 sort_order、创建时间、uuid 稳定排序每级 children。
+    def _build_manifest_menu_sort_index(menu_config: Any) -> ManifestMenuSortIndex:
+        """从 manifest menu_config 构建排序索引（应用菜单唯一数据源）。"""
+        by_path: Dict[str, int] = {}
+        by_title: Dict[str, int] = {}
 
-        构建树时子节点是按「全表 order_by(sort_order, created_at)」扫描顺序 append 到父节点上的，
-        同级兄弟的实际顺序不一定与各自的 sort_order 一致；须在此处统一为「同级按 sort_order」。
+        def walk(node: Dict[str, Any]) -> None:
+            title = node.get("title")
+            if title and str(title).strip():
+                so = node.get("sort_order", 0)
+                by_title[str(title).strip()] = int(so) if so is not None else 0
+            path = node.get("path")
+            if path and str(path).strip():
+                so = node.get("sort_order", 0)
+                by_path[str(path).strip()] = int(so) if so is not None else 0
+            for child in node.get("children") or []:
+                if isinstance(child, dict):
+                    walk(child)
+
+        if isinstance(menu_config, dict):
+            walk(menu_config)
+            for child in menu_config.get("children") or []:
+                if isinstance(child, dict):
+                    walk(child)
+        elif isinstance(menu_config, list):
+            for item in menu_config:
+                if isinstance(item, dict):
+                    walk(item)
+        return ManifestMenuSortIndex(by_path=by_path, by_title=by_title)
+
+    @staticmethod
+    def _resolve_manifest_sort_order(
+        *,
+        menu_path: Optional[str],
+        menu_name: Optional[str],
+        index: ManifestMenuSortIndex,
+        application_uuid: str,
+    ) -> int:
+        path = (menu_path or "").strip()
+        if path and path in index["by_path"]:
+            return index["by_path"][path]
+        name = (menu_name or "").strip()
+        if name and name in index["by_title"]:
+            return index["by_title"][name]
+        from loguru import logger
+
+        logger.error(
+            "应用菜单项未在 manifest 中配置排序 path={} name={} application_uuid={}",
+            path or None,
+            name or None,
+            application_uuid,
+        )
+        raise ValidationError(
+            f"菜单未在应用 manifest menu_config 中声明排序"
+            f"（path={path or '-'}, name={name or '-'}）"
+        )
+
+    @staticmethod
+    async def _load_manifest_sort_indexes_for_apps(
+        tenant_id: int,
+        application_uuids: set[str],
+    ) -> Dict[str, ManifestMenuSortIndex]:
+        """按应用 UUID 从磁盘 manifest.json 加载同级菜单排序索引。"""
+        indexes: Dict[str, ManifestMenuSortIndex] = {}
+        for app_uuid in application_uuids:
+            app = await ApplicationService.get_application_by_uuid_optional(tenant_id, app_uuid)
+            if not app:
+                continue
+            code = (app.get("code") or "").strip()
+            if not code:
+                continue
+            manifest = ApplicationService._get_manifest_by_code(code)
+            if not manifest:
+                continue
+            menu_config = manifest.get("menu_config")
+            if menu_config:
+                indexes[app_uuid] = MenuService._build_manifest_menu_sort_index(menu_config)
+        return indexes
+
+    @staticmethod
+    def _sort_menu_tree_children_inplace(
+        nodes: List[MenuTreeResponse],
+        app_manifest_sort_indexes: Optional[Dict[str, ManifestMenuSortIndex]] = None,
+    ) -> None:
         """
+        递归稳定排序每级 children。
+
+        - 应用菜单：只认 manifest（path 或 title/sort_order）；不读 core_menus.sort_order
+        - 系统菜单（无 application_uuid）：只认 core_menus.sort_order
+        """
+        from loguru import logger
+
+        indexes = app_manifest_sort_indexes or {}
+
         for node in nodes:
             ch = node.children
             if not ch:
                 continue
-            ch.sort(
-                key=lambda c: (
-                    int(c.sort_order) if c.sort_order is not None else 0,
-                    c.created_at.timestamp() if c.created_at is not None else 0.0,
-                    str(c.uuid),
+            app_uuid = None
+            for c in ch:
+                if c.application_uuid:
+                    app_uuid = str(c.application_uuid)
+                    break
+            if not app_uuid and node.application_uuid:
+                app_uuid = str(node.application_uuid)
+
+            if app_uuid:
+                manifest_idx = indexes.get(app_uuid)
+                if not manifest_idx:
+                    logger.error(
+                        "应用菜单排序失败：无法从 manifest 加载索引 application_uuid={}",
+                        app_uuid,
+                    )
+                    raise ValidationError(
+                        f"应用菜单排序配置缺失（application_uuid={app_uuid}），"
+                        "请确认 riveredge-backend/src/apps 下 manifest.json 已部署"
+                    )
+
+                def _app_menu_sort_key(item: MenuTreeResponse, _idx=manifest_idx, _au=app_uuid) -> tuple:
+                    order = MenuService._resolve_manifest_sort_order(
+                        menu_path=item.path,
+                        menu_name=item.name,
+                        index=_idx,
+                        application_uuid=_au,
+                    )
+                    return (order, str(item.uuid))
+
+                ch.sort(key=_app_menu_sort_key)
+            else:
+                ch.sort(
+                    key=lambda c: (
+                        int(c.sort_order) if c.sort_order is not None else 0,
+                        c.created_at.timestamp() if c.created_at is not None else 0.0,
+                        str(c.uuid),
+                    )
                 )
-            )
-            MenuService._sort_menu_tree_children_inplace(ch)
+            MenuService._sort_menu_tree_children_inplace(ch, app_manifest_sort_indexes)
+
+    @staticmethod
+    def _overlay_manifest_sort_order_on_tree(
+        nodes: List[MenuTreeResponse],
+        app_manifest_sort_indexes: Dict[str, ManifestMenuSortIndex],
+    ) -> None:
+        """将 manifest 排序写回响应 sort_order，避免前端再按库内旧值重排。"""
+        for node in nodes:
+            if node.application_uuid:
+                app_uuid = str(node.application_uuid)
+                idx = app_manifest_sort_indexes.get(app_uuid)
+                if idx:
+                    node.sort_order = MenuService._resolve_manifest_sort_order(
+                        menu_path=node.path,
+                        menu_name=node.name,
+                        index=idx,
+                        application_uuid=app_uuid,
+                    )
+            if node.children:
+                MenuService._overlay_manifest_sort_order_on_tree(
+                    node.children, app_manifest_sort_indexes
+                )
 
     @staticmethod
     async def _clear_menu_cache(tenant_id: int) -> None:
@@ -395,11 +541,11 @@ class MenuService:
             List[MenuTreeResponse]: 菜单树列表
         """
         # 生成缓存键（基于查询参数）
-        # v3：树返回前对每级 children 做 sort_order 稳定排序；改版本号使旧缓存失效，避免长期读到乱序 JSON
+        # v6：应用菜单按 manifest path+title 排序；改版本号使旧缓存失效
         suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
         cache_key_value = (
             f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
-            f"_i{is_active if is_active is not None else 'all'}_v3{suffix}"
+            f"_i{is_active if is_active is not None else 'all'}_v6{suffix}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
         
@@ -438,7 +584,25 @@ class MenuService:
                         cached_tree = filter_orphan(cached_tree)
                     except Exception:
                         pass
-                    MenuService._sort_menu_tree_children_inplace(cached_tree)
+                    cached_app_uuids: set[str] = set()
+
+                    def _collect_app_uuids(nodes: List[MenuTreeResponse]) -> None:
+                        for n in nodes:
+                            if n.application_uuid:
+                                cached_app_uuids.add(str(n.application_uuid))
+                            if n.children:
+                                _collect_app_uuids(n.children)
+
+                    _collect_app_uuids(cached_tree)
+                    manifest_sort_indexes = await MenuService._load_manifest_sort_indexes_for_apps(
+                        tenant_id, cached_app_uuids
+                    )
+                    MenuService._sort_menu_tree_children_inplace(
+                        cached_tree, manifest_sort_indexes
+                    )
+                    MenuService._overlay_manifest_sort_order_on_tree(
+                        cached_tree, manifest_sort_indexes
+                    )
                     return cached_tree
             except Exception:
                 # 缓存失败不影响主流程
@@ -527,7 +691,12 @@ class MenuService:
                     # 指定的父菜单，只返回该菜单及其子菜单
                     root_menus.append(menu_response)
 
-        MenuService._sort_menu_tree_children_inplace(root_menus)
+        app_uuids = {str(m.application_uuid) for m in all_menus if m.application_uuid}
+        manifest_sort_indexes = await MenuService._load_manifest_sort_indexes_for_apps(
+            tenant_id, app_uuids
+        )
+        MenuService._sort_menu_tree_children_inplace(root_menus, manifest_sort_indexes)
+        MenuService._overlay_manifest_sort_order_on_tree(root_menus, manifest_sort_indexes)
 
         # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
         # 使用 ApplicationService（raw SQL）避免 Tortoise 模型列与数据库不一致
@@ -991,9 +1160,7 @@ class MenuService:
                 menu_permission_code
                 or MenuService._infer_root_entry_permission(menu_path, parent_id)
             )
-            # 数据库为 IntField，仅支持整数；小数会被截断导致排序错乱，此处统一转为 int
-            _so = menu_item.get("sort_order", 0)
-            menu_sort_order = int(_so) if _so is not None else 0
+            # 应用菜单展示顺序以 manifest 为唯一数据源，不同步 sort_order 至 core_menus
             menu_is_external = menu_item.get("is_external", False)
             menu_external_url = menu_item.get("external_url")
             menu_meta = menu_item.get("meta")
@@ -1026,7 +1193,6 @@ class MenuService:
                 existing_menu.icon = menu_icon
                 existing_menu.component = menu_component
                 existing_menu.permission_code = menu_permission_code
-                existing_menu.sort_order = menu_sort_order
                 _resolved = resolve_sync_is_active_for_existing_row(
                     is_active, preserve_existing_is_active
                 )
@@ -1062,7 +1228,7 @@ class MenuService:
                     permission_code=menu_permission_code,
                     application_uuid=application_uuid,
                     parent_id=parent_id,
-                    sort_order=menu_sort_order,
+                    sort_order=0,
                     is_active=is_active,
                     is_external=menu_is_external,
                     external_url=menu_external_url,

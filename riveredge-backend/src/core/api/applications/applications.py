@@ -855,7 +855,7 @@ async def sync_application_manifest(
     """
     同步应用清单配置
 
-    从前端应用的manifest.json文件同步菜单配置到数据库。
+    从后端 src/apps/{app}/manifest.json 同步菜单配置到数据库（单一数据源）。
     解决应用菜单更新后需要重新安装的问题。
 
     Args:
