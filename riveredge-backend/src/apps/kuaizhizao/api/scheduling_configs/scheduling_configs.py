@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.scheduling_config import (
     SchedulingConfigResponse,
     SchedulingConfigListResponse,
 )
+from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/scheduling-configs", tags=["App · Kuaige Zhizao · Scheduling Configuration"])
@@ -109,6 +110,26 @@ async def get_default_scheduling_config(
     except Exception as e:
         logger.error(f"获取默认排程配置失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取默认排程配置失败")
+
+
+@router.put("/default", response_model=SchedulingConfigResponse, summary="Upsert default scheduling config")
+async def upsert_default_scheduling_config(
+    constraints: SchedulingConstraints,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建或更新默认排程配置（排程页快速保存）。"""
+    try:
+        return await config_service.upsert_default_config(
+            tenant_id=tenant_id,
+            constraints=constraints,
+            updated_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"保存默认排程配置失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="保存默认排程配置失败")
 
 
 @router.get("/{config_id}", response_model=SchedulingConfigResponse, summary="Get scheduling config")

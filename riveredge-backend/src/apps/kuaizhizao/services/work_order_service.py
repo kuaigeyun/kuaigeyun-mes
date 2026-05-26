@@ -1580,6 +1580,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     continue
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id)
                 if wo:
+                    if wo.is_frozen:
+                        logger.warning(f"工单 {wo.code} 已冻结，忽略日期批量更新")
+                        continue
                     wo.planned_start_date = start
                     wo.planned_end_date = end
                     wo.updated_by = updated_by
@@ -1619,11 +1622,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     continue
                 op = await WorkOrderOperation.get_or_none(tenant_id=tenant_id, id=op_id)
                 if op:
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
+                    if wo and wo.is_frozen:
+                        logger.warning(f"工单 {wo.code} 已冻结，忽略工序日期批量更新")
+                        continue
                     await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
                         planned_start_date=start,
                         planned_end_date=end,
                     )
-                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
                     if wo:
                         ops = await WorkOrderOperation.filter(
                             tenant_id=tenant_id,

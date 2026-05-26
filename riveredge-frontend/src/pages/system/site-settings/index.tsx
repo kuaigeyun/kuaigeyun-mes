@@ -432,7 +432,7 @@ const SiteSettingsPage: React.FC = () => {
           setLogoUrl(previewUrl);
         } catch (error) {
           // 如果获取预览URL失败，继续使用本地预览URL
-          console.error('获取LOGO预览URL失败:', error);
+          console.warn('Failed to get logo preview URL:', error);
         }
         
         // 更新LOGO文件列表
@@ -927,4 +927,3 @@ const SiteSettingsPage: React.FC = () => {
 };
 
 export default SiteSettingsPage;
-

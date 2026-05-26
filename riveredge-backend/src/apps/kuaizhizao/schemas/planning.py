@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 # 导入BaseSchema用于兼容性
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 
 
 # === 生产计划明细 ===
@@ -260,20 +261,6 @@ class LRPComputationResult(BaseSchema):
 
 # === 高级排产 ===
 
-class SchedulingConstraints(BaseSchema):
-    """排产约束条件"""
-    priority_weight: float = Field(0.3, ge=0, le=1, description="优先级权重（0-1）")
-    due_date_weight: float = Field(0.3, ge=0, le=1, description="交期权重（0-1）")
-    capacity_weight: float = Field(0.2, ge=0, le=1, description="产能权重（0-1）")
-    setup_time_weight: float = Field(0.2, ge=0, le=1, description="换线时间权重（0-1）")
-    optimize_objective: str = Field("min_makespan", description="优化目标（min_makespan/min_total_time/min_setup_time）")
-    # 4M 人机料法可配置开关
-    consider_human: bool = Field(True, description="是否考虑人员约束")
-    consider_equipment: bool = Field(True, description="是否考虑设备约束")
-    consider_material: bool = Field(True, description="是否考虑物料齐套")
-    consider_mold_tool: bool = Field(True, description="是否考虑模具/工装占用")
-
-
 class IntelligentSchedulingRequest(BaseSchema):
     """智能排产请求"""
     work_order_ids: Optional[List[int]] = Field(None, description="工单ID列表（可选，如果不提供则对所有待排产工单进行排产）")
@@ -330,3 +317,60 @@ class OptimizeScheduleResponse(BaseSchema):
     optimized: bool = Field(..., description="是否优化成功")
     improvement: float = Field(..., description="改进程度（百分比）")
     iterations: int = Field(..., description="迭代次数")
+    objective: Optional[str] = Field(None, description="优化目标")
+    before_metrics: Optional[Dict[str, Any]] = Field(None, description="优化前指标")
+    after_metrics: Optional[Dict[str, Any]] = Field(None, description="优化后指标")
+    conflict_count: int = Field(0, description="冲突数量")
+    unscheduled_count: int = Field(0, description="未排产数量")
+
+
+class SchedulingScenarioBase(BaseSchema):
+    """排程场景基础信息。"""
+    name: str = Field(..., max_length=120, description="场景名称")
+    description: Optional[str] = Field(None, description="场景说明")
+    work_order_ids: List[int] = Field(default_factory=list, description="场景工单范围")
+    constraints: SchedulingConstraints = Field(default_factory=SchedulingConstraints, description="场景约束")
+    objective: str = Field("min_makespan", description="优化目标")
+
+
+class SchedulingScenarioCreate(SchedulingScenarioBase):
+    """创建场景请求。"""
+    pass
+
+
+class SchedulingScenarioUpdate(BaseSchema):
+    """更新场景请求。"""
+    name: Optional[str] = Field(None, max_length=120, description="场景名称")
+    description: Optional[str] = Field(None, description="场景说明")
+    work_order_ids: Optional[List[int]] = Field(None, description="场景工单范围")
+    constraints: Optional[SchedulingConstraints] = Field(None, description="场景约束")
+    objective: Optional[str] = Field(None, description="优化目标")
+
+
+class SchedulingScenarioRunRequest(BaseSchema):
+    """运行场景请求。"""
+    constraints_override: Optional[SchedulingConstraints] = Field(None, description="临时覆盖约束")
+    apply_objective: Optional[str] = Field(None, description="临时覆盖优化目标")
+
+
+class SchedulingScenarioResponse(BaseSchema):
+    """排程场景响应。"""
+    id: int = Field(..., description="场景ID")
+    name: str = Field(..., description="场景名称")
+    description: Optional[str] = Field(None, description="场景说明")
+    status: str = Field(..., description="状态（draft/simulated/published）")
+    objective: str = Field(..., description="优化目标")
+    work_order_ids: List[int] = Field(default_factory=list, description="工单范围")
+    constraints: SchedulingConstraints = Field(..., description="场景约束")
+    metrics: Dict[str, Any] = Field(default_factory=dict, description="场景指标")
+    result_snapshot: Dict[str, Any] = Field(default_factory=dict, description="场景排程快照")
+    published_at: Optional[datetime] = Field(None, description="发布时间")
+    published_by: Optional[int] = Field(None, description="发布人")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class SchedulingScenarioListResponse(BaseSchema):
+    """场景列表响应。"""
+    data: List[SchedulingScenarioResponse] = Field(default_factory=list, description="场景列表")
+    total: int = Field(0, description="总数")

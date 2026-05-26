@@ -131,6 +131,7 @@ from .state_transition import StateTransitionRule, StateTransitionLog
 # 单据关联逻辑
 from .document_relation import DocumentRelation
 from .scheduling_config import SchedulingConfig
+from .scheduling_scenario import SchedulingScenario
 from .work_order_score import WorkOrderScore
 
 __all__ = [
@@ -269,5 +270,6 @@ __all__ = [
     # 单据关联
     'DocumentRelation',
     'SchedulingConfig',
+    'SchedulingScenario',
     'WorkOrderScore',
 ]

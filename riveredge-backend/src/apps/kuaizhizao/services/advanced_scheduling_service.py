@@ -1,35 +1,92 @@
 """
 高级排产服务模块
 
-提供智能排产算法和多约束优化功能。
-
-Author: Auto (AI Assistant)
-Date: 2026-01-27
+提供有限产能启发式排程与优化入口。
 """
 
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, date, timedelta
+from collections import defaultdict
 from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-from apps.kuaizhizao.models.equipment import Equipment
-from apps.master_data.models.factory import Workshop
+from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 from core.services.base import BaseService
-from infra.exceptions.exceptions import ValidationError, BusinessLogicError
+
+
+DEFAULT_CONSTRAINTS: Dict[str, Any] = SchedulingConstraints().model_dump()
 
 
 class AdvancedSchedulingService(BaseService):
-    """
-    高级排产服务类
-    
-    提供智能排产算法和多约束优化功能。
-    """
-    
+    """高级排产服务类（有限产能 MVP）。"""
+
     def __init__(self):
         super().__init__(WorkOrder)
-    
+
+    def _build_constraints(self, constraints: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        merged = dict(DEFAULT_CONSTRAINTS)
+        if constraints:
+            merged.update(constraints)
+        return SchedulingConstraints.model_validate(merged).model_dump()
+
+    @staticmethod
+    def _normalize_shift_start(dt: datetime) -> datetime:
+        return dt.replace(minute=0, second=0, microsecond=0)
+
+    @staticmethod
+    def _estimate_work_order_hours(work_order: WorkOrder, operations: List[WorkOrderOperation]) -> float:
+        quantity = float(work_order.quantity or 1)
+        op_hours = 0.0
+        for op in operations:
+            std = float(op.standard_time or 0)
+            setup = float(op.setup_time or 0)
+            if std > 0:
+                op_hours += std * max(quantity, 1.0)
+            op_hours += max(setup, 0.0)
+        if op_hours > 0:
+            return max(op_hours, 0.1)
+        if work_order.planned_start_date and work_order.planned_end_date:
+            delta_h = (work_order.planned_end_date - work_order.planned_start_date).total_seconds() / 3600.0
+            if delta_h > 0:
+                return delta_h
+        return max(quantity * 0.1, 0.1)
+
+    @staticmethod
+    def _add_work_hours(start_dt: datetime, duration_hours: float, daily_capacity_hours: float) -> datetime:
+        if daily_capacity_hours >= 24:
+            return start_dt + timedelta(hours=duration_hours)
+
+        day_start = start_dt.replace(hour=8, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(hours=daily_capacity_hours)
+        cur = start_dt
+        remaining = duration_hours
+
+        while remaining > 0:
+            if cur < day_start:
+                cur = day_start
+            if cur >= day_end:
+                day_start = (day_start + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+                day_end = day_start + timedelta(hours=daily_capacity_hours)
+                cur = day_start
+                continue
+            available_today = (day_end - cur).total_seconds() / 3600.0
+            consume = min(remaining, available_today)
+            cur = cur + timedelta(hours=consume)
+            remaining -= consume
+        return cur
+
+    @staticmethod
+    def _calc_total_tardiness_hours(rows: List[Dict[str, Any]]) -> float:
+        total = 0.0
+        for row in rows:
+            due = row.get("due_date")
+            end = row.get("planned_end_date")
+            if due and end and end > due:
+                total += (end - due).total_seconds() / 3600.0
+        return round(total, 3)
+
     async def intelligent_scheduling(
         self,
         tenant_id: int,
@@ -38,111 +95,59 @@ class AdvancedSchedulingService(BaseService):
         apply_results: bool = True,
         updated_by: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        智能排产算法
-        
-        根据多个约束条件（优先级、交期、工作中心能力、设备可用性等）进行智能排产。
-        
-        Args:
-            tenant_id: 组织ID
-            work_order_ids: 工单ID列表（可选，如果不提供则对所有待排产工单进行排产）
-            constraints: 约束条件字典
-                - priority_weight: 优先级权重（0-1）
-                - due_date_weight: 交期权重（0-1）
-                - capacity_weight: 产能权重（0-1）
-                - setup_time_weight: 换线时间权重（0-1）
-                - optimize_objective: 优化目标（min_makespan/min_total_time/min_setup_time）
-        
-        Returns:
-            Dict[str, Any]: 排产结果
-                - scheduled_orders: 已排产的工单列表
-                - unscheduled_orders: 无法排产的工单列表
-                - conflicts: 冲突列表
-                - statistics: 统计信息
-        """
-        # 获取待排产工单
-        # 待排产工单：草稿、已下达（与工单模型 status 一致）
-        status_filter = ['draft', 'released']
+        """智能排产（有限产能 MVP）。"""
+        status_filter = ["draft", "released"]
+        query = WorkOrder.filter(tenant_id=tenant_id, status__in=status_filter, deleted_at__isnull=True)
         if work_order_ids:
-            work_orders = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                id__in=work_order_ids,
-                status__in=status_filter
-            ).all()
-        else:
-            work_orders = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                status__in=status_filter
-            ).all()
-        
+            query = query.filter(id__in=work_order_ids)
+        work_orders = await query.all()
         if not work_orders:
             return {
                 "scheduled_orders": [],
                 "unscheduled_orders": [],
                 "conflicts": [],
-                "statistics": {}
+                "statistics": {
+                    "total_orders": 0,
+                    "scheduled_count": 0,
+                    "unscheduled_count": 0,
+                    "scheduling_rate": 0.0,
+                },
             }
-        
-        # 默认约束条件（含 4M 人机料法开关）
-        default_constraints = {
-            "priority_weight": 0.3,
-            "due_date_weight": 0.3,
-            "capacity_weight": 0.2,
-            "setup_time_weight": 0.2,
-            "optimize_objective": "min_makespan",
-            "consider_human": True,
-            "consider_equipment": True,
-            "consider_material": True,
-            "consider_mold_tool": True,
-        }
-        
-        if constraints:
-            default_constraints.update(constraints)
-        
-        # 执行智能排产算法
-        result = await self._execute_scheduling_algorithm(
-            tenant_id,
-            work_orders,
-            default_constraints
+
+        normalized_constraints = self._build_constraints(constraints)
+        wo_ids = [wo.id for wo in work_orders]
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).order_by("work_order_id", "sequence").all()
+        ops_by_wo: Dict[int, List[WorkOrderOperation]] = defaultdict(list)
+        for op in ops:
+            ops_by_wo[int(op.work_order_id)].append(op)
+
+        result = await self._execute_finite_capacity_scheduling(
+            tenant_id=tenant_id,
+            work_orders=work_orders,
+            operations_by_work_order=ops_by_wo,
+            constraints=normalized_constraints,
         )
-        
-        # 根据 4M 开关决定是否检测模具/工装占用冲突
-        if default_constraints.get("consider_mold_tool", True):
-            mold_tool_conflicts = await self._check_mold_tool_conflicts(tenant_id)
-            result["conflicts"] = result.get("conflicts", []) + mold_tool_conflicts
-        
-        # 若需应用结果，将排产日期写入工单
+
         if apply_results and result.get("scheduled_orders") and updated_by:
             await self.apply_scheduling_results(
                 tenant_id=tenant_id,
                 results=result["scheduled_orders"],
                 updated_by=updated_by,
             )
-        
         return result
-    
-    async def _execute_scheduling_algorithm(
+
+    async def _execute_finite_capacity_scheduling(
         self,
         tenant_id: int,
         work_orders: List[WorkOrder],
-        constraints: Dict[str, Any]
+        operations_by_work_order: Dict[int, List[WorkOrderOperation]],
+        constraints: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        执行排产算法
-        
-        使用启发式算法（如遗传算法、模拟退火等）进行排产优化。
-        """
-        # TODO: 实现具体的排产算法
-        # 简单算法：基于优先级的贪心排产 + 车间日产能负荷约束
-        
-        scheduled_orders = []
-        unscheduled_orders = []
-        conflicts = []
-        
-        # 维护一个简单的日产能负荷表: {(workshop_id, date): current_hours}
-        daily_load = {}
-        
-        # 按综合分排序（统一 WorkOrderScoreService）
+        """有限产能启发式排程：工作中心 + 设备 + 模具/工装 + 冻结语义。"""
         from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 
         score_service = WorkOrderScoreService()
@@ -154,79 +159,160 @@ class AdvancedSchedulingService(BaseService):
             include_kitting=False,
         )
 
-        def _sort_key(wo: WorkOrder) -> tuple:
-            frozen_boost = 1 if getattr(wo, "is_frozen", False) else 0
-            score = score_map.get(wo.id)
-            if score is not None:
-                return (frozen_boost, score)
-            return (frozen_boost, self._get_priority_score(wo, constraints))
+        objective = constraints.get("optimize_objective", "min_makespan")
+        horizon_days = int(constraints.get("scheduling_window_days", 14))
+        daily_capacity_hours = float(constraints.get("daily_capacity_hours", 24.0))
 
-        sorted_orders = sorted(work_orders, key=_sort_key, reverse=True)
-        
-        # 模拟排产过程（冻结单保持原计划，不参与自动挪期）
+        def _sort_tuple(wo: WorkOrder) -> Tuple:
+            if wo.is_frozen:
+                return (0, wo.planned_start_date or datetime.min, 0.0)
+            score = float(score_map.get(wo.id) or self._get_priority_score(wo, constraints))
+            due = wo.planned_end_date or datetime.max
+            if objective == "min_tardiness":
+                return (1, due, -score)
+            return (1, -score, due)
+
+        sorted_orders = sorted(work_orders, key=_sort_tuple)
+        resource_next_available: Dict[str, datetime] = {}
+        work_center_daily_usage: Dict[Tuple[int, date], float] = defaultdict(float)
+        scheduled_orders: List[Dict[str, Any]] = []
+        unscheduled_orders: List[Dict[str, Any]] = []
+        conflicts: List[Dict[str, Any]] = []
+
+        now_anchor = self._normalize_shift_start(datetime.now())
+
         for work_order in sorted_orders:
-            if getattr(work_order, "is_frozen", False):
-                if work_order.planned_start_date:
-                    scheduled_orders.append({
+            operations = operations_by_work_order.get(int(work_order.id), [])
+            estimated_hours = self._estimate_work_order_hours(work_order, operations)
+            due_date = work_order.planned_end_date
+            base_start = self._normalize_shift_start(work_order.planned_start_date or now_anchor)
+
+            if work_order.is_frozen:
+                if not (work_order.planned_start_date and work_order.planned_end_date):
+                    unscheduled_orders.append(
+                        {
+                            "work_order_id": work_order.id,
+                            "work_order_code": work_order.code,
+                            "reason": "冻结工单缺少计划起止时间，无法参与排程",
+                        }
+                    )
+                    continue
+                scheduled_orders.append(
+                    {
                         "work_order_id": work_order.id,
                         "work_order_code": work_order.code,
-                        "original_date": work_order.planned_start_date.date(),
+                        "planned_start_date": work_order.planned_start_date,
+                        "planned_end_date": work_order.planned_end_date,
                         "scheduled_date": work_order.planned_start_date.date(),
                         "delay_days": 0,
-                        "estimated_hours": 0,
+                        "estimated_hours": estimated_hours,
+                        "due_date": due_date,
                         "frozen": True,
-                    })
+                    }
+                )
                 continue
-            try:
-                # 获取计划日期，若无则默认今天
-                current_date = (work_order.planned_start_date or datetime.now()).date()
-                workshop_id = work_order.workshop_id or 0
-                
-                # 预估工单耗时（优先计划区间，否则简化占位）
-                if work_order.planned_start_date and work_order.planned_end_date:
-                    delta_h = (
-                        work_order.planned_end_date - work_order.planned_start_date
-                    ).total_seconds() / 3600.0
-                    estimated_hours = max(delta_h, 0.1)
-                else:
-                    estimated_hours = float(work_order.quantity or 1) * 0.1
-                capacity_limit = 24.0 # 默认每日 24h
-                
-                # 寻找可用日期 (最多向后搜索 14 天)
-                found_date = None
-                for i in range(14):
-                    check_date = current_date + timedelta(days=i)
-                    load = daily_load.get((workshop_id, check_date), 0.0)
-                    if load + estimated_hours <= capacity_limit:
-                        found_date = check_date
+
+            work_center_id = int(work_order.work_center_id or work_order.workshop_id or 0)
+            resource_keys = [f"wc:{work_center_id}"]
+            if constraints.get("consider_equipment", True):
+                for op in operations:
+                    if op.assigned_equipment_id:
+                        resource_keys.append(f"eq:{int(op.assigned_equipment_id)}")
                         break
-                
-                if found_date:
-                    # 分配产能
-                    daily_load[(workshop_id, found_date)] = daily_load.get((workshop_id, found_date), 0.0) + estimated_hours
-                    
-                    scheduled_orders.append({
+            if constraints.get("consider_human", True):
+                for op in operations:
+                    if op.assigned_worker_id:
+                        resource_keys.append(f"hr:{int(op.assigned_worker_id)}")
+                        break
+            if constraints.get("consider_mold_tool", True):
+                for op in operations:
+                    if op.assigned_mold_id:
+                        resource_keys.append(f"mold:{int(op.assigned_mold_id)}")
+                    if op.assigned_tool_id:
+                        resource_keys.append(f"tool:{int(op.assigned_tool_id)}")
+            resource_keys = sorted(set(resource_keys))
+
+            candidate_start = base_start
+            window_end = base_start + timedelta(days=horizon_days)
+            placed = False
+            while candidate_start <= window_end:
+                max_resource_start = max([candidate_start] + [resource_next_available.get(k, candidate_start) for k in resource_keys])
+                slot_start = self._normalize_shift_start(max_resource_start)
+                slot_end = self._add_work_hours(slot_start, estimated_hours, daily_capacity_hours)
+
+                # 工作中心日负荷约束（24h 时等价无限，不额外限制）
+                if daily_capacity_hours < 24:
+                    day_cursor = slot_start
+                    overflow = False
+                    while day_cursor < slot_end:
+                        day = day_cursor.date()
+                        day_start = day_cursor.replace(hour=8, minute=0, second=0, microsecond=0)
+                        day_end = day_start + timedelta(hours=daily_capacity_hours)
+                        segment_end = min(slot_end, day_end)
+                        segment_hours = max((segment_end - day_cursor).total_seconds() / 3600.0, 0.0)
+                        used = work_center_daily_usage[(work_center_id, day)]
+                        if used + segment_hours > daily_capacity_hours + 1e-6:
+                            overflow = True
+                            break
+                        day_cursor = segment_end
+                        if day_cursor >= day_end:
+                            day_cursor = (day_start + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+                    if overflow:
+                        candidate_start = slot_start + timedelta(hours=1)
+                        continue
+
+                # 命中可用槽位
+                for key in resource_keys:
+                    resource_next_available[key] = slot_end
+                if daily_capacity_hours < 24:
+                    day_cursor = slot_start
+                    while day_cursor < slot_end:
+                        day = day_cursor.date()
+                        day_start = day_cursor.replace(hour=8, minute=0, second=0, microsecond=0)
+                        day_end = day_start + timedelta(hours=daily_capacity_hours)
+                        segment_end = min(slot_end, day_end)
+                        segment_hours = max((segment_end - day_cursor).total_seconds() / 3600.0, 0.0)
+                        work_center_daily_usage[(work_center_id, day)] += segment_hours
+                        day_cursor = segment_end
+                        if day_cursor >= day_end:
+                            day_cursor = (day_start + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+
+                delay_days = max((slot_start.date() - base_start.date()).days, 0)
+                scheduled_orders.append(
+                    {
                         "work_order_id": work_order.id,
                         "work_order_code": work_order.code,
-                        "original_date": current_date,
-                        "scheduled_date": found_date,
-                        "delay_days": (found_date - current_date).days,
-                        "estimated_hours": estimated_hours
-                    })
-                else:
-                    unscheduled_orders.append({
+                        "planned_start_date": slot_start,
+                        "planned_end_date": slot_end,
+                        "scheduled_date": slot_start.date(),
+                        "delay_days": delay_days,
+                        "estimated_hours": estimated_hours,
+                        "due_date": due_date,
+                    }
+                )
+                placed = True
+                break
+
+            if not placed:
+                reason = f"排程窗口 {horizon_days} 天内无可用产能或关键资源"
+                unscheduled_orders.append(
+                    {
                         "work_order_id": work_order.id,
                         "work_order_code": work_order.code,
-                        "reason": "未来 14 天内均无足够车间产能"
-                    })
-            except Exception as e:
-                logger.error(f"排产工单 {work_order.code} 失败: {e}")
-                unscheduled_orders.append({
-                    "work_order_id": work_order.id,
-                    "work_order_code": work_order.code,
-                    "reason": f"系统错误: {str(e)}"
-                })
-        
+                        "reason": reason,
+                    }
+                )
+                conflicts.append(
+                    {
+                        "type": "capacity_window_exhausted",
+                        "work_order_id": work_order.id,
+                        "work_order_code": work_order.code,
+                        "work_center_id": work_center_id,
+                        "resource_keys": resource_keys,
+                        "message": reason,
+                    }
+                )
+
         return {
             "scheduled_orders": scheduled_orders,
             "unscheduled_orders": unscheduled_orders,
@@ -235,10 +321,10 @@ class AdvancedSchedulingService(BaseService):
                 "total_orders": len(work_orders),
                 "scheduled_count": len(scheduled_orders),
                 "unscheduled_count": len(unscheduled_orders),
-                "scheduling_rate": len(scheduled_orders) / len(work_orders) if work_orders else 0
-            }
+                "scheduling_rate": len(scheduled_orders) / len(work_orders) if work_orders else 0.0,
+            },
         }
-    
+
     async def _check_mold_tool_conflicts(self, tenant_id: int) -> List[Dict[str, Any]]:
         """
         检测模具/工装占用冲突
@@ -324,16 +410,6 @@ class AdvancedSchedulingService(BaseService):
         
         return score
     
-    async def _check_capacity(
-        self,
-        tenant_id: int,
-        work_order: WorkOrder
-    ) -> bool:
-        """检查工作中心能力"""
-        # TODO: 实现工作中心能力检查
-        # 这里先返回True，表示能力充足
-        return True
-    
     async def apply_scheduling_results(
         self,
         tenant_id: int,
@@ -355,14 +431,25 @@ class AdvancedSchedulingService(BaseService):
             for res in results:
                 wo_id = res.get("work_order_id")
                 scheduled_date = res.get("scheduled_date")
+                planned_start_date = res.get("planned_start_date")
+                planned_end_date = res.get("planned_end_date")
 
-                if not wo_id or not scheduled_date:
+                if not wo_id:
                     continue
 
                 wo = await WorkOrder.get_or_none(id=wo_id, tenant_id=tenant_id)
                 if wo:
-                    dt_start = datetime.combine(scheduled_date, datetime.min.time().replace(hour=8))
+                    dt_start = planned_start_date
+                    dt_end = planned_end_date
+                    if not dt_start and scheduled_date:
+                        dt_start = datetime.combine(scheduled_date, datetime.min.time().replace(hour=8))
+                    if not dt_end and scheduled_date:
+                        dt_end = datetime.combine(scheduled_date, datetime.min.time().replace(hour=17))
+                    if not dt_start:
+                        continue
                     wo.planned_start_date = dt_start
+                    if dt_end:
+                        wo.planned_end_date = dt_end
                     wo.updated_by = updated_by
                     await wo.save()
                     updated_ids.append(wo_id)
@@ -382,7 +469,7 @@ class AdvancedSchedulingService(BaseService):
                         )
                     else:
                         await WorkOrder.filter(tenant_id=tenant_id, id=wo_id).update(
-                            planned_end_date=datetime.combine(scheduled_date, datetime.min.time().replace(hour=17)),
+                            planned_end_date=dt_end or datetime.combine(scheduled_date, datetime.min.time().replace(hour=17)),
                         )
 
         for wo_id in updated_ids:
@@ -393,14 +480,87 @@ class AdvancedSchedulingService(BaseService):
         self,
         tenant_id: int,
         schedule_id: Optional[int] = None,
-        optimization_params: Optional[Dict[str, Any]] = None
+        optimization_params: Optional[Dict[str, Any]] = None,
+        updated_by: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         优化排产计划
         """
-        # TODO: 实现更复杂的排产优化算法
+        params = optimization_params or {}
+        objective = params.get("optimization_objective") or "min_makespan"
+        max_iterations = int(params.get("max_iterations") or 100)
+
+        from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
+
+        default_cfg = await SchedulingConfigService().get_default_config(tenant_id)
+        merged_constraints = self._build_constraints(default_cfg.constraints if default_cfg else None)
+        merged_constraints["optimize_objective"] = objective
+        merged_constraints["scheduling_window_days"] = min(90, max(7, int(max_iterations / 10)))
+
+        status_filter = ["draft", "released"]
+        before_work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=status_filter,
+            deleted_at__isnull=True,
+        ).all()
+        before_rows: List[Dict[str, Any]] = []
+        for wo in before_work_orders:
+            before_rows.append(
+                {
+                    "work_order_id": wo.id,
+                    "planned_start_date": wo.planned_start_date,
+                    "planned_end_date": wo.planned_end_date,
+                    "due_date": wo.planned_end_date,
+                }
+            )
+
+        before_completion = max(
+            [r["planned_end_date"] for r in before_rows if r.get("planned_end_date")],
+            default=None,
+        )
+        before_tardiness = self._calc_total_tardiness_hours(before_rows)
+
+        result = await self.intelligent_scheduling(
+            tenant_id=tenant_id,
+            constraints=merged_constraints,
+            apply_results=True,
+            updated_by=updated_by,
+        )
+        scheduled_rows = result.get("scheduled_orders", [])
+        after_completion = max(
+            [r.get("planned_end_date") for r in scheduled_rows if r.get("planned_end_date")],
+            default=None,
+        )
+        after_tardiness = self._calc_total_tardiness_hours(scheduled_rows)
+
+        if objective == "min_tardiness":
+            base = before_tardiness or 1.0
+            improvement = max((before_tardiness - after_tardiness) / base, 0.0)
+        else:
+            before_span = (
+                (before_completion - min([r["planned_start_date"] for r in before_rows if r.get("planned_start_date")])).total_seconds()
+                / 3600.0
+            ) if before_completion and any(r.get("planned_start_date") for r in before_rows) else 0.0
+            after_span = (
+                (after_completion - min([r["planned_start_date"] for r in scheduled_rows if r.get("planned_start_date")])).total_seconds()
+                / 3600.0
+            ) if after_completion and any(r.get("planned_start_date") for r in scheduled_rows) else 0.0
+            base = before_span or 1.0
+            improvement = max((before_span - after_span) / base, 0.0)
+
         return {
             "optimized": True,
-            "improvement": 0.0,
-            "iterations": 0
+            "improvement": round(float(improvement), 6),
+            "iterations": max_iterations,
+            "objective": objective,
+            "before_metrics": {
+                "total_tardiness_hours": before_tardiness,
+                "completion_time": before_completion.isoformat() if before_completion else None,
+            },
+            "after_metrics": {
+                "total_tardiness_hours": after_tardiness,
+                "completion_time": after_completion.isoformat() if after_completion else None,
+            },
+            "conflict_count": len(result.get("conflicts") or []),
+            "unscheduled_count": len(result.get("unscheduled_orders") or []),
         }

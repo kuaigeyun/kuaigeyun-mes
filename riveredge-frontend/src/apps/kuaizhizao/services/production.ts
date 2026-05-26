@@ -11,6 +11,42 @@ export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi } from './quality-execution';
 export { planningApi } from './planning';
 
+export type SchedulingObjective =
+  | 'min_makespan'
+  | 'min_total_time'
+  | 'min_setup_time'
+  | 'min_tardiness';
+
+export interface SchedulingConstraints {
+  priority_weight: number;
+  due_date_weight: number;
+  capacity_weight: number;
+  setup_time_weight: number;
+  optimize_objective: SchedulingObjective;
+  consider_human: boolean;
+  consider_equipment: boolean;
+  consider_material: boolean;
+  consider_mold_tool: boolean;
+  scheduling_window_days?: number;
+  daily_capacity_hours?: number;
+}
+
+export interface SchedulingScenario {
+  id: number;
+  name: string;
+  description?: string;
+  status: 'draft' | 'simulated' | 'published' | string;
+  objective: SchedulingObjective | string;
+  work_order_ids: number[];
+  constraints: SchedulingConstraints;
+  metrics: Record<string, any>;
+  result_snapshot: Record<string, any>;
+  published_at?: string | null;
+  published_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 
 // 生产控制台（控制塔）相关接口
 export const productionControlApi = {
@@ -376,6 +412,9 @@ export const schedulingConfigApi = {
   getDefault: async () => {
     return apiRequest('/apps/kuaizhizao/scheduling-configs/default', { method: 'GET' });
   },
+  upsertDefault: async (constraints: SchedulingConstraints) => {
+    return apiRequest('/apps/kuaizhizao/scheduling-configs/default', { method: 'PUT', data: constraints });
+  },
   get: async (id: number) => {
     return apiRequest(`/apps/kuaizhizao/scheduling-configs/${id}`, { method: 'GET' });
   },
@@ -395,17 +434,7 @@ export const advancedSchedulingApi = {
   // 智能排产
   intelligentScheduling: async (data: {
     work_order_ids?: number[];
-    constraints?: {
-      priority_weight?: number;
-      due_date_weight?: number;
-      capacity_weight?: number;
-      setup_time_weight?: number;
-      optimize_objective?: 'min_makespan' | 'min_total_time' | 'min_setup_time';
-      consider_human?: boolean;
-      consider_equipment?: boolean;
-      consider_material?: boolean;
-      consider_mold_tool?: boolean;
-    };
+    constraints?: Partial<SchedulingConstraints>;
   }) => {
     return apiRequest('/apps/kuaizhizao/scheduling/intelligent', { method: 'POST', data });
   },
@@ -416,9 +445,48 @@ export const advancedSchedulingApi = {
     optimization_params?: {
       max_iterations?: number;
       convergence_threshold?: number;
-      optimization_objective?: string;
+      optimization_objective?: SchedulingObjective;
     };
   }) => {
     return apiRequest('/apps/kuaizhizao/scheduling/optimize', { method: 'POST', data });
+  },
+};
+
+export const schedulingScenarioApi = {
+  list: async (params?: { skip?: number; limit?: number; status?: string }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling/scenarios', { method: 'GET', params });
+  },
+  create: async (data: {
+    name: string;
+    description?: string;
+    work_order_ids: number[];
+    constraints: SchedulingConstraints;
+    objective: SchedulingObjective | string;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling/scenarios', { method: 'POST', data });
+  },
+  update: async (
+    id: number,
+    data: Partial<{
+      name: string;
+      description?: string;
+      work_order_ids: number[];
+      constraints: SchedulingConstraints;
+      objective: SchedulingObjective | string;
+    }>
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}`, { method: 'PUT', data });
+  },
+  run: async (
+    id: number,
+    data?: Partial<{
+      constraints_override: SchedulingConstraints;
+      apply_objective: SchedulingObjective | string;
+    }>
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}/run`, { method: 'POST', data: data || {} });
+  },
+  publish: async (id: number) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}/publish`, { method: 'POST' });
   },
 };

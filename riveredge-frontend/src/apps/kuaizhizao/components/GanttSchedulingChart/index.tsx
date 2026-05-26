@@ -52,6 +52,8 @@ export interface GanttSchedulingChartProps {
   onBatchUpdate?: (updates: GanttDateUpdate[]) => void | Promise<void>;
   onBatchUpdateOperations?: (updates: GanttOperationDateUpdate[]) => void | Promise<void>;
   onRefresh?: () => void;
+  nonDraggableTaskIds?: Array<number | string>;
+  onBlockedDragAttempt?: (taskId: number | string) => void;
 }
 
 const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
@@ -61,6 +63,8 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   taskLevel = 'work_order',
   onBatchUpdate,
   onBatchUpdateOperations,
+  nonDraggableTaskIds = [],
+  onBlockedDragAttempt,
 }) => {
   // 首次渲染时按需注入 wx-icons.css，减少未使用页面/登录页的外链开销
   useEffect(() => {
@@ -69,6 +73,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
 
   const pendingUpdatesRef = useRef<Map<number | string, { start: Date; end: Date }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lockedTaskIds = useMemo(() => new Set(nonDraggableTaskIds.map((id) => String(id))), [nonDraggableTaskIds]);
 
   const tasks = useMemo(() => {
     return workOrdersToGanttTasks(workOrders, taskLevel);
@@ -102,6 +107,10 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       const id = ev.id;
       const { start: newStart, end: newEnd } = ev.task;
       if (!newStart || !newEnd) return;
+      if (lockedTaskIds.has(String(id))) {
+        onBlockedDragAttempt?.(id);
+        return;
+      }
 
       pendingUpdatesRef.current.set(id, { start: newStart, end: newEnd });
 
@@ -137,7 +146,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         }
       }, 400);
     },
-    [onBatchUpdate, onBatchUpdateOperations]
+    [lockedTaskIds, onBatchUpdate, onBatchUpdateOperations, onBlockedDragAttempt]
   );
 
   if (loading) {

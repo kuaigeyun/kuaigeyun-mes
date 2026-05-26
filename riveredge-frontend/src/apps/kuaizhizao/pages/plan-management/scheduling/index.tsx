@@ -9,13 +9,21 @@
 
 import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography, Alert } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Progress, Typography, Alert, InputNumber, Select, Input, Divider } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
+import {
+  workOrderApi,
+  advancedSchedulingApi,
+  schedulingConfigApi,
+  schedulingScenarioApi,
+  SchedulingConstraints,
+  SchedulingObjective,
+  SchedulingScenario,
+} from '../../../services/production';
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import type { ViewMode, WorkOrderForGantt, GanttTaskLevel } from '../../../components/GanttSchedulingChart/types';
 import dayjs from 'dayjs';
@@ -42,7 +50,9 @@ const DEFAULT_SCHEDULING_CONSTRAINTS = {
   consider_equipment: true,
   consider_material: true,
   consider_mold_tool: true,
-};
+  scheduling_window_days: 14,
+  daily_capacity_hours: 24,
+} satisfies SchedulingConstraints;
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -61,10 +71,40 @@ const SchedulingPage: React.FC = () => {
   const [ganttTaskLevel, setGanttTaskLevel] = useState<GanttTaskLevel>('work_order');
   const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
   const [schedulingConstraints, setSchedulingConstraints] = useState(DEFAULT_SCHEDULING_CONSTRAINTS);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [tableFilterState, setTableFilterState] = useState<Record<string, any>>({});
+  const [lastBlockedTaskId, setLastBlockedTaskId] = useState<string>('');
+  const [scenarioModalOpen, setScenarioModalOpen] = useState(false);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
+  const [scenarios, setScenarios] = useState<SchedulingScenario[]>([]);
+  const [activeScenarioId, setActiveScenarioId] = useState<number>();
+  const [scenarioDraftName, setScenarioDraftName] = useState('');
+
+  const selectedWorkOrderIds = useMemo(
+    () => selectedRowKeys.map((k) => Number(k)).filter((n) => !Number.isNaN(n) && n > 0),
+    [selectedRowKeys]
+  );
+
+  const buildWorkOrderParams = useCallback(
+    (query: Record<string, any>, paging?: { skip: number; limit: number }) => ({
+      skip: paging?.skip ?? 0,
+      limit: paging?.limit ?? 500,
+      status: query.status,
+      code: query.code,
+      keyword: query.keyword,
+      workshop_id: query.workshop_id,
+      work_center_id: query.work_center_id,
+      include_operations: true,
+      include_scores: true,
+      include_readiness: false,
+    }),
+    []
+  );
 
   const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
     async () => {
-      const res = await workOrderApi.list({ skip: 0, limit: 500, include_operations: true, include_scores: true });
+      const res = await workOrderApi.list(buildWorkOrderParams(tableFilterState));
       let list = Array.isArray(res) ? res : (res?.data ?? []);
       if (filterWorkOrderIds?.length) {
         const idSet = new Set(filterWorkOrderIds);
@@ -72,7 +112,7 @@ const SchedulingPage: React.FC = () => {
       }
       return list as WorkOrderForGantt[];
     },
-    { refreshDeps: [filterWorkOrderIds] }
+    { refreshDeps: [filterWorkOrderIds, tableFilterState, buildWorkOrderParams] }
   );
 
   useEffect(() => {
@@ -115,6 +155,34 @@ const SchedulingPage: React.FC = () => {
         rate: Math.min(100, Math.round((hours / 24) * 100)),
       }));
   }, [ganttWorkOrders]);
+
+  const nonDraggableTaskIds = useMemo(() => {
+    const ids: Array<number | string> = [];
+    ganttWorkOrders.forEach((wo) => {
+      if (!wo.is_frozen) return;
+      ids.push(wo.id);
+      (wo.operations || []).forEach((op) => {
+        if (op.id != null) ids.push(`op-${op.id}`);
+      });
+    });
+    return ids;
+  }, [ganttWorkOrders]);
+
+  const loadScenarios = useCallback(async () => {
+    setScenarioLoading(true);
+    try {
+      const res = await schedulingScenarioApi.list({ skip: 0, limit: 50 });
+      const rows = Array.isArray(res) ? res : (res?.data ?? []);
+      setScenarios(rows);
+      if (!activeScenarioId && rows[0]?.id) {
+        setActiveScenarioId(rows[0].id);
+      }
+    } catch (e: any) {
+      messageApi.error(e?.message || '加载场景失败');
+    } finally {
+      setScenarioLoading(false);
+    }
+  }, [activeScenarioId, messageApi]);
 
   /**
    * 处理智能排产
@@ -337,13 +405,24 @@ const SchedulingPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params: any) => {
-          const res = await workOrderApi.list({
-            skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-            limit: params.pageSize ?? 20,
+          const queryState = {
             status: params.status,
             code: params.code,
-            include_scores: true,
+            keyword: params.keyword,
+            workshop_id: params.workshop_id,
+            work_center_id: params.work_center_id,
+          };
+          setTableFilterState((prev) => {
+            const prevKey = JSON.stringify(prev);
+            const nextKey = JSON.stringify(queryState);
+            return prevKey === nextKey ? prev : queryState;
           });
+          const res = await workOrderApi.list(
+            buildWorkOrderParams(queryState, {
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+            })
+          );
           let data = Array.isArray(res) ? res : (res?.data ?? res?.items ?? []);
           if (filterWorkOrderIds?.length) {
             const idSet = new Set(filterWorkOrderIds);
@@ -393,6 +472,44 @@ const SchedulingPage: React.FC = () => {
             onClick={() => setConfigDrawerOpen(true)}
           >
             排程配置
+          </Button>,
+          <Button
+            key="scenario"
+            loading={scenarioLoading}
+            onClick={async () => {
+              setScenarioModalOpen(true);
+              await loadScenarios();
+            }}
+          >
+            场景沙盘
+          </Button>,
+          <Button
+            key="optimize"
+            loading={optimizing}
+            onClick={async () => {
+              try {
+                setOptimizing(true);
+                const objective = schedulingConstraints.optimize_objective || 'min_makespan';
+                const result = await advancedSchedulingApi.optimizeSchedule({
+                  optimization_params: {
+                    optimization_objective: objective,
+                    max_iterations: 200,
+                    convergence_threshold: 0.01,
+                  },
+                });
+                messageApi.success(
+                  `优化完成：迭代 ${result?.iterations ?? 0} 次，改进 ${(Number(result?.improvement || 0) * 100).toFixed(1)}%，冲突 ${result?.conflict_count ?? 0}，未排 ${result?.unscheduled_count ?? 0}`
+                );
+                actionRef.current?.reload();
+                refreshGantt();
+              } catch (e: any) {
+                messageApi.error(e?.message || '优化排程失败');
+              } finally {
+                setOptimizing(false);
+              }
+            }}
+          >
+            优化排产
           </Button>,
         ]}
       />
@@ -487,9 +604,141 @@ const SchedulingPage: React.FC = () => {
             onBatchUpdate={handleGanttBatchUpdate}
             onBatchUpdateOperations={handleGanttBatchUpdateOperations}
             onRefresh={refreshGantt}
+            nonDraggableTaskIds={nonDraggableTaskIds}
+            onBlockedDragAttempt={(taskId) => {
+              const text = String(taskId);
+              if (text === lastBlockedTaskId) return;
+              setLastBlockedTaskId(text);
+              messageApi.warning('冻结工单禁止拖拽排程，请先解冻后调整');
+            }}
           />
         </Suspense>
       </Card>
+
+      <Modal
+        title="场景沙盘"
+        width={680}
+        open={scenarioModalOpen}
+        onCancel={() => setScenarioModalOpen(false)}
+        footer={
+          <Space>
+            <Button
+              loading={scenarioLoading}
+              onClick={async () => {
+                const name = (scenarioDraftName || `场景-${dayjs().format('MMDD-HHmm')}`).trim();
+                const workOrderIds = selectedWorkOrderIds.length > 0
+                  ? selectedWorkOrderIds
+                  : (filterWorkOrderIds || []);
+                try {
+                  setScenarioLoading(true);
+                  const created = await schedulingScenarioApi.create({
+                    name,
+                    description: '来自排程页的草案场景',
+                    work_order_ids: workOrderIds,
+                    constraints: schedulingConstraints,
+                    objective: schedulingConstraints.optimize_objective,
+                  });
+                  messageApi.success(`场景已创建：${created?.name || name}`);
+                  setScenarioDraftName('');
+                  await loadScenarios();
+                  if (created?.id) setActiveScenarioId(created.id);
+                } catch (e: any) {
+                  messageApi.error(e?.message || '创建场景失败');
+                } finally {
+                  setScenarioLoading(false);
+                }
+              }}
+            >
+              新建场景
+            </Button>
+            <Button
+              type="primary"
+              loading={scenarioLoading}
+              onClick={async () => {
+                if (!activeScenarioId) {
+                  messageApi.warning('请先选择场景');
+                  return;
+                }
+                try {
+                  setScenarioLoading(true);
+                  const ran = await schedulingScenarioApi.run(activeScenarioId, {
+                    apply_objective: schedulingConstraints.optimize_objective,
+                  });
+                  messageApi.success(
+                    `场景重排完成：排产 ${ran?.metrics?.scheduled_count ?? 0}，冲突 ${ran?.metrics?.conflict_count ?? 0}`
+                  );
+                  await loadScenarios();
+                } catch (e: any) {
+                  messageApi.error(e?.message || '运行场景失败');
+                } finally {
+                  setScenarioLoading(false);
+                }
+              }}
+            >
+              运行场景
+            </Button>
+            <Button
+              loading={scenarioLoading}
+              onClick={async () => {
+                if (!activeScenarioId) {
+                  messageApi.warning('请先选择场景');
+                  return;
+                }
+                try {
+                  setScenarioLoading(true);
+                  const published = await schedulingScenarioApi.publish(activeScenarioId);
+                  messageApi.success(`场景已发布：${published?.name || activeScenarioId}`);
+                  actionRef.current?.reload();
+                  refreshGantt();
+                  await loadScenarios();
+                } catch (e: any) {
+                  messageApi.error(e?.message || '发布场景失败');
+                } finally {
+                  setScenarioLoading(false);
+                }
+              }}
+            >
+              发布到正式计划
+            </Button>
+          </Space>
+        }
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input
+            placeholder="新场景名称（留空自动生成）"
+            value={scenarioDraftName}
+            onChange={(e) => setScenarioDraftName(e.target.value)}
+          />
+          <Select
+            showSearch
+            placeholder="选择已有场景"
+            value={activeScenarioId}
+            style={{ width: '100%' }}
+            options={scenarios.map((s) => ({
+              label: `${s.name}（${s.status}）`,
+              value: s.id,
+            }))}
+            onChange={(v) => setActiveScenarioId(v)}
+          />
+          <Divider style={{ margin: '6px 0' }} />
+          {(() => {
+            const active = scenarios.find((s) => s.id === activeScenarioId);
+            if (!active) return <Typography.Text type="secondary">暂无场景，请先创建。</Typography.Text>;
+            const metrics = active.metrics || {};
+            return (
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Typography.Text strong>{active.name}</Typography.Text>
+                <Typography.Text type="secondary">
+                  状态：{active.status} ｜ 目标：{active.objective} ｜ 工单数：{active.work_order_ids?.length || 0}
+                </Typography.Text>
+                <Typography.Text>
+                  指标：排产 {metrics.scheduled_count ?? 0}，未排 {metrics.unscheduled_count ?? 0}，冲突 {metrics.conflict_count ?? 0}
+                </Typography.Text>
+              </Space>
+            );
+          })()}
+        </Space>
+      </Modal>
 
       {/* 排程配置 Modal - 4M 人机料法可配置 */}
       <Modal
@@ -502,7 +751,22 @@ const SchedulingPage: React.FC = () => {
             <Button onClick={() => setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS)}>
               恢复默认
             </Button>
-            <Button type="primary" onClick={() => setConfigDrawerOpen(false)}>
+            <Button
+              type="primary"
+              loading={configSaving}
+              onClick={async () => {
+                try {
+                  setConfigSaving(true);
+                  await schedulingConfigApi.upsertDefault(schedulingConstraints);
+                  messageApi.success('排程配置已保存');
+                  setConfigDrawerOpen(false);
+                } catch (e: any) {
+                  messageApi.error(e?.message || '排程配置保存失败');
+                } finally {
+                  setConfigSaving(false);
+                }
+              }}
+            >
               确定
             </Button>
           </Space>
@@ -514,6 +778,53 @@ const SchedulingPage: React.FC = () => {
             勾选表示排程时考虑该约束，取消勾选则忽略（适合资源有限的中小企业按实情选择）
           </div>
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>优化目标</span>
+              <Select
+                size="small"
+                style={{ width: 160 }}
+                value={schedulingConstraints.optimize_objective}
+                options={[
+                  { label: '最小完工时间', value: 'min_makespan' },
+                  { label: '最小总时长', value: 'min_total_time' },
+                  { label: '最少换线时间', value: 'min_setup_time' },
+                  { label: '最小延期', value: 'min_tardiness' },
+                ]}
+                onChange={(v: SchedulingObjective) =>
+                  setSchedulingConstraints((c) => ({ ...c, optimize_objective: v }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>排程窗口（天）</span>
+              <InputNumber
+                size="small"
+                min={1}
+                max={90}
+                value={schedulingConstraints.scheduling_window_days}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    scheduling_window_days: Number(v || DEFAULT_SCHEDULING_CONSTRAINTS.scheduling_window_days),
+                  }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>每日产能（小时）</span>
+              <InputNumber
+                size="small"
+                min={1}
+                max={24}
+                value={schedulingConstraints.daily_capacity_hours}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    daily_capacity_hours: Number(v || DEFAULT_SCHEDULING_CONSTRAINTS.daily_capacity_hours),
+                  }))
+                }
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>人：考虑人员约束</span>
               <Switch

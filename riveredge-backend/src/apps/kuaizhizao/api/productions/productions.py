@@ -36,6 +36,7 @@ from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.report_service import ReportService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+from apps.kuaizhizao.services.scheduling_scenario_service import SchedulingScenarioService
 
 # 初始化服务实例
 work_order_service = WorkOrderService()
@@ -50,7 +51,7 @@ disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
 report_service = ReportService()
-from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+scheduling_scenario_service = SchedulingScenarioService()
 from apps.kuaizhizao.services.quality_service import (
     IncomingInspectionService,
     ProcessInspectionService,
@@ -253,6 +254,11 @@ from apps.kuaizhizao.schemas.planning import (
     IntelligentSchedulingResponse,
     OptimizeScheduleRequest,
     OptimizeScheduleResponse,
+    SchedulingScenarioCreate,
+    SchedulingScenarioUpdate,
+    SchedulingScenarioRunRequest,
+    SchedulingScenarioResponse,
+    SchedulingScenarioListResponse,
 )
 
 from .work_orders import router as work_orders_router
@@ -1700,9 +1706,92 @@ async def optimize_schedule(
     result = await service.optimize_schedule(
         tenant_id=tenant_id,
         schedule_id=request.schedule_id,
-        optimization_params=request.optimization_params.model_dump() if request.optimization_params else None
+        optimization_params=request.optimization_params.model_dump() if request.optimization_params else None,
+        updated_by=current_user.id,
     )
     return OptimizeScheduleResponse(**result)
+
+
+@router.get("/scheduling/scenarios", response_model=SchedulingScenarioListResponse, summary="List scheduling scenarios")
+async def list_scheduling_scenarios(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    status: Optional[str] = Query(None, description="场景状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioListResponse:
+    return await scheduling_scenario_service.list_scenarios(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+    )
+
+
+@router.post("/scheduling/scenarios", response_model=SchedulingScenarioResponse, summary="Create scheduling scenario")
+async def create_scheduling_scenario(
+    body: SchedulingScenarioCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioResponse:
+    return await scheduling_scenario_service.create_scenario(
+        tenant_id=tenant_id,
+        payload=body,
+        created_by=current_user.id,
+    )
+
+
+@router.get("/scheduling/scenarios/{scenario_id}", response_model=SchedulingScenarioResponse, summary="Get scheduling scenario")
+async def get_scheduling_scenario(
+    scenario_id: int = Path(..., description="场景ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioResponse:
+    return await scheduling_scenario_service.get_scenario(tenant_id=tenant_id, scenario_id=scenario_id)
+
+
+@router.put("/scheduling/scenarios/{scenario_id}", response_model=SchedulingScenarioResponse, summary="Update scheduling scenario")
+async def update_scheduling_scenario(
+    body: SchedulingScenarioUpdate,
+    scenario_id: int = Path(..., description="场景ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioResponse:
+    return await scheduling_scenario_service.update_scenario(
+        tenant_id=tenant_id,
+        scenario_id=scenario_id,
+        payload=body,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/scheduling/scenarios/{scenario_id}/run", response_model=SchedulingScenarioResponse, summary="Run scheduling scenario")
+async def run_scheduling_scenario(
+    body: SchedulingScenarioRunRequest,
+    scenario_id: int = Path(..., description="场景ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioResponse:
+    return await scheduling_scenario_service.run_scenario(
+        tenant_id=tenant_id,
+        scenario_id=scenario_id,
+        updated_by=current_user.id,
+        constraints_override=body.constraints_override.model_dump() if body.constraints_override else None,
+        apply_objective=body.apply_objective,
+    )
+
+
+@router.post("/scheduling/scenarios/{scenario_id}/publish", response_model=SchedulingScenarioResponse, summary="Publish scheduling scenario")
+async def publish_scheduling_scenario(
+    scenario_id: int = Path(..., description="场景ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SchedulingScenarioResponse:
+    return await scheduling_scenario_service.publish_scenario(
+        tenant_id=tenant_id,
+        scenario_id=scenario_id,
+        updated_by=current_user.id,
+    )
 
 
 # ============ 采购订单管理 API ============

@@ -17,6 +17,7 @@ from apps.kuaizhizao.schemas.scheduling_config import (
     SchedulingConfigResponse,
     SchedulingConfigListResponse,
 )
+from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -30,6 +31,39 @@ class SchedulingConfigService(AppBaseService[SchedulingConfig]):
 
     def __init__(self):
         super().__init__(SchedulingConfig)
+
+    async def upsert_default_config(
+        self,
+        tenant_id: int,
+        constraints: SchedulingConstraints,
+        updated_by: int,
+    ) -> SchedulingConfigResponse:
+        """创建或更新默认排程配置（排程页快速保存入口）。"""
+        async with in_transaction():
+            current_default = await SchedulingConfig.get_or_none(
+                tenant_id=tenant_id,
+                is_default=True,
+            )
+            constraints_dict = constraints.model_dump()
+            if current_default:
+                current_default.constraints = constraints_dict
+                current_default.is_active = True
+                current_default.updated_by = updated_by
+                await current_default.save()
+                return SchedulingConfigResponse.model_validate(current_default)
+
+            config = await SchedulingConfig.create(
+                tenant_id=tenant_id,
+                config_code="DEFAULT_APS",
+                config_name="默认排程配置",
+                constraints=constraints_dict,
+                is_default=True,
+                is_active=True,
+                description="排程页自动维护的默认配置",
+                created_by=updated_by,
+                updated_by=updated_by,
+            )
+            return SchedulingConfigResponse.model_validate(config)
 
     async def create_config(
         self,
