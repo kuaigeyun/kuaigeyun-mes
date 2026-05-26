@@ -5,9 +5,8 @@
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
 ![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
-![Redis](https://img.shields.io/badge/Redis-6+-DC382D?style=flat-square&logo=redis)
 ![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
 ![UV](https://img.shields.io/badge/UV-1.x-FFD43B?style=flat-square)
 ![Tortoise ORM](https://img.shields.io/badge/Tortoise%20ORM-0.21-2E7D32?style=flat-square)
@@ -57,8 +56,8 @@
 | ------ | ----------------------------------------------------------------- |
 | 前端   | React 18 + TypeScript + Vite、Ant Design Pro、Three.js（3D 拓扑） |
 | 移动端 | Expo 54 + React Native 0.81、Ant Design React Native、Expo Router |
-| 后端   | FastAPI、Tortoise ORM + PostgreSQL                                |
-| 架构   | 多租户 SaaS、插件化应用                                           |
+| 后端   | FastAPI、Tortoise ORM + PostgreSQL、Taskiq（异步任务，无需 Redis） |
+| 架构   | 多租户 SaaS、插件化应用、Caddy 生产部署                           |
 
 **3D 模型来源**：工厂拓扑 3D 视图使用 [Kenney City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial)（CC0 公共领域）。
 
@@ -66,22 +65,38 @@
 
 ---
 
-## 已上线模块
+## 插件应用
 
-| 模块      | 功能概览                                                                                             | 说明                                       |
-| --------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 销售管理  | 报价单、试样打样、销售预测、销售订单、发货通知                                                       | 需求到出货闭环，支持 MTS/MTO               |
-| 计划管理  | 需求管理、需求计算、生产计划、排程管理、计算配置、计算历史                                           | 统一处理预测与订单，自动生成工单与采购建议 |
-| 采购管理  | 采购申请、采购订单、到货通知                                                                         | 支持采购申请与直采                         |
-| 生产执行  | 工单、报工、工位机触屏、返工单、委外、异常管理（缺料/交期/质量）                                     | 工单全生命周期                             |
-| 质量管理  | 来料/过程/成品检验、检验计划、质量追溯                                                               | 贯穿来料、过程、成品                       |
-| 设备/工装 | 设备、模具、工装、故障、保养计划、保养提醒、设备状态                                                 | 设备与工装全生命周期                       |
-| 仓储管理  | 入库/出库、线边仓、倒冲记录、库存、补货建议、盘点、调拨、组装/拆解、客户来料登记、条码映射、批次库存 | 线边仓与报工自动倒冲                       |
-| 分析中心  | 单据时效、单据效率、成本核算/对比/规则/明细/优化/报表、全追溯、经营看板                              | 效率分析与成本管理                         |
-| 财务管理  | 应收、应付、发票、收款、付款、发票库                                                                 | 与业务单据联动                             |
-| 绩效管理  | 节假日、技能、员工配置、计件/工时单价、KPI 定义、绩效汇总                                            | 计件与工时绩效核算                         |
+业务按**插件化应用**拆分，租户可按需启用；各应用共享主数据与平台能力。
 
-基础数据：工厂建模（厂区、车间、产线、工位）、物料主数据、BOM、工艺路线、客户、供应商等。
+| 插件 | 定位 | 主要能力 |
+| ---- | ---- | -------- |
+| **快制造** | 制造业全流程 MES | 销售、计划、采购、生产执行、质量、设备/工装、仓储、分析中心、绩效 |
+| **快车间** | 精益车间执行 | 计划、生产执行、质量、设备、仓储、绩效（车间视角精简菜单） |
+| **进销存** | 供销存协同 | 销售、采购、仓储 |
+| **快财务** | 管理会计 | 应收/应付、收款/付款、发票库、成本管理（不含总账） |
+| **主数据** | 唯一数据源 | 工厂建模、物料/BOM/工艺、客户/供应商、供应链主档 |
+| **快报表** | 经营分析 | 自制报表、BI 大屏、多源数据聚合 |
+| **好力 GO** | 现场定制应用 | 设备、模具、巡查等（客户专用场景） |
+| KU-AI / 快数采 | 规划中 | AI 辅助、工业数采（占位，敬请期待） |
+
+### 平台能力（跨应用）
+
+多租户与权限、插件式应用市场、业务蓝图与流程开关、自定义字段、审批流、打印模板设计器、外部数据/应用连接、定时消息、二维码、甘特图排产、Univer 嵌入式 Excel 导入、上线检查助手、3D 工厂拓扑等。
+
+### 快制造业务模块概览
+
+| 模块 | 功能概览 |
+| ---- | -------- |
+| 销售管理 | 报价、试样、销售预测、销售订单、发货通知 |
+| 计划管理 | 需求管理、需求计算、生产计划、排程、计算配置与历史 |
+| 采购管理 | 采购申请、采购订单、到货通知 |
+| 生产执行 | 工单、报工、工位机触屏、返工、委外、异常管理 |
+| 质量管理 | 来料/过程/成品检验、检验计划、质量追溯 |
+| 设备/工装 | 设备、模具、工装、故障、保养计划与提醒 |
+| 仓储管理 | 入出库、线边仓、倒冲、库存、盘点、调拨、条码与批次 |
+| 分析中心 | 单据时效/效率、成本核算与报表、全追溯、经营看板 |
+| 绩效管理 | 节假日、技能、计件/工时单价、KPI、绩效汇总 |
 
 ---
 
@@ -127,9 +142,15 @@
 
 ## 当前进展
 
-**已完成**：销售（报价、试样、预测、订单、发货及报表）、计划（需求、计算、生产计划、排程、配置、历史及报表）、采购、生产执行、生产报表、质量、设备、仓储、分析中心、财务、绩效、系统与配置（初始化向导、极简/全流程切换、流程开关、模块开关、自定义字段）、报表与设计（kuaireport、打印模板设计器）、二维码与审批、甘特图排产、质量分析。
+**已完成**
 
-**后续增强**：行业模板、智能默认值；有限能力排程、更精细产能约束；第三方系统集成、企业上下游协同；多级审批配置、流程可视化编排；拖拉拽报表设计器、更多预制报表。
+- 插件化应用：快制造、快车间、进销存、快财务、主数据、快报表、好力 GO
+- 制造业务：销售 → 计划 → 采购 → 生产 → 质量 → 设备 → 仓储 → 分析 → 绩效全链路
+- 平台：多租户、权限、业务蓝图、流程/模块开关、自定义字段、审批流、打印与 BI 设计器
+- 部署：`fast-deploy` 对话式向导，**Windows / Linux 均已验证**（生产 8080 + 开发 8100/8200）
+- 移动端：Expo 工位机与现场应用适配
+
+**后续增强**：行业模板与智能默认值；有限能力排程与产能约束；KU-AI / 快数采；第三方集成与上下游协同；流程可视化编排、更多预制报表。
 
 ---
 
@@ -217,18 +238,23 @@
 
 ## 快速开始
 
-**环境**：Node.js 22、Python 3.12、PostgreSQL 15
-
-**命令行快速部署**（Git Bash 一条命令，自动判平台/国内镜像/配置向导）：见 [fast-deploy/README.md](fast-deploy/README.md)。
+**环境**：Node.js 22+、Python 3.12+（系统检测；应用运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）。无需 Redis。
 
 ```bash
-git clone <repository-url>
-cd riveredge
-./fast-deploy/deploy.sh          # 生产
-./fast-deploy/deploy.sh dev      # 开发
+git clone https://gitee.com/kuaigeyun/kuaigeyun.git
+cd kuaigeyun   # 或你的仓库目录名
+
+./fast-deploy/deploy.sh          # 生产模式（8 阶段向导）
+./fast-deploy/deploy.sh dev      # 开发模式（Vite 热重载）
 ```
 
-使用部署面板可图形化完成环境检测、配置与一键启动，详见 [部署面板使用指南](docs/部署面板使用指南.md)。
+| 模式 | Web | API |
+| ---- | --- | --- |
+| 生产 | `http://<服务器IP>:8080` | `/api` 经 Caddy 转发 |
+| 开发 | `http://<服务器IP>:8100` | `http://<服务器IP>:8200` |
+
+- **完整部署文档**：[docs/部署指南.md](docs/部署指南.md)（Windows / Linux、端口、故障排查、日常运维）
+- **脚本速查**：[fast-deploy/README.md](fast-deploy/README.md)
 
 ---
 
