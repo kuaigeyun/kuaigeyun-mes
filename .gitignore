@@ -79,6 +79,10 @@ scripts/
 !riveredge-frontend/src/pages/infra/scripts/
 !riveredge-frontend/src/pages/infra/scripts/**
 
+# 部署面板脚本（勿被根目录 scripts/ 规则误伤）
+!riveredge-panel/scripts/
+!riveredge-panel/scripts/**
+
 # ===== 后端脚本与测试（不推送） =====
 riveredge-backend/scripts/
 riveredge-backend/tests/
