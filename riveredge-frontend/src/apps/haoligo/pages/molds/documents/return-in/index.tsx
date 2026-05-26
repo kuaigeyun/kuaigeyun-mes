@@ -590,7 +590,7 @@ const MoldReturnInPage: React.FC = () => {
         footer={null}
         destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
           <Table<MoldRow>
             size="small"

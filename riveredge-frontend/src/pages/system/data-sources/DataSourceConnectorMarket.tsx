@@ -64,7 +64,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
       width={MODAL_CONFIG.STANDARD_WIDTH}
       destroyOnHidden
     >
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Radio.Group
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -101,7 +101,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
                 onClick={() => handleSelect(connector)}
                 style={{ height: '100%' }}
               >
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                   <Space>
                     <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
                     <Text strong>{t(`pages.system.dataSources.connectors.${connector.id}.name`, { defaultValue: connector.name })}</Text>

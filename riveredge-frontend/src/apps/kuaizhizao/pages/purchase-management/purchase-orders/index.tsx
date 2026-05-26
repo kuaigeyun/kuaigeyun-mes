@@ -1930,7 +1930,7 @@ const PurchaseOrdersPage: React.FC = () => {
         confirmLoading={pullRequisitionSubmitting}
         destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
           <Input.Search
             allowClear
             value={pullRequisitionKeyword}

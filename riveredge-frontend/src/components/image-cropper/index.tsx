@@ -304,7 +304,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
         </Button>,
       ]}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* 剪裁形状选择 */}
         <div>
           <div style={{ marginBottom: 8 }}>剪裁形状：</div>

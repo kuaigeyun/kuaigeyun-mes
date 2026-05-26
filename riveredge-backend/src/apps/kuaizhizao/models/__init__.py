@@ -36,6 +36,9 @@ from .material_shortage_exception import MaterialShortageException
 from .delivery_delay_exception import DeliveryDelayException
 from .quality_exception import QualityException
 from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
+from .quality_8d_report import Quality8DReport
+from .oqc_inspection import OQCInspection
+from .spc_sample import SPCSample
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -159,6 +162,9 @@ __all__ = [
     'QualityException',
     'ExceptionProcessRecord',
     'ExceptionProcessHistory',
+    'Quality8DReport',
+    'OQCInspection',
+    'SPCSample',
 
     # 仓储管理模块
     'ProductionPicking',

@@ -847,7 +847,7 @@ const DepartmentListPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>{t('field.department.syncIntroBody')}</div>
           <Alert type="warning" showIcon message={t('field.department.syncIntroWarning')} />
         </Space>

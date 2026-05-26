@@ -4633,7 +4633,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     aria-expanded={!!systemSettingsPanelMounted && !systemSettingsPanelExiting}
                     aria-label={t('ui.sidebar.systemSettings')}
                   >
-                    {!collapsed ? '系统配置' : null}
+                    {!collapsed ? t('ui.sidebar.systemSettingsShort') : null}
                   </Button>
                 </div>
                 <div style={{ flex: 1 }}>

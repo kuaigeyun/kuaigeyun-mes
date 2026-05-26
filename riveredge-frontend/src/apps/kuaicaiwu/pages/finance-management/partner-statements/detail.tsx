@@ -82,7 +82,7 @@ const PartnerStatementDetailPage: React.FC = () => {
       title: '标记已发送',
       width: 480,
       content: (
-        <Space direction="vertical" style={{ width: '100%', marginTop: 12 }}>
+        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
           <Typography.Text type="secondary">
             请先将对账单导出或打印后，通过微信/邮件等方式发送给对方，再标记发送记录。
           </Typography.Text>

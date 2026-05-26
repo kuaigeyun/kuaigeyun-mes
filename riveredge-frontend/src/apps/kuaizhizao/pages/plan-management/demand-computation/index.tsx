@@ -1644,7 +1644,7 @@ const DemandComputationPage: React.FC = () => {
         confirmLoading={pullDemandSubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按需求单号/需求名称搜索"

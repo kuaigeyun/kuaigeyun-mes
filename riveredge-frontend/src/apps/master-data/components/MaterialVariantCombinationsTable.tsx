@@ -743,7 +743,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       )}
 
       {!legacyScope || !legacySplitAllowed ? (
-        <Space direction="vertical" size={8} style={{ marginBottom: 12, width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ marginBottom: 12, width: '100%' }}>
           <Space wrap>
             <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
               {t('app.master-data.materials.addVariantCombo', '新增行')}

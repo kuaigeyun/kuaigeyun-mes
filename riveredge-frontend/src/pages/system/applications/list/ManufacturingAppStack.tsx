@@ -24,7 +24,7 @@ export function ManufacturingAppStack<T extends { uuid: string; code: string }>(
   apps,
   renderCard,
 }: ManufacturingAppStackProps<T>) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
 
   const ordered = useMemo(
@@ -54,15 +54,25 @@ export function ManufacturingAppStack<T extends { uuid: string; code: string }>(
       >
         {ordered.map((app) => {
           const isActive = app.code === activeApp.code;
-          const label = getAppDisplayName(app.code, t, app.code);
+          const lang = String(i18n.resolvedLanguage ?? i18n.language ?? '').toLowerCase();
+          const baseLabel = getAppDisplayName(app.code, t, app.code);
+          const abbr =
+            app.code === 'kuaizhizao'
+              ? 'UNI'
+              : app.code === 'kuaierp'
+                ? 'ERP'
+                : app.code === 'kuaimes'
+                  ? 'MES'
+                  : null;
+          const label = !lang.startsWith('zh') && abbr ? abbr : baseLabel;
           return (
             <button
               key={app.uuid}
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={label}
-              title={label}
+              aria-label={baseLabel}
+              title={baseLabel}
               className={`manufacturing-app-stack__tab${isActive ? ' manufacturing-app-stack__tab--active' : ''}`}
               onClick={() => setActiveCode(app.code)}
               style={

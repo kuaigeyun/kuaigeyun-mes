@@ -939,6 +939,15 @@ async def sync_application_manifest(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"manifest.json格式错误: {str(e)}"
         )
+    except ValidationError as e:
+        # 保留业务校验语义，避免统一包装成 500 导致前端误判
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except HTTPException:
+        # 透传 403/404 等业务错误，前端可直接展示真实原因
+        raise
     except Exception as e:
         logger.error(f"同步应用清单失败: {e}")
         raise HTTPException(

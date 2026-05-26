@@ -64,7 +64,7 @@ const ManagementDashboard: React.FC = () => {
 
   return (
     <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Title level={2}>数字化经营决策看板 <Text type="secondary" style={{ fontSize: '14px', fontWeight: 'normal' }}>近 30 天经营快报</Text></Title>
 
         {/* 核心 KPI 卡片 */}

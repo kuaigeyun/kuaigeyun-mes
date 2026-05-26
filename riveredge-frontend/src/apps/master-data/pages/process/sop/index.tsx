@@ -549,7 +549,7 @@ const SOPPage: React.FC = () => {
             (record as any)?.materialGroupUuids ?? (record as any)?.material_group_uuids ?? [];
           if (!Array.isArray(uuids) || uuids.length === 0) return '-';
           return (
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
               {uuids.map((u) => {
                 const g = materialGroups.find((x) => x.uuid === u);
                 return <Tag key={u}>{g ? `${g.code} - ${g.name}` : u}</Tag>;
@@ -566,7 +566,7 @@ const SOPPage: React.FC = () => {
           const uuids: string[] = (record as any)?.materialUuids ?? (record as any)?.material_uuids ?? [];
           if (!Array.isArray(uuids) || uuids.length === 0) return '-';
           return (
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
               {uuids.map((u) => {
                 const m = materials.find((x) => x.uuid === u);
                 return <Tag key={u}>{m ? `${m.code} - ${m.name}` : u}</Tag>;
@@ -583,7 +583,7 @@ const SOPPage: React.FC = () => {
           const uuids: string[] = (record as any)?.routeUuids ?? (record as any)?.route_uuids ?? [];
           if (!Array.isArray(uuids) || uuids.length === 0) return '-';
           return (
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
               {uuids.map((u) => {
                 const r = routes.find((x) => x.uuid === u);
                 return <Tag key={u}>{r ? `${r.code} - ${r.name}` : u}</Tag>;

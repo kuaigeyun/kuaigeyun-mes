@@ -3442,7 +3442,7 @@ const QuotationsPage: React.FC = () => {
         destroyOnHidden
         styles={{ body: { paddingTop: 4, paddingBottom: 8 } }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={16}>
           <div
             style={{
               position: 'relative',

@@ -312,7 +312,7 @@ const ProgramViewerKioskPage: React.FC = () => {
           >
             {/* 程序信息 */}
             <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>程序名称：</strong>
                   <span>{programName || '加工程序'}</span>

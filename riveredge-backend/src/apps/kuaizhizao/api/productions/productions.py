@@ -259,6 +259,7 @@ from .work_orders import router as work_orders_router
 from .reporting import router as reporting_router
 from .warehouse_execution import router as warehouse_execution_router
 from .quality_execution import router as quality_execution_router
+from .quality_improvement import router as quality_improvement_router
 from .document_relations_legacy import router as document_relations_legacy_router
 
 # 创建路由
@@ -271,6 +272,7 @@ router.include_router(work_orders_router)
 router.include_router(reporting_router)
 router.include_router(warehouse_execution_router)
 router.include_router(quality_execution_router)
+router.include_router(quality_improvement_router)
 router.include_router(document_relations_legacy_router)
 
 

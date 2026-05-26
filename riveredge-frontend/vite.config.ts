@@ -83,7 +83,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         // ⚠️ 关键修复：增加超时时间，防止后端重启时连接超时
-        timeout: 30000, // 增加超时时间到 30 秒
+        timeout: 120000, // 菜单全量同步等重操作可能超过 30 秒，统一放宽到 120 秒
         ws: true, // 支持 WebSocket
         // ⚠️ 关键修复：配置代理错误处理，防止后端重启导致前端服务崩溃
         configure: (proxy, _options) => {
@@ -94,7 +94,7 @@ export default defineConfig({
           });
           proxy.on('proxyReq', (proxyReq, _req, _res) => {
             // 设置更长的超时时间
-            proxyReq.setTimeout(30000);
+            proxyReq.setTimeout(120000);
           });
         },
       } as ProxyOptions,

@@ -1,0 +1,126 @@
+import { apiRequest } from '../../../services/api';
+
+export interface Quality8DReport {
+  id: number;
+  report_code: string;
+  title: string;
+  status: string;
+  severity?: string;
+  owner_name?: string;
+  due_date?: string;
+  quality_exception_id?: number;
+  verification_result?: string;
+  remarks?: string;
+  created_at?: string;
+}
+
+export interface DefectLedgerItem {
+  id: number;
+  code: string;
+  work_order_code?: string;
+  operation_name?: string;
+  product_name?: string;
+  defect_quantity: number;
+  defect_type: string;
+  defect_reason: string;
+  disposition: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface OQCInspection {
+  id: number;
+  inspection_code: string;
+  source_code: string;
+  material_code: string;
+  material_name: string;
+  inspection_quantity: number;
+  qualified_quantity: number;
+  unqualified_quantity: number;
+  inspection_result: string;
+  quality_status: string;
+  release_decision: string;
+  review_status: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface SPCSample {
+  id: number;
+  characteristic_name: string;
+  chart_type: string;
+  sample_time: string;
+  sample_value: number;
+  sample_size: number;
+}
+
+export interface SPCChartResponse {
+  characteristic_name: string;
+  chart_type: string;
+  mean: number;
+  sigma: number;
+  ucl: number;
+  lcl: number;
+  points: Array<{
+    sample_time: string;
+    sample_value: number;
+    out_of_control: boolean;
+    triggered_rules: string[];
+  }>;
+  triggered_summary: string[];
+}
+
+export const qualityImprovementApi = {
+  eightD: {
+    list: async (params?: any) =>
+      apiRequest<Quality8DReport[]>('/apps/kuaizhizao/quality-8d-reports', { method: 'GET', params }),
+    create: async (data: any) =>
+      apiRequest<Quality8DReport>('/apps/kuaizhizao/quality-8d-reports', { method: 'POST', data }),
+    update: async (id: number, data: any) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}`, { method: 'PUT', data }),
+    transition: async (id: number, data: { to_status: string; remarks?: string; verification_result?: string }) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}/transition`, { method: 'POST', data }),
+    startFromException: async (exceptionId: number, title: string) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/exceptions/quality/${exceptionId}/start-8d`, {
+        method: 'POST',
+        data: { title },
+      }),
+  },
+
+  nonconformingLedger: {
+    list: async (params?: any) =>
+      apiRequest<DefectLedgerItem[]>('/apps/kuaizhizao/nonconforming-ledger', { method: 'GET', params }),
+    updateDisposition: async (
+      id: number,
+      data: { disposition: string; status?: string; quarantine_location?: string; remarks?: string }
+    ) =>
+      apiRequest(`/apps/kuaizhizao/nonconforming-ledger/${id}/disposition`, {
+        method: 'PUT',
+        data,
+      }),
+  },
+
+  oqc: {
+    list: async (params?: any) =>
+      apiRequest<{ items: OQCInspection[]; total: number }>('/apps/kuaizhizao/oqc-inspections', { method: 'GET', params }),
+    create: async (data: any) => apiRequest<OQCInspection>('/apps/kuaizhizao/oqc-inspections', { method: 'POST', data }),
+    conduct: async (id: number, data: any) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/conduct`, { method: 'POST', data }),
+    approve: async (id: number, approve = true) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/approve`, {
+        method: 'POST',
+        params: { approve },
+      }),
+  },
+
+  spc: {
+    listSamples: async (params?: any) =>
+      apiRequest<SPCSample[]>('/apps/kuaizhizao/spc/samples', { method: 'GET', params }),
+    createSample: async (data: any) => apiRequest<SPCSample>('/apps/kuaizhizao/spc/samples', { method: 'POST', data }),
+    getImrChart: async (characteristicName: string, limit = 50) =>
+      apiRequest<SPCChartResponse>('/apps/kuaizhizao/spc/charts/imr', {
+        method: 'GET',
+        params: { characteristic_name: characteristicName, limit },
+      }),
+  },
+};

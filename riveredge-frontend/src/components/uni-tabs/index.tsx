@@ -812,7 +812,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         key: 'favoriteToQuickEntry',
-        label: t('tabs.favoriteToQuickEntry', { defaultValue: '收藏' }),
+        label: t('ui.tabs.favoriteToQuickEntry'),
         icon: <StarFilled style={{ color: '#f59e0b' }} />, // 2026 Amber Gold
         disabled: isWorkplace,
       },

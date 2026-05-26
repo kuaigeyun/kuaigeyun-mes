@@ -1173,7 +1173,7 @@ const ReceiptNoticesPage: React.FC = () => {
         confirmLoading={pullPurchaseOrderSubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按采购订单号/供应商搜索"

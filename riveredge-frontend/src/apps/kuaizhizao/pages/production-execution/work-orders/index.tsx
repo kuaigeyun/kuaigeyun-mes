@@ -4660,7 +4660,7 @@ const WorkOrdersPage: React.FC = () => {
         confirmLoading={pullComputationSubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按运算单号搜索"
@@ -4748,7 +4748,7 @@ const WorkOrdersPage: React.FC = () => {
         confirmLoading={pullProductionPlanSubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按计划编号/计划名称搜索"
@@ -6637,7 +6637,7 @@ const WorkOrdersPage: React.FC = () => {
         <Spin spinning={batchReleaseLoading}>
           <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
             {batchReleaseCheckResults.length > 0 ? (
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                 {batchReleaseCheckResults.map((result, index) => (
                   <Card
                     key={index}
@@ -6858,7 +6858,7 @@ const WorkOrdersPage: React.FC = () => {
               {!simulationResult ? (
                 <Empty description="请在左侧填写信息并点击“开始模拟分析”" />
               ) : (
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   <div style={{ backgroundColor: '#f5f5f5', padding: 12, borderRadius: 4 }}>
                     <Typography.Title level={5}>建议：{simulationResult.recommendation}</Typography.Title>
                     <Space size="large">

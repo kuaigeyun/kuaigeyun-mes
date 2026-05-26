@@ -116,7 +116,7 @@ export const UniImportMappingModal: React.FC<UniImportMappingModalProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap align="center">
           <Typography.Text>{t('components.uniImport.mappingHeaderRow')}：</Typography.Text>
           <InputNumber

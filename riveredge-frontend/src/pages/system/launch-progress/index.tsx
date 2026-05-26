@@ -290,10 +290,10 @@ const LaunchProgressPage: React.FC = () => {
                 >
                   {progressTracking && progressTracking.has_countdown ? (
                     <div>
-                      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                         {/* 倒计时和进度条 */}
                         <Card>
-                          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                             <Statistic
                               title={t('pages.system.launchProgress.daysRemaining')}
                               value={progressTracking.days_remaining}
@@ -345,7 +345,7 @@ const LaunchProgressPage: React.FC = () => {
                 {/* 进度报告 */}
                 {progressReport && (
                   <Card title={t('pages.system.launchProgress.progressReport')} style={{ marginTop: 16 }}>
-                    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                       <div>
                         <Title level={4}>{t('pages.system.launchProgress.statsTitle')}</Title>
                         <Space size="large">
@@ -413,7 +413,7 @@ const LaunchProgressPage: React.FC = () => {
                 {/* 检查报告 */}
                 {checkReport && (
                   <Card title={t('pages.system.launchProgress.checkReport')} style={{ marginTop: 16 }}>
-                    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                       <div>
                         <Title level={4}>{t('pages.system.launchProgress.statsTitle')}</Title>
                         <Space size="large">

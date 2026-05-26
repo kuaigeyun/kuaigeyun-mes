@@ -2633,10 +2633,10 @@ const ReportingPage: React.FC = () => {
                       {/* 工站上下料物料绑定（核心功能，新增） */}
                       <div style={{ marginTop: 16, marginBottom: 16 }}>
                         <div style={{ marginBottom: 8, fontWeight: 'bold' }}>工站上下料物料绑定：</div>
-                        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                           {/* 上料绑定 */}
                           <Card size="small" title="上料绑定">
-                            <Space direction="vertical" style={{ width: '100%' }} size="small">
+                            <Space orientation="vertical" style={{ width: '100%' }} size="small">
                               {feedingList.map((feeding, index) => (
                                 <Card key={index} size="small" style={{ backgroundColor: '#f5f5f5' }}>
                                   <Row gutter={16}>
@@ -2670,7 +2670,7 @@ const ReportingPage: React.FC = () => {
 
                           {/* 下料绑定 */}
                           <Card size="small" title="下料绑定">
-                            <Space direction="vertical" style={{ width: '100%' }} size="small">
+                            <Space orientation="vertical" style={{ width: '100%' }} size="small">
                               {dischargingList.map((discharging, index) => (
                                 <Card key={index} size="small" style={{ backgroundColor: '#f5f5f5' }}>
                                   <Row gutter={16}>

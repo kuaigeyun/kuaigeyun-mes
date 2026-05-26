@@ -205,7 +205,7 @@ const MenuListPage: React.FC = () => {
         }))
       );
     } catch (error: any) {
-      console.warn('加载应用列表失败:', error);
+      console.warn('Failed to load applications:', error);
     }
   }, []);
 
@@ -552,13 +552,13 @@ const MenuListPage: React.FC = () => {
         hideInSearch: true,
         render: (_: any, record: Menu) =>
           record.application_uuid ? (
-            <Tooltip title={t('menu.system.appMenuSyncTip', { defaultValue: '应用菜单由 manifest 同步，在应用中心同步菜单可更新' })}>
+            <Tooltip title={t('menu.system.appMenuSyncTip')}>
               <Tag color="blue" icon={<SyncOutlined />}>
-                {t('menu.system.appMenu', { defaultValue: '应用' })}
+                {t('menu.system.appMenu')}
               </Tag>
             </Tooltip>
           ) : (
-            <Tag>{t('menu.system.systemMenu', { defaultValue: '系统' })}</Tag>
+            <Tag>{t('menu.system.systemMenu')}</Tag>
           ),
     },
     {
@@ -604,9 +604,7 @@ const MenuListPage: React.FC = () => {
                 <Tooltip
                   title={
                     isAppMenu
-                      ? t('menu.system.appMenuDeleteDisabled', {
-                          defaultValue: '应用菜单不可删除，请在应用中心同步更新',
-                        })
+                      ? t('menu.system.appMenuDeleteDisabled')
                       : deleteCheck.reason
                   }
                 >
@@ -619,7 +617,7 @@ const MenuListPage: React.FC = () => {
               </Popconfirm>,
               <Tooltip
                 key="addChild"
-                title={isAppMenu ? t('pages.system.menus.externalNo', { defaultValue: '菜单由 manifest 同步，不可在此添加子项' }) : undefined}
+                title={isAppMenu ? t('menu.system.appMenuAddDisabled') : undefined}
               >
                 <span>
                   <Button

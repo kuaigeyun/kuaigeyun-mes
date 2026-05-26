@@ -328,7 +328,7 @@ const ReportingKioskPage: React.FC = () => {
         >
           {/* 扫码/输入工单编号区域 */}
           <Card title="工单信息" style={{ marginBottom: 24 }}>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="large" style={{ width: '100%' }}>
               <Row gutter={[16, 16]}>
                 <Col span={24}>
                   <Form.Item
@@ -369,7 +369,7 @@ const ReportingKioskPage: React.FC = () => {
               {/* 工单信息显示 */}
               {currentWorkOrder && (
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
-                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
                       <strong>工单编号：</strong>
                       <span>{currentWorkOrder.code}</span>
@@ -403,7 +403,7 @@ const ReportingKioskPage: React.FC = () => {
           {/* 工序选择区域 */}
           {currentWorkOrder && workOrderOperations.length > 0 && (
             <Card title="选择工序" style={{ marginBottom: 24 }}>
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {workOrderOperations.map((operation) => (
                   <Button
                     key={operation.operation_id}
@@ -447,10 +447,10 @@ const ReportingKioskPage: React.FC = () => {
           {/* 报工表单区域 */}
           {currentOperation && (
             <Card title="报工信息" style={{ marginBottom: 24 }}>
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {/* 工序信息显示 */}
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
-                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
                       <strong>工序编号：</strong>
                       <span>{currentOperation.operation_code}</span>

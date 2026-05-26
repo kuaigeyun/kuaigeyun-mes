@@ -564,7 +564,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                   />
                 ) : (
-                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                     {lines.map((row, idx) => (
                       <Card key={row._draftKey} size="small" type="inner">
                         <Flex justify="space-between" align="flex-start" wrap="wrap" gap={8}>

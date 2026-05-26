@@ -1049,7 +1049,7 @@ const ShipmentNoticesPage: React.FC = () => {
         confirmLoading={pullSalesOrderSubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按销售订单号/客户搜索"

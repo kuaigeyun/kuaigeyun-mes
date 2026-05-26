@@ -131,7 +131,7 @@ export const GoLiveAssistantContent: React.FC<GoLiveAssistantContentProps> = ({
             </Space>
           }
           description={
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
             <span>{item.description}</span>
             {isManualConfirm && !completed && (
               <Button

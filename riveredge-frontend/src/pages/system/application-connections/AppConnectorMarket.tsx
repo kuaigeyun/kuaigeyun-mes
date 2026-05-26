@@ -122,7 +122,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
       width={800}
       destroyOnHidden
     >
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Radio.Group
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -160,7 +160,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                 onClick={() => handleSelect(connector)}
                 style={{ height: '100%' }}
               >
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                   <Space>
                     <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
                     <Text strong>{t(`pages.system.applicationConnections.type${connector.id.charAt(0).toUpperCase() + connector.id.slice(1)}`, { defaultValue: connector.name })}</Text>

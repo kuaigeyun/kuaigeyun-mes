@@ -3194,7 +3194,7 @@ const BOMPage: React.FC = () => {
               暂无版本历史
             </div>
           ) : (
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
               {versionList.map((bom, index) => (
                 <div
                   key={bom.uuid}
@@ -3295,7 +3295,7 @@ const BOMPage: React.FC = () => {
             {versionCompareResult.added_items && versionCompareResult.added_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#52c41a', marginBottom: 12 }}>新增子件（{versionCompareResult.added_items.length}项）</h4>
-                <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.added_items.map((item: any, index: number) => (
                     <div
                       key={index}
@@ -3323,7 +3323,7 @@ const BOMPage: React.FC = () => {
             {versionCompareResult.removed_items && versionCompareResult.removed_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>删除子件（{versionCompareResult.removed_items.length}项）</h4>
-                <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.removed_items.map((item: any, index: number) => (
                     <div
                       key={index}
@@ -3351,7 +3351,7 @@ const BOMPage: React.FC = () => {
             {versionCompareResult.modified_items && versionCompareResult.modified_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#1890ff', marginBottom: 12 }}>修改子件（{versionCompareResult.modified_items.length}项）</h4>
-                <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.modified_items.map((item: any, index: number) => (
                     <div
                       key={index}
@@ -3365,7 +3365,7 @@ const BOMPage: React.FC = () => {
                       <div style={{ marginBottom: 8 }}>
                         <strong>{getMaterialName(item.item.componentId)}</strong>
                       </div>
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                         {Object.entries(item.changes || {}).map(([field, change]: [string, any]) => (
                           <div key={field} style={{ paddingLeft: 16 }}>
                             <span style={{ fontWeight: 500 }}>{field === 'quantity' ? t('app.master-data.bom.quantityTitle') : field === 'unit' ? t('app.master-data.bom.unitTitle') : field === 'wasteRate' ? t('app.master-data.bom.wasteRateTitle') : field === 'isRequired' ? t('app.master-data.bom.isRequiredTitle') : field}</span>
@@ -3473,7 +3473,7 @@ const BOMPage: React.FC = () => {
             
             {quantityResult.components && quantityResult.components.length > 0 ? (
               <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                   {quantityResult.components
                     .sort((a, b) => a.level - b.level || a.componentCode.localeCompare(b.componentCode))
                     .map((component, index) => {
@@ -3498,7 +3498,7 @@ const BOMPage: React.FC = () => {
                                   <Tag color={component.level === 0 ? 'blue' : 'default'}>层级 {component.level}</Tag>
                                 </Space>
                               </div>
-                              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                                 <div>
                                   <span style={{ color: '#999' }}>基础用量：</span>
                                   <span style={{ marginLeft: 8 }}>{component.baseQuantity} {component.unit || ''}</span>

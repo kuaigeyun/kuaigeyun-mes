@@ -261,7 +261,7 @@ const OperationGuidePage: React.FC = () => {
             label: t('pages.system.operationGuide.tabPreview'),
             children: (
               <Card title={t('pages.system.operationGuide.previewTitle')}>
-                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                   <div>
                     <Title level={4}>{t('pages.system.operationGuide.guideComponentTitle')}</Title>
                     <Paragraph>

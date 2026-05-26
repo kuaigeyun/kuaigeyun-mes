@@ -1380,7 +1380,7 @@ const MoldLedgerPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>
             将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「单模产能列」则同时更新单模产能）；不存在则新增（默认状态「待用」；未配置单模产能列时新增单模产能为 0）。
           </div>

@@ -138,7 +138,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* 文本输入方式 */}
         <div>
           <Input.TextArea

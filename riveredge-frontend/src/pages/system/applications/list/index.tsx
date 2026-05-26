@@ -467,7 +467,7 @@ const ApplicationHelpView: React.FC = () => {
       content: (
         <>
           <Title level={2}>4. 常见问题 (FAQ)</Title>
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <Card size="small" title="Q: 为什么“卸载”按钮是禁用的？">
               <Text>A: 该应用带有 <code>System</code> 标签，代表它是系统级应用，为保障系统核心运行稳定，系统底层安全机制禁止对其执行卸载操作。</Text>
             </Card>
@@ -552,6 +552,7 @@ const ApplicationListPage: React.FC = () => {
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetStage, setResetStage] = useState(1); // 1, 2, 3
+  const resetConfirmPhrase = t('pages.system.applications.resetConfirmPhrase');
   const [dedicatedBindingModalOpen, setDedicatedBindingModalOpen] = useState(false);
   const [dedicatedBindingApp, setDedicatedBindingApp] = useState<Application | null>(null);
   const [dedicatedBindingRows, setDedicatedBindingRows] = useState<DedicatedBindingRow[]>([]);
@@ -586,7 +587,7 @@ const ApplicationListPage: React.FC = () => {
         marginRight: 'auto',
       }}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <div>
           <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
             {t('pages.system.applications.customAppsEmptyTitle')}
@@ -782,7 +783,6 @@ const ApplicationListPage: React.FC = () => {
       messageApi.success(t('pages.system.applications.installSuccess'));
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
-      console.log(`📢 已触发应用安装事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.installFailed'));
     }
@@ -801,7 +801,6 @@ const ApplicationListPage: React.FC = () => {
       messageApi.success(t('pages.system.applications.uninstallSuccess'));
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
-      console.log(`📢 已触发应用卸载事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.uninstallFailed'));
     }
@@ -855,28 +854,29 @@ const ApplicationListPage: React.FC = () => {
           if (activeExclusives.length > 0) {
             const exclusiveNames = activeExclusives.map((a) => a.name).join('、');
             const targetGroupLabel = ['kuaierp', 'kuaimes'].includes(record.code)
-              ? '「进销存 + 快车间」模式'
-              : '「快制造」一体模式';
+              ? t('pages.system.applications.modeErpMes')
+              : t('pages.system.applications.modeKuaizhizao');
             const mutualGroupLabel = record.code === 'kuaizhizao'
-              ? '「进销存 + 快车间」'
-              : '「快制造」';
+              ? t('pages.system.applications.modeErpMesName')
+              : t('pages.system.applications.modeKuaizhizaoName');
             await new Promise<void>((resolve, reject) => {
               modalApi.confirm({
-                title: '互斥模式切换确认',
+                title: t('pages.system.applications.mutualExclusiveSwitchTitle'),
                 content: (
                   <div>
-                    <p>您正在切换至 <strong>{targetGroupLabel}</strong>。</p>
+                    <p>{t('pages.system.applications.mutualExclusiveSwitchingTo', { target: targetGroupLabel })}</p>
                     <p>
-                      当前已启用的 <strong>{exclusiveNames}</strong>（{mutualGroupLabel}）
-                      将被自动<strong style={{ color: '#ff4d4f' }}>禁用</strong>，其菜单入口将对用户隐藏。
+                      {t('pages.system.applications.mutualExclusiveCurrentlyEnabled')}{' '}
+                      <strong>{exclusiveNames}</strong>（{mutualGroupLabel}）
+                      {t('pages.system.applications.mutualExclusiveWillAutoDisable')}
                     </p>
                     <p style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
-                      两种模式共享同一套业务数据，切换不会丢失数据。
+                      {t('pages.system.applications.mutualExclusiveDataShared')}
                     </p>
                   </div>
                 ),
-                okText: '确认切换',
-                cancelText: '取消',
+                okText: t('pages.system.applications.mutualExclusiveConfirm'),
+                cancelText: t('common.cancel'),
                 onOk: () => resolve(),
                 onCancel: () => reject(new Error('user_cancel')),
               });
@@ -1468,7 +1468,7 @@ const ApplicationListPage: React.FC = () => {
                         boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.35)' : '-2px 2px 5px rgba(0,0,0,0.05)',
                       }}
                     >
-                      {isPro ? 'PRO' : 'FREE'}
+                      {isPro ? t('pages.system.applications.tierPro') : t('pages.system.applications.tierFree')}
                     </div>
                   )}
 
@@ -2190,7 +2190,6 @@ const ApplicationListPage: React.FC = () => {
                 total: filteredData.length,
               };
             } catch (error: any) {
-              console.error('获取应用列表失败:', error);
               messageApi.error(error?.message || t('pages.system.applications.loadListFailed'));
               return {
                 data: [],
@@ -2207,13 +2206,13 @@ const ApplicationListPage: React.FC = () => {
               size="middle"
               value={appCategoryFilter}
               options={[
-                { label: '全部', value: 'all' },
-                { label: '通用', value: 'general' },
-                { label: '其他', value: 'other' },
-                { label: '行业', value: 'industry' },
+                { label: t('pages.system.applications.categoryAll'), value: 'all' },
+                { label: t('pages.system.applications.categoryGeneral'), value: 'general' },
+                { label: t('pages.system.applications.categoryOther'), value: 'other' },
+                { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
                 { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
-                { label: '基础版', value: 'basic' },
-                { label: '专业版', value: 'pro' },
+                { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
+                { label: t('pages.system.applications.categoryPro'), value: 'pro' },
               ]}
               onChange={(value) => {
                 setAppCategoryFilter(value as AppCategoryFilter);
@@ -2328,7 +2327,7 @@ const ApplicationListPage: React.FC = () => {
               <p style={{ color: '#333', marginBottom: 24, fontWeight: 500 }}>
                 {t('pages.system.applications.resetWarn2', { defaultValue: '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。' })}
               </p>
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                 <Button 
                   type="primary" 
                   danger 
@@ -2354,7 +2353,7 @@ const ApplicationListPage: React.FC = () => {
                 {t('pages.system.applications.resetTypeConfirm', { defaultValue: '请在下方准确输入以下内容以确认操作：' })}
               </p>
               <div style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', padding: '8px 12px', borderRadius: 4, marginBottom: 16, fontWeight: 'bold', color: '#856404' }}>
-                我已知晓重置数据会造成的影响
+                {resetConfirmPhrase}
               </div>
               <ProFormText
                 placeholder={t('pages.system.applications.resetInputPlaceholder', { defaultValue: '请输入确认文本' })}
@@ -2370,9 +2369,9 @@ const ApplicationListPage: React.FC = () => {
                   size="large" 
                   block
                   loading={submitting}
-                  disabled={resetConfirmText !== '我已知晓重置数据会造成的影响'}
+                  disabled={resetConfirmText !== resetConfirmPhrase}
                   onClick={async () => {
-                    if (resetConfirmText !== '我已知晓重置数据会造成的影响') return;
+                    if (resetConfirmText !== resetConfirmPhrase) return;
                     try {
                       setSubmitting(true);
                       const result = await apiRequest<{ success: boolean; message?: string }>(
@@ -2465,7 +2464,7 @@ const ApplicationListPage: React.FC = () => {
         />
         <Divider />
         <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingAddSection')}</div>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Select
             showSearch
             allowClear

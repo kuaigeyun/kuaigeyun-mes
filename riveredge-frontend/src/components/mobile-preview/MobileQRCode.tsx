@@ -54,7 +54,7 @@ export const MobileQRCode: React.FC = () => {
             <div style={{ marginBottom: 12, background: 'white', padding: 8, borderRadius: 4, border: `1px solid ${token.colorBorder}`, display: 'flex', justifyContent: 'center' }}>
                 <QRCodeSVG value={mobileUrl} size={180} />
             </div>
-            <Space direction="vertical" size={8} style={{ width: '100%', alignItems: 'center' }}>
+            <Space orientation="vertical" size={8} style={{ width: '100%', alignItems: 'center' }}>
                 <Text strong>扫码体验移动端</Text>
 
                 <Collapse

@@ -2390,7 +2390,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="warning"
             showIcon
@@ -2407,7 +2407,7 @@ const MaterialsManagementPage: React.FC = () => {
             checked={rewriteResetSequence}
             onChange={(e) => setRewriteResetSequence(e.target.checked)}
           >
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
               <span>{t('app.master-data.materials.rewriteResetSequence')}</span>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {t('app.master-data.materials.rewriteResetSequenceDesc')}
@@ -2430,7 +2430,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
@@ -2474,7 +2474,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
@@ -2520,7 +2520,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
@@ -2558,7 +2558,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
@@ -2607,7 +2607,7 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
@@ -2808,7 +2808,7 @@ const MaterialsManagementPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>
             <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
               {t('app.master-data.materials.standardPresetSectionImportSettings')}
@@ -2819,7 +2819,7 @@ const MaterialsManagementPage: React.FC = () => {
               style={{ background: token.colorFillAlter }}
               styles={{ body: { padding: '12px 16px' } }}
             >
-              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={10} style={{ width: '100%' }}>
                 <div>
                   <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
                     {t('app.master-data.materials.standardPresetMaterialAssignLabel')}

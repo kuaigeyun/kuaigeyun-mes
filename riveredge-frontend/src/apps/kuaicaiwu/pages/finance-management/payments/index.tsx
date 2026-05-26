@@ -413,7 +413,7 @@ const PaymentsPage: React.FC = () => {
         confirmLoading={false}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按应付单号/供应商搜索"

@@ -1019,7 +1019,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         footer={null}
         destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Alert
             type="info"
             showIcon

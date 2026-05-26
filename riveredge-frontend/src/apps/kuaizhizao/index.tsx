@@ -64,6 +64,10 @@ const ProcessInspectionPage = lazy(() => import('./pages/quality-management/proc
 const FinishedGoodsInspectionPage = lazy(() => import('./pages/quality-management/finished-goods-inspection'));
 const TraceabilityPage = lazy(() => import('./pages/quality-management/traceability'));
 const InspectionPlansPage = lazy(() => import('./pages/quality-management/inspection-plans'));
+const NonconformingLedgerPage = lazy(() => import('./pages/quality-management/nonconforming-ledger'));
+const EightDReportsPage = lazy(() => import('./pages/quality-management/eight-d-reports'));
+const OQCInspectionPage = lazy(() => import('./pages/quality-management/oqc-inspection'));
+const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor'));
 
 // 设备管理页面
 const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
@@ -277,6 +281,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/finished-goods-inspection" element={withPageSuspense(FinishedGoodsInspectionPage)} />
       <Route path="quality-management/traceability" element={withPageSuspense(TraceabilityPage)} />
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
+      <Route path="quality-management/nonconforming-ledger" element={withPageSuspense(NonconformingLedgerPage)} />
+      <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
+      <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
+      <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
 
       {/* 设备管理路由 */}
       <Route path="equipment-management/dashboard" element={withPageSuspense(EquipmentDashboardPage)} />

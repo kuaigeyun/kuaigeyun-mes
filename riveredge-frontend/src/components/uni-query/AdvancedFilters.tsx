@@ -149,7 +149,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
         </Button>
       </div>
       
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         {filterGroups.map((group, groupIndex) => (
           <FilterGroupItem
             key={group.id}

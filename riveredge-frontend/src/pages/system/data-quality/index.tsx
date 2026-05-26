@@ -271,7 +271,7 @@ const DataQualityPage: React.FC = () => {
             label: t('pages.system.dataQuality.tabValidate'),
             children: validationReport ? (
               <Card>
-                <Space direction="vertical" style={{ width: '100%' }} size="large">
+                <Space orientation="vertical" style={{ width: '100%' }} size="large">
                   <div>
                     <Text strong>{t('pages.system.dataQuality.validateOverview')}</Text>
                     <div style={{ marginTop: 16 }}>
@@ -358,11 +358,11 @@ const DataQualityPage: React.FC = () => {
             label: t('pages.system.dataQuality.tabReport'),
             children: qualityReport ? (
               <Card>
-                <Space direction="vertical" style={{ width: '100%' }} size="large">
+                <Space orientation="vertical" style={{ width: '100%' }} size="large">
                   <div>
                     <Text strong>{t('pages.system.dataQuality.qualityMetrics')}</Text>
                     <div style={{ marginTop: 16 }}>
-                      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                             <Text>{t('pages.system.dataQuality.completeness')}</Text>

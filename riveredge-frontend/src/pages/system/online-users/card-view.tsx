@@ -307,7 +307,7 @@ const CardView: React.FC = () => {
                       )}
                       
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
-                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.statusLabel')}：</Text>
                             <Tag color={statusInfo.status === 'success' ? 'success' : statusInfo.status === 'warning' ? 'warning' : 'default'}>

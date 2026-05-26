@@ -1256,7 +1256,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)' }}>
           选择状态为「待启用」的模具，直接新建试模单，无需关联模具采购单。
         </p>
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
           <Table<MoldRow>
             size="small"

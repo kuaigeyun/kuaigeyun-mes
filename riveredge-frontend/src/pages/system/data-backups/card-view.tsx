@@ -340,7 +340,7 @@ const CardView: React.FC = () => {
                       ].filter(Boolean)}
                     >
                       <div style={{ marginBottom: 16 }}>
-                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text strong style={{ fontSize: 16 }}>
                               {backup.name}
@@ -358,7 +358,7 @@ const CardView: React.FC = () => {
                       </div>
                       
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
-                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelStatus')}</Text>
                             <Badge

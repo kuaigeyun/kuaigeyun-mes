@@ -3739,7 +3739,7 @@ const SalesOrdersPage: React.FC = () => {
         confirmLoading={pullQuotationSubmitting}
         destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
           <Input.Search
             allowClear
             value={pullQuotationKeyword}

@@ -470,7 +470,7 @@ const DrawingsPage: React.FC = () => {
         dataIndex: 'file',
         render: (_, r) =>
           r.file ? (
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
               <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(r.file)}>
                 {r.file.originalName}
               </Button>
@@ -494,7 +494,7 @@ const DrawingsPage: React.FC = () => {
         dataIndex: 'supplementaryFiles',
         render: (_, r) =>
           r.supplementaryFiles?.length ? (
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
               {r.supplementaryFiles.map((f) => (
                 <Button key={f.uuid} type="link" size="small" onClick={() => openPreview(f)}>
                   {f.originalName}

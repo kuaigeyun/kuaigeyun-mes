@@ -71,7 +71,7 @@ const EquipmentPage: React.FC = () => {
   return (
     <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       <ListPageTemplate>
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <div>
             <Title level={4} style={{ marginTop: 0, marginBottom: 8 }}>
               {t('app.haoligo.equipment.hub.title')}

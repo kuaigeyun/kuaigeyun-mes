@@ -45,7 +45,7 @@ export const TaxCalculator = () => {
         ]}
         style={{ marginBottom: 10 }}
       />
-      <Space direction="vertical" style={{ width: '100%' }} size={10}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={10}>
         {mode === 'forward' ? (
           <div>
             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.amountExclTax')}</Text>
@@ -144,7 +144,7 @@ export const WeightCalculator = () => {
         ]}
         style={{ marginBottom: 10 }}
       />
-      <Space direction="vertical" style={{ width: '100%' }} size={10}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={10}>
         <Select style={{ width: '100%' }} value={type} onChange={setType} size="small" options={[
           { label: t('pages.dashboard.toolkit.materialSteel'), value: 'steel' }, 
           { label: t('pages.dashboard.toolkit.materialStainless'), value: 'stainless' }, 
@@ -253,7 +253,7 @@ export const ExchangeCalculator = () => {
         ]}
         style={{ marginBottom: 10 }}
       />
-      <Space direction="vertical" style={{ width: '100%' }} size={10}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={10}>
         <Select style={{ width: '100%' }} value={currency} onChange={setCurrency} size="small" options={[
           { label: t('pages.dashboard.toolkit.usd'), value: 'USD' },
           { label: t('pages.dashboard.toolkit.eur'), value: 'EUR' },
@@ -368,7 +368,7 @@ export const UnitConverter = () => {
   return (
     <div style={{ padding: '8px 4px', width: 268 }}>
       <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.unitConversionTitle')}</Text>
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         <Select
           style={{ width: '100%' }}
           value={type}

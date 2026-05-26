@@ -496,7 +496,7 @@ const DataSourceListPage: React.FC = () => {
         ]}
       >
         <div style={{ marginBottom: 16 }}>
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <Space size="small">
                 <Text strong style={{ fontSize: 16 }}>
@@ -529,7 +529,7 @@ const DataSourceListPage: React.FC = () => {
         </div>
         
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.connectionStatusLabel')}</Text>
               <Badge
@@ -774,7 +774,7 @@ const DataSourceListPage: React.FC = () => {
         const list = (record.related_datasets || []) as unknown[];
         if (list.length === 0) return <span style={{ color: '#999' }}>{t('pages.system.dataSources.noDatasets')}</span>;
         return (
-          <Space direction="vertical" size={4}>
+          <Space orientation="vertical" size={4}>
             {list.slice(0, 10).map((d: any) => (
               <Tag key={d.uuid}>{d.name} ({d.code})</Tag>
             ))}

@@ -396,7 +396,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 0 && (
         <Card title="第一步：选择物料或物料组" size="small">
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 500 }}>选择类型</div>
               <Segmented<'material_group' | 'material'>
@@ -460,7 +460,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       {currentStep === 1 && (
         <Card title="第二步：工艺路线与工序" size="small">
           {route ? (
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
               <div>
                 <strong>工艺路线：</strong>{route.code} - {route.name}
               </div>
@@ -529,7 +529,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               </div>
             </Space>
           ) : (
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
               <Alert
                 type="info"
                 showIcon
@@ -577,7 +577,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 2 && (
         <Card title="第三步：确认工序" size="small">
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon
@@ -621,7 +621,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 3 && (
         <Card title="第四步：SOP 已创建" size="small">
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
               已创建 {createdSops.length} 个 SOP 草稿。建议逐条进入「编辑」完善基本信息、作业指导与报工采集。
             </div>

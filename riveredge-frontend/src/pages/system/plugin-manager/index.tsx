@@ -128,7 +128,7 @@ const PluginManagerPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <div style={{ fontWeight: 'bold' }}>
             {record.icon && <span style={{ marginRight: 8 }}>{record.icon}</span>}
             {record.name}
@@ -166,7 +166,7 @@ const PluginManagerPage: React.FC = () => {
       dataIndex: 'is_active',
       width: 200,
       render: (_, record) => (
-        <Space direction="vertical" size={4}>
+        <Space orientation="vertical" size={4}>
           <div>
             {record.is_valid ? (
               <Tag color="green" icon={<CheckCircleOutlined />}>

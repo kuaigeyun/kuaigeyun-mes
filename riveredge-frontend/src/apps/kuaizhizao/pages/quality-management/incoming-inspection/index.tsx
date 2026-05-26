@@ -53,6 +53,8 @@ import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { hasPermission } from '../../../../../utils/permission';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -130,12 +132,14 @@ const IncomingInspectionPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const { token } = AntdTheme.useToken();
   const incomingInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
+  const canReadNcLedger = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-nonconforming-ledger:read');
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
 
@@ -332,7 +336,27 @@ const IncomingInspectionPage: React.FC = () => {
         });
       }
 
-      messageApi.success('不合格品记录创建成功');
+      messageApi.success(
+        canReadNcLedger ? {
+          content: (
+            <Space>
+              <span>不合格品记录创建成功</span>
+              <Button
+                type="link"
+                size="small"
+                onClick={() =>
+                  window.open(
+                    `/apps/kuaizhizao/quality-management/nonconforming-ledger?incoming_inspection_id=${currentDefectInspection?.id || ''}`,
+                    '_blank'
+                  )
+                }
+              >
+                查看台账
+              </Button>
+            </Space>
+          ),
+        } : '不合格品记录创建成功'
+      );
       setCreateDefectModalVisible(false);
       defectFormRef.current?.resetFields();
       invalidateStats();

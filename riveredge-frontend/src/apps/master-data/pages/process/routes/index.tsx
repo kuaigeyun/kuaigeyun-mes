@@ -770,7 +770,7 @@ const ProcessRoutesPage: React.FC = () => {
         styles={{ body: { maxHeight: 'min(72vh, 720px)', overflowY: 'auto', paddingTop: 8 } }}
       >
         <Spin spinning={bindLoading || bindApplying}>
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={16}>
             <Card
               size="small"
               title={

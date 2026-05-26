@@ -348,7 +348,7 @@ const DrawingViewerKioskPage: React.FC = () => {
           >
             {/* 图纸信息 */}
             <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>图纸URL：</strong>
                   <span style={{ wordBreak: 'break-all' }}>{imageUrl}</span>
@@ -406,7 +406,7 @@ const DrawingViewerKioskPage: React.FC = () => {
 
             {/* 操作提示 */}
             <Card size="small" style={{ marginTop: 24, backgroundColor: '#f5f5f5' }}>
-              <Space direction="vertical" size="small" style={{ width: '100%', fontSize: 20 }}>
+              <Space orientation="vertical" size="small" style={{ width: '100%', fontSize: 20 }}>
                 <div>
                   <strong>操作提示：</strong>
                 </div>

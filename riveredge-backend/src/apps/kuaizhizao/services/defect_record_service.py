@@ -290,6 +290,9 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         status: Optional[str] = None,
         defect_type: Optional[str] = None,
         disposition: Optional[str] = None,
+        incoming_inspection_id: Optional[int] = None,
+        process_inspection_id: Optional[int] = None,
+        finished_goods_inspection_id: Optional[int] = None,
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None
     ) -> List[DefectRecordListResponse]:
@@ -324,6 +327,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             query &= Q(defect_type=defect_type)
         if disposition:
             query &= Q(disposition=disposition)
+        if incoming_inspection_id:
+            query &= Q(incoming_inspection_id=incoming_inspection_id)
+        if process_inspection_id:
+            query &= Q(process_inspection_id=process_inspection_id)
+        if finished_goods_inspection_id:
+            query &= Q(finished_goods_inspection_id=finished_goods_inspection_id)
         if date_start:
             query &= Q(created_at__gte=date_start)
         if date_end:
@@ -333,6 +342,43 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         defect_records = await DefectRecord.filter(query).order_by('-created_at').offset(skip).limit(limit).all()
 
         return [DefectRecordListResponse.model_validate(record) for record in defect_records]
+
+    async def update_disposition(
+        self,
+        tenant_id: int,
+        defect_id: int,
+        updated_by: int,
+        disposition: str,
+        status: Optional[str] = None,
+        quarantine_location: Optional[str] = None,
+        remarks: Optional[str] = None,
+    ) -> DefectRecordResponse:
+        """更新不合格品台账处置信息。"""
+        defect_record = await DefectRecord.get_or_none(
+            id=defect_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not defect_record:
+            raise NotFoundError(f"不良品记录不存在: {defect_id}")
+
+        user_info = await self.get_user_info(updated_by)
+        defect_record.disposition = disposition
+        if status:
+            defect_record.status = status
+            if status == "processed":
+                defect_record.processed_at = datetime.now()
+                defect_record.processed_by = updated_by
+                defect_record.processed_by_name = user_info["name"]
+        if quarantine_location is not None:
+            defect_record.quarantine_location = quarantine_location
+        if remarks:
+            append_line = f"[处置更新 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {remarks}"
+            defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
+        defect_record.updated_by = updated_by
+        defect_record.updated_by_name = user_info["name"]
+        await defect_record.save()
+        return DefectRecordResponse.model_validate(defect_record)
 
     async def create_defect_from_incoming_inspection(
         self,

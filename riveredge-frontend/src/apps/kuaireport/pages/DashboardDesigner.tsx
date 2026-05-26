@@ -394,7 +394,7 @@ const DashboardDesigner: React.FC = () => {
                             />
                         ) : (
                             <div style={{ color: 'rgba(255,255,255,0.45)' }}>
-                                <Space direction="vertical" style={{ width: '100%' }}>
+                                <Space orientation="vertical" style={{ width: '100%' }}>
                                     <div>大屏名称: {name}</div>
                                     <div>组件总数: {layout.length}</div>
                                     <Divider style={{ borderColor: '#303030' }} />

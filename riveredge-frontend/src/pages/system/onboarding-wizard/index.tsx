@@ -2194,7 +2194,7 @@ const OnboardingWizardPage: React.FC = () => {
                       : token.colorBgContainer,
                   }}
                 >
-                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Space size={12}>
                         <Checkbox 

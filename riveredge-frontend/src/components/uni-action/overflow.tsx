@@ -1,5 +1,6 @@
 import React from 'react'
 import { Button, Dropdown, Space, Popconfirm, Tooltip } from 'antd'
+import i18next from 'i18next'
 import {
   ApartmentOutlined,
   FileTextOutlined,
@@ -34,6 +35,12 @@ export const ROW_ACTIONS_MIN_PRIMARY_VISIBLE = 3
 
 /** 列表操作列内联按钮横向间距（Ant Design Space） */
 export const ROW_ACTIONS_INLINE_GAP = 4
+
+function getMoreButtonLabel(): string {
+  const lang = String(i18next.resolvedLanguage ?? i18next.language ?? '').toLowerCase()
+  if (lang.startsWith('zh')) return '更多'
+  return i18next.t('common.more', { defaultValue: 'More' })
+}
 
 function normalizeAndSortActions(
   nodes: React.ReactNode[],
@@ -276,7 +283,7 @@ export function renderRowActionsOverflow(
         trigger={['click']}
       >
         <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
-          更多
+          {getMoreButtonLabel()}
         </Button>
       </Dropdown>
     </Space>

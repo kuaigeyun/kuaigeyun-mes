@@ -2035,7 +2035,7 @@ const InboundPage: React.FC = () => {
         okText="创建采购入库单"
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按通知单号/采购订单号/供应商搜索"

@@ -3583,7 +3583,7 @@ const BOMDesignerPage: React.FC = () => {
       destroyOnHidden
     >
       {!versionCompareResult ? (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Form.Item label={t('app.master-data.bom.versionCompareSelectHint')}>
             <Space wrap>
               <Select
@@ -3625,7 +3625,7 @@ const BOMDesignerPage: React.FC = () => {
               <h4 style={{ color: '#52c41a', marginBottom: 12 }}>
                 {t('app.master-data.bom.versionCompareAdded')}（{versionCompareResult.added.length}{t('app.master-data.bom.versionCompareItem')}）
               </h4>
-              <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Space orientation="vertical" style={{ width: '100%' }} size="small">
                 {versionCompareResult.added.map((item: any, index: number) => (
                   <div
                     key={index}
@@ -3657,7 +3657,7 @@ const BOMDesignerPage: React.FC = () => {
               <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>
                 {t('app.master-data.bom.versionCompareRemoved')}（{versionCompareResult.removed.length}{t('app.master-data.bom.versionCompareItem')}）
               </h4>
-              <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Space orientation="vertical" style={{ width: '100%' }} size="small">
                 {versionCompareResult.removed.map((item: any, index: number) => (
                   <div
                     key={index}
@@ -3689,7 +3689,7 @@ const BOMDesignerPage: React.FC = () => {
               <h4 style={{ color: '#1890ff', marginBottom: 12 }}>
                 {t('app.master-data.bom.versionCompareModified')}（{versionCompareResult.modified.length}{t('app.master-data.bom.versionCompareItem')}）
               </h4>
-              <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Space orientation="vertical" style={{ width: '100%' }} size="small">
                 {versionCompareResult.modified.map((item: any, index: number) => {
                   const v1 = item.version1 ?? {};
                   const v2 = item.version2 ?? {};
@@ -3705,7 +3705,7 @@ const BOMDesignerPage: React.FC = () => {
                       }}
                     >
                       <div style={{ marginBottom: 8 }}><strong>{name}</strong></div>
-                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                         {v1.quantity !== v2.quantity && (
                           <div style={{ paddingLeft: 16 }}>
                             {t('app.master-data.bom.quantityTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.quantity}</span>

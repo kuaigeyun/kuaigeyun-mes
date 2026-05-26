@@ -181,7 +181,7 @@ export const ParameterConfigTemplate: React.FC<ParameterConfigTemplateProps> = (
                 {group.description}
               </Text>
             )}
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               {group.parameters.map((param) => (
                 <ProFormCheckbox
                   key={param.key}

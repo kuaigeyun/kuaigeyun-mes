@@ -399,13 +399,13 @@ const InitialDataImportPage: React.FC = () => {
   const renderStepContent = () => {
     if (currentStep === 0) {
       return (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
             {t('app.kuaizhizao.initialData.pageIntro')}
           </Paragraph>
 
           <Card size="small" styles={{ body: { padding: 48 } }}>
-            <Space direction="vertical" size={0} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={0} style={{ width: '100%' }}>
               <Space size={6} align="center" wrap style={{ marginBottom: 8 }}>
                 <Title level={5} style={{ margin: 0 }}>
                   {t('app.kuaizhizao.initialData.cardPrepTitle')}
@@ -440,7 +440,7 @@ const InitialDataImportPage: React.FC = () => {
           ) : null}
 
           <Card size="small" styles={{ body: { padding: 48 } }}>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="large" style={{ width: '100%' }}>
               <div>
                 <Space size={6} align="center" wrap style={{ marginBottom: 8 }}>
                   <Title level={5} style={{ margin: 0 }}>
@@ -508,7 +508,7 @@ const InitialDataImportPage: React.FC = () => {
     }
     if (currentStep === 1) {
       return (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <Paragraph type="secondary">{t('app.kuaizhizao.initialData.wipIntro')}</Paragraph>
           <Space wrap align="center">
             <Button type="primary" icon={<ImportOutlined />} onClick={() => setWipImportVisible(true)}>
@@ -532,7 +532,7 @@ const InitialDataImportPage: React.FC = () => {
     }
     if (currentStep === 2) {
       return (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <Paragraph type="secondary">{t('app.kuaizhizao.initialData.arIntro')}</Paragraph>
           <Space wrap align="center">
             <Button type="primary" icon={<ImportOutlined />} onClick={() => setReceivablesPayablesImportVisible(true)}>

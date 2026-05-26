@@ -748,7 +748,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             {t('components.techStackModal.overview.intro')}
           </Paragraph>
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
               <Text strong>FastAPI</Text>：{t('components.techStackModal.overview.fastapi')}
             </div>
@@ -923,7 +923,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             {t('components.techStackModal.aiAssist.intro')}
           </Paragraph>
-          <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
             <div>
               {t('components.techStackModal.aiAssist.cursor')}
             </div>

@@ -997,7 +997,7 @@ const DeliveryNotesPage: React.FC = () => {
         confirmLoading={pullSalesDeliverySubmitting}
         destroyOnClose
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按出库单号/销售订单号/客户搜索"

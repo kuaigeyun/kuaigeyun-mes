@@ -411,7 +411,7 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
       )}
 
       {step === 1 && assembly && (
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Alert
             type="info"
             showIcon
@@ -426,7 +426,7 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
               <Tree treeData={treeData} defaultExpandAll blockNode />
             </div>
             <div style={{ flex: 1 }}>
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <div>
                   <Typography.Text>{t('app.master-data.drawings.stepBomWizard.rootMaterial')}</Typography.Text>
                   <Select

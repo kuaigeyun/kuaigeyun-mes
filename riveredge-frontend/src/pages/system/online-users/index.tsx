@@ -213,7 +213,7 @@ const OnlineUsersPage: React.FC = () => {
         ]}
       >
         <div style={{ marginBottom: 16 }}>
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Avatar size={48} icon={<UserOutlined />} />
               <div style={{ flex: 1 }}>
@@ -237,7 +237,7 @@ const OnlineUsersPage: React.FC = () => {
         </div>
         
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             {user.email && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.email')}：</Text>

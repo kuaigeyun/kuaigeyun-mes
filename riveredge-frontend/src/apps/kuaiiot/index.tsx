@@ -14,7 +14,7 @@ const KuaiIotApp: React.FC = () => {
         <Result
           icon={<ThunderboltOutlined style={{ color: '#13c2c2', fontSize: 64 }} />}
           title={
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
               <Title level={2}>kuaiiot | 快数采</Title>
               <Text type="secondary">工业物联网数据采集与集成平台</Text>
             </Space>

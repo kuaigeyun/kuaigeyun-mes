@@ -108,7 +108,7 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Typography.Text type="secondary">
           {t('components.uniImport.previewSummary', {
             total: preview.totalDataRows,

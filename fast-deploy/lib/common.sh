@@ -458,11 +458,34 @@ stop_service() {
         fi
         rm -f "$pidf"
     fi
-    if [ "$name" = "caddy" ]; then
-        local stragglers
-        stragglers="$(pgrep -f "caddy run" 2>/dev/null || true)"
-        for spid in $stragglers; do
-            kill "$spid" 2>/dev/null && log_info "已清理残留 caddy (PID $spid)" || true
+    local patterns=()
+    case "$name" in
+        caddy)
+            patterns=("caddy run")
+            ;;
+        backend)
+            patterns=("uvicorn server.main:app")
+            ;;
+        worker)
+            patterns=("taskiq worker.*core.tasks.taskiq_app:broker")
+            ;;
+        scheduler)
+            patterns=("taskiq scheduler.*core.tasks.taskiq_app:scheduler")
+            ;;
+    esac
+    if [ "${#patterns[@]}" -gt 0 ]; then
+        local pattern stragglers
+        for pattern in "${patterns[@]}"; do
+            stragglers="$(pgrep -f "$pattern" 2>/dev/null || true)"
+            for spid in $stragglers; do
+                [ -n "$spid" ] || continue
+                if [ "$name" = "backend" ] || [ "$name" = "worker" ] || [ "$name" = "scheduler" ]; then
+                    graceful_kill_pid "$spid"
+                else
+                    kill "$spid" 2>/dev/null || true
+                fi
+                log_info "已清理残留 $name (PID $spid)"
+            done
         done
     fi
 }
@@ -1422,6 +1445,9 @@ cmd_stop_prod() {
     stop_service worker
     stop_service scheduler
     stop_service backend
+    # 清理未纳入 pid 文件管理的旧进程占用（如历史 uvicorn/caddy）
+    kill_port "$PROXY_PORT"
+    kill_port "$BACKEND_PORT"
     log_ok "生产服务已停止"
 }
 

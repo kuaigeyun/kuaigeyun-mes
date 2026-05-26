@@ -291,7 +291,7 @@ export const FilterGroupItem: React.FC<FilterGroupItemProps> = ({
       </div>
       
       {/* 条件和嵌套组 */}
-      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={4} style={{ width: '100%' }}>
         {/* 筛选条件（支持拖拽排序） */}
         <DndContext
           sensors={sensors}
@@ -318,7 +318,7 @@ export const FilterGroupItem: React.FC<FilterGroupItemProps> = ({
         
         {/* 嵌套组 */}
         {group.groups && group.groups.length > 0 && (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             {group.groups.map((nestedGroup, nestedIndex) => (
               <FilterGroupItem
                 key={nestedGroup.id}

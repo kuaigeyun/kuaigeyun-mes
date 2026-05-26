@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from tortoise.exceptions import IntegrityError
 import json
 import re
@@ -940,6 +940,16 @@ class MenuService:
         app_name = app.get("name") if app else None
 
         existing_menu_map = {menu.uuid: menu for menu in existing_menus}
+        # 性能优化：同步过程使用内存索引匹配，避免每个菜单节点重复访问数据库
+        existing_menu_by_path: Dict[str, Menu] = {}
+        existing_menu_by_parent_name: Dict[Tuple[Optional[int], str], Menu] = {}
+        for menu in existing_menus:
+            if menu.path and menu.path not in existing_menu_by_path:
+                existing_menu_by_path[menu.path] = menu
+            if menu.name:
+                key = (menu.parent_id, menu.name)
+                if key not in existing_menu_by_parent_name:
+                    existing_menu_by_parent_name[key] = menu
         
         # 递归创建或更新菜单
         created_count = 0
@@ -1001,27 +1011,15 @@ class MenuService:
             if menu_uuid and menu_uuid in existing_menu_map:
                 existing_menu = existing_menu_map[menu_uuid]
             elif menu_path:
-                existing_menu = await Menu.filter(
-                    tenant_id=tenant_id,
-                    application_uuid=application_uuid,
-                    path=menu_path,
-                    deleted_at__isnull=True
-                ).first()
+                existing_menu = existing_menu_by_path.get(menu_path)
             elif menu_name:
                 # 无 path 的菜单（如父级分组）：按 parent_id + name 匹配，从源头杜绝重复
-                filter_kw: Dict[str, Any] = dict(
-                    tenant_id=tenant_id,
-                    application_uuid=application_uuid,
-                    name=menu_name,
-                    deleted_at__isnull=True,
-                )
-                if parent_id is None:
-                    filter_kw["parent_id__isnull"] = True
-                else:
-                    filter_kw["parent_id"] = parent_id
-                existing_menu = await Menu.filter(**filter_kw).first()
+                existing_menu = existing_menu_by_parent_name.get((parent_id, menu_name))
             
             if existing_menu:
+                old_path = existing_menu.path
+                old_parent_id = existing_menu.parent_id
+                old_name = existing_menu.name
                 # 更新现有菜单
                 existing_menu.name = menu_name
                 existing_menu.path = menu_path
@@ -1043,6 +1041,14 @@ class MenuService:
                 # 从 existing_menu_map 中移除，表示已处理
                 if existing_menu.uuid in existing_menu_map:
                     del existing_menu_map[existing_menu.uuid]
+                if old_path and existing_menu_by_path.get(old_path) is existing_menu:
+                    del existing_menu_by_path[old_path]
+                if old_name and existing_menu_by_parent_name.get((old_parent_id, old_name)) is existing_menu:
+                    del existing_menu_by_parent_name[(old_parent_id, old_name)]
+                if existing_menu.path:
+                    existing_menu_by_path[existing_menu.path] = existing_menu
+                if existing_menu.name:
+                    existing_menu_by_parent_name[(existing_menu.parent_id, existing_menu.name)] = existing_menu
                 
                 menu_obj = existing_menu
             else:
@@ -1063,6 +1069,10 @@ class MenuService:
                     meta=menu_meta,
                 )
                 created_count += 1
+                if menu_obj.path:
+                    existing_menu_by_path[menu_obj.path] = menu_obj
+                if menu_obj.name:
+                    existing_menu_by_parent_name[(menu_obj.parent_id, menu_obj.name)] = menu_obj
             
             # 递归处理子菜单
             if children:
@@ -1141,6 +1151,7 @@ class MenuService:
             is_active=True,
         )
         total = await MenuService._sync_builtin_system_menu_tree(tenant_id=tenant_id)
+        need_permission_sync = False
         for app in apps:
             menu_config = app.get("menu_config")
             app_uuid = app.get("uuid")
@@ -1153,10 +1164,18 @@ class MenuService:
                         application_uuid=str(app_uuid),
                         menu_config=menu_config,
                         is_active=app.get("is_active", True),
+                        skip_permission_sync=True,
                     )
                     total += count
+                    need_permission_sync = True
                 except Exception as e:
                     logger.warning(f"同步应用 {app.get('code')} 菜单失败: {e}")
+        if need_permission_sync:
+            try:
+                from core.services.authorization.permission_sync_service import PermissionSyncService
+                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+            except Exception as e:
+                logger.warning(f"全量菜单同步后权限同步失败: {e}")
         if total > 0:
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")
         return total

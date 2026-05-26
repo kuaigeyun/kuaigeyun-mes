@@ -18,6 +18,9 @@ import { getQualityExceptionLifecycle } from '../../../utils/qualityExceptionLif
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+import { qualityImprovementApi } from '../../../services/quality-improvement';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { hasPermission } from '../../../../../utils/permission';
 
 /**
  * 质量异常接口定义
@@ -52,12 +55,14 @@ interface QualityException {
  */
 const QualityExceptionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
+  const canCreate8D = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:create');
   // 用户列表交由 UniUserSelect 内置管理
   const handleFormRef = useRef<any>(null);
 
@@ -303,6 +308,25 @@ const QualityExceptionsPage: React.FC = () => {
               danger
             >
               取消
+            </Button>
+          )}
+          {canCreate8D && (
+            <Button
+              type="link"
+              size="small"
+              onClick={async () => {
+                try {
+                  await qualityImprovementApi.eightD.startFromException(
+                    Number(record.id),
+                    `${record.work_order_code || '质量异常'}-${record.problem_description || '8D报告'}`
+                  );
+                  messageApi.success('已发起 8D 报告');
+                } catch (error: any) {
+                  messageApi.error(error?.message || '发起8D失败');
+                }
+              }}
+            >
+              发起8D
             </Button>
           )}
         </Space>

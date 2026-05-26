@@ -248,7 +248,7 @@ const SOPViewerKioskPage: React.FC = () => {
           <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* SOP基本信息 */}
             <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>SOP编号：</strong>
                   <span>{sop.code}</span>
@@ -318,7 +318,7 @@ const SOPViewerKioskPage: React.FC = () => {
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 24 }}
                 styles={{ body: { flex: 1, overflow: 'auto' } }}
               >
-                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                   {/* 步骤标题 */}
                   <div style={{ fontSize: 32, fontWeight: 600, textAlign: 'center' }}>
                     {currentStep.title}
