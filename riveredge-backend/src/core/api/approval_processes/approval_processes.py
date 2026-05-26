@@ -18,6 +18,7 @@ from core.schemas.approval_process import (
 from core.services.approval.approval_process_service import ApprovalProcessService
 from core.api.deps.deps import get_current_tenant
 from core.services.system.installed_feature_scope import get_installed_application_codes
+from core.services.system.installed_feature_scope import approval_process_codes_for_installed_apps
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -295,6 +296,11 @@ async def load_preset_approval_processes(
 
     为当前组织加载中国中小制造业极简审批流程预设（简单审批、采购单、销售单、工单等）。
     """
-    count = await ApprovalProcessService.load_preset_sme(tenant_id)
+    installed_app_codes = await get_installed_application_codes(tenant_id)
+    visible_codes = approval_process_codes_for_installed_apps(installed_app_codes)
+    count = await ApprovalProcessService.load_preset_sme(
+        tenant_id,
+        only_codes=visible_codes,
+    )
     return {"created": count, "message": f"成功加载 {count} 个审批流程预设"}
 

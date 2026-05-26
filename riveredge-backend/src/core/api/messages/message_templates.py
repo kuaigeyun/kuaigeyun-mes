@@ -14,6 +14,8 @@ from core.schemas.message_template import (
 )
 from core.services.messaging.message_template_service import MessageTemplateService
 from core.api.deps.deps import get_current_tenant
+from core.services.system.installed_feature_scope import get_installed_application_codes
+from core.services.system.installed_feature_scope import message_template_codes_for_installed_apps
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -83,7 +85,8 @@ async def list_message_templates(
         skip=skip,
         limit=limit,
         type=type,
-        is_active=is_active
+        is_active=is_active,
+        installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return [MessageTemplateResponse.model_validate(mt) for mt in message_templates]
 
@@ -196,6 +199,12 @@ async def load_preset_message_templates(
 
     为当前组织加载中国中小制造业极简消息模板预设（审批通知、验证码、欢迎邮件等）。
     """
-    count = await MessageTemplateService.load_preset_sme(tenant_id)
+    installed_app_codes = await get_installed_application_codes(tenant_id)
+    visible_codes = message_template_codes_for_installed_apps(installed_app_codes)
+    count = await MessageTemplateService.load_preset_sme(
+        tenant_id,
+        only_codes=visible_codes,
+    )
     return {"created": count, "message": f"成功加载 {count} 个消息模板预设"}
+
 

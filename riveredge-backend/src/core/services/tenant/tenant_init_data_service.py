@@ -304,15 +304,36 @@ class TenantInitDataService:
 
         if key == "approval_process_preset":
             from core.services.approval.approval_process_service import ApprovalProcessService
-            return await ApprovalProcessService.load_preset_sme(tenant_id)
+            from core.services.system.installed_feature_scope import (
+                approval_process_codes_for_installed_apps,
+                get_installed_application_codes,
+            )
+            installed = await get_installed_application_codes(tenant_id)
+            return await ApprovalProcessService.load_preset_sme(
+                tenant_id,
+                only_codes=approval_process_codes_for_installed_apps(installed),
+            )
 
         if key == "message_template_preset":
             from core.services.messaging.message_template_service import MessageTemplateService
-            return await MessageTemplateService.load_preset_sme(tenant_id)
+            from core.services.system.installed_feature_scope import (
+                get_installed_application_codes,
+                message_template_codes_for_installed_apps,
+            )
+            installed = await get_installed_application_codes(tenant_id)
+            return await MessageTemplateService.load_preset_sme(
+                tenant_id,
+                only_codes=message_template_codes_for_installed_apps(installed),
+            )
 
         if key == "print_template_preset":
             from core.services.print.print_template_service import PrintTemplateService
-            return await PrintTemplateService.load_preset_sme(tenant_id)
+            from core.services.system.installed_feature_scope import get_installed_application_codes
+            installed = await get_installed_application_codes(tenant_id)
+            return await PrintTemplateService.load_preset_sme(
+                tenant_id,
+                installed_app_codes=installed,
+            )
 
         if key == "warehouse_preset":
             from apps.master_data.services.warehouse_service import WarehouseService

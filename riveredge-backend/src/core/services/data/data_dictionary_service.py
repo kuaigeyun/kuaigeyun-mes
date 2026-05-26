@@ -637,7 +637,11 @@ class DataDictionaryService:
             return None
 
     @staticmethod
-    async def initialize_system_dictionaries(tenant_id: int) -> Dict[str, Any]:
+    async def initialize_system_dictionaries(
+        tenant_id: int,
+        *,
+        only_codes: Optional[Set[str]] = None,
+    ) -> Dict[str, Any]:
         """
         初始化系统字典
         
@@ -645,6 +649,7 @@ class DataDictionaryService:
         
         Args:
             tenant_id: 组织ID
+            only_codes: 仅初始化这些字典 code（None 表示全部）
             
         Returns:
             Dict[str, Any]: 初始化结果
@@ -659,12 +664,17 @@ class DataDictionaryService:
         updated_items_count = 0
         
         for dict_config in SYSTEM_DICTIONARIES:
+            code = str(dict_config.get("code") or "").strip()
+            if not code:
+                continue
+            if only_codes is not None and code not in only_codes:
+                continue
             try:
                 dictionary, items_created, items_updated = (
                     await DataDictionaryService._sync_single_system_dictionary_config(tenant_id, dict_config)
                 )
                 created_dictionaries.append({
-                    "code": dict_config["code"],
+                    "code": code,
                     "name": dict_config["name"],
                     "uuid": str(dictionary.uuid),
                     "items_created": items_created,
@@ -673,10 +683,10 @@ class DataDictionaryService:
                 created_items_count += items_created
                 updated_items_count += items_updated
                 logger.info(
-                    f"系统字典 {dict_config['code']} 初始化完成：创建 {items_created} 个字典项，更新 {items_updated} 个字典项"
+                    f"系统字典 {code} 初始化完成：创建 {items_created} 个字典项，更新 {items_updated} 个字典项"
                 )
             except Exception as e:
-                logger.error(f"初始化系统字典 {dict_config['code']} 失败: {e}")
+                logger.error(f"初始化系统字典 {code} 失败: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
         

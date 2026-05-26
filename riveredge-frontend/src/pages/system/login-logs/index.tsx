@@ -16,6 +16,7 @@ import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { ListPageTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import {
   getLoginLogs,
@@ -34,6 +35,7 @@ const LoginLogsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<LoginLogStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -44,7 +46,7 @@ const LoginLogsPage: React.FC = () => {
    */
   const loadStats = React.useCallback(async () => {
     // 检查 currentUser，确保在调用 API 前用户已登录
-    if (!currentUser) {
+    if (!currentUser || !statCardsVisible) {
       return;
     }
     
@@ -57,14 +59,14 @@ const LoginLogsPage: React.FC = () => {
         messageApi.error(error.message || t('pages.system.loginLogs.loadStatsFailed'));
       }
     }
-  }, [currentUser, messageApi]);
+  }, [currentUser, messageApi, statCardsVisible]);
 
   useEffect(() => {
     // 只有在用户已登录（currentUser 存在）时才加载统计数据
-    if (currentUser) {
+    if (currentUser && statCardsVisible) {
       loadStats();
     }
-  }, [currentUser, loadStats]);
+  }, [currentUser, loadStats, statCardsVisible]);
 
   /**
    * 查看日志详情

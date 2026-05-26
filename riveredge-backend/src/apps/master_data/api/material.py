@@ -1737,8 +1737,12 @@ async def get_standard_parts_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    """按行业 / 一级分类 / 二级分类返回常用标准件（含 GB/T 推荐编号），不含租户业务数据。"""
-    return MaterialService.get_standard_parts_preset_catalog()
+    """标准件预设功能当前阶段已停用。"""
+    raise _http_error(
+        status_code=status.HTTP_410_GONE,
+        detail="标准件预设功能已停用，当前阶段不再提供预览接口。",
+        tenant_id=tenant_id,
+    )
 
 
 @router.post("/standard-parts/load-preset", summary="Import selected standard-part materials")
@@ -1747,33 +1751,12 @@ async def load_standard_parts_preset(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    """
-    将所选标准件写入物料分组；采购件（Buy）。
-    - **groupMode=single**：全部写入 **materialGroupUuid**。
-    - **groupMode=preset_by_category**：按预设库分类各建/复用物料分组（编码 `SP_*`），再写入对应组；可选 **parentMaterialGroupUuid** 作为父级。
-    - **codeMode=auto**：主编码走 MATERIAL_CODE 编码规则（或回退生成）。
-    - **codeMode=gb**：主编码使用目录中的国标推荐编号（gbCode）；已存在则跳过。
-    """
-    try:
-        result = await MaterialService.load_standard_parts_preset(
-            tenant_id,
-            body.preset_keys,
-            body.code_mode,
-            group_mode=body.group_mode,
-            material_group_uuid=body.material_group_uuid,
-            parent_material_group_uuid=body.parent_material_group_uuid,
-        )
-        return {
-            "created": result["created"],
-            "skippedDuplicateCode": result["skipped_duplicate_code"],
-            "skippedDuplicateItem": result["skipped_duplicate_item"],
-            "failed": result["failed"],
-            "groupsCreated": result["groups_created"],
-            "groupsReused": result["groups_reused"],
-            "message": result["message"],
-        }
-    except ValidationError as e:
-        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    """标准件预设功能当前阶段已停用。"""
+    raise _http_error(
+        status_code=status.HTTP_410_GONE,
+        detail="标准件预设功能已停用，当前阶段不再提供加载接口。",
+        tenant_id=tenant_id,
+    )
 
 
 @router.get("/{material_uuid}", response_model=MaterialResponse, summary="Get material")

@@ -213,6 +213,24 @@ async def delete_print_template(
         )
 
 
+@router.post("/load-preset")
+async def load_preset_print_templates(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载打印模板预设
+
+    为当前组织加载系统打印模板预设；预设项会按已安装应用自动过滤。
+    """
+    installed_app_codes = await get_installed_application_codes(tenant_id)
+    count = await PrintTemplateService.load_preset_sme(
+        tenant_id,
+        installed_app_codes=installed_app_codes,
+    )
+    return {"created": count, "message": f"成功加载 {count} 个打印模板预设"}
+
+
 @router.post("/{uuid}/render", response_model=PrintTemplateRenderResponse)
 async def render_print_template(
     uuid: str,

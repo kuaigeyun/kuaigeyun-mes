@@ -1,4 +1,6 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 export interface ListPageStatCardsContextValue {
   enabled: boolean;
@@ -35,7 +37,20 @@ export function getListPageStatCardsVisible(
   pageKey: string,
 ): boolean {
   const map = (preferences?.ui as Record<string, unknown> | undefined)?.list_page_stat_cards;
-  if (!map || typeof map !== 'object') return true;
+  if (!map || typeof map !== 'object') return false;
   const stored = (map as Record<string, unknown>)[toListPageStatCardsPreferenceSegment(pageKey)];
-  return stored === undefined ? true : Boolean(stored);
+  return stored === undefined ? false : Boolean(stored);
+}
+
+/**
+ * 在页面组件中读取当前列表页指标卡显隐偏好（无需依赖 ListPageTemplate 内部 Context）。
+ */
+export function useListPageStatCardsVisible(pageKey?: string): boolean {
+  const location = useLocation();
+  const preferences = useUserPreferenceStore((s) => s.preferences);
+  const resolvedPageKey = pageKey ?? location.pathname;
+  return useMemo(
+    () => getListPageStatCardsVisible(preferences, resolvedPageKey),
+    [preferences, resolvedPageKey],
+  );
 }

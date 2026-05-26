@@ -20,6 +20,7 @@ import {
   getPrintTemplateByUuid,
   createPrintTemplate,
   getNextPrintTemplateCode,
+  loadPresetPrintTemplates,
   updatePrintTemplate,
   deletePrintTemplate,
   renderPrintTemplate,
@@ -29,11 +30,10 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
-import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
+import { EMPTY_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -90,7 +90,6 @@ const extractVariables = (content: string): string[] => {
  */
 const PrintTemplateListPage: React.FC = () => {
   const { t } = useTranslation();
-  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -289,50 +288,14 @@ const PrintTemplateListPage: React.FC = () => {
   };
 
   /**
-   * 加载预设：仅加载当前阶段保留的基础单据模板
+   * 加载系统预设：按后端已安装功能范围创建缺失模板
    */
   const handleLoadPreset = async () => {
     try {
       setPresetLoading(true);
-      const BASIC_PRESET_TYPES = new Set([
-        'quotation',
-        'sales_order',
-        'purchase_order',
-        'work_order',
-        'delivery_notice',
-      ]);
-      const results = await Promise.allSettled(
-        DOCUMENT_TYPE_OPTIONS
-          .filter(({ value }) => BASIC_PRESET_TYPES.has(value))
-          .map(({ value: presetDocumentType }) => {
-          const schema = getSchemaByType(presetDocumentType);
-          const schemaName = schema?.name ?? presetDocumentType;
-          const code = DOCUMENT_TYPE_TO_CODE[presetDocumentType] ?? presetDocumentType.toUpperCase();
-          const content = presetDocumentType === 'work_order' ? DEFAULT_WORK_ORDER_HTML_TEMPLATE : EMPTY_HTML_TEMPLATE;
-          return createPrintTemplate({
-            name: schemaName + t('pages.system.printTemplates.presetTemplateNameSuffix'),
-            code,
-            type: 'html',
-            description: t('pages.system.printTemplates.presetTemplateDescription', { name: schemaName }),
-            content,
-            config: { document_type: presetDocumentType },
-            is_active: true,
-            is_default: false,
-          });
-        })
-      );
-      const successCount = results.filter((r) => r.status === 'fulfilled').length;
-      const failCount = results.filter((r) => r.status === 'rejected').length;
-      if (successCount > 0) {
-        messageApi.success(t('pages.system.printTemplates.presetAllLoaded', { count: successCount }));
-        actionRef.current?.reload();
-      }
-      if (failCount > 0) {
-        messageApi.warning(t('pages.system.printTemplates.presetPartiallyLoaded', { success: successCount, failed: failCount }));
-      }
-      if (successCount === 0 && failCount > 0) {
-        messageApi.error(t('pages.system.printTemplates.createWorkOrderFailed'));
-      }
+      const res = await loadPresetPrintTemplates();
+      messageApi.success(res.message || t('pages.system.printTemplates.presetAllLoaded', { count: res.created ?? 0 }));
+      actionRef.current?.reload();
     } catch (_error: any) {
       messageApi.error(_error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
     } finally {
@@ -739,11 +702,9 @@ const PrintTemplateListPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.printTemplates.batchDelete')}
           toolBarRender={() => [
-            trialRunMode && (
             <Button key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
               {t('pages.system.printTemplates.loadPresetButton')}
             </Button>
-            ),
           ]}
           showImportButton
           showExportButton

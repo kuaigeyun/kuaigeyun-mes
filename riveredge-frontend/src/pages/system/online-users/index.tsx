@@ -12,6 +12,7 @@ import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag,
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import {
   getOnlineUsers,
@@ -38,6 +39,7 @@ const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -49,7 +51,7 @@ const OnlineUsersPage: React.FC = () => {
    */
   const loadStats = React.useCallback(async () => {
     // 检查 currentUser，确保在调用 API 前用户已登录
-    if (!currentUser) {
+    if (!currentUser || !statCardsVisible) {
       return;
     }
     
@@ -62,7 +64,7 @@ const OnlineUsersPage: React.FC = () => {
         messageApi.error(error.message || t('pages.system.onlineUsers.loadStatsFailed'));
       }
     }
-  }, [currentUser, messageApi]);
+  }, [currentUser, messageApi, statCardsVisible]);
 
   const getUserStatus = (user: OnlineUser): { status: 'success' | 'warning' | 'default'; text: string } => {
     if (!user.last_activity_time) {
@@ -95,10 +97,10 @@ const OnlineUsersPage: React.FC = () => {
 
   useEffect(() => {
     // 只有在用户已登录（currentUser 存在）时才加载统计数据
-    if (currentUser) {
+    if (currentUser && statCardsVisible) {
       loadStats();
     }
-  }, [currentUser, loadStats]);
+  }, [currentUser, loadStats, statCardsVisible]);
 
   /**
    * 设置自动刷新（每30秒刷新一次）
@@ -106,7 +108,9 @@ const OnlineUsersPage: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       refreshIntervalRef.current = setInterval(() => {
-        loadStats();
+        if (statCardsVisible) {
+          loadStats();
+        }
         actionRef.current?.reload();
       }, 30000);
       
@@ -116,7 +120,7 @@ const OnlineUsersPage: React.FC = () => {
         }
       };
     }
-  }, [currentUser, loadStats]);
+  }, [currentUser, loadStats, statCardsVisible]);
 
   /**
    * 查看用户详情

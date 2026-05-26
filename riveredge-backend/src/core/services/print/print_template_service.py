@@ -233,13 +233,26 @@ class PrintTemplateService:
             raise ValidationError(f"打印模板代码冲突，请重试。base={base_code}") from e
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        *,
+        installed_app_codes: Optional[Set[str]] = None,
+    ) -> int:
         """
         加载打印模板预设数据。
         仅创建不存在的模板（按 code 去重）。
         """
+        from core.services.system.installed_feature_scope import (
+            print_template_visible_for_installed_apps,
+        )
+
         created = 0
         for item in PRESET_PRINT_TEMPLATES:
+            if installed_app_codes is not None and not print_template_visible_for_installed_apps(
+                item.get("config"),
+                installed_app_codes,
+            ):
+                continue
             base_code = str(item["code"]).strip().upper()
             exists = await PrintTemplate.filter(
                 tenant_id=tenant_id,

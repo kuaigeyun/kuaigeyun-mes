@@ -4,7 +4,7 @@
 提供消息模板的 CRUD 操作。
 """
 
-from typing import Optional, List
+from typing import Optional, List, Set
 from uuid import UUID
 from datetime import datetime
 
@@ -114,7 +114,8 @@ class MessageTemplateService:
         skip: int = 0,
         limit: int = 100,
         type: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        installed_app_codes: Optional[Set[str]] = None,
     ) -> List[MessageTemplate]:
         """
         获取消息模板列表
@@ -139,8 +140,22 @@ class MessageTemplateService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        return await query.order_by("-created_at").offset(skip).limit(limit).all()
+
+        if installed_app_codes is None:
+            return await query.order_by("-created_at").offset(skip).limit(limit).all()
+
+        from core.services.system.installed_feature_scope import (
+            message_template_code_visible_for_installed_apps,
+        )
+
+        scan_cap = 4000
+        rows = await query.order_by("-created_at").limit(scan_cap).all()
+        filtered = [
+            r
+            for r in rows
+            if message_template_code_visible_for_installed_apps(str(r.code or ""), installed_app_codes)
+        ]
+        return filtered[skip : skip + limit]
     
     @staticmethod
     async def update_message_template(
@@ -286,7 +301,11 @@ class MessageTemplateService:
     ]
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        *,
+        only_codes: Optional[Set[str]] = None,
+    ) -> int:
         """
         加载中国中小制造业极简消息模板预设数据。
         仅创建不存在的模板（按 code 去重）。
@@ -295,9 +314,14 @@ class MessageTemplateService:
 
         created = 0
         for item in MessageTemplateService.PRESET_MESSAGE_TEMPLATES:
+            code = str(item.get("code") or "").strip()
+            if not code:
+                continue
+            if only_codes is not None and code not in only_codes:
+                continue
             exists = await MessageTemplate.filter(
                 tenant_id=tenant_id,
-                code=item["code"],
+                code=code,
                 deleted_at__isnull=True,
             ).exists()
             if not exists:

@@ -28,14 +28,12 @@ import {
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 /**
  * 审批流程管理列表页面组件
  */
 const ApprovalProcessListPage: React.FC = () => {
   const { t } = useTranslation();
-  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -418,7 +416,6 @@ const ApprovalProcessListPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
         toolBarRender={() => [
-          trialRunMode && (
           <Button
             key="loadPreset"
             loading={loadPresetLoading}
@@ -437,7 +434,6 @@ const ApprovalProcessListPage: React.FC = () => {
           >
             {t('field.approvalProcess.loadPreset')}
           </Button>
-          ),
         ]}
         showImportButton
         showExportButton

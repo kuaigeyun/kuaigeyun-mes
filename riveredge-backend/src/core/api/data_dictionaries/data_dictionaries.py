@@ -23,6 +23,7 @@ from core.schemas.dictionary_item import (
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
 from core.services.system.installed_feature_scope import get_installed_application_codes
+from core.services.system.installed_feature_scope import system_dictionary_codes_for_installed_apps
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/data-dictionaries", tags=["Core · Data Dictionaries"])
@@ -45,8 +46,11 @@ async def initialize_system_dictionaries(
         Dict[str, Any]: 初始化结果
     """
     try:
+        installed_app_codes = await get_installed_application_codes(tenant_id)
+        dictionary_codes = system_dictionary_codes_for_installed_apps(installed_app_codes)
         result = await DataDictionaryService.initialize_system_dictionaries(
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            only_codes=dictionary_codes,
         )
         return result
     except Exception as e:

@@ -36,14 +36,12 @@ import {
   UpdateMessageTemplateData,
 } from '../../../../services/messageTemplate';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 /**
  * 消息模板管理列表页面组件
  */
 const MessageTemplateListPage: React.FC = () => {
   const { t } = useTranslation();
-  const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -454,7 +452,6 @@ const MessageTemplateListPage: React.FC = () => {
         deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteTitle')}
         deleteConfirmDescription={(c) => t('pages.system.messageConfig.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
-          trialRunMode && (
           <Button
             key="loadPreset"
             loading={loadPresetLoading}
@@ -473,7 +470,6 @@ const MessageTemplateListPage: React.FC = () => {
           >
             {t('field.messageTemplate.loadPreset')}
           </Button>
-          ),
         ]}
         showImportButton={false}
         showExportButton={true}

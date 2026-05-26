@@ -316,16 +316,17 @@ class ApprovalProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if (
-            not for_audit_config
-            and installed_app_codes is not None
-            and "kuaizhizao" not in installed_app_codes
-        ):
+        if installed_app_codes is not None:
             from core.services.system.installed_feature_scope import (
                 KUAIZHIZAO_APPROVAL_PROCESS_CODES,
+                approval_process_code_visible_for_installed_apps,
             )
 
-            query = query.filter(~Q(code__in=list(KUAIZHIZAO_APPROVAL_PROCESS_CODES)))
+            if not approval_process_code_visible_for_installed_apps(
+                "demand",
+                installed_app_codes,
+            ):
+                query = query.filter(~Q(code__in=list(KUAIZHIZAO_APPROVAL_PROCESS_CODES)))
         
         return await query.order_by("-created_at").offset(skip).limit(limit).all()
     
@@ -459,16 +460,25 @@ class ApprovalProcessService:
     ]
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        *,
+        only_codes: Optional[Set[str]] = None,
+    ) -> int:
         """
         加载中国中小制造业极简审批流程预设数据。
         仅创建不存在的流程（按 code 去重）。
         """
         created = 0
         for item in ApprovalProcessService.PRESET_APPROVAL_PROCESSES:
+            code = str(item.get("code") or "").strip()
+            if not code:
+                continue
+            if only_codes is not None and code not in only_codes:
+                continue
             exists = await ApprovalProcess.filter(
                 tenant_id=tenant_id,
-                code=item["code"],
+                code=code,
                 deleted_at__isnull=True,
             ).exists()
             if not exists:

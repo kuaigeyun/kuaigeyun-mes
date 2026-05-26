@@ -457,10 +457,14 @@ const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
     const title = String(column.title ?? '');
     let score = 0;
     if (/^status$/i.test(field)) score += 120;
+    if (/^operation_type$/i.test(field)) score += 120;
     if (/lifecycle|status|stage|state/i.test(field)) score += 80;
+    if (/operation[\s_-]*type|action[\s_-]*type/i.test(field)) score += 80;
     if (/生命周期/.test(title)) score += 90;
     if (/阶段/.test(title)) score += 70;
     if (/状态/.test(title)) score += 50;
+    if (/操作类型|动作类型/.test(title)) score += 90;
+    if (/operation\s*type|action\s*type/i.test(title)) score += 60;
 
     if (score > 0 && (!best || score > best.score)) {
       best = { field, valueEnum, score };

@@ -12,6 +12,7 @@ import { App, Badge, Tag, Button, Space, Typography } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { theme } from 'antd';
 import {
   getUserTasks,
@@ -30,6 +31,7 @@ const UserTasksPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
+  const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<UserTaskStats | null>(null);
   const [taskType, setTaskType] = useState<'pending' | 'processed' | 'submitted'>('pending');
@@ -41,13 +43,16 @@ const UserTasksPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const loadStats = useCallback(async () => {
+    if (!statCardsVisible) {
+      return;
+    }
     try {
       const data = await getUserTaskStats();
       setStats(data);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.personal.tasks.loadStatsFailed'));
     }
-  }, [messageApi, t]);
+  }, [messageApi, t, statCardsVisible]);
 
   /**
    * 加载任务统计
@@ -55,12 +60,12 @@ const UserTasksPage: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     (async () => {
-      if (isMounted) {
+      if (isMounted && statCardsVisible) {
         await loadStats();
       }
     })();
     return () => { isMounted = false; };
-  }, [loadStats]);
+  }, [loadStats, statCardsVisible]);
 
   /**
    * 处理任务（审批或拒绝）
@@ -394,37 +399,35 @@ const UserTasksPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate
-        statCards={
-          stats ? [
-            {
-              title: t('pages.personal.tasks.totalTasks'),
-              value: stats.total,
-              valueStyle: { color: themeToken.colorPrimary },
-              onClick: () => actionRef.current?.reload(),
-            },
-            {
-              title: t('pages.personal.tasks.pendingTasks'),
-              value: stats.pending,
-              valueStyle: { color: themeToken.colorError },
-              description: taskType === 'pending' ? <Badge status="error" text="Active" /> : null,
-              onClick: () => setTaskType('pending'),
-            },
-            {
-              title: t('pages.personal.tasks.approvedTasks'),
-              value: stats.approved,
-              valueStyle: { color: themeToken.colorSuccess },
-              description: taskType === 'processed' ? <Badge status="success" text="Active" /> : null,
-              onClick: () => setTaskType('processed'),
-            },
-            {
-              title: t('pages.personal.tasks.mySubmitted'),
-              value: stats.submitted,
-              valueStyle: { color: themeToken.colorWarning },
-              description: taskType === 'submitted' ? <Badge status="warning" text="Active" /> : null,
-              onClick: () => setTaskType('submitted'),
-            },
-          ] : undefined
-        }
+        statCards={[
+          {
+            title: t('pages.personal.tasks.totalTasks'),
+            value: stats?.total ?? 0,
+            valueStyle: { color: themeToken.colorPrimary },
+            onClick: () => actionRef.current?.reload(),
+          },
+          {
+            title: t('pages.personal.tasks.pendingTasks'),
+            value: stats?.pending ?? 0,
+            valueStyle: { color: themeToken.colorError },
+            description: taskType === 'pending' ? <Badge status="error" text="Active" /> : null,
+            onClick: () => setTaskType('pending'),
+          },
+          {
+            title: t('pages.personal.tasks.approvedTasks'),
+            value: stats?.approved ?? 0,
+            valueStyle: { color: themeToken.colorSuccess },
+            description: taskType === 'processed' ? <Badge status="success" text="Active" /> : null,
+            onClick: () => setTaskType('processed'),
+          },
+          {
+            title: t('pages.personal.tasks.mySubmitted'),
+            value: stats?.submitted ?? 0,
+            valueStyle: { color: themeToken.colorWarning },
+            description: taskType === 'submitted' ? <Badge status="warning" text="Active" /> : null,
+            onClick: () => setTaskType('submitted'),
+          },
+        ]}
       >
         <UniTable<UserTask>
           columnPersistenceId="pages.personal.tasks"

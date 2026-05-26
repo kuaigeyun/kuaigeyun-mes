@@ -161,6 +161,26 @@ KUAIZHIZAO_APPROVAL_PROCESS_CODES: FrozenSet[str] = frozenset(
     }
 )
 
+_MESSAGE_TEMPLATE_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
+    # 审批通知模板目前仅在快制造审批流程域内使用
+    "approval_approved": frozenset({"kuaizhizao"}),
+    "approval_rejected": frozenset({"kuaizhizao"}),
+}
+
+_MESSAGE_TEMPLATE_ALWAYS_VISIBLE: FrozenSet[str] = frozenset(
+    {
+        "verification_code",
+        "welcome_register",
+    }
+)
+
+_MESSAGE_TEMPLATE_CODE_PREFIX_TO_APP: Dict[str, str] = {
+    "HAOLIGO_": "haoligo",
+    "KUAIZHIZAO_": "kuaizhizao",
+    "KUAICAIWU_": "kuaicaiwu",
+    "MASTER_DATA_": "master-data",
+}
+
 
 async def get_installed_application_codes(tenant_id: int) -> Set[str]:
     apps = await ApplicationService.get_installed_applications(tenant_id)
@@ -216,6 +236,15 @@ def data_dictionary_list_visibility_q(installed: Set[str]) -> Q:
     return reduce(or_, parts)
 
 
+def system_dictionary_codes_for_installed_apps(installed: Set[str]) -> Set[str]:
+    """基于已启用应用，计算应可见/可初始化的系统字典 code 集合。"""
+    visible: Set[str] = set(_SYSTEM_DICTIONARY_ALWAYS_VISIBLE)
+    for code, req in _SYSTEM_DICTIONARY_REQUIRES_APPS.items():
+        if installed & req:
+            visible.add(code)
+    return visible
+
+
 def code_rule_disallowed_rule_codes(installed: Set[str]) -> Set[str]:
     from core.config.code_rule_pages import CODE_RULE_PAGES
 
@@ -251,3 +280,48 @@ def print_template_visible_for_installed_apps(
     if dt in _PRINT_DOC_KUAIZHIZAO:
         return "kuaizhizao" in installed
     return True
+
+
+def approval_process_code_visible_for_installed_apps(code: str, installed: Set[str]) -> bool:
+    """审批流程 code 按已启用应用可见性判断（未知 code 默认可见）。"""
+    normalized = (code or "").strip()
+    if not normalized:
+        return True
+    if normalized in KUAIZHIZAO_APPROVAL_PROCESS_CODES:
+        return "kuaizhizao" in installed
+    return True
+
+
+def approval_process_codes_for_installed_apps(installed: Set[str]) -> Set[str]:
+    """按已启用应用计算可初始化的审批流程 code 集合。"""
+    visible: Set[str] = {"personal_task"}
+    if "kuaizhizao" in installed:
+        visible.update(KUAIZHIZAO_APPROVAL_PROCESS_CODES)
+    return visible
+
+
+def message_template_code_visible_for_installed_apps(code: str, installed: Set[str]) -> bool:
+    """消息模板 code 按已启用应用可见性判断（未知 code 默认可见）。"""
+    normalized = (code or "").strip()
+    if not normalized:
+        return True
+    if normalized in _MESSAGE_TEMPLATE_ALWAYS_VISIBLE:
+        return True
+    req = _MESSAGE_TEMPLATE_REQUIRES_APPS.get(normalized)
+    if not req:
+        # 历史模板没有显式映射时，按 code 前缀推断归属应用（例如 HAOLIGO_*）。
+        upper_code = normalized.upper()
+        for prefix, app_code in _MESSAGE_TEMPLATE_CODE_PREFIX_TO_APP.items():
+            if upper_code.startswith(prefix):
+                return app_code in installed
+        return True
+    return bool(installed & req)
+
+
+def message_template_codes_for_installed_apps(installed: Set[str]) -> Set[str]:
+    """按已启用应用计算可初始化的消息模板 code 集合。"""
+    visible: Set[str] = set(_MESSAGE_TEMPLATE_ALWAYS_VISIBLE)
+    for code, req in _MESSAGE_TEMPLATE_REQUIRES_APPS.items():
+        if installed & req:
+            visible.add(code)
+    return visible

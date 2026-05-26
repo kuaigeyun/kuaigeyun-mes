@@ -47,7 +47,6 @@ import {
   NumberOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  AppstoreOutlined,
   FileOutlined,
   FilePdfOutlined,
   SwapOutlined,
@@ -317,6 +316,8 @@ type StandardPartFlatRow = {
 const MaterialsManagementPage: React.FC = () => {
   const { t } = useTranslation()
   const trialRunMode = useTrialRunMode()
+  // 标准件预设导入当前阶段关闭（保留代码以便后续恢复）。
+  const standardPresetFeatureEnabled = false
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -2157,15 +2158,6 @@ const MaterialsManagementPage: React.FC = () => {
                       {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
                     </Button>
                     {trialRunMode && (
-                    <Button
-                      icon={<AppstoreOutlined />}
-                      loading={standardPresetLoading}
-                      onClick={handleOpenStandardPreset}
-                    >
-                      {t('app.master-data.materials.loadStandardPreset')}
-                    </Button>
-                    )}
-                    {trialRunMode && (
                     <Button icon={<RedoOutlined />} onClick={handleOpenRewriteMainCodes}>
                       {t('app.master-data.materials.rewriteMainCodes')}
                     </Button>
@@ -2770,6 +2762,7 @@ const MaterialsManagementPage: React.FC = () => {
         </Space>
       </Modal>
 
+      {standardPresetFeatureEnabled && (
       <Modal
         title={t('app.master-data.materials.standardPresetModalTitle')}
         open={standardPresetOpen}
@@ -3039,6 +3032,7 @@ const MaterialsManagementPage: React.FC = () => {
           />
         </Space>
       </Modal>
+      )}
 
       {/* 分组创建/编辑 Modal - 使用 FormModalTemplate 与其它单列 modal 行为一致 */}
       <FormModalTemplate

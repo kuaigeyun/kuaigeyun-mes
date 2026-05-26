@@ -76,6 +76,11 @@ export interface NextPrintTemplateCodeResponse {
   code: string;
 }
 
+export interface LoadPresetPrintTemplateResponse {
+  created: number;
+  message: string;
+}
+
 export interface CompilePrintTemplateData {
   source_type?: 'designer_json' | 'html_jinja';
   source: Record<string, any> | string;
@@ -131,6 +136,15 @@ export async function createPrintTemplate(data: CreatePrintTemplateData): Promis
 export async function getNextPrintTemplateCode(baseCode: string): Promise<NextPrintTemplateCodeResponse> {
   return apiRequest<NextPrintTemplateCodeResponse>('/core/print-templates/next-code', {
     params: { base_code: baseCode },
+  });
+}
+
+/**
+ * 加载系统打印模板预设（按已安装功能自动过滤）
+ */
+export async function loadPresetPrintTemplates(): Promise<LoadPresetPrintTemplateResponse> {
+  return apiRequest<LoadPresetPrintTemplateResponse>('/core/print-templates/load-preset', {
+    method: 'POST',
   });
 }
 
