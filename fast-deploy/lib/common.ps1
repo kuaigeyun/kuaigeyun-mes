@@ -90,18 +90,29 @@ function Test-VersionGe([string]$a, [string]$b) {
 function Get-EnhancedPath {
     $paths = @($env:PATH)
     $extra = @(
+        (Join-Path $script:FastDeployDir '.tools\node'),
         "$env:ProgramFiles\nodejs",
+        "$env:ProgramFiles(x86)\nodejs",
         "$env:LOCALAPPDATA\Programs\Python\Python312",
         "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts",
+        "$env:LOCALAPPDATA\Programs\Python\Python313",
+        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts",
         "$env:USERPROFILE\.local\bin",
         "$env:ProgramFiles\PostgreSQL\15\bin",
         "$env:ProgramFiles\PostgreSQL\16\bin",
         "$env:ProgramFiles\PostgreSQL\17\bin",
-        (Join-Path $script:FastDeployDir '.tools\caddy'),
-        (Join-Path $script:FastDeployDir '.tools\node')
+        (Join-Path $script:FastDeployDir '.tools\caddy')
     )
     foreach ($p in $extra) {
         if ($p -and (Test-Path $p) -and ($paths -notcontains $p)) { $paths = @($p) + $paths }
+    }
+    $pyRoot = Join-Path $env:LOCALAPPDATA 'Programs\Python'
+    if (Test-Path $pyRoot) {
+        foreach ($dir in Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue) {
+            foreach ($sub in @($dir.FullName, (Join-Path $dir.FullName 'Scripts'))) {
+                if (($paths -notcontains $sub)) { $paths = @($sub) + $paths }
+            }
+        }
     }
     return ($paths -join ';')
 }
@@ -138,19 +149,48 @@ function Resolve-Caddy {
 }
 
 function Test-CheckNode {
-    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return 'missing' }
-    $v = (node -v) -replace '^v',''
+    $env:PATH = Get-EnhancedPath
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $node) {
+        $candidates = @(
+            (Join-Path $script:FastDeployDir '.tools\node\node.exe'),
+            (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe')
+        )
+        foreach ($p in $candidates) {
+            if (Test-Path $p) { $node = Get-Command $p -ErrorAction SilentlyContinue; if ($node) { break } }
+        }
+    }
+    if (-not $node) { return 'missing' }
+    $v = (& $node.Source -v) -replace '^v',''
     if (Test-VersionGe $v '22.0.0') { return 'ok' } else { return "old:$v" }
 }
 
 function Test-CheckPython {
-    foreach ($c in @('python','py')) {
-        if (Get-Command $c -ErrorAction SilentlyContinue) {
-            $out = & $c --version 2>&1
-            if ($out -match '(\d+\.\d+\.\d+)') {
-                $v = $Matches[1]
-                if (Test-VersionGe $v '3.12.0') { return 'ok' } else { return "old:$v" }
-            }
+    $env:PATH = Get-EnhancedPath
+    foreach ($c in @('python3.12', 'python3', 'python', 'py')) {
+        if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { continue }
+        $out = if ($c -eq 'py') { & py -3.12 --version 2>&1 } else { & $c --version 2>&1 }
+        if ($out -match '(\d+\.\d+\.\d+)') {
+            $v = $Matches[1]
+            if (Test-VersionGe $v '3.12.0') { return 'ok' } else { return "old:$v" }
+        }
+    }
+    $pyCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')
+    )
+    $pyRoot = Join-Path $env:LOCALAPPDATA 'Programs\Python'
+    if (Test-Path $pyRoot) {
+        $pyCandidates += Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'python.exe' }
+    }
+    foreach ($p in $pyCandidates) {
+        if (-not (Test-Path $p)) { continue }
+        $out = & $p --version 2>&1
+        if ($out -match '(\d+\.\d+\.\d+)') {
+            $v = $Matches[1]
+            if (Test-VersionGe $v '3.12.0') { return 'ok' } else { return "old:$v" }
         }
     }
     return 'missing'
@@ -162,6 +202,7 @@ function Test-CheckUv {
 }
 
 function Test-CheckNpm {
+    $env:PATH = Get-EnhancedPath
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { return 'missing' }
     $v = (npm -v).Trim()
     if (Test-VersionGe $v '10.0.0') { return 'ok' } else { return "old:$v" }

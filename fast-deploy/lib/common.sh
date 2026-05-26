@@ -62,26 +62,40 @@ if is_windows_gitbash; then
     export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 fi
 
-# Windows 安装后补充常见路径（当前 Git Bash 会话内生效）
+# Windows 安装后补充常见路径（当前 Git Bash 会话内生效；含便携版 .tools/node）
 refresh_windows_path() {
     is_windows_gitbash || return 0
-    local p
+    local p dir
     for p in \
+        "$FAST_DEPLOY_DIR/.tools/node" \
         "/c/Program Files/nodejs" \
         "/c/Program Files (x86)/nodejs" \
         "$LOCALAPPDATA/Programs/Python/Python312" \
         "$LOCALAPPDATA/Programs/Python/Python312/Scripts" \
+        "$LOCALAPPDATA/Programs/Python/Python313" \
+        "$LOCALAPPDATA/Programs/Python/Python313/Scripts" \
         "$USERPROFILE/.local/bin" \
         "/c/Program Files/PostgreSQL/17/bin" \
         "/c/Program Files/PostgreSQL/16/bin" \
         "/c/Program Files/PostgreSQL/15/bin" \
-        "$FAST_DEPLOY_DIR/.tools/caddy" \
-        "$FAST_DEPLOY_DIR/.tools/node"
+        "$FAST_DEPLOY_DIR/.tools/caddy"
     do
         [ -d "$p" ] && PATH="$p:$PATH"
     done
+    for dir in "$LOCALAPPDATA/Programs/Python"/Python3*; do
+        [ -d "$dir" ] || continue
+        PATH="$dir:$dir/Scripts:$PATH"
+    done
+    for dir in "/c/Program Files/Python"*; do
+        [ -d "$dir" ] || continue
+        PATH="$dir:$dir/Scripts:$PATH"
+    done
     export PATH
 }
+
+if is_windows_gitbash; then
+    refresh_windows_path
+fi
 
 run_windows_install_component() {
     local comp=$1
@@ -245,25 +259,65 @@ resolve_caddy() {
 }
 
 check_node() {
-    if ! command -v node >/dev/null 2>&1; then
-        echo "missing"
-        return
+    is_windows_gitbash && refresh_windows_path
+    local node_bin="" v p
+    if command -v node >/dev/null 2>&1; then
+        node_bin="node"
+    elif is_windows_gitbash; then
+        for p in \
+            "$FAST_DEPLOY_DIR/.tools/node/node.exe" \
+            "/c/Program Files/nodejs/node.exe" \
+            "/c/Program Files (x86)/nodejs/node.exe"
+        do
+            [ -x "$p" ] && { node_bin="$p"; break; }
+        done
     fi
-    local v
-    v="$(node -v 2>/dev/null | sed 's/^v//')"
+    [ -z "$node_bin" ] && { echo "missing"; return; }
+    v="$("$node_bin" -v 2>/dev/null | sed 's/^v//' | tr -d '\r')"
+    [ -z "$v" ] && { echo "missing"; return; }
     if version_ge "$v" "22.0.0"; then echo "ok"; else echo "old:$v"; fi
 }
 
+_python_version_output() {
+    local py=$1
+    case "$py" in
+        "py -3.12") py -3.12 --version 2>&1 ;;
+        *) "$py" --version 2>&1 ;;
+    esac
+}
+
 check_python() {
-    local py=""
+    local py="" v p dir
+    is_windows_gitbash && refresh_windows_path
     for c in python3.12 python3 python; do
         if command -v "$c" >/dev/null 2>&1; then py="$c"; break; fi
     done
+    if [ -z "$py" ] && is_windows_gitbash && command -v py >/dev/null 2>&1; then
+        if py -3.12 --version >/dev/null 2>&1; then
+            py="py -3.12"
+        elif py -3 --version >/dev/null 2>&1; then
+            py="py -3"
+        fi
+    fi
+    if [ -z "$py" ] && is_windows_gitbash; then
+        for p in \
+            "$LOCALAPPDATA/Programs/Python/Python312/python.exe" \
+            "$LOCALAPPDATA/Programs/Python/Python313/python.exe" \
+            "/c/Program Files/Python312/python.exe"
+        do
+            [ -x "$p" ] && { py="$p"; break; }
+        done
+        if [ -z "$py" ]; then
+            for dir in "$LOCALAPPDATA/Programs/Python"/Python3* "/c/Program Files/Python"*; do
+                [ -x "$dir/python.exe" ] || continue
+                py="$dir/python.exe"
+                break
+            done
+        fi
+    fi
     [ -z "$py" ] && { echo "missing"; return; }
-    local v
-    v="$("$py" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)"
+    v="$(_python_version_output "$py" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)"
     [ -z "$v" ] && { echo "missing"; return; }
-    # 补齐 patch 版本便于 sort -V
     [[ "$v" != *.*.* ]] && v="${v}.0"
     if version_ge "$v" "3.12.0"; then echo "ok"; else echo "old:$v"; fi
 }
@@ -275,6 +329,7 @@ check_uv() {
 }
 
 check_npm() {
+    is_windows_gitbash && refresh_windows_path
     if ! command -v npm >/dev/null 2>&1; then echo "missing"; return; fi
     local v
     v="$(npm -v 2>/dev/null | tr -d '\r')"
@@ -1446,6 +1501,7 @@ run_install_component() {
 }
 
 cmd_check() {
+    is_windows_gitbash && refresh_windows_path
     local need_caddy=0
     [ "$DEPLOY_MODE" = "prod" ] && need_caddy=1
     local failed=0
