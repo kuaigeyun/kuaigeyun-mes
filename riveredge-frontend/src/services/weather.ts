@@ -8,6 +8,8 @@
  * @date 2026-01-21
  */
 
+import i18n from '../config/i18n';
+
 /**
  * 天气数据接口
  */
@@ -26,6 +28,18 @@ export interface WeatherData {
   windSpeed?: number;
   /** 体感温度 */
   feelsLike?: number;
+  /** 定位纬度（用于按语言反查地名） */
+  lat?: number;
+  /** 定位经度 */
+  lon?: number;
+}
+
+export type WeatherLang = 'zh' | 'en';
+
+/** 解析当前界面语言对应的天气文案语言 */
+export function resolveWeatherLanguage(language?: string): WeatherLang {
+  const raw = language ?? i18n.language ?? 'zh-CN';
+  return String(raw).toLowerCase().startsWith('en') ? 'en' : 'zh';
 }
 
 /**
@@ -74,9 +88,9 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 /**
  * 通过 Open-Meteo 地理编号 API 将城市名解析为经纬度
  */
-async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number } | null> {
+async function geocodeCity(cityName: string, language: WeatherLang = 'zh'): Promise<{ lat: number; lon: number; label?: string } | null> {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=zh`;
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=${language}`;
     const res = await window.fetch(url, { signal: (window.AbortSignal as any).timeout(5000) });
     if (!res.ok) return null;
     const data = await res.json();
@@ -85,7 +99,31 @@ async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number
       const r = results[0];
       const lat = parseFloat(r.latitude);
       const lon = parseFloat(r.longitude);
-      if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+      if (!isNaN(lat) && !isNaN(lon)) {
+        return { lat, lon, label: r.name as string | undefined };
+      }
+    }
+  } catch {
+    // 静默失败
+  }
+  return null;
+}
+
+/** Open-Meteo 逆地理：按当前语言返回城市/地区名 */
+export async function reverseGeocodeLabel(
+  lat: number,
+  lon: number,
+  language: WeatherLang = resolveWeatherLanguage()
+): Promise<string | null> {
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=${language}`;
+    const res = await window.fetch(url, { signal: (window.AbortSignal as any).timeout(5000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.results;
+    if (Array.isArray(results) && results.length > 0) {
+      const r = results[0];
+      return (r.name as string) || (r.admin1 as string) || null;
     }
   } catch {
     // 静默失败
@@ -96,7 +134,12 @@ async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number
 /**
  * 通过 Open-Meteo 获取天气（经纬度）
  */
-async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string): Promise<WeatherData | null> {
+async function getWeatherByCoords(
+  lat: number,
+  lon: number,
+  cityLabel?: string,
+  language: WeatherLang = resolveWeatherLanguage()
+): Promise<WeatherData | null> {
   try {
     const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`;
     const res = await window.fetch(meteoUrl, { signal: (window.AbortSignal as any).timeout(6000) });
@@ -105,10 +148,16 @@ async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string):
     const current = data.current;
     if (!current) return null;
     const weatherCode = current.weather_code || 0;
+    let city = cityLabel;
+    if (!city) {
+      city = (await reverseGeocodeLabel(lat, lon, language)) ?? `${lat},${lon}`;
+    }
     return {
-      city: cityLabel ?? `${lat},${lon}`,
+      city,
+      lat,
+      lon,
       temperature: Math.round(current.temperature_2m ?? 0),
-      description: getWeatherDescription(weatherCode),
+      description: getWeatherDescription(weatherCode, language),
       iconCode: weatherCode.toString(),
       humidity: Math.round(current.relative_humidity_2m ?? 0),
       windSpeed: Math.round((current.wind_speed_10m ?? 0) * 3.6),
@@ -125,7 +174,7 @@ async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string):
  *
  * @param city 城市名称或经纬度（格式：lat,lon）
  */
-export async function getWeather(city: string): Promise<WeatherData | null> {
+export async function getWeather(city: string, language: WeatherLang = resolveWeatherLanguage()): Promise<WeatherData | null> {
   try {
     // 1. 若有经纬度，直接使用 Open-Meteo
     if (city.includes(',')) {
@@ -133,21 +182,27 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
       const lat = parseFloat(parts[0]);
       const lon = parseFloat(parts[1]);
       if (!isNaN(lat) && !isNaN(lon)) {
-        const result = await getWeatherByCoords(lat, lon, city);
+        const result = await getWeatherByCoords(lat, lon, undefined, language);
         if (result) return result;
       }
     }
 
     // 2. 城市名：通过 Open-Meteo 地理编号获取经纬度，再取天气
-    const coords = await geocodeCity(city);
+    const coords = await geocodeCity(city, language);
     if (coords) {
-      const result = await getWeatherByCoords(coords.lat, coords.lon, city);
+      const result = await getWeatherByCoords(
+        coords.lat,
+        coords.lon,
+        coords.label ?? city,
+        language
+      );
       if (result) return result;
     }
 
     // 3. 备选：wttr.in（国内可能超时）
     try {
-      const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
+      const wttrLang = language === 'zh' ? 'zh' : 'en';
+      const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=${wttrLang}`;
       const wttrResponse = await window.fetch(wttrUrl, {
         headers: { Accept: 'application/json' },
         signal: (window.AbortSignal as any).timeout(4000),
@@ -158,10 +213,14 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
           const current = data.current_condition[0];
           const location = data.nearest_area?.[0] || {};
           const weatherCode = parseInt(current.weatherCode) || 100;
+          const areaName =
+            language === 'zh'
+              ? location.areaName?.[0]?.value || city
+              : location.areaName?.[0]?.value || city;
           return {
-            city: location.areaName?.[0]?.value || city,
+            city: areaName,
             temperature: parseInt(current.temp_C) || 0,
-            description: current.lang_zh?.[0]?.value || current.weatherDesc?.[0]?.value || '未知',
+            description: getWeatherDescription(weatherCode, language),
             iconCode: weatherCode.toString(),
             humidity: parseInt(current.humidity) || 0,
             windSpeed: parseInt(current.windspeedKmph) || 0,
@@ -183,11 +242,10 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
 }
 
 /**
- * 根据 Open-Meteo 天气代码获取天气描述
+ * 根据 Open-Meteo WMO 天气代码获取本地化描述
  */
-function getWeatherDescription(code: number): string {
-  // Open-Meteo WMO 天气代码
-  const codeMap: Record<number, string> = {
+export function getWeatherDescription(code: number, language: WeatherLang = resolveWeatherLanguage()): string {
+  const zhMap: Record<number, string> = {
     0: '晴',
     1: '基本晴',
     2: '部分多云',
@@ -217,11 +275,55 @@ function getWeatherDescription(code: number): string {
     96: '雷暴伴冰雹',
     99: '雷暴伴大冰雹',
   };
-  
-  return codeMap[code] || '未知';
+  const enMap: Record<number, string> = {
+    0: 'Clear',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Depositing rime fog',
+    51: 'Light drizzle',
+    53: 'Moderate drizzle',
+    55: 'Dense drizzle',
+    56: 'Light freezing drizzle',
+    57: 'Dense freezing drizzle',
+    61: 'Slight rain',
+    63: 'Moderate rain',
+    65: 'Heavy rain',
+    66: 'Light freezing rain',
+    67: 'Heavy freezing rain',
+    71: 'Slight snow',
+    73: 'Moderate snow',
+    75: 'Heavy snow',
+    77: 'Snow grains',
+    80: 'Slight rain showers',
+    81: 'Moderate rain showers',
+    82: 'Violent rain showers',
+    85: 'Slight snow showers',
+    86: 'Heavy snow showers',
+    95: 'Thunderstorm',
+    96: 'Thunderstorm with hail',
+    99: 'Thunderstorm with heavy hail',
+  };
+  const map = language === 'en' ? enMap : zhMap;
+  return map[code] ?? (language === 'en' ? 'Unknown' : '未知');
 }
 
-const WEATHER_CACHE_KEY = 'RIVEREDGE_WEATHER_CACHE';
+/** 按当前语言刷新描述（城市名需配合 reverseGeocodeLabel） */
+export function localizeWeatherData(
+  data: WeatherData,
+  language?: string
+): WeatherData {
+  const lang = resolveWeatherLanguage(language);
+  const code = parseInt(data.iconCode, 10);
+  const normalizedCode = Number.isFinite(code) ? code : 0;
+  return {
+    ...data,
+    description: getWeatherDescription(normalizedCode, lang),
+  };
+}
+
+const WEATHER_CACHE_KEY = 'RIVEREDGE_WEATHER_CACHE_V2';
 const WEATHER_CACHE_DURATION = 60 * 60 * 1000; // 缓存1小时
 
 interface WeatherCachePayload {
@@ -248,8 +350,10 @@ function readWeatherCache(): WeatherCachePayload | null {
 /**
  * 获取本地缓存的天气数据
  */
-export function getCachedWeather(): WeatherData | null {
-  return readWeatherCache()?.data ?? null;
+export function getCachedWeather(language?: string): WeatherData | null {
+  const raw = readWeatherCache()?.data ?? null;
+  if (!raw) return null;
+  return localizeWeatherData(raw, language);
 }
 
 /**
@@ -268,13 +372,14 @@ export function isWeatherCacheExpired(maxAge = WEATHER_CACHE_DURATION): boolean 
  * 
  * @param force 是否强制拉取最新数据（跳过缓存）
  */
-export async function getWeatherByIP(force = false): Promise<WeatherData | null> {
+export async function getWeatherByIP(force = false, language?: string): Promise<WeatherData | null> {
+  const lang = resolveWeatherLanguage(language);
   try {
     // 1. 尝试从缓存读取
     if (!force) {
       const cached = readWeatherCache();
       if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_DURATION) {
-        return cached.data;
+        return localizeWeatherData(cached.data, lang);
       }
     }
 
@@ -283,18 +388,31 @@ export async function getWeatherByIP(force = false): Promise<WeatherData | null>
     if (!location || (!location.city && (location.lat == null || location.lon == null))) {
       return null;
     }
-    const locationParam = location.lat != null && location.lon != null
-      ? `${location.lat},${location.lon}`
-      : location.city;
-      
-    const weather = await getWeather(locationParam);
+    const locationParam =
+      location.lat != null && location.lon != null
+        ? `${location.lat},${location.lon}`
+        : location.city;
+
+    const weather = await getWeather(locationParam, lang);
     if (weather) {
-      weather.city = location.city || location.region || weather.city;
-      
+      if (location.lat != null && location.lon != null) {
+        weather.lat = location.lat;
+        weather.lon = location.lon;
+        const localizedCity = await reverseGeocodeLabel(location.lat, location.lon, lang);
+        if (localizedCity) {
+          weather.city = localizedCity;
+        } else if (!weather.city || weather.city.includes(',')) {
+          weather.city = location.city || location.region || weather.city;
+        }
+      } else {
+        weather.city = location.city || location.region || weather.city;
+      }
+      weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);
+
       // 3. 存入本地缓存
       const cacheData = {
         data: weather,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cacheData));
     }

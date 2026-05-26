@@ -55,6 +55,15 @@ interface StatusHistoryItem {
   remark?: string;
 }
 
+function hasMetric(value: number | null | undefined): boolean {
+  return value != null && !Number.isNaN(Number(value));
+}
+
+function formatMetric(value: number | null | undefined, decimals: number, suffix = ''): string | undefined {
+  if (!hasMetric(value)) return undefined;
+  return `${Number(value).toFixed(decimals)}${suffix}`;
+}
+
 const EquipmentStatusPage: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -413,14 +422,14 @@ const EquipmentStatusPage: React.FC = () => {
                         text={item.is_online ? '在线' : '离线'}
                       />
                     </div>
-                    {item.runtime_hours !== undefined && (
+                    {hasMetric(item.runtime_hours) && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        运行时长: {item.runtime_hours.toFixed(1)} 小时
+                        运行时长: {formatMetric(item.runtime_hours, 1, ' 小时')}
                       </div>
                     )}
-                    {item.temperature !== undefined && (
+                    {hasMetric(item.temperature) && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        温度: {item.temperature.toFixed(1)}°C
+                        温度: {formatMetric(item.temperature, 1, '°C')}
                       </div>
                     )}
                     {item.monitored_at && (
@@ -495,17 +504,10 @@ const EquipmentStatusPage: React.FC = () => {
                         text={currentEquipment.is_online ? '在线' : '离线'}
                       />
                     ),
-                    runtime_hours:
-                      currentEquipment.runtime_hours !== undefined
-                        ? `${currentEquipment.runtime_hours.toFixed(2)} 小时`
-                        : undefined,
-                    temperature:
-                      currentEquipment.temperature !== undefined
-                        ? `${currentEquipment.temperature.toFixed(1)}°C`
-                        : undefined,
-                    pressure: currentEquipment.pressure !== undefined ? currentEquipment.pressure.toFixed(2) : undefined,
-                    vibration:
-                      currentEquipment.vibration !== undefined ? currentEquipment.vibration.toFixed(2) : undefined,
+                    runtime_hours: formatMetric(currentEquipment.runtime_hours, 2, ' 小时'),
+                    temperature: formatMetric(currentEquipment.temperature, 1, '°C'),
+                    pressure: formatMetric(currentEquipment.pressure, 2),
+                    vibration: formatMetric(currentEquipment.vibration, 2),
                     last_maintenance_date: currentEquipment.last_maintenance_date
                       ? dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD')
                       : undefined,
@@ -523,10 +525,10 @@ const EquipmentStatusPage: React.FC = () => {
                     { title: '设备分类', dataIndex: 'category' },
                     { title: '当前状态', dataIndex: 'status' },
                     { title: '在线状态', dataIndex: 'is_online' },
-                    { title: '运行时长', dataIndex: 'runtime_hours', hide: currentEquipment.runtime_hours === undefined },
-                    { title: '温度', dataIndex: 'temperature', hide: currentEquipment.temperature === undefined },
-                    { title: '压力', dataIndex: 'pressure', hide: currentEquipment.pressure === undefined },
-                    { title: '振动值', dataIndex: 'vibration', hide: currentEquipment.vibration === undefined },
+                    { title: '运行时长', dataIndex: 'runtime_hours', hide: !hasMetric(currentEquipment.runtime_hours) },
+                    { title: '温度', dataIndex: 'temperature', hide: !hasMetric(currentEquipment.temperature) },
+                    { title: '压力', dataIndex: 'pressure', hide: !hasMetric(currentEquipment.pressure) },
+                    { title: '振动值', dataIndex: 'vibration', hide: !hasMetric(currentEquipment.vibration) },
                     {
                       title: '上次维护日期',
                       dataIndex: 'last_maintenance_date',

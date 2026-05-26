@@ -9879,6 +9879,13 @@ export default {
   'components.tenantSelection.default': '默认',
   'components.tenantSelection.domainLabel': '域名',
 
+  // 天气组件
+  'components.weather.loading': '加载天气...',
+  'components.weather.unavailable': '天气信息暂不可用',
+  'components.weather.loadFailed': '无法获取天气信息',
+  'components.weather.feelsLike': '体感 {{value}}°C',
+  'components.weather.refresh': '刷新天气',
+
   // 单据关联关系图
   'components.documentRelationGraph.title': '单据关联关系可视化',
   'components.documentRelationGraph.noDocuments': '暂无关联单据',

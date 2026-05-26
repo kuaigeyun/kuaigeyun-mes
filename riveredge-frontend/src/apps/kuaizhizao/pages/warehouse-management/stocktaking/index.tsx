@@ -96,10 +96,11 @@ const StocktakingPage: React.FC = () => {
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const materials = await materialApi.list({ isActive: true });
-        setMaterialList(materials || []);
+        const { items } = await materialApi.list({ isActive: true, limit: 10000 });
+        setMaterialList(items);
       } catch (error) {
         console.error('加载物料列表失败:', error);
+        setMaterialList([]);
       }
     };
     loadMaterials();
@@ -203,7 +204,7 @@ const StocktakingPage: React.FC = () => {
       await stocktakingApi.createItem(currentStocktakingId.toString(), {
         stocktaking_id: currentStocktakingId,
         material_id: values.material_id,
-        material_code: material.code,
+        material_code: material.mainCode ?? material.code ?? '',
         material_name: material.name,
         warehouse_id: values.warehouse_id,
         location_id: values.location_id,
@@ -594,7 +595,7 @@ const StocktakingPage: React.FC = () => {
           placeholder="请选择物料"
           rules={[{ required: true, message: '请选择物料' }]}
           options={materialList.map((m: any) => ({
-            label: `${m.code} - ${m.name}`,
+            label: `${m.mainCode ?? m.code ?? ''} - ${m.name}`,
             value: m.id,
           }))}
           fieldProps={{

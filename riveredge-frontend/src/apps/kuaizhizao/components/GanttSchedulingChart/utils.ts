@@ -8,6 +8,17 @@ import dayjs from 'dayjs';
 const DEFAULT_START = 8; // 08:00
 const DEFAULT_END = 17; // 17:00
 
+function buildGanttLabel(wo: WorkOrderForGantt, fallbackName?: string) {
+  const productName = (wo.product_name || wo.name || fallbackName || `工单 ${wo.id}`).trim();
+  const workOrderCode = (wo.code || String(wo.id)).trim();
+  const frozenPrefix = wo.is_frozen ? '🔒 ' : '';
+  return {
+    gantt_primary_label: `${frozenPrefix}${productName}`,
+    gantt_work_order_code: workOrderCode,
+    text: `${frozenPrefix}${productName}\n${workOrderCode}`,
+  };
+}
+
 function resolveTaskVisual(wo: WorkOrderForGantt, end: Date): { css: string; color: string; textColor: string } {
   if (wo.is_frozen) {
     return { css: 'gantt-task-gray', color: '#bfbfbf', textColor: '#1f1f1f' };
@@ -54,25 +65,17 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
   const durationDays = durationMs / (24 * 60 * 60 * 1000);
   const duration = Math.max(1, Math.ceil(durationDays));
 
-  const baseText = [wo.code, wo.product_name].filter(Boolean).join(' - ') || `工单 ${wo.id}`;
-  const frozenPrefix = wo.is_frozen ? '🔒 ' : '';
-  const scoreSuffix =
-    wo.scheduling_score != null
-      ? ` [权重:${Number(wo.scheduling_score).toFixed(1)}]`
-      : '';
+  const label = buildGanttLabel(wo);
   const eq = _aggregateResourceNames(wo, 'assigned_equipment_name');
   const mold = _aggregateResourceNames(wo, 'assigned_mold_name');
   const tool = _aggregateResourceNames(wo, 'assigned_tool_name');
-  const resourceParts = [eq && `设备: ${eq}`, mold && `模具: ${mold}`, tool && `工装: ${tool}`].filter(Boolean);
-  const subtitle = resourceParts.length > 0 ? resourceParts.join(' | ') : undefined;
-  const text = subtitle
-    ? `${frozenPrefix}${baseText}${scoreSuffix}\n${subtitle}`
-    : `${frozenPrefix}${baseText}${scoreSuffix}`;
   const visual = resolveTaskVisual(wo, end);
 
   return {
     id: wo.id,
-    text,
+    text: label.text,
+    gantt_primary_label: label.gantt_primary_label,
+    gantt_work_order_code: label.gantt_work_order_code,
     start,
     end,
     duration,
@@ -134,19 +137,14 @@ export function operationToGanttTask(
   const progress = qty > 0 ? Math.min(100, Math.round((completed / qty) * 100)) : 0;
 
   const opName = op.operation_name || `工序${op.sequence ?? ''}`;
-  const baseText = `${wo.code || ''} - ${opName}`.trim() || `工序 ${op.id}`;
-  const resourceParts = [
-    op.assigned_equipment_name && `设备: ${op.assigned_equipment_name}`,
-    op.assigned_mold_name && `模具: ${op.assigned_mold_name}`,
-    op.assigned_tool_name && `工装: ${op.assigned_tool_name}`,
-  ].filter(Boolean) as string[];
-  const subtitle = resourceParts.length > 0 ? resourceParts.join(' | ') : undefined;
-  const text = subtitle ? `${baseText}\n${subtitle}` : baseText;
+  const label = buildGanttLabel(wo, opName);
   const visual = resolveTaskVisual(wo, end);
 
   return {
     id: `op-${op.id}`,
-    text,
+    text: label.text,
+    gantt_primary_label: label.gantt_primary_label,
+    gantt_work_order_code: label.gantt_work_order_code,
     start,
     end,
     duration,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Card, Row, Col, Progress, Table, Tag, Typography, Space, Spin, Empty, 
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
@@ -117,6 +117,13 @@ const ProductionControlTower: React.FC = () => {
     }
   };
 
+  // 监听 Drawer 打开以获取物料
+  useEffect(() => {
+    if (simulationVisible && materials.length === 0) {
+      fetchMaterials();
+    }
+  }, [simulationVisible]);
+
   const kpiShortcuts: ModuleShortcutDef[] = useMemo(
     () => [
       { key: 'demand', title: '需求运算', icon: <RocketOutlined style={{ fontSize: 20, color: '#1890ff' }} />, path: '/apps/kuaizhizao/plan-management/demand-computation' },
@@ -177,105 +184,107 @@ const ProductionControlTower: React.FC = () => {
 
   return (
     <div className="plan-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
-      <Spin spinning={loading && !s}>
-        <Row gutter={[16, 16]}>
-          
-          {/* KPI 区 */}
-          <Col span={24}>
+      <Row gutter={[16, 16]}>
+        
+        {/* KPI 区 */}
+        <Col span={24}>
+          <Spin spinning={loading && !s}>
             <ModuleKpiRow items={kpis} />
-          </Col>
+          </Spin>
+        </Col>
 
-          {/* 快捷按钮 (6 宫格) */}
-          <Col span={24}>
-            <ModuleShortcutGrid items={kpiShortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />
-          </Col>
+        {/* 快捷按钮 (6 宫格) */}
+        <Col span={24}>
+          <ModuleShortcutGrid items={kpiShortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />
+        </Col>
 
-          {/* 执行协调 */}
-          <Col span={24}>
-            <Card
-              style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-              styles={{ body: { padding: '16px 24px' } }}
-            >
-              <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
-            </Card>
-          </Col>
+        {/* 执行协调 */}
+        <Col span={24}>
+          <Card
+            style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
+            styles={{ body: { padding: '16px 24px' } }}
+          >
+            <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
+          </Card>
+        </Col>
 
-          {/* 图表展示区 */}
-          <Col span={24}>
-            <Row gutter={[16, 16]} align="stretch">
-              {/* 关键工作中心负荷率对比 */}
-              <Col xs={24} lg={12} style={{ display: 'flex' }}>
-                <Card
-                  title={<Space><DashboardOutlined style={{ color: token.colorPrimary }} /><span>工作中心负荷率对比 (14天预测)</span></Space>}
-                  style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-                  styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
-                >
-                  {!s?.resource_load || s.resource_load.length === 0 ? (
-                    <Empty description="暂无负荷数据" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
-                  ) : (
-                    <Column
-                      data={s.resource_load}
-                      xField="work_center_name"
-                      yField="load_rate"
-                      height={220}
-                      autoFit
-                      style={{
-                        fill: '#fa8c16',
-                        radiusTopLeft: 4,
-                        radiusTopRight: 4,
-                      }}
-                      scale={{
-                        y: {
-                          formatter: (val: any) => `${val}%`
-                        }
-                      }}
-                      axis={{
-                        x: { title: false },
-                        y: { title: false, grid: true }
-                      }}
-                    />
-                  )}
-                </Card>
-              </Col>
+        {/* 图表展示区 */}
+        <Col span={24}>
+          <Row gutter={[16, 16]} align="stretch">
+            {/* 关键工作中心负荷率对比 */}
+            <Col xs={24} lg={12} style={{ display: 'flex' }}>
+              <Card
+                loading={loading && !s}
+                title={<Space><DashboardOutlined style={{ color: token.colorPrimary }} /><span>工作中心负荷率对比 (14天预测)</span></Space>}
+                style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
+                styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
+              >
+                {!s?.resource_load || s.resource_load.length === 0 ? (
+                  <Empty description="暂无负荷数据" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
+                ) : (
+                  <Column
+                    data={s.resource_load}
+                    xField="work_center_name"
+                    yField="load_rate"
+                    height={220}
+                    autoFit
+                    style={{
+                      fill: '#fa8c16',
+                      radiusTopLeft: 4,
+                      radiusTopRight: 4,
+                    }}
+                    scale={{
+                      y: {
+                        formatter: (val: any) => `${val}%`
+                      }
+                    }}
+                    axis={{
+                      x: { title: false },
+                      y: { title: false, grid: true }
+                    }}
+                  />
+                )}
+              </Card>
+            </Col>
 
-              {/* 工单物料齐套率分布 */}
-              <Col xs={24} lg={12} style={{ display: 'flex' }}>
-                <Card
-                  title={<Space><CheckCircleOutlined style={{ color: '#52c41a' }} /><span>工单物料齐套率排行 (TOP 8)</span></Space>}
-                  style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-                  styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
-                >
-                  {readinessList.length === 0 ? (
-                    <Empty description="暂无齐套进度数据" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
-                  ) : (
-                    <Column
-                      data={readinessList.slice(0, 8)}
-                      xField="work_order_code"
-                      yField="readiness_rate"
-                      height={220}
-                      autoFit
-                      style={{
-                        fill: token.colorPrimary,
-                        radiusTopLeft: 4,
-                        radiusTopRight: 4,
-                      }}
-                      scale={{
-                        y: {
-                          formatter: (val: any) => `${val}%`
-                        }
-                      }}
-                      axis={{
-                        x: { title: false },
-                        y: { title: false, grid: true }
-                      }}
-                    />
-                  )}
-                </Card>
-              </Col>
-            </Row>
-          </Col>
-        </Row>
-      </Spin>
+            {/* 工单物料齐套率分布 */}
+            <Col xs={24} lg={12} style={{ display: 'flex' }}>
+              <Card
+                loading={loading && !s}
+                title={<Space><CheckCircleOutlined style={{ color: '#52c41a' }} /><span>工单物料齐套率排行 (TOP 8)</span></Space>}
+                style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
+                styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
+              >
+                {readinessList.length === 0 ? (
+                  <Empty description="暂无齐套进度数据" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
+                ) : (
+                  <Column
+                    data={readinessList.slice(0, 8)}
+                    xField="work_order_code"
+                    yField="readiness_rate"
+                    height={220}
+                    autoFit
+                    style={{
+                      fill: token.colorPrimary,
+                      radiusTopLeft: 4,
+                      radiusTopRight: 4,
+                    }}
+                    scale={{
+                      y: {
+                        formatter: (val: any) => `${val}%`
+                      }
+                    }}
+                    axis={{
+                      x: { title: false },
+                      y: { title: false, grid: true }
+                    }}
+                  />
+                )}
+              </Card>
+            </Col>
+          </Row>
+        </Col>
+      </Row>
 
       {/* 紧急插单影响模拟 Drawer */}
       <Drawer

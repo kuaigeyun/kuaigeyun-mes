@@ -1381,12 +1381,13 @@ code {
   padding: 12px 0 4px;
 }
 .dashboard-cwc-header-left {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 46%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   padding-left: 16px;
 }
 .dashboard-cwc-date-meta {
@@ -1412,16 +1413,15 @@ code {
 .dashboard-cwc-weather {
   position: relative;
   z-index: 1;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   align-self: stretch;
-  padding-left: 12px;
-  padding-right: 16px;
+  padding-left: 10px;
+  padding-right: 12px;
   margin-left: 2px;
   min-width: 0;
-  max-width: 52%;
   border-left: 1px solid rgba(255, 255, 255, 0.55);
 }
 .dashboard-cwc-top--dark .dashboard-cwc-weather {
@@ -1430,18 +1430,17 @@ code {
 .dashboard-cwc-month-nav {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-shrink: 1;
-  min-width: 0;
+  justify-content: flex-start;
+  gap: 2px;
+  flex-shrink: 0;
+  width: fit-content;
   max-width: 100%;
   padding: 0;
 }
 .dashboard-cwc-month-label-wrap {
-  container-type: inline-size;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   display: flex;
@@ -1452,9 +1451,9 @@ code {
   align-items: baseline;
   justify-content: center;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
   margin-bottom: 0;
   color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
 }

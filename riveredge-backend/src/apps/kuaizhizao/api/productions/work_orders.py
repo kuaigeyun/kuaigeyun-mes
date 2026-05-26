@@ -337,8 +337,8 @@ async def list_work_orders(
     order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at（前缀-表示降序）"),
     include_operations: bool = Query(False, description="是否包含工序（用于甘特图展示设备/模具/工装）"),
     include_readiness: bool = Query(
-        True,
-        description="是否计算齐套率（BOM+库存）；工单列表页建议 false 以大幅提升首屏速度，齐套率列可为空",
+        False,
+        description="是否计算齐套率（BOM+库存）；列表页默认 false，齐套详情请用 kitting-analysis 或打开齐套弹窗",
     ),
     include_scores: bool = Query(
         False,

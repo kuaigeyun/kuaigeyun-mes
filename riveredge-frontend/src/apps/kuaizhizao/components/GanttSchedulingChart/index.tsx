@@ -4,15 +4,31 @@
  * 基于 @svar-ui/react-gantt 实现工单级时间轴展示、拖拽调整、日/周/月视图。
  */
 
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import '../gantt-scrollbar.less';
 import type { WorkOrderForGantt } from './types';
 import { workOrdersToGanttTasks } from './utils';
-import type { ViewMode, GanttTaskLevel } from './types';
+import type { ViewMode, GanttTaskLevel, GanttTask } from './types';
 import dayjs from 'dayjs';
 import { ensureGanttIconsCssLoaded } from '../../../../utils/loadGanttIconsCss';
+import { GanttTaskLabel } from './GanttTaskLabel';
+
+const GANTT_ROW_HEIGHT = 44;
+
+function renderGanttTaskLabel(row: Pick<GanttTask, 'gantt_primary_label' | 'gantt_work_order_code' | 'text'>) {
+  return (
+    <GanttTaskLabel
+      productName={row.gantt_primary_label}
+      workOrderCode={row.gantt_work_order_code}
+    />
+  );
+}
+
+const SchedulingTaskTemplate: React.FC<{
+  data: Pick<GanttTask, 'gantt_primary_label' | 'gantt_work_order_code' | 'text'>;
+}> = ({ data }) => renderGanttTaskLabel(data);
 
 const SCALES_DAY = [
   { unit: 'month', step: 1, format: '%Y年%m月' },
@@ -91,16 +107,12 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   const pendingUpdatesRef = useRef<Map<number | string, { start: Date; end: Date }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const rafRef = useRef<number | null>(null);
   const lockedTaskIds = useMemo(() => new Set(nonDraggableTaskIds.map((id) => String(id))), [nonDraggableTaskIds]);
-  const [nowLineLeftPx, setNowLineLeftPx] = useState<number | null>(null);
-  const [nowLineHeightPx, setNowLineHeightPx] = useState<number>(0);
   const [dynamicMaxHeightPx, setDynamicMaxHeightPx] = useState<number>(0);
-  const deferredWorkOrders = useDeferredValue(workOrders);
 
   const tasks = useMemo(() => {
-    return workOrdersToGanttTasks(deferredWorkOrders, taskLevel);
-  }, [deferredWorkOrders, taskLevel]);
+    return workOrdersToGanttTasks(workOrders, taskLevel);
+  }, [workOrders, taskLevel]);
 
   const scales = useMemo(() => {
     if (viewMode === 'day') return SCALES_DAY;
@@ -111,7 +123,12 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   const ganttColumns = useMemo(() => {
     const taskHeader = taskLevel === 'operation' ? '工单/工序' : '工单';
     return [
-      { id: 'text', header: taskHeader, width: 140 },
+      {
+        id: 'text',
+        header: taskHeader,
+        width: 168,
+        cell: ({ row }: { row: GanttTask }) => renderGanttTaskLabel(row),
+      },
     ];
   }, [taskLevel]);
 
@@ -132,36 +149,6 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     };
   }, [tasks]);
 
-  const updateNowLinePosition = useCallback(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const startMs = start.getTime();
-    const endMs = end.getTime();
-    if (endMs <= startMs) {
-      setNowLineLeftPx(null);
-      return;
-    }
-    const nowMs = Date.now();
-    if (nowMs < startMs || nowMs > endMs) {
-      setNowLineLeftPx(null);
-      return;
-    }
-    const ratio = (nowMs - startMs) / (endMs - startMs);
-    const firstTable = wrapper.querySelector('table');
-    const leftPaneWidth = firstTable instanceof HTMLElement ? firstTable.getBoundingClientRect().width : 0;
-    const contentWidth = Math.max(wrapper.scrollWidth, wrapper.clientWidth);
-    const timelineWidth = Math.max(1, contentWidth - leftPaneWidth);
-    const lineContentX = leftPaneWidth + ratio * timelineWidth;
-    const viewportX = lineContentX - wrapper.scrollLeft;
-    const lineHeight = Math.max(wrapper.clientHeight, wrapper.scrollHeight);
-    setNowLineHeightPx(Math.max(0, lineHeight));
-    if (viewportX < 0 || viewportX > wrapper.clientWidth) {
-      setNowLineLeftPx(null);
-      return;
-    }
-    setNowLineLeftPx(viewportX);
-  }, [start, end]);
-
   const updateDynamicMaxHeight = useCallback(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -176,39 +163,16 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
-    updateNowLinePosition();
     updateDynamicMaxHeight();
-    const scheduleUpdate = () => {
-      if (rafRef.current != null) return;
-      rafRef.current = window.requestAnimationFrame(() => {
-        rafRef.current = null;
-        updateNowLinePosition();
-      });
-    };
-    const onScroll = () => scheduleUpdate();
-    const onResize = () => {
-      scheduleUpdate();
-      updateDynamicMaxHeight();
-    };
-    wrapper.addEventListener('scroll', onScroll, { passive: true });
+    const onResize = () => updateDynamicMaxHeight();
     window.addEventListener('resize', onResize, { passive: true });
-    const resizeObserver = new ResizeObserver(() => {
-      scheduleUpdate();
-      updateDynamicMaxHeight();
-    });
+    const resizeObserver = new ResizeObserver(() => updateDynamicMaxHeight());
     resizeObserver.observe(wrapper);
-    const timer = setInterval(updateNowLinePosition, 60 * 1000);
     return () => {
-      wrapper.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
-      clearInterval(timer);
-      if (rafRef.current != null) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
     };
-  }, [updateDynamicMaxHeight, updateNowLinePosition]);
+  }, [updateDynamicMaxHeight]);
 
   const handleUpdateTask = useCallback(
     (ev: { id: number | string; task: { start?: Date; end?: Date; duration?: number } }) => {
@@ -280,14 +244,6 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       ref={wrapperRef}
       style={dynamicMaxHeightPx > 0 ? ({ ['--gantt-max-height' as string]: `${dynamicMaxHeightPx}px` } as React.CSSProperties) : undefined}
     >
-      {nowLineLeftPx != null && (
-        <div
-          className="gantt-now-line"
-          style={{ left: `${nowLineLeftPx}px`, height: `${nowLineHeightPx}px` }}
-        >
-          <span className="gantt-now-line-label">现在</span>
-        </div>
-      )}
       <Willow>
         <Gantt
           tasks={tasks}
@@ -296,6 +252,8 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           start={start}
           end={end}
           zoom
+          cellHeight={GANTT_ROW_HEIGHT}
+          taskTemplate={SchedulingTaskTemplate}
           onUpdateTask={handleUpdateTask}
           readonly={!onBatchUpdate && !onBatchUpdateOperations}
           columns={ganttColumns}

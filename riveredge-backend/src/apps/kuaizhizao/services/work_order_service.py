@@ -1123,7 +1123,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         planned_end_to: Optional[str] = None,
         order_by: Optional[str] = None,
         include_operations: bool = False,
-        include_readiness: bool = True,
+        include_readiness: bool = False,
         include_scores: bool = False,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
@@ -1289,34 +1289,63 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         "assigned_tool_name": op.assigned_tool_name,
                     })
 
-        # 齐套率：每行 BOM 展开 + 库存汇总，列表页可关闭以换取首屏速度
+        # 齐套率：BOM 展开 + 库存汇总；列表页默认关闭。开启时同产品+数量+变型配置复用 BOM 结果，避免 N 次重复展开
         wo_requirements_map: dict[int, list] = {}
         all_comp_ids = set()
         inventory_map: dict = {}
         if include_readiness:
+            import json
+
+            bom_cache: dict[str, list] = {}
+
+            def _bom_cache_key(wo: WorkOrder) -> str:
+                variant_attrs = getattr(wo, "variant_attributes", None)
+                cfg_selections = getattr(wo, "configurable_selections", None)
+                if cfg_selections and isinstance(cfg_selections, dict):
+                    try:
+                        cfg_selections = {
+                            str(k): int(v) for k, v in cfg_selections.items() if v is not None
+                        }
+                    except (TypeError, ValueError):
+                        cfg_selections = None
+                return json.dumps(
+                    {
+                        "product_id": wo.product_id,
+                        "quantity": float(wo.quantity or 0),
+                        "variant_attributes": variant_attrs,
+                        "configurable_selections": cfg_selections,
+                    },
+                    sort_keys=True,
+                    default=str,
+                )
+
             for wo in work_orders:
                 if wo.status in ['draft', 'released', 'in_progress']:
                     try:
-                        variant_attrs = getattr(wo, "variant_attributes", None)
-                        cfg_selections = getattr(wo, "configurable_selections", None)
-                        # 转换配置位字典
-                        if cfg_selections and isinstance(cfg_selections, dict):
-                            try:
-                                cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
-                            except (TypeError, ValueError):
-                                cfg_selections = None
-
-                        # 与 get_work_order_kitting_analysis / 库位与叫料 一致：齐套按「不拆中间自制件子 BOM」展开，
-                        # 否则列表会把子阶物料逐行计入，多数无独立库存 → 齐套率虚低（如 5/12≈41.67%）。
-                        requirements = await calculate_material_requirements_from_bom(
-                            tenant_id=tenant_id,
-                            material_id=wo.product_id,
-                            required_quantity=float(wo.quantity),
-                            only_approved=True,
-                            variant_attributes=variant_attrs,
-                            configurable_selections=cfg_selections,
-                            for_kitting_analysis=True,
-                        )
+                        cache_key = _bom_cache_key(wo)
+                        if cache_key not in bom_cache:
+                            variant_attrs = getattr(wo, "variant_attributes", None)
+                            cfg_selections = getattr(wo, "configurable_selections", None)
+                            if cfg_selections and isinstance(cfg_selections, dict):
+                                try:
+                                    cfg_selections = {
+                                        str(k): int(v)
+                                        for k, v in cfg_selections.items()
+                                        if v is not None
+                                    }
+                                except (TypeError, ValueError):
+                                    cfg_selections = None
+                            # 与 get_work_order_kitting_analysis / 库位与叫料 一致：齐套按「不拆中间自制件子 BOM」展开
+                            bom_cache[cache_key] = await calculate_material_requirements_from_bom(
+                                tenant_id=tenant_id,
+                                material_id=wo.product_id,
+                                required_quantity=float(wo.quantity),
+                                only_approved=True,
+                                variant_attributes=variant_attrs,
+                                configurable_selections=cfg_selections,
+                                for_kitting_analysis=True,
+                            )
+                        requirements = bom_cache[cache_key]
                         wo_requirements_map[wo.id] = requirements
                         for r in requirements:
                             all_comp_ids.add(r.component_id)

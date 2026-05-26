@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any, Tuple
 
 from tortoise.expressions import Q
 from decimal import Decimal
+from tortoise.functions import Count
 
 from tortoise.transactions import in_transaction
 from apps.kuaizhizao.constants import (
@@ -266,6 +267,23 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         resp.lifecycle = get_purchase_requisition_lifecycle(req, audit_required=audit_required)
         return resp
 
+    async def _batch_requisition_items_count(
+        self, tenant_id: int, requisition_ids: List[int]
+    ) -> Dict[int, int]:
+        """批量统计采购申请明细行数（列表用，避免 N+1 count）。"""
+        if not requisition_ids:
+            return {}
+        rows = (
+            await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id,
+                requisition_id__in=requisition_ids,
+            )
+            .group_by("requisition_id")
+            .annotate(cnt=Count("id"))
+            .values("requisition_id", "cnt")
+        )
+        return {int(row["requisition_id"]): int(row["cnt"]) for row in rows}
+
     async def list_requisitions(
         self,
         tenant_id: int,
@@ -311,22 +329,26 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         total = await query.count()
         reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
+        req_ids = [req.id for req in reqs if req.id is not None]
 
-        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
+        items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_request"
+        )
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_purchase_requisition_lifecycle,
+        )
+
         result = []
         for req in reqs:
-            # 列表入口同样自愈转单状态，避免详情未打开前列表显示陈旧状态
-            await self._recalc_conversion_status(tenant_id, req)
-            items_count = await PurchaseRequisitionItem.filter(
-                tenant_id=tenant_id, requisition_id=req.id
-            ).count()
             req_dict = {k: getattr(req, k) for k in req._meta.fields_map if hasattr(req, k)}
             req_dict.pop("items", None)
             resp = PurchaseRequisitionListResponse.model_construct(**req_dict)
-            resp.items_count = items_count
-            from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle, get_document_milestones
-            milestones = await get_document_milestones(req.tenant_id, "purchase_requisition", req.id)
-            resp.lifecycle = get_purchase_requisition_lifecycle(req, milestones=milestones, audit_required=audit_required)
+            resp.items_count = items_count_map.get(req.id, 0)
+            # 列表仅按当前 status 计算生命周期；转单状态自愈在详情/转单/修正接口执行
+            resp.lifecycle = get_purchase_requisition_lifecycle(
+                req, milestones=None, audit_required=audit_required
+            )
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
 

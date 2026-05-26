@@ -49,8 +49,8 @@ function tenantIdForSnapshot(): string {
 }
 
 function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
-  /* v3：列表默认 include_readiness，齐套率有值；升级键避免 session 中仍为未计算快照 */
-  return `riveredge.woList.v3:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
+  /* v4：列表默认不算齐套/权重分，首屏更快；升级键避免 session 中仍为 v3 重数据快照 */
+  return `riveredge.woList.v4:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
 }
 
 /** 将上次成功的列表写入 sessionStorage，下次进页可瞬时 hydrate */
@@ -146,10 +146,10 @@ export async function fetchWorkOrderListForTable(
   const apiParams: Record<string, any> = {
     skip: (params.current - 1) * params.pageSize,
     limit: params.pageSize,
-    /** 为 true 时后端按 BOM+库存计算齐套率（列表列可显示进度条）；数据量大时略慢 */
-    include_readiness: true,
-    /** 附带排程/备料综合分（读缓存快照） */
-    include_scores: true,
+    /** 列表首屏关闭；齐套率点击列打开齐套分析 Modal 按需加载 */
+    include_readiness: false,
+    /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
+    include_scores: false,
   }
   const s = searchFormValues || {}
   if (s.code) apiParams.code = s.code

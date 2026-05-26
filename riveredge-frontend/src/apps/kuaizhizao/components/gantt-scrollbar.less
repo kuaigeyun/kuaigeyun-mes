@@ -49,28 +49,58 @@
   background: transparent !important;
 }
 
-/* Delfoi 风格：当前时间竖线 */
-.gantt-now-line {
-  position: absolute;
-  top: 0;
-  bottom: auto;
-  width: 2px;
-  background: rgba(22, 119, 255, 0.75);
-  z-index: 999;
+/* 任务标签：第一行产品名，第二行工单号（小字） */
+.gantt-chart-wrapper .gantt-task-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.25;
   pointer-events: none;
 }
 
-.gantt-now-line-label {
-  position: absolute;
-  top: 4px;
-  left: 4px;
+.gantt-chart-wrapper .gantt-task-label-primary {
   font-size: 12px;
-  color: #1677ff;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(22, 119, 255, 0.35);
-  border-radius: 2px;
-  padding: 0 4px;
-  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-chart-wrapper .gantt-task-label-code {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 左侧列表允许多行展示 */
+.gantt-chart-wrapper .wx-text.wx-pqc08MHU:has(.gantt-task-label) {
+  white-space: normal;
+  overflow: hidden;
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* 时间轴任务条内标签 */
+.gantt-chart-wrapper .wx-GKbcLEGA.wx-content:has(.gantt-task-label),
+.gantt-chart-wrapper .wx-content:has(.gantt-task-label) {
+  white-space: normal;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+}
+
+.gantt-task-blue .gantt-task-label-code,
+.gantt-task-red .gantt-task-label-code,
+.wx-task.gantt-task-blue .gantt-task-label-code,
+.wx-task.gantt-task-red .gantt-task-label-code {
+  opacity: 0.9;
 }
 
 /* 尝试覆盖任务条颜色：兼容多种 DOM 命名 */

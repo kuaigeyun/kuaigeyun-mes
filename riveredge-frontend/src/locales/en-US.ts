@@ -10075,5 +10075,12 @@ export default {
   'app.kuaizhizao.salesReturn.totalQuantity': 'Total Quantity',
   'app.kuaizhizao.shipmentNotice.totalAmount': 'Total Amount',
   'app.kuaizhizao.shipmentNotice.totalQuantity': 'Total Quantity',
+
+  // Weather widget
+  'components.weather.loading': 'Loading weather...',
+  'components.weather.unavailable': 'Weather unavailable',
+  'components.weather.loadFailed': 'Unable to get weather',
+  'components.weather.feelsLike': 'Feels like {{value}}°C',
+  'components.weather.refresh': 'Refresh weather',
 };
 

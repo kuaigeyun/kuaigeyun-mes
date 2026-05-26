@@ -69,6 +69,10 @@ export interface GanttTask {
   css?: string;
   /** 兼容部分库字段命名 */
   class?: string;
+  /** 标签主行（产品名等） */
+  gantt_primary_label?: string;
+  /** 标签副行（工单号） */
+  gantt_work_order_code?: string;
 }
 
 export type ViewMode = 'day' | 'week' | 'month';

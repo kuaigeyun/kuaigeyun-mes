@@ -44,6 +44,48 @@ function estimateWorkOrderPlanHours(wo: WorkOrderForGantt): number {
   return (Number(wo.quantity) || 1) * 0.1;
 }
 
+function applyWorkOrderDateUpdates(
+  list: WorkOrderForGantt[],
+  updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>
+): WorkOrderForGantt[] {
+  if (updates.length === 0) return list;
+  const byId = new Map(updates.map((u) => [u.work_order_id, u]));
+  return list.map((wo) => {
+    const patch = byId.get(wo.id);
+    if (!patch) return wo;
+    return {
+      ...wo,
+      planned_start_date: patch.planned_start_date,
+      planned_end_date: patch.planned_end_date,
+    };
+  });
+}
+
+function applyOperationDateUpdates(
+  list: WorkOrderForGantt[],
+  updates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>
+): WorkOrderForGantt[] {
+  if (updates.length === 0) return list;
+  const byOpId = new Map(updates.map((u) => [u.operation_id, u]));
+  return list.map((wo) => {
+    if (!wo.operations?.length) return wo;
+    let changed = false;
+    const operations = wo.operations.map((op) => {
+      const opId = op.id;
+      if (opId == null) return op;
+      const patch = byOpId.get(opId);
+      if (!patch) return op;
+      changed = true;
+      return {
+        ...op,
+        planned_start_date: patch.planned_start_date,
+        planned_end_date: patch.planned_end_date,
+      };
+    });
+    return changed ? { ...wo, operations } : wo;
+  });
+}
+
 /** 默认排程约束（含 4M 人机料法开关） */
 const DEFAULT_SCHEDULING_CONSTRAINTS = {
   priority_weight: 0.3,
@@ -129,7 +171,12 @@ const SchedulingPage: React.FC = () => {
     []
   );
 
-  const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
+  const {
+    data: ganttWorkOrders = [] as WorkOrderForGantt[],
+    loading: ganttLoading,
+    run: refreshGantt,
+    mutate: mutateGanttWorkOrders,
+  } = useRequest(
     async () => {
       const res = await workOrderApi.list(buildWorkOrderParams(tableFilterState));
       let list = Array.isArray(res) ? res : (res?.data ?? []);
@@ -448,17 +495,18 @@ const SchedulingPage: React.FC = () => {
         }))
         .filter((u) => Number.isInteger(u.work_order_id) && u.work_order_id > 0);
       if (validUpdates.length === 0) return;
+      mutateGanttWorkOrders((prev) => applyWorkOrderDateUpdates(prev ?? [], validUpdates));
       try {
         await workOrderApi.batchUpdateDates(validUpdates);
         messageApi.success('排程已更新');
         actionRef.current?.reload();
-        refreshGantt();
       } catch (e: any) {
         messageApi.error(e?.message || '排程更新失败');
+        refreshGantt();
         throw e;
       }
     },
-    [messageApi, refreshGantt]
+    [messageApi, mutateGanttWorkOrders, refreshGantt]
   );
 
   const handleGanttBatchUpdateOperations = useCallback(
@@ -470,17 +518,18 @@ const SchedulingPage: React.FC = () => {
         }))
         .filter((u) => Number.isInteger(u.operation_id) && u.operation_id > 0);
       if (validUpdates.length === 0) return;
+      mutateGanttWorkOrders((prev) => applyOperationDateUpdates(prev ?? [], validUpdates));
       try {
         await workOrderApi.batchUpdateOperationDates(validUpdates);
         messageApi.success('工序排程已更新');
         actionRef.current?.reload();
-        refreshGantt();
       } catch (e: any) {
         messageApi.error(e?.message || '工序排程更新失败');
+        refreshGantt();
         throw e;
       }
     },
-    [messageApi, refreshGantt]
+    [messageApi, mutateGanttWorkOrders, refreshGantt]
   );
 
   const columns: ProColumns<any>[] = [

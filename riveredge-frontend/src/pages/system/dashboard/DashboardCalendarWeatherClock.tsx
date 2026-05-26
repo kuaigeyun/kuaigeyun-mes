@@ -122,7 +122,7 @@ export function DashboardCalendarWeatherClock({
                 icon={<LeftOutlined />}
                 aria-label={t('pages.dashboard.calendarPrevMonth')}
                 onClick={() => setViewMonth((m) => m.subtract(1, 'month'))}
-                style={{ color: token.colorPrimary, minWidth: 24, width: 24, height: 24, padding: 0 }}
+                style={{ color: token.colorPrimary, minWidth: 20, width: 20, height: 20, padding: 0, fontSize: 11 }}
               />
               <span className="dashboard-cwc-month-label-wrap">
                 <Text className="dashboard-cwc-month-label">
@@ -137,7 +137,7 @@ export function DashboardCalendarWeatherClock({
                 icon={<RightOutlined />}
                 aria-label={t('pages.dashboard.calendarNextMonth')}
                 onClick={() => setViewMonth((m) => m.add(1, 'month'))}
-                style={{ color: token.colorPrimary, minWidth: 24, width: 24, height: 24, padding: 0 }}
+                style={{ color: token.colorPrimary, minWidth: 20, width: 20, height: 20, padding: 0, fontSize: 11 }}
               />
             </div>
           </div>

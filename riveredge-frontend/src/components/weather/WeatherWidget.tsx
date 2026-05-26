@@ -8,10 +8,19 @@
  * @date 2026-01-21
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Space, Typography, Spin, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getWeatherByIP, type WeatherData, getCachedWeather, isWeatherCacheExpired } from '../../services/weather';
+import { useTranslation } from 'react-i18next';
+import {
+  getWeatherByIP,
+  type WeatherData,
+  getCachedWeather,
+  isWeatherCacheExpired,
+  localizeWeatherData,
+  reverseGeocodeLabel,
+  resolveWeatherLanguage,
+} from '../../services/weather';
 import { getWeatherIcon } from './weatherIcons';
 
 const { Text } = Typography;
@@ -43,11 +52,13 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   mini = false,
   tone = 'dark',
 }) => {
-  // 1. 优先从本地缓存读取，实现“秒开”
-  const cachedWeather = getCachedWeather();
+  const { t, i18n } = useTranslation();
+  // 1. 优先从本地缓存读取，实现"秒开"
+  const cachedWeather = getCachedWeather(i18n.language);
   const [weather, setWeather] = useState<WeatherData | null>(cachedWeather);
   const [loading, setLoading] = useState(!cachedWeather);
   const [error, setError] = useState<string | null>(null);
+  const [localizedCity, setLocalizedCity] = useState<string | null>(null);
   const weatherRef = useRef<WeatherData | null>(cachedWeather);
 
   useEffect(() => {
@@ -66,14 +77,14 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     }
     setError(null);
     try {
-      const data = await getWeatherByIP(force);
+      const data = await getWeatherByIP(force, i18n.language);
       if (data) {
         setWeather(data);
         onWeatherChange?.(data);
       } else if (!hasCurrentWeather) {
         // 只有既没有新数据也没有缓存数据时才报错
         setWeather(null);
-        setError('无法获取天气信息');
+        setError(t('components.weather.loadFailed'));
         onWeatherChange?.(null);
       }
     } catch (err: unknown) {
@@ -82,28 +93,49 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       }
       if (!hasCurrentWeather) {
         setWeather(null);
-        setError(err instanceof Error ? err.message : '加载天气失败');
+        setError(err instanceof Error ? err.message : t('components.weather.loadFailed'));
         onWeatherChange?.(null);
       }
     } finally {
       setLoading(false);
     }
-  }, [onWeatherChange]);
+  }, [onWeatherChange, i18n.language]);
+
+  const displayWeather = useMemo(
+    () => (weather ? localizeWeatherData(weather, i18n.language) : null),
+    [weather, i18n.language]
+  );
 
   useEffect(() => {
-    // 延迟执行 initial load，避免 effect 期间的同步 setState 警告
+    if (!weather?.lat || !weather?.lon) {
+      setLocalizedCity(null);
+      return;
+    }
+    let cancelled = false;
+    const lang = resolveWeatherLanguage(i18n.language);
+    reverseGeocodeLabel(weather.lat, weather.lon, lang).then((name) => {
+      if (!cancelled) setLocalizedCity(name);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [weather?.lat, weather?.lon, i18n.language]);
+
+  useEffect(() => {
     const timerId = window.setTimeout(() => {
-      // 只在“页面刷新后的首次加载”执行自动更新逻辑。
-      // SPA 内路由切换回来时不再触发，减少 API 调用。
-      const hasCheckedThisPage = window.sessionStorage.getItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY) === '1';
-      if (hasCheckedThisPage) {
+      if (!weatherRef.current) {
+        // 没有任何数据（缓存键变更导致读不到旧缓存），必须立即触发加载
+        loadWeather();
+        window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
         return;
       }
-      window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
-
-      // 进入工作台：先展示本地缓存，仅当缓存超过1小时再异步拉取一次
-      if (!weatherRef.current || isWeatherCacheExpired()) {
-        loadWeather();
+      // 有数据时，仅在页面刷新后的首次访问中检查缓存是否过期
+      const hasCheckedThisPage = window.sessionStorage.getItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY) === '1';
+      if (!hasCheckedThisPage) {
+        window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
+        if (isWeatherCacheExpired()) {
+          loadWeather();
+        }
       }
     }, 0);
 
@@ -134,17 +166,17 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       <Space style={style} size={compact ? 'small' : 'middle'}>
         <Spin size="small" />
         <Text style={{ color: tc.meta, fontSize: compact ? 12 : 14 }}>
-          加载天气...
+          {t('components.weather.loading')}
         </Text>
       </Space>
     );
   }
 
-  if (error || !weather) {
+  if (error || !displayWeather) {
     return (
       <Space style={style} size={compact ? 'small' : 'middle'}>
         <Text style={{ color: tc.muted, fontSize: compact ? 12 : 14 }}>
-          天气信息暂不可用
+          {t('components.weather.unavailable')}
         </Text>
         {showRefresh && (
           <ReloadOutlined
@@ -161,7 +193,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   }
 
   // 获取天气图标
-  const WeatherIcon = getWeatherIcon(weather.iconCode, weather.description);
+  const WeatherIcon = getWeatherIcon(displayWeather.iconCode, displayWeather.description);
+  const cityLabel = localizedCity ?? displayWeather.city;
 
   return (
     <Space 
@@ -174,56 +207,71 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       </div>
       
       {/* 天气信息 */}
-      <Space orientation="vertical" size={compact ? 2 : 0}>
-        <Space size="small">
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: mini || compact ? 2 : 4,
+          minWidth: 0,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.1 }}>
           <Text
             style={{
               color: tc.primary,
               fontSize: tempSize,
               fontWeight: 600,
-              lineHeight: 1,
-              whiteSpace: 'nowrap', // ⚠️ 防止温度符号由于宽度极窄而换行
+              lineHeight: 1.1,
+              whiteSpace: 'nowrap',
+              margin: 0,
             }}
           >
-            {weather.temperature}°C
+            {displayWeather.temperature}°C
           </Text>
-          {weather.feelsLike !== undefined && weather.feelsLike !== weather.temperature && (
-            <Text
-              style={{
-                color: tc.muted,
-                fontSize: compact ? 11 : 12,
-                lineHeight: 1,
-              }}
-            >
-              体感 {weather.feelsLike}°C
-            </Text>
-          )}
-        </Space>
-        <Space size="small" wrap>
+          {displayWeather.feelsLike !== undefined &&
+            displayWeather.feelsLike !== displayWeather.temperature && (
+              <Text
+                style={{
+                  color: tc.muted,
+                  fontSize: mini ? 10 : compact ? 11 : 12,
+                  lineHeight: 1.1,
+                  margin: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('components.weather.feelsLike', { value: displayWeather.feelsLike })}
+              </Text>
+            )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.1 }}>
           <Text
+            ellipsis
             style={{
               color: tc.meta,
               fontSize: metaSize,
-              lineHeight: 1.2,
+              lineHeight: 1.1,
+              margin: 0,
             }}
           >
-            {weather.city}
+            {cityLabel}
           </Text>
           <Text
+            ellipsis
             style={{
               color: tc.muted,
               fontSize: metaSize,
-              lineHeight: 1.2,
+              lineHeight: 1.1,
+              margin: 0,
             }}
           >
-            {weather.description}
+            {displayWeather.description}
           </Text>
-        </Space>
-      </Space>
+        </div>
+      </div>
 
       {/* 刷新按钮 */}
       {showRefresh && (
-        <Tooltip title="刷新天气">
+        <Tooltip title={t('components.weather.refresh')}>
           <ReloadOutlined
             style={{
               color: tc.muted,

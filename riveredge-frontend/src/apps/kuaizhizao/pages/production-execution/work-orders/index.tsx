@@ -3935,8 +3935,8 @@ const WorkOrdersPage: React.FC = () => {
         let inner: React.ReactNode
         if (rate == null || Number.isNaN(Number(rate))) {
           inner = (
-            <Typography.Text type="secondary" title="无 BOM 需求、齐套计算异常或单据状态不在计算范围内时可无值；可至工单详情或齐套分析查看">
-              —
+            <Typography.Text type="secondary" title="列表为加快加载未预计算；点击打开齐套分析查看进度与叫料">
+              点击查看
             </Typography.Text>
           )
         } else {

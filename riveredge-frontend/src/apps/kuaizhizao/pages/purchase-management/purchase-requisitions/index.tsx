@@ -125,7 +125,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const lastRequisitionsCacheRef = useRef<PurchaseRequisition[]>([]);
   const deepLinkHandledRef = useRef<string | null>(null);
-  const pendingPushPoIdRef = useRef<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
@@ -154,12 +153,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
     prTrackingRefreshKey,
   );
 
-  useEffect(() => {
-    supplierApi.list?.({ isActive: true } as any).then((res: any) => {
-      const list = Array.isArray(res) ? res : res?.data || res?.results || [];
+  const ensureSupplierList = useCallback(async (): Promise<Array<{ id: number; code?: string; name: string }>> => {
+    if (supplierList.length > 0) return supplierList;
+    try {
+      const res: any = await supplierApi.list?.({ isActive: true, limit: 500 } as any);
+      const list = Array.isArray(res) ? res : res?.data || res?.results || res?.items || [];
       setSupplierList(list);
-    }).catch(() => setSupplierList([]));
-  }, []);
+      return list;
+    } catch {
+      setSupplierList([]);
+      return [];
+    }
+  }, [supplierList]);
 
   const initialCreateItems = [{ ...INITIAL_PR_FORM_ITEM_ROW }];
 
@@ -215,6 +220,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     async (record: PurchaseRequisition) => {
       const s = (record.status ?? '').toString().trim();
       if (!['草稿', 'draft', 'DRAFT'].includes(s) || record.id == null) return;
+      void ensureSupplierList();
       setEditingId(record.id);
       setPreviewCode(null);
       setEffectiveRuleCode(null);
@@ -254,7 +260,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         setEditingId(null);
       }
     },
-    [messageApi]
+    [messageApi, ensureSupplierList]
   );
 
   const lifecycleValueEnum = purchaseRequestAuditEnabled
@@ -438,6 +444,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再请求 getCodeRulePageConfig + testGenerateCode 预填编号 */
   const handleCreate = async () => {
+    void ensureSupplierList();
     setEditingId(null);
     setPreviewCode(null);
     setEffectiveRuleCode(null);
@@ -725,6 +732,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const handleDetail = async (record: PurchaseRequisition) => {
     try {
+      void ensureSupplierList();
       const detail = await getPurchaseRequisition(record.id!);
       void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
       setCurrentReq(detail);
@@ -788,7 +796,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const handleConvert = async (record: PurchaseRequisition) => {
     try {
-      if (!supplierList.length) {
+      const suppliers = await ensureSupplierList();
+      if (!suppliers.length) {
         messageApi.warning('请先维护供应商档案，才能下推采购单');
         return;
       }
@@ -799,7 +808,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         messageApi.info('无可下推的明细，所有明细已转采购单');
         return;
       }
-      const defaultSupplierId = unconverted[0]?.supplier_id || supplierList[0]?.id;
+      const defaultSupplierId = unconverted[0]?.supplier_id || suppliers[0]?.id;
       const quantities: Record<number, number> = {};
       unconverted.forEach((i) => {
         if (i.id != null) quantities[i.id] = Number(i.quantity ?? 0);
@@ -807,7 +816,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       convertFormRef.current = {
         selectedIds: unconverted.map((i) => i.id!).filter(Boolean),
         supplierId: defaultSupplierId || 0,
-        supplierName: supplierList.find((s) => s.id === defaultSupplierId)?.name || supplierList[0]?.name || '',
+        supplierName: suppliers.find((s) => s.id === defaultSupplierId)?.name || suppliers[0]?.name || '',
         itemQuantities: quantities,
         itemSuppliers: {},
         persistDefaultSupplier: false,
@@ -821,7 +830,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           <ConvertForm
             items={allItems}
             unconvertedIds={unconverted.map((i) => i.id!).filter(Boolean)}
-            suppliers={supplierList}
+            suppliers={suppliers}
             formRef={convertFormRef}
           />
         ),
@@ -913,13 +922,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
     if (action === 'pushPO') {
       setSelectedRowKeys([requisitionId]);
-      if (supplierList.length === 0) {
-        pendingPushPoIdRef.current = requisitionId;
-        return;
-      }
-      pendingPushPoIdRef.current = null;
       void (async () => {
         try {
+          await ensureSupplierList();
           const detail = await getPurchaseRequisition(requisitionId);
           void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
           setCurrentReq(detail);
@@ -943,24 +948,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         deepLinkHandledRef.current = null;
       }
     })();
-  }, [searchParams, location.pathname, navigate, messageApi, supplierList]);
-
-  useEffect(() => {
-    const requisitionId = pendingPushPoIdRef.current;
-    if (requisitionId == null || supplierList.length === 0) return;
-    pendingPushPoIdRef.current = null;
-
-    void (async () => {
-      try {
-        const detail = await getPurchaseRequisition(requisitionId);
-        void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
-        setCurrentReq(detail);
-        await handleConvert({ ...detail, id: requisitionId });
-      } catch {
-        messageApi.error('打开采购申请失败');
-      }
-    })();
-  }, [supplierList, messageApi]);
+  }, [searchParams, location.pathname, navigate, messageApi, ensureSupplierList]);
 
   const toolbarPushMenuItems = useMemo(
     () =>
