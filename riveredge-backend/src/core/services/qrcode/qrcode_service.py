@@ -26,10 +26,19 @@ try:
     from PIL import Image
     PYZBAR_AVAILABLE = True
 except ImportError:
+    pyzbar_decode = None
     PYZBAR_AVAILABLE = False
     logger.warning(
-        "pyzbar 不可用，二维码解析将关闭。若 uv 已同步仍如此，Linux 通常缺少系统库，请执行: "
-        "sudo apt install -y libzbar0（再重启后端）"
+        "pyzbar 不可用，二维码解析将关闭。请运行: uv sync --no-install-project"
+    )
+except OSError as exc:
+    pyzbar_decode = None
+    PYZBAR_AVAILABLE = False
+    logger.warning(
+        "pyzbar 原生库加载失败，二维码图片解析将关闭（{}）。"
+        "Windows 可执行: uv pip install --force-reinstall pyzbar；"
+        "Linux 可执行: sudo apt install -y libzbar0",
+        exc,
     )
 
 from infra.exceptions.exceptions import ValidationError, NotFoundError

@@ -1052,6 +1052,27 @@ sync_backend_deps() {
         export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
         "$(resolve_uv)" sync --no-install-project
     ) || { log_error "Python 依赖同步失败"; exit 1; }
+    if is_windows_gitbash; then
+        ensure_pyzbar_windows_native
+    fi
+}
+
+ensure_pyzbar_windows_native() {
+    local dll="$BACKEND_DIR/.venv/Lib/site-packages/pyzbar/libzbar-64.dll"
+    [ -f "$dll" ] && return 0
+    log_warn "pyzbar 缺少 Windows 原生 DLL (libzbar-64.dll)，正在重装 pyzbar..."
+    (
+        cd "$BACKEND_DIR"
+        "$(resolve_uv)" pip install --force-reinstall 'pyzbar>=0.1.9'
+    ) || {
+        log_warn "pyzbar 重装未成功，二维码图片解析不可用，但不影响后端启动"
+        return 0
+    }
+    if [ -f "$dll" ]; then
+        log_ok "pyzbar Windows 原生库已就绪"
+    else
+        log_warn "仍未找到 libzbar-64.dll，二维码图片解析不可用"
+    fi
 }
 
 cmd_migrate() {

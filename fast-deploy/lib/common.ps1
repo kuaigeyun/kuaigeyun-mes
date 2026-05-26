@@ -514,6 +514,23 @@ function Invoke-Configure {
     }
 }
 
+function Ensure-PyzbarWindowsNative {
+    $dll = Join-Path $script:BackendDir '.venv\Lib\site-packages\pyzbar\libzbar-64.dll'
+    if (Test-Path $dll) { return }
+    Write-LogWarn 'pyzbar 缺少 Windows 原生 DLL (libzbar-64.dll)，正在重装 pyzbar...'
+    $uv = Resolve-Uv
+    Push-Location $script:BackendDir
+    try {
+        & $uv pip install --force-reinstall 'pyzbar>=0.1.9'
+        if ($LASTEXITCODE -ne 0) {
+            Write-LogWarn 'pyzbar 重装未成功，二维码图片解析不可用，但不影响后端启动'
+            return
+        }
+        if (Test-Path $dll) { Write-LogOk 'pyzbar Windows 原生库已就绪' }
+        else { Write-LogWarn '仍未找到 libzbar-64.dll，二维码图片解析不可用' }
+    } finally { Pop-Location }
+}
+
 function Sync-BackendDeps {
     Apply-CN-Mirrors
     Write-LogInfo '同步 Python 依赖...'
@@ -526,6 +543,7 @@ function Sync-BackendDeps {
         & $uv sync --no-install-project
         if ($LASTEXITCODE -ne 0) { throw 'uv sync 失败' }
     } finally { Pop-Location }
+    Ensure-PyzbarWindowsNative
 }
 
 function Invoke-Migrate {
