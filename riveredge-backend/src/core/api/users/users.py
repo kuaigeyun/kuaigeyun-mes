@@ -17,6 +17,12 @@ from core.schemas.user import (
     UserResponse,
     UserListResponse,
 )
+from core.schemas.user_display import (
+    UserDisplayListResponse,
+    UserDisplayResolveRequest,
+    UserDisplayResolveResponse,
+)
+from core.services.user.user_display_service import UserDisplayService
 from core.services.user.user_service import UserService
 from core.api.deps.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_access
@@ -168,6 +174,58 @@ async def batch_delete_users(
         failure_count=result["failure_count"],
         errors=[UserBatchDeleteErrorItem(**item) for item in result["errors"]],
     )
+
+
+_require_user_picker_access = require_access(
+    "system:user",
+    "display",
+    required_permissions=["system:user:read", "system:user:display"],
+)
+
+
+@router.get("/display-search", response_model=UserDisplayListResponse)
+async def search_users_for_display(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="姓名或账号关键词"),
+    department_uuid: Optional[str] = Query(None, description="部门 UUID 筛选"),
+    position_uuid: Optional[str] = Query(None, description="岗位 UUID 筛选"),
+    is_active: Optional[bool] = Query(True, description="是否仅启用用户"),
+    _auth: object = Depends(_require_user_picker_access),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    人员展示搜索（表单选人）。
+
+    仅需 system:user:display 或 system:user:read，不返回人员管理所需的完整字段。
+    """
+    result = await UserDisplayService.search(
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        department_uuid=department_uuid,
+        position_uuid=position_uuid,
+        is_active=is_active,
+    )
+    return UserDisplayListResponse(**result)
+
+
+@router.post("/display-resolve", response_model=UserDisplayResolveResponse)
+async def resolve_users_for_display(
+    body: UserDisplayResolveRequest,
+    _auth: object = Depends(_require_user_picker_access),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按 ID/UUID 批量解析人员展示名（单据回显、编辑表单初始值）。
+    """
+    items = await UserDisplayService.resolve(
+        tenant_id=tenant_id,
+        user_ids=body.user_ids,
+        user_uuids=body.user_uuids,
+    )
+    return UserDisplayResolveResponse(items=items)
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

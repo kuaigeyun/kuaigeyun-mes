@@ -62,6 +62,7 @@ import {
   getMold,
   getMoldLedgerDatasetBinding,
   listMoldOperationRecords,
+  listMoldWarehouses,
   listMolds,
   putMoldLedgerDatasetBinding,
   syncMoldLedgerFromDataset,
@@ -72,6 +73,7 @@ import {
   type MoldLedgerDatasetBindingPayload,
   type MoldOperationRecordRow,
   type MoldRow,
+  type MoldWarehouseRow,
   type MoldUpdatePayload,
 } from '../../../services/haoligo';
 import { executeDatasetQuery, getDatasetList } from '../../../../../services/dataset';
@@ -114,6 +116,7 @@ function renderMoldLedgerStatusCell(status: string) {
 const moldOperationKindColors: Record<MoldOperationRecordRow['kind'], string> = {
   borrow: 'blue',
   return: 'green',
+  trial: 'gold',
   maintenance: 'orange',
   maintenance_complete: 'cyan',
   outsource_maintenance: 'purple',
@@ -307,9 +310,35 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
   );
 }
 
+/** 批量修改：选择此项表示清空所在仓库 */
+const MOLD_WAREHOUSE_BATCH_CLEAR = '__clear_mold_warehouse__';
+
+function parseMoldWarehouseIdForForm(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(String(value).trim());
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+function parseMoldWarehouseIdForBatch(value: unknown): number | null | undefined {
+  if (value === MOLD_WAREHOUSE_BATCH_CLEAR) return null;
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = typeof value === 'number' ? value : Number(String(value).trim());
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
+}
+
+function formatMoldWarehouseLabel(row: MoldWarehouseRow): string {
+  const name = (row.warehouse_name || '').trim();
+  return name || String(row.id);
+}
+
+function renderMoldWarehouseCell(row: Pick<MoldRow, 'mold_warehouse_name'>): string {
+  const name = (row.mold_warehouse_name || '').trim();
+  return name || '—';
+}
+
 /** 批量修改弹窗：仅把已填写的项加入 PATCH（留空表示不改动该字段）。 */
-function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldUpdatePayload | null {
-  const patch: MoldUpdatePayload = {};
+function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldBatchLifecyclePayload | null {
+  const patch: MoldBatchLifecyclePayload = {};
   const y = numOrUndef(values.service_life_years);
   if (y !== undefined) patch.service_life_years = y;
   const t = numOrUndef(values.usable_times);
@@ -328,6 +357,14 @@ function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldUpda
     }
     patch.status = status;
   }
+  if (values.mold_warehouse_id === MOLD_WAREHOUSE_BATCH_CLEAR) {
+    patch.mold_warehouse_id = null;
+  } else {
+    const whId = parseMoldWarehouseIdForBatch(values.mold_warehouse_id);
+    if (whId !== undefined) {
+      patch.mold_warehouse_id = whId;
+    }
+  }
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
@@ -342,6 +379,7 @@ const MoldLedgerPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string; label: string }[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{ value: number; label: string }[]>([]);
   const [datasetBinding, setDatasetBinding] = useState<MoldLedgerDatasetBindingPayload | null>(null);
   const [bindingModalOpen, setBindingModalOpen] = useState(false);
   const [bindingCfgForm] = Form.useForm<MoldLedgerDatasetBindingPayload>();
@@ -537,6 +575,24 @@ const MoldLedgerPage: React.FC = () => {
     loadSuppliers();
   }, [loadSuppliers]);
 
+  const loadWarehouses = useCallback(async () => {
+    try {
+      const rows = await listMoldWarehouses();
+      setWarehouseOptions(
+        rows.map((w) => ({
+          value: w.id,
+          label: formatMoldWarehouseLabel(w),
+        })),
+      );
+    } catch {
+      setWarehouseOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWarehouses();
+  }, [loadWarehouses]);
+
   const handleOpenBatchModal = useCallback(() => {
     batchForm.resetFields();
     setBatchScope('selected');
@@ -566,7 +622,7 @@ const MoldLedgerPage: React.FC = () => {
 
   const handleBatchSubmit = async () => {
     const values = batchForm.getFieldsValue();
-    let patch: MoldUpdatePayload | null;
+    let patch: MoldBatchLifecyclePayload | null;
     try {
       patch = buildMoldLifecycleBatchPatch(values);
     } catch (e) {
@@ -668,6 +724,7 @@ const MoldLedgerPage: React.FC = () => {
         maintenance_cycle_by_days: detail.maintenance_cycle_by_days ?? undefined,
         allow_repeated_borrow: detail.allow_repeated_borrow ?? true,
         purchase_vendor_name: detail.purchase_vendor_name ?? undefined,
+        mold_warehouse_id: detail.mold_warehouse_id ?? undefined,
         status: detail.status,
         remark: detail.remark ?? undefined,
         used_times: detail.used_times ?? 0,
@@ -771,6 +828,11 @@ const MoldLedgerPage: React.FC = () => {
       dataIndex: 'status',
       render: (_, r) => renderMoldLedgerStatusCell(r.status),
     },
+    {
+      title: '所在仓库',
+      dataIndex: 'mold_warehouse_name',
+      render: (_, r) => renderMoldWarehouseCell(r),
+    },
     { title: '备注', dataIndex: 'remark', span: 2, render: (_, r) => r.remark || '—' },
   ];
 
@@ -794,6 +856,7 @@ const MoldLedgerPage: React.FC = () => {
     maintenance_cycle_by_days: numOrUndef(values.maintenance_cycle_by_days),
     allow_repeated_borrow: Boolean(values.allow_repeated_borrow),
     purchase_vendor_name: String(values.purchase_vendor_name ?? '').trim() || null,
+    mold_warehouse_id: parseMoldWarehouseIdForForm(values.mold_warehouse_id),
     status,
     total_manufacture_qty: 0,
     remark: String(values.remark ?? '').trim() || null,
@@ -842,6 +905,14 @@ const MoldLedgerPage: React.FC = () => {
       valueType: 'select',
       valueEnum: statusValueEnum,
       render: (_, r) => renderMoldLedgerStatusCell(r.status),
+    },
+    {
+      title: '所在仓库',
+      dataIndex: 'mold_warehouse_name',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => renderMoldWarehouseCell(r),
     },
     {
       title: '允许重复领用',
@@ -1261,6 +1332,19 @@ const MoldLedgerPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
+            <ProFormSelect
+              name="mold_warehouse_id"
+              label="所在仓库"
+              placeholder="请选择模具仓库"
+              allowClear
+              showSearch
+              options={warehouseOptions}
+              fieldProps={{
+                optionFilterProp: 'label',
+              }}
+            />
+          </Col>
+          <Col span={12}>
             <ProForm.Item name="purchase_vendor_name" label="购买厂商">
               <AutoComplete
                 options={supplierOptions}
@@ -1287,7 +1371,7 @@ const MoldLedgerPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="批量修改（状态 / 模具寿命 / 额定可用次数 / 额定可用产量 / 维修周期）"
+        title="批量修改（状态 / 所在仓库 / 模具寿命 / 额定可用次数 / 额定可用产量 / 维修周期）"
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
@@ -1333,6 +1417,21 @@ const MoldLedgerPage: React.FC = () => {
                   placeholder="留空不修改"
                   style={{ width: '100%' }}
                   options={MOLD_LEDGER_STATUSES.map((s) => ({ label: s, value: s }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="mold_warehouse_id" label="所在仓库">
+                <Select
+                  allowClear
+                  placeholder="留空不修改"
+                  showSearch
+                  optionFilterProp="label"
+                  style={{ width: '100%' }}
+                  options={[
+                    { label: '（清空所在仓库）', value: MOLD_WAREHOUSE_BATCH_CLEAR },
+                    ...warehouseOptions,
+                  ]}
                 />
               </Form.Item>
             </Col>

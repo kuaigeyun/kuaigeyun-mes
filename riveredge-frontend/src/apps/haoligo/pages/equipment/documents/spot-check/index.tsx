@@ -32,9 +32,7 @@ import {
   Tag,
   Tooltip,
   Typography,
-  Upload,
 } from 'antd';
-import type { UploadProps } from 'antd/es/upload';
 import { DeleteOutlined, EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -55,8 +53,10 @@ import {
   type EquipmentSpotCheckRow,
 } from '../../../../services/haoligo';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
-import { getUserList } from '../../../../../../services/user';
-import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { useGlobalStore } from '../../../../../../stores';
+import { resolveUserIdLabels, searchUserIdOptions } from '../../../../../../utils/userDisplay';
+import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 import {
@@ -147,26 +147,25 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const title = t('app.haoligo.menu.equipment.documents.spot-check');
   const reload = useCallback(() => actionRef.current?.reload(), []);
 
-  const searchReportNotifyUsers = useCallback(async (keyword?: string) => {
-    const res = await getUserList({
-      page: 1,
-      page_size: 50,
-      is_active: true,
-      keyword: keyword?.trim() || undefined,
-    });
-    const opts = (res.items || []).map((u) => {
-      const label = (u.full_name || '').trim() || u.username;
-      reportUserLabelRef.current.set(u.id, label);
-      return { label, value: u.id };
-    });
-    const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-    for (const id of selIds) {
-      if (Number.isFinite(id) && !opts.some((o) => o.value === id)) {
-        opts.unshift({ value: id, label: reportUserLabelRef.current.get(id) || `用户#${id}` });
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
+  const searchReportNotifyUsers = useCallback(
+    async (keyword?: string) => {
+      const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: reportUserLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        reportUserLabelRef.current.set(o.value, o.label);
       }
-    }
-    return opts;
-  }, []);
+      return opts;
+    },
+    [currentUser],
+  );
 
   const parseReportNotifyUserIds = (v: Record<string, unknown>): number[] => {
     const raw = v.report_notify_user_ids;
@@ -268,19 +267,9 @@ const SpotCheckDocumentsPage: React.FC = () => {
       });
       setModalOpen(true);
       if (notifyIds.length) {
-        void (async () => {
-          try {
-            const res = await getUserList({ page: 1, page_size: 50, is_active: true });
-            for (const uid of notifyIds) {
-              const hit = (res.items || []).find((u) => u.id === uid);
-              if (hit) {
-                reportUserLabelRef.current.set(hit.id, (hit.full_name || '').trim() || hit.username);
-              }
-            }
-          } catch {
-            /* ignore */
-          }
-        })();
+        void resolveUserIdLabels(notifyIds, currentUser).then((labels) => {
+          labels.forEach((label, id) => reportUserLabelRef.current.set(id, label));
+        });
       }
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -494,28 +483,6 @@ const SpotCheckDocumentsPage: React.FC = () => {
       setFormLoading(false);
     }
   };
-
-  const linePhotoUploadProps = (idx: number): UploadProps => ({
-    listType: 'picture-card',
-    accept: '.jpg,.jpeg,.png,.gif,.webp',
-    disabled: detailMode,
-    fileList: uuidsToUploadFileList(lines[idx]?.attachment_file_ids || []),
-    onChange: ({ fileList }) => {
-      const uuids = normUploadUuids(fileList);
-      setLines((prev) =>
-        prev.map((x, i) => (i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x)),
-      );
-    },
-    customRequest: async (options) => {
-      try {
-        const file = options.file as File;
-        const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_equipment_spot_check' });
-        options.onSuccess?.(res, options.file);
-      } catch (e) {
-        options.onError?.(e instanceof Error ? e : new Error(String(e)));
-      }
-    },
-  });
 
   const valueTypeLabel = (vt: string) => {
     const key = normalizeInspectionValueType(vt);
@@ -733,9 +700,33 @@ const SpotCheckDocumentsPage: React.FC = () => {
             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               {t('app.haoligo.equipment.documents.colLinePhotos')}
             </Typography.Text>
-            <Upload {...linePhotoUploadProps(idx)} className="haoligo-spot-check-line-upload">
-              {readOnly ? null : '+'}
-            </Upload>
+            {readOnly ? (
+              <MoldAttachmentImagePreview uuids={row.attachment_file_ids ?? undefined} />
+            ) : (
+              <SecurePictureCardUpload
+                className="haoligo-spot-check-line-upload"
+                uuids={row.attachment_file_ids ?? undefined}
+                accept=".jpg,.jpeg,.png,.gif,.webp"
+                onUuidsChange={(uuids) => {
+                  setLines((prev) =>
+                    prev.map((x, i) =>
+                      i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x,
+                    ),
+                  );
+                }}
+                customRequest={async (options) => {
+                  try {
+                    const file = options.file as File;
+                    const res: FileUploadResponse = await uploadFile(file, {
+                      category: 'haoligo_equipment_spot_check',
+                    });
+                    options.onSuccess?.(res, options.file);
+                  } catch (e) {
+                    options.onError?.(e instanceof Error ? e : new Error(String(e)));
+                  }
+                }}
+              />
+            )}
           </Col>
         </Row>
       </Card>

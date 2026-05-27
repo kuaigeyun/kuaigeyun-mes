@@ -83,7 +83,13 @@ import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
-import { MenuTree, getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../services/menu';
+import {
+  MenuTree,
+  getEffectiveHome,
+  getTenantBackendHome,
+  EFFECTIVE_HOME_QUERY_KEY,
+  TENANT_BACKEND_HOME_QUERY_KEY,
+} from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
@@ -132,7 +138,7 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
   }
 }
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore, resolveTenantHomePath } from '../stores/configStore';
+import { useConfigStore, resolveEffectiveHomePath } from '../stores/configStore';
 import RedirectToTenantHome from '../components/redirect-to-tenant-home';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
@@ -914,9 +920,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 60 * 1000,
   });
 
+  const { data: effectiveHome } = useQuery({
+    queryKey: [...EFFECTIVE_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getEffectiveHome,
+    enabled: !!(getToken() && tenantIdStrForHome && currentUser),
+    staleTime: 60 * 1000,
+  });
+
   const effectiveSystemHomePath = useMemo(
-    () => resolveTenantHomePath(tenantBackendHome?.path, configs),
-    [tenantBackendHome?.path, configs],
+    () => resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs),
+    [effectiveHome, tenantBackendHome?.path, configs],
   );
 
   // 消息下拉菜单状态

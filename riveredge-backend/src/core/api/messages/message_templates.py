@@ -205,6 +205,12 @@ async def load_preset_message_templates(
         tenant_id,
         only_codes=visible_codes,
     )
+    if "haoligo" in installed_app_codes:
+        from apps.haoligo.services.haoligo_message_template_registry import (
+            load_haoligo_message_template_presets,
+        )
+
+        count += await load_haoligo_message_template_presets(tenant_id)
     return {"created": count, "message": f"成功加载 {count} 个消息模板预设"}
 
 

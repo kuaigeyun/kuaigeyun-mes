@@ -271,33 +271,6 @@ class MessageTemplateService:
             },
             "is_active": True,
         },
-        {
-            "name": "验证码邮件",
-            "code": "verification_code",
-            "type": "email",
-            "description": "发送验证码的邮件模板",
-            "subject": "【{system_name}】您的验证码",
-            "content": "您好，\n\n您的验证码是：{code}\n\n验证码有效期为 {expire_minutes} 分钟，请勿泄露给他人。\n\n如非本人操作，请忽略此邮件。",
-            "variables": {
-                "code": "验证码",
-                "system_name": "系统名称",
-                "expire_minutes": "有效期（分钟）",
-            },
-            "is_active": True,
-        },
-        {
-            "name": "欢迎注册",
-            "code": "welcome_register",
-            "type": "email",
-            "description": "用户注册成功后的欢迎邮件",
-            "subject": "欢迎加入 {system_name}",
-            "content": "您好 {username}，\n\n欢迎注册 {system_name}！\n\n您的账号已创建成功，请使用您注册时填写的手机号/邮箱登录。\n\n如有问题请联系管理员。",
-            "variables": {
-                "username": "用户名",
-                "system_name": "系统名称",
-            },
-            "is_active": True,
-        },
     ]
 
     @staticmethod

@@ -35,6 +35,19 @@ class RoleService:
     ALLOWED_EXTERNAL_PARTNER_TYPES = {"customer", "supplier"}
 
     @staticmethod
+    def _normalize_home_path(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if not text.startswith("/"):
+            raise ValidationError("角色首页路径须以 / 开头")
+        if len(text) > 500:
+            raise ValidationError("角色首页路径不能超过 500 个字符")
+        return text
+
+    @staticmethod
     def _normalize_role_type_pair(
         role_type: Optional[str],
         external_partner_type: Optional[str],
@@ -99,6 +112,7 @@ class RoleService:
             getattr(data, "role_type", None),
             getattr(data, "external_partner_type", None),
         )
+        home_path = RoleService._normalize_home_path(getattr(data, "home_path", None))
         role = await Role.create(
             tenant_id=tenant_id,
             name=data.name,
@@ -106,6 +120,7 @@ class RoleService:
             description=data.description,
             role_type=role_type,
             external_partner_type=external_partner_type,
+            home_path=home_path,
             is_active=data.is_active if data.is_active is not None else True,
             is_system=False,  # 系统角色只能由系统创建
         )
@@ -284,6 +299,8 @@ class RoleService:
         
         # 更新角色
         update_data = data.model_dump(exclude_unset=True)
+        if "home_path" in update_data:
+            update_data["home_path"] = RoleService._normalize_home_path(update_data.get("home_path"))
         if "role_type" in update_data or "external_partner_type" in update_data:
             next_role_type = update_data.get("role_type", role.role_type)
             next_partner_type = update_data.get("external_partner_type", role.external_partner_type)

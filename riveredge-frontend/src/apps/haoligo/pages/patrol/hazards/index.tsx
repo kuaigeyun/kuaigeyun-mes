@@ -5,7 +5,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Space, Tag, Typography } from 'antd';
-import type { UploadFile } from 'antd/es/upload/interface';
 import { EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,13 +16,12 @@ import {
   updateHazardReport,
   type HazardRow,
 } from '../../../services/haoligo';
-import { getUserList } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores/globalStore';
+import { searchUserNameOptions } from '../../../../../utils/userDisplay';
 import { formDateTimeToIso } from '../shared/datetimeHelpers';
 import { PatrolImagePreview } from '../shared/PatrolImagePreview';
 import { RemediationFormBody } from '../shared/RemediationFormBody';
 import { hazardIssueTypeCodes } from '../shared/patrolIssueHelpers';
-import { normUploadUuids, uuidsToUploadFileList } from '../shared/uploadHelpers';
 
 const statusColors: Record<string, string> = {
   已登记: 'processing',
@@ -47,24 +45,19 @@ const PatrolHazardsPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>();
   const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
-  const [afterFiles, setAfterFiles] = useState<UploadFile[]>([]);
+  const [afterUuids, setAfterUuids] = useState<string[]>([]);
   const [contextRow, setContextRow] = useState<HazardRow | null>(null);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   useEffect(() => {
-    void getUserList({ page: 1, page_size: 500, is_active: true })
-      .then((res) => {
-        const opts = (res.items || []).map((u) => {
-          const name = (u.full_name || '').trim() || u.username;
-          return { label: name, value: name };
-        });
-        const me = currentUserDisplayName();
-        if (me && !opts.some((o) => o.value === me)) {
-          opts.unshift({ label: me, value: me });
-        }
-        setUserOptions(opts);
-      })
+    void searchUserNameOptions({
+      pageSize: 200,
+      selectedName: currentUserDisplayName(),
+      currentUser,
+    })
+      .then(setUserOptions)
       .catch(() => setUserOptions([]));
-  }, []);
+  }, [currentUser]);
 
   const openRemediate = async (record: HazardRow, detailOnly: boolean) => {
     try {
@@ -80,7 +73,7 @@ const PatrolHazardsPage: React.FC = () => {
           savedHandler || (detailOnly ? undefined : currentUserDisplayName()),
       });
       const ids = (detail.after_image_file_ids as string[] | undefined) ?? [];
-      setAfterFiles(uuidsToUploadFileList(ids));
+      setAfterUuids(ids);
       setModalVisible(true);
     } catch (e) {
       messageApi.error((e as Error).message || '加载失败');
@@ -91,7 +84,7 @@ const PatrolHazardsPage: React.FC = () => {
     if (editId == null) return;
     setFormLoading(true);
     try {
-      const afterIds = normUploadUuids(afterFiles);
+      const afterIds = afterUuids.filter((u) => typeof u === 'string' && u.trim());
       const handlerName = String(values.handler_name ?? '').trim();
       const handledAtIso = formDateTimeToIso(values.handled_at);
       const solution = String(values.solution_note ?? '').trim();
@@ -305,15 +298,15 @@ const PatrolHazardsPage: React.FC = () => {
               登记现场照片
             </Typography.Text>
             <PatrolImagePreview
-              files={uuidsToUploadFileList((contextRow.before_image_file_ids as string[] | undefined) ?? [])}
+              uuids={(contextRow.before_image_file_ids as string[] | undefined) ?? []}
               emptyText="无"
             />
           </div>
         )}
         <RemediationFormBody
           userOptions={userOptions}
-          afterFiles={afterFiles}
-          onAfterFilesChange={setAfterFiles}
+          afterUuids={afterUuids}
+          onAfterUuidsChange={setAfterUuids}
           readOnly={isDetailView}
         />
       </FormModalTemplate>

@@ -3,6 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -12,83 +13,69 @@ import {
   ProFormList,
   ProFormSelect,
   ProFormText,
+  ProFormDependency,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
+import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores';
+import {
+  canCompleteSourceDocument,
+  canInitiateCompleteCreate,
+} from '../../../../../../utils/documentWorkflowPermission';
+import { hasPermission } from '../../../../../../utils/permission';
+import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { refreshCurrentUserInStore } from '../../../../../../services/auth';
+import { buildOutsourceCompleteCreateFromMaintenanceUrl } from '../../../../utils/outsourceCompleteNavigation';
+import {
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+} from '../../../../constants/documentPermissionResources';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
-import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
-import type { DepartmentTreeItem } from '../../../../../../services/department';
-import { getDepartmentTree } from '../../../../../../services/department';
-import { getUserList } from '../../../../../../services/user';
-import { useGlobalStore } from '../../../../../../stores';
+import { uploadFile } from '../../../../../../services/file';
+import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
+import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
+import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
 import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
 import {
+  approveMoldOutsourceMaintenanceSheet,
   createMoldOutsourceMaintenanceSheet,
   deleteMoldOutsourceMaintenanceSheet,
   getMoldOutsourceMaintenanceSheet,
   listMoldOutsourceMaintenanceSheets,
   listMolds,
+  rejectMoldOutsourceMaintenanceSheet,
+  revokeMoldOutsourceMaintenanceSheetApproval,
   updateMoldOutsourceMaintenanceSheet,
   type MoldOutsourceMaintenanceSheetCreatePayload,
   type MoldOutsourceMaintenanceSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
+import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+
+const sheetStatusEnum: Record<string, { text: string }> = {
+  待审核: { text: '待审核' },
+  已通过: { text: '已通过' },
+  已驳回: { text: '已驳回' },
+};
 
 type SupplierOpt = { key: string; value: string; label: string; code: string };
-
-const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
-
-function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = [];
-  for (const n of items) {
-    if (n.children?.length) {
-      out.push(...collectLeafDepartmentOptions(n.children));
-    } else {
-      out.push({ label: n.name, value: n.uuid });
-    }
-  }
-  return out;
-}
-
-function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
-  for (const n of items) {
-    if (n.uuid === uuid) return n;
-    if (n.children?.length) {
-      const f = findDeptNodeByUuid(n.children, uuid);
-      if (f) return f;
-    }
-  }
-  return null;
-}
-
-function firstLeafUuidUnder(node: DepartmentTreeItem): string {
-  if (!node.children?.length) return node.uuid;
-  for (const c of node.children) {
-    return firstLeafUuidUnder(c);
-  }
-  return node.uuid;
-}
-
-function resolveDefaultLeafDeptUuid(
-  tree: DepartmentTreeItem[],
-  userDeptUuid: string | undefined,
-): string | undefined {
-  const u = (userDeptUuid || '').trim();
-  if (!u || !tree.length) return undefined;
-  const node = findDeptNodeByUuid(tree, u);
-  if (!node) return undefined;
-  return firstLeafUuidUnder(node);
-}
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -103,20 +90,22 @@ function normUploadUuids(val: unknown): string[] {
   return out;
 }
 
-function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
-  if (!uuids?.length) return [];
-  return uuids.map((uuid) => ({
-    uid: uuid,
-    name: '附件',
-    status: 'done',
-    url: getFileDownloadUrl(uuid),
-    response: { uuid },
-  }));
-}
+type DetailAttachmentPreview = {
+  header: string[];
+  byMold: Record<string, string[]>;
+};
+
+const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
+  const n = (name || '').trim();
+  const c = (code || '').trim();
+  if (n && c) return `${c} · ${n}`;
+  return n || c || '—';
+};
 
 const defaultLineItem = () => ({
   mold_code: '',
   mold_name: '',
+  mold_warehouse_name: '',
   repair_reason: undefined as string | undefined,
   repair_cost: undefined as number | undefined,
   item_attachments: [] as UploadFile[],
@@ -124,16 +113,37 @@ const defaultLineItem = () => ({
 
 const MoldOutsourceMaintenancePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canInitiateComplete =
+    canInitiateCompleteCreate(
+      currentUser,
+      HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
+      HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+    ) ||
+    canCompleteSourceDocument(currentUser, HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE);
+  const canUpdateMaintenance = hasPermission(
+    currentUser,
+    buildPermissionCode(HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE, 'update'),
+  );
+  const canDeleteMaintenance = hasPermission(
+    currentUser,
+    buildPermissionCode(HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE, 'delete'),
+  );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
-  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
-  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
-  const applicantSearchSeqRef = useRef(0);
-  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
-  /** 新建时复用下拉数据，减少重复请求（编辑带 extras 会跳过缓存）；含外协单位列表 */
-  const tenantFormOptionsValidUntilRef = useRef(0);
+  const {
+    applicantPresetUsers,
+    leafDeptOptions,
+    onApplicantPicked,
+    preloadTenantFormOptions: preloadApplicantAndDepartments,
+    getCreateApplicantDefaults,
+    resolveInitDepartmentUuid,
+    presetFromApplicantRow,
+    departmentTreeRef,
+  } = useApplicantUserIdField(formRef);
+  /** 新建时复用下拉数据，减少重复请求（编辑带回显 preset 会跳过缓存）；含外协单位列表 */
+  const combinedFormOptionsValidUntilRef = useRef(0);
   const supplierOptionsRef = useRef<SupplierOpt[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -142,26 +152,27 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [auditSheetStatus, setAuditSheetStatus] = useState<string>('待审核');
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [supplierOptions, setSupplierOptions] = useState<SupplierOpt[]>([]);
-  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
-  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
   const [moldPickRow, setMoldPickRow] = useState<number | null>(null);
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
   const [outsourcedUnitFallback, setOutsourcedUnitFallback] = useState<{ label: string; value: string } | null>(null);
-
+  const [detailAttachmentPreview, setDetailAttachmentPreview] = useState<DetailAttachmentPreview | null>(null);
   useEffect(() => {
-    if (modalVisible) return;
-    if (applicantSearchTimerRef.current) {
-      clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = null;
-    }
-    applicantSearchSeqRef.current += 1;
-  }, [modalVisible]);
+    void refreshCurrentUserInStore().catch(() => {});
+  }, []);
+
+  const handleCreateCompleteFromRow = useCallback(
+    (record: MoldOutsourceMaintenanceSheetRow) => {
+      navigate(buildOutsourceCompleteCreateFromMaintenanceUrl(record.id));
+    },
+    [navigate],
+  );
 
   const loadActiveSuppliers = useCallback(async () => {
     try {
@@ -195,158 +206,22 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     return m;
   }, [leafDeptOptions]);
 
-  const loadLeafDepartments = useCallback(async () => {
-    try {
-      const tree = await getDepartmentTree({ is_active: true });
-      const items = tree.items || [];
-      departmentTreeRef.current = items;
-      setLeafDeptOptions(collectLeafDepartmentOptions(items));
-    } catch {
-      departmentTreeRef.current = [];
-      setLeafDeptOptions([]);
-    }
-  }, []);
-
-  const bootstrapApplicantOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const emptyDept = new Map<number, string>();
-      const emptyLabel = new Map<number, string>();
-      try {
-        const res = await getUserList({
-          page: 1,
-          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
-          is_active: true,
-        });
-        const deptMap = new Map<number, string>();
-        const labelMap = new Map<number, string>();
-        const opts: { label: string; value: number }[] = [];
-        for (const u of res.items || []) {
-          const person = (u.full_name || '').trim() || u.username;
-          deptMap.set(u.id, (u.department?.uuid || '').trim());
-          labelMap.set(u.id, person);
-          opts.push({ value: u.id, label: person });
-        }
-        const cu = useGlobalStore.getState().currentUser;
-        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
-          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
-          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
-          labelMap.set(cu.id, person);
-          opts.unshift({ value: cu.id, label: person });
-        }
-        for (const ex of extras || []) {
-          if (!deptMap.has(ex.id)) {
-            deptMap.set(ex.id, (ex.deptUuid || '').trim());
-            labelMap.set(ex.id, ex.name);
-            opts.push({ value: ex.id, label: ex.name });
-          }
-        }
-        applicantDeptUuidByUserIdRef.current = deptMap;
-        applicantLabelByIdRef.current = labelMap;
-        applicantBootstrapOptionsRef.current = opts.slice();
-        setApplicantOptions(opts);
-      } catch {
-        applicantDeptUuidByUserIdRef.current = emptyDept;
-        applicantLabelByIdRef.current = emptyLabel;
-        applicantBootstrapOptionsRef.current = [];
-        setApplicantOptions([]);
-      }
-    },
-    [],
-  );
-
-  const flushApplicantSearch = useCallback(async (keyword: string) => {
-    const seq = ++applicantSearchSeqRef.current;
-    const kw = keyword.trim();
-    if (!kw) {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-      return;
-    }
-    try {
-      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
-      if (seq !== applicantSearchSeqRef.current) return;
-      const deptMap = applicantDeptUuidByUserIdRef.current;
-      const labelMap = applicantLabelByIdRef.current;
-      const next: { label: string; value: number }[] = [];
-      for (const u of res.items || []) {
-        const person = (u.full_name || '').trim() || u.username;
-        deptMap.set(u.id, (u.department?.uuid || '').trim());
-        labelMap.set(u.id, person);
-        next.push({ value: u.id, label: person });
-      }
-      const inst = formRef.current;
-      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
-      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
-        const g = useGlobalStore.getState();
-        const cu = g.currentUser;
-        const lab =
-          labelMap.get(selId) ||
-          (cu?.id === selId
-            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
-            : `用户#${selId}`);
-        const du =
-          (deptMap.get(selId) || '').trim() ||
-          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
-        deptMap.set(selId, du);
-        labelMap.set(selId, lab);
-        next.unshift({ value: selId, label: lab });
-      }
-      setApplicantOptions(next);
-    } catch {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-    }
-  }, []);
-
-  const scheduleApplicantSearch = useCallback(
-    (raw: string) => {
-      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = setTimeout(() => {
-        applicantSearchTimerRef.current = null;
-        void flushApplicantSearch(raw);
-      }, 280);
-    },
-    [flushApplicantSearch],
-  );
-
-  const preloadTenantFormOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
+  const preloadFormOptions = useCallback(
+    async (applicantPresets?: UniUserIdSelectPreset[]) => {
       const ttlMs = 90_000;
       const now = Date.now();
+      const hasExtras = Boolean(applicantPresets?.length);
       const warm =
-        !extras &&
-        now < tenantFormOptionsValidUntilRef.current &&
-        applicantDeptUuidByUserIdRef.current.size > 0 &&
+        !hasExtras &&
+        now < combinedFormOptionsValidUntilRef.current &&
         departmentTreeRef.current.length > 0 &&
         supplierOptionsRef.current.length > 0;
       if (warm) return;
-      await Promise.all([
-        bootstrapApplicantOptions(extras),
-        loadLeafDepartments(),
-        loadActiveSuppliers(),
-      ]);
-      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
+      await Promise.all([preloadApplicantAndDepartments(applicantPresets), loadActiveSuppliers()]);
+      combinedFormOptionsValidUntilRef.current = hasExtras ? 0 : Date.now() + ttlMs;
     },
-    [bootstrapApplicantOptions, loadActiveSuppliers, loadLeafDepartments],
+    [departmentTreeRef, loadActiveSuppliers, preloadApplicantAndDepartments],
   );
-
-  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
-    const inst = formRef.current;
-    if (!inst) return;
-    if (userId == null || !Number.isFinite(userId)) {
-      inst.setFieldsValue({ department_uuid: undefined });
-      return;
-    }
-    const tree = departmentTreeRef.current;
-    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
-    if (!userDeptUuid) {
-      const cu = useGlobalStore.getState().currentUser;
-      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
-    }
-    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
-    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
-    else inst.setFieldsValue({ department_uuid: undefined });
-  }, []);
 
   const loadMoldsForPicker = useCallback(async () => {
     setMoldLoading(true);
@@ -371,7 +246,8 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   }, [moldRows, moldKw]);
 
   const uploadFieldProps = useMemo(
-    (): Partial<UploadProps> => ({
+    (): Partial<UploadProps> =>
+      withMoldPictureCardUploadClass({
       listType: 'picture-card',
       accept: '.jpg,.jpeg,.png,.gif,.webp',
       beforeUpload: (file) => {
@@ -391,12 +267,13 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           options.onError?.(err instanceof Error ? err : new Error(String(err)));
         }
       },
-    }),
+      }),
     [messageApi],
   );
 
   const handleCreate = useCallback(() => {
     setOutsourcedUnitFallback(null);
+    setDetailAttachmentPreview(null);
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
@@ -404,20 +281,12 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     setModalVisible(true);
     void (async () => {
       try {
-        await preloadTenantFormOptions(undefined);
-        const tree = departmentTreeRef.current;
-        const cu = useGlobalStore.getState().currentUser;
-        const uid = cu?.id;
-        let deptUuid: string | undefined;
-        if (uid != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-          deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-        }
+        await preloadFormOptions(undefined);
+        const applicantDefaults = getCreateApplicantDefaults();
         setFormInitialValues({
           outsourced_unit_name: undefined,
           outsourced_unit_code: undefined,
-          applicant_user_id: uid,
-          department_uuid: deptUuid,
+          ...applicantDefaults,
           source_order_no: undefined,
           header_attachments: [],
           line_items: [defaultLineItem()],
@@ -429,7 +298,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [messageApi, preloadTenantFormOptions]);
+  }, [getCreateApplicantDefaults, messageApi, preloadFormOptions]);
 
   useNewShortcut(handleCreate);
 
@@ -443,51 +312,68 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       try {
         const d = await getMoldOutsourceMaintenanceSheet(record.id);
         setEditId(d.id);
-        const extras =
-          d.applicant_user_id != null
-            ? [
-                {
-                  id: d.applicant_user_id,
-                  name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
-                  deptUuid: (d.department_uuid || '').trim(),
-                },
-              ]
-            : undefined;
-        await preloadTenantFormOptions(extras);
+        setAuditSheetStatus(d.sheet_status);
+        const preset = presetFromApplicantRow(d);
+        await preloadFormOptions(preset ? [preset] : undefined);
         setOutsourcedUnitFallback(
           d.outsourced_unit_name && !supplierOptionsRef.current.some((o) => o.value === d.outsourced_unit_name)
             ? { label: d.outsourced_unit_name, value: d.outsourced_unit_name }
             : null,
         );
-        let initDept = (d.department_uuid || '').trim();
-        if (!initDept && d.applicant_user_id != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
-          initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
+        const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
+        const byMold: Record<string, string[]> = {};
+        for (const it of d.line_items || []) {
+          const mc = String(it.mold_code ?? '').trim();
+          if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
         }
+        setDetailAttachmentPreview(
+          detailOnly
+            ? { header: [...(d.header_attachment_file_uuids || [])], byMold }
+            : null,
+        );
+        const header_attachments = detailOnly
+          ? []
+          : await uuidsToSecureUploadFileList(d.header_attachment_file_uuids);
+        const line_items = detailOnly
+          ? (d.line_items || []).map((it) => ({
+              mold_code: it.mold_code,
+              mold_name: it.mold_name ?? '',
+              mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
+              repair_reason: it.repair_reason,
+              repair_cost:
+                it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
+              item_attachments: [] as UploadFile[],
+            }))
+          : await Promise.all(
+              (d.line_items || []).map(async (it) => ({
+                mold_code: it.mold_code,
+                mold_name: it.mold_name ?? '',
+                mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
+                repair_reason: it.repair_reason,
+                repair_cost:
+                  it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
+                item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
+              })),
+            );
         setFormInitialValues({
           outsourced_unit_name: d.outsourced_unit_name,
           outsourced_unit_code: d.outsourced_unit_code ?? undefined,
           applicant_user_id: d.applicant_user_id ?? undefined,
-          department_uuid: initDept || undefined,
+          department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
-          header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
-          line_items: (d.line_items || []).map((it) => ({
-            mold_code: it.mold_code,
-            mold_name: it.mold_name ?? '',
-            repair_reason: it.repair_reason,
-            repair_cost: it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
-            item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
-          })),
+          header_attachments,
+          line_items,
         });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
         messageApi.error((e as Error).message || '加载外协维保单失败');
         setIsDetailView(false);
+        setDetailAttachmentPreview(null);
         setModalVisible(false);
         setFormOptionsReady(false);
       }
     },
-    [messageApi, preloadTenantFormOptions],
+    [messageApi, preloadFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid],
   );
 
   const handleEdit = (record: MoldOutsourceMaintenanceSheetRow) => void openSheetForm(record, false);
@@ -627,20 +513,11 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   const onResetForm = () => {
     if (!formOptionsReady) return;
     setOutsourcedUnitFallback(null);
-    const tree = departmentTreeRef.current;
-    const cu = useGlobalStore.getState().currentUser;
-    const uid = cu?.id;
-    let deptUuid: string | undefined;
-    if (uid != null) {
-      const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-      deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       outsourced_unit_name: undefined,
       outsourced_unit_code: undefined,
-      applicant_user_id: uid,
-      department_uuid: deptUuid,
+      ...getCreateApplicantDefaults(),
       source_order_no: undefined,
       header_attachments: [],
       line_items: [defaultLineItem()],
@@ -654,7 +531,12 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     const cur = (inst.getFieldValue('line_items') as Record<string, unknown>[]) || [];
     const next = cur.map((row, i) =>
       i === rowIndex
-        ? { ...row, mold_code: m.mold_code, mold_name: m.name }
+        ? {
+            ...row,
+            mold_code: m.mold_code,
+            mold_name: m.name,
+            mold_warehouse_name: formatMoldWarehouseLabel(m.mold_warehouse_name, m.mold_warehouse_code),
+          }
         : row,
     );
     inst.setFieldsValue({ line_items: next });
@@ -681,31 +563,112 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
     { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
     {
+      title: '所在仓库',
+      dataIndex: 'primary_mold_warehouse_name',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => {
+        const fromHeader = (r.primary_mold_warehouse_name || '').trim();
+        if (fromHeader) return fromHeader;
+        const first = r.line_items?.[0];
+        return formatMoldWarehouseLabel(first?.mold_warehouse_name, first?.mold_warehouse_code);
+      },
+    },
+    {
       title: '明细条数',
       key: 'line_count',
       width: 88,
       hideInSearch: true,
       render: (_, r) => r.line_items?.length ?? 0,
     },
+    {
+      title: '审核状态',
+      dataIndex: 'sheet_status',
+      width: 100,
+      valueType: 'select',
+      valueEnum: sheetStatusEnum,
+      fieldProps: { allowClear: true },
+      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
+    },
     moldDocumentCreatedAtColumn<MoldOutsourceMaintenanceSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 320,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+      uniActionRenderOptions: MOLD_SHEET_TABLE_ACTION_OPTIONS,
+      render: (_, record) => {
+        const approved = isMoldSheetApproved(record.sheet_status);
+        const canRepair = canInitiateComplete && Boolean(record.can_complete);
+        const actions: React.ReactNode[] = [
+          <Button
+            key="detail"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => void handleDetail(record)}
+          >
             详情
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
-            编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
-            删除
-          </Button>
-        </Space>
-      ),
+          </Button>,
+        ];
+        if (canRepair) {
+          actions.push(
+            <Button
+              key="complete"
+              type="link"
+              size="small"
+              icon={<ToolOutlined />}
+              onClick={() => handleCreateCompleteFromRow(record)}
+            >
+              维修
+            </Button>,
+          );
+        }
+        if (canUpdateMaintenance) {
+          actions.push(
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              disabled={approved}
+              onClick={() => void handleEdit(record)}
+            >
+              编辑
+            </Button>,
+          );
+        }
+        if (canDeleteMaintenance) {
+          actions.push(
+            <Button
+              key="delete"
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={approved}
+              onClick={() => handleDeleteOne(record)}
+            >
+              删除
+            </Button>,
+          );
+        }
+        actions.push(
+          ...buildMoldSheetAuditActionElements({
+            canAudit: canAuditMoldSheet(currentUser, HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE),
+            sheetStatus: record.sheet_status,
+            handlers: {
+              onApprove: () => approveMoldOutsourceMaintenanceSheet(record.id),
+              onReject: () => rejectMoldOutsourceMaintenanceSheet(record.id),
+              onRevoke: () => revokeMoldOutsourceMaintenanceSheetApproval(record.id),
+            },
+            messageApi,
+            reload: () => actionRef.current?.reload(),
+          }),
+        );
+        return renderRowActionsOverflow(actions, `outsource-maint-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
+      },
     },
   ];
 
@@ -730,6 +693,10 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               const res = await listMoldOutsourceMaintenanceSheets({
                 skip,
                 limit: pageSize,
+                sheet_status:
+                  typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
+                    ? searchFormValues.sheet_status
+                    : undefined,
                 keyword:
                   typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
                     ? searchFormValues.keyword.trim()
@@ -741,7 +708,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1248 }}
+          scroll={{ x: 1296 }}
         />
       </ListPageTemplate>
 
@@ -759,8 +726,36 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          isDetailView ? (
-            <Button onClick={() => setModalVisible(false)}>关闭</Button>
+          isDetailView && editId != null ? (
+            <MoldSheetDetailAuditFooter
+              resource={HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE}
+              sheetStatus={auditSheetStatus}
+              onClose={() => {
+                setModalVisible(false);
+                setEditId(null);
+                setIsDetailView(false);
+                setDetailAttachmentPreview(null);
+                setFormOptionsReady(false);
+              }}
+              onReload={() => {
+                actionRef.current?.reload();
+                void getMoldOutsourceMaintenanceSheet(editId).then((d) => setAuditSheetStatus(d.sheet_status));
+              }}
+              handlers={{
+                onApprove: () => approveMoldOutsourceMaintenanceSheet(editId),
+                onReject: () => rejectMoldOutsourceMaintenanceSheet(editId),
+                onRevoke: () => revokeMoldOutsourceMaintenanceSheetApproval(editId),
+              }}
+            />
+          ) : isDetailView ? (
+            <Button
+              onClick={() => {
+                setModalVisible(false);
+                setDetailAttachmentPreview(null);
+              }}
+            >
+              关闭
+            </Button>
           ) : (
             <div
               style={{
@@ -819,23 +814,13 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             >
             <Row gutter={16}>
               <Col span={12}>
-                <ProFormSelect
+                <UniUserIdSelect
                   name="applicant_user_id"
                   label="申请人"
-                  placeholder="可选中后搜索更多用户"
-                  rules={[{ required: true, message: '请选择申请人' }]}
-                  options={applicantOptions}
-                  showSearch
-                  fieldProps={{
-                    virtual: true,
-                    listHeight: 256,
-                    optionFilterProp: 'label',
-                    filterOption: false,
-                    onSearch: scheduleApplicantSearch,
-                    onChange: (v: number) => {
-                      syncDefaultDepartmentForApplicant(v);
-                    },
-                  }}
+                  placeholder="请输入姓名或账号搜索"
+                  required
+                  presetUsers={applicantPresetUsers}
+                  onUserPicked={onApplicantPicked}
                 />
               </Col>
               <Col span={12}>
@@ -876,12 +861,18 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
               <Col span={12}>
-                <ProFormUploadButton
-                  name="header_attachments"
-                  label="附件照片（维修前）"
-                  max={10}
-                  fieldProps={uploadFieldProps}
-                />
+                {isDetailView ? (
+                  <Form.Item label="附件照片（维修前）">
+                    <MoldAttachmentImagePreview uuids={detailAttachmentPreview?.header} />
+                  </Form.Item>
+                ) : (
+                  <ProFormUploadButton
+                    name="header_attachments"
+                    label="附件照片（维修前）"
+                    max={10}
+                    fieldProps={uploadFieldProps}
+                  />
+                )}
               </Col>
             </Row>
 
@@ -970,6 +961,14 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                       />
                     </Col>
                     <Col span={12}>
+                      <ProFormText
+                        name="mold_warehouse_name"
+                        label="所在仓库"
+                        placeholder="根据模具代号自动带出"
+                        fieldProps={{ readOnly: true }}
+                      />
+                    </Col>
+                    <Col span={12}>
                       <DictionarySelect
                         dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
                         name="repair_reason"
@@ -992,12 +991,28 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                       />
                     </Col>
                     <Col span={24}>
-                      <ProFormUploadButton
-                        name="item_attachments"
-                        label="维修模具图片附件（维修前）"
-                        max={8}
-                        fieldProps={uploadFieldProps}
-                      />
+                      {isDetailView ? (
+                        <ProFormDependency name={['line_items']}>
+                          {({ line_items }) => {
+                            const rows = (line_items as { mold_code?: string }[] | undefined) ?? [];
+                            const mc = String(rows[index]?.mold_code ?? '').trim();
+                            return (
+                              <Form.Item label="维修模具图片附件（维修前）">
+                                <MoldAttachmentImagePreview
+                                  uuids={mc ? detailAttachmentPreview?.byMold[mc] : []}
+                                />
+                              </Form.Item>
+                            );
+                          }}
+                        </ProFormDependency>
+                      ) : (
+                        <ProFormUploadButton
+                          name="item_attachments"
+                          label="维修模具图片附件（维修前）"
+                          max={8}
+                          fieldProps={uploadFieldProps}
+                        />
+                      )}
                     </Col>
                   </Row>
                 </div>

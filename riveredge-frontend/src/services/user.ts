@@ -395,6 +395,59 @@ export async function generateUserQRCode(userUuid: string, username: string, ful
   });
 }
 
+/** 人员展示项（选人/回显，非人员管理全量读） */
+export interface UserDisplayItem {
+  id: number;
+  uuid: string;
+  username: string;
+  full_name?: string | null;
+  label: string;
+  department_uuid?: string | null;
+}
+
+export interface UserDisplayListParams {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  department_uuid?: string;
+  position_uuid?: string;
+  is_active?: boolean;
+}
+
+export interface UserDisplayListResponse {
+  items: UserDisplayItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface UserDisplayResolvePayload {
+  user_ids?: number[];
+  user_uuids?: string[];
+}
+
+/**
+ * 人员展示搜索（需 system:user:display 或 system:user:read）
+ */
+export async function searchUserDisplay(
+  params?: UserDisplayListParams,
+): Promise<UserDisplayListResponse> {
+  return apiRequest<UserDisplayListResponse>('/core/users/display-search', { params });
+}
+
+/**
+ * 按 ID/UUID 批量解析人员展示名
+ */
+export async function resolveUserDisplay(
+  payload: UserDisplayResolvePayload,
+): Promise<UserDisplayItem[]> {
+  const res = await apiRequest<{ items: UserDisplayItem[] }>('/core/users/display-resolve', {
+    method: 'POST',
+    data: payload,
+  });
+  return res.items || [];
+}
+
 /**
  * 获取指定用户的生物特征注册选项
  */

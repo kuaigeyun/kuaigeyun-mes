@@ -919,23 +919,6 @@ class MenuService:
             path=path,
             name=menu.name,
         )
-        if not row:
-            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
-        menu = await Menu.filter(
-            tenant_id=tenant_id,
-            uuid=row.menu_uuid,
-            deleted_at__isnull=True,
-        ).first()
-        if not menu or not menu.is_active or menu.is_external:
-            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
-        path = (menu.path or "").strip()
-        if not path:
-            return TenantBackendHomeResponse(menu_uuid=None, path=None, name=None)
-        return TenantBackendHomeResponse(
-            menu_uuid=str(menu.uuid),
-            path=path,
-            name=menu.name,
-        )
 
     @staticmethod
     async def set_tenant_backend_home(tenant_id: int, menu_uuid: str) -> MenuResponse:

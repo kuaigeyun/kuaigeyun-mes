@@ -18,12 +18,17 @@
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-treenode {
-    padding: 2px 0;
+    padding: 0;
     align-items: center;
+    border-bottom: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06));
+
+    &:last-child {
+      border-bottom: none;
+    }
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-list-holder-inner {
-    padding: 8px;
+    padding: 4px 8px 8px;
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-node-content-wrapper {
@@ -31,6 +36,7 @@
     min-height: 40px;
     align-items: center;
     border-radius: var(--ant-border-radius, 6px);
+    margin: 2px 0;
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-node-content-wrapper:hover {

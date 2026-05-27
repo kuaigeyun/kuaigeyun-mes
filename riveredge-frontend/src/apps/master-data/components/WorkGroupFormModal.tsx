@@ -9,7 +9,8 @@ import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { workGroupApi } from '../services/factory';
-import { getUserList } from '../../../services/user';
+import { useGlobalStore } from '../../../stores';
+import { searchUserIdOptions } from '../../../utils/userDisplay';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { WorkGroup, WorkGroupCreate, WorkGroupUpdate, WorkGroupMemberItem } from '../types/factory';
@@ -52,19 +53,15 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
   } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   useEffect(() => {
-    getUserList({ page: 1, page_size: 1000, is_active: true })
-      .then((r) => {
-        setEmployees(
-          r.items.map((e: { id: number; full_name?: string; username?: string }) => ({
-            id: e.id,
-            full_name: e.full_name || e.username || '',
-          })),
-        );
-      })
+    void searchUserIdOptions({ pageSize: 200, currentUser })
+      .then((opts) =>
+        setEmployees(opts.map((o) => ({ id: o.value, full_name: o.label }))),
+      )
       .catch(() => {});
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!open) return;

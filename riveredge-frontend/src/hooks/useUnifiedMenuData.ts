@@ -23,7 +23,7 @@ import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
 
 /** 与 Dashboard / clearSessionQueries 共用，避免侧栏与工作台菜单缓存不一致 */
-const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
+export const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
 
 function treeHasAppPath(nodes: MenuTree[]): boolean {
   for (const n of nodes) {

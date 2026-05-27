@@ -52,6 +52,7 @@ import type { DataNode } from 'antd/es/tree';
 import {
   getRoleList,
   getRoleByUuid,
+  updateRole,
   deleteRole,
   getRoleFunctionGrants,
   replaceRoleFunctionGrants,
@@ -74,7 +75,9 @@ import { refreshCurrentUserInStore } from '../../../services/auth';
 import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
 import { PERMISSION_TEMPLATES, getPermissionUuidsByTemplate } from '../../../config/permission-modules';
-import { getMenuTree, type MenuTree } from '../../../services/menu';
+import { getMenuTree, EFFECTIVE_HOME_QUERY_KEY, type MenuTree } from '../../../services/menu';
+import { flattenMenuHomePathOptions } from '../../../utils/menuHomePathOptions';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTrialRunMode } from '../../../hooks/useTrialRunMode';
 import {
   extractAppCodeFromPath,
@@ -132,6 +135,7 @@ function permissionLeafDisplayLabel(
     audit: '审核',
     assign: '派工/分配',
     execute: '执行',
+    complete: '完修',
     print: '打印',
   };
   return actionFallback[String(actionSeg).toLowerCase()] || actionSeg;
@@ -474,6 +478,9 @@ const RolesPermissionsPage: React.FC = () => {
   // 选中角色相关状态
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedRoleLoading, setSelectedRoleLoading] = useState(false);
+  const [roleHomePathDraft, setRoleHomePathDraft] = useState<string | undefined>();
+  const [savingRoleHome, setSavingRoleHome] = useState(false);
+  const queryClient = useQueryClient();
 
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
@@ -864,7 +871,9 @@ const RolesPermissionsPage: React.FC = () => {
           const defaultCustomPayload =
             scope === 'scope_custom' && /outsource-maintenance|outsource-complete/.test(r)
               ? { resolver: 'outsourced_unit' }
-              : undefined;
+              : scope === 'scope_custom' && /molds-documents-trial|molds-reports-trial-record/.test(r)
+                ? { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' }
+                : undefined;
           if (row) {
             map.set(r, {
               ...row,
@@ -956,17 +965,45 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 选择角色
    */
+  const homePathOptions = useMemo(
+    () =>
+      flattenMenuHomePathOptions(menuTree, (menuName, path) => {
+        const label = translateMenuName(menuName, t, path);
+        return `${label} (${path})`;
+      }),
+    [menuTree, t],
+  );
+
+  const handleSaveRoleHomePath = async () => {
+    if (!selectedRole || selectedRole.is_system) return;
+    try {
+      setSavingRoleHome(true);
+      const home_path = roleHomePathDraft?.trim() || null;
+      const updated = await updateRole(selectedRole.uuid, { home_path });
+      setSelectedRole(updated);
+      setRoles((prev) => prev.map((r) => (r.uuid === updated.uuid ? { ...r, ...updated } : r)));
+      void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
+      messageApi.success(t('pages.system.roles.roleHomeSaved', { defaultValue: '角色首页已保存' }));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.saveFailed'));
+    } finally {
+      setSavingRoleHome(false);
+    }
+  };
+
   const handleSelectRole = async (role: Role) => {
     try {
       setSelectedRoleLoading(true);
-      setSelectedRole(role);
+      const detail = await getRoleByUuid(role.uuid);
+      setSelectedRole(detail);
+      setRoleHomePathDraft(detail.home_path || undefined);
 
       // 并行加载三层权限数据
       initializedExpandRef.current = false;
       const [, roleDataPolicies, roleFieldPolicies] = await Promise.all([
-        loadFunctionGrantsForRole(role.uuid),
-        getRoleDataPolicies(role.uuid),
-        getRoleFieldPolicies(role.uuid),
+        loadFunctionGrantsForRole(detail.uuid),
+        getRoleDataPolicies(detail.uuid),
+        getRoleFieldPolicies(detail.uuid),
       ]);
       setDataPolicies(roleDataPolicies);
       setFieldPolicies(roleFieldPolicies);
@@ -1363,6 +1400,41 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
           </div>
 
+          <div
+            style={{
+              padding: '12px 24px',
+              borderBottom: `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontWeight: 500, flexShrink: 0 }}>
+              {t('field.role.homePath', { defaultValue: 'UniTabs 首页' })}
+            </span>
+            <Select
+              style={{ minWidth: 320, flex: 1, maxWidth: 560 }}
+              allowClear
+              showSearch
+              placeholder={t('field.role.homePathPlaceholder', { defaultValue: '选择页面路径，留空则按全局规则' })}
+              value={roleHomePathDraft}
+              onChange={(v) => setRoleHomePathDraft(v)}
+              options={homePathOptions}
+              optionFilterProp="label"
+              disabled={selectedRole.is_system}
+            />
+            <Button
+              type="primary"
+              ghost
+              loading={savingRoleHome}
+              disabled={selectedRole.is_system}
+              onClick={() => void handleSaveRoleHomePath()}
+            >
+              {t('pages.system.roles.saveRoleHome', { defaultValue: '保存首页' })}
+            </Button>
+          </div>
+
           {/* 权限层 Tab */}
             <div style={{ padding: '16px 24px 0 24px' }}>
               <Tabs
@@ -1530,7 +1602,10 @@ const RolesPermissionsPage: React.FC = () => {
                                 nextScope === 'scope_custom' &&
                                 /outsource-maintenance|outsource-complete/.test(x.resource)
                                   ? { resolver: 'outsourced_unit' }
-                                  : undefined;
+                                  : nextScope === 'scope_custom' &&
+                                      /molds-documents-trial|molds-reports-trial-record/.test(x.resource)
+                                    ? { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' }
+                                    : undefined;
                               return {
                                 ...x,
                                 scope_type: nextScope,

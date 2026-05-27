@@ -7,9 +7,6 @@ from typing import Any, Dict, List
 from loguru import logger
 
 from apps.haoligo.constants.message_template_codes import HAOLIGO_PATROL_ISSUE_REGISTER_REPORT
-from core.models.message_template import MessageTemplate
-from core.schemas.message_template import MessageTemplateCreate
-from core.services.messaging.message_template_service import MessageTemplateService
 
 PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_CONTENT = (
     "您好，\n\n"
@@ -54,28 +51,7 @@ HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
 
 async def ensure_haoligo_patrol_message_templates(tenant_id: int) -> int:
     """按租户补齐好力 GO 现场巡查消息模板（已存在则跳过）。返回新建数量。"""
-    created = 0
-    for item in HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS:
-        exists = await MessageTemplate.filter(
-            tenant_id=tenant_id,
-            code=item["code"],
-            deleted_at__isnull=True,
-        ).exists()
-        if exists:
-            continue
-        try:
-            data = MessageTemplateCreate(
-                name=item["name"],
-                code=item["code"],
-                type=item["type"],
-                description=item.get("description"),
-                subject=item.get("subject"),
-                content=item["content"],
-                variables=item.get("variables"),
-                is_active=item.get("is_active", True),
-            )
-            await MessageTemplateService.create_message_template(tenant_id, data)
-            created += 1
-        except Exception as e:
-            logger.warning("创建好力 GO 巡查消息模板 {} 失败: {}", item["code"], e)
-    return created
+    from apps.haoligo.services.haoligo_message_template_registry import load_haoligo_message_template_presets
+
+    only = {str(p["code"]) for p in HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS}
+    return await load_haoligo_message_template_presets(tenant_id, only_codes=only)

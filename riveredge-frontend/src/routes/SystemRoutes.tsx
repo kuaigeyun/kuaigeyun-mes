@@ -126,6 +126,7 @@ const LanguagesPage = React.lazy(() => import('../pages/system/languages/list'))
 const SiteSettingsPage = React.lazy(() => import('../pages/system/site-settings'));
 const ConfigCenterPage = React.lazy(() => import('../pages/system/config-center'));
 const ApplicationCenterPage = React.lazy(() => import('../pages/system/applications/list'));
+const DefaultHomePage = React.lazy(() => import('../pages/system/default-home'));
 const PluginManagerPage = React.lazy(() => import('../pages/system/plugin-manager'));
 const OperationLogsPage = React.lazy(() => import('../pages/system/operation-logs'));
 const LoginLogsPage = React.lazy(() => import('../pages/system/login-logs'));
@@ -211,6 +212,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/config-center" element={withPermission(withSuspense(ConfigCenterPage), ['system:config-center:read'])} />
     <Route path="/system/business-config" element={<Navigate to="/system/config-center" replace />} />
     <Route path="/system/system-parameters" element={<Navigate to="/system/config-center" replace />} />
+    <Route path="/system/default-home" element={withSuspense(DefaultHomePage)} />
     <Route path="/system/applications" element={withPermission(withSuspense(ApplicationCenterPage), ['system:application:read'])} />
     <Route path="/system/plugin-manager" element={withPermission(withSuspense(PluginManagerPage), ['system:plugin-manager:read'])} />
     <Route path="/system/operation-logs" element={withPermission(withSuspense(OperationLogsPage), ['system:operation-log:read'])} />

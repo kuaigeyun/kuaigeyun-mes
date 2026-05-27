@@ -178,10 +178,14 @@ def require_module_access(
     *,
     check_abac: bool = True,
     require_tenant: bool = True,
+    collection_create_permissions: list[str] | None = None,
 ):
     """
     按模块统一鉴权：依据 HTTP 方法与路径推断 action，并校验
     `{app_code}:{module_code}:{action}`。
+
+    collection_create_permissions：集合 POST 创建时改为「满足其一」的权限码列表
+    （例如完修单 create 或来源维保单 complete）。
     """
     resource = f"{(app_code or '').strip()}:{(module_code or '').strip()}".strip(":")
 
@@ -208,7 +212,14 @@ def require_module_access(
             )
 
         action = _resolve_action_by_request(request.method, request.url.path)
-        required = [AccessControlService.build_permission_code(resource, action)]
+        if (
+            collection_create_permissions
+            and (request.method or "").upper() == "POST"
+            and action == "create"
+        ):
+            required = list(collection_create_permissions)
+        else:
+            required = [AccessControlService.build_permission_code(resource, action)]
         env = {
             "method": request.method,
             "path": request.url.path,

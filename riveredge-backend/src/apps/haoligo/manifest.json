@@ -27,7 +27,7 @@
             "title": "app.haoligo.menu.workspace",
             "path": "/apps/haoligo/workspace",
             "icon": "LayoutDashboard",
-            "permission": "haoligo:workspace:read",
+            "permission": "haoligo:workspace-dashboard:read",
             "sort_order": 0
           }
         ]
@@ -45,6 +45,13 @@
             "icon": "BookMarked",
             "permission": "haoligo:molds-ledger:read",
             "sort_order": 10
+          },
+          {
+            "title": "app.haoligo.menu.molds.warehouse",
+            "path": "/apps/haoligo/molds/warehouse",
+            "icon": "Warehouse",
+            "permission": "haoligo:molds-warehouse:read",
+            "sort_order": 15
           },
           {
             "title": "app.haoligo.menu.molds.group.documents",
@@ -490,6 +497,9 @@
     "haoligo:molds-documents-maintenance:delete",
     "haoligo:molds-documents-maintenance:import",
     "haoligo:molds-documents-maintenance:export",
+    "haoligo:molds-documents-maintenance:approve",
+    "haoligo:molds-documents-maintenance:audit",
+    "haoligo:molds-documents-maintenance:reject",
     "haoligo:molds-documents-maintenance-complete:read",
     "haoligo:molds-documents-maintenance-complete:create",
     "haoligo:molds-documents-maintenance-complete:update",
@@ -502,12 +512,19 @@
     "haoligo:molds-documents-outsource-complete:delete",
     "haoligo:molds-documents-outsource-complete:import",
     "haoligo:molds-documents-outsource-complete:export",
+    "haoligo:molds-documents-outsource-complete:approve",
+    "haoligo:molds-documents-outsource-complete:audit",
+    "haoligo:molds-documents-outsource-complete:reject",
     "haoligo:molds-documents-outsource-maintenance:read",
     "haoligo:molds-documents-outsource-maintenance:create",
     "haoligo:molds-documents-outsource-maintenance:update",
+    "haoligo:molds-documents-outsource-maintenance:complete",
     "haoligo:molds-documents-outsource-maintenance:delete",
     "haoligo:molds-documents-outsource-maintenance:import",
     "haoligo:molds-documents-outsource-maintenance:export",
+    "haoligo:molds-documents-outsource-maintenance:approve",
+    "haoligo:molds-documents-outsource-maintenance:audit",
+    "haoligo:molds-documents-outsource-maintenance:reject",
     "haoligo:molds-documents-return-in:read",
     "haoligo:molds-documents-return-in:create",
     "haoligo:molds-documents-return-in:update",
@@ -520,12 +537,21 @@
     "haoligo:molds-documents-trial:delete",
     "haoligo:molds-documents-trial:import",
     "haoligo:molds-documents-trial:export",
+    "haoligo:molds-documents-trial:approve",
+    "haoligo:molds-documents-trial:audit",
+    "haoligo:molds-documents-trial:reject",
     "haoligo:molds-ledger:read",
     "haoligo:molds-ledger:create",
     "haoligo:molds-ledger:update",
     "haoligo:molds-ledger:delete",
     "haoligo:molds-ledger:import",
     "haoligo:molds-ledger:export",
+    "haoligo:molds-warehouse:read",
+    "haoligo:molds-warehouse:create",
+    "haoligo:molds-warehouse:update",
+    "haoligo:molds-warehouse:delete",
+    "haoligo:molds-warehouse:import",
+    "haoligo:molds-warehouse:export",
     "haoligo:molds-reports-maintenance-alert:read",
     "haoligo:molds-reports-maintenance-alert:create",
     "haoligo:molds-reports-maintenance-alert:update",
@@ -603,6 +629,12 @@
     "haoligo:workspace:update",
     "haoligo:workspace:delete",
     "haoligo:workspace:import",
-    "haoligo:workspace:export"
+    "haoligo:workspace:export",
+    "haoligo:workspace-dashboard:read",
+    "haoligo:workspace-dashboard:create",
+    "haoligo:workspace-dashboard:update",
+    "haoligo:workspace-dashboard:delete",
+    "haoligo:workspace-dashboard:import",
+    "haoligo:workspace-dashboard:export"
   ]
 }

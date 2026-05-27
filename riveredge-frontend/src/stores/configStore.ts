@@ -212,15 +212,23 @@ export function getPersistedConfigs(): Record<string, any> | null {
   }
 }
 
-const TENANT_HOME_WORKPLACE = '/system/dashboard/workplace';
-const TENANT_HOME_FALLBACK = '/system/applications';
+export const TENANT_HOME_WORKPLACE = '/system/dashboard/workplace';
+/** 无角色/菜单首页且关闭系统工作台时的独立兜底页（不再使用应用中心） */
+export const TENANT_HOME_FALLBACK = '/system/default-home';
 
-/** 根据配置对象解析租户默认首页（内存 / 持久化通用） */
+/** 历史占位首页 path，切换有效首页时需从标签栏剔除 */
+export const LEGACY_TENANT_DEFAULT_HOME_PATHS = [
+  TENANT_HOME_WORKPLACE,
+  '/system/applications',
+  TENANT_HOME_FALLBACK,
+] as const;
+
+/** 根据配置对象解析租户默认首页（仅在后端 effective-home 不可用时的本地回退） */
 export function getTenantHomePathFromConfigs(configs: Record<string, any> | null | undefined): string {
   return configs?.enable_system_dashboard !== false ? TENANT_HOME_WORKPLACE : TENANT_HOME_FALLBACK;
 }
 
-/** 租户后台首页：自定义首页优先，否则系统默认（工作台 / 应用中心） */
+/** 租户菜单主页 + 站点工作台开关（不含角色首页；完整链路请用 effective-home API） */
 export function resolveTenantHomePath(
   backendHomePath?: string | null,
   configs?: Record<string, any> | null,
@@ -228,6 +236,19 @@ export function resolveTenantHomePath(
   const custom = backendHomePath?.trim();
   if (custom) return custom;
   return getTenantHomePathFromConfigs(configs ?? getPersistedConfigs() ?? {});
+}
+
+export type EffectiveHomeSource = 'role' | 'menu' | 'workplace' | 'fallback';
+
+/** 合并后端 effective-home 与本地回退 */
+export function resolveEffectiveHomePath(
+  effective: { path: string } | null | undefined,
+  backendHomePath?: string | null,
+  configs?: Record<string, any> | null,
+): string {
+  const p = effective?.path?.trim();
+  if (p) return p;
+  return resolveTenantHomePath(backendHomePath, configs);
 }
 
 /** 登录后默认落地（持久化 configs；关闭「系统级仪表盘」时为应用中心） */

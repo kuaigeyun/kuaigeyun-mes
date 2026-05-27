@@ -167,12 +167,8 @@ _MESSAGE_TEMPLATE_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "approval_rejected": frozenset({"kuaizhizao"}),
 }
 
-_MESSAGE_TEMPLATE_ALWAYS_VISIBLE: FrozenSet[str] = frozenset(
-    {
-        "verification_code",
-        "welcome_register",
-    }
-)
+# 邮件类全局预设已下线（邮件渠道未建设）；无「始终加载」的核心模板
+_MESSAGE_TEMPLATE_ALWAYS_VISIBLE: FrozenSet[str] = frozenset()
 
 _MESSAGE_TEMPLATE_CODE_PREFIX_TO_APP: Dict[str, str] = {
     "HAOLIGO_": "haoligo",

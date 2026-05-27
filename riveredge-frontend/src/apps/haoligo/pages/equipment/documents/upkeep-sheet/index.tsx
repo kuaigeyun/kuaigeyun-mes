@@ -2,7 +2,7 @@
  * 好力 GO — 设备维保单（维修/保养；单台设备；对齐厂内维保单头区）
  */
 
-import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -24,10 +24,8 @@ import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/lay
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
-import type { DepartmentTreeItem } from '../../../../../../services/department';
-import { getDepartmentTree } from '../../../../../../services/department';
-import { getUserList } from '../../../../../../services/user';
-import { useGlobalStore } from '../../../../../../stores';
+import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
+import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import {
   createEquipmentUpkeepSheet,
   deleteEquipmentUpkeepSheet,
@@ -43,50 +41,6 @@ import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
-const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
-
-function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = [];
-  for (const n of items) {
-    if (n.children?.length) {
-      out.push(...collectLeafDepartmentOptions(n.children));
-    } else {
-      out.push({ label: n.name, value: n.uuid });
-    }
-  }
-  return out;
-}
-
-function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
-  for (const n of items) {
-    if (n.uuid === uuid) return n;
-    if (n.children?.length) {
-      const f = findDeptNodeByUuid(n.children, uuid);
-      if (f) return f;
-    }
-  }
-  return null;
-}
-
-function firstLeafUuidUnder(node: DepartmentTreeItem): string {
-  if (!node.children?.length) return node.uuid;
-  for (const c of node.children) {
-    return firstLeafUuidUnder(c);
-  }
-  return node.uuid;
-}
-
-function resolveDefaultLeafDeptUuid(
-  tree: DepartmentTreeItem[],
-  userDeptUuid: string | undefined,
-): string | undefined {
-  const u = (userDeptUuid || '').trim();
-  if (!u || !tree.length) return undefined;
-  const node = findDeptNodeByUuid(tree, u);
-  if (!node) return undefined;
-  return firstLeafUuidUnder(node);
-}
-
 const EquipmentUpkeepSheetPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -97,14 +51,19 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   }, [searchParams]);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
-  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
-  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
-  const applicantSearchSeqRef = useRef(0);
-  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
+  const {
+    applicantPresetUsers,
+    leafDeptOptions,
+    onApplicantPicked,
+    preloadTenantFormOptions: preloadApplicantAndDepartments,
+    getCreateApplicantDefaults,
+    resolveInitDepartmentUuid,
+    presetFromApplicantRow,
+    departmentTreeRef,
+  } = useApplicantUserIdField(formRef);
   const workshopMapRef = useRef<Map<number, { code: string; name: string }>>(new Map());
-  const tenantFormOptionsValidUntilRef = useRef(0);
+  /** 下拉缓存 TTL：部门树来自 hook；车间独立加载 */
+  const combinedFormOptionsValidUntilRef = useRef(0);
   const [equipmentWorkshopLabel, setEquipmentWorkshopLabel] = useState('');
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -114,37 +73,14 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
-  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
-  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
 
   const title = t('app.haoligo.menu.equipment.documents.upkeep-sheet');
-
-  useEffect(() => {
-    if (modalVisible) return;
-    if (applicantSearchTimerRef.current) {
-      clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = null;
-    }
-    applicantSearchSeqRef.current += 1;
-  }, [modalVisible]);
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of leafDeptOptions) m.set(o.value, o.label);
     return m;
   }, [leafDeptOptions]);
-
-  const loadLeafDepartments = useCallback(async () => {
-    try {
-      const tree = await getDepartmentTree({ is_active: true });
-      const items = tree.items || [];
-      departmentTreeRef.current = items;
-      setLeafDeptOptions(collectLeafDepartmentOptions(items));
-    } catch {
-      departmentTreeRef.current = [];
-      setLeafDeptOptions([]);
-    }
-  }, []);
 
   const loadWorkshopMap = useCallback(async () => {
     try {
@@ -154,6 +90,23 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       workshopMapRef.current = new Map();
     }
   }, []);
+
+  const preloadFormOptions = useCallback(
+    async (applicantPresets?: UniUserIdSelectPreset[]) => {
+      const ttlMs = 90_000;
+      const now = Date.now();
+      const hasExtras = Boolean(applicantPresets?.length);
+      const warm =
+        !hasExtras &&
+        now < combinedFormOptionsValidUntilRef.current &&
+        departmentTreeRef.current.length > 0 &&
+        workshopMapRef.current.size > 0;
+      if (warm) return;
+      await Promise.all([preloadApplicantAndDepartments(applicantPresets), loadWorkshopMap()]);
+      combinedFormOptionsValidUntilRef.current = hasExtras ? 0 : Date.now() + ttlMs;
+    },
+    [departmentTreeRef, loadWorkshopMap, preloadApplicantAndDepartments],
+  );
 
   const formatWorkshopLabel = useCallback((workshopId: number) => {
     const w = workshopMapRef.current.get(workshopId);
@@ -175,143 +128,6 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     },
     [formatWorkshopLabel],
   );
-
-  const bootstrapApplicantOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const emptyDept = new Map<number, string>();
-      const emptyLabel = new Map<number, string>();
-      try {
-        const res = await getUserList({
-          page: 1,
-          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
-          is_active: true,
-        });
-        const deptMap = new Map<number, string>();
-        const labelMap = new Map<number, string>();
-        const opts: { label: string; value: number }[] = [];
-        for (const u of res.items || []) {
-          const person = (u.full_name || '').trim() || u.username;
-          deptMap.set(u.id, (u.department?.uuid || '').trim());
-          labelMap.set(u.id, person);
-          opts.push({ value: u.id, label: person });
-        }
-        const cu = useGlobalStore.getState().currentUser;
-        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
-          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
-          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
-          labelMap.set(cu.id, person);
-          opts.unshift({ value: cu.id, label: person });
-        }
-        for (const ex of extras || []) {
-          if (!deptMap.has(ex.id)) {
-            deptMap.set(ex.id, (ex.deptUuid || '').trim());
-            labelMap.set(ex.id, ex.name);
-            opts.push({ value: ex.id, label: ex.name });
-          }
-        }
-        applicantDeptUuidByUserIdRef.current = deptMap;
-        applicantLabelByIdRef.current = labelMap;
-        applicantBootstrapOptionsRef.current = opts.slice();
-        setApplicantOptions(opts);
-      } catch {
-        applicantDeptUuidByUserIdRef.current = emptyDept;
-        applicantLabelByIdRef.current = emptyLabel;
-        applicantBootstrapOptionsRef.current = [];
-        setApplicantOptions([]);
-      }
-    },
-    [],
-  );
-
-  const flushApplicantSearch = useCallback(async (keyword: string) => {
-    const seq = ++applicantSearchSeqRef.current;
-    const kw = keyword.trim();
-    if (!kw) {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-      return;
-    }
-    try {
-      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
-      if (seq !== applicantSearchSeqRef.current) return;
-      const deptMap = applicantDeptUuidByUserIdRef.current;
-      const labelMap = applicantLabelByIdRef.current;
-      const next: { label: string; value: number }[] = [];
-      for (const u of res.items || []) {
-        const person = (u.full_name || '').trim() || u.username;
-        deptMap.set(u.id, (u.department?.uuid || '').trim());
-        labelMap.set(u.id, person);
-        next.push({ value: u.id, label: person });
-      }
-      const inst = formRef.current;
-      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
-      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
-        const g = useGlobalStore.getState();
-        const cu = g.currentUser;
-        const lab =
-          labelMap.get(selId) ||
-          (cu?.id === selId
-            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
-            : `用户#${selId}`);
-        const du =
-          (deptMap.get(selId) || '').trim() ||
-          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
-        deptMap.set(selId, du);
-        labelMap.set(selId, lab);
-        next.unshift({ value: selId, label: lab });
-      }
-      setApplicantOptions(next);
-    } catch {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-    }
-  }, []);
-
-  const scheduleApplicantSearch = useCallback(
-    (raw: string) => {
-      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = setTimeout(() => {
-        applicantSearchTimerRef.current = null;
-        void flushApplicantSearch(raw);
-      }, 280);
-    },
-    [flushApplicantSearch],
-  );
-
-  const preloadTenantFormOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const warm =
-        !extras &&
-        now < tenantFormOptionsValidUntilRef.current &&
-        applicantDeptUuidByUserIdRef.current.size > 0 &&
-        departmentTreeRef.current.length > 0 &&
-        workshopMapRef.current.size > 0;
-      if (warm) return;
-      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments(), loadWorkshopMap()]);
-      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
-    },
-    [bootstrapApplicantOptions, loadLeafDepartments, loadWorkshopMap],
-  );
-
-  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
-    const inst = formRef.current;
-    if (!inst) return;
-    if (userId == null || !Number.isFinite(userId)) {
-      inst.setFieldsValue({ department_uuid: undefined });
-      return;
-    }
-    const tree = departmentTreeRef.current;
-    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
-    if (!userDeptUuid) {
-      const cu = useGlobalStore.getState().currentUser;
-      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
-    }
-    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
-    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
-    else inst.setFieldsValue({ department_uuid: undefined });
-  }, []);
 
   const uploadFieldProps = useMemo(
     (): Partial<UploadProps> => ({
@@ -347,19 +163,11 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     setModalVisible(true);
     void (async () => {
       try {
-        await preloadTenantFormOptions(undefined);
-        const tree = departmentTreeRef.current;
-        const cu = useGlobalStore.getState().currentUser;
-        const uid = cu?.id;
-        let deptUuid: string | undefined;
-        if (uid != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-          deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-        }
+        await preloadFormOptions(undefined);
+        const applicantDefaults = getCreateApplicantDefaults();
         setFormInitialValues({
           service_type: urlServiceType ?? '保养',
-          applicant_user_id: uid,
-          department_uuid: deptUuid,
+          ...applicantDefaults,
           equipment_id: undefined,
           description: '',
           header_attachments: [],
@@ -371,7 +179,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [messageApi, preloadTenantFormOptions, t, urlServiceType]);
+  }, [getCreateApplicantDefaults, messageApi, preloadFormOptions, t, urlServiceType]);
 
   const handleMainModalCancel = useCallback(() => {
     setModalVisible(false);
@@ -390,26 +198,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       setModalVisible(true);
       try {
         const d = await getEquipmentUpkeepSheet(record.id);
-        const extras =
-          d.applicant_user_id != null
-            ? [
-                {
-                  id: d.applicant_user_id,
-                  name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
-                  deptUuid: (d.department_uuid || '').trim(),
-                },
-              ]
-            : undefined;
-        await preloadTenantFormOptions(extras);
-        let initDept = (d.department_uuid || '').trim();
-        if (!initDept && d.applicant_user_id != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
-          initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
-        }
+        const preset = presetFromApplicantRow(d);
+        await preloadFormOptions(preset ? [preset] : undefined);
+        const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
         setFormInitialValues({
           service_type: (d.service_type || '保养').trim() === '维修' ? '维修' : '保养',
           applicant_user_id: d.applicant_user_id ?? undefined,
-          department_uuid: initDept || undefined,
+          department_uuid: initDept,
           equipment_id: d.equipment_id,
           description: d.description,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
@@ -423,7 +218,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setIsDetailView(false);
       }
     },
-    [messageApi, preloadTenantFormOptions, syncEquipmentWorkshop, t],
+    [messageApi, preloadFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid, syncEquipmentWorkshop, t],
   );
 
   const triggerSubmit = useCallback(() => {
@@ -489,7 +284,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
           equipment_id: equipmentId,
-          description: desc || null,
+          description: desc || undefined,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
@@ -702,23 +497,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
             >
               <Row gutter={16}>
                 <Col span={12}>
-                  <ProFormSelect
+                  <UniUserIdSelect
                     name="applicant_user_id"
                     label={t('app.haoligo.equipment.upkeep.applicant')}
-                    placeholder="可选中后搜索更多用户"
-                    rules={[{ required: true, message: t('app.haoligo.equipment.upkeep.selectApplicant') }]}
-                    options={applicantOptions}
-                    showSearch
-                    fieldProps={{
-                      virtual: true,
-                      listHeight: 256,
-                      optionFilterProp: 'label',
-                      filterOption: false,
-                      onSearch: scheduleApplicantSearch,
-                      onChange: (v: number) => {
-                        syncDefaultDepartmentForApplicant(v);
-                      },
-                    }}
+                    placeholder="请输入姓名或账号搜索"
+                    required
+                    presetUsers={applicantPresetUsers}
+                    onUserPicked={onApplicantPicked}
                   />
                 </Col>
                 <Col span={12}>

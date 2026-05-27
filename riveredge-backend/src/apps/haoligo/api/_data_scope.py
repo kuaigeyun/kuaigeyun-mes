@@ -9,6 +9,8 @@ from infra.models.user import User
 RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
 RESOURCE_OUTSOURCE_COMPLETE = "haoligo:molds-documents-outsource-complete"
 RESOURCE_OUTSOURCE_MAINTENANCE_LOG = "haoligo:molds-reports-outsource-maintenance-log"
+RESOURCE_TRIAL_SHEET = "haoligo:molds-documents-trial"
+RESOURCE_TRIAL_RECORD = "haoligo:molds-reports-trial-record"
 
 
 async def apply_outsource_sheet_scope(qs, *, tenant_id: int, user: User, resource: str):
@@ -17,6 +19,30 @@ async def apply_outsource_sheet_scope(qs, *, tenant_id: int, user: User, resourc
 
 async def assert_outsource_row_visible(row, *, tenant_id: int, user: User, resource: str) -> None:
     await DataScopeService.assert_row_visible(row, tenant_id=tenant_id, user=user, resource=resource)
+
+
+async def apply_trial_sheet_scope(qs, *, tenant_id: int, user: User, resource: str = RESOURCE_TRIAL_SHEET):
+    return await DataScopeService.apply(qs, tenant_id=tenant_id, user=user, resource=resource)
+
+
+async def assert_trial_row_visible(row, *, tenant_id: int, user: User, resource: str = RESOURCE_TRIAL_SHEET) -> None:
+    await DataScopeService.assert_row_visible(row, tenant_id=tenant_id, user=user, resource=resource)
+
+
+async def assert_trial_supplier_code_writable(
+    *,
+    tenant_id: int,
+    user: User,
+    resource: str,
+    supplier_code: str | None,
+) -> None:
+    await DataScopeService.assert_partner_code_writable(
+        tenant_id=tenant_id,
+        user=user,
+        resource=resource,
+        partner_code=supplier_code,
+        dimension=DIMENSION_SUPPLIER,
+    )
 
 
 async def assert_outsource_partner_code_writable(

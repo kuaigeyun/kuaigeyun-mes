@@ -1,9 +1,20 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { App, Space, Tag } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { NamePath } from 'antd/es/form/interface';
-import { getUserList, User } from '../../services/user';
+import {
+  getUserList,
+  searchUserDisplay,
+  type User,
+  type UserDisplayItem,
+} from '../../services/user';
+import { useGlobalStore } from '../../stores';
+import {
+  canPickUsersForDisplay,
+  canReadUserDirectory,
+  formatUserDisplayLabel,
+} from '../../utils/userDisplay';
 
 interface UniUserSelectProps {
   /** 表单字段名称 */
@@ -36,12 +47,27 @@ interface UniUserSelectProps {
   [key: string]: any;
 }
 
+function displayItemToUser(item: UserDisplayItem): User {
+  return {
+    id: item.id,
+    uuid: item.uuid,
+    username: item.username,
+    full_name: item.full_name ?? undefined,
+    is_active: true,
+    is_tenant_admin: false,
+    tenant_id: 0,
+    created_at: '',
+    updated_at: '',
+    department_uuid: item.department_uuid ?? undefined,
+  };
+}
+
 /**
  * 统一的人员/角色选择组件
  *
  * @description
- * 封装了 `getUserList` API。支持防抖搜索、限定部门和禁用过滤。
- * 组件自带对后端结构转换为 Select option 结构的映射。
+ * 有 system:user:read 时走 getUserList；仅有 system:user:display 时走 display-search。
+ * 无选人权限时为只读（由业务侧 preset 或单据快照字段展示）。
  */
 export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   name,
@@ -60,21 +86,41 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   ...restProps
 }) => {
   const { message } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canPick = canPickUsersForDisplay(currentUser);
+  const useFullList = canReadUserDirectory(currentUser);
+
   const [data, setData] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchUsers = async (searchText: string = '') => {
+    if (!canPick) {
+      setData([]);
+      return;
+    }
     setLoading(true);
     try {
-      const response = await getUserList({
-        page: 1,
-        page_size: 50,
-        keyword: searchText,
-        ...(activeOnly ? { is_active: true } : {}),
-        ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
-        ...(positionUuid ? { position_uuid: positionUuid } : {}),
-      });
-      setData(response.items || []);
+      if (useFullList) {
+        const response = await getUserList({
+          page: 1,
+          page_size: 50,
+          keyword: searchText,
+          ...(activeOnly ? { is_active: true } : {}),
+          ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
+          ...(positionUuid ? { position_uuid: positionUuid } : {}),
+        });
+        setData(response.items || []);
+      } else {
+        const response = await searchUserDisplay({
+          page: 1,
+          page_size: 50,
+          keyword: searchText || undefined,
+          ...(activeOnly ? { is_active: true } : {}),
+          ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
+          ...(positionUuid ? { position_uuid: positionUuid } : {}),
+        });
+        setData((response.items || []).map(displayItemToUser));
+      }
     } catch (error) {
       console.error('Failed to fetch users:', error);
       message.error('加载人员列表失败，请稍后重试');
@@ -85,14 +131,13 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
 
   const { run: debounceFetch } = useDebounceFn(
     (value: string) => fetchUsers(value),
-    { wait: 300 }
+    { wait: 300 },
   );
 
   useEffect(() => {
-    fetchUsers();
-    // 只在入参过滤条件变化时重新初次拉取
+    void fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOnly, departmentUuid, positionUuid]);
+  }, [activeOnly, departmentUuid, positionUuid, canPick, useFullList]);
 
   const handleChange = (val: any, _option: any) => {
     if (!onChange) return;
@@ -109,33 +154,35 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
 
   const defaultIdSet = useMemo(
     () => new Set((defaultBadgeUserIds || []).filter((n) => typeof n === 'number')),
-    [defaultBadgeUserIds]
+    [defaultBadgeUserIds],
   );
 
   const options = useMemo(() => {
     return data.map((item) => ({
-      label: item.full_name ? `${item.full_name} (${item.username})` : item.username,
+      label: formatUserDisplayLabel(item),
       value: item.uuid,
       key: item.uuid,
     }));
   }, [data]);
+
+  const effectiveReadonly = readonly || !canPick;
 
   return (
     <ProFormSelect
       name={name}
       label={label}
       placeholder={placeholder}
-      readonly={readonly}
+      readonly={effectiveReadonly}
       disabled={disabled}
       width={width}
       rules={required ? [{ required: true, message: `请选择${label}` }] : undefined}
       options={options}
       fieldProps={{
         mode,
-        showSearch: true,
+        showSearch: canPick,
         loading,
-        filterOption: false, // 禁用默认前端过滤，配合关键字查询后端结果
-        onSearch: debounceFetch,
+        filterOption: false,
+        onSearch: canPick ? debounceFetch : undefined,
         onChange: handleChange,
         optionRender: (ori) => {
           const u = data.find((item) => item.uuid === ori.value);
@@ -143,9 +190,7 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
             typeof ori.label === 'string'
               ? ori.label
               : u
-                ? u.full_name
-                  ? `${u.full_name} (${u.username})`
-                  : u.username
+                ? formatUserDisplayLabel(u)
                 : '';
           return (
             <Space size={6} wrap>

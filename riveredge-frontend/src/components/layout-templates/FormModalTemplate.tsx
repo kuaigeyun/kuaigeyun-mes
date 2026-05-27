@@ -124,7 +124,10 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       modalRender={modalRender}
       footer={
         readOnly ? (
-          <Button onClick={handleClose}>关闭</Button>
+          <Space wrap>
+            {extraFooter}
+            <Button onClick={handleClose}>关闭</Button>
+          </Space>
         ) : (
           <Space wrap>
             <Button onClick={handleClose}>{t('common.cancel')}</Button>

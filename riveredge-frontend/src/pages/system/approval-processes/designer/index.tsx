@@ -17,7 +17,8 @@ import { App, Button, Form, Space, theme, Typography } from 'antd';
 import { 
   SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, 
 } from '@ant-design/icons';
-import { getUserList } from '../../../../services/user';
+import { searchUserDisplay } from '../../../../services/user';
+import { formatUserDisplayLabel } from '../../../../utils/userDisplay';
 import { getRoleList } from '../../../../services/role';
 import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge } from '@ant-design/pro-flow';
@@ -405,7 +406,21 @@ const ApprovalProcessDesignerPage: React.FC = () => {
             <ProFormSelect name="approverType" label={t('pages.approval.designer.approverType')} options={[{ label: t('pages.approval.designer.approverTypeUser'), value: 'user' }, { label: t('pages.approval.designer.approverTypeRole'), value: 'role' }, { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' }]} initialValue="user" />
             <ProFormDependency name={['approverType']}>
               {({ approverType }) => {
-                if (approverType === 'user') return <ProFormSelect name="approvers" label={t('pages.approval.designer.selectUser')} request={async () => (await getUserList({})).items.map((u) => ({ label: u.username, value: u.uuid }))} mode="multiple" />;
+                if (approverType === 'user')
+                  return (
+                    <ProFormSelect
+                      name="approvers"
+                      label={t('pages.approval.designer.selectUser')}
+                      request={async () => {
+                        const res = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
+                        return (res.items || []).map((u) => ({
+                          label: formatUserDisplayLabel(u),
+                          value: u.uuid,
+                        }));
+                      }}
+                      mode="multiple"
+                    />
+                  );
                 if (approverType === 'role') return <ProFormSelect name="roles" label={t('pages.approval.designer.selectRole')} request={async () => (await getRoleList({})).items.map((r) => ({ label: r.name, value: r.uuid }))} mode="multiple" />;
                 return null;
               }}

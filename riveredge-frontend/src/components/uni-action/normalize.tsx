@@ -35,6 +35,7 @@ import {
   resolveButtonTone,
   type ResolvedRowActionTone,
   isAuditSemanticAction,
+  isAppLocalAuditAction,
 } from './actionText'
 
 function rowActionToneMatchesProps(tone: ResolvedRowActionTone, props: Record<string, unknown>): boolean {
@@ -133,11 +134,15 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
 
   if (isButtonLike) {
     const actionText = normalizeActionLabelText(readNodeText(node))
-    if (ctx.suppressAuditSemanticActions && isAuditSemanticAction(actionText)) {
+    const props = (node as React.ReactElement<any>).props || {}
+    if (
+      ctx.suppressAuditSemanticActions &&
+      isAuditSemanticAction(actionText) &&
+      !isAppLocalAuditAction(props as Record<string, unknown>)
+    ) {
       return null
     }
     const tone = resolveButtonTone(actionText)
-    const props = (node as React.ReactElement<any>).props || {}
     const rawChildrenText = readNodeText(props.children)
     const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
     const kind = resolveActionKind(node)
@@ -175,7 +180,11 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const tone = resolveButtonTone(text)
     const kind = resolveActionKind(node)
     const defaultIcon = defaultIconForRowAction(node)
-    if (ctx.suppressAuditSemanticActions && isAuditSemanticAction(text)) {
+    if (
+      ctx.suppressAuditSemanticActions &&
+      isAuditSemanticAction(text) &&
+      !isAppLocalAuditAction(props)
+    ) {
       return null
     }
     return (

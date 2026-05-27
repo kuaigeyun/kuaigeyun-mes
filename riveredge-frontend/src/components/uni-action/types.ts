@@ -1,7 +1,11 @@
+import type { ResourcePermissionGates } from '../../hooks/useResourcePermissions';
+
 /**
  * UniAction：表格操作列渲染选项
  */
 export type UniActionRenderOptions = {
+  /** 行内操作按功能权限隐藏（由 UniTable 注入） */
+  permissionGates?: ResourcePermissionGates;
   /**
    * 与 `ROW_ACTIONS_DIRECT_MAX` 配合：溢出时主行保留 `max(directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)` 个可点击项。
    */

@@ -22,7 +22,7 @@ import {
   type WorkshopRow,
 } from '../../../../services/haoligo';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../../services/dataDictionary';
-import { getUserList } from '../../../../../../services/user';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../../shared/datetimeHelpers';
 import { IssueRegisterFormBody } from '../../shared/IssueRegisterFormBody';
@@ -72,21 +72,9 @@ const PatrolIssueRegisterPage: React.FC = () => {
     void listWorkshops()
       .then(setWorkshops)
       .catch(() => setWorkshops([]));
-    void getUserList({ page: 1, page_size: 500, is_active: true })
-      .then((res) => {
-        const opts = (res.items || []).map((u) => ({
-          label: (u.full_name || '').trim() || u.username,
-          value: u.id,
-        }));
-        const cu = useGlobalStore.getState().currentUser;
-        if (cu?.id != null && !opts.some((o) => o.value === cu.id)) {
-          opts.unshift({
-            label: (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`,
-            value: cu.id,
-          });
-        }
-        setUserOptions(opts);
-      })
+    const cu = useGlobalStore.getState().currentUser;
+    void searchUserIdOptions({ pageSize: 200, selectedIds: cu?.id ? [cu.id] : [], currentUser: cu })
+      .then(setUserOptions)
       .catch(() => setUserOptions([]));
   }, [loadIssueTypes]);
 

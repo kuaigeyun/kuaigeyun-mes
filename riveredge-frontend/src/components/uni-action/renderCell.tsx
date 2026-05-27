@@ -4,6 +4,7 @@ import type { UniActionRenderOptions } from './types'
 import { ROW_ACTIONS_DIRECT_MAX, renderRowActionsOverflow } from './overflow'
 import { collectOperationActions } from './collect'
 import { normalizeActionTree } from './normalize'
+import { filterActionsByResourcePermission } from './filterByPermission'
 
 /**
  * 页面若在 render 里已调用 `renderRowActionsOverflow`，会得到 `Space` + 末尾 `Dropdown`。
@@ -29,24 +30,34 @@ export function renderUniTableOperationCell(
 ): React.ReactNode {
   const directMax = options?.directMax ?? ROW_ACTIONS_DIRECT_MAX
   const suppressAuditSemanticActions = options?.suppressAuditSemanticActions ?? false
+  const permissionGates = options?.permissionGates
   const ctx = { suppressAuditSemanticActions }
+
+  const applyPermissionFilter = (nodes: React.ReactNode[]) => {
+    if (!permissionGates?.enabled) return nodes
+    return filterActionsByResourcePermission(nodes, permissionGates)
+  }
 
   if (!Array.isArray(rendered) && isRowActionsOverflowLayout(rendered)) {
     return rendered
   }
 
   if (Array.isArray(rendered)) {
-    const normalized = (rendered as React.ReactNode[])
-      .map((n) => normalizeActionTree(n, ctx))
-      .filter((n) => n != null && n !== false) as React.ReactNode[]
+    const normalized = applyPermissionFilter(
+      (rendered as React.ReactNode[])
+        .map((n) => normalizeActionTree(n, ctx))
+        .filter((n) => n != null && n !== false) as React.ReactNode[],
+    )
     return renderRowActionsOverflow(normalized, rowKey, { directMax, suppressAuditSemanticActions })
   }
 
   const collected = collectOperationActions(rendered)
   if (collected) {
-    const normalized = collected
-      .map((n) => normalizeActionTree(n, ctx))
-      .filter((n) => n != null && n !== false) as React.ReactNode[]
+    const normalized = applyPermissionFilter(
+      collected
+        .map((n) => normalizeActionTree(n, ctx))
+        .filter((n) => n != null && n !== false) as React.ReactNode[],
+    )
     return renderRowActionsOverflow(normalized, rowKey, { directMax, suppressAuditSemanticActions })
   }
 

@@ -15,6 +15,19 @@ from apps.haoligo.api._mold_maintenance_mold_status import (
     refresh_mold_status_if_no_open_maintenance_sheet,
     unique_mold_codes_from_stored_line_items,
 )
+from apps.haoligo.api._mold_sheet_audit import (
+    apply_rejected_resubmit_fields,
+    assert_approved_for_revoke,
+    assert_pending_for_audit,
+    assert_sheet_mutation_allowed,
+    effective_sheet_status,
+)
+from apps.haoligo.constants.mold_sheet_audit import (
+    SHEET_AUDIT_STATUS_SET,
+    SHEET_STATUS_APPROVED,
+    SHEET_STATUS_PENDING,
+    SHEET_STATUS_REJECTED,
+)
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_sheet_rule_codes import (
@@ -234,6 +247,9 @@ class MoldMaintenanceSheetOut(BaseModel):
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[MoldMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
+    sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
+    audited_at: Optional[datetime] = None
+    audited_by_user_id: Optional[int] = None
     created_at: datetime
 
 
@@ -297,6 +313,9 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
+        sheet_status=effective_sheet_status(row),
+        audited_at=getattr(row, "audited_at", None),
+        audited_by_user_id=getattr(row, "audited_by_user_id", None),
         created_at=row.created_at,
     )
 
@@ -308,13 +327,18 @@ async def list_maintenance_sheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    sheet_status: Optional[str] = Query(None, description="待审核 / 已通过 / 已驳回"),
     open_for_complete: bool = Query(
         False,
         description="为 true 时仅返回尚未关联未删除维保完修单的维保单（用于完修单选源）",
     ),
 ):
     qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id)
+    st = (sheet_status or "").strip()
+    if st and st in SHEET_AUDIT_STATUS_SET:
+        qs = qs.filter(sheet_status=st)
     if open_for_complete:
+        qs = qs.filter(sheet_status=SHEET_STATUS_APPROVED)
         linked_ids = (
             await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
             .filter(deleted_at__isnull=True, source_maintenance_sheet_id__not_isnull=True)
@@ -373,12 +397,7 @@ async def create_maintenance_sheet(
             source_order_no=_strip_opt(body.source_order_no),
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             line_items=stored,
-        )
-        await apply_mold_status_on_maintenance_sheet_created(
-            tenant_id,
-            is_outsource=False,
-            service_type=body.service_type,
-            stored_line_items=stored,
+            sheet_status=SHEET_STATUS_PENDING,
         )
     return _serialize(row)
 
@@ -405,7 +424,9 @@ async def update_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    assert_sheet_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
+    data.pop("sheet_status", None)
     if "applicant_user_id" in data and data["applicant_user_id"] is not None:
         app_uid, app_name = await _resolve_applicant_only(tenant_id, int(data["applicant_user_id"]))
         data["applicant_user_id"] = app_uid
@@ -431,9 +452,74 @@ async def update_maintenance_sheet(
         prev_codes = set(unique_mold_codes_from_stored_line_items(row.line_items or []))
         await assert_maintenance_line_molds_are_standby(tenant_id, stored, allow_mold_codes=prev_codes)
         data["line_items"] = stored
+    apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    return _serialize(row)
+
+
+@router.post("/{row_id}/approve", response_model=MoldMaintenanceSheetOut, summary="审核通过维保单")
+async def approve_maintenance_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_APPROVED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    await apply_mold_status_on_maintenance_sheet_created(
+        tenant_id,
+        is_outsource=False,
+        service_type=row.service_type,
+        stored_line_items=row.line_items or [],
+    )
+    return _serialize(row)
+
+
+@router.post("/{row_id}/reject", response_model=MoldMaintenanceSheetOut, summary="审核驳回维保单")
+async def reject_maintenance_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_REJECTED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    return _serialize(row)
+
+
+@router.post(
+    "/{row_id}/revoke-approval",
+    response_model=MoldMaintenanceSheetOut,
+    summary="撤销维保单审核（已通过→待审核）",
+)
+async def revoke_maintenance_sheet_approval(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    assert_approved_for_revoke(row)
+    codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
+    row.sheet_status = SHEET_STATUS_PENDING
+    row.audited_at = None
+    row.audited_by_user_id = None
+    await row.save()
+    for mc in codes:
+        await refresh_mold_status_if_no_open_maintenance_sheet(tenant_id, mc)
     return _serialize(row)
 
 
@@ -446,6 +532,7 @@ async def delete_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    assert_sheet_mutation_allowed(row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()

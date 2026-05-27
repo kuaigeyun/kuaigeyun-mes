@@ -3,6 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -26,11 +27,11 @@ import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/lay
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
-import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
-import type { DepartmentTreeItem } from '../../../../../../services/department';
-import { getDepartmentTree } from '../../../../../../services/department';
-import { getUserList } from '../../../../../../services/user';
-import { useGlobalStore } from '../../../../../../stores';
+import { uploadFile } from '../../../../../../services/file';
+import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachmentStrip';
+import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
+import { UniUserIdSelect } from '../../../../../../components/uni-user-id-select';
+import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import {
   createMoldOutsourceMaintenanceCompleteSheet,
   deleteMoldOutsourceMaintenanceCompleteSheet,
@@ -46,6 +47,13 @@ import {
   type MoldOutsourceMaintenanceSheetRow,
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
+import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import {
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+} from '../../../../constants/documentPermissionResources';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -60,72 +68,65 @@ function normUploadUuids(val: unknown): string[] {
   return out;
 }
 
-function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
-  if (!uuids?.length) return [];
-  return uuids.map((uuid) => ({
-    uid: uuid,
-    name: '附件',
-    status: 'done',
-    url: getFileDownloadUrl(uuid),
-    response: { uuid },
-  }));
-}
-
-/** 首屏只拉少量用户，其余靠下拉内搜索（keyword）加载 */
-const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
-
-function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = [];
-  for (const n of items) {
-    if (n.children?.length) {
-      out.push(...collectLeafDepartmentOptions(n.children));
-    } else {
-      out.push({ label: n.name, value: n.uuid });
-    }
-  }
-  return out;
-}
-
-function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
-  for (const n of items) {
-    if (n.uuid === uuid) return n;
-    if (n.children?.length) {
-      const f = findDeptNodeByUuid(n.children, uuid);
-      if (f) return f;
-    }
-  }
-  return null;
-}
-
-function firstLeafUuidUnder(node: DepartmentTreeItem): string {
-  if (!node.children?.length) return node.uuid;
-  for (const c of node.children) {
-    return firstLeafUuidUnder(c);
-  }
-  return node.uuid;
-}
-
-function resolveDefaultLeafDeptUuid(
-  tree: DepartmentTreeItem[],
-  userDeptUuid: string | undefined,
-): string | undefined {
-  const u = (userDeptUuid || '').trim();
-  if (!u || !tree.length) return undefined;
-  const node = findDeptNodeByUuid(tree, u);
-  if (!node) return undefined;
-  return firstLeafUuidUnder(node);
-}
-
 /** 外协维保单「维修前 / 维修后」附件预览（表头 + 按模具） */
 type BeforeAttachmentPreview = {
   header: string[];
   byMold: Record<string, string[]>;
 };
 
-function ReadonlyAttachmentStrip({ uuids }: { uuids: string[] | undefined }) {
-  const fl = uuidsToUploadFileList(uuids);
-  if (!fl.length) return <span style={{ color: '#999' }}>无</span>;
-  return <Upload listType="picture-card" disabled fileList={fl} />;
+function buildSourceOrderNoFromMaintenance(row: MoldOutsourceMaintenanceSheetRow): string {
+  const n = row.id;
+  return (
+    (row.source_order_no && String(row.source_order_no).trim()) ||
+    (row.sheet_no && String(row.sheet_no).trim()) ||
+    `外协维保单#${n}`
+  );
+}
+
+function buildBeforePreviewFromMaintenance(row: MoldOutsourceMaintenanceSheetRow): BeforeAttachmentPreview {
+  const byMold: Record<string, string[]> = {};
+  for (const it of row.line_items || []) {
+    const mc = String(it.mold_code ?? '').trim();
+    if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
+  }
+  return {
+    header: [...(row.header_attachment_file_uuids || [])],
+    byMold,
+  };
+}
+
+const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
+  const n = (name || '').trim();
+  const c = (code || '').trim();
+  if (n && c) return `${c} · ${n}`;
+  return n || c || '';
+};
+
+function buildLineItemsFromMaintenanceSource(row: MoldOutsourceMaintenanceSheetRow) {
+  return (row.line_items || []).map((it) => ({
+    mold_code: String(it.mold_code ?? '').trim(),
+    mold_name: it.mold_name != null ? String(it.mold_name) : '',
+    mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
+    repair_reason: it.repair_reason != null ? String(it.repair_reason) : '',
+    repair_content: '',
+    repair_result: undefined as string | undefined,
+    repair_cost:
+      it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
+    item_attachments: [] as UploadFile[],
+  }));
+}
+
+function buildFormValuesFromMaintenanceSource(row: MoldOutsourceMaintenanceSheetRow): Record<string, unknown> {
+  return {
+    source_outsource_maintenance_sheet_id: row.id,
+    source_order_no: buildSourceOrderNoFromMaintenance(row),
+    outsourced_unit_name: (row.outsourced_unit_name && String(row.outsourced_unit_name).trim()) || '',
+    outsourced_unit_code: row.outsourced_unit_code ?? undefined,
+    applicant_user_id: row.applicant_user_id ?? undefined,
+    department_uuid: (row.department_uuid || '').trim() || undefined,
+    header_attachments: [],
+    line_items: buildLineItemsFromMaintenanceSource(row),
+  };
 }
 
 function outsourceCompleteStatusTag(status: string | undefined) {
@@ -207,6 +208,7 @@ function SourceOutsourceSheetPickerTrigger({
 const defaultMoldLine = () => ({
   mold_code: '',
   mold_name: '',
+  mold_warehouse_name: '',
   repair_reason: '',
   repair_content: '',
   repair_result: undefined as string | undefined,
@@ -218,13 +220,18 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
-  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
-  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
-  const applicantSearchSeqRef = useRef(0);
-  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
-  const tenantFormOptionsValidUntilRef = useRef(0);
+  const {
+    applicantPresetUsers,
+    leafDeptOptions,
+    onApplicantPicked,
+    applyApplicantPreset,
+    preloadTenantFormOptions,
+    getCreateApplicantDefaults,
+    resetApplicantToCurrentUser,
+    resolveInitDepartmentUuid,
+    presetFromApplicantRow,
+    enrichApplicantPresetFromRow,
+  } = useApplicantUserIdField(formRef);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formOptionsReady, setFormOptionsReady] = useState(false);
@@ -236,183 +243,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const [outsourceRows, setOutsourceRows] = useState<MoldOutsourceMaintenanceSheetRow[]>([]);
   const [beforeAttachmentPreview, setBeforeAttachmentPreview] = useState<BeforeAttachmentPreview | null>(null);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
-  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
-  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
-
-  useEffect(() => {
-    if (modalVisible) return;
-    if (applicantSearchTimerRef.current) {
-      clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = null;
-    }
-    applicantSearchSeqRef.current += 1;
-  }, [modalVisible]);
-
-  const loadLeafDepartments = useCallback(async () => {
-    try {
-      const tree = await getDepartmentTree({ is_active: true });
-      const items = tree.items || [];
-      departmentTreeRef.current = items;
-      setLeafDeptOptions(collectLeafDepartmentOptions(items));
-    } catch {
-      departmentTreeRef.current = [];
-      setLeafDeptOptions([]);
-    }
-  }, []);
-
-  const bootstrapApplicantOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const emptyDept = new Map<number, string>();
-      const emptyLabel = new Map<number, string>();
-      try {
-        const res = await getUserList({
-          page: 1,
-          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
-          is_active: true,
-        });
-        const deptMap = new Map<number, string>();
-        const labelMap = new Map<number, string>();
-        const opts: { label: string; value: number }[] = [];
-        for (const u of res.items || []) {
-          const person = (u.full_name || '').trim() || u.username;
-          deptMap.set(u.id, (u.department?.uuid || '').trim());
-          labelMap.set(u.id, person);
-          opts.push({ value: u.id, label: person });
-        }
-        const cu = useGlobalStore.getState().currentUser;
-        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
-          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
-          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
-          labelMap.set(cu.id, person);
-          opts.unshift({ value: cu.id, label: person });
-        }
-        for (const ex of extras || []) {
-          if (!deptMap.has(ex.id)) {
-            deptMap.set(ex.id, (ex.deptUuid || '').trim());
-            labelMap.set(ex.id, ex.name);
-            opts.push({ value: ex.id, label: ex.name });
-          }
-        }
-        applicantDeptUuidByUserIdRef.current = deptMap;
-        applicantLabelByIdRef.current = labelMap;
-        applicantBootstrapOptionsRef.current = opts.slice();
-        setApplicantOptions(opts);
-      } catch {
-        applicantDeptUuidByUserIdRef.current = emptyDept;
-        applicantLabelByIdRef.current = emptyLabel;
-        applicantBootstrapOptionsRef.current = [];
-        setApplicantOptions([]);
-      }
-    },
-    [],
-  );
-
-  const flushApplicantSearch = useCallback(async (keyword: string) => {
-    const seq = ++applicantSearchSeqRef.current;
-    const kw = keyword.trim();
-    if (!kw) {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-      return;
-    }
-    try {
-      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
-      if (seq !== applicantSearchSeqRef.current) return;
-      const deptMap = applicantDeptUuidByUserIdRef.current;
-      const labelMap = applicantLabelByIdRef.current;
-      const next: { label: string; value: number }[] = [];
-      for (const u of res.items || []) {
-        const person = (u.full_name || '').trim() || u.username;
-        deptMap.set(u.id, (u.department?.uuid || '').trim());
-        labelMap.set(u.id, person);
-        next.push({ value: u.id, label: person });
-      }
-      const inst = formRef.current;
-      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
-      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
-        const g = useGlobalStore.getState();
-        const cu = g.currentUser;
-        const lab =
-          labelMap.get(selId) ||
-          (cu?.id === selId
-            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
-            : `用户#${selId}`);
-        const du =
-          (deptMap.get(selId) || '').trim() ||
-          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
-        deptMap.set(selId, du);
-        labelMap.set(selId, lab);
-        next.unshift({ value: selId, label: lab });
-      }
-      setApplicantOptions(next);
-    } catch {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-    }
-  }, []);
-
-  const scheduleApplicantSearch = useCallback(
-    (raw: string) => {
-      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = setTimeout(() => {
-        applicantSearchTimerRef.current = null;
-        void flushApplicantSearch(raw);
-      }, 280);
-    },
-    [flushApplicantSearch],
-  );
-
-  const preloadTenantFormOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const warm =
-        !extras &&
-        now < tenantFormOptionsValidUntilRef.current &&
-        applicantDeptUuidByUserIdRef.current.size > 0 &&
-        departmentTreeRef.current.length > 0;
-      if (warm) return;
-      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments()]);
-      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
-    },
-    [bootstrapApplicantOptions, loadLeafDepartments],
-  );
-
-  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
-    const inst = formRef.current;
-    if (!inst) return;
-    if (userId == null || !Number.isFinite(userId)) {
-      inst.setFieldsValue({ department_uuid: undefined });
-      return;
-    }
-    const tree = departmentTreeRef.current;
-    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
-    if (!userDeptUuid) {
-      const cu = useGlobalStore.getState().currentUser;
-      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
-    }
-    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
-    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
-    else inst.setFieldsValue({ department_uuid: undefined });
-  }, []);
-
-  const resetApplicantDepartmentToCurrentUserDefaults = useCallback(() => {
-    const inst = formRef.current;
-    if (!inst) return;
-    const tree = departmentTreeRef.current;
-    const cu = useGlobalStore.getState().currentUser;
-    const uid = cu?.id;
-    let deptUuid: string | undefined;
-    if (uid != null) {
-      const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-      deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-    }
-    inst.setFieldsValue({
-      applicant_user_id: uid,
-      department_uuid: deptUuid,
-    });
-  }, []);
-
   const outsourceRowsRepair = useMemo(
     () => outsourceRows.filter((r) => String(r.service_type ?? '').trim() === '维修'),
     [outsourceRows],
@@ -444,51 +274,12 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
 
   const applySelectedOutsourceSheetRow = useCallback(
     async (row: MoldOutsourceMaintenanceSheetRow) => {
-      const n = row.id;
-      const srcNo =
-        (row.source_order_no && String(row.source_order_no).trim()) ||
-        (row.sheet_no && String(row.sheet_no).trim()) ||
-        `外协维保单#${n}`;
-      const byMold: Record<string, string[]> = {};
-      for (const it of row.line_items || []) {
-        const mc = String(it.mold_code ?? '').trim();
-        if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
-      }
-      if (row.applicant_user_id != null) {
-        await bootstrapApplicantOptions([
-          {
-            id: row.applicant_user_id,
-            name: (row.applicant_name || '').trim() || `用户#${row.applicant_user_id}`,
-            deptUuid: (row.department_uuid || '').trim(),
-          },
-        ]);
-      }
-      setBeforeAttachmentPreview({
-        header: [...(row.header_attachment_file_uuids || [])],
-        byMold,
-      });
-      formRef.current?.setFieldsValue({
-        source_outsource_maintenance_sheet_id: n,
-        source_order_no: srcNo,
-        outsourced_unit_name: (row.outsourced_unit_name && String(row.outsourced_unit_name).trim()) || '',
-        outsourced_unit_code: row.outsourced_unit_code ?? undefined,
-        applicant_user_id: row.applicant_user_id ?? undefined,
-        department_uuid: (row.department_uuid || '').trim() || undefined,
-        line_items: (row.line_items || []).map((it) => ({
-          mold_code: String(it.mold_code ?? '').trim(),
-          mold_name: it.mold_name != null ? String(it.mold_name) : '',
-          repair_reason: it.repair_reason != null ? String(it.repair_reason) : '',
-          repair_content: '',
-          repair_result: undefined,
-          repair_cost:
-            it.repair_cost != null && it.repair_cost !== ''
-              ? Number(it.repair_cost)
-              : undefined,
-          item_attachments: [],
-        })),
-      });
+      const rowPreset = await enrichApplicantPresetFromRow(row);
+      if (rowPreset) applyApplicantPreset(rowPreset);
+      setBeforeAttachmentPreview(buildBeforePreviewFromMaintenance(row));
+      formRef.current?.setFieldsValue(buildFormValuesFromMaintenanceSource(row));
     },
-    [bootstrapApplicantOptions],
+    [applyApplicantPreset, enrichApplicantPresetFromRow],
   );
 
   const clearSelectedOutsourceSheet = useCallback(() => {
@@ -501,8 +292,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       header_attachments: [],
       line_items: [defaultMoldLine()],
     });
-    resetApplicantDepartmentToCurrentUserDefaults();
-  }, [resetApplicantDepartmentToCurrentUserDefaults]);
+    resetApplicantToCurrentUser();
+  }, [resetApplicantToCurrentUser]);
 
   const openSourceOutsourcePicker = useCallback(() => {
     setSourcePickerOpen(true);
@@ -522,7 +313,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   }, []);
 
   const uploadFieldProps = useMemo<UploadProps>(
-    () => ({
+    () =>
+      withMoldPictureCardUploadClass({
       listType: 'picture-card',
       accept: '.jpg,.jpeg,.png,.gif,.webp',
       beforeUpload: (file) => {
@@ -542,7 +334,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           options.onError?.(err instanceof Error ? err : new Error(String(err)));
         }
       },
-    }),
+      }),
     [messageApi],
   );
 
@@ -555,17 +347,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     try {
       await loadOutsourceSheetsForSource(true);
       await preloadTenantFormOptions(undefined);
-      const tree = departmentTreeRef.current;
-      const cu = useGlobalStore.getState().currentUser;
-      const uid = cu?.id;
-      let deptUuid: string | undefined;
-      if (uid != null) {
-        const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-        deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-      }
       setFormInitialValues({
-        applicant_user_id: uid,
-        department_uuid: deptUuid,
+        ...getCreateApplicantDefaults(),
         source_outsource_maintenance_sheet_id: undefined,
         source_order_no: '',
         outsourced_unit_name: undefined,
@@ -583,6 +366,69 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  const startCreateWithSourceSheet = useCallback(
+    async (row: MoldOutsourceMaintenanceSheetRow) => {
+      setIsDetailView(false);
+      setIsEdit(false);
+      setEditId(null);
+      setFormOptionsReady(false);
+      setModalVisible(true);
+      try {
+        const fullRow =
+          row.line_items?.length && row.outsourced_unit_name
+            ? row
+            : await getMoldOutsourceMaintenanceSheet(row.id);
+        if (String(fullRow.service_type ?? '').trim() !== '维修') {
+          messageApi.warning('仅维修类型外协维保单可创建维保完成单');
+          setModalVisible(false);
+          return;
+        }
+        await loadOutsourceSheetsForSource(true);
+        setOutsourceRows((prev) => {
+          if (prev.some((x) => x.id === fullRow.id)) return prev;
+          return [fullRow, ...prev];
+        });
+        const rowPreset = await enrichApplicantPresetFromRow(fullRow);
+        await preloadTenantFormOptions(rowPreset ? [rowPreset] : undefined);
+        if (rowPreset) applyApplicantPreset(rowPreset);
+        setBeforeAttachmentPreview(buildBeforePreviewFromMaintenance(fullRow));
+        setFormInitialValues(buildFormValuesFromMaintenanceSource(fullRow));
+        startTransition(() => setFormOptionsReady(true));
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法创建维保完成单');
+        setModalVisible(false);
+        setFormOptionsReady(false);
+      }
+    },
+    [
+      applyApplicantPreset,
+      enrichApplicantPresetFromRow,
+      loadOutsourceSheetsForSource,
+      messageApi,
+      preloadTenantFormOptions,
+    ],
+  );
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkConsumedRef = useRef(false);
+
+  useEffect(() => {
+    const raw = searchParams.get(OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM);
+    if (!raw || deepLinkConsumedRef.current) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    deepLinkConsumedRef.current = true;
+    setSearchParams({}, { replace: true });
+    void (async () => {
+      try {
+        const row = await getMoldOutsourceMaintenanceSheet(id);
+        await startCreateWithSourceSheet(row);
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法根据外协维保单打开维保完成单');
+      }
+    })();
+  }, [messageApi, searchParams, setSearchParams, startCreateWithSourceSheet]);
 
   const openSheetForm = async (record: MoldOutsourceMaintenanceCompleteSheetRow, detailOnly: boolean) => {
     setIsDetailView(detailOnly);
@@ -610,40 +456,31 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       }
       setOutsourceRows(rows);
       setEditId(d.id);
-      const extras =
-        d.applicant_user_id != null
-          ? [
-              {
-                id: d.applicant_user_id,
-                name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
-                deptUuid: (d.department_uuid || '').trim(),
-              },
-            ]
-          : undefined;
-      await preloadTenantFormOptions(extras);
-      let initDept = (d.department_uuid || '').trim();
-      if (!initDept && d.applicant_user_id != null) {
-        const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
-        initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
-      }
-      setFormInitialValues({
-        source_outsource_maintenance_sheet_id: d.source_outsource_maintenance_sheet_id ?? undefined,
-        source_order_no: d.source_order_no,
-        applicant_user_id: d.applicant_user_id ?? undefined,
-        department_uuid: initDept || undefined,
-        outsourced_unit_name: d.outsourced_unit_name,
-        outsourced_unit_code: d.outsourced_unit_code ?? undefined,
-        header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
-        line_items: (d.line_items || []).map((it) => ({
+      const preset = presetFromApplicantRow(d);
+      await preloadTenantFormOptions(preset ? [preset] : undefined);
+      const header_attachments = await uuidsToSecureUploadFileList(d.header_attachment_file_uuids);
+      const line_items = await Promise.all(
+        (d.line_items || []).map(async (it) => ({
           mold_code: it.mold_code,
           mold_name: it.mold_name ?? '',
+          mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
           repair_reason: it.repair_reason ?? '',
           repair_content: it.repair_content ?? '',
           repair_result: it.repair_result ?? undefined,
           repair_cost:
             it.repair_cost != null && it.repair_cost !== '' ? Number(it.repair_cost) : undefined,
-          item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
+          item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
         })),
+      );
+      setFormInitialValues({
+        source_outsource_maintenance_sheet_id: d.source_outsource_maintenance_sheet_id ?? undefined,
+        source_order_no: d.source_order_no,
+        applicant_user_id: d.applicant_user_id ?? undefined,
+        department_uuid: resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid),
+        outsourced_unit_name: d.outsourced_unit_name,
+        outsourced_unit_code: d.outsourced_unit_code ?? undefined,
+        header_attachments,
+        line_items,
       });
       if (d.source_outsource_maintenance_sheet_id != null) {
         const byMold: Record<string, string[]> = {};
@@ -929,7 +766,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       header_attachments: [],
       line_items: [defaultMoldLine()],
     });
-    resetApplicantDepartmentToCurrentUserDefaults();
+    resetApplicantToCurrentUser();
     setBeforeAttachmentPreview(null);
     messageApi.success('已重置');
   };
@@ -979,6 +816,19 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     },
     { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
     {
+      title: '所在仓库',
+      dataIndex: 'primary_mold_warehouse_name',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => {
+        const fromHeader = (r.primary_mold_warehouse_name || '').trim();
+        if (fromHeader) return fromHeader;
+        const first = r.line_items?.[0];
+        return formatMoldWarehouseLabel(first?.mold_warehouse_name, first?.mold_warehouse_code) || '—';
+      },
+    },
+    {
       title: '模具条数',
       key: 'line_count',
       width: 88,
@@ -993,26 +843,33 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => {
         const approved = (record.sheet_status || '').trim() === '已通过';
-        return (
-          <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
-              详情
-            </Button>
-            <Button type="link" size="small" icon={<EditOutlined />} disabled={approved} onClick={() => void handleEdit(record)}>
-              编辑
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              danger
-              disabled={approved}
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteOne(record)}
-            >
-              删除
-            </Button>
-          </Space>
-        );
+        const actions: React.ReactNode[] = [
+          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            详情
+          </Button>,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            disabled={approved}
+            onClick={() => void handleEdit(record)}
+          >
+            编辑
+          </Button>,
+          <Button
+            key="delete"
+            type="link"
+            size="small"
+            danger
+            disabled={approved}
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteOne(record)}
+          >
+            删除
+          </Button>,
+        ];
+        return renderRowActionsOverflow(actions, `out-complete-${record.id}`);
       },
     },
   ];
@@ -1023,6 +880,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
           headerTitle="模具外协维保完成单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-complete"
+          completeCreateSourceResource={HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -1164,23 +1022,13 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
 
               <Row gutter={16}>
                 <Col span={12}>
-                  <ProFormSelect
+                  <UniUserIdSelect
                     name="applicant_user_id"
                     label="申请人"
-                    placeholder="可选中后搜索更多用户"
-                    rules={[{ required: true, message: '请选择申请人' }]}
-                    options={applicantOptions}
-                    showSearch
-                    fieldProps={{
-                      virtual: true,
-                      listHeight: 256,
-                      optionFilterProp: 'label',
-                      filterOption: false,
-                      onSearch: scheduleApplicantSearch,
-                      onChange: (v: number) => {
-                        syncDefaultDepartmentForApplicant(v);
-                      },
-                    }}
+                    placeholder="请输入姓名或账号搜索"
+                    required
+                    presetUsers={applicantPresetUsers}
+                    onUserPicked={onApplicantPicked}
                   />
                 </Col>
                 <Col span={12}>
@@ -1304,6 +1152,14 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                           name="repair_reason"
                           label="维修原因"
                           placeholder="维修原因"
+                          fieldProps={{ readOnly: true }}
+                        />
+                      </Col>
+                      <Col xs={24} sm={8}>
+                        <ProFormText
+                          name="mold_warehouse_name"
+                          label="所在仓库"
+                          placeholder="—"
                           fieldProps={{ readOnly: true }}
                         />
                       </Col>

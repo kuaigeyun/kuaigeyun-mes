@@ -17,7 +17,8 @@ import { App, Alert, AutoComplete, Button, Col, Form, Modal, Row, Select, Space,
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { getUserList } from '../../../../../../services/user';
+import { useGlobalStore } from '../../../../../../stores';
+import { searchUserNameOptions } from '../../../../../../utils/userDisplay';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import {
@@ -85,29 +86,17 @@ const OutputRecordDocumentsPage: React.FC = () => {
   const title = t('app.haoligo.menu.equipment.documents.output-record');
   const reload = useCallback(() => actionRef.current?.reload(), []);
 
-  const userDisplayName = useCallback((u: { full_name?: string | null; username: string }) => {
-    return (u.full_name || '').trim() || u.username;
-  }, []);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
-  const searchUserNameOptions = useCallback(
-    async (keyword: string | undefined, selectedName?: string) => {
-      const res = await getUserList({
-        page: 1,
-        page_size: 50,
-        is_active: true,
-        keyword: keyword?.trim() || undefined,
-      });
-      const opts = (res.items || []).map((u) => {
-        const name = userDisplayName(u);
-        return { label: name, value: name };
-      });
-      const sel = (selectedName || '').trim();
-      if (sel && !opts.some((o) => o.value === sel)) {
-        opts.unshift({ label: sel, value: sel });
-      }
-      return opts;
-    },
-    [userDisplayName],
+  const loadUserNameOptions = useCallback(
+    async (keyword: string | undefined, selectedName?: string) =>
+      searchUserNameOptions({
+        keyword,
+        pageSize: 50,
+        selectedName,
+        currentUser,
+      }),
+    [currentUser],
   );
 
   useEffect(() => {
@@ -813,7 +802,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 allowClear
                 debounceTime={300}
                 request={async ({ keyWords }) =>
-                  searchUserNameOptions(keyWords, formRef.current?.getFieldValue('operator_name') as string | undefined)
+                  loadUserNameOptions(keyWords, formRef.current?.getFieldValue('operator_name') as string | undefined)
                 }
                 fieldProps={{
                   style: { width: '100%' },
@@ -830,7 +819,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 allowClear
                 debounceTime={300}
                 request={async ({ keyWords }) =>
-                  searchUserNameOptions(keyWords, formRef.current?.getFieldValue('team_leader_name') as string | undefined)
+                  loadUserNameOptions(keyWords, formRef.current?.getFieldValue('team_leader_name') as string | undefined)
                 }
                 fieldProps={{
                   style: { width: '100%' },

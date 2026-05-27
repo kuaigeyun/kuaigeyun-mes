@@ -1,0 +1,69 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: FastAPI (app)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "server.main:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "9000"
+      ],
+      "jinja": true,
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/riveredge-backend"
+      },
+      "cwd": "${workspaceFolder}/riveredge-backend",
+      "python": "${workspaceFolder}/venv311/Scripts/python.exe"
+    },
+    {
+      "name": "Python: 当前文件",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/riveredge-backend/src"
+      },
+      "cwd": "${workspaceFolder}/riveredge-backend",
+      "python": "${workspaceFolder}/venv311/Scripts/python.exe"
+    },
+    {
+      "name": "Python: Pytest (当前文件)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "${file}",
+        "-v",
+        "-s"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/riveredge-backend",
+      "python": "${workspaceFolder}/venv311/Scripts/python.exe"
+    },
+    {
+      "name": "Python: Pytest (所有测试)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests",
+        "-v",
+        "--tb=short"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/riveredge-backend",
+      "python": "${workspaceFolder}/venv311/Scripts/python.exe"
+    }
+  ]
+}

@@ -117,10 +117,11 @@ import 'use-antd-resizable-header/dist/style.css'
 import { TableContext } from '@ant-design/pro-table/es/Store/Provide'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
 import { useNewShortcut } from '../../hooks/useNewShortcut'
+import { usePagePermissionResource } from '../../hooks/usePagePermissionResource'
+import { useResourcePermissions } from '../../hooks/useResourcePermissions'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
-import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 
@@ -784,6 +785,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   printButtonText?: string
   /**
+   * 功能资源前缀（app:module），用于按权限隐藏工具栏/行内按钮。
+   * 不传时从当前路由在导航菜单上的 permission_code 自动解析。
+   */
+  permissionResource?: string
+  /**
+   * 与 permissionResource 配合：新建按钮接受「来源单据 :complete」或「本页 :create」。
+   * 值为来源单据资源前缀（app:module）。
+   */
+  completeCreateSourceResource?: string
+  /** 为 true 时不按权限隐藏按钮（特殊页面临时关闭） */
+  disablePermissionGates?: boolean
+  /**
    * 是否显示新建按钮（默认：false）
    */
   showCreateButton?: boolean
@@ -1116,6 +1129,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showPrintButton = false,
   onPrint,
   printButtonText,
+  permissionResource: permissionResourceProp,
+  completeCreateSourceResource,
+  disablePermissionGates = false,
   showCreateButton = false,
   onCreate,
   createButtonText,
@@ -1159,6 +1175,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 }: UniTableProps<T>) {
   const { t } = useTranslation()
   const location = useLocation()
+  const pagePermissionResource = usePagePermissionResource(location.pathname)
+  const permissionGates = useResourcePermissions(
+    disablePermissionGates ? null : permissionResourceProp ?? pagePermissionResource,
+    completeCreateSourceResource
+      ? { completeCreateSourceResource }
+      : undefined,
+  )
+  const gatedShowCreateButton = showCreateButton && permissionGates.canCreate
+  const gatedShowDeleteButton = showDeleteButton && permissionGates.canDelete
+  const gatedShowEditButton = showEditButton && permissionGates.canUpdate
+  const gatedShowImportButton = showImportButton && permissionGates.canImport
+  const gatedShowExportButton = showExportButton && permissionGates.canExport
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -1169,7 +1197,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const isMobile = !screens.md && screens.xs // 手机端判定：小于 768px 且有 xs
 
   // 全局 Alt+N：当前页有新建按钮时，按 Alt+N 触发新建（与点击新建按钮一致）
-  useNewShortcut(showCreateButton && onCreate ? onCreate : undefined);
+  useNewShortcut(gatedShowCreateButton && onCreate ? onCreate : undefined);
 
   // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)
@@ -1335,9 +1363,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 预加载 UniImport（UniverSheet ~2MB）：直接在挂载时触发 import，让浏览器与页面其它资源并行下载。
   // 不再用 requestIdleCallback 做"空闲时"调度，那属于不确定时序的妥协。
   useEffect(() => {
-    if (!showImportButton || !onImport) return
+    if (!gatedShowImportButton || !onImport) return
     import('../uni-import').catch(() => {})
-  }, [showImportButton, onImport])
+  }, [gatedShowImportButton, onImport])
 
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
   const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')
@@ -1352,12 +1380,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 检测是否为操作列（用于操作列样式与宽度处理；与 normalizeFixedRightColumnOrder 共用判定）
   const isOperationColumn = (col: any) => isUniTableOperationColumn(col)
-  const { data: auditRequiredMap } = useAuditRequiredMap()
-  const hasAnyAuditEnabled = useMemo(
-    () => Object.values(auditRequiredMap || {}).some((v) => v === true),
-    [auditRequiredMap]
-  )
-
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   const processedColumns = React.useMemo(() => {
     const mapped = effectiveColumns.map((col: any) => {
@@ -1423,7 +1445,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 const record = args[1] as Record<string, any> | undefined
                 const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
                 return renderUniTableOperationCell(rendered, `uni-op-${rowKey}`, {
-                  suppressAuditSemanticActions: !hasAnyAuditEnabled,
+                  permissionGates,
                   ...(uniActionRenderOptions && typeof uniActionRenderOptions === 'object'
                     ? uniActionRenderOptions
                     : {}),
@@ -1436,7 +1458,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
     // 列宽策略保持稳定，不随空表/有数据态切换，避免固定列在首次加载与刷新时抖动
     return applyUniTableColumnWidthPolicy(mapped, false)
-  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled])
+  }, [effectiveColumns, dateFormatKey, permissionGates])
 
   // 全项目统一策略：结构化列保留页面 width；主文本列由 applyUniTableColumnWidthPolicy 释放 width；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
@@ -2004,7 +2026,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     // 新建按钮，带 Alt+N 快捷键提示
-    if (showCreateButton && onCreate) {
+    if (gatedShowCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
           {(createButtonText ?? t('components.uniTable.create')) + NEW_SHORTCUT_HINT}
@@ -2040,7 +2062,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     // 批量删除（uni-batch 删除预设）
-    if (showDeleteButton && onDelete) {
+    if (gatedShowDeleteButton && onDelete) {
       actions.push(
         <UniBatchDeleteButton
           key="delete"
@@ -2063,7 +2085,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     // 修改按钮（需要选中一行）
-    if (showEditButton && onEdit) {
+    if (gatedShowEditButton && onEdit) {
       actions.push(
         <Button
           key="edit"
@@ -2081,7 +2103,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    if (onDetail) {
+    if (onDetail && permissionGates.canRead) {
       actions.push(
         <Button
           key="detail"
@@ -2106,7 +2128,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const buildRightActions = (iconOnly = false) => {
     const rightButtons: ReactNode[] = []
 
-    if (showImportButton && onImport) {
+    if (gatedShowImportButton && onImport) {
       rightButtons.push(
         <UniImportToolbarButton
           key="import"
@@ -2117,7 +2139,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    if (showExportButton && onExport) {
+    if (gatedShowExportButton && onExport) {
       rightButtons.push(
         <UniExportMenuButton<T>
           key="export"
@@ -2188,9 +2210,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       toolBarActions,
       toolBarActionsAfterDelete,
       toolBarActionsAfterBatch,
-      showCreateButton,
-      showDeleteButton,
-      showEditButton,
+      gatedShowCreateButton,
+      gatedShowDeleteButton,
+      gatedShowEditButton,
+      permissionGates.canRead,
       restProps.toolBarRender,
     ],
   )
@@ -2654,10 +2677,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             <UniSearch
               beforeSearch={beforeSearchButtons}
               betweenFuzzyAndAdvanced={
-                betweenFuzzyAndAdvancedButtons || (isMobile && showCreateButton && onCreate) ? (
+                betweenFuzzyAndAdvancedButtons || (isMobile && gatedShowCreateButton && onCreate) ? (
                   <>
                     {betweenFuzzyAndAdvancedButtons}
-                    {isMobile && showCreateButton && onCreate ? (
+                    {isMobile && gatedShowCreateButton && onCreate ? (
                       <Button
                         key="mobile-create"
                         type="primary"
@@ -3415,7 +3438,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       </div>
 
       {/* 导入弹窗：仅当用户点击导入时才加载 UniverJS 相关 chunk，显著减轻首屏体积 */}
-      {showImportButton && onImport && importModalVisible && (
+      {gatedShowImportButton && onImport && importModalVisible && (
         <Suspense fallback={null}>
           <LazyUniImport
             visible={importModalVisible}

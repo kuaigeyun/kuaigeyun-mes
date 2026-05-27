@@ -14,12 +14,12 @@ import {
   ProFormSelect,
   ProFormSwitch,
 } from '@ant-design/pro-components';
-import { App, Button, Card, Col, Empty, Flex, Input, Modal, Row, Space, Spin, Switch, Tag, Typography, Upload } from 'antd';
-import type { UploadProps } from 'antd';
+import { App, Button, Card, Col, Empty, Flex, Input, Modal, Row, Space, Spin, Switch, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { getUserList } from '../../../../../../services/user';
+import { useGlobalStore } from '../../../../../../stores';
+import { resolveUserIdLabels, searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import {
@@ -38,7 +38,8 @@ import {
   type WorkshopRow,
 } from '../../../../services/haoligo';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
-import { normUploadUuids, uuidsToUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 
@@ -128,26 +129,25 @@ const RoutePatrolDocumentsPage: React.FC = () => {
     })();
   }, []);
 
-  const searchReportNotifyUsers = useCallback(async (keyword?: string) => {
-    const res = await getUserList({
-      page: 1,
-      page_size: 50,
-      is_active: true,
-      keyword: keyword?.trim() || undefined,
-    });
-    const opts = (res.items || []).map((u) => {
-      const label = (u.full_name || '').trim() || u.username;
-      reportUserLabelRef.current.set(u.id, label);
-      return { label, value: u.id };
-    });
-    const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-    for (const id of selIds) {
-      if (Number.isFinite(id) && !opts.some((o) => o.value === id)) {
-        opts.unshift({ value: id, label: reportUserLabelRef.current.get(id) || `用户#${id}` });
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
+  const searchReportNotifyUsers = useCallback(
+    async (keyword?: string) => {
+      const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: reportUserLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        reportUserLabelRef.current.set(o.value, o.label);
       }
-    }
-    return opts;
-  }, []);
+      return opts;
+    },
+    [currentUser],
+  );
 
   const parseReportNotifyUserIds = (v: Record<string, unknown>): number[] => {
     const raw = v.report_notify_user_ids;
@@ -228,17 +228,8 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       setTimeout(async () => {
         const notifyIds = row.report_notify_user_ids || [];
         if (notifyIds.length) {
-          try {
-            const res = await getUserList({ page: 1, page_size: 50, is_active: true });
-            for (const uid of notifyIds) {
-              const hit = (res.items || []).find((u) => u.id === uid);
-              if (hit) {
-                reportUserLabelRef.current.set(hit.id, (hit.full_name || '').trim() || hit.username);
-              }
-            }
-          } catch {
-            /* ignore */
-          }
+          const labels = await resolveUserIdLabels(notifyIds, currentUser);
+          labels.forEach((label, id) => reportUserLabelRef.current.set(id, label));
         }
         formRef.current?.setFieldsValue({
           patrol_route_id: row.patrol_route_id,
@@ -406,28 +397,6 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       setFormLoading(false);
     }
   };
-
-  const linePhotoUploadProps = (idx: number): UploadProps => ({
-    listType: 'picture-card',
-    accept: '.jpg,.jpeg,.png,.gif,.webp',
-    disabled: detailMode,
-    fileList: uuidsToUploadFileList(lines[idx]?.attachment_file_ids || []),
-    onChange: ({ fileList }) => {
-      const uuids = normUploadUuids(fileList);
-      setLines((prev) =>
-        prev.map((x, i) => (i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x)),
-      );
-    },
-    customRequest: async (options) => {
-      try {
-        const file = options.file as File;
-        const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_equipment_route_patrol' });
-        options.onSuccess?.(res, options.file);
-      } catch (e) {
-        options.onError?.(e instanceof Error ? e : new Error(String(e)));
-      }
-    },
-  });
 
   const routeSummaryText =
     routeHint && lines.length > 0
@@ -658,9 +627,33 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                           <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                             {t('app.haoligo.equipment.documents.colLinePhotos')}
                           </Typography.Text>
-                          <Upload {...linePhotoUploadProps(idx)} className="haoligo-route-patrol-line-upload">
-                            {detailMode ? null : '+'}
-                          </Upload>
+                          {detailMode ? (
+                            <MoldAttachmentImagePreview uuids={row.attachment_file_ids ?? undefined} />
+                          ) : (
+                            <SecurePictureCardUpload
+                              className="haoligo-route-patrol-line-upload"
+                              uuids={row.attachment_file_ids ?? undefined}
+                              accept=".jpg,.jpeg,.png,.gif,.webp"
+                              onUuidsChange={(uuids) => {
+                                setLines((prev) =>
+                                  prev.map((x, i) =>
+                                    i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x,
+                                  ),
+                                );
+                              }}
+                              customRequest={async (options) => {
+                                try {
+                                  const file = options.file as File;
+                                  const res: FileUploadResponse = await uploadFile(file, {
+                                    category: 'haoligo_equipment_route_patrol',
+                                  });
+                                  options.onSuccess?.(res, options.file);
+                                } catch (e) {
+                                  options.onError?.(e instanceof Error ? e : new Error(String(e)));
+                                }
+                              }}
+                            />
+                          )}
                         </div>
                       </Card>
                     ))}

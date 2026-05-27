@@ -15,6 +15,19 @@ from apps.haoligo.api._mold_maintenance_mold_status import (
     refresh_mold_status_if_no_open_maintenance_sheet,
     unique_mold_codes_from_stored_line_items,
 )
+from apps.haoligo.api._mold_sheet_audit import (
+    apply_rejected_resubmit_fields,
+    assert_approved_for_revoke,
+    assert_pending_for_audit,
+    assert_sheet_mutation_allowed,
+    effective_sheet_status,
+)
+from apps.haoligo.constants.mold_sheet_audit import (
+    SHEET_AUDIT_STATUS_SET,
+    SHEET_STATUS_APPROVED,
+    SHEET_STATUS_PENDING,
+    SHEET_STATUS_REJECTED,
+)
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.routes_mold_maintenance_sheet import (
@@ -32,6 +45,12 @@ from apps.haoligo.api._data_scope import (
     apply_outsource_sheet_scope,
     assert_outsource_partner_code_writable,
     assert_outsource_row_visible,
+)
+from apps.haoligo.services.outsource_sheet_warehouse import (
+    apply_warehouses_on_outsource_maintenance_approved,
+    format_mold_warehouse_label,
+    merge_line_warehouse_fields,
+    mold_warehouse_snapshot_by_codes,
 )
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -110,6 +129,13 @@ class OutsourceMaintLineOut(BaseModel):
     repair_reason: str
     repair_cost: Optional[Decimal] = None
     attachment_file_uuids: List[str] = Field(default_factory=list)
+    mold_warehouse_id: Optional[int] = Field(None, description="模具台账所在仓库 ID")
+    mold_warehouse_code: Optional[str] = Field(None, description="所在仓库编码")
+    mold_warehouse_name: Optional[str] = Field(None, description="所在仓库名称")
+    before_outsource_warehouse_id: Optional[int] = Field(
+        None,
+        description="外协审核通过前厂内仓库 ID（完修归还用）",
+    )
 
 
 def _line_to_store(line: OutsourceMaintLineIn) -> dict[str, Any]:
@@ -155,7 +181,18 @@ class MoldOutsourceMaintenanceSheetOut(BaseModel):
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[OutsourceMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
+    primary_mold_warehouse_name: Optional[str] = Field(
+        None,
+        description="列表摘要：首行模具所在仓库",
+    )
     created_at: datetime
+    sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
+    audited_at: Optional[datetime] = None
+    audited_by_user_id: Optional[int] = None
+    can_complete: bool = Field(
+        False,
+        description="是否可发起完修：维修类且尚无未驳回的关联完修单",
+    )
 
 
 class MoldOutsourceMaintenanceSheetCreate(BaseModel):
@@ -212,13 +249,59 @@ def _primary_mold(lines: List[OutsourceMaintLineOut]) -> Optional[str]:
     return c or None
 
 
-def _serialize(row: HaoligoMoldOutsourceMaintenanceSheet) -> MoldOutsourceMaintenanceSheetOut:
+async def _linked_maintenance_ids_with_active_complete(tenant_id: int) -> set[int]:
+    linked_ids = (
+        await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
+        .filter(
+            deleted_at__isnull=True,
+            source_outsource_maintenance_sheet_id__not_isnull=True,
+        )
+        .exclude(sheet_status="已驳回")
+        .values_list("source_outsource_maintenance_sheet_id", flat=True)
+    )
+    return {int(x) for x in linked_ids if x is not None}
+
+
+def _row_can_complete(row: HaoligoMoldOutsourceMaintenanceSheet, *, linked_ids: set[int]) -> bool:
+    if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
+        return False
+    if (row.service_type or "").strip() != "维修":
+        return False
+    return int(row.id) not in linked_ids
+
+
+async def _serialize(
+    row: HaoligoMoldOutsourceMaintenanceSheet,
+    *,
+    tenant_id: int,
+    linked_complete_ids: set[int] | None = None,
+) -> MoldOutsourceMaintenanceSheetOut:
     raw_lines = row.line_items or []
     lines: List[OutsourceMaintLineOut] = []
+    raw_dicts: List[dict[str, Any]] = []
     if isinstance(raw_lines, list):
         for item in raw_lines:
             if isinstance(item, dict):
+                raw_dicts.append(item)
                 lines.append(_line_from_store(item))
+    codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]
+    snapshots = await mold_warehouse_snapshot_by_codes(tenant_id, codes)
+    enriched: List[OutsourceMaintLineOut] = []
+    for ln, raw in zip(lines, raw_dicts):
+        snap = snapshots.get((ln.mold_code or "").strip(), {})
+        enriched.append(
+            ln.model_copy(
+                update=merge_line_warehouse_fields({}, snapshot=snap, raw=raw),
+            )
+        )
+    lines = enriched
+    primary_wh: Optional[str] = None
+    if lines:
+        primary_wh = format_mold_warehouse_label(
+            warehouse_name=lines[0].mold_warehouse_name,
+            warehouse_code=lines[0].mold_warehouse_code,
+        )
+    linked = linked_complete_ids or set()
     return MoldOutsourceMaintenanceSheetOut(
         id=row.id,
         uuid=row.uuid,
@@ -234,7 +317,12 @@ def _serialize(row: HaoligoMoldOutsourceMaintenanceSheet) -> MoldOutsourceMainte
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
+        primary_mold_warehouse_name=primary_wh,
+        sheet_status=effective_sheet_status(row),
+        audited_at=getattr(row, "audited_at", None),
+        audited_by_user_id=getattr(row, "audited_by_user_id", None),
         created_at=row.created_at,
+        can_complete=_row_can_complete(row, linked_ids=linked),
     )
 
 
@@ -245,25 +333,21 @@ async def list_outsource_maintenance_sheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    sheet_status: Optional[str] = Query(None, description="待审核 / 已通过 / 已驳回"),
     open_for_complete: bool = Query(
         False,
         description="为 true 时仅返回尚未关联未删除外协维保完修单的外协维保单（用于完修单选源）",
     ),
 ):
+    linked_complete_ids = await _linked_maintenance_ids_with_active_complete(tenant_id)
     qs = tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id)
+    st = (sheet_status or "").strip()
+    if st and st in SHEET_AUDIT_STATUS_SET:
+        qs = qs.filter(sheet_status=st)
     if open_for_complete:
-        linked_ids = (
-            await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
-            .filter(
-                deleted_at__isnull=True,
-                source_outsource_maintenance_sheet_id__not_isnull=True,
-            )
-            .exclude(sheet_status="已驳回")
-            .values_list("source_outsource_maintenance_sheet_id", flat=True)
-        )
-        lid = [int(x) for x in linked_ids if x is not None]
-        if lid:
-            qs = qs.filter(~Q(id__in=lid))
+        qs = qs.filter(sheet_status=SHEET_STATUS_APPROVED)
+    if open_for_complete and linked_complete_ids:
+        qs = qs.filter(~Q(id__in=list(linked_complete_ids)))
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(
@@ -281,7 +365,10 @@ async def list_outsource_maintenance_sheets(
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
-        "items": [_serialize(r) for r in rows],
+        "items": [
+            await _serialize(r, tenant_id=tenant_id, linked_complete_ids=linked_complete_ids)
+            for r in rows
+        ],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -322,14 +409,9 @@ async def create_outsource_maintenance_sheet(
             source_order_no=_strip_opt(body.source_order_no),
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             line_items=stored,
+            sheet_status=SHEET_STATUS_PENDING,
         )
-        await apply_mold_status_on_maintenance_sheet_created(
-            tenant_id,
-            is_outsource=True,
-            service_type=body.service_type,
-            stored_line_items=stored,
-        )
-    return _serialize(row)
+    return await _serialize(row, tenant_id=tenant_id)
 
 
 @router.get("/{row_id}", response_model=MoldOutsourceMaintenanceSheetOut, summary="外协维保单详情")
@@ -344,7 +426,7 @@ async def get_outsource_maintenance_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
-    return _serialize(row)
+    return await _serialize(row, tenant_id=tenant_id)
 
 
 @router.patch("/{row_id}", response_model=MoldOutsourceMaintenanceSheetOut, summary="更新外协维保单")
@@ -360,7 +442,9 @@ async def update_outsource_maintenance_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
+    assert_sheet_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
+    data.pop("sheet_status", None)
     if "applicant_user_id" in data and data["applicant_user_id"] is not None:
         app_uid, app_name = await _resolve_applicant_only(tenant_id, int(data["applicant_user_id"]))
         data["applicant_user_id"] = app_uid
@@ -400,10 +484,85 @@ async def update_outsource_maintenance_sheet(
         prev_codes = set(unique_mold_codes_from_stored_line_items(row.line_items or []))
         await assert_maintenance_line_molds_are_standby(tenant_id, stored, allow_mold_codes=prev_codes)
         data["line_items"] = stored
+    apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
-    return _serialize(row)
+    return await _serialize(row, tenant_id=tenant_id)
+
+
+@router.post("/{row_id}/approve", response_model=MoldOutsourceMaintenanceSheetOut, summary="审核通过外协维保单")
+async def approve_outsource_maintenance_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_APPROVED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    await apply_warehouses_on_outsource_maintenance_approved(tenant_id, row)
+    await apply_mold_status_on_maintenance_sheet_created(
+        tenant_id,
+        is_outsource=True,
+        service_type=row.service_type,
+        stored_line_items=row.line_items or [],
+    )
+    return await _serialize(row, tenant_id=tenant_id)
+
+
+@router.post("/{row_id}/reject", response_model=MoldOutsourceMaintenanceSheetOut, summary="审核驳回外协维保单")
+async def reject_outsource_maintenance_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_REJECTED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    return await _serialize(row, tenant_id=tenant_id)
+
+
+@router.post(
+    "/{row_id}/revoke-approval",
+    response_model=MoldOutsourceMaintenanceSheetOut,
+    summary="撤销外协维保单审核（已通过→待审核）",
+)
+async def revoke_outsource_maintenance_sheet_approval(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
+    assert_approved_for_revoke(row)
+    codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
+    row.sheet_status = SHEET_STATUS_PENDING
+    row.audited_at = None
+    row.audited_by_user_id = None
+    await row.save()
+    for mc in codes:
+        await refresh_mold_status_if_no_open_maintenance_sheet(tenant_id, mc)
+    return await _serialize(row, tenant_id=tenant_id)
 
 
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除外协维保单")
@@ -418,6 +577,7 @@ async def delete_outsource_maintenance_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
+    assert_sheet_mutation_allowed(row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()

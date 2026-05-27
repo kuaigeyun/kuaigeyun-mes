@@ -76,6 +76,14 @@ const MoldTrialRecordReportPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: '试模人员',
+      dataIndex: 'trial_user_name',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => r.trial_user_name || '—',
+    },
+    {
       title: '试模结果',
       dataIndex: 'trial_result',
       valueType: 'select',

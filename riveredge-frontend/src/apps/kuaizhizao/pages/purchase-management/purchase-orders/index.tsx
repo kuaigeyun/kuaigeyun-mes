@@ -60,7 +60,9 @@ import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../servic
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { getUserList, type User } from '../../../../../services/user';
+import { searchUserDisplay, type User } from '../../../../../services/user';
+import { useGlobalStore } from '../../../../../stores';
+import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import {
   DocumentStatus,
   ReviewStatusEnum,
@@ -427,6 +429,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [usersLoading, setUsersLoading] = useState(false);
 
   // 审批流程相关状态
@@ -467,8 +470,8 @@ const PurchaseOrdersPage: React.FC = () => {
     const loadUsers = async () => {
       setUsersLoading(true);
       try {
-        const res = await getUserList({ page_size: 1000, is_active: true });
-        setUsers(res.items || []);
+        const res = await searchUserDisplay({ page_size: 200, is_active: true });
+        setUsers(displayItemsToUsers(res.items || []));
       } catch {
         setUsers([]);
       } finally {
@@ -477,7 +480,7 @@ const PurchaseOrdersPage: React.FC = () => {
     };
     loadSuppliers();
     loadUsers();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     const loadOrderType = async () => {

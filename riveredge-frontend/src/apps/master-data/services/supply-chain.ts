@@ -5,7 +5,8 @@
  */
 
 import { api } from '../../../services/api';
-import { getUserList } from '../../../services/user';
+import { useGlobalStore } from '../../../stores';
+import { searchUserIdOptions } from '../../../utils/userDisplay';
 import {
   getDictionaryItemsCached,
   getDictionaryItemsSync,
@@ -115,11 +116,9 @@ export const supplierApi = {
  */
 export const getUserOptions = async () => {
   try {
-    const res = await getUserList({ page: 1, page_size: 1000, is_active: true });
-    return res.items.map((user: any) => ({
-      label: user.full_name || user.username,
-      value: user.id || user.uuid, // 后端 salesman_id 是 int，所以优先用 id
-    }));
+    const currentUser = useGlobalStore.getState().currentUser;
+    const opts = await searchUserIdOptions({ pageSize: 200, isActive: true, currentUser });
+    return opts.map((o) => ({ label: o.label, value: o.value }));
   } catch (error) {
     console.error('获取用户列表失败:', error);
     return [];

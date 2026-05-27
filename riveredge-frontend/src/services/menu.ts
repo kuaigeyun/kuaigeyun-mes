@@ -157,6 +157,18 @@ export async function syncAllMenus(): Promise<{ success: boolean; message: strin
 /** React Query 缓存键：当前租户后台首页 */
 export const TENANT_BACKEND_HOME_QUERY_KEY = ['tenantBackendHome'] as const;
 
+/** React Query 缓存键：当前用户有效 UniTabs 首页 */
+export const EFFECTIVE_HOME_QUERY_KEY = ['effectiveHome'] as const;
+
+export type EffectiveHomeSource = 'role' | 'menu' | 'workplace' | 'fallback';
+
+export interface EffectiveHome {
+  path: string;
+  source: EffectiveHomeSource;
+  role_uuid?: string | null;
+  menu_uuid?: string | null;
+}
+
 export interface TenantBackendHome {
   menu_uuid: string | null;
   path: string | null;
@@ -166,6 +178,11 @@ export interface TenantBackendHome {
 /** 当前租户配置的后台首页（未配置时 path/menu_uuid 为 null） */
 export async function getTenantBackendHome(): Promise<TenantBackendHome> {
   return apiRequest<TenantBackendHome>('/core/menus/backend-home');
+}
+
+/** 当前用户有效首页：角色 > 菜单主页 > 工作台 > 兜底页 */
+export async function getEffectiveHome(): Promise<EffectiveHome> {
+  return apiRequest<EffectiveHome>('/core/menus/effective-home');
 }
 
 /** 将菜单设为后台首页（租户内唯一，自动取消原配置） */

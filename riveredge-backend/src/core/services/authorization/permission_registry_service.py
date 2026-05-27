@@ -27,6 +27,7 @@ class PermissionRegistryService:
         "system:application:delete",
         "system:user:create",
         "system:user:read",
+        "system:user:display",
         "system:user:update",
         "system:user:delete",
         "system:department:create",

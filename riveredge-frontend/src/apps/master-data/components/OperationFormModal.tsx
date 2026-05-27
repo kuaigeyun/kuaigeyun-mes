@@ -20,7 +20,8 @@ import {
 } from '../services/factory';
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
-import { getUserList } from '../../../services/user';
+import { useGlobalStore } from '../../../stores';
+import { searchUserDisplay } from '../../../services/user';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
@@ -115,7 +116,12 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       const [defectsRes, usersRes, teamsRes, workshopsRes, workCentersRes, stationsRes, equipmentRes, plansRes] = await Promise.all([
         // 不传 isActive：与列表/详情展示一致；再通过 boundDefectTypes 补齐未出现在列表中的绑定项
         defectTypeApi.list({ limit: 500 }),
-        getUserList({ is_active: true, page_size: 100 }),
+        searchUserDisplay({ page: 1, page_size: 100, is_active: true }).catch(() => ({
+          items: [],
+          total: 0,
+          page: 1,
+          page_size: 100,
+        })),
         workGroupApi.list({ is_active: true, limit: 500 }),
         workshopApi.list({ is_active: true, limit: 500 }),
         workCenterApi.list({ is_active: true, limit: 500 }),
@@ -131,7 +137,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       }));
 
       const pOpts: { label: string; value: string }[] = [];
-      (Array.isArray(usersRes?.items) ? usersRes.items : []).forEach((u: any) => {
+      (usersRes?.items ?? []).forEach((u) => {
         pOpts.push({ label: `[人员] ${u.full_name || u.username}`, value: `U_${u.uuid}` });
       });
       factoryListItems(teamsRes as any).forEach((t: any) => {

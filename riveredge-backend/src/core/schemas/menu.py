@@ -144,6 +144,18 @@ class TenantBackendHomeResponse(BaseModel):
     name: Optional[str] = Field(None, description="菜单名称")
 
 
+class EffectiveHomeResponse(BaseModel):
+    """当前登录用户的 UniTabs 有效首页（按角色 > 菜单主页 > 工作台 > 兜底页解析）"""
+
+    path: str = Field(..., description="有效首页路由")
+    source: str = Field(
+        ...,
+        description="来源：role | menu | workplace | fallback",
+    )
+    role_uuid: Optional[str] = Field(None, description="命中角色首页时的角色 UUID")
+    menu_uuid: Optional[str] = Field(None, description="命中菜单主页时的菜单 UUID")
+
+
 # 更新前向引用
 MenuTreeResponse.model_rebuild()
 

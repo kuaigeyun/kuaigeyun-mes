@@ -49,6 +49,11 @@ class Role(BaseModel):
     )
     is_system = fields.BooleanField(default=False, description="是否系统角色（系统角色不可删除）")
     is_active = fields.BooleanField(default=True, description="是否启用")
+    home_path = fields.CharField(
+        max_length=500,
+        null=True,
+        description="角色级 UniTabs 首页路由（path，优先于租户菜单首页）",
+    )
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

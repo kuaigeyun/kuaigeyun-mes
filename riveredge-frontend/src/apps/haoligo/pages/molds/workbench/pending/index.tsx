@@ -1,42 +1,31 @@
 /**
- * 好力 GO — 外协维保审核（外协维保完修单；审核人为申请人；列表含待审核/已通过/已驳回）
+ * 好力 GO — 外协维保审核（外协维保完修单唯一审核入口；数据范围内待审/历史）
  */
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Divider, Modal, Space, Spin, Table, Tag, Upload } from 'antd';
-import type { UploadFile } from 'antd/es/upload/interface';
-import { CheckOutlined, CloseOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
+import { App, Button, Descriptions, Divider, Modal, Space, Spin, Table } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { getFileDownloadUrl } from '../../../../../../services/file';
+import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachmentStrip';
+import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
+import { HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE } from '../../../../constants/documentPermissionResources';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import {
   approveMoldOutsourceMaintenanceCompleteSheet,
   getMoldOutsourceMaintenanceCompleteSheet,
-  listAuditMoldOutsourceMaintenanceCompleteSheetsMine,
+  listMoldOutsourceMaintenanceCompleteSheets,
   rejectMoldOutsourceMaintenanceCompleteSheet,
   revokeApprovalMoldOutsourceMaintenanceCompleteSheet,
   type MoldOutsourceCompleteLineRow,
   type MoldOutsourceMaintenanceCompleteSheetRow,
 } from '../../../../services/haoligo';
-
-function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
-  if (!uuids?.length) return [];
-  return uuids.map((uuid) => ({
-    uid: uuid,
-    name: '附件',
-    status: 'done',
-    url: getFileDownloadUrl(uuid),
-    response: { uuid },
-  }));
-}
-
-function ReadonlyAttachmentStrip({ uuids }: { uuids: string[] | undefined }) {
-  const fl = uuidsToUploadFileList(uuids);
-  if (!fl.length) return <span style={{ color: '#999' }}>无</span>;
-  return <Upload listType="picture-card" disabled fileList={fl} />;
-}
+import { canAuditMoldSheet, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 
 function repairSummary(items: MoldOutsourceCompleteLineRow[]): string {
   const parts: string[] = [];
@@ -48,26 +37,20 @@ function repairSummary(items: MoldOutsourceCompleteLineRow[]): string {
   return parts.length ? parts.join('；') : '—';
 }
 
-function effectiveSheetStatus(r: MoldOutsourceMaintenanceCompleteSheetRow): string {
-  const s = (r.sheet_status || '').trim();
-  if (s === '待审核' || s === '已通过' || s === '已驳回') return s;
-  return '已通过';
-}
-
-function auditStatusTag(r: MoldOutsourceMaintenanceCompleteSheetRow) {
-  const s = effectiveSheetStatus(r);
-  const color = s === '已通过' ? 'success' : s === '已驳回' ? 'error' : 'processing';
-  return <Tag color={color}>{s}</Tag>;
-}
-
 const MoldOutsourcePendingReviewPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal: modalApi } = App.useApp();
+  const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canAudit = canAuditMoldSheet(currentUser, HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE);
   const actionRef = useRef<ActionType>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRow, setDetailRow] = useState<MoldOutsourceMaintenanceCompleteSheetRow | null>(null);
-  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailRow(null);
+  };
 
   const openDetail = async (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
     setDetailOpen(true);
@@ -78,82 +61,23 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
       setDetailRow(d);
     } catch (e) {
       messageApi.error((e as Error).message || '加载详情失败');
-      setDetailOpen(false);
+      closeDetail();
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const handleApprove = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
-    modalApi.confirm({
-      title: '审核通过',
-      content: `确认通过外协维保完修单「${record.sheet_no || record.id}」？通过后模具将按维修结果更新状态。`,
-      onOk: async () => {
-        setActionLoadingId(record.id);
-        try {
-          await approveMoldOutsourceMaintenanceCompleteSheet(record.id);
-          messageApi.success('已通过审核');
-          if (detailRow?.id === record.id) {
-            const d = await getMoldOutsourceMaintenanceCompleteSheet(record.id);
-            setDetailRow(d);
-          }
-          actionRef.current?.reload();
-        } catch (e) {
-          messageApi.error((e as Error).message || '操作失败');
-        } finally {
-          setActionLoadingId(null);
-        }
-      },
-    });
+  const reloadDetail = async (id: number) => {
+    const d = await getMoldOutsourceMaintenanceCompleteSheet(id);
+    setDetailRow(d);
+    actionRef.current?.reload();
   };
 
-  const handleReject = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
-    modalApi.confirm({
-      title: '驳回',
-      content: `确认驳回外协维保完修单「${record.sheet_no || record.id}」？驳回后可重新编辑或再次提交完修。`,
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        setActionLoadingId(record.id);
-        try {
-          await rejectMoldOutsourceMaintenanceCompleteSheet(record.id);
-          messageApi.success('已驳回');
-          if (detailRow?.id === record.id) {
-            const d = await getMoldOutsourceMaintenanceCompleteSheet(record.id);
-            setDetailRow(d);
-          }
-          actionRef.current?.reload();
-        } catch (e) {
-          messageApi.error((e as Error).message || '操作失败');
-        } finally {
-          setActionLoadingId(null);
-        }
-      },
-    });
-  };
-
-  const handleRevoke = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
-    modalApi.confirm({
-      title: '撤回审核',
-      content: `确认撤回外协维保完修单「${record.sheet_no || record.id}」的审核通过？撤回后将回到待审核，模具台账将按未通过审核重新计算（通常回到外协维修）。`,
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        setActionLoadingId(record.id);
-        try {
-          await revokeApprovalMoldOutsourceMaintenanceCompleteSheet(record.id);
-          messageApi.success('已撤回审核');
-          if (detailRow?.id === record.id) {
-            const d = await getMoldOutsourceMaintenanceCompleteSheet(record.id);
-            setDetailRow(d);
-          }
-          actionRef.current?.reload();
-        } catch (e) {
-          messageApi.error((e as Error).message || '操作失败');
-        } finally {
-          setActionLoadingId(null);
-        }
-      },
-    });
-  };
+  const auditHandlersFor = (id: number) => ({
+    onApprove: () => approveMoldOutsourceMaintenanceCompleteSheet(id),
+    onReject: () => rejectMoldOutsourceMaintenanceCompleteSheet(id),
+    onRevoke: () => revokeApprovalMoldOutsourceMaintenanceCompleteSheet(id),
+  });
 
   const sheetStatusEnum: Record<string, { text: string }> = {
     待审核: { text: '待审核' },
@@ -176,6 +100,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
       hideInTable: true,
       valueType: 'select',
       valueEnum: sheetStatusEnum,
+      initialValue: '待审核',
       fieldProps: { allowClear: true, placeholder: '全部' },
     },
     {
@@ -195,7 +120,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
       key: 'sheet_status_display',
       width: 100,
       hideInSearch: true,
-      render: (_, r) => auditStatusTag(r),
+      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
     },
     {
       title: '维修摘要',
@@ -209,57 +134,36 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 220,
+      width: 260,
       fixed: 'right',
-      uniActionRenderOptions: { suppressAuditSemanticActions: false, directMax: 4 },
+      uniActionRenderOptions: MOLD_SHEET_TABLE_ACTION_OPTIONS,
       render: (_, record) => {
-        const st = effectiveSheetStatus(record);
-        return (
-          <Space size={4} style={{ flexWrap: 'nowrap' }}>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record)}>
-              详情
-            </Button>
-            {st === '待审核' ? (
-              <>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<CheckOutlined />}
-                  loading={actionLoadingId === record.id}
-                  onClick={() => handleApprove(record)}
-                >
-                  通过
-                </Button>
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<CloseOutlined />}
-                  loading={actionLoadingId === record.id}
-                  onClick={() => handleReject(record)}
-                >
-                  驳回
-                </Button>
-              </>
-            ) : null}
-            {st === '已通过' ? (
-              <Button
-                type="link"
-                size="small"
-                icon={<RollbackOutlined />}
-                loading={actionLoadingId === record.id}
-                onClick={() => handleRevoke(record)}
-              >
-                撤回审核
-              </Button>
-            ) : null}
-          </Space>
+        const actions: React.ReactNode[] = [
+          <Button
+            key="detail"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => void openDetail(record)}
+          >
+            详情
+          </Button>,
+          ...buildMoldSheetAuditActionElements({
+            canAudit,
+            sheetStatus: record.sheet_status,
+            handlers: auditHandlersFor(record.id),
+            messageApi,
+            reload: () => actionRef.current?.reload(),
+          }),
+        ];
+        return renderRowActionsOverflow(
+          actions,
+          `outsource-audit-${record.id}`,
+          MOLD_SHEET_TABLE_ACTION_OPTIONS,
         );
       },
     },
   ];
-
-  const detailStatus = detailRow ? effectiveSheetStatus(detailRow) : null;
 
   return (
     <>
@@ -281,7 +185,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
                 typeof stRaw === 'string' && stRaw.trim() && ['待审核', '已通过', '已驳回'].includes(stRaw.trim())
                   ? stRaw.trim()
                   : undefined;
-              const res = await listAuditMoldOutsourceMaintenanceCompleteSheetsMine({
+              const res = await listMoldOutsourceMaintenanceCompleteSheets({
                 skip,
                 limit: pageSize,
                 keyword:
@@ -303,46 +207,18 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
       <Modal
         title="外协维保完修单详情"
         open={detailOpen}
-        onCancel={() => {
-          setDetailOpen(false);
-          setDetailRow(null);
-        }}
+        onCancel={closeDetail}
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
           detailRow ? (
-            <Space wrap>
-              <Button onClick={() => setDetailOpen(false)}>关闭</Button>
-              {detailStatus === '待审核' ? (
-                <>
-                  <Button
-                    danger
-                    icon={<CloseOutlined />}
-                    loading={actionLoadingId === detailRow.id}
-                    onClick={() => handleReject(detailRow)}
-                  >
-                    驳回
-                  </Button>
-                  <Button
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    loading={actionLoadingId === detailRow.id}
-                    onClick={() => handleApprove(detailRow)}
-                  >
-                    通过
-                  </Button>
-                </>
-              ) : null}
-              {detailStatus === '已通过' ? (
-                <Button
-                  icon={<RollbackOutlined />}
-                  loading={actionLoadingId === detailRow.id}
-                  onClick={() => handleRevoke(detailRow)}
-                >
-                  撤回审核
-                </Button>
-              ) : null}
-            </Space>
+            <MoldSheetDetailAuditFooter
+              resource={HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE}
+              sheetStatus={detailRow.sheet_status}
+              onClose={closeDetail}
+              onReload={() => void reloadDetail(detailRow.id)}
+              handlers={auditHandlersFor(detailRow.id)}
+            />
           ) : null
         }
       >
@@ -353,7 +229,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
         ) : detailRow ? (
           <>
             <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="审核状态">{auditStatusTag(detailRow)}</Descriptions.Item>
+              <Descriptions.Item label="审核状态">{moldSheetAuditStatusTag(detailRow.sheet_status)}</Descriptions.Item>
               <Descriptions.Item label="完修单单号">{detailRow.sheet_no || '—'}</Descriptions.Item>
               <Descriptions.Item label="来源单号">{detailRow.source_order_no}</Descriptions.Item>
               <Descriptions.Item label="申请人">{detailRow.applicant_name || '—'}</Descriptions.Item>

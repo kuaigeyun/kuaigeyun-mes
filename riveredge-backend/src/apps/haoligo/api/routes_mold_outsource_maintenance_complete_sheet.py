@@ -39,6 +39,16 @@ from apps.haoligo.api._data_scope import (
     apply_outsource_sheet_scope,
     assert_outsource_row_visible,
 )
+from apps.haoligo.services.outsource_sheet_warehouse import (
+    apply_warehouses_on_outsource_complete_approved,
+    format_mold_warehouse_label,
+    merge_line_warehouse_fields,
+    mold_warehouse_snapshot_by_codes,
+)
+from apps.haoligo.api._mold_sheet_audit import assert_pending_for_audit as assert_pending_for_sheet_audit
+from apps.haoligo.api._mold_sheet_audit import assert_approved_for_revoke as assert_approved_for_sheet_revoke
+from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
+from apps.haoligo.authorization.workflow_permissions import OUTSOURCE_COMPLETE_CREATE_PERMISSIONS
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -47,7 +57,15 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/outsource-maintenance-complete-sheets",
     tags=["App · HaoliGO · 外协维保完修单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-outsource-complete"))],
+    dependencies=[
+        Depends(
+            require_module_access(
+                "haoligo",
+                "molds-documents-outsource-complete",
+                collection_create_permissions=OUTSOURCE_COMPLETE_CREATE_PERMISSIONS,
+            )
+        )
+    ],
 )
 
 _COMPLETION_TEXT_MAX = 4000
@@ -141,6 +159,9 @@ class OutsourceCompleteLineOut(BaseModel):
         default_factory=list,
         description="来源外协维保单该行模具图片·维修前（只读，用于对比）",
     )
+    mold_warehouse_id: Optional[int] = Field(None, description="模具台账所在仓库 ID")
+    mold_warehouse_code: Optional[str] = Field(None, description="所在仓库编码")
+    mold_warehouse_name: Optional[str] = Field(None, description="所在仓库名称")
 
 
 def _line_dict_for_sheet(line: OutsourceCompleteLineIn) -> dict[str, Any]:
@@ -219,6 +240,10 @@ class MoldOutsourceMaintenanceCompleteSheetOut(BaseModel):
     )
     line_items: List[OutsourceCompleteLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="首行模具代号")
+    primary_mold_warehouse_name: Optional[str] = Field(
+        None,
+        description="列表摘要：首行模具所在仓库",
+    )
     sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
     audited_at: Optional[Any] = None
     audited_by_user_id: Optional[int] = None
@@ -236,15 +261,6 @@ def _guard_mutation_allowed(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="已通过审核的外协维保完修单不可修改或删除",
         )
-
-
-async def _guard_applicant_auditor(
-    row: HaoligoMoldOutsourceMaintenanceCompleteSheet,
-    user: User,
-) -> None:
-    aid = getattr(row, "applicant_user_id", None)
-    if aid is None or int(aid) != int(user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅申请人可审核该外协维保完修单")
 
 
 class MoldOutsourceMaintenanceCompleteSheetCreate(BaseModel):
@@ -311,11 +327,31 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
                     if mc:
                         src_by_mold[mc] = _norm_uuid_list(it.get("attachment_file_uuids"))
 
+    tid_int = int(tid) if tid is not None else 0
+    codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]
+    snapshots = await mold_warehouse_snapshot_by_codes(tid_int, codes) if tid_int else {}
+    raw_dicts: List[dict[str, Any]] = []
+    if isinstance(raw_lines, list):
+        for item in raw_lines:
+            if isinstance(item, dict):
+                raw_dicts.append(item)
     enriched_lines: List[OutsourceCompleteLineOut] = []
-    for ln in lines:
+    for ln, raw in zip(lines, raw_dicts):
         mc = (ln.mold_code or "").strip()
+        snap = snapshots.get(mc, {})
         enriched_lines.append(
-            ln.model_copy(update={"source_attachment_file_uuids": src_by_mold.get(mc, [])})
+            ln.model_copy(
+                update={
+                    **merge_line_warehouse_fields({}, snapshot=snap, raw=raw),
+                    "source_attachment_file_uuids": src_by_mold.get(mc, []),
+                }
+            )
+        )
+    primary_wh: Optional[str] = None
+    if enriched_lines:
+        primary_wh = format_mold_warehouse_label(
+            warehouse_name=enriched_lines[0].mold_warehouse_name,
+            warehouse_code=enriched_lines[0].mold_warehouse_code,
         )
 
     return MoldOutsourceMaintenanceCompleteSheetOut(
@@ -336,6 +372,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
         source_header_attachment_file_uuids=src_header,
         line_items=enriched_lines,
         primary_mold_code=_primary_mold(enriched_lines),
+        primary_mold_warehouse_name=primary_wh,
         sheet_status=_effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
@@ -485,6 +522,40 @@ async def create_outsource_maintenance_complete_sheet(
             sheet_status="待审核",
         )
     return await _serialize(row)
+
+
+@router.get("/pending-audit", summary="外协维保完修单待审核列表（需审核权限；按数据范围）")
+async def list_pending_audit_outsource_maintenance_complete_sheets(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    keyword: Optional[str] = Query(None),
+):
+    qs = tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(
+        sheet_status=SHEET_STATUS_PENDING
+    )
+    qs = await apply_outsource_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
+    if keyword and keyword.strip():
+        k = keyword.strip()
+        qs = qs.filter(
+            Q(source_order_no__icontains=k)
+            | Q(sheet_no__icontains=k)
+            | Q(outsourced_unit_name__icontains=k)
+            | Q(department_name__icontains=k)
+            | Q(applicant_name__icontains=k)
+        )
+    total = await qs.count()
+    rows = await qs.order_by("-id").offset(skip).limit(limit)
+    items = [await _serialize(r) for r in rows]
+    return {
+        "items": items,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get("/audit-mine", summary="委外审核列表（当前用户为申请人；含待审核/已通过/已驳回）")
@@ -658,7 +729,7 @@ async def delete_outsource_maintenance_complete_sheet(
 @router.post(
     "/{row_id}/approve",
     response_model=MoldOutsourceMaintenanceCompleteSheetOut,
-    summary="委外审核通过（仅申请人）",
+    summary="审核通过外协维保完修单",
 )
 async def approve_outsource_maintenance_complete_sheet(
     row_id: int,
@@ -671,13 +742,12 @@ async def approve_outsource_maintenance_complete_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
-    await _guard_applicant_auditor(row, user)
-    if _effective_sheet_status(row) != "待审核":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅待审核状态可通过审核")
+    assert_pending_for_sheet_audit(row)
     row.sheet_status = OUTSOURCE_MAINTENANCE_COMPLETE_APPROVED_STATUS
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
     await row.save()
+    await apply_warehouses_on_outsource_complete_approved(tenant_id, row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     for mc in codes:
         await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
@@ -687,7 +757,7 @@ async def approve_outsource_maintenance_complete_sheet(
 @router.post(
     "/{row_id}/reject",
     response_model=MoldOutsourceMaintenanceCompleteSheetOut,
-    summary="委外审核驳回（仅申请人）",
+    summary="审核驳回外协维保完修单",
 )
 async def reject_outsource_maintenance_complete_sheet(
     row_id: int,
@@ -700,9 +770,7 @@ async def reject_outsource_maintenance_complete_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
-    await _guard_applicant_auditor(row, user)
-    if _effective_sheet_status(row) != "待审核":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅待审核状态可驳回")
+    assert_pending_for_sheet_audit(row)
     row.sheet_status = "已驳回"
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
@@ -716,7 +784,7 @@ async def reject_outsource_maintenance_complete_sheet(
 @router.post(
     "/{row_id}/revoke-approval",
     response_model=MoldOutsourceMaintenanceCompleteSheetOut,
-    summary="撤销委外审核（仅申请人；仅已通过→待审核）",
+    summary="撤销外协维保完修单审核（已通过→待审核）",
 )
 async def revoke_approval_outsource_maintenance_complete_sheet(
     row_id: int,
@@ -729,10 +797,8 @@ async def revoke_approval_outsource_maintenance_complete_sheet(
     await assert_outsource_row_visible(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
-    await _guard_applicant_auditor(row, user)
-    if _effective_sheet_status(row) != OUTSOURCE_MAINTENANCE_COMPLETE_APPROVED_STATUS:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅已通过状态可撤销审核")
-    row.sheet_status = "待审核"
+    assert_approved_for_sheet_revoke(row)
+    row.sheet_status = SHEET_STATUS_PENDING
     row.audited_at = None
     row.audited_by_user_id = None
     await row.save()

@@ -773,7 +773,9 @@ class PermissionSyncService:
             "export": "导出",
             "import": "导入",
             "print": "打印",
+            "display": "展示",
             "execute": "执行",
+            "complete": "完修",
             "reject": "驳回",
             "revoke": "撤销",
         }.get(action.lower(), action)

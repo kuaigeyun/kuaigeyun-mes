@@ -18,6 +18,9 @@ import {
   CreateRoleData,
   UpdateRoleData,
 } from '../../../../services/role';
+import { getMenuTree, EFFECTIVE_HOME_QUERY_KEY, type MenuTree } from '../../../../services/menu';
+import { RoleHomePathSelect } from './RoleHomePathSelect';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface RoleFormModalProps {
   open: boolean;
@@ -36,10 +39,19 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
+  const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
 
   const isEdit = Boolean(editUuid);
+
+  useEffect(() => {
+    if (!open) return;
+    void getMenuTree({ is_active: true })
+      .then((trees) => setMenuTree(trees || []))
+      .catch(() => setMenuTree([]));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +67,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
           role_type: detail.role_type || 'internal',
           external_partner_type: detail.external_partner_type,
           is_active: detail.is_active ?? true,
+          home_path: detail.home_path || undefined,
         });
       })
       .catch((err: any) => {
@@ -73,6 +86,9 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       if (payload.role_type !== 'external') {
         payload.external_partner_type = undefined;
       }
+      if (payload.home_path === undefined || payload.home_path === '') {
+        payload.home_path = null;
+      }
       if (isEdit && editUuid) {
         await updateRole(editUuid, payload as UpdateRoleData);
         messageApi.success(t('pages.system.updateSuccess'));
@@ -80,6 +96,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
         await createRole(payload as CreateRoleData);
         messageApi.success(t('pages.system.createSuccess'));
       }
+      void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
       onClose();
       formRef.current?.resetFields();
       onSuccess();
@@ -109,6 +126,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       layout="vertical"
     >
       <SchemaFormRenderer schema={roleFormSchema} isEdit={isEdit} />
+      <RoleHomePathSelect menuTree={menuTree} />
     </FormModalTemplate>
   );
 };

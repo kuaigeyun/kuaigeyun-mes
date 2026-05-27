@@ -8,10 +8,46 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._data_scope import (
+    RESOURCE_TRIAL_RECORD,
+    RESOURCE_TRIAL_SHEET,
+    apply_trial_sheet_scope,
+    assert_trial_row_visible,
+    assert_trial_supplier_code_writable,
+)
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids, validate_report_notify_users
+from apps.haoligo.constants.mold_trial_failure_handling import (
+    TRIAL_FAILURE_HANDLING_DISPATCHED,
+    TRIAL_FAILURE_HANDLING_RECALLED,
+)
+from apps.haoligo.services.trial_sheet_side_effects import (
+    create_replacement_trial_sheet_after_recall,
+    dispatch_trial_pending_sheet,
+    recall_trial_failure_sheet,
+    apply_trial_failure_after_save,
+    list_supplier_notify_preview,
+    list_trial_repair_notify_preview,
+    resolve_supplier_by_name,
+    validate_failure_handling_payload,
+)
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_TRIAL_SHEET_NO
 from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
+from apps.haoligo.api._mold_sheet_audit import (
+    apply_rejected_resubmit_fields,
+    assert_approved_for_revoke,
+    assert_pending_for_audit,
+    assert_sheet_mutation_allowed,
+    effective_sheet_status,
+)
+from apps.haoligo.constants.mold_sheet_audit import (
+    SHEET_AUDIT_STATUS_SET,
+    SHEET_STATUS_APPROVED,
+    SHEET_STATUS_PENDING,
+    SHEET_STATUS_REJECTED,
+)
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -49,10 +85,18 @@ class MoldTrialSheetOut(BaseModel):
     mold_code: Optional[str] = None
     mold_name: Optional[str] = None
     trial_times: Optional[int] = None
+    trial_user_id: Optional[int] = None
+    trial_user_name: Optional[str] = None
+    failure_handling: Optional[str] = None
+    pending_notify_user_ids: List[int] = Field(default_factory=list)
+    repair_warehouse_id: Optional[int] = None
+    dispatch_origin_warehouse_id: Optional[int] = None
     result_attachment_file_uuids: List[str] = Field(default_factory=list)
     inspection_attachment_file_uuids: List[str] = Field(default_factory=list)
     trial_result: str
     sheet_status: str
+    audited_at: Optional[datetime] = None
+    audited_by_user_id: Optional[int] = None
     created_at: datetime
 
 
@@ -61,11 +105,13 @@ class MoldTrialSheetCreate(BaseModel):
     supplier_name: Optional[str] = Field(None, max_length=200)
     mold_code: Optional[str] = Field(None, max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
-    trial_times: Optional[int] = Field(None, ge=0)
     result_attachment_file_uuids: Optional[List[str]] = None
     inspection_attachment_file_uuids: Optional[List[str]] = None
     trial_result: TrialResultLiteral
-    sheet_status: SheetStatusLiteral = "草稿"
+    trial_user_id: Optional[int] = Field(None, ge=1)
+    failure_handling: Optional[str] = None
+    pending_notify_user_ids: Optional[List[int]] = None
+    repair_warehouse_id: Optional[int] = Field(None, ge=1)
 
     @field_validator("purchase_order_no", mode="before")
     @classmethod
@@ -89,11 +135,43 @@ class MoldTrialSheetUpdate(BaseModel):
     supplier_name: Optional[str] = Field(None, max_length=200)
     mold_code: Optional[str] = Field(None, max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
-    trial_times: Optional[int] = Field(None, ge=0)
     result_attachment_file_uuids: Optional[List[str]] = None
     inspection_attachment_file_uuids: Optional[List[str]] = None
     trial_result: Optional[TrialResultLiteral] = None
-    sheet_status: Optional[SheetStatusLiteral] = None
+    trial_user_id: Optional[int] = Field(None, ge=1)
+    failure_handling: Optional[str] = None
+    pending_notify_user_ids: Optional[List[int]] = None
+    repair_warehouse_id: Optional[int] = Field(None, ge=1)
+
+
+class MoldTrialSupplierNotifyUserOut(BaseModel):
+    id: int
+    name: str
+
+
+class MoldTrialSupplierNotifyPreviewOut(BaseModel):
+    items: List[MoldTrialSupplierNotifyUserOut] = Field(default_factory=list)
+
+
+class MoldTrialNextTimesOut(BaseModel):
+    trial_times: int = Field(description="本单试模次数（第几次，创建时自动写入）")
+
+
+class MoldTrialDispatchIn(BaseModel):
+    target_warehouse_id: int = Field(..., ge=1, description="接收仓库（供应商外部模具仓库）")
+
+
+class MoldTrialRecallIn(BaseModel):
+    target_warehouse_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="收回目标仓库；不传则使用发出前记录的仓库",
+    )
+
+
+class MoldTrialRecallRetrialOut(BaseModel):
+    recalled: MoldTrialSheetOut
+    new_sheet: MoldTrialSheetOut
 
 
 class MoldTrialDatasetBindingOut(BaseModel):
@@ -120,6 +198,39 @@ async def _not_found():
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
 
 
+async def _resolve_trial_supplier_fields(
+    tenant_id: int,
+    supplier_name: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    name = (supplier_name or "").strip() or None
+    if not name:
+        return None, None
+    sup = await resolve_supplier_by_name(tenant_id, name)
+    if sup:
+        resolved_name = (sup.name or "").strip() or name
+        resolved_code = (sup.code or "").strip() or None
+        return resolved_name, resolved_code
+    return name, None
+
+
+async def _resolve_next_trial_times(
+    tenant_id: int,
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+) -> int:
+    """按模具代号（优先）或采购订单号统计已有试模单数，本单为第 N 次（每张单计 1）。"""
+    mc = (mold_code or "").strip()
+    if mc:
+        n = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(mold_code=mc).count()
+        return n + 1
+    po = (purchase_order_no or "").strip()
+    if po:
+        n = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(purchase_order_no=po).count()
+        return n + 1
+    return 1
+
+
 def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
     return MoldTrialSheetOut(
         id=row.id,
@@ -130,10 +241,18 @@ def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         mold_code=row.mold_code,
         mold_name=row.mold_name,
         trial_times=row.trial_times,
+        trial_user_id=row.trial_user_id,
+        trial_user_name=row.trial_user_name,
+        failure_handling=row.failure_handling,
+        pending_notify_user_ids=normalize_report_user_ids(row.pending_notify_user_ids),
+        repair_warehouse_id=row.repair_warehouse_id,
+        dispatch_origin_warehouse_id=getattr(row, "dispatch_origin_warehouse_id", None),
         result_attachment_file_uuids=list(row.result_attachment_file_uuids or []),
         inspection_attachment_file_uuids=list(row.inspection_attachment_file_uuids or []),
         trial_result=row.trial_result,
-        sheet_status=row.sheet_status,
+        sheet_status=effective_sheet_status(row),
+        audited_at=getattr(row, "audited_at", None),
+        audited_by_user_id=getattr(row, "audited_by_user_id", None),
         created_at=row.created_at,
     )
 
@@ -199,7 +318,7 @@ async def put_trial_dataset_binding(
 @router.get("", summary="试模单分页列表")
 async def list_trial_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     sheet_status: Optional[str] = Query(None, description="按单据状态筛选（兼容旧参数）"),
@@ -209,8 +328,11 @@ async def list_trial_sheets(
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
 ):
     qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id)
-    if sheet_status:
-        qs = qs.filter(sheet_status=sheet_status)
+    st = (sheet_status or "").strip()
+    if st and st in SHEET_AUDIT_STATUS_SET:
+        qs = qs.filter(sheet_status=st)
+    elif st:
+        qs = qs.filter(sheet_status=st)
     if trial_result and trial_result.strip():
         qs = qs.filter(trial_result=trial_result.strip())
     if keyword and keyword.strip():
@@ -221,11 +343,15 @@ async def list_trial_sheets(
             | Q(mold_code__icontains=k)
             | Q(mold_name__icontains=k)
             | Q(supplier_name__icontains=k)
+            | Q(trial_user_name__icontains=k)
         )
     if created_from is not None:
         qs = qs.filter(created_at__gte=created_from)
     if created_to is not None:
         qs = qs.filter(created_at__lte=created_to)
+    qs = await apply_trial_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
@@ -240,37 +366,115 @@ async def list_trial_sheets(
 async def create_trial_sheet(
     body: MoldTrialSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     try:
         sheet_no = await generate_mold_sheet_no(tenant_id, HAOLIGO_MOLD_TRIAL_SHEET_NO)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    mold_code = (body.mold_code or "").strip() or None
+    trial_times = await _resolve_next_trial_times(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=body.purchase_order_no,
+    )
+    trial_uid = body.trial_user_id if body.trial_user_id is not None else user.id
+    trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(trial_uid))
+    fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+        trial_result=body.trial_result,
+        failure_handling=body.failure_handling,
+        pending_notify_user_ids=body.pending_notify_user_ids,
+        repair_warehouse_id=body.repair_warehouse_id,
+    )
+    if notify_ids:
+        await validate_report_notify_users(tenant_id, notify_ids)
+    supplier_name, supplier_code = await _resolve_trial_supplier_fields(tenant_id, body.supplier_name)
+    await assert_trial_supplier_code_writable(
+        tenant_id=tenant_id,
+        user=user,
+        resource=RESOURCE_TRIAL_SHEET,
+        supplier_code=supplier_code,
+    )
     row = await HaoligoMoldTrialSheet.create(
         tenant_id=tenant_id,
         sheet_no=sheet_no,
         purchase_order_no=body.purchase_order_no,
-        supplier_name=(body.supplier_name or "").strip() or None,
-        mold_code=(body.mold_code or "").strip() or None,
+        supplier_name=supplier_name,
+        supplier_code=supplier_code,
+        mold_code=mold_code,
         mold_name=(body.mold_name or "").strip() or None,
-        trial_times=body.trial_times,
+        trial_times=trial_times,
+        trial_user_id=trial_uid,
+        trial_user_name=trial_uname,
+        failure_handling=fh_mode,
+        pending_notify_user_ids=notify_ids,
+        repair_warehouse_id=repair_wh_id,
         result_attachment_file_uuids=_norm_uuid_list(body.result_attachment_file_uuids),
         inspection_attachment_file_uuids=_norm_uuid_list(body.inspection_attachment_file_uuids),
         trial_result=body.trial_result,
-        sheet_status=body.sheet_status,
+        sheet_status=SHEET_STATUS_PENDING,
     )
     return _serialize(row)
+
+
+@router.get(
+    "/supplier-notify-preview",
+    response_model=MoldTrialSupplierNotifyPreviewOut,
+    summary="预览试模单供应商绑定用户（待处理抄送）",
+)
+async def preview_supplier_notify_users(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    supplier_name: Optional[str] = Query(None, description="供应商名称（与试模单一致）"),
+):
+    items = await list_supplier_notify_preview(tenant_id, supplier_name)
+    return MoldTrialSupplierNotifyPreviewOut(
+        items=[MoldTrialSupplierNotifyUserOut(id=x["id"], name=x["name"]) for x in items],
+    )
+
+
+@router.get(
+    "/repair-notify-preview",
+    response_model=MoldTrialSupplierNotifyPreviewOut,
+    summary="预览试模单立即送修站内信接收人",
+)
+async def preview_repair_notify_users(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    supplier_name: Optional[str] = Query(None, description="供应商名称"),
+    trial_user_id: Optional[int] = Query(None, ge=1, description="试模人员用户 ID"),
+):
+    items = await list_trial_repair_notify_preview(tenant_id, supplier_name, trial_user_id)
+    return MoldTrialSupplierNotifyPreviewOut(
+        items=[MoldTrialSupplierNotifyUserOut(id=x["id"], name=x["name"]) for x in items],
+    )
+
+
+@router.get("/next-trial-times", response_model=MoldTrialNextTimesOut, summary="预览本单为第几次试模")
+async def preview_next_trial_times(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    mold_code: Optional[str] = Query(None, description="模具代号（优先）"),
+    purchase_order_no: Optional[str] = Query(None, description="采购订单号（无模具代号时按订单统计）"),
+):
+    n = await _resolve_next_trial_times(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=purchase_order_no,
+    )
+    return MoldTrialNextTimesOut(trial_times=n)
 
 
 @router.get("/{row_id}", response_model=MoldTrialSheetOut, summary="试模单详情")
 async def get_trial_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     return _serialize(row)
 
 
@@ -279,12 +483,48 @@ async def update_trial_sheet(
     row_id: int,
     body: MoldTrialSheetUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    assert_sheet_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
+    data.pop("sheet_status", None)
+    body_set = set(data.keys())
+    data.pop("trial_times", None)
+    effective_result = str(data.get("trial_result", row.trial_result) or "").strip()
+    row_fh = (row.failure_handling or "").strip()
+    skip_fh_validation = row_fh in (
+        TRIAL_FAILURE_HANDLING_DISPATCHED,
+        TRIAL_FAILURE_HANDLING_RECALLED,
+    ) and "failure_handling" not in body_set
+    if skip_fh_validation and "failure_handling" in data:
+        data.pop("failure_handling", None)
+    if not skip_fh_validation and (
+        effective_result == "不合格"
+        or any(
+            k in body_set
+            for k in ("failure_handling", "pending_notify_user_ids", "repair_warehouse_id", "trial_result")
+        )
+    ):
+        fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+            trial_result=effective_result,
+            failure_handling=data.get("failure_handling", row.failure_handling),
+            pending_notify_user_ids=data.get("pending_notify_user_ids", row.pending_notify_user_ids),
+            repair_warehouse_id=data.get("repair_warehouse_id", row.repair_warehouse_id),
+        )
+        if notify_ids:
+            await validate_report_notify_users(tenant_id, notify_ids)
+        data["failure_handling"] = fh_mode
+        data["pending_notify_user_ids"] = notify_ids
+        data["repair_warehouse_id"] = repair_wh_id
+    elif effective_result == "合格":
+        data["failure_handling"] = None
+        data["pending_notify_user_ids"] = []
+        data["repair_warehouse_id"] = None
+        data["dispatch_origin_warehouse_id"] = None
     if "purchase_order_no" in data:
         if data["purchase_order_no"] is None:
             pass
@@ -297,15 +537,159 @@ async def update_trial_sheet(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="采购订单号与模具代号不能同时为空",
                 )
-    for k in ("supplier_name", "mold_code", "mold_name"):
+    if "supplier_name" in data:
+        sname, scode = await _resolve_trial_supplier_fields(
+            tenant_id,
+            data.get("supplier_name", row.supplier_name),
+        )
+        data["supplier_name"] = sname
+        data["supplier_code"] = scode
+        await assert_trial_supplier_code_writable(
+            tenant_id=tenant_id,
+            user=user,
+            resource=RESOURCE_TRIAL_SHEET,
+            supplier_code=scode,
+        )
+    for k in ("mold_code", "mold_name"):
         if k in data and data[k] is not None:
             data[k] = str(data[k]).strip() or None
     if "result_attachment_file_uuids" in data and data["result_attachment_file_uuids"] is not None:
         data["result_attachment_file_uuids"] = _norm_uuid_list(data["result_attachment_file_uuids"])
     if "inspection_attachment_file_uuids" in data and data["inspection_attachment_file_uuids"] is not None:
         data["inspection_attachment_file_uuids"] = _norm_uuid_list(data["inspection_attachment_file_uuids"])
+    if "pending_notify_user_ids" in data and data["pending_notify_user_ids"] is not None:
+        data["pending_notify_user_ids"] = normalize_report_user_ids(data["pending_notify_user_ids"])
+    if "trial_user_id" in data and data["trial_user_id"] is not None:
+        trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(data["trial_user_id"]))
+        data["trial_user_id"] = trial_uid
+        data["trial_user_name"] = trial_uname
+    apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
+    await row.save()
+    return _serialize(row)
+
+
+@router.post("/{row_id}/approve", response_model=MoldTrialSheetOut, summary="审核通过试模单")
+async def approve_trial_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_APPROVED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    if (row.trial_result or "").strip() == "不合格":
+        await apply_trial_failure_after_save(tenant_id, row, send_notify=True)
+    return _serialize(row)
+
+
+@router.post("/{row_id}/reject", response_model=MoldTrialSheetOut, summary="审核驳回试模单")
+async def reject_trial_sheet(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    assert_pending_for_audit(row)
+    row.sheet_status = SHEET_STATUS_REJECTED
+    row.audited_at = timezone.now()
+    row.audited_by_user_id = user.id
+    await row.save()
+    return _serialize(row)
+
+
+@router.post("/{row_id}/dispatch", response_model=MoldTrialSheetOut, summary="待处理试模单发出至供应商仓")
+async def dispatch_trial_sheet(
+    row_id: int,
+    body: MoldTrialDispatchIn,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    await dispatch_trial_pending_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    return _serialize(row)
+
+
+@router.post("/{row_id}/recall", response_model=MoldTrialSheetOut, summary="已发出/立即送修试模单收回")
+async def recall_trial_sheet(
+    row_id: int,
+    body: MoldTrialRecallIn,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    return _serialize(row)
+
+
+@router.post(
+    "/{row_id}/recall-and-retrial",
+    response_model=MoldTrialRecallRetrialOut,
+    summary="收回试模单并自动生成下一试模单",
+)
+async def recall_trial_sheet_and_retrial(
+    row_id: int,
+    body: MoldTrialRecallIn,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    try:
+        new_row = await create_replacement_trial_sheet_after_recall(
+            tenant_id,
+            source_row=row,
+            operator_user_id=user.id,
+            resolve_applicant=_resolve_applicant_only,
+            resolve_next_trial_times=_resolve_next_trial_times,
+            generate_sheet_no=generate_mold_sheet_no,
+            sheet_no_rule_code=HAOLIGO_MOLD_TRIAL_SHEET_NO,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    return MoldTrialRecallRetrialOut(recalled=_serialize(row), new_sheet=_serialize(new_row))
+
+
+@router.post(
+    "/{row_id}/revoke-approval",
+    response_model=MoldTrialSheetOut,
+    summary="撤销试模单审核（已通过→待审核）",
+)
+async def revoke_trial_sheet_approval(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if not row:
+        await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    assert_approved_for_revoke(row)
+    row.sheet_status = SHEET_STATUS_PENDING
+    row.audited_at = None
+    row.audited_by_user_id = None
     await row.save()
     return _serialize(row)
 
@@ -314,10 +698,12 @@ async def update_trial_sheet(
 async def delete_trial_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    assert_sheet_mutation_allowed(row)
     row.deleted_at = timezone.now()
     await row.save()

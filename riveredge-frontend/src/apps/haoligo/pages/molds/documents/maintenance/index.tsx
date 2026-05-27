@@ -16,7 +16,7 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
@@ -24,69 +24,42 @@ import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/lay
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
-import { getFileDownloadUrl, uploadFile } from '../../../../../../services/file';
-import type { DepartmentTreeItem } from '../../../../../../services/department';
-import { getDepartmentTree } from '../../../../../../services/department';
-import { getUserList } from '../../../../../../services/user';
-import { useGlobalStore } from '../../../../../../stores';
+import { uploadFile } from '../../../../../../services/file';
+import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
+import { UniUserIdSelect } from '../../../../../../components/uni-user-id-select';
+import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import {
+  approveMoldMaintenanceSheet,
   createMoldMaintenanceSheet,
   deleteMoldMaintenanceSheet,
   getMoldMaintenanceSheet,
   listMoldMaintenanceSheets,
   listMolds,
+  rejectMoldMaintenanceSheet,
+  revokeMoldMaintenanceSheetApproval,
   updateMoldMaintenanceSheet,
   type MoldMaintenanceSheetCreatePayload,
   type MoldMaintenanceSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
+import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 
-/** 首屏只拉少量用户，其余靠下拉内搜索（keyword）加载，减轻 JSON 解析与 Select 首帧压力 */
-const APPLICANT_BOOTSTRAP_PAGE_SIZE = 120;
+const HAOLIGO_MAINTENANCE_RESOURCE = 'haoligo:molds-documents-maintenance';
 
-function collectLeafDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = [];
-  for (const n of items) {
-    if (n.children?.length) {
-      out.push(...collectLeafDepartmentOptions(n.children));
-    } else {
-      out.push({ label: n.name, value: n.uuid });
-    }
-  }
-  return out;
-}
-
-function findDeptNodeByUuid(items: DepartmentTreeItem[], uuid: string): DepartmentTreeItem | null {
-  for (const n of items) {
-    if (n.uuid === uuid) return n;
-    if (n.children?.length) {
-      const f = findDeptNodeByUuid(n.children, uuid);
-      if (f) return f;
-    }
-  }
-  return null;
-}
-
-/** 取该节点下第一个末级部门（深度优先，先序） */
-function firstLeafUuidUnder(node: DepartmentTreeItem): string {
-  if (!node.children?.length) return node.uuid;
-  for (const c of node.children) {
-    return firstLeafUuidUnder(c);
-  }
-  return node.uuid;
-}
-
-function resolveDefaultLeafDeptUuid(
-  tree: DepartmentTreeItem[],
-  userDeptUuid: string | undefined,
-): string | undefined {
-  const u = (userDeptUuid || '').trim();
-  if (!u || !tree.length) return undefined;
-  const node = findDeptNodeByUuid(tree, u);
-  if (!node) return undefined;
-  return firstLeafUuidUnder(node);
-}
+const sheetStatusEnum: Record<string, { text: string }> = {
+  待审核: { text: '待审核' },
+  已通过: { text: '已通过' },
+  已驳回: { text: '已驳回' },
+};
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -101,16 +74,10 @@ function normUploadUuids(val: unknown): string[] {
   return out;
 }
 
-function uuidsToUploadFileList(uuids: string[] | undefined): UploadFile[] {
-  if (!uuids?.length) return [];
-  return uuids.map((uuid) => ({
-    uid: uuid,
-    name: '附件',
-    status: 'done',
-    url: getFileDownloadUrl(uuid),
-    response: { uuid },
-  }));
-}
+type DetailAttachmentPreview = {
+  header: string[];
+  byMold: Record<string, string[]>;
+};
 
 const defaultLineItem = () => ({
   mold_code: '',
@@ -121,16 +88,18 @@ const defaultLineItem = () => ({
 
 const MoldMaintenancePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
-  const applicantLabelByIdRef = useRef<Map<number, string>>(new Map());
-  const applicantBootstrapOptionsRef = useRef<{ label: string; value: number }[]>([]);
-  const applicantSearchSeqRef = useRef(0);
-  const applicantSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
-  /** 新建时复用下拉数据，减少重复请求（编辑带 extras 会跳过缓存） */
-  const tenantFormOptionsValidUntilRef = useRef(0);
+  const {
+    applicantPresetUsers,
+    leafDeptOptions,
+    onApplicantPicked,
+    preloadTenantFormOptions,
+    getCreateApplicantDefaults,
+    resolveInitDepartmentUuid,
+    presetFromApplicantRow,
+  } = useApplicantUserIdField(formRef);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isDetailView, setIsDetailView] = useState(false);
@@ -138,178 +107,21 @@ const MoldMaintenancePage: React.FC = () => {
   const [formOptionsReady, setFormOptionsReady] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [auditSheetStatus, setAuditSheetStatus] = useState<string>('待审核');
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
-  const [applicantOptions, setApplicantOptions] = useState<{ label: string; value: number }[]>([]);
-  const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
   const [moldPickRow, setMoldPickRow] = useState<number | null>(null);
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
-
-  useEffect(() => {
-    if (modalVisible) return;
-    if (applicantSearchTimerRef.current) {
-      clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = null;
-    }
-    applicantSearchSeqRef.current += 1;
-  }, [modalVisible]);
+  const [detailAttachmentPreview, setDetailAttachmentPreview] = useState<DetailAttachmentPreview | null>(null);
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of leafDeptOptions) m.set(o.value, o.label);
     return m;
   }, [leafDeptOptions]);
-
-  const loadLeafDepartments = useCallback(async () => {
-    try {
-      const tree = await getDepartmentTree({ is_active: true });
-      const items = tree.items || [];
-      departmentTreeRef.current = items;
-      setLeafDeptOptions(collectLeafDepartmentOptions(items));
-    } catch {
-      departmentTreeRef.current = [];
-      setLeafDeptOptions([]);
-    }
-  }, []);
-
-  const bootstrapApplicantOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const emptyDept = new Map<number, string>();
-      const emptyLabel = new Map<number, string>();
-      try {
-        const res = await getUserList({
-          page: 1,
-          page_size: APPLICANT_BOOTSTRAP_PAGE_SIZE,
-          is_active: true,
-        });
-        const deptMap = new Map<number, string>();
-        const labelMap = new Map<number, string>();
-        const opts: { label: string; value: number }[] = [];
-        for (const u of res.items || []) {
-          const person = (u.full_name || '').trim() || u.username;
-          deptMap.set(u.id, (u.department?.uuid || '').trim());
-          labelMap.set(u.id, person);
-          opts.push({ value: u.id, label: person });
-        }
-        const cu = useGlobalStore.getState().currentUser;
-        if (cu?.id != null && Number.isFinite(cu.id) && !deptMap.has(cu.id)) {
-          const person = (cu.full_name || '').trim() || cu.username || `用户#${cu.id}`;
-          deptMap.set(cu.id, (cu.department?.uuid || '').trim());
-          labelMap.set(cu.id, person);
-          opts.unshift({ value: cu.id, label: person });
-        }
-        for (const ex of extras || []) {
-          if (!deptMap.has(ex.id)) {
-            deptMap.set(ex.id, (ex.deptUuid || '').trim());
-            labelMap.set(ex.id, ex.name);
-            opts.push({ value: ex.id, label: ex.name });
-          }
-        }
-        applicantDeptUuidByUserIdRef.current = deptMap;
-        applicantLabelByIdRef.current = labelMap;
-        applicantBootstrapOptionsRef.current = opts.slice();
-        setApplicantOptions(opts);
-      } catch {
-        applicantDeptUuidByUserIdRef.current = emptyDept;
-        applicantLabelByIdRef.current = emptyLabel;
-        applicantBootstrapOptionsRef.current = [];
-        setApplicantOptions([]);
-      }
-    },
-    [],
-  );
-
-  const flushApplicantSearch = useCallback(async (keyword: string) => {
-    const seq = ++applicantSearchSeqRef.current;
-    const kw = keyword.trim();
-    if (!kw) {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-      return;
-    }
-    try {
-      const res = await getUserList({ page: 1, page_size: 50, is_active: true, keyword: kw });
-      if (seq !== applicantSearchSeqRef.current) return;
-      const deptMap = applicantDeptUuidByUserIdRef.current;
-      const labelMap = applicantLabelByIdRef.current;
-      const next: { label: string; value: number }[] = [];
-      for (const u of res.items || []) {
-        const person = (u.full_name || '').trim() || u.username;
-        deptMap.set(u.id, (u.department?.uuid || '').trim());
-        labelMap.set(u.id, person);
-        next.push({ value: u.id, label: person });
-      }
-      const inst = formRef.current;
-      const selId = inst?.getFieldValue('applicant_user_id') as number | undefined;
-      if (selId != null && Number.isFinite(selId) && !next.some((o) => o.value === selId)) {
-        const g = useGlobalStore.getState();
-        const cu = g.currentUser;
-        const lab =
-          labelMap.get(selId) ||
-          (cu?.id === selId
-            ? ((cu.full_name || '').trim() || cu.username || `用户#${selId}`)
-            : `用户#${selId}`);
-        const du =
-          (deptMap.get(selId) || '').trim() ||
-          (cu?.id === selId ? (cu.department?.uuid || '').trim() : '');
-        deptMap.set(selId, du);
-        labelMap.set(selId, lab);
-        next.unshift({ value: selId, label: lab });
-      }
-      setApplicantOptions(next);
-    } catch {
-      if (seq !== applicantSearchSeqRef.current) return;
-      setApplicantOptions(applicantBootstrapOptionsRef.current.slice());
-    }
-  }, []);
-
-  const scheduleApplicantSearch = useCallback(
-    (raw: string) => {
-      if (applicantSearchTimerRef.current) clearTimeout(applicantSearchTimerRef.current);
-      applicantSearchTimerRef.current = setTimeout(() => {
-        applicantSearchTimerRef.current = null;
-        void flushApplicantSearch(raw);
-      }, 280);
-    },
-    [flushApplicantSearch],
-  );
-
-  const preloadTenantFormOptions = useCallback(
-    async (extras?: { id: number; name: string; deptUuid?: string }[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const warm =
-        !extras &&
-        now < tenantFormOptionsValidUntilRef.current &&
-        applicantDeptUuidByUserIdRef.current.size > 0 &&
-        departmentTreeRef.current.length > 0;
-      if (warm) return;
-      await Promise.all([bootstrapApplicantOptions(extras), loadLeafDepartments()]);
-      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
-    },
-    [bootstrapApplicantOptions, loadLeafDepartments],
-  );
-
-  const syncDefaultDepartmentForApplicant = useCallback((userId: number | undefined) => {
-    const inst = formRef.current;
-    if (!inst) return;
-    if (userId == null || !Number.isFinite(userId)) {
-      inst.setFieldsValue({ department_uuid: undefined });
-      return;
-    }
-    const tree = departmentTreeRef.current;
-    let userDeptUuid = (applicantDeptUuidByUserIdRef.current.get(userId) || '').trim();
-    if (!userDeptUuid) {
-      const cu = useGlobalStore.getState().currentUser;
-      if (cu?.id === userId && cu.department?.uuid) userDeptUuid = cu.department.uuid.trim();
-    }
-    const leaf = resolveDefaultLeafDeptUuid(tree, userDeptUuid || undefined);
-    if (leaf) inst.setFieldsValue({ department_uuid: leaf });
-    else inst.setFieldsValue({ department_uuid: undefined });
-  }, []);
 
   const loadMoldsForPicker = useCallback(async () => {
     setMoldLoading(true);
@@ -334,7 +146,8 @@ const MoldMaintenancePage: React.FC = () => {
   }, [moldRows, moldKw]);
 
   const uploadFieldProps = useMemo(
-    (): Partial<UploadProps> => ({
+    (): Partial<UploadProps> =>
+      withMoldPictureCardUploadClass({
       listType: 'picture-card',
       accept: '.jpg,.jpeg,.png,.gif,.webp',
       beforeUpload: (file) => {
@@ -354,11 +167,12 @@ const MoldMaintenancePage: React.FC = () => {
           options.onError?.(err instanceof Error ? err : new Error(String(err)));
         }
       },
-    }),
+      }),
     [messageApi],
   );
 
   const handleCreate = useCallback(() => {
+    setDetailAttachmentPreview(null);
     setIsDetailView(false);
     setIsEdit(false);
     setEditId(null);
@@ -367,18 +181,10 @@ const MoldMaintenancePage: React.FC = () => {
     void (async () => {
       try {
         await preloadTenantFormOptions(undefined);
-        const tree = departmentTreeRef.current;
-        const cu = useGlobalStore.getState().currentUser;
-        const uid = cu?.id;
-        let deptUuid: string | undefined;
-        if (uid != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-          deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-        }
+        const applicantDefaults = getCreateApplicantDefaults();
         setFormInitialValues({
           service_type: '维修',
-          applicant_user_id: uid,
-          department_uuid: deptUuid,
+          ...applicantDefaults,
           source_order_no: undefined,
           header_attachments: [],
           line_items: [defaultLineItem()],
@@ -390,7 +196,7 @@ const MoldMaintenancePage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [messageApi, preloadTenantFormOptions]);
+  }, [messageApi, preloadTenantFormOptions, getCreateApplicantDefaults]);
 
   const handleMainModalCancel = useCallback(() => {
     setModalVisible(false);
@@ -398,6 +204,7 @@ const MoldMaintenancePage: React.FC = () => {
     setMoldPickRow(null);
     setFormOptionsReady(false);
     setIsDetailView(false);
+    setDetailAttachmentPreview(null);
   }, []);
 
   useNewShortcut(handleCreate);
@@ -412,34 +219,43 @@ const MoldMaintenancePage: React.FC = () => {
       try {
         const d = await getMoldMaintenanceSheet(record.id);
         setEditId(d.id);
-        const extras =
-          d.applicant_user_id != null
-            ? [
-                {
-                  id: d.applicant_user_id,
-                  name: (d.applicant_name || '').trim() || `用户#${d.applicant_user_id}`,
-                  deptUuid: (d.department_uuid || '').trim(),
-                },
-              ]
-            : undefined;
-        await preloadTenantFormOptions(extras);
-        let initDept = (d.department_uuid || '').trim();
-        if (!initDept && d.applicant_user_id != null) {
-          const uu = (applicantDeptUuidByUserIdRef.current.get(d.applicant_user_id) || '').trim();
-          initDept = resolveDefaultLeafDeptUuid(departmentTreeRef.current, uu) || '';
+        setAuditSheetStatus(d.sheet_status);
+        const preset = presetFromApplicantRow(d);
+        await preloadTenantFormOptions(preset ? [preset] : undefined);
+        const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
+        const byMold: Record<string, string[]> = {};
+        for (const it of d.line_items || []) {
+          const mc = String(it.mold_code ?? '').trim();
+          if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
         }
+        setDetailAttachmentPreview(
+          detailOnly ? { header: [...(d.header_attachment_file_uuids || [])], byMold } : null,
+        );
+        const header_attachments = detailOnly
+          ? []
+          : await uuidsToSecureUploadFileList(d.header_attachment_file_uuids);
+        const line_items = detailOnly
+          ? (d.line_items || []).map((it) => ({
+              mold_code: it.mold_code,
+              mold_name: it.mold_name ?? '',
+              repair_reason: it.repair_reason,
+              item_attachments: [] as UploadFile[],
+            }))
+          : await Promise.all(
+              (d.line_items || []).map(async (it) => ({
+                mold_code: it.mold_code,
+                mold_name: it.mold_name ?? '',
+                repair_reason: it.repair_reason,
+                item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
+              })),
+            );
         setFormInitialValues({
           service_type: d.service_type,
           applicant_user_id: d.applicant_user_id ?? undefined,
-          department_uuid: initDept || undefined,
+          department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
-          header_attachments: uuidsToUploadFileList(d.header_attachment_file_uuids),
-          line_items: (d.line_items || []).map((it) => ({
-            mold_code: it.mold_code,
-            mold_name: it.mold_name ?? '',
-            repair_reason: it.repair_reason,
-            item_attachments: uuidsToUploadFileList(it.attachment_file_uuids),
-          })),
+          header_attachments,
+          line_items,
         });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
@@ -447,9 +263,10 @@ const MoldMaintenancePage: React.FC = () => {
         setModalVisible(false);
         setFormOptionsReady(false);
         setIsDetailView(false);
+        setDetailAttachmentPreview(null);
       }
     },
-    [messageApi, preloadTenantFormOptions],
+    [messageApi, preloadTenantFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid],
   );
 
   const handleEdit = useCallback(
@@ -584,19 +401,10 @@ const MoldMaintenancePage: React.FC = () => {
 
   const onResetForm = () => {
     if (!formOptionsReady) return;
-    const tree = departmentTreeRef.current;
-    const cu = useGlobalStore.getState().currentUser;
-    const uid = cu?.id;
-    let deptUuid: string | undefined;
-    if (uid != null) {
-      const uu = (applicantDeptUuidByUserIdRef.current.get(uid) || cu?.department?.uuid || '').trim();
-      deptUuid = resolveDefaultLeafDeptUuid(tree, uu || undefined);
-    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       service_type: '维修',
-      applicant_user_id: uid,
-      department_uuid: deptUuid,
+      ...getCreateApplicantDefaults(),
       header_attachments: [],
       line_items: [defaultLineItem()],
     });
@@ -642,25 +450,70 @@ const MoldMaintenancePage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => r.line_items?.length ?? 0,
     },
+    {
+      title: '审核状态',
+      dataIndex: 'sheet_status',
+      width: 100,
+      valueType: 'select',
+      valueEnum: sheetStatusEnum,
+      fieldProps: { allowClear: true },
+      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
+    },
     moldDocumentCreatedAtColumn<MoldMaintenanceSheetRow>(),
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 280,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+      uniActionRenderOptions: MOLD_SHEET_TABLE_ACTION_OPTIONS,
+      render: (_, record) => {
+        const approved = isMoldSheetApproved(record.sheet_status);
+        const auditHandlers = {
+          onApprove: () => approveMoldMaintenanceSheet(record.id),
+          onReject: () => rejectMoldMaintenanceSheet(record.id),
+          onRevoke: () => revokeMoldMaintenanceSheetApproval(record.id),
+        };
+        const actions: React.ReactNode[] = [
+          <Button
+            key="detail"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => void handleDetail(record)}
+          >
             详情
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+          </Button>,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            disabled={approved}
+            onClick={() => void handleEdit(record)}
+          >
             编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          </Button>,
+          <Button
+            key="delete"
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            disabled={approved}
+            onClick={() => handleDeleteOne(record)}
+          >
             删除
-          </Button>
-        </Space>
-      ),
+          </Button>,
+          ...buildMoldSheetAuditActionElements({
+            canAudit: canAuditMoldSheet(currentUser, HAOLIGO_MAINTENANCE_RESOURCE),
+            sheetStatus: record.sheet_status,
+            handlers: auditHandlers,
+            messageApi,
+            reload: () => actionRef.current?.reload(),
+          }),
+        ];
+        return renderRowActionsOverflow(actions, `maint-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
+      },
     },
   ];
 
@@ -685,6 +538,10 @@ const MoldMaintenancePage: React.FC = () => {
               const res = await listMoldMaintenanceSheets({
                 skip,
                 limit: pageSize,
+                sheet_status:
+                  typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
+                    ? searchFormValues.sheet_status
+                    : undefined,
                 keyword:
                   typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
                     ? searchFormValues.keyword.trim()
@@ -707,7 +564,30 @@ const MoldMaintenancePage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          isDetailView ? (
+          isDetailView && editId != null ? (
+            <MoldSheetDetailAuditFooter
+              resource={HAOLIGO_MAINTENANCE_RESOURCE}
+              sheetStatus={auditSheetStatus}
+              onClose={handleMainModalCancel}
+              onReload={() => {
+                actionRef.current?.reload();
+                if (editId != null) {
+                  void getMoldMaintenanceSheet(editId).then((d) => setAuditSheetStatus(d.sheet_status));
+                }
+              }}
+              handlers={{
+                onApprove: async () => {
+                  await approveMoldMaintenanceSheet(editId);
+                },
+                onReject: async () => {
+                  await rejectMoldMaintenanceSheet(editId);
+                },
+                onRevoke: async () => {
+                  await revokeMoldMaintenanceSheetApproval(editId);
+                },
+              }}
+            />
+          ) : isDetailView ? (
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button htmlType="button" onClick={handleMainModalCancel}>
                 关闭
@@ -771,23 +651,13 @@ const MoldMaintenancePage: React.FC = () => {
             >
               <Row gutter={16}>
                 <Col span={12}>
-                  <ProFormSelect
+                  <UniUserIdSelect
                     name="applicant_user_id"
                     label="申请人"
-                    placeholder="可选中后搜索更多用户"
-                    rules={[{ required: true, message: '请选择申请人' }]}
-                    options={applicantOptions}
-                    showSearch
-                    fieldProps={{
-                      virtual: true,
-                      listHeight: 256,
-                      optionFilterProp: 'label',
-                      filterOption: false,
-                      onSearch: scheduleApplicantSearch,
-                      onChange: (v: number) => {
-                        syncDefaultDepartmentForApplicant(v);
-                      },
-                    }}
+                    placeholder="请输入姓名或账号搜索"
+                    required
+                    presetUsers={applicantPresetUsers}
+                    onUserPicked={onApplicantPicked}
                   />
                 </Col>
                 <Col span={12}>
@@ -822,14 +692,22 @@ const MoldMaintenancePage: React.FC = () => {
               </Col>
               <Col span={12}>
                 <ProFormDependency name={['service_type']}>
-                  {({ service_type }) => (
-                    <ProFormUploadButton
-                      name="header_attachments"
-                      label={service_type === '保养' ? '附件照片（保养前）' : '附件照片（维修前）'}
-                      max={10}
-                      fieldProps={uploadFieldProps}
-                    />
-                  )}
+                  {({ service_type }) => {
+                    const headerLabel =
+                      service_type === '保养' ? '附件照片（保养前）' : '附件照片（维修前）';
+                    return isDetailView ? (
+                      <Form.Item label={headerLabel}>
+                        <MoldAttachmentImagePreview uuids={detailAttachmentPreview?.header} />
+                      </Form.Item>
+                    ) : (
+                      <ProFormUploadButton
+                        name="header_attachments"
+                        label={headerLabel}
+                        max={10}
+                        fieldProps={uploadFieldProps}
+                      />
+                    );
+                  }}
                 </ProFormDependency>
               </Col>
             </Row>
@@ -943,12 +821,23 @@ const MoldMaintenancePage: React.FC = () => {
                       </ProFormDependency>
                     </Col>
                     <Col span={24}>
-                      <ProFormDependency name={['service_type']} ignoreFormListField>
-                        {({ service_type }) => {
+                      <ProFormDependency name={['service_type', 'line_items']} ignoreFormListField>
+                        {({ service_type, line_items }) => {
                           const isUpkeep = service_type === '保养';
                           const moldImgLabel = isUpkeep
                             ? '保养模具图片附件（保养前）'
                             : '维修模具图片附件（维修前）';
+                          if (isDetailView) {
+                            const rows = (line_items as { mold_code?: string }[] | undefined) ?? [];
+                            const mc = String(rows[index]?.mold_code ?? '').trim();
+                            return (
+                              <Form.Item label={moldImgLabel}>
+                                <MoldAttachmentImagePreview
+                                  uuids={mc ? detailAttachmentPreview?.byMold[mc] : []}
+                                />
+                              </Form.Item>
+                            );
+                          }
                           return (
                             <ProFormUploadButton
                               name="item_attachments"

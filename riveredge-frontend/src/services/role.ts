@@ -40,6 +40,7 @@ export interface Role {
   external_partner_type?: 'customer' | 'supplier';
   is_system: boolean;
   is_active: boolean;
+  home_path?: string | null;
   tenant_id: number;
   permission_count?: number;
   user_count?: number;
@@ -83,6 +84,7 @@ export interface CreateRoleData {
   role_type?: 'internal' | 'external';
   external_partner_type?: 'customer' | 'supplier';
   is_active?: boolean;
+  home_path?: string | null;
 }
 
 /**
@@ -95,6 +97,7 @@ export interface UpdateRoleData {
   role_type?: 'internal' | 'external';
   external_partner_type?: 'customer' | 'supplier';
   is_active?: boolean;
+  home_path?: string | null;
 }
 
 /**

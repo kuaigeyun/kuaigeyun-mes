@@ -85,6 +85,7 @@ async def resolve_maintenance_status_for_mold(tenant_id: int, mold_code: str) ->
           SELECT ms.id, 'inhouse'::text AS src, ms.service_type
           FROM haoligo_mold_maintenance_sheet ms
           WHERE ms.tenant_id = $1 AND ms.deleted_at IS NULL
+            AND COALESCE(NULLIF(trim(ms.sheet_status), ''), '已通过') = '已通过'
             AND NOT EXISTS (
               SELECT 1 FROM haoligo_mold_maintenance_complete_sheet c
               WHERE c.tenant_id = ms.tenant_id AND c.deleted_at IS NULL
@@ -99,6 +100,7 @@ async def resolve_maintenance_status_for_mold(tenant_id: int, mold_code: str) ->
           SELECT os.id, 'out'::text AS src, os.service_type
           FROM haoligo_mold_outsource_maintenance_sheet os
           WHERE os.tenant_id = $1 AND os.deleted_at IS NULL
+            AND COALESCE(NULLIF(trim(os.sheet_status), ''), '已通过') = '已通过'
             AND NOT EXISTS (
               SELECT 1 FROM haoligo_mold_outsource_maintenance_complete_sheet oc
               WHERE oc.tenant_id = os.tenant_id AND oc.deleted_at IS NULL

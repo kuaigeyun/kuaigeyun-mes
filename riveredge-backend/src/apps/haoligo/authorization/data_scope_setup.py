@@ -13,10 +13,21 @@ _HAOLIGO_OUTSOURCE_PROFILE = DataScopeResourceProfile(
     partner_dimension=DIMENSION_SUPPLIER,
 )
 
+_HAOLIGO_TRIAL_PROFILE = DataScopeResourceProfile(
+    applicant_user_id_field="trial_user_id",
+    partner_code_field="supplier_code",
+    partner_dimension=DIMENSION_SUPPLIER,
+)
+
 _HAOLIGO_RESOURCES = (
     "haoligo:molds-documents-outsource-maintenance",
     "haoligo:molds-documents-outsource-complete",
     "haoligo:molds-reports-outsource-maintenance-log",
+)
+
+_HAOLIGO_TRIAL_RESOURCES = (
+    "haoligo:molds-documents-trial",
+    "haoligo:molds-reports-trial-record",
 )
 
 _registered = False
@@ -28,4 +39,6 @@ def register_haoligo_data_scope_profiles() -> None:
         return
     for resource in _HAOLIGO_RESOURCES:
         register_resource_profile(resource, _HAOLIGO_OUTSOURCE_PROFILE)
+    for resource in _HAOLIGO_TRIAL_RESOURCES:
+        register_resource_profile(resource, _HAOLIGO_TRIAL_PROFILE)
     _registered = True

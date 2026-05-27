@@ -9,6 +9,7 @@ import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import HaoligoAppLayout from './layouts/AppLayout';
 import { withHaoligoPermission } from './components/HaoligoPermissionRoute';
+import HaoligoDefaultRedirect from './components/HaoligoDefaultRedirect';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<PageSkeleton />}>
@@ -33,6 +34,7 @@ const EquipmentDocumentsUpkeepCompletePage = lazy(() => import('./pages/equipmen
 const EquipmentDocumentsOutputRecordPage = lazy(() => import('./pages/equipment/documents/output-record'));
 const EquipmentDocumentsStatusAdjustmentPage = lazy(() => import('./pages/equipment/documents/status-adjustment'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
+const MoldWarehousePage = lazy(() => import('./pages/molds/warehouse'));
 const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
 const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
 const MoldTrialSheetsPage = lazy(() => import('./pages/molds/documents/trial'));
@@ -54,7 +56,13 @@ const PatrolReportLegacyRedirect = lazy(() => import('./pages/patrol/reports/Pat
 const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>
-      <Route path="workspace" element={withPageSuspense(WorkspacePage)} />
+      <Route
+        path="workspace"
+        element={withHaoligoPermission(
+          'haoligo:workspace-dashboard:read',
+          withPageSuspense(WorkspacePage),
+        )}
+      />
       <Route path="equipment/workshops" element={<Navigate to="/apps/master-data/factory/workshops" replace />} />
       <Route path="equipment/categories" element={withPageSuspense(EquipmentCategoriesPage)} />
       <Route path="equipment/manufacturers" element={withPageSuspense(EquipmentManufacturersPage)} />
@@ -95,6 +103,10 @@ const HaoligoApp: React.FC = () => (
         <Route
           path="ledger"
           element={withHaoligoPermission('haoligo:molds-ledger:read', withPageSuspense(MoldLedgerPage))}
+        />
+        <Route
+          path="warehouse"
+          element={withHaoligoPermission('haoligo:molds-warehouse:read', withPageSuspense(MoldWarehousePage))}
         />
         <Route path="documents/trial" element={withPageSuspense(MoldTrialSheetsPage)} />
         <Route path="documents/borrow-out" element={withPageSuspense(MoldBorrowOutPage)} />
@@ -181,7 +193,7 @@ const HaoligoApp: React.FC = () => (
           element={<Navigate to="/apps/haoligo/equipment/documents/route-patrol" replace />}
         />
       </Route>
-      <Route index element={<Navigate to="workspace" replace />} />
+      <Route index element={<HaoligoDefaultRedirect />} />
     </Route>
   </Routes>
 );

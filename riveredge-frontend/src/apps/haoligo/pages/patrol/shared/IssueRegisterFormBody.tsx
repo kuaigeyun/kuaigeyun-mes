@@ -14,7 +14,8 @@ import {
   ProFormSwitch,
   ProFormText,
 } from '@ant-design/pro-components';
-import { getUserList } from '../../../../../services/user';
+import { useGlobalStore } from '../../../../../stores';
+import { searchUserIdOptions } from '../../../../../utils/userDisplay';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
 import type { DictionaryItem } from '../../../../../services/dataDictionary';
 import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
@@ -88,27 +89,19 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
   onBeforeFilesChange,
   readOnly,
 }) => {
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
   const searchReportNotifyUsers = useCallback(
     async (keyword?: string) => {
-      const res = await getUserList({
-        page: 1,
-        page_size: 50,
-        is_active: true,
-        keyword: keyword?.trim() || undefined,
-      });
-      const opts = (res.items || []).map((u) => ({
-        label: (u.full_name || '').trim() || u.username,
-        value: u.id,
-      }));
       const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-      for (const id of selIds) {
-        if (Number.isFinite(id) && !opts.some((o) => o.value === id)) {
-          opts.unshift({ value: id, label: `用户#${id}` });
-        }
-      }
-      return opts;
+      return searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        currentUser,
+      });
     },
-    [formRef],
+    [formRef, currentUser],
   );
 
   const uploadProps: UploadProps = {

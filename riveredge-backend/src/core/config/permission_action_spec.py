@@ -14,9 +14,11 @@ STANDARD_ACTIONS: set[str] = {
     "reject",
     "revoke",
     "execute",
+    "complete",
     "import",
     "export",
     "print",
+    "display",
 }
 
 def canonical_action(action: str) -> str:

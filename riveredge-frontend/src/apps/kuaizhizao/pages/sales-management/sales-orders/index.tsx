@@ -120,7 +120,9 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
-import { getUserList, type User } from '../../../../../services/user';
+import { searchUserDisplay, type User } from '../../../../../services/user';
+import { useGlobalStore } from '../../../../../stores';
+import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -617,20 +619,22 @@ const SalesOrdersPage: React.FC = () => {
    * 加载用户列表（系统管理-用户管理-帐户管理 /core/users）
    * 无用户数据时使用空数组，不阻塞页面
    */
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
   React.useEffect(() => {
     const loadUsers = async () => {
       try {
         setUsersLoading(true);
-        const result = await getUserList({ page: 1, page_size: 100, is_active: true });
-        setUsers(result.items || []);
+        const result = await searchUserDisplay({ page: 1, page_size: 100, is_active: true });
+        setUsers(displayItemsToUsers(result.items || []));
       } catch {
         setUsers([]);
       } finally {
         setUsersLoading(false);
       }
     };
-    loadUsers();
-  }, []);
+    void loadUsers();
+  }, [currentUser]);
 
   /**
    * 加载发货方式、付款条件数据字典

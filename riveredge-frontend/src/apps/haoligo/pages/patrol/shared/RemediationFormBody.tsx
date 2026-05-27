@@ -3,10 +3,10 @@
  */
 
 import React from 'react';
-import { Typography, Upload } from 'antd';
-import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
+import { Typography } from 'antd';
 import { ProFormDateTimePicker, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
+import { SecurePictureCardUpload } from '../../../components/SecurePictureCardUpload';
 import { PatrolImagePreview } from './PatrolImagePreview';
 
 const { Text } = Typography;
@@ -22,34 +22,17 @@ function SectionLabel({ num, label }: { num: string; label: string }) {
 
 export interface RemediationFormBodyProps {
   userOptions: { label: string; value: string }[];
-  afterFiles: UploadFile[];
-  onAfterFilesChange: (files: UploadFile[]) => void;
+  afterUuids: string[];
+  onAfterUuidsChange: (uuids: string[]) => void;
   readOnly?: boolean;
 }
 
 export const RemediationFormBody: React.FC<RemediationFormBodyProps> = ({
   userOptions,
-  afterFiles,
-  onAfterFilesChange,
+  afterUuids,
+  onAfterUuidsChange,
   readOnly,
 }) => {
-  const uploadProps: UploadProps = {
-    listType: 'picture-card',
-    accept: '.jpg,.jpeg,.png,.gif,.webp',
-    fileList: afterFiles,
-    disabled: readOnly,
-    onChange: ({ fileList }) => onAfterFilesChange(fileList),
-    customRequest: async (options) => {
-      try {
-        const file = options.file as File;
-        const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_patrol_hazard' });
-        options.onSuccess?.(res, options.file);
-      } catch (e) {
-        options.onError?.(e instanceof Error ? e : new Error(String(e)));
-      }
-    },
-  };
-
   return (
     <>
       <div style={{ marginBottom: 12 }}>
@@ -63,9 +46,22 @@ export const RemediationFormBody: React.FC<RemediationFormBodyProps> = ({
       <div style={{ marginBottom: 12 }}>
         <SectionLabel num="06" label="处理后照片（选填）" />
         {readOnly ? (
-          <PatrolImagePreview files={afterFiles} />
+          <PatrolImagePreview uuids={afterUuids} emptyText="无" />
         ) : (
-          <Upload {...uploadProps}>+</Upload>
+          <SecurePictureCardUpload
+            uuids={afterUuids}
+            onUuidsChange={onAfterUuidsChange}
+            accept=".jpg,.jpeg,.png,.gif,.webp"
+            customRequest={async (options) => {
+              try {
+                const file = options.file as File;
+                const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_patrol_hazard' });
+                options.onSuccess?.(res, options.file);
+              } catch (e) {
+                options.onError?.(e instanceof Error ? e : new Error(String(e)));
+              }
+            }}
+          />
         )}
       </div>
       <div style={{ marginBottom: 12 }}>

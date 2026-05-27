@@ -29,3 +29,10 @@ class HaoligoMoldOutsourceMaintenanceSheet(HaoligoTenantModel):
     source_order_no = fields.CharField(max_length=128, null=True, description="来源单号")
     header_attachment_file_uuids = fields.JSONField(null=True, description="基础信息附件（文件 UUID 列表）")
     line_items = fields.JSONField(description="模具明细列表")
+    sheet_status = fields.CharField(
+        max_length=32,
+        default="待审核",
+        description="审核状态：待审核/已通过/已驳回",
+    )
+    audited_at = fields.DatetimeField(null=True, description="审核时间")
+    audited_by_user_id = fields.IntField(null=True, description="审核人用户 ID")

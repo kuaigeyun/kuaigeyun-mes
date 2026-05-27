@@ -146,7 +146,8 @@ import { materialApi } from '../../../../master-data/services/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
-import { getUserList, type User } from '../../../../../services/user'
+import { searchUserDisplay, type User } from '../../../../../services/user'
+import { displayItemsToUsers } from '../../../../../utils/userDisplay'
 import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
@@ -707,7 +708,7 @@ const WorkOrdersPage: React.FC = () => {
             materialApi.list({ isActive: true, limit: 1000 }),
             operationApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             processRouteApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
-            getUserList({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
+            searchUserDisplay({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
             getEquipmentList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
             getMoldList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
             toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
@@ -716,7 +717,7 @@ const WorkOrdersPage: React.FC = () => {
         setProductList(Array.isArray(products) ? products : (products as any)?.data ?? (products as any)?.items ?? [])
         setOperationList(unwrapProcessPagedList(operations))
         setProcessRouteList(unwrapProcessPagedList(routes))
-        setWorkerList(usersRes?.items || [])
+        setWorkerList(displayItemsToUsers(usersRes?.items || []))
         setEquipmentList(equipmentRes?.items || [])
         setMoldList(moldsRes?.items || [])
         setToolList(toolsRes?.items || [])
@@ -913,7 +914,7 @@ const WorkOrdersPage: React.FC = () => {
       let uuid = picked.uuid
       if (!uuid && picked.id) {
         try {
-          const res = await getUserList({ is_active: true, page_size: 500 })
+          const res = await searchUserDisplay({ is_active: true, page_size: 200 })
           const u = res.items?.find((x) => x.id === picked.id)
           uuid = u?.uuid
         } catch {
@@ -959,7 +960,7 @@ const WorkOrdersPage: React.FC = () => {
       setDispatchPickListsLoading(true)
       try {
         const [users, teams, stations, equipment, molds, tools, workshops, workCenters] = await Promise.all([
-          getUserList({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
+          searchUserDisplay({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
           workGroupApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
           workstationApi.list({ is_active: true, limit: 1000 }).catch(() => ({ items: [], total: 0 })),
           getEquipmentList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
@@ -969,7 +970,7 @@ const WorkOrdersPage: React.FC = () => {
           workCenterApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
-        setWorkerList((users as any)?.items ?? [])
+        setWorkerList(displayItemsToUsers(users?.items ?? []))
         setTeamList(factoryListItems(teams as any))
         setStationList(factoryListItems(stations as any))
         setEquipmentList(equipment?.items ?? [])

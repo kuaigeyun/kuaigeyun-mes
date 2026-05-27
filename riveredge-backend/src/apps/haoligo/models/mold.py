@@ -14,7 +14,7 @@ class HaoligoMold(HaoligoTenantModel):
         table = "haoligo_mold"
         table_description = "好力GO - 模具主数据"
         unique_together = [("tenant_id", "mold_code")]
-        indexes = [("tenant_id",), ("mold_code",), ("status",)]
+        indexes = [("tenant_id",), ("mold_code",), ("status",), ("mold_warehouse_id",)]
 
     mold_code = fields.CharField(max_length=64, description="模具编码（组织内唯一）")
     name = fields.CharField(max_length=200, description="模具名称")
@@ -58,6 +58,15 @@ class HaoligoMold(HaoligoTenantModel):
         default=Decimal("0"),
         description="总制造数量（累计）",
     )
+    mold_warehouse = fields.ForeignKeyField(
+        "models.HaoligoMoldWarehouse",
+        related_name="molds",
+        null=True,
+        on_delete=fields.SET_NULL,
+        description="所在模具仓库",
+    )
+    mold_warehouse_code = fields.CharField(max_length=64, null=True, description="所在仓库编号（冗余）")
+    mold_warehouse_name = fields.CharField(max_length=200, null=True, description="所在仓库名称（冗余）")
     outsource_vendor_code = fields.CharField(max_length=64, null=True, description="外协厂商代号")
     outsource_vendor_name = fields.CharField(max_length=200, null=True, description="外协厂商名称")
     erp_material_code = fields.CharField(max_length=64, null=True, description="ERP 物料编码（同步引用）")
@@ -68,3 +77,7 @@ class HaoligoMold(HaoligoTenantModel):
         description="来源：sync=数据集同步，manual=手工创建/导入，NULL=历史或未同步回填",
     )
     remark = fields.TextField(null=True, description="备注")
+    trial_pending_notify_user_ids = fields.JSONField(
+        default=list,
+        description="试模不合格待处理：上次指定的消息提醒人员（按模具记忆）",
+    )

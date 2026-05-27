@@ -25,3 +25,10 @@ class HaoligoMoldMaintenanceSheet(HaoligoTenantModel):
         description="基础信息附件·维护保养前（文件 UUID 列表）",
     )
     line_items = fields.JSONField(description="模具明细列表")
+    sheet_status = fields.CharField(
+        max_length=32,
+        default="待审核",
+        description="审核状态：待审核/已通过/已驳回",
+    )
+    audited_at = fields.DatetimeField(null=True, description="审核时间")
+    audited_by_user_id = fields.IntField(null=True, description="审核人用户 ID")

@@ -16,7 +16,7 @@ export const HaoligoPermissionRoute: React.FC<HaoligoPermissionRouteProps> = ({
 }) => (
   <PermissionGuard
     permission={permission}
-    fallback={<Navigate to="/apps/haoligo/workspace" replace />}
+    fallback={<Navigate to="/apps/haoligo" replace />}
   >
     {children}
   </PermissionGuard>

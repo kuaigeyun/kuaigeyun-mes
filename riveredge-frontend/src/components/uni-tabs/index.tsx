@@ -12,19 +12,25 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
-import { useConfigStore, resolveTenantHomePath } from '../../stores/configStore';
+import {
+  useConfigStore,
+  resolveEffectiveHomePath,
+  LEGACY_TENANT_DEFAULT_HOME_PATHS,
+} from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
 import { getUserInfo, getTenantId, getToken } from '../../utils/auth';
-import { getTenantBackendHome, TENANT_BACKEND_HOME_QUERY_KEY } from '../../services/menu';
+import {
+  getEffectiveHome,
+  getTenantBackendHome,
+  EFFECTIVE_HOME_QUERY_KEY,
+  TENANT_BACKEND_HOME_QUERY_KEY,
+} from '../../services/menu';
 import { RouteTransition } from '../route-transition';
 
-/** 站点级默认「首页」路径（与 configStore 一致）；自定义租户后台首页出现时需从标签栏移除这些占位 */
-const TENANT_DEFAULT_HOME_PATHS = ['/system/dashboard/workplace', '/system/applications'] as const;
-
 function isTenantDefaultHomePath(p: string): boolean {
-  return (TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
+  return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
 }
 
 /**
@@ -102,11 +108,20 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     staleTime: 60 * 1000,
   });
 
-  /** 固定标签栏首位「首页」：租户在菜单里配置的自定义后台首页优先，否则与站点默认一致（与 BasicLayout Logo 一致） */
+  const { data: effectiveHome, isFetched: effectiveHomeFetched } = useQuery({
+    queryKey: [...EFFECTIVE_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getEffectiveHome,
+    enabled: !!(getToken() && tenantIdStrForHome),
+    staleTime: 60 * 1000,
+  });
+
+  /** 固定标签栏首位「首页」：角色 > 菜单主页 > 工作台 > 兜底页（与 Logo、登录落地一致） */
   const tenantHomePath = useMemo(
-    () => resolveTenantHomePath(tenantBackendHome?.path, configs),
-    [tenantBackendHome?.path, configs],
+    () => resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs),
+    [effectiveHome, tenantBackendHome?.path, configs],
   );
+
+  const homePathReady = backendHomeFetched && effectiveHomeFetched;
 
   /** 关闭默认首页标签时尚未拉取自定义首页时，延后跳转避免误落应用中心 */
   const pendingDefaultHomeCloseRef = useRef<string | null>(null);
@@ -305,14 +320,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   useEffect(() => {
     const pendingKey = pendingDefaultHomeCloseRef.current;
-    if (!pendingKey || !backendHomeFetched) return;
+    if (!pendingKey || !homePathReady) return;
     pendingDefaultHomeCloseRef.current = null;
-    const resolvedHome = resolveTenantHomePath(tenantBackendHome?.path, configs);
+    const resolvedHome = resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs);
     if (pendingKey !== resolvedHome) {
       setActiveKey(resolvedHome);
       navigateRef.current(resolvedHome);
     }
-  }, [backendHomeFetched, tenantBackendHome?.path, configs]);
+  }, [homePathReady, effectiveHome, tenantBackendHome?.path, configs]);
 
   /**
    * 租户后台首页路径变化时：移除旧首页标签、去掉与当前模式冲突的默认路径标签，并把新首页固定到第一位且不可关闭。
@@ -573,11 +588,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const resolveHomeAfterClose = useCallback(
     (closedKey: string): string | 'pending' | null => {
       if (!isTenantDefaultHomePath(closedKey)) return null;
-      if (!backendHomeFetched) return 'pending';
-      const resolvedHome = resolveTenantHomePath(tenantBackendHome?.path, configs);
+      if (!homePathReady) return 'pending';
+      const resolvedHome = resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs);
       return closedKey !== resolvedHome ? resolvedHome : null;
     },
-    [backendHomeFetched, tenantBackendHome?.path, configs],
+    [homePathReady, effectiveHome, tenantBackendHome?.path, configs],
   );
 
   /**
@@ -605,7 +620,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           setActiveKey(nextTab.key);
           navigate(nextTab.key);
         }
-      } else if (backendHomeFetched) {
+      } else if (homePathReady) {
         navigate(tenantHomePath);
       } else {
         pendingDefaultHomeCloseRef.current = targetKey;

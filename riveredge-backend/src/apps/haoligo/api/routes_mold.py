@@ -16,6 +16,7 @@ from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_ledger_source import MOLD_LEDGER_SOURCE_MANUAL, MOLD_LEDGER_SOURCE_SYNC
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_ledger_dataset_binding import HaoligoMoldLedgerDatasetBinding
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
@@ -23,6 +24,7 @@ from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceShe
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import HaoligoMoldOutsourceMaintenanceCompleteSheet
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
 from apps.haoligo.models.mold_return_sheet import HaoligoMoldReturnSheet
+from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
@@ -63,6 +65,44 @@ _LEDGER_DELETE = Depends(
 _ALLOWED_MOLD_STATUS_STR = "、".join(MOLD_LEDGER_STATUS_VALUES)
 
 
+def _coerce_optional_mold_warehouse_id(v: object) -> int | None:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return None
+        try:
+            return int(s)
+        except ValueError as e:
+            raise ValueError("所在仓库无效") from e
+    if isinstance(v, bool):
+        raise ValueError("所在仓库无效")
+    try:
+        return int(v)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as e:
+        raise ValueError("所在仓库无效") from e
+
+
+async def _apply_mold_warehouse_to_row(
+    row: HaoligoMold,
+    *,
+    tenant_id: int,
+    mold_warehouse_id: int | None,
+) -> None:
+    if mold_warehouse_id is None:
+        row.mold_warehouse_id = None
+        row.mold_warehouse_code = None
+        row.mold_warehouse_name = None
+        return
+    wh = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=mold_warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="模具仓库不存在")
+    row.mold_warehouse_id = wh.id
+    row.mold_warehouse_code = (wh.warehouse_code or "").strip()
+    row.mold_warehouse_name = (wh.warehouse_name or "").strip()
+
+
 class MoldOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -83,11 +123,15 @@ class MoldOut(BaseModel):
     total_manufacture_qty: Decimal
     outsource_vendor_code: Optional[str] = None
     outsource_vendor_name: Optional[str] = None
+    mold_warehouse_id: Optional[int] = None
+    mold_warehouse_code: Optional[str] = None
+    mold_warehouse_name: Optional[str] = None
     erp_material_code: Optional[str] = None
     remark: Optional[str] = None
     ledger_source: Optional[str] = None
     used_times: int = 0
     used_yield: Decimal = Decimal("0")
+    trial_pending_notify_user_ids: list[int] = []
 
 
 class MoldCreate(BaseModel):
@@ -108,6 +152,12 @@ class MoldCreate(BaseModel):
     outsource_vendor_name: Optional[str] = Field(None, max_length=200)
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
+    mold_warehouse_id: Optional[int] = None
+
+    @field_validator("mold_warehouse_id", mode="before")
+    @classmethod
+    def coerce_create_mold_warehouse_id(cls, v: object) -> int | None:
+        return _coerce_optional_mold_warehouse_id(v)
 
     @field_validator("status")
     @classmethod
@@ -135,6 +185,12 @@ class MoldUpdate(BaseModel):
     outsource_vendor_name: Optional[str] = Field(None, max_length=200)
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
+    mold_warehouse_id: Optional[int] = None
+
+    @field_validator("mold_warehouse_id", mode="before")
+    @classmethod
+    def coerce_update_mold_warehouse_id(cls, v: object) -> int | None:
+        return _coerce_optional_mold_warehouse_id(v)
 
     @field_validator("status")
     @classmethod
@@ -145,6 +201,23 @@ class MoldUpdate(BaseModel):
         if s not in MOLD_LEDGER_STATUS_SET:
             raise ValueError(f"模具状态无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
         return s
+
+
+async def _mold_warehouse_columns_patch(tenant_id: int, mold_warehouse_id: int | None) -> dict[str, Any]:
+    if mold_warehouse_id is None:
+        return {
+            "mold_warehouse_id": None,
+            "mold_warehouse_code": None,
+            "mold_warehouse_name": None,
+        }
+    wh = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=mold_warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="模具仓库不存在")
+    return {
+        "mold_warehouse_id": wh.id,
+        "mold_warehouse_code": (wh.warehouse_code or "").strip(),
+        "mold_warehouse_name": (wh.warehouse_name or "").strip(),
+    }
 
 
 _MOLD_BATCH_PATCH_FIELDS = frozenset(
@@ -172,6 +245,12 @@ class MoldBatchLifecycleBody(BaseModel):
     maintenance_cycle_by_yield: Optional[Decimal] = None
     maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
     status: Optional[str] = Field(None, max_length=32)
+    mold_warehouse_id: Optional[int] = None
+
+    @field_validator("mold_warehouse_id", mode="before")
+    @classmethod
+    def coerce_batch_mold_warehouse_id(cls, v: object) -> int | None:
+        return _coerce_optional_mold_warehouse_id(v)
 
     @field_validator("status")
     @classmethod
@@ -216,6 +295,8 @@ def _molds_filtered_queryset(tenant_id: int, status_filter: Optional[str], keywo
             | Q(purchase_vendor_name__icontains=kw)
             | Q(outsource_vendor_code__icontains=kw)
             | Q(outsource_vendor_name__icontains=kw)
+            | Q(mold_warehouse_code__icontains=kw)
+            | Q(mold_warehouse_name__icontains=kw)
             | Q(erp_material_code__icontains=kw)
             | Q(remark__icontains=kw)
         )
@@ -444,7 +525,10 @@ async def batch_update_mold_lifecycle(
         exclude_unset=True,
         exclude={"scope", "mold_ids", "filter_status", "filter_keyword"},
     )
+    has_warehouse = "mold_warehouse_id" in patch_raw
     patch = {k: v for k, v in patch_raw.items() if k in _MOLD_BATCH_PATCH_FIELDS and v is not None}
+    if has_warehouse:
+        patch.update(await _mold_warehouse_columns_patch(tenant_id, patch_raw["mold_warehouse_id"]))
     if not patch:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -507,6 +591,7 @@ _OPERATION_RECORDS_CAP = 500
 MoldOperationKind = Literal[
     "borrow",
     "return",
+    "trial",
     "maintenance",
     "maintenance_complete",
     "outsource_maintenance",
@@ -584,7 +669,7 @@ async def _scan_sheets_with_mold_in_lines(model, tenant_id: int, mold_code: str)
 @router.get(
     "/{row_id}/operation-records",
     response_model=MoldOperationRecordsResponse,
-    summary="模具关联操作记录（领用/还入/厂内外协维保与完修）",
+    summary="模具关联操作记录（领用/还入/试模/厂内外协维保与完修）",
 )
 async def list_mold_operation_records(
     row_id: int,
@@ -607,9 +692,15 @@ async def list_mold_operation_records(
             "-created_at"
         ).limit(_BORROW_RETURN_LIMIT)
 
-    borrows, returns, mains, completes, outs, out_completes = await asyncio.gather(
+    async def load_trials():
+        return await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(mold_code=mcode).order_by(
+            "-created_at"
+        ).limit(_BORROW_RETURN_LIMIT)
+
+    borrows, returns, trials, mains, completes, outs, out_completes = await asyncio.gather(
         load_borrows(),
         load_returns(),
+        load_trials(),
         _scan_sheets_with_mold_in_lines(HaoligoMoldMaintenanceSheet, tenant_id, mcode),
         _scan_sheets_with_mold_in_lines(HaoligoMoldMaintenanceCompleteSheet, tenant_id, mcode),
         _scan_sheets_with_mold_in_lines(HaoligoMoldOutsourceMaintenanceSheet, tenant_id, mcode),
@@ -657,6 +748,44 @@ async def list_mold_operation_records(
                 uuid=r.uuid,
                 sheet_no=(r.sheet_no or "").strip() or None,
                 title="还入（还入单）",
+                detail="；".join(parts),
+            )
+        )
+
+    for t in trials:
+        parts: List[str] = []
+        tr = (t.trial_result or "").strip()
+        if tr:
+            parts.append(f"试模结果：{tr}")
+        times = t.trial_times
+        if times is not None and int(times) > 0:
+            parts.append(f"第 {int(times)} 次试模")
+        sup = (t.supplier_name or "").strip()
+        if sup:
+            parts.append(f"供应商：{sup}")
+        po = (t.purchase_order_no or "").strip()
+        if po:
+            parts.append(f"采购订单：{po}")
+        tun = (t.trial_user_name or "").strip()
+        if tun:
+            parts.append(f"试模人员：{tun}")
+        fh = (t.failure_handling or "").strip()
+        if fh:
+            parts.append(f"处理方式：{fh}")
+        st = (t.sheet_status or "").strip()
+        if st:
+            parts.append(f"审核：{st}")
+        title = "试模单"
+        if tr == "不合格" and fh:
+            title = f"试模单（{fh}）"
+        events.append(
+            MoldOperationRecordOut(
+                kind="trial",
+                occurred_at=t.created_at,
+                record_id=t.id,
+                uuid=t.uuid,
+                sheet_no=(t.sheet_no or "").strip() or None,
+                title=title,
                 detail="；".join(parts),
             )
         )
@@ -796,6 +925,9 @@ async def create_mold(
         used_times=0,
         used_yield=Decimal("0"),
     )
+    if body.mold_warehouse_id is not None:
+        await _apply_mold_warehouse_to_row(row, tenant_id=tenant_id, mold_warehouse_id=body.mold_warehouse_id)
+        await row.save()
     return MoldOut.model_validate(row)
 
 
@@ -824,6 +956,12 @@ async def update_mold(
     if not row:
         await _not_found()
     data = body.model_dump(exclude_unset=True)
+    if "mold_warehouse_id" in data:
+        await _apply_mold_warehouse_to_row(
+            row,
+            tenant_id=tenant_id,
+            mold_warehouse_id=data.pop("mold_warehouse_id"),
+        )
     for k, v in data.items():
         if isinstance(v, str):
             v = v.strip()

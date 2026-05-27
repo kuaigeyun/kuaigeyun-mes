@@ -11,6 +11,8 @@ import {
   FileProtectOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useGlobalStore } from '../../../../stores/globalStore';
+import { hasPermission } from '../../../../utils/permission';
 import { Column, Pie } from '@ant-design/charts';
 import dayjs from 'dayjs';
 import {
@@ -42,10 +44,16 @@ const { useToken } = theme;
 /**
  * 好力 GO 整体工作台：汇总设备 / 模具 / 巡查关键数量与预警。
  */
+const EMPTY_LIST = { items: [] as never[], total: 0 };
+
 const WorkspacePage: React.FC = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { token } = useToken();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canReadEquipment = hasPermission(currentUser, 'haoligo:equipment-ledger:read');
+  const canReadMolds = hasPermission(currentUser, 'haoligo:molds-ledger:read');
+  const canReadHazards = hasPermission(currentUser, 'haoligo:patrol-hazards:read');
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<HaoligoMeta | null>(null);
@@ -88,14 +96,26 @@ const WorkspacePage: React.FC = () => {
       const [m, ws, h1, h2, h3, eqAll, moAll, hazards] = await Promise.all([
         fetchHaoligoMeta(),
         listWorkshops(),
-        listHazardReports({ status: '已登记', limit: 1 }),
-        listHazardReports({ status: '已治理', limit: 1 }),
-        listHazardReports({ limit: 1 }),
-        fetchAll((skip, limit) => listEquipments({ skip, limit })),
-        fetchAll((skip, limit) => listMolds({ skip, limit })),
-        fetchAll((skip, limit) =>
-          listHazardReports({ skip, limit, reported_from: fromDate, reported_to: toDate }),
-        ),
+        canReadHazards
+          ? listHazardReports({ status: '已登记', limit: 1 })
+          : Promise.resolve({ items: [], total: 0 }),
+        canReadHazards
+          ? listHazardReports({ status: '已治理', limit: 1 })
+          : Promise.resolve({ items: [], total: 0 }),
+        canReadHazards
+          ? listHazardReports({ limit: 1 })
+          : Promise.resolve({ items: [], total: 0 }),
+        canReadEquipment
+          ? fetchAll((skip, limit) => listEquipments({ skip, limit }))
+          : Promise.resolve(EMPTY_LIST),
+        canReadMolds
+          ? fetchAll((skip, limit) => listMolds({ skip, limit }))
+          : Promise.resolve(EMPTY_LIST),
+        canReadHazards
+          ? fetchAll((skip, limit) =>
+              listHazardReports({ skip, limit, reported_from: fromDate, reported_to: toDate }),
+            )
+          : Promise.resolve(EMPTY_LIST),
       ]);
       setMeta(m);
       setWorkshopCount(ws.length);
@@ -177,7 +197,7 @@ const WorkspacePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [message]);
+  }, [message, canReadEquipment, canReadMolds, canReadHazards]);
 
   useEffect(() => {
     void load();

@@ -22,6 +22,11 @@ class RoleBase(BaseModel):
     role_type: str = Field(default="internal", description="角色类型：internal/external")
     external_partner_type: Optional[str] = Field(None, description="外部角色合作方类型：customer/supplier")
     is_active: bool = Field(default=True, description="是否启用")
+    home_path: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="UniTabs 固定首页路由（path，如 /apps/haoligo/...）",
+    )
 
 
 class RoleCreate(RoleBase):
@@ -57,6 +62,11 @@ class RoleUpdate(BaseModel):
     role_type: Optional[str] = Field(None, description="角色类型：internal/external")
     external_partner_type: Optional[str] = Field(None, description="外部角色合作方类型：customer/supplier")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    home_path: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="UniTabs 固定首页路由；传空字符串表示清除",
+    )
 
 
 class PermissionInfo(BaseModel):

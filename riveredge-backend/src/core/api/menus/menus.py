@@ -17,6 +17,7 @@ from core.schemas.menu import (
     MenuTreeResponse,
     MenuListResponse,
     TenantBackendHomeResponse,
+    EffectiveHomeResponse,
 )
 from core.services.system.menu_service import MenuService
 from core.api.deps.deps import get_current_tenant
@@ -137,13 +138,35 @@ async def get_backend_home(
     return await MenuService.get_tenant_backend_home_response(tenant_id=tenant_id)
 
 
+@router.get("/effective-home", response_model=EffectiveHomeResponse, summary="当前用户 UniTabs 有效首页")
+async def get_effective_home(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按优先级解析：角色首页 > 菜单设为主页 > 系统级工作台 > 独立兜底页。
+    """
+    from core.services.system.effective_home_service import EffectiveHomeService
+
+    user_id = getattr(current_user, "id", None)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
+    result = await EffectiveHomeService.resolve_for_user(tenant_id=tenant_id, user_id=int(user_id))
+    return EffectiveHomeResponse(
+        path=result.path,
+        source=result.source,
+        role_uuid=result.role_uuid,
+        menu_uuid=result.menu_uuid,
+    )
+
+
 @router.delete("/backend-home", status_code=status.HTTP_204_NO_CONTENT, summary="清除后台首页配置")
 async def clear_backend_home(
     _auth: object = Depends(require_access("system.menu", "update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """清除后使用系统默认（仪表盘工作台或应用中心）。"""
+    """清除后按有效首页规则回落（角色首页 / 工作台 / 兜底页）。"""
     await MenuService.clear_tenant_backend_home(tenant_id=tenant_id)
 
 

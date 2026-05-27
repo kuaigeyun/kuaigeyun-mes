@@ -321,10 +321,17 @@ class TenantInitDataService:
                 message_template_codes_for_installed_apps,
             )
             installed = await get_installed_application_codes(tenant_id)
-            return await MessageTemplateService.load_preset_sme(
+            count = await MessageTemplateService.load_preset_sme(
                 tenant_id,
                 only_codes=message_template_codes_for_installed_apps(installed),
             )
+            if "haoligo" in installed:
+                from apps.haoligo.services.haoligo_message_template_registry import (
+                    load_haoligo_message_template_presets,
+                )
+
+                count += await load_haoligo_message_template_presets(tenant_id)
+            return count
 
         if key == "print_template_preset":
             from core.services.print.print_template_service import PrintTemplateService

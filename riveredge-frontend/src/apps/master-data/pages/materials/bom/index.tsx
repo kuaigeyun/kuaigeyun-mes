@@ -36,7 +36,10 @@ const BOM_ISSUE_METHOD_LABEL: Record<string, string> = Object.fromEntries(
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
-import { getUserList, User } from '../../../../../services/user';
+import type { User } from '../../../../../services/user';
+import { searchUserDisplay } from '../../../../../services/user';
+import { useGlobalStore } from '../../../../../stores';
+import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 /** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
@@ -303,6 +306,7 @@ const BOMPage: React.FC = () => {
 
   // 用户列表（用于渲染审核人姓名）
   const [users, setUsers] = useState<User[]>([]);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   /** BOM 视图类型（与 UniTable 视图联动）：productBom=成品 | semiProductBom=半成品 | allBom=全部 */
   const bomViewTypeRef = useRef<'productBom' | 'semiProductBom' | 'allBom'>('productBom');
@@ -319,14 +323,14 @@ const BOMPage: React.FC = () => {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const result = await getUserList({ page_size: 1000 });
-        setUsers(result.items);
-      } catch (error: any) {
+        const result = await searchUserDisplay({ page_size: 200, is_active: true });
+        setUsers(displayItemsToUsers(result.items || []));
+      } catch (error: unknown) {
         console.error('加载用户列表失败:', error);
       }
     };
-    loadUsers();
-  }, []);
+    void loadUsers();
+  }, [currentUser]);
 
   /**
    * 加载物料列表

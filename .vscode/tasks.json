@@ -1,0 +1,97 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "启动后端服务 (app)",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv311/Scripts/python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 9000",
+      "windows": {
+        "command": "${workspaceFolder}/venv311/Scripts/python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 9000"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/riveredge-backend"
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "启动前端服务",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/riveredge-frontend"
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "启动前后端服务（复合任务）",
+      "dependsOn": [
+        "启动后端服务 (app)",
+        "启动前端服务"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "运行测试 (pytest)",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv311/Scripts/python.exe -m pytest",
+      "windows": {
+        "command": "${workspaceFolder}/venv311/Scripts/python.exe -m pytest"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/riveredge-backend"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "代码格式化 (Black)",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv311/Scripts/python.exe -m black .",
+      "windows": {
+        "command": "${workspaceFolder}/venv311/Scripts/python.exe -m black ."
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/riveredge-backend"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "代码检查 (Ruff)",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv311/Scripts/python.exe -m ruff check .",
+      "windows": {
+        "command": "${workspaceFolder}/venv311/Scripts/python.exe -m ruff check ."
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/riveredge-backend"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    }
+  ]
+}

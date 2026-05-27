@@ -26,6 +26,7 @@ import {
   setMenuAsBackendHome,
   clearTenantBackendHome,
   TENANT_BACKEND_HOME_QUERY_KEY,
+  EFFECTIVE_HOME_QUERY_KEY,
 } from '../../../services/menu';
 import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
@@ -166,6 +167,7 @@ const MenuListPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
+    queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
   }, [queryClient]);
 
   const handleSetBackendHome = useCallback(
@@ -174,6 +176,7 @@ const MenuListPage: React.FC = () => {
         await setMenuAsBackendHome(record.uuid);
         messageApi.success(t('pages.system.menus.setBackendHomeSuccess'));
         await queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
+        await queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('pages.system.menus.setBackendHomeFailed'));
       }
@@ -186,6 +189,7 @@ const MenuListPage: React.FC = () => {
       await clearTenantBackendHome();
       messageApi.success(t('pages.system.menus.clearBackendHomeSuccess'));
       await queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
+      await queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
     } catch (e: unknown) {
       messageApi.error((e as Error)?.message || t('pages.system.menus.clearBackendHomeFailed'));
     }
