@@ -329,6 +329,9 @@ class EquipmentOut(BaseModel):
     )
     remark: Optional[str] = None
     image_file_uuids: List[str] = Field(default_factory=list)
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
+    used_yield: Decimal = Decimal("0")
 
 
 class EquipmentCreate(BaseModel):
@@ -347,6 +350,8 @@ class EquipmentCreate(BaseModel):
     )
     remark: Optional[str] = None
     image_file_uuids: Optional[List[str]] = Field(default_factory=list, description="设备图片文件 uuid")
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
 
 
 class EquipmentUpdate(BaseModel):
@@ -364,6 +369,8 @@ class EquipmentUpdate(BaseModel):
     )
     remark: Optional[str] = None
     image_file_uuids: Optional[List[str]] = None
+    maintenance_cycle_by_yield: Optional[Decimal] = None
+    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
 
 
 class EquipmentOperationalStatusLogOut(BaseModel):
@@ -1175,6 +1182,9 @@ async def create_equipment(
         operational_status=await normalize_operational_status(tenant_id, body.operational_status),
         remark=body.remark,
         image_file_uuids=_norm_uuid_list(body.image_file_uuids),
+        maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
+        maintenance_cycle_by_days=body.maintenance_cycle_by_days,
+        used_yield=Decimal("0"),
     )
     return EquipmentOut.model_validate(row)
 

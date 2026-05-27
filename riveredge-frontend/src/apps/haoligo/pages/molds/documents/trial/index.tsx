@@ -47,6 +47,8 @@ import {
   ShoppingOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
 import { useGlobalStore } from '../../../../../../stores';
 import { formatUserDisplayLabel, searchUserIdOptions } from '../../../../../../utils/userDisplay';
@@ -466,8 +468,12 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
 
 const MoldTrialSheetsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
+  const bumpMoldLedgerTableCache = useCallback(() => {
+    invalidateHaoligoMoldLedgerTableCache(queryClient);
+  }, [queryClient]);
   const formRef = useRef<ProFormInstance>(null);
   /** 编辑时保留原状态（表单不再展示状态字段） */
   const [bindingCfgForm] = Form.useForm<MoldTrialDatasetBindingPayload & { test_po?: string }>();
@@ -800,13 +806,14 @@ const MoldTrialSheetsPage: React.FC = () => {
       await dispatchMoldTrialSheet(dispatchRecord.id, { target_warehouse_id: dispatchTargetWhId });
       messageApi.success('已发出');
       setDispatchModalOpen(false);
+      bumpMoldLedgerTableCache();
       actionRef.current?.reload();
     } catch (e) {
       messageApi.error((e as Error).message || '发出失败');
     } finally {
       setDispatchSubmitting(false);
     }
-  }, [dispatchRecord, dispatchTargetWhId, messageApi]);
+  }, [dispatchRecord, dispatchTargetWhId, messageApi, bumpMoldLedgerTableCache]);
 
   const openRecallModal = useCallback(
     async (record: MoldTrialSheetRow) => {
@@ -847,13 +854,14 @@ const MoldTrialSheetsPage: React.FC = () => {
       await recallMoldTrialSheet(recallRecord.id, { target_warehouse_id: recallTargetWhId });
       messageApi.success('已收回');
       setRecallModalOpen(false);
+      bumpMoldLedgerTableCache();
       actionRef.current?.reload();
     } catch (e) {
       messageApi.error((e as Error).message || '收回失败');
     } finally {
       setRecallSubmitting(false);
     }
-  }, [recallRecord, recallTargetWhId, messageApi]);
+  }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
 
   const applyDefaultRepairWarehouseForSupplier = useCallback(
     (supplierName: string) => {
@@ -1182,6 +1190,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         target_warehouse_id: recallTargetWhId,
       });
       setRecallModalOpen(false);
+      bumpMoldLedgerTableCache();
       actionRef.current?.reload();
       messageApi.success(
         `原单已标记「已收回」；已生成第 ${res.new_sheet.trial_times ?? ''} 次试模单 ${res.new_sheet.sheet_no || ''}，请填写试模结果后保存`,
@@ -1323,6 +1332,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       }
 
       setModalVisible(false);
+      bumpMoldLedgerTableCache();
       actionRef.current?.reload();
     } catch (e) {
       messageApi.error((e as Error).message || '保存失败');
@@ -1712,15 +1722,14 @@ const MoldTrialSheetsPage: React.FC = () => {
           >
             删除
           </Button>,
-          ...(isTrialSheetHandlingClosed(record)
-            ? []
-            : buildMoldSheetAuditActionElements({
-                canAudit: canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE),
-                sheetStatus: record.sheet_status,
-                handlers: auditHandlers,
-                messageApi,
-                reload: () => actionRef.current?.reload(),
-              })),
+          ...buildMoldSheetAuditActionElements({
+            canAudit: canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE),
+            sheetStatus: record.sheet_status,
+            handlers: auditHandlers,
+            messageApi,
+            reload: () => actionRef.current?.reload(),
+            revokeOnly: isTrialSheetHandlingClosed(record),
+          }),
         ];
         if (canUpdateTrial && canDispatchTrialSheet(record)) {
           actions.push(

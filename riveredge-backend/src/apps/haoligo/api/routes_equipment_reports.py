@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, List, Optional
 
@@ -18,10 +19,54 @@ from apps.haoligo.api.routes_equipment_documents import (
 )
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_operations import HaoligoEquipmentOutputRecord
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(prefix="/equipment/reports", tags=["App · HaoliGO · 设备报表"])
+
+
+class MaintenanceUpkeepLastByEquipmentOut(BaseModel):
+    items: dict[str, datetime] = Field(
+        default_factory=dict,
+        description="设备代号 → 最近一次保养完修时间（ISO 8601）",
+    )
+
+
+@router.get(
+    "/maintenance-upkeep-last-by-equipment",
+    response_model=MaintenanceUpkeepLastByEquipmentOut,
+    summary="各设备最近保养完修时间（设备保养计划表聚合）",
+    dependencies=[Depends(require_module_access("haoligo", "equipment-reports-maintenance-plan"))],
+)
+async def get_maintenance_upkeep_last_by_equipment(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+) -> MaintenanceUpkeepLastByEquipmentOut:
+    from tortoise import connections
+
+    conn = connections.get("default")
+    rows = await conn.execute_query_dict(
+        """
+        SELECT e.asset_code AS asset_code, max(c.created_at) AS last_upkeep_at
+        FROM haoligo_equipment_upkeep_complete_sheet c
+        INNER JOIN haoligo_equipment_upkeep_sheet s
+          ON s.id = c.source_upkeep_sheet_id AND s.tenant_id = c.tenant_id
+        INNER JOIN haoligo_equipment e ON e.id = s.equipment_id AND e.tenant_id = c.tenant_id
+        WHERE c.tenant_id = $1
+          AND c.deleted_at IS NULL
+          AND trim(coalesce(c.service_type, '')) = '保养'
+        GROUP BY e.asset_code
+        """,
+        [tenant_id],
+    )
+    out: dict[str, datetime] = {}
+    for r in rows:
+        code = str(r.get("asset_code") or "").strip()
+        at = r.get("last_upkeep_at")
+        if code and at is not None:
+            out[code] = at
+    return MaintenanceUpkeepLastByEquipmentOut(items=out)
 
 
 def _apply_output_record_filters(

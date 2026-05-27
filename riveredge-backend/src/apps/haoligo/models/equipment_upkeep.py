@@ -62,4 +62,5 @@ class HaoligoEquipmentUpkeepCompleteSheet(HaoligoTenantModel):
     completion_content = fields.TextField(null=True, description="保养完修内容")
     repair_content = fields.TextField(null=True, description="维修完修内容")
     repair_result = fields.CharField(max_length=32, null=True, description="维修完修结果")
+    clear_total_production = fields.BooleanField(default=False, description="保养完修是否清空累计产量")
     reporter_user_id = fields.IntField(description="填报人用户 ID")

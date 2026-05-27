@@ -48,6 +48,9 @@ export interface EquipmentRow {
   operational_status?: string | null;
   /** 进入当前运行状态的时间（ISO），用于看板停机时长等 */
   operational_status_since?: string | null;
+  maintenance_cycle_by_yield?: string | null;
+  maintenance_cycle_by_days?: number | null;
+  used_yield?: string | null;
   remark?: string | null;
   image_file_uuids?: string[];
 }
@@ -114,6 +117,8 @@ export type EquipmentCreatePayload = {
   inspection_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
+  maintenance_cycle_by_yield?: string | number | null;
+  maintenance_cycle_by_days?: number | null;
   remark?: string | null;
   image_file_uuids?: string[] | null;
 };
@@ -127,9 +132,16 @@ export type EquipmentUpdatePayload = {
   inspection_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
+  maintenance_cycle_by_yield?: string | number | null;
+  maintenance_cycle_by_days?: number | null;
   remark?: string | null;
   image_file_uuids?: string[] | null;
 };
+
+/** 设备保养计划表：各设备最近保养完修时间 */
+export function fetchMaintenanceUpkeepLastByEquipment(): Promise<{ items: Record<string, string> }> {
+  return apiRequest(`${PREFIX}/equipment/reports/maintenance-upkeep-last-by-equipment`);
+}
 
 export function listEquipments(params?: {
   workshop_id?: number;
@@ -776,6 +788,8 @@ export interface EquipmentUpkeepCompleteSheetRow {
   completion_content?: string | null;
   repair_content?: string | null;
   repair_result?: string | null;
+  /** 保养完修：是否清空累计产量 */
+  clear_total_production?: boolean;
   reporter_user_id: number;
   created_at: string;
 }
@@ -788,6 +802,7 @@ export type EquipmentUpkeepCompleteSheetCreatePayload = {
   completion_content?: string | null;
   repair_content?: string | null;
   repair_result?: string | null;
+  clear_total_production?: boolean;
 };
 
 export type EquipmentUpkeepCompleteSheetUpdatePayload = {
@@ -797,6 +812,7 @@ export type EquipmentUpkeepCompleteSheetUpdatePayload = {
   completion_content?: string | null;
   repair_content?: string | null;
   repair_result?: string | null;
+  clear_total_production?: boolean;
 };
 
 export function listEquipmentUpkeepCompleteSheets(params?: {
@@ -1109,6 +1125,11 @@ export function listMolds(params?: {
   keyword?: string;
 }): Promise<PageResult<MoldRow>> {
   return apiRequest(`${PREFIX}/molds`, { params });
+}
+
+/** 保养预警表：各模具最近保养完修时间（厂内 + 外协已通过） */
+export function fetchMaintenanceUpkeepLastByMold(): Promise<{ items: Record<string, string> }> {
+  return apiRequest(`${PREFIX}/molds/reports/maintenance-upkeep-last-by-mold`);
 }
 
 export function getMold(rowId: number): Promise<MoldRow> {
@@ -2110,7 +2131,7 @@ export function getPatrolReportKpiSummary(): Promise<PatrolReportKpiSummary> {
 
 export function getPatrolReport(
   reportKey: string,
-  params?: { months?: number },
+  params?: { months?: number; days?: number },
 ): Promise<PatrolReportPayload> {
   return apiRequest(`${PREFIX}/patrol/reports/${reportKey}`, { params });
 }

@@ -21,6 +21,8 @@ import type { UploadProps } from 'antd';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores';
 import {
@@ -131,6 +133,11 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     buildPermissionCode(HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE, 'delete'),
   );
   const actionRef = useRef<ActionType>(null);
+  const queryClient = useQueryClient();
+  const reloadTableAndMoldLedger = useCallback(() => {
+    invalidateHaoligoMoldLedgerTableCache(queryClient);
+    actionRef.current?.reload();
+  }, [queryClient]);
   const formRef = useRef<ProFormInstance>(null);
   const {
     applicantPresetUsers,
@@ -664,7 +671,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               onRevoke: () => revokeMoldOutsourceMaintenanceSheetApproval(record.id),
             },
             messageApi,
-            reload: () => actionRef.current?.reload(),
+            reload: reloadTableAndMoldLedger,
           }),
         );
         return renderRowActionsOverflow(actions, `outsource-maint-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
@@ -738,7 +745,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                 setFormOptionsReady(false);
               }}
               onReload={() => {
-                actionRef.current?.reload();
+                reloadTableAndMoldLedger();
                 void getMoldOutsourceMaintenanceSheet(editId).then((d) => setAuditSheetStatus(d.sheet_status));
               }}
               handlers={{

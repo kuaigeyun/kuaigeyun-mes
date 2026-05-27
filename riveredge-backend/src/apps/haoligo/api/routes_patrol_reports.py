@@ -21,6 +21,7 @@ REPORT_KEYS = frozenset(
     {
         "issue-type-share",
         "monthly-volume",
+        "daily-volume",
         "keyword-cloud",
         "node-completion-trend",
         "status-distribution",
@@ -146,6 +147,28 @@ async def _monthly_count(tenant_id: int, *, months: int = 12) -> List[ChartPoint
         ORDER BY 1
     """
     rows = await conn.execute_query_dict(sql, [tenant_id, months])
+    return [ChartPoint(label=str(r["label"]), value=float(r["value"])) for r in rows]
+
+
+async def _daily_count(tenant_id: int, *, days: int = 7) -> List[ChartPoint]:
+    """近 N 日隐患上报量（按自然日，label 为 YYYY-MM-DD）。"""
+    conn = await _conn()
+    sql = """
+        SELECT to_char(
+                   date_trunc('day', COALESCE(reported_at, created_at)),
+                   'YYYY-MM-DD'
+               ) AS label,
+               COUNT(*)::float AS value
+        FROM haoligo_hazard_report
+        WHERE tenant_id = $1
+          AND deleted_at IS NULL
+          AND COALESCE(reported_at, created_at) IS NOT NULL
+          AND date_trunc('day', COALESCE(reported_at, created_at))
+              >= date_trunc('day', CURRENT_TIMESTAMP) - ($2::int - 1) * INTERVAL '1 day'
+        GROUP BY 1
+        ORDER BY 1
+    """
+    rows = await conn.execute_query_dict(sql, [tenant_id, days])
     return [ChartPoint(label=str(r["label"]), value=float(r["value"])) for r in rows]
 
 
@@ -281,6 +304,7 @@ async def get_patrol_report(
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(get_current_user),
     months: int = Query(12, ge=3, le=36),
+    days: int = Query(7, ge=1, le=90),
 ):
     key = report_key.strip().lower()
     if key not in REPORT_KEYS:
@@ -292,6 +316,8 @@ async def get_patrol_report(
         )
     if key == "monthly-volume":
         return PatrolReportPayload(report_key=key, points=await _monthly_count(tenant_id, months=months))
+    if key == "daily-volume":
+        return PatrolReportPayload(report_key=key, points=await _daily_count(tenant_id, days=days))
     if key == "status-distribution":
         return PatrolReportPayload(report_key=key, points=await _group_count(tenant_id, "status"))
     if key == "node-completion-trend":

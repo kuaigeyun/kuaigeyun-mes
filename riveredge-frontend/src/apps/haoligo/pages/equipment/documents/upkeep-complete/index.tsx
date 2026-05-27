@@ -9,6 +9,7 @@ import {
   ProForm,
   ProFormInstance,
   ProFormSelect,
+  ProFormSwitch,
   ProFormTextArea,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
@@ -199,6 +200,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         completion_content: '',
         repair_content: '',
         repair_result: undefined,
+        clear_total_production: st === '保养',
       });
       setSourcePickerOpen(false);
     },
@@ -215,6 +217,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       completion_content: '',
       repair_content: '',
       repair_result: undefined,
+      clear_total_production: true,
     });
   }, []);
 
@@ -247,6 +250,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         completion_content: '',
         repair_content: '',
         repair_result: undefined,
+        clear_total_production: true,
         header_attachments: [],
       });
       setBeforePreview(null);
@@ -292,6 +296,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           completion_content: d.completion_content ?? '',
           repair_content: d.repair_content ?? '',
           repair_result: d.repair_result ?? undefined,
+          clear_total_production: st === '保养' ? d.clear_total_production !== false : false,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
         });
         startTransition(() => setFormOptionsReady(true));
@@ -363,6 +368,8 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       }
     }
     const headerUuids = normUploadUuids(values.header_attachments);
+    const clearTotal =
+      st === '保养' ? values.clear_total_production !== false && values.clear_total_production !== 0 : false;
     setFormLoading(true);
     try {
       if (isEdit && editId != null) {
@@ -373,6 +380,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           repair_content: st === '维修' ? repairContent : null,
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
+          clear_total_production: st === '保养' ? clearTotal : undefined,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
       } else {
@@ -389,6 +397,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           repair_content: st === '维修' ? repairContent : null,
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
+          clear_total_production: st === '保养' ? clearTotal : undefined,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
       }
@@ -500,6 +509,17 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       dataIndex: 'repair_result',
       width: 100,
       hideInSearch: true,
+    },
+    {
+      title: '重置累计产量',
+      dataIndex: 'clear_total_production',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => {
+        const st = String(r.service_type ?? '').trim();
+        if (st === '维修') return '—';
+        return r.clear_total_production ? '是' : '否';
+      },
     },
     moldDocumentCreatedAtColumn<EquipmentUpkeepCompleteSheetRow>(),
     {
@@ -738,17 +758,26 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                     }}
                   >
                     {formServiceType === '保养' ? (
-                      <ProFormTextArea
-                        name="completion_content"
-                        label={t('app.haoligo.equipment.upkeepComplete.upkeepContent')}
-                        rules={[
-                          {
-                            required: !isDetailView,
-                            message: t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'),
-                          },
-                        ]}
-                        fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
-                      />
+                      <>
+                        <ProFormTextArea
+                          name="completion_content"
+                          label={t('app.haoligo.equipment.upkeepComplete.upkeepContent')}
+                          rules={[
+                            {
+                              required: !isDetailView,
+                              message: t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'),
+                            },
+                          ]}
+                          fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
+                        />
+                        {!isDetailView ? (
+                          <ProFormSwitch
+                            name="clear_total_production"
+                            label="是否重置累计产量"
+                            initialValue
+                          />
+                        ) : null}
+                      </>
                     ) : (
                       <>
                         <ProFormTextArea

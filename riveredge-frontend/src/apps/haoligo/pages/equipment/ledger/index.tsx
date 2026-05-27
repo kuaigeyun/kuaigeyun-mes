@@ -11,6 +11,7 @@ import {
   ProColumns,
   ProDescriptionsItemProps,
   ProFormDatePicker,
+  ProFormDigit,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
@@ -69,6 +70,19 @@ function toIsoDate(v: unknown): string | null | undefined {
   if (dayjs.isDayjs(v)) return v.format('YYYY-MM-DD');
   const s = String(v).trim();
   return s ? s.slice(0, 10) : null;
+}
+
+function decStrOrUndef(v: unknown): string | undefined {
+  if (v == null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? String(v).trim() : undefined;
+}
+
+function intOrUndef(v: unknown): number | undefined {
+  if (v == null || v === '') return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.trunc(n);
 }
 
 const EquipmentLedgerPage: React.FC = () => {
@@ -229,6 +243,10 @@ const EquipmentLedgerPage: React.FC = () => {
         criticality: detail.criticality ?? undefined,
         operational_status: detail.operational_status ?? undefined,
         manufacture_date: detail.manufacture_date ? dayjs(detail.manufacture_date) : undefined,
+        maintenance_cycle_by_yield:
+          detail.maintenance_cycle_by_yield != null ? Number(detail.maintenance_cycle_by_yield) : undefined,
+        maintenance_cycle_by_days: detail.maintenance_cycle_by_days ?? undefined,
+        used_yield: detail.used_yield != null ? Number(detail.used_yield) : undefined,
         remark: detail.remark ?? '',
         equipment_images: await uuidsToSecureUploadFileList(detail.image_file_uuids),
       });
@@ -310,6 +328,8 @@ const EquipmentLedgerPage: React.FC = () => {
     criticality: criticalityPayload(values),
     operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
+    maintenance_cycle_by_yield: decStrOrUndef(values.maintenance_cycle_by_yield),
+    maintenance_cycle_by_days: intOrUndef(values.maintenance_cycle_by_days),
     remark: String(values.remark ?? '').trim() || null,
     image_file_uuids: normUploadUuids(values.equipment_images),
   });
@@ -327,6 +347,8 @@ const EquipmentLedgerPage: React.FC = () => {
     criticality: criticalityPayload(values),
     operational_status: operationalStatusPayload(values),
     manufacture_date: toIsoDate(values.manufacture_date) ?? null,
+    maintenance_cycle_by_yield: decStrOrUndef(values.maintenance_cycle_by_yield),
+    maintenance_cycle_by_days: intOrUndef(values.maintenance_cycle_by_days),
     remark: String(values.remark ?? '').trim() || null,
     image_file_uuids: normUploadUuids(values.equipment_images),
   });
@@ -418,6 +440,21 @@ const EquipmentLedgerPage: React.FC = () => {
         title: t('app.haoligo.equipment.ledger.colManufactureDate'),
         dataIndex: 'manufacture_date',
         render: (_, r) => (r.manufacture_date ? String(r.manufacture_date).slice(0, 10) : dash),
+      },
+      {
+        title: '保养周期(依产量)',
+        dataIndex: 'maintenance_cycle_by_yield',
+        render: (_, r) => r.maintenance_cycle_by_yield ?? dash,
+      },
+      {
+        title: '保养周期(依天数)',
+        dataIndex: 'maintenance_cycle_by_days',
+        render: (_, r) => (r.maintenance_cycle_by_days != null ? r.maintenance_cycle_by_days : dash),
+      },
+      {
+        title: '累计产量',
+        dataIndex: 'used_yield',
+        render: (_, r) => r.used_yield ?? dash,
       },
       { title: t('app.haoligo.equipment.ledger.colRemark'), dataIndex: 'remark', render: (_, r) => r.remark || dash },
       {
@@ -511,6 +548,27 @@ const EquipmentLedgerPage: React.FC = () => {
         width: 112,
         hideInSearch: true,
         render: (_, r) => (r.manufacture_date ? String(r.manufacture_date).slice(0, 10) : dash),
+      },
+      {
+        title: '保养周期(依产量)',
+        dataIndex: 'maintenance_cycle_by_yield',
+        width: 130,
+        hideInSearch: true,
+        render: (_, r) => r.maintenance_cycle_by_yield ?? dash,
+      },
+      {
+        title: '保养周期(依天数)',
+        dataIndex: 'maintenance_cycle_by_days',
+        width: 120,
+        hideInSearch: true,
+        render: (_, r) => (r.maintenance_cycle_by_days != null ? r.maintenance_cycle_by_days : dash),
+      },
+      {
+        title: '累计产量',
+        dataIndex: 'used_yield',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) => r.used_yield ?? dash,
       },
       { title: t('app.haoligo.equipment.ledger.colRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       {
@@ -700,7 +758,7 @@ const EquipmentLedgerPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1500 }}
+          scroll={{ x: 1900 }}
         />
       </ListPageTemplate>
 
@@ -822,6 +880,34 @@ const EquipmentLedgerPage: React.FC = () => {
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="maintenance_cycle_by_yield"
+              label="保养周期(依产量)"
+              placeholder="请输入保养周期(依产量)"
+              min={0}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="maintenance_cycle_by_days"
+              label="保养周期(依天数)"
+              placeholder="请输入保养周期(依天数)"
+              min={0}
+              fieldProps={{ precision: 0, style: { width: '100%' } }}
+            />
+          </Col>
+          {isEdit ? (
+            <Col span={12}>
+              <ProFormDigit
+                name="used_yield"
+                label="累计产量"
+                disabled
+                fieldProps={{ precision: 4, style: { width: '100%' } }}
+              />
+            </Col>
+          ) : null}
           <Col span={24}>
             <ProFormUploadButton
               name="equipment_images"

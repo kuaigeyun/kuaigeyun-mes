@@ -13,6 +13,7 @@ from tortoise.transactions import in_transaction
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.equipment_maintenance_equipment_status import (
+    apply_upkeep_clear_total_to_equipment,
     refresh_equipment_status_after_maintenance_change,
 )
 from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only, _validate_leaf_department
@@ -140,6 +141,7 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     completion_content: Optional[str] = None
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
+    clear_total_production: bool = False
     reporter_user_id: int
     created_at: datetime
 
@@ -157,6 +159,7 @@ class EquipmentUpkeepCompleteSheetCreate(BaseModel):
     completion_content: Optional[str] = Field(None, description="保养完成说明")
     repair_content: Optional[str] = Field(None, description="维修内容")
     repair_result: Optional[str] = Field(None, max_length=32, description="维修结果")
+    clear_total_production: Optional[bool] = Field(None, description="保养完修是否清空累计产量")
 
 
 class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
@@ -166,6 +169,7 @@ class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
     completion_content: Optional[str] = None
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
+    clear_total_production: Optional[bool] = None
 
 
 async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkeepCompleteSheetOut:
@@ -213,6 +217,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
         completion_content=row.completion_content,
         repair_content=row.repair_content,
         repair_result=row.repair_result,
+        clear_total_production=bool(getattr(row, "clear_total_production", False)),
         reporter_user_id=row.reporter_user_id,
         created_at=row.created_at,
     )
@@ -282,6 +287,7 @@ async def create_upkeep_complete_sheet(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    clear_flag = bool(body.clear_total_production) if svc == "保养" else False
     src_no = (str(src.sheet_no or "").strip() or f"维保单#{src.id}")
     applicant_id = body.applicant_user_id if body.applicant_user_id is not None else src.applicant_user_id
     if not applicant_id:
@@ -312,8 +318,11 @@ async def create_upkeep_complete_sheet(
             completion_content=completion_content,
             repair_content=repair_content,
             repair_result=repair_result,
+            clear_total_production=clear_flag,
             reporter_user_id=user.id,
         )
+        if svc == "保养" and clear_flag:
+            await apply_upkeep_clear_total_to_equipment(tenant_id, equipment_id, clear=True)
         await refresh_equipment_status_after_maintenance_change(
             tenant_id,
             equipment_id,
@@ -379,6 +388,8 @@ async def update_upkeep_complete_sheet(
         uu, dname = await _validate_leaf_department(tenant_id, du_s)
         data["department_uuid"] = uu
         data["department_name"] = dname
+    if svc != "保养":
+        data["clear_total_production"] = False
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
@@ -388,6 +399,8 @@ async def update_upkeep_complete_sheet(
         if src:
             equipment_id = src.equipment_id
     if equipment_id:
+        if svc == "保养" and bool(getattr(row, "clear_total_production", False)):
+            await apply_upkeep_clear_total_to_equipment(tenant_id, equipment_id, clear=True)
         await refresh_equipment_status_after_maintenance_change(
             tenant_id,
             equipment_id,

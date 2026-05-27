@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Iterable
 
 from tortoise import connections
@@ -17,6 +18,10 @@ from apps.haoligo.constants.mold_maintenance_complete import (
 )
 from apps.haoligo.constants.mold_status import MAINTENANCE_OCCUPY_STATUSES
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
+from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
+    HaoligoMoldOutsourceMaintenanceCompleteSheet,
+)
 
 
 def mold_status_label_for_maintenance_sheet(*, is_outsource: bool, service_type: str) -> str:
@@ -252,3 +257,58 @@ async def refresh_mold_status_if_no_open_maintenance_sheet(tenant_id: int, mold_
 async def refresh_mold_status_after_maintenance_completed(tenant_id: int, mold_code: str) -> None:
     """维保/外协维保完修单创建、更新、删除后：按未完修维保单或最近完修结论重算台账状态。"""
     await refresh_mold_status_from_open_maintenance(tenant_id, mold_code)
+
+
+def inhouse_complete_line_clears_total_for_mold(
+    sheet: HaoligoMoldMaintenanceCompleteSheet,
+    mold_code: str,
+) -> bool:
+    """该完修单对本模具是否计为「清空总产量」（保养且行级或历史表头为真）。"""
+    m = (mold_code or "").strip()
+    if not m or str(sheet.service_type or "").strip() != "保养":
+        return False
+    raw = sheet.line_items
+    fb = bool(sheet.clear_total_production)
+    if not isinstance(raw, list):
+        return fb
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("mold_code") or "").strip() != m:
+            continue
+        v = item.get("clear_total_production")
+        if v is None:
+            return fb
+        return bool(v)
+    return fb
+
+
+async def apply_upkeep_clear_total_to_mold(tenant_id: int, mold_code: str, *, clear: bool) -> None:
+    if not clear:
+        return
+    mcode = (mold_code or "").strip()
+    if not mcode:
+        return
+    mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mcode).first()
+    if mold:
+        mold.used_yield = Decimal("0")
+        await mold.save(update_fields=["used_yield", "updated_at"])
+
+
+async def apply_upkeep_clear_from_inhouse_complete_sheet(
+    tenant_id: int,
+    sheet: HaoligoMoldMaintenanceCompleteSheet,
+) -> None:
+    for mc in unique_mold_codes_from_stored_line_items(sheet.line_items or []):
+        clear = inhouse_complete_line_clears_total_for_mold(sheet, mc)
+        await apply_upkeep_clear_total_to_mold(tenant_id, mc, clear=clear)
+
+
+async def apply_upkeep_clear_from_outsource_complete_sheet_on_approve(
+    tenant_id: int,
+    sheet: HaoligoMoldOutsourceMaintenanceCompleteSheet,
+) -> None:
+    if str(sheet.service_type or "").strip() != "保养" or not bool(sheet.clear_total_production):
+        return
+    for mc in unique_mold_codes_from_stored_line_items(sheet.line_items or []):
+        await apply_upkeep_clear_total_to_mold(tenant_id, mc, clear=True)

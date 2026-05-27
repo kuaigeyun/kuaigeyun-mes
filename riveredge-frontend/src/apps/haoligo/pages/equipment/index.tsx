@@ -31,6 +31,7 @@ const REPORT_LINKS: NavItem[] = [
 const ANALYTICS_LINKS: NavItem[] = [
   { to: '/apps/haoligo/equipment/dashboard/status', titleKey: 'app.haoligo.menu.equipment.dashboard.status' },
   { to: '/apps/haoligo/equipment/reports/capacity', titleKey: 'app.haoligo.menu.equipment.reports.capacity' },
+  { to: '/apps/haoligo/equipment/reports/maintenance-plan', titleKey: 'app.haoligo.menu.equipment.reports.maintenance-plan' },
 ];
 
 const EquipmentPage: React.FC = () => {

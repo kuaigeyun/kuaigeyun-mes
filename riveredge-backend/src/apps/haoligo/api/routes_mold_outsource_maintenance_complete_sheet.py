@@ -11,6 +11,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._mold_maintenance_mold_status import (
+    apply_upkeep_clear_from_outsource_complete_sheet_on_approve,
     refresh_mold_status_after_maintenance_completed,
     unique_mold_codes_from_stored_line_items,
 )
@@ -748,6 +749,7 @@ async def approve_outsource_maintenance_complete_sheet(
     row.audited_by_user_id = user.id
     await row.save()
     await apply_warehouses_on_outsource_complete_approved(tenant_id, row)
+    await apply_upkeep_clear_from_outsource_complete_sheet_on_approve(tenant_id, row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     for mc in codes:
         await refresh_mold_status_after_maintenance_completed(tenant_id, mc)

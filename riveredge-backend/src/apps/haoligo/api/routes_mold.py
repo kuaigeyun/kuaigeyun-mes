@@ -11,7 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from tortoise import timezone
 from tortoise.expressions import Q
 
-from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
+from apps.haoligo.api._mold_maintenance_mold_status import (
+    inhouse_complete_line_clears_total_for_mold,
+)
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_ledger_source import MOLD_LEDGER_SOURCE_MANUAL, MOLD_LEDGER_SOURCE_SYNC
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
@@ -639,26 +641,6 @@ def _complete_line_for_mold(raw_items: Any, mold_code: str) -> Optional[dict]:
     return None
 
 
-def _inhouse_complete_line_clears_total_for_mold(sheet: HaoligoMoldMaintenanceCompleteSheet, mold_code: str) -> bool:
-    """该完修单对本模具是否计为「清空总产量」（保养且行级或历史表头为真）。"""
-    m = (mold_code or "").strip()
-    if not m or str(sheet.service_type or "").strip() != "保养":
-        return False
-    raw = sheet.line_items
-    fb = bool(sheet.clear_total_production)
-    if not isinstance(raw, list):
-        return fb
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("mold_code") or "").strip() != m:
-            continue
-        v = item.get("clear_total_production")
-        if v is None:
-            return fb
-        return bool(v)
-    return fb
-
 
 async def _scan_sheets_with_mold_in_lines(model, tenant_id: int, mold_code: str):
     qs = tenant_alive(model, tenant_id).order_by("-created_at").limit(_JSON_SHEET_SCAN_LIMIT)
@@ -813,7 +795,7 @@ async def list_mold_operation_records(
 
     for m in completes:
         parts = [f"来源单号：{m.source_order_no}", f"类型：{m.service_type}"]
-        if _inhouse_complete_line_clears_total_for_mold(m, mcode):
+        if inhouse_complete_line_clears_total_for_mold(m, mcode):
             parts.append("已清空总产量")
         ld = _complete_line_for_mold(m.line_items, mcode)
         stc = str(m.service_type or "").strip()

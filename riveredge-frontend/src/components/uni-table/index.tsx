@@ -29,7 +29,7 @@ import React, {
   Suspense,
   lazy,
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { translatePathTitle } from '../../utils/menuTranslation'
@@ -566,6 +566,21 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
 /**
  * 统一 ProTable 组件属性
  */
+/** 清除 UniTable 列表 TanStack 缓存（与工具栏 refresh 相同语义），便于跨页 mutation 后其它列表立即拉新数据。 */
+export function invalidateUniTableListCache(
+  queryClient: QueryClient,
+  ...columnPersistenceIds: string[]
+): void {
+  for (const id of columnPersistenceIds) {
+    const trimmed = id.trim()
+    if (!trimmed) continue
+    queryClient.removeQueries({
+      queryKey: ['uniTable', trimmed],
+      exact: false,
+    })
+  }
+}
+
 export interface UniTableProps<T extends Record<string, any> = Record<string, any>>
   extends Omit<ProTableProps<T, any>, 'request'> {
   /**
@@ -1882,7 +1897,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             | undefined
           const state = queryClient.getQueryState(fullQueryKey)
           const updatedAt = state?.dataUpdatedAt ?? 0
-          const cacheStale = !cached || Date.now() - updatedAt > staleTimeMs
+          const cacheStale =
+            !cached || state?.isInvalidated === true || Date.now() - updatedAt > staleTimeMs
           if (cached != null && cacheStale) {
             // 后台 revalidate；TanStack `structuralSharing` 会在内容相同时复用旧引用，
             // 因此严格用 `===` 判断「真的变化了」再触发 reload，避免无谓渲染。

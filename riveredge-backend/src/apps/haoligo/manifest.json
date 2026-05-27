@@ -296,6 +296,13 @@
                 "icon": "Activity",
                 "permission": "haoligo:equipment-reports-capacity:read",
                 "sort_order": 32
+              },
+              {
+                "title": "app.haoligo.menu.equipment.reports.maintenance-plan",
+                "path": "/apps/haoligo/equipment/reports/maintenance-plan",
+                "icon": "CalendarClock",
+                "permission": "haoligo:equipment-reports-maintenance-plan:read",
+                "sort_order": 33
               }
             ]
           }
@@ -467,6 +474,12 @@
     "haoligo:equipment-reports-capacity:delete",
     "haoligo:equipment-reports-capacity:import",
     "haoligo:equipment-reports-capacity:export",
+    "haoligo:equipment-reports-maintenance-plan:read",
+    "haoligo:equipment-reports-maintenance-plan:create",
+    "haoligo:equipment-reports-maintenance-plan:update",
+    "haoligo:equipment-reports-maintenance-plan:delete",
+    "haoligo:equipment-reports-maintenance-plan:import",
+    "haoligo:equipment-reports-maintenance-plan:export",
     "haoligo:entry:read",
     "haoligo:haoligo:create",
     "haoligo:haoligo:update",

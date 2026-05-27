@@ -177,6 +177,19 @@ class HaoligoEquipment(HaoligoTenantModel):
         default=list,
         description="设备图片（core 文件 uuid 列表）",
     )
+    maintenance_cycle_by_yield = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        description="维保周期(依产量)",
+    )
+    maintenance_cycle_by_days = fields.IntField(null=True, description="维保周期(依天数)")
+    used_yield = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        default=0,
+        description="保养周期累计产量（产出单完成数量累计；保养完修可清零）",
+    )
 
 
 class HaoligoPatrolRoute(HaoligoTenantModel):

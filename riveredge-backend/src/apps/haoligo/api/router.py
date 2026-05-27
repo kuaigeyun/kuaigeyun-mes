@@ -31,6 +31,7 @@ from apps.haoligo.api.routes_mold_outsource_maintenance_sheet import (
 from apps.haoligo.api.routes_mold_outsource_maintenance_complete_sheet import (
     router as mold_outsource_maintenance_complete_sheet_router,
 )
+from apps.haoligo.api.routes_mold_reports import router as mold_reports_router
 from apps.haoligo.api.routes_patrol import router as patrol_router
 from apps.haoligo.api.routes_patrol_reports import router as patrol_reports_router
 
@@ -67,6 +68,7 @@ router.include_router(mold_outsource_maintenance_sheet_router)
 router.include_router(mold_outsource_maintenance_complete_sheet_router)
 router.include_router(mold_maintenance_sheet_router)
 router.include_router(mold_maintenance_complete_sheet_router)
+router.include_router(mold_reports_router)
 # 须在 mold_router 之前：后者含 /molds/{row_id}，否则会误把 /molds/warehouses 当成模具 id
 router.include_router(mold_warehouse_router)
 router.include_router(mold_router)

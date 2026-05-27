@@ -15,6 +15,7 @@ from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api.equipment_maintenance_equipment_status import adjust_equipment_used_yield
 from apps.haoligo.constants.equipment_sheet_rule_codes import (
     HAOLIGO_EQUIPMENT_OUTPUT_RECORD_NO,
     HAOLIGO_EQUIPMENT_ROUTE_PATROL_NO,
@@ -1506,6 +1507,7 @@ async def create_output_record(
             reporter_user_id=user.id,
             dataset_snapshot=body.dataset_snapshot,
         )
+        await adjust_equipment_used_yield(tenant_id, eq.id, Decimal(str(body.completed_qty or 0)))
     await row.fetch_related("equipment")
     return await _serialize_output_record(row)
 
@@ -1532,6 +1534,8 @@ async def update_output_record(
     row = await tenant_alive(HaoligoEquipmentOutputRecord, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    prev_eq_id = row.equipment_id
+    prev_qty = Decimal(str(row.completed_qty or 0))
     data = body.model_dump(exclude_unset=True)
     if "work_order_no" in data and data["work_order_no"] is not None:
         s = str(data["work_order_no"]).strip()
@@ -1552,6 +1556,17 @@ async def update_output_record(
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    new_eq_id = row.equipment_id
+    new_qty = Decimal(str(row.completed_qty or 0))
+    if prev_eq_id == new_eq_id:
+        delta = new_qty - prev_qty
+        if delta:
+            await adjust_equipment_used_yield(tenant_id, new_eq_id, delta)
+    else:
+        if prev_eq_id:
+            await adjust_equipment_used_yield(tenant_id, prev_eq_id, -prev_qty)
+        if new_eq_id:
+            await adjust_equipment_used_yield(tenant_id, new_eq_id, new_qty)
     await row.fetch_related("equipment")
     return await _serialize_output_record(row)
 
@@ -1565,5 +1580,9 @@ async def delete_output_record(
     row = await tenant_alive(HaoligoEquipmentOutputRecord, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    eq_id = row.equipment_id
+    qty = Decimal(str(row.completed_qty or 0))
     row.deleted_at = timezone.now()
     await row.save()
+    if eq_id and qty:
+        await adjust_equipment_used_yield(tenant_id, eq_id, -qty)

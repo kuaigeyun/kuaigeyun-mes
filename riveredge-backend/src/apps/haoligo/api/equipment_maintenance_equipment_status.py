@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Optional
 
 from apps.haoligo.api._qs import tenant_alive
@@ -141,3 +142,25 @@ async def apply_equipment_status_on_upkeep_sheet_created(
         await _set_equipment_operational_status(
             tenant_id, equipment_id, "repair", changed_by_user_id=changed_by_user_id
         )
+
+
+async def apply_upkeep_clear_total_to_equipment(tenant_id: int, equipment_id: int, *, clear: bool) -> None:
+    if not clear:
+        return
+    eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=equipment_id).first()
+    if eq:
+        eq.used_yield = Decimal("0")
+        await eq.save(update_fields=["used_yield", "updated_at"])
+
+
+async def adjust_equipment_used_yield(tenant_id: int, equipment_id: int, delta: Decimal) -> None:
+    """产出单完成数量变更时同步台账累计产量。"""
+    eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=equipment_id).first()
+    if not eq:
+        return
+    cur = eq.used_yield if eq.used_yield is not None else Decimal("0")
+    ny = cur + delta
+    if ny < 0:
+        ny = Decimal("0")
+    eq.used_yield = ny
+    await eq.save(update_fields=["used_yield", "updated_at"])

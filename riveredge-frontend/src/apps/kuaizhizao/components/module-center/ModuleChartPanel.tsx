@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Col, Row, Segmented, Spin } from 'antd';
+import { Card, Col, Segmented, Spin } from 'antd';
 
 export interface ModuleChartPanelProps {
   title: React.ReactNode;
@@ -25,7 +25,7 @@ export function ModuleChartPanel({
   lg = 12,
 }: ModuleChartPanelProps) {
   return (
-    <Col xs={24} lg={lg}>
+    <Col xs={24} lg={lg} style={{ display: 'flex', minWidth: 0 }}>
       <Card
         title={title}
         extra={
@@ -40,21 +40,27 @@ export function ModuleChartPanel({
             extra
           )
         }
-        style={{ borderRadius: 12 }}
-        styles={{ body: { padding: '12px 16px 8px', minHeight: height } }}
+        style={{ borderRadius: 12, width: '100%', height: '100%' }}
+        styles={{
+          body: {
+            padding: '12px 16px 8px',
+            minHeight: height,
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
       >
-        <Spin spinning={!!loading}>{children}</Spin>
+        <Spin spinning={!!loading} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {children}
+        </Spin>
       </Card>
     </Col>
   );
 }
 
+/** 图表区与 actionRow 共用外层 Row 栅格，勿再嵌套 Row */
 export function ModuleChartRow({ children }: { children: React.ReactNode }) {
-  return (
-    <Row gutter={[16, 16]} style={{ width: '100%' }}>
-      {children}
-    </Row>
-  );
+  return <>{children}</>;
 }
 
 export default ModuleChartPanel;

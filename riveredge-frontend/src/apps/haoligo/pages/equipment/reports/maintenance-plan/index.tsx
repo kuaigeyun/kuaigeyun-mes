@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 保养预警表（统计报表：台账 + 厂内/外协保养完修合并预警）
+ * 好力 GO — 设备保养计划表（台账 + 保养完修记录合并预警）
  */
 
 import React, { useRef } from 'react';
@@ -8,17 +8,17 @@ import { App, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
-import { getMoldLedgerStatusTagColor } from '../../../../constants/moldStatus';
+import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 import {
   type AlertLevel,
-  type MoldMaintenanceAlertRow,
-  buildMoldMaintenanceAlertRows,
+  type EquipmentMaintenanceAlertRow,
+  buildEquipmentMaintenanceAlertRows,
   dominantDimensionLabel,
-  loadMoldMaintenanceAlertDataset,
+  loadEquipmentMaintenanceAlertDataset,
   passesSeverityFilter,
   severityRank,
   sortMaintenanceAlertRows,
-} from '../../../../utils/moldMaintenanceAlert';
+} from '../../../../utils/equipmentMaintenanceAlert';
 
 const CACHE_TTL_MS = 45_000;
 
@@ -28,17 +28,18 @@ function alertTag(level: AlertLevel) {
   return <Tag color="success">正常</Tag>;
 }
 
-const MoldMaintenanceAlertReportPage: React.FC = () => {
+const EquipmentMaintenancePlanReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const cacheRef = useRef<{ at: number; rows: MoldMaintenanceAlertRow[] } | null>(null);
+  const cacheRef = useRef<{ at: number; rows: EquipmentMaintenanceAlertRow[] } | null>(null);
+  const { formatStatus: operationalStatusLabel } = useEquipmentOperationalStatusLabels();
 
-  const columns: ProColumns<MoldMaintenanceAlertRow>[] = [
+  const columns: ProColumns<EquipmentMaintenanceAlertRow>[] = [
     {
       title: '关键词',
       dataIndex: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '模具代号 / 名称' },
+      fieldProps: { placeholder: '设备编号 / 名称' },
     },
     {
       title: '最低严重程度',
@@ -61,17 +62,14 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       sorter: (a, b) => severityRank[a.alert_level] - severityRank[b.alert_level],
       render: (_, r) => alertTag(r.alert_level),
     },
-    { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true, hideInSearch: true },
-    { title: '模具名称', dataIndex: 'name', width: 160, ellipsis: true, hideInSearch: true },
+    { title: '设备编号', dataIndex: 'asset_code', width: 120, ellipsis: true, hideInSearch: true },
+    { title: '设备名称', dataIndex: 'name', width: 160, ellipsis: true, hideInSearch: true },
     {
-      title: '台账状态',
-      dataIndex: 'status',
+      title: '运行状态',
+      dataIndex: 'operational_status',
       width: 110,
       hideInSearch: true,
-      render: (_, r) => {
-        const c = getMoldLedgerStatusTagColor(r.status);
-        return c ? <Tag color={c}>{r.status}</Tag> : <Tag>{r.status}</Tag>;
-      },
+      render: (_, r) => operationalStatusLabel(r.operational_status, '—'),
     },
     {
       title: '主导维度',
@@ -117,21 +115,21 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       render: (_, r) => (r.days_usage_pct != null ? `${r.days_usage_pct}%` : '—'),
     },
     {
-      title: '维保周期(产量)',
+      title: '保养周期(产量)',
       dataIndex: 'maintenance_cycle_by_yield',
       width: 130,
       hideInSearch: true,
       render: (_, r) => r.maintenance_cycle_by_yield ?? '—',
     },
     {
-      title: '已用产量',
+      title: '累计产量',
       dataIndex: 'used_yield',
       width: 120,
       hideInSearch: true,
       render: (_, r) => r.used_yield ?? '—',
     },
     {
-      title: '维保周期(天)',
+      title: '保养周期(天)',
       dataIndex: 'maintenance_cycle_by_days',
       width: 120,
       hideInSearch: true,
@@ -141,9 +139,9 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <UniTable<MoldMaintenanceAlertRow>
-        headerTitle="保养预警表"
-        columnPersistenceId="apps.haoligo.pages.molds.reports.maintenance-alert"
+      <UniTable<EquipmentMaintenanceAlertRow>
+        headerTitle="设备保养计划表"
+        columnPersistenceId="apps.haoligo.pages.equipment.reports.maintenance-plan"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -155,23 +153,18 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
           try {
             let rows = cacheRef.current?.rows;
             if (!cacheRef.current || now - cacheRef.current.at > CACHE_TTL_MS) {
-              const { molds, lastUpkeepByMold } = await loadMoldMaintenanceAlertDataset();
-              rows = buildMoldMaintenanceAlertRows(molds, lastUpkeepByMold);
+              const { equipments, lastUpkeepByEquipment } = await loadEquipmentMaintenanceAlertDataset();
+              rows = buildEquipmentMaintenanceAlertRows(equipments, lastUpkeepByEquipment);
               cacheRef.current = { at: now, rows };
             }
             const kw =
               typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim().toLowerCase() : '';
-            const st =
-              typeof searchFormValues?.status === 'string' && searchFormValues.status.trim()
-                ? searchFormValues.status.trim()
-                : '';
             const sevMin =
               typeof searchFormValues?.severity_min === 'string' ? searchFormValues.severity_min : 'all';
 
             let filtered = rows!.filter((r) => {
-              if (st && r.status !== st) return false;
               if (kw) {
-                const hay = `${r.mold_code}\n${r.name}`.toLowerCase();
+                const hay = `${r.asset_code}\n${r.name}`.toLowerCase();
                 if (!hay.includes(kw)) return false;
               }
               return passesSeverityFilter(r, sevMin === 'all' ? 'all' : sevMin);
@@ -182,7 +175,7 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
             const data = filtered.slice(start, start + pageSize);
             return { data, success: true, total };
           } catch (e) {
-            messageApi.error((e as Error).message || '加载保养预警失败');
+            messageApi.error((e as Error).message || '加载设备保养计划失败');
             return { data: [], success: false, total: 0 };
           }
         }}
@@ -191,4 +184,4 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
   );
 };
 
-export default MoldMaintenanceAlertReportPage;
+export default EquipmentMaintenancePlanReportPage;

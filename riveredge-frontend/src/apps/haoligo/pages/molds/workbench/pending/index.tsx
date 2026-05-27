@@ -2,12 +2,12 @@
  * 好力 GO — 外协维保审核（外协维保完修单唯一审核入口；数据范围内待审/历史）
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Divider, Modal, Space, Spin, Table } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
-import { UniTable } from '../../../../../../components/uni-table';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
@@ -26,6 +26,7 @@ import {
   type MoldOutsourceMaintenanceCompleteSheetRow,
 } from '../../../../services/haoligo';
 import { canAuditMoldSheet, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 
 function repairSummary(items: MoldOutsourceCompleteLineRow[]): string {
   const parts: string[] = [];
@@ -42,7 +43,12 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const canAudit = canAuditMoldSheet(currentUser, HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE);
+  const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>();
+  const reloadTableAndMoldLedger = useCallback(() => {
+    invalidateHaoligoMoldLedgerTableCache(queryClient);
+    actionRef.current?.reload();
+  }, [queryClient]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRow, setDetailRow] = useState<MoldOutsourceMaintenanceCompleteSheetRow | null>(null);
@@ -70,7 +76,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
   const reloadDetail = async (id: number) => {
     const d = await getMoldOutsourceMaintenanceCompleteSheet(id);
     setDetailRow(d);
-    actionRef.current?.reload();
+    reloadTableAndMoldLedger();
   };
 
   const auditHandlersFor = (id: number) => ({
@@ -153,7 +159,7 @@ const MoldOutsourcePendingReviewPage: React.FC = () => {
             sheetStatus: record.sheet_status,
             handlers: auditHandlersFor(record.id),
             messageApi,
-            reload: () => actionRef.current?.reload(),
+            reload: reloadTableAndMoldLedger,
           }),
         ];
         return renderRowActionsOverflow(

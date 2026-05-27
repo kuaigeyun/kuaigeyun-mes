@@ -10,6 +10,8 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._mold_maintenance_mold_status import (
+    apply_upkeep_clear_from_inhouse_complete_sheet,
+    inhouse_complete_line_clears_total_for_mold,
     refresh_mold_status_after_maintenance_completed,
     unique_mold_codes_from_stored_line_items,
 )
@@ -465,6 +467,7 @@ async def create_maintenance_complete_sheet(
         )
         for mc in unique_mold_codes_from_stored_line_items(stored):
             await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
+        await apply_upkeep_clear_from_inhouse_complete_sheet(tenant_id, row)
     return await _serialize(row)
 
 
@@ -542,6 +545,7 @@ async def update_maintenance_complete_sheet(
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     for mc in codes:
         await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
+    await apply_upkeep_clear_from_inhouse_complete_sheet(tenant_id, row)
     return await _serialize(row)
 
 

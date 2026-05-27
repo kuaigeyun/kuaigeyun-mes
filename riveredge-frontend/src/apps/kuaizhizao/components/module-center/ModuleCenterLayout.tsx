@@ -24,7 +24,7 @@ export function ModuleCenterLayout({
           <Col span={24}>{kpiRow}</Col>
           <Col span={24}>{shortcutRow}</Col>
           {actionRow}
-          {chartRow ? <Col span={24}>{chartRow}</Col> : null}
+          {chartRow}
         </Row>
       </Spin>
     </div>

@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Card, Dropdown, Empty, Flex, Segmented, Spin, Typography, theme } from 'antd';
+import { App, Card, Dropdown, Empty, Flex, Select, Spin, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import EquipmentStatusTrafficLight, {
@@ -104,17 +104,27 @@ const EquipmentStatusDashboardPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const viewModeOptions = useMemo(
-    () => [
-      { label: t('app.haoligo.equipment.statusBoard.segmentAll'), value: VIEW_ALL },
-      { label: t('app.haoligo.equipment.statusBoard.segmentByWorkshop'), value: VIEW_GROUP },
-      ...workshops.map((w) => ({
-        label: w.name?.trim() || w.code,
-        value: workshopViewKey(w.id),
-      })),
-    ],
-    [t, workshops],
-  );
+  const viewModeSelectOptions = useMemo(() => {
+    const groups: { label: string; options: { label: string; value: string }[] }[] = [
+      {
+        label: t('app.haoligo.equipment.statusBoard.viewModeGroup'),
+        options: [
+          { label: t('app.haoligo.equipment.statusBoard.segmentAll'), value: VIEW_ALL },
+          { label: t('app.haoligo.equipment.statusBoard.segmentByWorkshop'), value: VIEW_GROUP },
+        ],
+      },
+    ];
+    if (workshops.length > 0) {
+      groups.push({
+        label: t('app.haoligo.equipment.statusBoard.workshopFilterGroup'),
+        options: workshops.map((w) => ({
+          label: w.code ? `${w.code} · ${w.name?.trim() || w.code}` : w.name?.trim() || w.code,
+          value: workshopViewKey(w.id),
+        })),
+      });
+    }
+    return groups;
+  }, [t, workshops]);
 
   const cardGridStyle = useMemo(
     (): React.CSSProperties => ({
@@ -456,22 +466,16 @@ const EquipmentStatusDashboardPage: React.FC = () => {
               <Typography.Title level={4} style={{ margin: 0 }}>
                 {t('app.haoligo.menu.equipment.dashboard.status')}
               </Typography.Title>
-              <div
-                style={{
-                  maxWidth: '100%',
-                  overflowX: 'auto',
-                  padding: '1px',
-                  background: token.colorFillQuaternary,
-                  border: `4px solid ${token.colorBgContainer}`,
-                  borderRadius: token.borderRadiusLG,
-                }}
-              >
-                <Segmented
-                  value={viewMode}
-                  options={viewModeOptions}
-                  onChange={(val) => setViewMode(String(val))}
-                />
-              </div>
+              <Select
+                value={viewMode}
+                options={viewModeSelectOptions}
+                onChange={(val) => setViewMode(String(val))}
+                showSearch
+                optionFilterProp="label"
+                style={{ minWidth: 220, maxWidth: 360 }}
+                popupMatchSelectWidth={320}
+                listHeight={400}
+              />
             </Flex>
             <Typography.Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
               {t('app.haoligo.equipment.statusBoard.lead', { count: totalCount })}

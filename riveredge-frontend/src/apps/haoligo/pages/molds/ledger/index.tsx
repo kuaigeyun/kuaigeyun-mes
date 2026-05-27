@@ -45,6 +45,10 @@ import dayjs from 'dayjs';
 import { DeleteOutlined, EditOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  HAOLIGO_MOLD_LEDGER_TANSTACK_QUERY,
+  useHaoligoMoldLedgerTableLiveRefresh,
+} from '../../../utils/moldLedgerTableCache';
+import {
   DetailDrawerSection,
   DRAWER_CONFIG,
   flushDrawerOpen,
@@ -371,6 +375,7 @@ function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldBatc
 const MoldLedgerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  useHaoligoMoldLedgerTableLiveRefresh(actionRef);
   const formRef = useRef<ProFormInstance>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -985,6 +990,8 @@ const MoldLedgerPage: React.FC = () => {
         <UniTable<MoldRow>
           headerTitle="模具台账"
           columnPersistenceId="apps.haoligo.pages.molds.ledger"
+          tanstackQuery={HAOLIGO_MOLD_LEDGER_TANSTACK_QUERY}
+          loadingDelay={0}
           skipFuzzyPinyinClientFilter
           actionRef={actionRef}
           rowKey="id"

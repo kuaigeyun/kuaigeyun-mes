@@ -20,7 +20,7 @@ export function ModuleActionPanel({
   loading,
 }: ModuleActionPanelProps) {
   return (
-    <Col xs={xs} lg={lg}>
+    <Col xs={xs} lg={lg} style={{ minWidth: 0 }}>
       <ProCard
         title={title}
         headerBordered
