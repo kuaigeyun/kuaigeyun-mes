@@ -188,6 +188,13 @@ async def lifespan(app: FastAPI):
         return_exceptions=False,
     )
 
+    from core.services.authorization.data_scope_bootstrap import ensure_data_scope_framework
+    from apps.haoligo.authorization.data_scope_setup import register_haoligo_data_scope_profiles
+
+    ensure_data_scope_framework()
+    register_haoligo_data_scope_profiles()
+    logger.info("✅ 数据权限框架（DataScopeService）已注册")
+
     # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
     try:
         from infra.models.infra_superadmin import InfraSuperAdmin

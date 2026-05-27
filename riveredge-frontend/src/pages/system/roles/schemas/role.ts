@@ -34,6 +34,27 @@ export const roleFormSchema: FieldConfig[] = [
     fieldProps: { rows: 2 },
   },
   {
+    name: 'role_type',
+    type: 'select',
+    labelKey: 'field.role.roleType',
+    required: true,
+    options: [
+      { labelKey: 'field.role.roleTypeInternal', value: 'internal' },
+      { labelKey: 'field.role.roleTypeExternal', value: 'external' },
+    ],
+  },
+  {
+    name: 'external_partner_type',
+    type: 'select',
+    labelKey: 'field.role.externalPartnerType',
+    placeholderKey: 'field.role.externalPartnerTypePlaceholder',
+    options: [
+      { labelKey: 'field.role.externalPartnerCustomer', value: 'customer' },
+      { labelKey: 'field.role.externalPartnerSupplier', value: 'supplier' },
+    ],
+    extraKey: 'field.role.externalPartnerTypeExtra',
+  },
+  {
     name: 'is_active',
     type: 'switch',
     labelKey: 'field.role.isActive',

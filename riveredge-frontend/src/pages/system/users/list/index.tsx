@@ -5,7 +5,7 @@
  * 支持用户的 CRUD 操作、导入导出和批量操作。
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
@@ -17,7 +17,9 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/
 import {
   getUserList,
   getUserByUuid,
+  getUserDataScopeBindings,
   createUser,
+  replaceUserDataScopeBindings,
   updateUser,
   deleteUser,
   importUsers,
@@ -36,6 +38,8 @@ import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/depa
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { customerApi, supplierApi, unwrapSupplyPagedList } from '../../../../apps/master-data/services/supply-chain';
+import type { Customer, Supplier } from '../../../../apps/master-data/types/supply-chain';
 
 /**
  * 账户管理列表页面组件
@@ -50,8 +54,21 @@ const UserListPage: React.FC = () => {
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, { role_type?: string; external_partner_type?: string }>>({});
+  const [customerOptions, setCustomerOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [supplierOptions, setSupplierOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [roleUuidsDraft, setRoleUuidsDraft] = useState<string[]>([]);
+  const selectedExternalPartnerTypes = useMemo(() => {
+    const types = new Set<string>();
+    roleUuidsDraft.forEach((uuid) => {
+      const role = roleMetaByUuid[uuid];
+      if (role?.role_type === 'external' && role.external_partner_type) {
+        types.add(role.external_partner_type);
+      }
+    });
+    return types;
+  }, [roleUuidsDraft, roleMetaByUuid]);
   const formRef = useRef<ProFormInstance>();
   const userDetailReqRef = useRef(0);
 
@@ -156,10 +173,12 @@ const UserListPage: React.FC = () => {
 
   const loadReferenceOptions = useCallback(async () => {
     try {
-      const [deptResponse, posResponse, roleResponse] = await Promise.all([
+      const [deptResponse, posResponse, roleResponse, supplierResponse, customerResponse] = await Promise.all([
         getDepartmentTree(),
         getPositionList({ page_size: 100 }),
         getRoleList({ page_size: 100 }),
+        supplierApi.list({ skip: 0, limit: 1000, isActive: true }),
+        customerApi.list({ skip: 0, limit: 1000, isActive: true }),
       ]);
 
       const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
@@ -186,6 +205,33 @@ const UserListPage: React.FC = () => {
         label: role.name,
         value: role.uuid,
       })));
+      setRoleMetaByUuid(
+        roleResponse.items.reduce((acc, role) => {
+          acc[role.uuid] = {
+            role_type: role.role_type,
+            external_partner_type: role.external_partner_type,
+          };
+          return acc;
+        }, {} as Record<string, { role_type?: string; external_partner_type?: string }>)
+      );
+      const customers = unwrapSupplyPagedList<Customer>(customerResponse);
+      setCustomerOptions(
+        customers
+          .map((x) => ({
+            label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
+            value: x.code,
+          }))
+          .filter((x) => !!x.value)
+      );
+      const suppliers = unwrapSupplyPagedList<Supplier>(supplierResponse);
+      setSupplierOptions(
+        suppliers
+          .map((x) => ({
+            label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
+            value: x.code,
+          }))
+          .filter((x) => !!x.value)
+      );
     } catch (error) {
       if (typeof window !== 'undefined') {
         window.console.error('加载选项数据失败:', error);
@@ -207,6 +253,8 @@ const UserListPage: React.FC = () => {
     setFormInitialValues({
       is_active: true,
       is_tenant_admin: false,
+      supplier_scope_codes: [],
+      customer_scope_codes: [],
     });
     setModalVisible(true);
   };
@@ -220,6 +268,12 @@ const UserListPage: React.FC = () => {
       setCurrentUserUuid(record.uuid);
       
       const detail = await getUserByUuid(record.uuid);
+      const [supplierBindings, customerBindings] = await Promise.all([
+        getUserDataScopeBindings(detail.uuid, 'supplier'),
+        getUserDataScopeBindings(detail.uuid, 'customer'),
+      ]);
+      const supplierCodes = supplierBindings.map((x) => x.scope_code).filter(Boolean);
+      const customerCodes = customerBindings.map((x) => x.scope_code).filter(Boolean);
       const editRoleUuids = detail.roles?.map(r => r.uuid) || [];
       setRoleUuidsDraft(editRoleUuids);
       setFormInitialValues({
@@ -232,6 +286,8 @@ const UserListPage: React.FC = () => {
         role_uuids: editRoleUuids,
         is_active: detail.is_active,
         is_tenant_admin: detail.is_tenant_admin,
+        supplier_scope_codes: supplierCodes,
+        customer_scope_codes: customerCodes,
       });
       setModalVisible(true);
     } catch (error: any) {
@@ -312,6 +368,14 @@ const UserListPage: React.FC = () => {
       // 移除确认密码字段，后端不需要这个字段
       const submitData = { ...values };
       delete submitData.confirmPassword;
+      const supplierCodes = (Array.isArray(submitData.supplier_scope_codes) ? submitData.supplier_scope_codes : [])
+        .map((v: any) => String(v || '').trim())
+        .filter(Boolean);
+      const customerCodes = (Array.isArray(submitData.customer_scope_codes) ? submitData.customer_scope_codes : [])
+        .map((v: any) => String(v || '').trim())
+        .filter(Boolean);
+      delete submitData.supplier_scope_codes;
+      delete submitData.customer_scope_codes;
       if (!submitData.password) {
         delete submitData.password;
       }
@@ -333,14 +397,34 @@ const UserListPage: React.FC = () => {
       }
 
       if (isEdit && currentUserUuid) {
-        await updateUser(currentUserUuid, submitData as UpdateUserData);
+        const updated = await updateUser(currentUserUuid, submitData as UpdateUserData);
+        await Promise.all([
+          replaceUserDataScopeBindings(updated.uuid, {
+            dimension: 'supplier',
+            items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
+          }),
+          replaceUserDataScopeBindings(updated.uuid, {
+            dimension: 'customer',
+            items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
+          }),
+        ]);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
         if (!submitData.password) {
           messageApi.error(t('field.user.passwordRequired'));
           return;
         }
-        await createUser(submitData as CreateUserData);
+        const created = await createUser(submitData as CreateUserData);
+        await Promise.all([
+          replaceUserDataScopeBindings(created.uuid, {
+            dimension: 'supplier',
+            items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
+          }),
+          replaceUserDataScopeBindings(created.uuid, {
+            dimension: 'customer',
+            items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
+          }),
+        ]);
         messageApi.success(t('pages.system.createSuccess'));
       }
 
@@ -993,6 +1077,36 @@ const UserListPage: React.FC = () => {
           }}
           colProps={{ span: 8 }}
         />
+        {selectedExternalPartnerTypes.has('supplier') && (
+          <ProFormSelect
+            name="supplier_scope_codes"
+            label="外部角色-供应商绑定"
+            placeholder="请选择该账号可访问的供应商（按编码）"
+            options={supplierOptions}
+            fieldProps={{
+              mode: 'multiple',
+              showSearch: true,
+              optionFilterProp: 'label',
+            }}
+            extra="根据所选外部角色自动显示；用于供应商数据隔离"
+            colProps={{ span: 24 }}
+          />
+        )}
+        {selectedExternalPartnerTypes.has('customer') && (
+          <ProFormSelect
+            name="customer_scope_codes"
+            label="外部角色-客户绑定"
+            placeholder="请选择该账号可访问的客户（按编码）"
+            options={customerOptions}
+            fieldProps={{
+              mode: 'multiple',
+              showSearch: true,
+              optionFilterProp: 'label',
+            }}
+            extra="根据所选外部角色自动显示；用于客户数据隔离"
+            colProps={{ span: 24 }}
+          />
+        )}
         <ProFormSwitch
           name="is_active"
           label={t('field.user.isActiveLabel')}

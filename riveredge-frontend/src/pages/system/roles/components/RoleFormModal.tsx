@@ -44,7 +44,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true });
+    formRef.current?.setFieldsValue({ is_active: true, role_type: 'internal' });
     if (!editUuid) return;
     getRoleByUuid(editUuid)
       .then((detail: Role) => {
@@ -52,6 +52,8 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
           name: detail.name,
           code: detail.code,
           description: detail.description,
+          role_type: detail.role_type || 'internal',
+          external_partner_type: detail.external_partner_type,
           is_active: detail.is_active ?? true,
         });
       })
@@ -63,11 +65,19 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
+      const payload = { ...values };
+      if (payload.role_type === 'external' && !payload.external_partner_type) {
+        messageApi.warning('外部角色必须选择绑定类型（客户或供应商）');
+        return;
+      }
+      if (payload.role_type !== 'external') {
+        payload.external_partner_type = undefined;
+      }
       if (isEdit && editUuid) {
-        await updateRole(editUuid, values as UpdateRoleData);
+        await updateRole(editUuid, payload as UpdateRoleData);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
-        await createRole(values as CreateRoleData);
+        await createRole(payload as CreateRoleData);
         messageApi.success(t('pages.system.createSuccess'));
       }
       onClose();

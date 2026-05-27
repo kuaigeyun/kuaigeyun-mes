@@ -149,7 +149,7 @@ class UserBatchDeleteResponse(BaseModel):
 @router.post("/batch-delete", response_model=UserBatchDeleteResponse)
 async def batch_delete_users(
     request: UserBatchDeleteRequest,
-    _auth: object = Depends(require_access("system.user", "delete")),
+    _auth: object = Depends(require_access("system:user", "delete")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -173,7 +173,7 @@ async def batch_delete_users(
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: UserCreateRequest,
-    _auth: object = Depends(require_access("system.user", "create")),
+    _auth: object = Depends(require_access("system:user", "create")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     user_service: Any = Depends(get_user_service_with_fallback),
@@ -281,7 +281,7 @@ async def get_user_list(
     position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
-    _auth: object = Depends(require_access("system.user", "read")),
+    _auth: object = Depends(require_access("system:user", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     user_service: Any = Depends(get_user_service_with_fallback),  # ⚠️ 第三阶段改进：依赖注入
@@ -367,7 +367,7 @@ async def get_user_list(
 @router.get("/{user_uuid}", response_model=UserResponse)
 async def get_user_detail(
     user_uuid: str,
-    _auth: object = Depends(require_access("system.user", "read")),
+    _auth: object = Depends(require_access("system:user", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -405,7 +405,7 @@ async def get_user_detail(
 async def update_user(
     user_uuid: str,
     data: UserUpdate,
-    _auth: object = Depends(require_access("system.user", "update")),
+    _auth: object = Depends(require_access("system:user", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -449,7 +449,7 @@ async def update_user(
 @router.delete("/{user_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_uuid: str,
-    _auth: object = Depends(require_access("system.user", "delete")),
+    _auth: object = Depends(require_access("system:user", "delete")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -488,7 +488,7 @@ async def delete_user(
 async def reset_user_password(
     user_uuid: str,
     data: Optional[UserResetPasswordRequest] = None,
-    _auth: object = Depends(require_access("system.user", "update")),
+    _auth: object = Depends(require_access("system:user", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -533,7 +533,7 @@ async def reset_user_password(
 @router.post("/import/preview", response_model=UserImportPreviewResponse)
 async def preview_user_import(
     request: UserImportRequest,
-    _auth: object = Depends(require_access("system.user", "import")),
+    _auth: object = Depends(require_access("system:user", "import")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -552,7 +552,7 @@ async def preview_user_import(
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_users(
     request: UserImportRequest,
-    _auth: object = Depends(require_access("system.user", "import")),
+    _auth: object = Depends(require_access("system:user", "import")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -605,7 +605,7 @@ async def export_users(
     position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否激活筛选"),
     is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
-    _auth: object = Depends(require_access("system.user", "export")),
+    _auth: object = Depends(require_access("system:user", "export")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -663,7 +663,7 @@ async def export_users(
 @router.get("/{user_uuid}/biometric/register-options")
 async def get_user_biometric_registration_options(
     user_uuid: str,
-    _auth: object = Depends(require_access("system.user", "update")),
+    _auth: object = Depends(require_access("system:user", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     biometric_service: Any = Depends(get_biometric_service)
@@ -679,7 +679,7 @@ async def get_user_biometric_registration_options(
 async def finalize_user_biometric_registration(
     user_uuid: str,
     data: WebAuthnRegisterFinalizeRequest,
-    _auth: object = Depends(require_access("system.user", "update")),
+    _auth: object = Depends(require_access("system:user", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     biometric_service: Any = Depends(get_biometric_service)
@@ -694,3 +694,8 @@ async def finalize_user_biometric_registration(
         challenge=data.challenge,
         device_name=data.device_name
     )
+
+
+from core.api.users.data_scope_bindings import router as data_scope_bindings_router
+
+router.include_router(data_scope_bindings_router)

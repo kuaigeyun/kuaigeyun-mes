@@ -27,6 +27,12 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from apps.haoligo.api._data_scope import (
+    RESOURCE_OUTSOURCE_MAINTENANCE,
+    apply_outsource_sheet_scope,
+    assert_outsource_partner_code_writable,
+    assert_outsource_row_visible,
+)
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -235,7 +241,7 @@ def _serialize(row: HaoligoMoldOutsourceMaintenanceSheet) -> MoldOutsourceMainte
 @router.get("", summary="外协维保单分页列表")
 async def list_outsource_maintenance_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -269,6 +275,9 @@ async def list_outsource_maintenance_sheets(
             | Q(source_order_no__icontains=k)
             | Q(service_type__icontains=k)
         )
+    qs = await apply_outsource_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
@@ -283,8 +292,14 @@ async def list_outsource_maintenance_sheets(
 async def create_outsource_maintenance_sheet(
     body: MoldOutsourceMaintenanceSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
+    await assert_outsource_partner_code_writable(
+        tenant_id=tenant_id,
+        user=user,
+        resource=RESOURCE_OUTSOURCE_MAINTENANCE,
+        partner_code=body.outsourced_unit_code,
+    )
     stored = [_line_to_store(x) for x in body.line_items]
     await assert_maintenance_line_molds_are_standby(tenant_id, stored)
     app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
@@ -321,11 +336,14 @@ async def create_outsource_maintenance_sheet(
 async def get_outsource_maintenance_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
     return _serialize(row)
 
 
@@ -334,11 +352,14 @@ async def update_outsource_maintenance_sheet(
     row_id: int,
     body: MoldOutsourceMaintenanceSheetUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
     data = body.model_dump(exclude_unset=True)
     if "applicant_user_id" in data and data["applicant_user_id"] is not None:
         app_uid, app_name = await _resolve_applicant_only(tenant_id, int(data["applicant_user_id"]))
@@ -358,6 +379,14 @@ async def update_outsource_maintenance_sheet(
         if not s:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="外协单位不能为空")
         data["outsourced_unit_name"] = s
+    if "outsourced_unit_code" in data or "outsourced_unit_name" in data:
+        code_for_scope = data.get("outsourced_unit_code", row.outsourced_unit_code)
+        await assert_outsource_partner_code_writable(
+            tenant_id=tenant_id,
+            user=user,
+            resource=RESOURCE_OUTSOURCE_MAINTENANCE,
+            partner_code=code_for_scope,
+        )
     for k in ("outsourced_unit_code", "source_order_no"):
         if k in data and data[k] is not None:
             data[k] = _strip_opt(str(data[k]))
@@ -381,11 +410,14 @@ async def update_outsource_maintenance_sheet(
 async def delete_outsource_maintenance_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()

@@ -107,6 +107,17 @@ export interface UpdateUserData {
   is_tenant_admin?: boolean;
 }
 
+export interface UserDataScopeBindingItem {
+  dimension: string;
+  scope_code: string;
+  scope_name?: string;
+}
+
+export interface UserDataScopeBindingReplacePayload {
+  dimension: string;
+  items: UserDataScopeBindingItem[];
+}
+
 /**
  * 获取用户列表
  *
@@ -161,6 +172,25 @@ export async function updateUser(userUuid: string, data: UpdateUserData): Promis
   return apiRequest<User>(`/core/users/${userUuid}`, {
     method: 'PUT',
     data,
+  });
+}
+
+export async function getUserDataScopeBindings(
+  userUuid: string,
+  dimension?: string
+): Promise<UserDataScopeBindingItem[]> {
+  return apiRequest<UserDataScopeBindingItem[]>(`/core/users/by-uuid/${userUuid}/data-scope-bindings`, {
+    params: dimension ? { dimension } : undefined,
+  });
+}
+
+export async function replaceUserDataScopeBindings(
+  userUuid: string,
+  payload: UserDataScopeBindingReplacePayload
+): Promise<UserDataScopeBindingItem[]> {
+  return apiRequest<UserDataScopeBindingItem[]>(`/core/users/by-uuid/${userUuid}/data-scope-bindings`, {
+    method: 'PUT',
+    data: payload,
   });
 }
 

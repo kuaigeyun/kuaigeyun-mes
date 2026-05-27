@@ -1,0 +1,109 @@
+"""内置与通用 scope_custom 解析器实现。"""
+
+from __future__ import annotations
+
+from tortoise.expressions import Q
+
+from core.models.data_permission_policy import DataScopeType
+from core.services.authorization.data_scope_constants import (
+    DIMENSION_OUTSOURCED_UNIT,
+    RESOLVER_OUTSOURCED_UNIT,
+    RESOLVER_PARTNER,
+)
+from core.services.authorization.data_scope_resolver_registry import (
+    ScopeResolveContext,
+    register_scope_resolver,
+)
+from core.services.authorization.user_data_scope_binding_service import UserDataScopeBindingService
+
+
+def _deny_all_q() -> Q:
+    return Q(id=-1)
+
+
+async def resolve_scope_all(_ctx: ScopeResolveContext) -> None:
+    """返回 None 表示不追加过滤（全部数据）。"""
+    return None
+
+
+async def resolve_scope_self(ctx: ScopeResolveContext) -> Q:
+    field = ctx.profile.applicant_user_id_field
+    if ctx.profile.created_by_user_id_field:
+        created_field = ctx.profile.created_by_user_id_field
+        return Q(**{field: ctx.user_id}) | Q(**{created_field: ctx.user_id})
+    return Q(**{field: ctx.user_id})
+
+
+async def resolve_scope_department(ctx: ScopeResolveContext) -> Q:
+    dept_field = ctx.profile.department_uuid_field
+    applicant_field = ctx.profile.applicant_user_id_field
+    clauses: list[Q] = []
+    if ctx.department_uuid:
+        clauses.append(Q(**{dept_field: ctx.department_uuid}))
+    if ctx.department_user_ids:
+        clauses.append(Q(**{f"{applicant_field}__in": ctx.department_user_ids}))
+    if not clauses:
+        return await resolve_scope_self(ctx)
+    combined = clauses[0]
+    for part in clauses[1:]:
+        combined |= part
+    return combined
+
+
+async def resolve_partner_scope(ctx: ScopeResolveContext) -> Q:
+    payload = ctx.scope_payload or {}
+    dimension = (
+        (payload.get("dimension") or "").strip()
+        or (ctx.profile.partner_dimension or "").strip()
+        or DIMENSION_OUTSOURCED_UNIT
+    )
+    code_field = (
+        (payload.get("code_field") or "").strip()
+        or (ctx.profile.partner_code_field or "").strip()
+    )
+    if not code_field:
+        return _deny_all_q()
+
+    codes = await UserDataScopeBindingService.list_scope_codes(
+        tenant_id=ctx.tenant_id,
+        user_id=ctx.user_id,
+        dimension=dimension,
+    )
+    if not codes:
+        return _deny_all_q()
+    return Q(**{f"{code_field}__in": codes})
+
+
+async def _resolve_outsourced_unit(ctx: ScopeResolveContext) -> Q:
+    target_dimension = (
+        (ctx.profile.partner_dimension or "").strip()
+        or DIMENSION_OUTSOURCED_UNIT
+    )
+    merged_payload = {
+        **(ctx.scope_payload or {}),
+        "dimension": target_dimension,
+    }
+    if not merged_payload.get("code_field") and ctx.profile.partner_code_field:
+        merged_payload["code_field"] = ctx.profile.partner_code_field
+    child = ScopeResolveContext(
+        tenant_id=ctx.tenant_id,
+        user_id=ctx.user_id,
+        resource=ctx.resource,
+        profile=ctx.profile,
+        scope_payload=merged_payload,
+        department_uuid=ctx.department_uuid,
+        department_user_ids=ctx.department_user_ids,
+    )
+    return await resolve_partner_scope(child)
+
+
+def register_builtin_scope_resolvers() -> None:
+    register_scope_resolver(RESOLVER_PARTNER, resolve_partner_scope)
+    register_scope_resolver(RESOLVER_OUTSOURCED_UNIT, _resolve_outsourced_unit)
+
+
+BUILTIN_SCOPE_RESOLVERS = {
+    DataScopeType.ALL: resolve_scope_all,
+    DataScopeType.SELF: resolve_scope_self,
+    DataScopeType.DEPARTMENT: resolve_scope_department,
+}

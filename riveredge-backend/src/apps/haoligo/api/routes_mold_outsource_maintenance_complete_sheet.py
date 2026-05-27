@@ -33,6 +33,12 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from apps.haoligo.api._data_scope import (
+    RESOURCE_OUTSOURCE_COMPLETE,
+    RESOURCE_OUTSOURCE_MAINTENANCE,
+    apply_outsource_sheet_scope,
+    assert_outsource_row_visible,
+)
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -340,7 +346,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
 @router.get("", summary="外协维保完修单分页列表")
 async def list_outsource_maintenance_complete_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -364,6 +370,9 @@ async def list_outsource_maintenance_complete_sheets(
         qs = qs.filter(created_at__gte=created_from)
     if created_to is not None:
         qs = qs.filter(created_at__lte=created_to)
+    qs = await apply_outsource_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]
@@ -379,13 +388,16 @@ async def list_outsource_maintenance_complete_sheets(
 async def create_outsource_maintenance_complete_sheet(
     body: MoldOutsourceMaintenanceCompleteSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(
         id=body.source_outsource_maintenance_sheet_id,
     ).first()
     if not src:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="外协维保单不存在")
+    await assert_outsource_row_visible(
+        src, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
     if await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(
         source_outsource_maintenance_sheet_id=src.id,
         deleted_at__isnull=True,
@@ -497,6 +509,9 @@ async def list_audit_outsource_maintenance_complete_sheets_mine(
             | Q(department_name__icontains=k)
             | Q(applicant_name__icontains=k)
         )
+    qs = await apply_outsource_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]
@@ -519,6 +534,9 @@ async def list_pending_outsource_maintenance_complete_sheets_mine(
     qs = (
         tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
         .filter(applicant_user_id=user.id, sheet_status="待审核")
+    )
+    qs = await apply_outsource_sheet_scope(
+        qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
     if keyword and keyword.strip():
         k = keyword.strip()
@@ -543,11 +561,14 @@ async def list_pending_outsource_maintenance_complete_sheets_mine(
 async def get_outsource_maintenance_complete_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     return await _serialize(row)
 
 
@@ -556,11 +577,14 @@ async def update_outsource_maintenance_complete_sheet(
     row_id: int,
     body: MoldOutsourceMaintenanceCompleteSheetUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     _guard_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
     if "source_order_no" in data and data["source_order_no"] is not None:
@@ -615,11 +639,14 @@ async def update_outsource_maintenance_complete_sheet(
 async def delete_outsource_maintenance_complete_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     _guard_mutation_allowed(row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
@@ -641,6 +668,9 @@ async def approve_outsource_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     await _guard_applicant_auditor(row, user)
     if _effective_sheet_status(row) != "待审核":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅待审核状态可通过审核")
@@ -667,6 +697,9 @@ async def reject_outsource_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     await _guard_applicant_auditor(row, user)
     if _effective_sheet_status(row) != "待审核":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅待审核状态可驳回")
@@ -693,6 +726,9 @@ async def revoke_approval_outsource_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_outsource_row_visible(
+        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
     await _guard_applicant_auditor(row, user)
     if _effective_sheet_status(row) != OUTSOURCE_MAINTENANCE_COMPLETE_APPROVED_STATUS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅已通过状态可撤销审核")

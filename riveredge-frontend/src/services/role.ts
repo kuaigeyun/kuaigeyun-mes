@@ -36,6 +36,8 @@ export interface Role {
   name: string;
   code: string;
   description?: string;
+  role_type: 'internal' | 'external';
+  external_partner_type?: 'customer' | 'supplier';
   is_system: boolean;
   is_active: boolean;
   tenant_id: number;
@@ -78,6 +80,8 @@ export interface CreateRoleData {
   name: string;
   code: string;
   description?: string;
+  role_type?: 'internal' | 'external';
+  external_partner_type?: 'customer' | 'supplier';
   is_active?: boolean;
 }
 
@@ -88,6 +92,8 @@ export interface UpdateRoleData {
   name?: string;
   code?: string;
   description?: string;
+  role_type?: 'internal' | 'external';
+  external_partner_type?: 'customer' | 'supplier';
   is_active?: boolean;
 }
 

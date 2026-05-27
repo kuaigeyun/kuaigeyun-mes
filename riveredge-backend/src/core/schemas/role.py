@@ -19,6 +19,8 @@ class RoleBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="角色名称")
     code: str = Field(..., min_length=1, max_length=50, description="角色代码（唯一，用于程序识别）")
     description: Optional[str] = Field(None, description="角色描述")
+    role_type: str = Field(default="internal", description="角色类型：internal/external")
+    external_partner_type: Optional[str] = Field(None, description="外部角色合作方类型：customer/supplier")
     is_active: bool = Field(default=True, description="是否启用")
 
 
@@ -52,6 +54,8 @@ class RoleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="角色名称")
     code: Optional[str] = Field(None, min_length=1, max_length=50, description="角色代码（唯一，用于程序识别）")
     description: Optional[str] = Field(None, description="角色描述")
+    role_type: Optional[str] = Field(None, description="角色类型：internal/external")
+    external_partner_type: Optional[str] = Field(None, description="外部角色合作方类型：customer/supplier")
     is_active: Optional[bool] = Field(None, description="是否启用")
 
 
@@ -114,6 +118,8 @@ class RoleListItem(BaseModel):
     name: str = Field(..., description="角色名称")
     code: str = Field(..., description="角色代码")
     description: Optional[str] = Field(None, description="角色描述")
+    role_type: str = Field(..., description="角色类型：internal/external")
+    external_partner_type: Optional[str] = Field(None, description="外部角色合作方类型：customer/supplier")
     is_system: bool = Field(..., description="是否系统角色")
     is_active: bool = Field(..., description="是否启用")
     permission_count: int = Field(..., description="关联的权限数量")

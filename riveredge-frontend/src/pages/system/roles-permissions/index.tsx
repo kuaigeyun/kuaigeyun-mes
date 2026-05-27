@@ -633,6 +633,12 @@ const RolesPermissionsPage: React.FC = () => {
               }}
             />
             <span>{role.name}</span>
+            {role.role_type === 'external' && role.external_partner_type === 'supplier' && (
+              <Tag color="cyan">{t('pages.system.roles.externalSupplier', { defaultValue: '供应商' })}</Tag>
+            )}
+            {role.role_type === 'external' && role.external_partner_type === 'customer' && (
+              <Tag color="geekblue">{t('pages.system.roles.externalCustomer', { defaultValue: '客户' })}</Tag>
+            )}
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
             {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
           </Space>
@@ -855,15 +861,26 @@ const RolesPermissionsPage: React.FC = () => {
         const map = new Map(prev.map((x) => [x.resource, x]));
         resources.forEach((r) => {
           const row = map.get(r);
+          const defaultCustomPayload =
+            scope === 'scope_custom' && /outsource-maintenance|outsource-complete/.test(r)
+              ? { resolver: 'outsourced_unit' }
+              : undefined;
           if (row) {
-            map.set(r, { ...row, scope_type: scope, scope_payload: scope === 'scope_custom' ? row.scope_payload : undefined });
+            map.set(r, {
+              ...row,
+              scope_type: scope,
+              scope_payload:
+                scope === 'scope_custom'
+                  ? row.scope_payload ?? defaultCustomPayload
+                  : undefined,
+            });
           } else {
             map.set(r, {
               uuid: `tmp-data-${Date.now()}-${r}`,
               role_uuid: selectedRole?.uuid || '',
               resource: r,
               scope_type: scope,
-              scope_payload: undefined,
+              scope_payload: scope === 'scope_custom' ? defaultCustomPayload : undefined,
             });
           }
         });
@@ -1504,11 +1521,27 @@ const RolesPermissionsPage: React.FC = () => {
                           { value: 'scope_self', label: '本人' },
                           { value: 'scope_custom', label: '自定义' },
                         ]}
-                        onChange={(val) =>
+                        onChange={(val) => {
+                          const nextScope = val as DataPermissionPolicy['scope_type'];
                           setDataPolicies((prev) =>
-                            prev.map((x, i) => (i === idx ? { ...x, scope_type: val as DataPermissionPolicy['scope_type'] } : x))
-                          )
-                        }
+                            prev.map((x, i) => {
+                              if (i !== idx) return x;
+                              const defaultCustomPayload =
+                                nextScope === 'scope_custom' &&
+                                /outsource-maintenance|outsource-complete/.test(x.resource)
+                                  ? { resolver: 'outsourced_unit' }
+                                  : undefined;
+                              return {
+                                ...x,
+                                scope_type: nextScope,
+                                scope_payload:
+                                  nextScope === 'scope_custom'
+                                    ? x.scope_payload ?? defaultCustomPayload
+                                    : undefined,
+                              };
+                            })
+                          );
+                        }}
                       />
                       <Button danger onClick={() => setDataPolicies((prev) => prev.filter((_, i) => i !== idx))}>
                         删除

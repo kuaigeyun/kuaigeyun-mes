@@ -165,10 +165,20 @@ class PermissionPolicyService:
             resource = cls._normalize_resource(item.resource)
             if resource not in allowed:
                 raise ValidationError(f"无效数据权限资源（非真源资源）: {item.resource}")
+            payload = item.scope_payload if scope == DataScopeType.CUSTOM else None
+            if scope == DataScopeType.CUSTOM:
+                resolver = ""
+                if isinstance(payload, dict):
+                    resolver = str(payload.get("resolver") or "").strip()
+                if not resolver:
+                    raise ValidationError(
+                        'scope_custom 须在 scope_payload 中指定 resolver，'
+                        '例如 {"resolver": "outsourced_unit"} 或 {"resolver": "partner", "dimension": "supplier"}'
+                    )
             desired[resource] = DataPermissionPolicyUpsert(
                 resource=resource,
                 scope_type=scope,
-                scope_payload=item.scope_payload if scope == DataScopeType.CUSTOM else None,
+                scope_payload=payload,
             )
 
         async with in_transaction():

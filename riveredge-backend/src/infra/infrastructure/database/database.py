@@ -168,6 +168,7 @@ TORTOISE_ORM = {
                 "core.models.permission_alias",
                 "core.models.field_name_alias",
                 "core.models.data_permission_policy",
+                "core.models.user_data_scope_binding",
                 "core.models.field_permission_policy",
                 "core.models.access_policy",
                 "core.models.policy_binding",

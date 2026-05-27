@@ -31,6 +31,24 @@ class RoleService:
     提供角色的 CRUD 操作和权限分配功能。
     """
     
+    ALLOWED_ROLE_TYPES = {"internal", "external"}
+    ALLOWED_EXTERNAL_PARTNER_TYPES = {"customer", "supplier"}
+
+    @staticmethod
+    def _normalize_role_type_pair(
+        role_type: Optional[str],
+        external_partner_type: Optional[str],
+    ) -> tuple[str, Optional[str]]:
+        rt = (role_type or "internal").strip().lower()
+        pt = (external_partner_type or "").strip().lower() or None
+        if rt not in RoleService.ALLOWED_ROLE_TYPES:
+            raise ValidationError("角色类型仅支持 internal / external")
+        if rt == "internal":
+            return "internal", None
+        if pt not in RoleService.ALLOWED_EXTERNAL_PARTNER_TYPES:
+            raise ValidationError("外部角色必须指定合作方类型：customer / supplier")
+        return "external", pt
+
     @staticmethod
     def _is_admin_system_role(role: Role) -> bool:
         """
@@ -77,11 +95,17 @@ class RoleService:
             raise ValidationError(f"角色代码 {data.code} 已存在")
         
         # 创建角色
+        role_type, external_partner_type = RoleService._normalize_role_type_pair(
+            getattr(data, "role_type", None),
+            getattr(data, "external_partner_type", None),
+        )
         role = await Role.create(
             tenant_id=tenant_id,
             name=data.name,
             code=data.code,
             description=data.description,
+            role_type=role_type,
+            external_partner_type=external_partner_type,
             is_active=data.is_active if data.is_active is not None else True,
             is_system=False,  # 系统角色只能由系统创建
         )
@@ -160,6 +184,8 @@ class RoleService:
                 "name": role.name,
                 "code": role.code,
                 "description": role.description,
+                "role_type": role.role_type,
+                "external_partner_type": role.external_partner_type,
                 "is_system": role.is_system,
                 "is_active": role.is_active,
                 "permission_count": permission_count,
@@ -258,6 +284,12 @@ class RoleService:
         
         # 更新角色
         update_data = data.model_dump(exclude_unset=True)
+        if "role_type" in update_data or "external_partner_type" in update_data:
+            next_role_type = update_data.get("role_type", role.role_type)
+            next_partner_type = update_data.get("external_partner_type", role.external_partner_type)
+            rt, pt = RoleService._normalize_role_type_pair(next_role_type, next_partner_type)
+            update_data["role_type"] = rt
+            update_data["external_partner_type"] = pt
         for key, value in update_data.items():
             setattr(role, key, value)
         
@@ -1030,6 +1062,8 @@ class RoleService:
                     name=item["name"],
                     code=item["code"],
                     description=item.get("description"),
+                    role_type="internal",
+                    external_partner_type=None,
                     is_active=True,
                     is_system=False,
                     created_at=now,
