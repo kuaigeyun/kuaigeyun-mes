@@ -1,46 +1,44 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Avatar } from 'antd';
 import type { AvatarProps } from 'antd';
-import { getAvatarFontSize, getAvatarText } from '../../../utils/avatar';
-import {
-  PROFILE_AVATAR_USE_NOTIONISTS,
-  buildNotionistsAvatarUrl,
-  resolveProfileAvatarSeed,
-} from '../../../utils/generatedAvatar';
+import { getAvatarText } from '../../../utils/avatar';
 
 export type ProfileNotionistsAvatarProps = {
   size: number;
+  /** 已上传头像 URL */
   uploadedSrc?: string;
+  /** DiceBear 预览 URL（无上传时由父组件传入） */
+  generatedSrc?: string;
   fullName?: string;
   username?: string;
-  profileUuid?: string;
-  email?: string;
   style?: AvatarProps['style'];
 };
 
 /**
- * 个人资料头像：优先上传图；无上传且开启 Notionists 时显示生成人物头像；否则首字母。
+ * 个人资料头像：优先上传图，其次生成图，否则首字母。
  */
 export const ProfileNotionistsAvatar: React.FC<ProfileNotionistsAvatarProps> = ({
   size,
   uploadedSrc,
+  generatedSrc,
   fullName,
   username,
-  profileUuid,
-  email,
   style,
 }) => {
   const [generatedFailed, setGeneratedFailed] = useState(false);
+  const [uploadedFailed, setUploadedFailed] = useState(false);
 
-  const generatedSrc = useMemo(() => {
-    if (uploadedSrc || !PROFILE_AVATAR_USE_NOTIONISTS || generatedFailed) {
-      return undefined;
-    }
-    const seed = resolveProfileAvatarSeed({ uuid: profileUuid, username, email });
-    return buildNotionistsAvatarUrl(seed, size * 2);
-  }, [uploadedSrc, profileUuid, username, email, size, generatedFailed]);
+  useEffect(() => {
+    setGeneratedFailed(false);
+    setUploadedFailed(false);
+  }, [uploadedSrc, generatedSrc]);
 
-  const displaySrc = uploadedSrc || generatedSrc;
+  const displaySrc =
+    uploadedSrc && !uploadedFailed
+      ? uploadedSrc
+      : generatedFailed
+        ? undefined
+        : generatedSrc;
   const showInitials = !displaySrc;
 
   return (
@@ -48,7 +46,9 @@ export const ProfileNotionistsAvatar: React.FC<ProfileNotionistsAvatarProps> = (
       size={size}
       src={displaySrc}
       onError={() => {
-        if (!uploadedSrc && generatedSrc) {
+        if (uploadedSrc && !uploadedFailed) {
+          setUploadedFailed(true);
+        } else if (generatedSrc) {
           setGeneratedFailed(true);
         }
       }}

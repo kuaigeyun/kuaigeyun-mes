@@ -5,12 +5,12 @@
  * 支持头像上传、个人简介编辑、联系方式编辑。
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid } from 'antd';
+import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin } from 'antd';
 import { ThemedSegmented } from '../../../components/themed-segmented';
-import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
 
 // ... (other imports)
 import { 
@@ -29,6 +29,13 @@ import {
 import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse } from '../../../services/file';
 import { getAvatarUrl } from '../../../utils/avatar';
 import { ProfileNotionistsAvatar } from './ProfileNotionistsAvatar';
+import {
+  PROFILE_AVATAR_USE_NOTIONISTS,
+  buildGeneratedAvatarUrl,
+  buildAvatarCandidateBatch,
+  resolveStableAvatarSeed,
+  type AvatarCandidate,
+} from '../../../utils/generatedAvatar';
 import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
 import { apiRequest } from '../../../services/api';
 import { useGlobalStore } from '../../../stores';
@@ -51,6 +58,10 @@ const UserProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [avatarFileList, setAvatarFileList] = useState<UploadFile[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [avatarCandidates, setAvatarCandidates] = useState<AvatarCandidate[]>([]);
+  const [applyingCandidateSeed, setApplyingCandidateSeed] = useState<string | null>(null);
+  /** 与资料表单同步的性别，用于生成头像（换一换 / 默认图） */
+  const [profileGender, setProfileGender] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -87,7 +98,8 @@ const UserProfilePage: React.FC = () => {
       setLoading(true);
       const data = await getUserProfile();
       setProfileData(data);
-      
+      setProfileGender(data.gender ?? undefined);
+
       // 设置表单值
       formRef.current?.setFieldsValue({
         username: data.username,
@@ -208,6 +220,7 @@ const UserProfilePage: React.FC = () => {
         }
         
         onSuccess?.(response);
+        setAvatarCandidates([]);
         messageApi.success(t('pages.personal.profile.avatarUploadSuccess'));
       } else {
         // 上传失败，释放本地预览 URL
@@ -224,6 +237,125 @@ const UserProfilePage: React.FC = () => {
   /**
    * 处理清除头像
    */
+  const resolveProfileGender = () => profileGender ?? profileData?.gender;
+
+  const generatedAvatarSrc = useMemo(() => {
+    if (!PROFILE_AVATAR_USE_NOTIONISTS || !profileData) {
+      return undefined;
+    }
+    const seed = resolveStableAvatarSeed({
+      uuid: profileData.uuid,
+      username: profileData.username,
+      email: profileData.email,
+    });
+    return buildGeneratedAvatarUrl({
+      seed,
+      gender: resolveProfileGender(),
+      size: 200,
+    });
+  }, [profileData, profileGender]);
+
+  const applyAvatarBlob = async (blob: Blob, fileName: string) => {
+    let localPreviewUrl: string | undefined;
+    try {
+      localPreviewUrl = URL.createObjectURL(blob);
+      setAvatarUrl(localPreviewUrl);
+
+      const file = new File([blob], fileName, {
+        type: blob.type || 'image/png',
+      });
+      const response = await uploadFile(file, { category: 'avatar' });
+      if (!response.uuid) {
+        throw new Error('upload failed');
+      }
+
+      formRef.current?.setFieldsValue({ avatar: response.uuid });
+
+      let previewUrl: string | undefined;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          previewUrl = await getAvatarUrl(response.uuid);
+        } catch {
+          previewUrl = undefined;
+        }
+        if (previewUrl) {
+          break;
+        }
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+
+      const displayUrl = previewUrl || localPreviewUrl;
+      if (previewUrl && localPreviewUrl && previewUrl !== localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl);
+        localPreviewUrl = undefined;
+      }
+      setAvatarUrl(displayUrl);
+
+      setAvatarFileList([
+        {
+          uid: response.uuid,
+          name: response.original_name || file.name,
+          status: 'done',
+          url: displayUrl,
+        },
+      ]);
+
+      await updateUserProfile({ avatar: response.uuid });
+      setProfileData((prev) => (prev ? { ...prev, avatar: response.uuid } : prev));
+
+      const prevUser = currentUser;
+      if (prevUser) {
+        setGlobalUser({
+          ...prevUser,
+          avatar: response.uuid,
+        });
+      }
+      const prevLocal = getUserInfo() || {};
+      setUserInfo({
+        ...prevLocal,
+        avatar: response.uuid,
+      });
+
+      setAvatarCandidates([]);
+      messageApi.success(t('pages.personal.profile.shuffleAvatarSuccess'));
+    } catch (error: unknown) {
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl);
+      }
+      throw error;
+    }
+  };
+
+  const handleShuffleAvatar = () => {
+    if (!PROFILE_AVATAR_USE_NOTIONISTS) {
+      return;
+    }
+    setAvatarCandidates(buildAvatarCandidateBatch(resolveProfileGender()));
+  };
+
+  const handleApplyAvatarCandidate = async (candidate: AvatarCandidate) => {
+    try {
+      setApplyingCandidateSeed(candidate.seed);
+      const res = await fetch(candidate.url);
+      if (!res.ok) {
+        throw new Error(`DiceBear ${res.status}`);
+      }
+      const blob = await res.blob();
+      await applyAvatarBlob(blob, `avatar-${candidate.seed.slice(0, 20)}.png`);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : '';
+      messageApi.error(
+        errMsg
+          ? `${t('pages.personal.profile.shuffleAvatarFailed')}: ${errMsg}`
+          : t('pages.personal.profile.shuffleAvatarFailed'),
+      );
+    } finally {
+      setApplyingCandidateSeed(null);
+    }
+  };
+
   const handleClearAvatar = async () => {
     try {
       setLoading(true);
@@ -234,7 +366,8 @@ const UserProfilePage: React.FC = () => {
       // 清除本地状态
       setAvatarUrl(undefined);
       setAvatarFileList([]);
-      
+      setAvatarCandidates([]);
+
       // 更新表单字段
       formRef.current?.setFieldsValue({
         avatar: null,
@@ -341,6 +474,7 @@ const UserProfilePage: React.FC = () => {
       try {
         const updatedData = await getUserProfile();
         setProfileData(updatedData);
+        setProfileGender(updatedData.gender ?? undefined);
 
         // 同步全局用户信息（顶栏/头像/欢迎语等依赖），避免保存后仍显示旧的 username/手机号
         const prevUser = currentUser;
@@ -446,10 +580,9 @@ const UserProfilePage: React.FC = () => {
               <ProfileNotionistsAvatar
                 size={120}
                 uploadedSrc={avatarUrl}
+                generatedSrc={generatedAvatarSrc}
                 fullName={profileData?.full_name}
                 username={profileData?.username}
-                profileUuid={profileData?.uuid}
-                email={profileData?.email}
                 style={{
                   backgroundColor: token.colorPrimary,
                   fontWeight: 500,
@@ -576,10 +709,9 @@ const UserProfilePage: React.FC = () => {
                   <ProfileNotionistsAvatar
                     size={100}
                     uploadedSrc={avatarUrl}
+                    generatedSrc={generatedAvatarSrc}
                     fullName={profileData?.full_name}
                     username={profileData?.username}
-                    profileUuid={profileData?.uuid}
-                    email={profileData?.email}
                     style={{
                       backgroundColor: token.colorPrimary,
                       fontWeight: 500,
@@ -596,6 +728,15 @@ const UserProfilePage: React.FC = () => {
                     >
                       <Button icon={<UploadOutlined />}>{t('pages.personal.profile.uploadAvatar')}</Button>
                     </Upload>
+                    {PROFILE_AVATAR_USE_NOTIONISTS && (
+                      <Button
+                        icon={<SyncOutlined />}
+                        onClick={handleShuffleAvatar}
+                        loading={!!applyingCandidateSeed}
+                      >
+                        {t('pages.personal.profile.shuffleAvatar')}
+                      </Button>
+                    )}
                     {avatarUrl && (
                       <Button
                         icon={<DeleteOutlined />}
@@ -607,6 +748,57 @@ const UserProfilePage: React.FC = () => {
                       </Button>
                     )}
                   </Space>
+                  {avatarCandidates.length > 0 && (
+                    <div style={{ width: '100%', maxWidth: 360 }}>
+                      <Text
+                        type="secondary"
+                        style={{ display: 'block', marginBottom: 8, fontSize: 12, textAlign: 'center' }}
+                      >
+                        {t('pages.personal.profile.shufflePickHint')}
+                      </Text>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 10,
+                          flexWrap: 'wrap',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {avatarCandidates.map((candidate) => {
+                          const isApplying = applyingCandidateSeed === candidate.seed;
+                          const isDisabled = !!applyingCandidateSeed && !isApplying;
+                          return (
+                            <button
+                              key={candidate.seed}
+                              type="button"
+                              title={t('pages.personal.profile.shuffleUseCandidate')}
+                              disabled={isDisabled}
+                              onClick={() => handleApplyAvatarCandidate(candidate)}
+                              style={{
+                                padding: 0,
+                                border: `2px solid ${isApplying ? token.colorPrimary : token.colorBorderSecondary}`,
+                                borderRadius: '50%',
+                                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                background: 'transparent',
+                                opacity: isDisabled ? 0.45 : 1,
+                                lineHeight: 0,
+                              }}
+                            >
+                              <Spin spinning={isApplying} size="small">
+                                <img
+                                  src={candidate.url}
+                                  alt=""
+                                  width={56}
+                                  height={56}
+                                  style={{ borderRadius: '50%', display: 'block' }}
+                                />
+                              </Spin>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </Space>
               </ProForm.Item>
               
@@ -645,7 +837,10 @@ const UserProfilePage: React.FC = () => {
                     return (
                       <ThemedSegmented
                         value={genderValue}
-                        onChange={(newValue) => setFieldValue('gender', newValue)}
+                        onChange={(newValue) => {
+                          setFieldValue('gender', newValue);
+                          setProfileGender(newValue as string);
+                        }}
                         options={[
                           { label: t('pages.personal.profile.male'), value: 'male' },
                           { label: t('pages.personal.profile.female'), value: 'female' },
