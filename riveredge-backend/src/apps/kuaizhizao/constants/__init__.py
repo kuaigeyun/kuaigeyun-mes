@@ -103,6 +103,9 @@ DOCUMENT_ENTITY_TYPES: Tuple[str, ...] = (
     "work_order",
     "purchase_order",
     "purchase_requisition",
+    "purchase_inquiry",
+    "sales_order_change",
+    "purchase_order_change",
     "demand_computation",
     "production_plan",
 )

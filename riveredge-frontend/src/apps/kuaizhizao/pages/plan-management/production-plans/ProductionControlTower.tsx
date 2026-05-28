@@ -25,6 +25,7 @@ import { SimulationSchedulingScorePreview } from '../../../../../components/Simu
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
+import { UniDashboard } from '../../../../../components/uni-dashboard';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const { Text } = Typography;
@@ -183,7 +184,7 @@ const ProductionControlTower: React.FC = () => {
   );
 
   return (
-    <div className="plan-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
+    <UniDashboard className="plan-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
       <Row gutter={[16, 16]}>
         
         {/* KPI 区 */}
@@ -483,7 +484,7 @@ const ProductionControlTower: React.FC = () => {
           </div>
         )}
       </Drawer>
-    </div>
+    </UniDashboard>
   );
 };
 

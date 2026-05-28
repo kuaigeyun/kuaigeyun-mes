@@ -752,6 +752,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not items:
             raise BusinessLogicError("没有可转单的申请行或所选行已转单")
 
+        from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+        await PurchaseInquiryService._assert_requisition_items_not_in_active_inquiry(
+            tenant_id, [i.id for i in items]
+        )
+
         # 行 -> 供应商
         line_suppliers: List[Tuple[PurchaseRequisitionItem, int]] = []
         for item in items:

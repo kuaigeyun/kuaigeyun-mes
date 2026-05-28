@@ -3621,6 +3621,18 @@ const SalesOrdersPage: React.FC = () => {
                           {t('app.kuaizhizao.salesOrder.delete')}
                         </Button>
                       )}
+                      {!canEdit && canPushDownSalesOrder(currentSalesOrder) && (
+                        <Button
+                          icon={<EditOutlined />}
+                          onClick={() =>
+                            navigate(
+                              `/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${currentSalesOrder.id}`,
+                            )
+                          }
+                        >
+                          {t('app.kuaizhizao.salesOrder.createChangeOrder', { defaultValue: '创建变更单' })}
+                        </Button>
+                      )}
                     </>
                   );
                 })()}

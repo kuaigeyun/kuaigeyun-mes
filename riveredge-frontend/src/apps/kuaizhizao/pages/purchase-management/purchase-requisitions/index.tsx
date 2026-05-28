@@ -11,6 +11,7 @@ import {
   EyeOutlined,
   EditOutlined,
   SwapOutlined,
+  FileSearchOutlined,
   DeleteOutlined,
   CopyOutlined,
   PlusOutlined,
@@ -43,6 +44,7 @@ import {
   PurchaseRequisition,
   PurchaseRequisitionItem,
 } from '../../../services/purchase-requisition';
+import { createInquiryFromRequisition } from '../../../services/purchase-inquiry';
 import {
   listDemandComputations,
   pushToPurchaseRequisition,
@@ -888,6 +890,31 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   };
 
+  const handleCreateInquiry = async (record: PurchaseRequisition) => {
+    try {
+      const detail = await getPurchaseRequisition(record.id!);
+      const unconverted = (detail.items ?? []).filter((i) => !i.purchase_order_id);
+      if (unconverted.length === 0) {
+        messageApi.info('无可询价的明细，所有明细已转采购单');
+        return;
+      }
+      modalApi.confirm({
+        title: '下推询价单',
+        content: `将为 ${unconverted.length} 条未转单明细创建询价单，是否继续？`,
+        onOk: async () => {
+          const doc = await createInquiryFromRequisition(record.id!, {
+            item_ids: unconverted.map((i) => i.id!).filter(Boolean),
+          });
+          messageApi.success(`已创建询价单 ${doc.inquiry_code}`);
+          navigate(`${ROUTES.PURCHASE_INQUIRIES}?inquiryId=${doc.id}`);
+          actionRef.current?.reload();
+        },
+      });
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail?.message ?? e?.message ?? '创建询价单失败');
+    }
+  };
+
   /** 协调看板深链：requisitionId + action=pushPO */
   useEffect(() => {
     const requisitionIdRaw = searchParams.get('requisitionId');
@@ -927,6 +954,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
       return;
     }
 
+    if (action === 'pushInquiry') {
+      setSelectedRowKeys([requisitionId]);
+      void (async () => {
+        try {
+          const detail = await getPurchaseRequisition(requisitionId);
+          void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
+          setCurrentReq(detail);
+          await handleCreateInquiry({ ...detail, id: requisitionId });
+        } catch {
+          messageApi.error('打开采购申请失败');
+        }
+      })();
+      return;
+    }
+
     void (async () => {
       try {
         const detail = await getPurchaseRequisition(requisitionId);
@@ -951,6 +993,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
               icon: <SwapOutlined />,
               onClick: () => {
                 void handleConvert(selectedRequisitionForToolbar);
+              },
+            },
+            {
+              key: 'push-inquiry',
+              label: '下推询价单',
+              icon: <FileSearchOutlined />,
+              onClick: () => {
+                void handleCreateInquiry(selectedRequisitionForToolbar);
               },
             },
           ])
@@ -1626,6 +1676,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   render: () => (
                     <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>
                       下推采购单
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'create-inquiry',
+                  visible: canPushPurchaseRequisition(currentReq),
+                  render: () => (
+                    <Button type="link" size="small" icon={<FileSearchOutlined />} onClick={() => handleCreateInquiry(currentReq)}>
+                      下推询价单
                     </Button>
                   ),
                 },

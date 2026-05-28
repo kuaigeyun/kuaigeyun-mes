@@ -1,6 +1,7 @@
 export type KuaizhizaoDocumentActionKey =
   | 'sales_order.pull_from_quotation'
   | 'purchase_order.pull_from_requisition'
+  | 'purchase_inquiry.pull_from_requisition'
   | 'shipment_notice.pull_from_sales_order'
   | 'delivery_note.pull_from_sales_delivery'
   | 'receipt_notice.pull_from_purchase_order'
@@ -38,6 +39,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     label: '从采购申请创建采购订单',
     sourceLabel: '采购申请',
     targetLabel: '采购订单',
+  },
+  'purchase_inquiry.pull_from_requisition': {
+    key: 'purchase_inquiry.pull_from_requisition',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从采购申请创建询价单',
+    sourceLabel: '采购申请',
+    targetLabel: '询价单',
   },
   'shipment_notice.pull_from_sales_order': {
     key: 'shipment_notice.pull_from_sales_order',

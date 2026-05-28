@@ -7,7 +7,7 @@ import {
 } from '@ant-design/pro-components';
 import { 
   Row, Col, List, Tag, Badge, Typography, Space, Progress, Timeline, 
-  Card, Empty, Spin, Divider 
+  Card, Empty, Spin, Divider, theme
 } from 'antd';
 import { 
   ClockCircleOutlined, 
@@ -18,11 +18,15 @@ import {
   ArrowRightOutlined
 } from '@ant-design/icons';
 import { mesDashboardService } from '../../services/dashboard';
+import { UniDashboard } from '../../../../components/uni-dashboard';
 import dayjs from 'dayjs';
 
 const { Text, Title, Link } = Typography;
+const { useToken } = theme;
 
 const MESDashboard: React.FC = () => {
+  const { token } = useToken();
+  const dashboardCardStyle = { borderRadius: token.borderRadiusLG };
   // 1. 获取基础统计
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['mesStatistics'],
@@ -56,15 +60,17 @@ const MESDashboard: React.FC = () => {
 
   if (statsLoading || todosLoading || progressLoading) {
     return (
-      <div style={{ padding: 100, textAlign: 'center' }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>正在加载车间实时看板...</div>
-      </div>
+      <UniDashboard>
+        <div style={{ padding: 100, textAlign: 'center' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>正在加载车间实时看板...</div>
+        </div>
+      </UniDashboard>
     );
   }
 
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <UniDashboard>
       <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Title level={3}>车间数字化看板 <Text type="secondary" style={{ fontSize: '14px' }}>实时生产执行监控与辅助决策</Text></Title>
 
@@ -72,6 +78,7 @@ const MESDashboard: React.FC = () => {
         <Row gutter={[16, 16]}>
           <Col span={6}>
             <StatisticCard
+              style={dashboardCardStyle}
               statistic={{
                 title: '工单完成率',
                 value: stats?.production?.completion_rate || 0,
@@ -92,6 +99,7 @@ const MESDashboard: React.FC = () => {
           </Col>
           <Col span={6}>
             <StatisticCard
+              style={dashboardCardStyle}
               statistic={{
                 title: '平均生产周期',
                 value: metrics?.average_production_cycle || 0,
@@ -104,6 +112,7 @@ const MESDashboard: React.FC = () => {
           </Col>
           <Col span={6}>
               <StatisticCard
+                style={dashboardCardStyle}
                 statistic={{
                   title: '制程良率 (Yield)',
                   value: 100 - (stats?.production?.defect_rate || 0),
@@ -121,6 +130,7 @@ const MESDashboard: React.FC = () => {
           </Col>
           <Col span={6}>
             <StatisticCard
+              style={dashboardCardStyle}
               statistic={{
                 title: '准交率 (OTD)',
                 value: metrics?.on_time_delivery_rate || 0,
@@ -138,7 +148,7 @@ const MESDashboard: React.FC = () => {
           <Col span={16}>
             <Space orientation="vertical" style={{ width: '100%' }} size="large">
               {/* 在制工序进展 */}
-              <ProCard title="在制工序进展监控" extra={<Link>查看全部工单</Link>} bordered>
+              <ProCard title="在制工序进展监控" extra={<Link>查看全部工单</Link>} bordered style={dashboardCardStyle}>
                 <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                   <List
                     itemLayout="horizontal"
@@ -167,7 +177,7 @@ const MESDashboard: React.FC = () => {
               </ProCard>
 
               {/* 我的待办事项 */}
-              <ProCard title="我的待办事项" extra={<Badge count={todos?.total} overflowCount={99} />} bordered>
+              <ProCard title="我的待办事项" extra={<Badge count={todos?.total} overflowCount={99} />} bordered style={dashboardCardStyle}>
                  <ProList
                     dataSource={todos?.items || []}
                     metas={{
@@ -200,6 +210,7 @@ const MESDashboard: React.FC = () => {
               title={<span><SoundOutlined /> 生产执行实时动态</span>} 
               bordered 
               headerBordered
+              style={dashboardCardStyle}
             >
               {(!broadcast?.items || broadcast.items.length === 0) ? (
                 <Empty description="暂无动态" />
@@ -231,16 +242,16 @@ const MESDashboard: React.FC = () => {
             <Divider dashed />
 
             {/* 快速入口 */}
-            <ProCard title="快速协同入口" bordered headStyle={{ borderBottom: 'none' }}>
+            <ProCard title="快速协同入口" bordered headStyle={{ borderBottom: 'none' }} style={dashboardCardStyle}>
                <Row gutter={[8, 8]}>
                   <Col span={12}>
-                    <Card size="small" hoverable style={{ textAlign: 'center', background: '#e6f7ff' }}>
+                    <Card size="small" hoverable style={{ textAlign: 'center', background: '#e6f7ff', ...dashboardCardStyle }}>
                         <ThunderboltOutlined style={{ fontSize: 24, color: '#1890ff' }} />
                         <div style={{ marginTop: 8 }}>异常上报</div>
                     </Card>
                   </Col>
                   <Col span={12}>
-                    <Card size="small" hoverable style={{ textAlign: 'center', background: '#f6ffed' }}>
+                    <Card size="small" hoverable style={{ textAlign: 'center', background: '#f6ffed', ...dashboardCardStyle }}>
                         <CarryOutOutlined style={{ fontSize: 24, color: '#52c41a' }} />
                         <div style={{ marginTop: 8 }}>工单报工</div>
                     </Card>
@@ -250,7 +261,7 @@ const MESDashboard: React.FC = () => {
           </Col>
         </Row>
       </Space>
-    </div>
+    </UniDashboard>
   );
 };
 

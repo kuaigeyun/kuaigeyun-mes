@@ -48,6 +48,7 @@ import {
   convertToPurchaseOrder,
   type PurchaseRequisition,
 } from '../../../services/purchase-requisition';
+import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../services/purchase-order-change';
 import { PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -405,6 +406,7 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
+  const [orderChangeHistory, setOrderChangeHistory] = useState<PurchaseOrderChange[]>([]);
   const [poTrackingRefreshKey, setPoTrackingRefreshKey] = useState(0);
   const purchaseOrderTracking = useDocumentTracking(
     detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
@@ -416,6 +418,14 @@ const PurchaseOrdersPage: React.FC = () => {
     () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail, purchaseOrderAuditEnabled) : null),
     [orderDetail, purchaseOrderAuditEnabled],
   );
+
+  useEffect(() => {
+    if (!orderDetail?.id) {
+      setOrderChangeHistory([]);
+      return;
+    }
+    listPurchaseOrderChangesByOrder(orderDetail.id).then(setOrderChangeHistory).catch(() => setOrderChangeHistory([]));
+  }, [orderDetail?.id]);
 
   const lifecycleValueEnum = useMemo(
     () => buildPurchaseOrderLifecycleValueEnum(t, purchaseOrderAuditEnabled),
@@ -2201,26 +2211,7 @@ const PurchaseOrdersPage: React.FC = () => {
           <Col span={12} />
         </Row>
 
-        {/* V2 审计：非草稿订单变更需填写原因 */}
-        <AntForm.Item noStyle shouldUpdate>
-          {() => {
-            const isNotDraft = isEdit && currentOrder && !isDraftStatus(currentOrder.status);
-            if (!isNotDraft) return null;
-            return (
-              <Row gutter={16}>
-                <Col span={24}>
-                  <ProFormTextArea
-                    name="change_reason"
-                    label={<span style={{ color: '#faad14', fontWeight: 600 }}>变更原因 (审计记录必备)</span>}
-                    placeholder="请输入本次变更的具体原因，例如：供应商调价、需求量调整等..."
-                    rules={[{ required: true, message: '非草稿状态单据变更，必须填写变更原因' }]}
-                    fieldProps={{ rows: 2 }}
-                  />
-                </Col>
-              </Row>
-            );
-          }}
-        </AntForm.Item>
+        {/* 已生效/执行中订单须通过变更单修改，不再支持直改填写变更原因 */}
         <div className="uni-table-detail" style={{ marginBottom: 24 }}>
           <UniTableDetailHeader
             title="采购明细"
@@ -2706,6 +2697,24 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'create-change',
+                  visible: isAuditedStatus(orderDetail.status),
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() =>
+                        navigate(
+                          `/apps/kuaizhizao/purchase-management/purchase-order-changes?source_order_id=${orderDetail.id}`,
+                        )
+                      }
+                    >
+                      创建变更单
+                    </Button>
+                  ),
+                },
+                {
                   key: 'expedite',
                   visible: orderDetail.status === 'AUDITED' || orderDetail.status === 'CONFIRMED' || orderDetail.status === '已审核' || orderDetail.status === '已确认',
                   render: () => (
@@ -2958,6 +2967,26 @@ const PurchaseOrdersPage: React.FC = () => {
               )}
               {purchaseOrderTracking.data && !purchaseOrderTracking.loading && (
                 <DocumentTrackingTimelineBody data={purchaseOrderTracking.data} />
+              )}
+
+              <Divider style={{ margin: '16px 0' }} />
+              <Typography.Title level={5} style={{ margin: '0 0 8px' }}>变更历史</Typography.Title>
+              {orderChangeHistory.length ? (
+                <Table
+                  size="small"
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={orderChangeHistory}
+                  columns={[
+                    { title: '变更单号', dataIndex: 'change_code' },
+                    { title: '版本', dataIndex: 'change_version', width: 70 },
+                    { title: '差额', dataIndex: 'delta_amount', width: 100 },
+                    { title: '状态', dataIndex: 'status', width: 100 },
+                    { title: '生效时间', dataIndex: 'applied_at', width: 160, render: (v: string) => v || '-' },
+                  ]}
+                />
+              ) : (
+                <Typography.Text type="secondary">暂无变更单</Typography.Text>
               )}
 
               {approvalStatus && approvalStatus.has_flow && (

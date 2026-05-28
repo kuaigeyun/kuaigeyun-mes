@@ -33,6 +33,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-production-outsource-work-order": "WWGD",  # 委外工单
     "kuaizhizao-purchase-order": "CG",           # 采购
     "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
+    "kuaizhizao-purchase-inquiry": "CGXJ",       # 采购询价单
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
     "kuaizhizao-sales-order": "XS",             # 销售
@@ -444,6 +445,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "PURCHASE_REQUISITION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-purchase-inquiry",
+        "page_name": "采购询价单",
+        "page_path": "/apps/kuaizhizao/purchase-management/purchase-inquiries",
+        "code_field": "inquiry_code",
+        "code_field_label": "询价单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_INQUIRY_CODE",
         "allow_manual_edit": True,
     },
     {

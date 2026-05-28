@@ -25,6 +25,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../.
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
 import { apiRequest } from '../../../../../../services/api';
 import type { DocumentPrintApiResult } from '../../../../../../utils/printResponseHelpers';
+import { listSalesOrderChangesByOrder, type SalesOrderChange } from '../../../../services/sales-order-change';
 
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
@@ -548,11 +549,45 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
 };
 
 export const SalesOrderDetailTimelinePane: React.FC = () => {
-  const { tracking } = useSalesOrderDetailContext();
-  return tracking.data ? (
-    <DocumentTrackingTimelineBody data={tracking.data} />
-  ) : (
-    <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+  const { tracking, order } = useSalesOrderDetailContext();
+  const [changes, setChanges] = useState<SalesOrderChange[]>([]);
+
+  useEffect(() => {
+    if (!order?.id) return;
+    listSalesOrderChangesByOrder(order.id).then(setChanges).catch(() => setChanges([]));
+  }, [order?.id]);
+
+  return (
+    <>
+      {tracking.data ? (
+        <DocumentTrackingTimelineBody data={tracking.data} />
+      ) : (
+        <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+      )}
+      <Typography.Title level={5} style={{ marginTop: 24 }}>变更历史</Typography.Title>
+      {changes.length ? (
+        <Table
+          size="small"
+          rowKey="id"
+          pagination={false}
+          dataSource={changes}
+          columns={[
+            { title: '变更单号', dataIndex: 'change_code' },
+            { title: '版本', dataIndex: 'change_version', width: 70 },
+            { title: '差额', dataIndex: 'delta_amount', width: 100 },
+            { title: '状态', dataIndex: 'status', width: 100 },
+            {
+              title: '生效时间',
+              dataIndex: 'applied_at',
+              width: 160,
+              render: (v: string) => v || '-',
+            },
+          ]}
+        />
+      ) : (
+        <Typography.Text type="secondary">暂无变更单</Typography.Text>
+      )}
+    </>
   );
 };
 

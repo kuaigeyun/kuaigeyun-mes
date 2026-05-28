@@ -35,14 +35,14 @@ export function ModuleShortcutGrid({
             hoverable
             onClick={() => navigate(sc.path)}
             styles={{ body: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 } }}
-            style={{ borderRadius: 10 }}
+            style={{ borderRadius: token.borderRadiusLG }}
           >
             <div
               className="module-shortcut-grid__icon-wrap"
               style={{
                 width: 40,
                 height: 40,
-                borderRadius: 10,
+                borderRadius: token.borderRadius,
                 background: plain ? token.colorPrimaryBg : 'rgba(0,0,0,0.04)',
                 border: plain ? `1px solid ${token.colorPrimaryBorder}` : undefined,
                 display: 'flex',

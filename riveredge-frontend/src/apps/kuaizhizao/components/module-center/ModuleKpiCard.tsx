@@ -21,24 +21,25 @@ function KpiSideBlock({
       className="module-kpi-card__side"
       style={{
         flexShrink: 0,
-        paddingLeft: 18,
-        marginLeft: 8,
+        paddingLeft: 16,
+        marginLeft: 4,
         borderLeft: `1px solid ${sideBorder}`,
-        minWidth: 82,
+        minWidth: 76,
+        maxWidth: 88,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        gap: 8,
+        gap: 6,
       }}
     >
       {lines.map((line) => (
         <div key={String(line.label)}>
-          <div className="module-kpi-card__side-label" style={{ fontSize: 12, color: sideLabelColor, lineHeight: 1.25 }}>
+          <div className="module-kpi-card__side-label" style={{ fontSize: 11, color: sideLabelColor, lineHeight: 1.2 }}>
             {line.label}
           </div>
           <div
             className="module-kpi-card__side-value"
-            style={{ fontSize: 17, fontWeight: 700, color: sideValueColor, lineHeight: 1.25, marginTop: 2 }}
+            style={{ fontSize: 15, fontWeight: 700, color: sideValueColor, lineHeight: 1.2, marginTop: 1 }}
           >
             {line.value}
           </div>
@@ -66,7 +67,7 @@ export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
               style={{
                 flex: 1,
                 width: '100%',
-                borderRadius: 12,
+                borderRadius: token.borderRadiusLG,
                 ...visual.card,
               }}
               styles={{
@@ -76,13 +77,13 @@ export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
                 },
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', minWidth: 0 }}>
                 <div
                   className="module-kpi-card__icon-wrap"
                   style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
+                    width: 44,
+                    height: 44,
+                    borderRadius: token.borderRadius,
                     background: visual.iconWrapBg,
                     display: 'flex',
                     alignItems: 'center',
@@ -98,26 +99,51 @@ export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     className="module-kpi-card__title"
-                    style={{ fontSize: 14, fontWeight: 500, color: visual.titleColor }}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: visual.titleColor,
+                      lineHeight: 1.25,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
                   >
                     {kpi.title}
                   </div>
                   <div
                     className="module-kpi-card__value"
-                    style={{ fontSize: 30, fontWeight: 700, color: visual.valueColor, lineHeight: 1.2, marginTop: 6 }}
+                    style={{
+                      fontSize: 30,
+                      fontWeight: 700,
+                      color: visual.valueColor,
+                      lineHeight: 1.15,
+                      marginTop: 4,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
                   >
                     {kpi.value}
                   </div>
                   {kpi.subtitle ? (
                     <div
                       className="module-kpi-card__subtitle"
-                      style={{ fontSize: 12, color: visual.subtitleColor, marginTop: 8 }}
+                      style={{
+                        fontSize: 12,
+                        color: visual.subtitleColor,
+                        marginTop: 4,
+                        lineHeight: 1.25,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
                     >
                       {kpi.subtitle}
                     </div>
                   ) : null}
                   {typeof kpi.progress === 'number' ? (
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 6 }}>
                       <Progress
                         percent={kpi.progress}
                         showInfo={false}

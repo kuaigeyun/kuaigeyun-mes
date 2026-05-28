@@ -31,7 +31,6 @@ import {
   RightOutlined,
   ShopOutlined,
 } from '@ant-design/icons';
-import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -43,6 +42,7 @@ import {
   findMenuInTree,
   getTranslatedMenuTitle,
 } from '../../../components/quick-entry/quickEntryItems';
+import { convertMenuTreeToTreeData } from '../../../components/quick-entry/convertMenuTreeToTreeData';
 import {
   getQuickEntryIconByPath,
   renderQuickEntryMenuIcon,
@@ -56,7 +56,7 @@ import {
   type TodoListResponse,
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
-import { getNavigationMenuTree, type MenuTree } from '../../../services/menu';
+import { getNavigationMenuTree } from '../../../services/menu';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
@@ -101,38 +101,6 @@ const { Title, Text } = Typography;
 const { useToken } = theme;
 const { useBreakpoint } = Grid;
 
-
-const convertMenuTreeToTreeData = (
-  menus: MenuTree[],
-  t: (key: string, options?: any) => string,
-): DataNode[] => {
-  const convertNode = (menu: MenuTree): DataNode | null => {
-    if (menu.is_external) return null;
-
-    const children = (menu.children || [])
-      .map(convertNode)
-      .filter((item): item is DataNode => item !== null);
-
-    const hasValidPath = !!menu.path && menu.path !== '/system/dashboard/workplace';
-    // 无路由且无可用子节点时，整节点不展示
-    if (!hasValidPath && children.length === 0) return null;
-
-    return {
-      title: getTranslatedMenuTitle(menu, t),
-      key: menu.uuid,
-      icon: renderQuickEntryMenuIcon(menu),
-      path: menu.path, // 添加 path 信息，供 QuickEntryGrid 保存时校验
-      children: children.length > 0 ? children : undefined,
-      isLeaf: children.length === 0,
-      // 目录节点可展开但不可勾选；仅有真实路由的菜单可选
-      disabled: !hasValidPath,
-    } as DataNode;
-  };
-
-  return menus
-    .map(convertNode)
-    .filter((item): item is DataNode => item !== null);
-};
 
 /**
  * 获取问候语 i18n 键（精细时间段划分，按北京时间）

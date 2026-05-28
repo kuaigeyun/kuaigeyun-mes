@@ -1,5 +1,6 @@
 import React from 'react';
 import { Row, Col, Spin } from 'antd';
+import { UniDashboard } from '../../../../components/uni-dashboard';
 import { MODULE_CENTER_GUTTER } from './constants';
 
 export interface ModuleCenterLayoutProps {
@@ -18,7 +19,7 @@ export function ModuleCenterLayout({
   chartRow,
 }: ModuleCenterLayoutProps) {
   return (
-    <div style={{ padding: '0 0 16px', overflow: 'visible' }}>
+    <UniDashboard style={{ padding: '0 0 16px', overflow: 'visible' }}>
       <Spin spinning={!!loading}>
         <Row gutter={[MODULE_CENTER_GUTTER, MODULE_CENTER_GUTTER]}>
           <Col span={24}>{kpiRow}</Col>
@@ -27,7 +28,7 @@ export function ModuleCenterLayout({
           {chartRow}
         </Row>
       </Spin>
-    </div>
+    </UniDashboard>
   );
 }
 

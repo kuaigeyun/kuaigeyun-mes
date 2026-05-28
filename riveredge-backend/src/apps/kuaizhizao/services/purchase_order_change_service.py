@@ -1,0 +1,629 @@
+"""采购变更单服务"""
+
+from datetime import datetime
+from decimal import Decimal
+from typing import List, Optional
+
+from tortoise.transactions import in_transaction
+
+from apps.common.base_service import AppBaseService
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
+from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
+from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange
+from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
+from apps.kuaizhizao.schemas.order_change import (
+    ApproveChangeRequest,
+    ChangeImpactPreviewResponse,
+    OrderChangeItemCreate,
+    OrderChangeItemResponse,
+    PurchaseOrderChangeCreate,
+    PurchaseOrderChangeListResponse,
+    PurchaseOrderChangeUpdate,
+    PurchaseOrderChangeWithItemsResponse,
+)
+from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_change_lifecycle
+from apps.kuaizhizao.services.order_change.helpers import (
+    infer_change_category,
+    is_source_order_locked_for_direct_edit,
+    line_amount,
+    resolve_purchase_line_change,
+)
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.services.business_config_service import BusinessConfigService
+
+
+class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
+    def __init__(self):
+        super().__init__(PurchaseOrderChangeOrder)
+        self.business_config_service = BusinessConfigService()
+
+    async def _generate_code(self, tenant_id: int) -> str:
+        return await self.generate_code(tenant_id, "PURCHASE_ORDER_CHANGE_CODE", prefix="POC")
+
+    async def _next_version(self, tenant_id: int, source_order_id: int) -> int:
+        count = await PurchaseOrderChangeOrder.filter(
+            tenant_id=tenant_id,
+            source_order_id=source_order_id,
+            deleted_at__isnull=True,
+            status=OrderChangeApplyStatus.APPLIED.value,
+        ).count()
+        pending = await PurchaseOrderChangeOrder.filter(
+            tenant_id=tenant_id,
+            source_order_id=source_order_id,
+            deleted_at__isnull=True,
+            status__in=[DocumentStatus.DRAFT.value, DocumentStatus.PENDING_REVIEW.value, DocumentStatus.AUDITED.value],
+        ).count()
+        if pending:
+            raise BusinessLogicError("该采购订单存在未完成的变更单，请先处理后再创建")
+        return count + 1
+
+    def _item_to_response(self, item: PurchaseOrderChangeItem) -> OrderChangeItemResponse:
+        return OrderChangeItemResponse(
+            id=item.id,
+            change_order_id=item.change_order_id,
+            line_no=item.line_no,
+            source_item_id=item.source_item_id,
+            change_type=item.change_type,
+            material_id=item.material_id,
+            material_code=item.material_code,
+            material_name=item.material_name,
+            material_spec=item.material_spec,
+            material_unit=item.material_unit,
+            before_quantity=item.before_quantity,
+            after_quantity=item.after_quantity,
+            before_unit_price=item.before_unit_price,
+            after_unit_price=item.after_unit_price,
+            before_delivery_date=item.before_delivery_date,
+            after_delivery_date=item.after_delivery_date,
+            before_amount=item.before_amount,
+            after_amount=item.after_amount,
+            delta_amount=item.delta_amount,
+            notes=item.notes,
+        )
+
+    async def _to_detail(self, doc: PurchaseOrderChangeOrder) -> PurchaseOrderChangeWithItemsResponse:
+        items = await PurchaseOrderChangeItem.filter(tenant_id=doc.tenant_id, change_order_id=doc.id).order_by("line_no")
+        lifecycle = get_purchase_order_change_lifecycle(doc.status, doc.review_status, doc.applied_at)
+        return PurchaseOrderChangeWithItemsResponse(
+            id=doc.id,
+            change_code=doc.change_code,
+            source_order_id=doc.source_order_id,
+            source_order_code=doc.source_order_code,
+            change_version=doc.change_version,
+            supplier_id=doc.supplier_id,
+            supplier_name=doc.supplier_name,
+            change_category=doc.change_category,
+            change_reason=doc.change_reason,
+            status=doc.status,
+            review_status=doc.review_status,
+            before_total_quantity=doc.before_total_quantity,
+            after_total_quantity=doc.after_total_quantity,
+            before_total_amount=doc.before_total_amount,
+            after_total_amount=doc.after_total_amount,
+            delta_amount=doc.delta_amount,
+            applied_at=doc.applied_at,
+            created_at=doc.created_at,
+            header_changes=doc.header_changes,
+            attachments=doc.attachments,
+            notes=doc.notes,
+            reviewer_name=doc.reviewer_name,
+            review_time=doc.review_time,
+            review_remarks=doc.review_remarks,
+            lifecycle=lifecycle,
+            items=[self._item_to_response(i) for i in items],
+        )
+
+    async def _validate_source_order(self, tenant_id: int, order_id: int) -> PurchaseOrder:
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+        if not is_source_order_locked_for_direct_edit(order.status, order.review_status):
+            raise BusinessLogicError("仅已确认或执行中的采购订单可创建变更单")
+        return order
+
+    async def _build_items_from_payload(
+        self,
+        tenant_id: int,
+        order: PurchaseOrder,
+        items: List[OrderChangeItemCreate],
+    ):
+        source_items = {
+            int(i.id): i
+            for i in await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
+        }
+        before_qty = Decimal("0")
+        before_amt = Decimal("0")
+        after_qty = Decimal("0")
+        after_amt = Decimal("0")
+        line_types: list[str] = []
+        rows: list[dict] = []
+
+        for idx, payload in enumerate(items, start=1):
+            if payload.change_type == OrderChangeLineType.LINE_ADD.value:
+                if not payload.material_id:
+                    raise BusinessLogicError("新增行必须选择物料")
+                change_type, diff = resolve_purchase_line_change(None, payload)
+                b_amt = Decimal("0")
+                a_amt = line_amount(diff["after_quantity"], diff["after_unit_price"])
+                after_qty += diff["after_quantity"]
+                after_amt += a_amt
+                line_types.append(change_type)
+                rows.append({
+                    "line_no": payload.line_no or idx,
+                    "source_item_id": None,
+                    "change_type": change_type,
+                    "material_id": payload.material_id,
+                    "material_code": payload.material_code,
+                    "material_name": payload.material_name,
+                    "material_spec": payload.material_spec,
+                    "material_unit": payload.material_unit,
+                    "before_quantity": diff["before_quantity"],
+                    "after_quantity": diff["after_quantity"],
+                    "before_unit_price": diff["before_unit_price"],
+                    "after_unit_price": diff["after_unit_price"],
+                    "before_delivery_date": diff["before_delivery_date"],
+                    "after_delivery_date": diff["after_delivery_date"],
+                    "before_amount": b_amt,
+                    "after_amount": a_amt,
+                    "delta_amount": a_amt - b_amt,
+                    "notes": payload.notes,
+                })
+                continue
+
+            src = source_items.get(int(payload.source_item_id)) if payload.source_item_id else None
+            if not src:
+                raise BusinessLogicError(f"变更行缺少有效原订单行: {payload.source_item_id}")
+
+            change_type, diff = resolve_purchase_line_change(src, payload)
+            line_types.append(change_type)
+            b_amt = line_amount(diff["before_quantity"], diff["before_unit_price"])
+            a_amt = line_amount(diff["after_quantity"], diff["after_unit_price"])
+            before_qty += diff["before_quantity"]
+            after_qty += diff["after_quantity"]
+            before_amt += b_amt
+            after_amt += a_amt
+            rows.append({
+                "line_no": payload.line_no or idx,
+                "source_item_id": src.id,
+                "change_type": change_type,
+                "material_id": src.material_id,
+                "material_code": src.material_code,
+                "material_name": src.material_name,
+                "material_spec": src.material_spec,
+                "material_unit": src.unit,
+                "before_quantity": diff["before_quantity"],
+                "after_quantity": diff["after_quantity"],
+                "before_unit_price": diff["before_unit_price"],
+                "after_unit_price": diff["after_unit_price"],
+                "before_delivery_date": diff["before_delivery_date"],
+                "after_delivery_date": diff["after_delivery_date"],
+                "before_amount": b_amt,
+                "after_amount": a_amt,
+                "delta_amount": a_amt - b_amt,
+                "notes": payload.notes,
+            })
+        if not rows:
+            raise BusinessLogicError("变更单至少包含一条有效变更行")
+        return rows, before_qty, after_qty, before_amt, after_amt, line_types
+
+    async def create_from_order(
+        self, tenant_id: int, order_id: int, created_by: int, change_reason: str = "订单变更"
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        order = await self._validate_source_order(tenant_id, order_id)
+        version = await self._next_version(tenant_id, order_id)
+        code = await self._generate_code(tenant_id)
+        source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
+        before_qty = Decimal("0")
+        before_amt = Decimal("0")
+        rows: list[dict] = []
+        for idx, src in enumerate(source_items, start=1):
+            b_amt = line_amount(src.ordered_quantity, src.unit_price)
+            before_qty += Decimal(str(src.ordered_quantity or 0))
+            before_amt += b_amt
+            rows.append({
+                "line_no": idx,
+                "source_item_id": src.id,
+                "change_type": OrderChangeLineType.QUANTITY.value,
+                "material_id": src.material_id,
+                "material_code": src.material_code,
+                "material_name": src.material_name,
+                "material_spec": src.material_spec,
+                "material_unit": src.unit,
+                "before_quantity": src.ordered_quantity,
+                "after_quantity": src.ordered_quantity,
+                "before_unit_price": src.unit_price,
+                "after_unit_price": src.unit_price,
+                "before_delivery_date": src.required_date,
+                "after_delivery_date": src.required_date,
+                "before_amount": b_amt,
+                "after_amount": b_amt,
+                "delta_amount": Decimal("0"),
+                "notes": None,
+            })
+        async with in_transaction():
+            doc = await PurchaseOrderChangeOrder.create(
+                tenant_id=tenant_id,
+                change_code=code,
+                source_order_id=order.id,
+                source_order_code=order.order_code,
+                change_version=version,
+                supplier_id=order.supplier_id,
+                supplier_name=order.supplier_name,
+                change_reason=change_reason,
+                change_category="MIXED",
+                status=DocumentStatus.DRAFT.value,
+                review_status=ReviewStatus.PENDING.value,
+                before_total_quantity=before_qty,
+                after_total_quantity=before_qty,
+                before_total_amount=before_amt,
+                after_total_amount=before_amt,
+                delta_amount=Decimal("0"),
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            for row in rows:
+                await PurchaseOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
+        return await self._to_detail(doc)
+
+    async def create_change_order(
+        self, tenant_id: int, data: PurchaseOrderChangeCreate, created_by: int
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        order = await self._validate_source_order(tenant_id, data.source_order_id)
+        rows, b_qty, a_qty, b_amt, a_amt, line_types = await self._build_items_from_payload(tenant_id, order, data.items)
+        async with in_transaction():
+            doc = await PurchaseOrderChangeOrder.create(
+                tenant_id=tenant_id,
+                change_code=await self._generate_code(tenant_id),
+                source_order_id=order.id,
+                source_order_code=order.order_code,
+                change_version=await self._next_version(tenant_id, order.id),
+                supplier_id=order.supplier_id,
+                supplier_name=order.supplier_name,
+                change_reason=data.change_reason,
+                change_category=data.change_category or infer_change_category(line_types),
+                effective_date=data.effective_date,
+                status=DocumentStatus.DRAFT.value,
+                review_status=ReviewStatus.PENDING.value,
+                before_total_quantity=b_qty,
+                after_total_quantity=a_qty,
+                before_total_amount=b_amt,
+                after_total_amount=a_amt,
+                delta_amount=a_amt - b_amt,
+                header_changes=data.header_changes,
+                attachments=data.attachments,
+                notes=data.notes,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            for row in rows:
+                await PurchaseOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
+        return await self._to_detail(doc)
+
+    async def update_change_order(
+        self, tenant_id: int, change_id: int, data: PurchaseOrderChangeUpdate, updated_by: int
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if not is_draft_status(doc.status):
+            raise BusinessLogicError("仅草稿状态可编辑变更单")
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id)
+        if not order:
+            raise NotFoundError("原采购订单不存在")
+        async with in_transaction():
+            if data.items is not None:
+                rows, b_qty, a_qty, b_amt, a_amt, line_types = await self._build_items_from_payload(
+                    tenant_id, order, data.items
+                )
+                await PurchaseOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).delete()
+                for row in rows:
+                    await PurchaseOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
+                doc.before_total_quantity = b_qty
+                doc.after_total_quantity = a_qty
+                doc.before_total_amount = b_amt
+                doc.after_total_amount = a_amt
+                doc.delta_amount = a_amt - b_amt
+                doc.change_category = data.change_category or infer_change_category(line_types)
+            doc.change_reason = data.change_reason
+            doc.effective_date = data.effective_date
+            doc.header_changes = data.header_changes
+            doc.attachments = data.attachments
+            doc.notes = data.notes
+            doc.updated_by = updated_by
+            await doc.save()
+        return await self._to_detail(doc)
+
+    async def list_change_orders(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        source_order_id: Optional[int] = None,
+        status: Optional[str] = None,
+        lifecycle_stage: Optional[str] = None,
+    ) -> List[PurchaseOrderChangeListResponse]:
+        qs = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if source_order_id:
+            qs = qs.filter(source_order_id=source_order_id)
+        if status:
+            qs = qs.filter(status=status)
+        docs = await qs.order_by("-created_at").offset(skip).limit(limit)
+        result = []
+        for doc in docs:
+            lifecycle = get_purchase_order_change_lifecycle(doc.status, doc.review_status, doc.applied_at)
+            if lifecycle_stage and lifecycle.get("current_stage_key") != lifecycle_stage:
+                continue
+            result.append(
+                PurchaseOrderChangeListResponse(
+                    id=doc.id,
+                    change_code=doc.change_code,
+                    source_order_id=doc.source_order_id,
+                    source_order_code=doc.source_order_code,
+                    change_version=doc.change_version,
+                    change_category=doc.change_category,
+                    change_reason=doc.change_reason,
+                    status=doc.status,
+                    review_status=doc.review_status,
+                    before_total_amount=doc.before_total_amount,
+                    after_total_amount=doc.after_total_amount,
+                    delta_amount=doc.delta_amount,
+                    applied_at=doc.applied_at,
+                    created_at=doc.created_at,
+                    lifecycle=lifecycle,
+                    supplier_id=doc.supplier_id,
+                    supplier_name=doc.supplier_name,
+                    partner_name=doc.supplier_name,
+                )
+            )
+        return result
+
+    async def get_by_id(self, tenant_id: int, change_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        return await self._to_detail(doc)
+
+    async def list_by_order(self, tenant_id: int, order_id: int) -> List[PurchaseOrderChangeListResponse]:
+        return await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)
+
+    async def delete_change_order(self, tenant_id: int, change_id: int) -> None:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if not is_draft_status(doc.status):
+            raise BusinessLogicError("仅草稿状态可删除")
+        doc.deleted_at = datetime.now()
+        await doc.save()
+
+    async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if not is_draft_status(doc.status):
+            raise BusinessLogicError("仅草稿可提交")
+        if doc.delta_amount == 0 and not doc.header_changes:
+            items = await PurchaseOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
+            has_line_change = any(
+                (i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value))
+                or (i.delta_amount or 0) != 0
+                for i in items
+            )
+            if not has_line_change:
+                raise BusinessLogicError("变更单无任何变更内容，无法提交")
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_order_change")
+        if audit_required:
+            doc.status = DocumentStatus.PENDING_REVIEW.value
+            doc.review_status = ReviewStatus.PENDING.value
+        else:
+            doc.status = DocumentStatus.AUDITED.value
+            doc.review_status = ReviewStatus.APPROVED.value
+        doc.updated_by = operator_id
+        await doc.save()
+        if not audit_required:
+            return await self.apply(tenant_id, change_id, operator_id)
+        return await self._to_detail(doc)
+
+    async def approve(
+        self, tenant_id: int, change_id: int, body: ApproveChangeRequest, operator_id: int
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if normalize_status(doc.status) != DocumentStatus.PENDING_REVIEW.value:
+            raise BusinessLogicError("仅待审核状态可审批")
+        doc.reviewer_id = operator_id
+        doc.reviewer_name = await self.get_user_name(operator_id)
+        doc.review_time = datetime.now()
+        doc.review_remarks = body.review_remarks
+        if body.approved:
+            doc.status = DocumentStatus.AUDITED.value
+            doc.review_status = ReviewStatus.APPROVED.value
+        else:
+            doc.status = DocumentStatus.REJECTED.value
+            doc.review_status = ReviewStatus.REJECTED.value
+        doc.updated_by = operator_id
+        await doc.save()
+        if body.approved:
+            return await self.apply(tenant_id, change_id, operator_id)
+        return await self._to_detail(doc)
+
+    async def withdraw(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if normalize_status(doc.status) != DocumentStatus.PENDING_REVIEW.value:
+            raise BusinessLogicError("仅待审核状态可撤回")
+        doc.status = DocumentStatus.DRAFT.value
+        doc.review_status = ReviewStatus.PENDING.value
+        doc.updated_by = operator_id
+        await doc.save()
+        return await self._to_detail(doc)
+
+    async def preview_impact(self, tenant_id: int, change_id: int) -> ChangeImpactPreviewResponse:
+        doc = await self.get_by_id(tenant_id, change_id)
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        impact = await DocumentRelationNewService().get_change_impact_purchase_order(tenant_id, doc.source_order_id)
+        return ChangeImpactPreviewResponse(
+            blocking_errors=[],
+            warnings=[],
+            affected_receipt_notices=impact.get("affected_receipt_notices", []),
+            affected_inbounds=impact.get("affected_inbounds", []),
+            recommended_actions=impact.get("recommended_actions", []),
+        )
+
+    async def apply(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if doc.status == OrderChangeApplyStatus.APPLIED.value:
+            return await self._to_detail(doc)
+        if normalize_status(doc.status) not in (DocumentStatus.AUDITED.value,) and doc.review_status != ReviewStatus.APPROVED.value:
+            raise BusinessLogicError("变更单未审核通过，无法生效")
+
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id)
+        if not order:
+            raise NotFoundError("原采购订单不存在")
+        items = await PurchaseOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
+        operator_name = await self.get_user_name(operator_id) or str(operator_id)
+
+        async with in_transaction():
+            if doc.header_changes:
+                for field, val in doc.header_changes.items():
+                    old_val = getattr(order, field, None)
+                    if str(old_val) != str(val):
+                        await PurchaseOrderChange.create(
+                            tenant_id=tenant_id,
+                            order_id=order.id,
+                            change_type="Modify",
+                            field_name=field,
+                            old_value=str(old_val),
+                            new_value=str(val),
+                            reason=doc.change_reason,
+                            operator_id=operator_id,
+                            operator_name=operator_name,
+                        )
+                        setattr(order, field, val)
+
+            for ch in items:
+                if ch.change_type == OrderChangeLineType.LINE_ADD.value:
+                    qty = Decimal(str(ch.after_quantity or 0))
+                    price = Decimal(str(ch.after_unit_price or 0))
+                    required_date = ch.after_delivery_date or order.order_date
+                    if not ch.material_id:
+                        raise BusinessLogicError("新增行缺少物料")
+                    total_price = line_amount(qty, price)
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Add",
+                        field_name=f"line_add_{ch.material_code}",
+                        old_value="0",
+                        new_value=str(qty),
+                        reason=doc.change_reason,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    await PurchaseOrderItem.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        material_id=ch.material_id,
+                        material_code=ch.material_code or "",
+                        material_name=ch.material_name or "",
+                        material_spec=ch.material_spec,
+                        unit=ch.material_unit or "",
+                        ordered_quantity=qty,
+                        received_quantity=Decimal("0"),
+                        outstanding_quantity=qty,
+                        unit_price=price,
+                        total_price=total_price,
+                        required_date=required_date,
+                    )
+                    continue
+
+                if not ch.source_item_id:
+                    continue
+                po_item = await PurchaseOrderItem.get_or_none(tenant_id=tenant_id, id=ch.source_item_id, order_id=order.id)
+                if not po_item:
+                    continue
+                if ch.change_type == OrderChangeLineType.LINE_CANCEL.value:
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Cancel",
+                        field_name=f"line_{po_item.id}",
+                        old_value=str(po_item.ordered_quantity),
+                        new_value="0",
+                        reason=doc.change_reason,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    await po_item.delete()
+                    continue
+                if ch.after_quantity != ch.before_quantity:
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Quantity",
+                        field_name=f"line_{po_item.id}_quantity",
+                        old_value=str(ch.before_quantity),
+                        new_value=str(ch.after_quantity),
+                        reason=doc.change_reason,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                if ch.after_unit_price != ch.before_unit_price:
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Price",
+                        field_name=f"line_{po_item.id}_price",
+                        old_value=str(ch.before_unit_price),
+                        new_value=str(ch.after_unit_price),
+                        reason=doc.change_reason,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                po_item.ordered_quantity = ch.after_quantity or po_item.ordered_quantity
+                po_item.unit_price = ch.after_unit_price or po_item.unit_price
+                po_item.required_date = ch.after_delivery_date or po_item.required_date
+                received = Decimal(str(po_item.received_quantity or 0))
+                po_item.outstanding_quantity = max(Decimal("0"), po_item.ordered_quantity - received)
+                po_item.total_price = line_amount(po_item.ordered_quantity, po_item.unit_price)
+                await po_item.save()
+
+            remaining = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
+            order.total_quantity = sum((Decimal(str(i.ordered_quantity or 0)) for i in remaining), Decimal("0"))
+            order.total_amount = sum((Decimal(str(i.total_price or 0)) for i in remaining), Decimal("0"))
+            order.updated_by = operator_id
+            await order.save()
+
+            doc.status = OrderChangeApplyStatus.APPLIED.value
+            doc.applied_at = datetime.now()
+            doc.applied_by = operator_id
+            doc.updated_by = operator_id
+            await doc.save()
+
+        try:
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="purchase_order",
+                    source_id=order.id,
+                    source_code=order.order_code,
+                    source_name=order.order_code,
+                    target_type="purchase_order_change",
+                    target_id=doc.id,
+                    target_code=doc.change_code,
+                    target_name=doc.change_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="采购订单变更",
+                ),
+                created_by=operator_id,
+            )
+        except Exception:
+            pass
+
+        return await self._to_detail(doc)

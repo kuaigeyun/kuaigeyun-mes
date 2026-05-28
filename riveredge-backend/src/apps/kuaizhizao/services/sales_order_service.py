@@ -1551,9 +1551,13 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        # 允许草稿或已审核状态更新（已审核时可能为反审核后再编辑，或直接编辑已审核订单）
-        if order.status not in (DemandStatus.DRAFT, DemandStatus.AUDITED, DemandStatus.PENDING_REVIEW):
-            raise BusinessLogicError(f"只能更新草稿、待审核或已审核的销售订单，当前状态: {order.status}")
+        from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
+        if is_source_order_locked_for_direct_edit(order.status, order.review_status):
+            raise BusinessLogicError(
+                f"销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更。当前状态: {order.status}"
+            )
+        if order.status not in (DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW):
+            raise BusinessLogicError(f"只能更新草稿或待审核的销售订单，当前状态: {order.status}")
 
         old_values = {
             "order_date": str(order.order_date) if order.order_date else None,

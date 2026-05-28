@@ -65,44 +65,37 @@ const WarehouseDashboard: React.FC = () => {
             resource="inventory"
             value={s?.total_inventory_value != null ? Number(s.total_inventory_value) : null}
             prefix=""
-            style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}
+            style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}
           />
         ),
         subtitle: '按物料标准成本/均价估算',
         icon: <InboxOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         onClick: () => navigate('/apps/kuaizhizao/warehouse-management/inventory'),
-        sideMetrics: [
-          { label: 'SKU 数', value: s?.total_sku ?? 0 },
-          { label: '总数量', value: s?.total_quantity ?? 0 },
-        ],
+        sideMetrics: [{ label: '总数量', value: s?.total_quantity ?? 0 }],
       },
       {
         key: 'health',
         title: '库存健康度',
         value: `${normalSkuPercent}%`,
-        subtitle: '正常库存 SKU 占比',
+        subtitle: `低库存 ${s?.low_stock ?? 0} · 缺料 ${s?.out_of_stock ?? 0}`,
         icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         onClick: () => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert'),
         progress: normalSkuPercent,
-        sideMetrics: [
-          { label: '低库存', value: s?.low_stock ?? 0 },
-          { label: '缺料', value: s?.out_of_stock ?? 0 },
-        ],
+        sideMetrics: [{ label: 'SKU 数', value: s?.total_sku ?? 0 }],
       },
       {
         key: 'pending',
         title: '待办出入库',
         value: (s?.pending_inbound || 0) + (s?.pending_outbound || 0),
-        subtitle: s?.overdue_inbound ? `有 ${s.overdue_inbound} 单入库逾期` : '所有单据在有效期内',
+        subtitle: s?.overdue_inbound
+          ? `待入库 ${s?.pending_inbound ?? 0} · 逾期 ${s.overdue_inbound} 单`
+          : `待入库 ${s?.pending_inbound ?? 0} · 待出库 ${s?.pending_outbound ?? 0}`,
         icon: <SwapOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
         onClick: () => navigate('/apps/kuaizhizao/warehouse-management/inbound'),
-        sideMetrics: [
-          { label: '待入库', value: s?.pending_inbound ?? 0 },
-          { label: '待出库', value: s?.pending_outbound ?? 0 },
-        ],
+        sideMetrics: [{ label: '待出库', value: s?.pending_outbound ?? 0 }],
       },
     ],
     [navigate, normalSkuPercent, s],

@@ -950,3 +950,59 @@ class DocumentRelationNewService:
             "affected_work_orders": affected_work_orders,
             "recommended_actions": recommended_actions,
         }
+
+    async def get_change_impact_purchase_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        """采购订单变更对下游的影响范围"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        upstream_change = {
+            "type": "purchase_order",
+            "id": order.id,
+            "code": getattr(order, "order_code", None),
+            "changed_at": order.updated_at.isoformat() if order.updated_at else None,
+        }
+
+        trace = await self.trace_document_chain(
+            tenant_id=tenant_id,
+            document_type="purchase_order",
+            document_id=order_id,
+            direction="downstream",
+            max_depth=10,
+        )
+        collected = self._flatten_downstream_nodes(trace.downstream_chain)
+
+        affected_receipt_notices = []
+        affected_inbounds = []
+        for (doc_type, doc_id), info in collected.items():
+            status = await self._get_document_status(tenant_id, doc_type, doc_id)
+            item = {
+                "id": doc_id,
+                "code": info.get("document_code"),
+                "name": info.get("document_name"),
+                "status": status,
+            }
+            if doc_type == "receipt_notice":
+                affected_receipt_notices.append(item)
+            elif doc_type in ("purchase_receipt", "inbound"):
+                affected_inbounds.append(item)
+
+        recommended_actions = []
+        if affected_receipt_notices:
+            recommended_actions.append("核对收货通知数量")
+        if affected_inbounds:
+            recommended_actions.append("核对在途入库单")
+
+        return {
+            "upstream_change": upstream_change,
+            "affected_receipt_notices": affected_receipt_notices,
+            "affected_inbounds": affected_inbounds,
+            "recommended_actions": recommended_actions,
+        }

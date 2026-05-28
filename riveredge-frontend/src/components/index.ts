@@ -72,3 +72,5 @@ export { default as UniWiki } from './uni-wiki';
 export type { WikiItem, WikiTreeData, UniWikiProps } from './uni-wiki';
 export { default as CopyableCode } from './copyable-code';
 export type { CopyableCodeProps } from './copyable-code';
+export { UniDashboard, UniDashboardSidebar, useUniDashboardSidebar } from './uni-dashboard';
+export type { UniDashboardProps } from './uni-dashboard';

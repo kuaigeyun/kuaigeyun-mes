@@ -357,11 +357,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             if not order:
                 raise NotFoundError(f"采购订单不存在: {order_id}")
 
-            # V2 审计增强：已审核/已确认的订单允许变更，但必须提供变更原因且记录日志
-            requires_audit = order.status not in [DocumentStatus.DRAFT.value]
-            if requires_audit and not order_data.change_reason:
-                raise BusinessLogicError("已生效订单，变更时必须填写'变更原因'")
+            from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
+            if is_source_order_locked_for_direct_edit(order.status, order.review_status):
+                raise BusinessLogicError(
+                    f"采购订单已生效或执行中，禁止直接修改，请通过采购变更单变更。当前状态: {order.status}"
+                )
 
+            requires_audit = order.status not in [DocumentStatus.DRAFT.value]
             operator_name = ""
             try:
                 from apps.common.base_service import AppBaseService
@@ -369,7 +371,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             except Exception:
                 operator_name = str(updated_by)
 
-            # 1. 如果是已生效订单，先记录头信息变更
             if requires_audit:
                 update_items = order_data.model_dump(exclude_unset=True, exclude={'items', 'change_reason'})
                 for field, new_val in update_items.items():

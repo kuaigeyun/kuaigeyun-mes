@@ -85,7 +85,6 @@ const ManufacturingDashboard: React.FC = () => {
         key: 'quality',
         title: '加工合格率 (今日)',
         value: `${s?.qualified_rate ?? 0}%`,
-        subtitle: `成品产出 ${s?.today_output ?? 0}`,
         icon: <SafetyCertificateOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
         progress: s?.qualified_rate ?? 0,

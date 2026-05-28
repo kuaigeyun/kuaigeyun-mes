@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Col, Segmented, Spin } from 'antd';
+import { Card, Col, Segmented, Spin, theme } from 'antd';
 
 export interface ModuleChartPanelProps {
   title: React.ReactNode;
@@ -24,6 +24,8 @@ export function ModuleChartPanel({
   children,
   lg = 12,
 }: ModuleChartPanelProps) {
+  const { token } = theme.useToken();
+
   return (
     <Col xs={24} lg={lg} style={{ display: 'flex', minWidth: 0 }}>
       <Card
@@ -40,7 +42,7 @@ export function ModuleChartPanel({
             extra
           )
         }
-        style={{ borderRadius: 12, width: '100%', height: '100%' }}
+        style={{ borderRadius: token.borderRadiusLG, width: '100%', height: '100%' }}
         styles={{
           body: {
             padding: '12px 16px 8px',

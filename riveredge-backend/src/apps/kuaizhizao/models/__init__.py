@@ -73,7 +73,15 @@ from .material_call_request_item import MaterialCallRequestItem
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem
+from .purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
 from .purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
+from .purchase_inquiry import (
+    PurchaseInquiry,
+    PurchaseInquiryItem,
+    PurchaseInquiryVendor,
+    PurchaseSupplierQuote,
+    PurchaseSupplierQuoteItem,
+)
 
 # 质量管理模块
 from .incoming_inspection import IncomingInspection
@@ -89,6 +97,7 @@ from .sales_forecast import SalesForecast
 from .sales_forecast_item import SalesForecastItem
 from .sales_order import SalesOrder
 from .sales_order_item import SalesOrderItem
+from .sales_order_change_order import SalesOrderChangeOrder, SalesOrderChangeItem
 from .quotation import Quotation
 from .quotation_item import QuotationItem
 from .delivery_notice import DeliveryNotice
@@ -201,8 +210,15 @@ __all__ = [
     # 采购管理模块
     'PurchaseOrder',
     'PurchaseOrderItem',
+    'PurchaseOrderChangeOrder',
+    'PurchaseOrderChangeItem',
     'PurchaseRequisition',
     'PurchaseRequisitionItem',
+    'PurchaseInquiry',
+    'PurchaseInquiryItem',
+    'PurchaseInquiryVendor',
+    'PurchaseSupplierQuote',
+    'PurchaseSupplierQuoteItem',
 
     # 质量管理模块
     'IncomingInspection',
@@ -217,6 +233,8 @@ __all__ = [
     'SalesForecastItem',
     'SalesOrder',
     'SalesOrderItem',
+    'SalesOrderChangeOrder',
+    'SalesOrderChangeItem',
     'Quotation',
     'QuotationItem',
     'DeliveryNotice',

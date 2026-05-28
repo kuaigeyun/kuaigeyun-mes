@@ -296,4 +296,38 @@ class DemandSourceChainService:
                                     "name": forecast.forecast_name,
                                 })
         
-        return {"chain": chain}
+        downstream = await self._get_requisition_downstream(tenant_id, requisition_id)
+        return {"chain": chain, "downstream": downstream}
+
+    async def _get_requisition_downstream(self, tenant_id: int, requisition_id: int) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry
+
+        downstream: List[Dict[str, Any]] = []
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_requisition",
+            source_id=requisition_id,
+        ).all()
+        for rel in rels:
+            if rel.target_type == "purchase_inquiry":
+                inq = await PurchaseInquiry.get_or_none(tenant_id=tenant_id, id=rel.target_id, deleted_at__isnull=True)
+                if inq:
+                    downstream.append({
+                        "type": "PurchaseInquiry",
+                        "id": inq.id,
+                        "code": inq.inquiry_code,
+                        "name": inq.inquiry_name,
+                        "status": inq.status,
+                    })
+            elif rel.target_type == "purchase_order":
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
+                if po:
+                    downstream.append({
+                        "type": "PurchaseOrder",
+                        "id": po.id,
+                        "code": po.order_code,
+                        "name": getattr(po, "order_name", None) or po.order_code,
+                        "status": po.status,
+                    })
+        return downstream

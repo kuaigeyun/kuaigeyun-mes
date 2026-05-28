@@ -47,6 +47,7 @@ import {
   resolveModuleRankBadgeStyle,
   resolveModuleFollowUpIconColors,
 } from '../../../components/module-center';
+import { UniDashboard } from '../../../../../components/uni-dashboard';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const { Text, Title, Paragraph } = Typography;
@@ -480,7 +481,7 @@ const SalesDashboard: React.FC = () => {
 
 
   return (
-    <div className="sales-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
+    <UniDashboard className="sales-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
       <Spin spinning={summaryLoading && !s}>
         <Row gutter={[16, 16]}>
           {/* KPI 区 */}
@@ -837,7 +838,7 @@ const SalesDashboard: React.FC = () => {
           </Col>
         </Row>
       </Spin>
-    </div>
+    </UniDashboard>
   );
 };
 

@@ -408,7 +408,7 @@ const ApplicationHelpView: React.FC = () => {
         <>
           <Title level={2}>3.2 应用的启用与授权</Title>
           <ul>
-            <li style={{ marginBottom: 12 }}><Text strong>启用 / 禁用</Text>：在应用卡片底部或表格行内切换 <b>[启用状态]</b> 开关。禁用的应用将不会在左侧菜单栏向普通用户展示。</li>
+            <li style={{ marginBottom: 12 }}><Text strong>启用 / 禁用</Text>：在应用卡片底部或表格行内切换 <b>[状态]</b> 开关。禁用的应用将不会在左侧菜单栏向普通用户展示。</li>
             <li><Text strong>激活专业版应用</Text>：在尝试启用专业版应用（如 快数采 kuaiiot、KU-AI kuaiai）时，系统会自动弹出授权验证窗口。您需要输入正确的授权码（License Key），校验通过后应用才会成功启用。</li>
           </ul>
         </>

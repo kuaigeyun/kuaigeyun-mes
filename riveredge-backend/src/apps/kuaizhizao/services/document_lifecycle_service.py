@@ -1058,6 +1058,71 @@ def get_purchase_requisition_lifecycle(
 
 
 # ---------------------------------------------------------------------------
+# 采购询价单生命周期
+# ---------------------------------------------------------------------------
+PURCHASE_INQUIRY_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "quoting", "label": "询价中"},
+    {"key": "pending_compare", "label": "待比价"},
+    {"key": "awarded", "label": "已定标"},
+    {"key": "converted", "label": "已转单"},
+]
+
+
+def normalize_purchase_inquiry_lifecycle_stage(stage: Optional[str]) -> str:
+    return _norm(stage)
+
+
+def get_purchase_inquiry_lifecycle(
+    inquiry: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    audit_required: bool = False,
+) -> Dict[str, Any]:
+    """采购询价单生命周期"""
+    status = _norm(getattr(inquiry, "status", None))
+    review_status = _norm(getattr(inquiry, "review_status", None))
+    milestones = milestones or []
+    status_map = {
+        "DRAFT": "draft", "draft": "draft", "草稿": "draft",
+        "QUOTING": "quoting", "quoting": "quoting", "询价中": "quoting",
+        "PENDING_COMPARE": "pending_compare", "pending_compare": "pending_compare", "待比价": "pending_compare",
+        "AWARDED": "awarded", "awarded": "awarded", "已定标": "awarded",
+        "CONVERTED": "converted", "converted": "converted", "已转单": "converted",
+        "CANCELLED": "draft", "cancelled": "draft", "已取消": "draft",
+    }
+    key = status_map.get(status, "draft")
+    stage_name = {
+        "draft": "草稿",
+        "quoting": "询价中",
+        "pending_compare": "待比价",
+        "awarded": "已定标",
+        "converted": "已转单",
+    }.get(key, status or "草稿")
+    if review_status in ("PENDING", "待审核") and key == "draft" and audit_required:
+        stage_name = "待审核"
+        key = "draft"
+    suggestions = []
+    if key == "draft":
+        suggestions = ["发布询价"]
+    elif key == "quoting":
+        suggestions = ["录入报价", "截止询价"]
+    elif key == "pending_compare":
+        suggestions = ["比价定标"]
+    elif key == "awarded":
+        suggestions = ["转采购订单"]
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "converted" else "normal",
+        "main_stages": _build_main_stages(PURCHASE_INQUIRY_MAIN_STAGES, key),
+        "sub_stages": None,
+        "next_step_suggestions": suggestions,
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 采购入库单生命周期（待入库→已入库）
 # ---------------------------------------------------------------------------
 PURCHASE_RECEIPT_MAIN_STAGES = [
@@ -1175,6 +1240,64 @@ def get_shipment_notice_lifecycle(
         "next_step_suggestions": ["通知仓库", "编辑通知明细"] if key == "pending" else (["撤回通知（回到待发货）", "执行出库"] if key == "notified" else []),
         "milestones": milestones,
     }
+
+
+# ---------------------------------------------------------------------------
+# 销售/采购变更单生命周期
+# ---------------------------------------------------------------------------
+ORDER_CHANGE_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "audited", "label": "已审核"},
+    {"key": "applied", "label": "已生效"},
+]
+
+
+def get_sales_order_change_lifecycle(
+    status: Optional[str],
+    review_status: Optional[str] = None,
+    applied_at: Optional[Any] = None,
+) -> Dict[str, Any]:
+    s = _norm(status)
+    if applied_at or s in ("APPLIED", "已生效"):
+        key = "applied"
+        stage_name = "已生效"
+    elif s in ("REJECTED", "已驳回"):
+        return {
+            "current_stage_key": "rejected",
+            "current_stage_name": "已驳回",
+            "status": "error",
+            "main_stages": _build_main_stages(ORDER_CHANGE_MAIN_STAGES, "draft"),
+            "sub_stages": [],
+            "next_step_suggestions": [],
+            "milestones": [],
+        }
+    elif s in ("PENDING_REVIEW", "待审核"):
+        key = "pending_review"
+        stage_name = "待审核"
+    elif s in ("AUDITED", "已审核") or _is_approved(review_status):
+        key = "audited"
+        stage_name = "已审核"
+    else:
+        key = "draft"
+        stage_name = "草稿"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "applied" else "normal",
+        "main_stages": _build_main_stages(ORDER_CHANGE_MAIN_STAGES, key),
+        "sub_stages": [],
+        "next_step_suggestions": ["提交审核"] if key == "draft" else (["生效回写"] if key == "audited" else []),
+        "milestones": [],
+    }
+
+
+def get_purchase_order_change_lifecycle(
+    status: Optional[str],
+    review_status: Optional[str] = None,
+    applied_at: Optional[Any] = None,
+) -> Dict[str, Any]:
+    return get_sales_order_change_lifecycle(status, review_status, applied_at)
 
 
 # ---------------------------------------------------------------------------

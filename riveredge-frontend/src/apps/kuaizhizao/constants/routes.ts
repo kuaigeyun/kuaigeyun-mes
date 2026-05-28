@@ -17,6 +17,7 @@ const APP_BASE = '/apps/kuaizhizao';
 /** 完整 URL（用于 navigate、Link、菜单 path 等） */
 export const ROUTES = {
   PURCHASE_REQUISITIONS: `${APP_BASE}/purchase-management/purchase-requisitions`,
+  PURCHASE_INQUIRIES: `${APP_BASE}/purchase-management/purchase-inquiries`,
   PURCHASE_ORDERS: `${APP_BASE}/purchase-management/purchase-orders`,
   RECEIPT_NOTICES: `${APP_BASE}/purchase-management/receipt-notices`,
   PURCHASE_RETURNS: `${APP_BASE}/purchase-management/purchase-returns`,

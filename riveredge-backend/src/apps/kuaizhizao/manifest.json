@@ -73,9 +73,19 @@
             "permission": "kuaizhizao:sales-order:read"
           },
           {
+            "title": "app.kuaizhizao.menu.sales-management.sales-order-changes",
+            "path": "/apps/kuaizhizao/sales-management/sales-order-changes",
+            "sort_order": 6,
+            "meta": {
+              "node": "sales_order_change",
+              "module": "sales"
+            },
+            "permission": "kuaizhizao:sales-order-change:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.sales-management.shipment-notices",
             "path": "/apps/kuaizhizao/sales-management/shipment-notices",
-            "sort_order": 6,
+            "sort_order": 7,
             "meta": {
               "module": "sales",
               "node": "shipment_notice"
@@ -85,7 +95,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-returns",
             "path": "/apps/kuaizhizao/sales-management/sales-returns",
-            "sort_order": 7,
+            "sort_order": 8,
             "meta": {
               "module": "sales",
               "node": "sales_return"
@@ -95,7 +105,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.reports",
             "icon": "fileText",
-            "sort_order": 8,
+            "sort_order": 9,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
@@ -283,9 +293,19 @@
             "permission": "kuaizhizao:purchase-requisition:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.purchase-inquiries",
+            "path": "/apps/kuaizhizao/purchase-management/purchase-inquiries",
+            "sort_order": 2,
+            "meta": {
+              "node": "purchase_inquiry",
+              "module": "purchase"
+            },
+            "permission": "kuaizhizao:purchase-inquiry:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-orders",
             "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
-            "sort_order": 2,
+            "sort_order": 3,
             "meta": {
               "node": "purchase_order",
               "module": "purchase"
@@ -293,9 +313,19 @@
             "permission": "kuaizhizao:purchase-order:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.purchase-order-changes",
+            "path": "/apps/kuaizhizao/purchase-management/purchase-order-changes",
+            "sort_order": 4,
+            "meta": {
+              "node": "purchase_order_change",
+              "module": "purchase"
+            },
+            "permission": "kuaizhizao:purchase-order-change:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.receipt-notices",
             "path": "/apps/kuaizhizao/purchase-management/receipt-notices",
-            "sort_order": 4,
+            "sort_order": 5,
             "meta": {
               "module": "purchase",
               "node": "receipt_notice"
@@ -305,7 +335,7 @@
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-returns",
             "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-            "sort_order": 5,
+            "sort_order": 6,
             "meta": {
               "module": "purchase",
               "node": "purchase_return"
@@ -315,7 +345,7 @@
           {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
             "icon": "fileText",
-            "sort_order": 6,
+            "sort_order": 7,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
@@ -1724,6 +1754,14 @@
     "kuaizhizao:purchase-order:revoke",
     "kuaizhizao:purchase-order:submit",
     "kuaizhizao:purchase-order:update",
+    "kuaizhizao:purchase-order-change:audit",
+    "kuaizhizao:purchase-order-change:create",
+    "kuaizhizao:purchase-order-change:delete",
+    "kuaizhizao:purchase-order-change:print",
+    "kuaizhizao:purchase-order-change:read",
+    "kuaizhizao:purchase-order-change:revoke",
+    "kuaizhizao:purchase-order-change:submit",
+    "kuaizhizao:purchase-order-change:update",
     "kuaizhizao:purchase-requisition:approve",
     "kuaizhizao:purchase-requisition:audit",
     "kuaizhizao:purchase-requisition:create",
@@ -1735,6 +1773,18 @@
     "kuaizhizao:purchase-requisition:revoke",
     "kuaizhizao:purchase-requisition:submit",
     "kuaizhizao:purchase-requisition:update",
+    "kuaizhizao:purchase-inquiry:approve",
+    "kuaizhizao:purchase-inquiry:audit",
+    "kuaizhizao:purchase-inquiry:create",
+    "kuaizhizao:purchase-inquiry:delete",
+    "kuaizhizao:purchase-inquiry:export",
+    "kuaizhizao:purchase-inquiry:import",
+    "kuaizhizao:purchase-inquiry:read",
+    "kuaizhizao:purchase-inquiry:reject",
+    "kuaizhizao:purchase-inquiry:revoke",
+    "kuaizhizao:purchase-inquiry:submit",
+    "kuaizhizao:purchase-inquiry:update",
+    "kuaizhizao:purchase-inquiry:print",
     "kuaizhizao:purchase-return:approve",
     "kuaizhizao:purchase-return:audit",
     "kuaizhizao:purchase-return:create",
@@ -1887,6 +1937,14 @@
     "kuaizhizao:sales-order:revoke",
     "kuaizhizao:sales-order:submit",
     "kuaizhizao:sales-order:update",
+    "kuaizhizao:sales-order-change:audit",
+    "kuaizhizao:sales-order-change:create",
+    "kuaizhizao:sales-order-change:delete",
+    "kuaizhizao:sales-order-change:print",
+    "kuaizhizao:sales-order-change:read",
+    "kuaizhizao:sales-order-change:revoke",
+    "kuaizhizao:sales-order-change:submit",
+    "kuaizhizao:sales-order-change:update",
     "kuaizhizao:sales-return:approve",
     "kuaizhizao:sales-return:audit",
     "kuaizhizao:sales-return:create",
@@ -2399,6 +2457,18 @@
       "allow_manual_edit": true
     },
     {
+      "page_code": "kuaizhizao-purchase-order-change",
+      "page_name": "采购变更单",
+      "page_path": "/apps/kuaizhizao/purchase-management/purchase-order-changes",
+      "code_field": "change_code",
+      "code_field_label": "采购变更单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "PURCHASE_ORDER_CHANGE_CODE",
+      "allow_manual_edit": true
+    },
+    {
       "page_code": "kuaizhizao-purchase-receipt",
       "page_name": "采购收货",
       "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
@@ -2444,6 +2514,18 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "SALES_ORDER_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-sales-order-change",
+      "page_name": "销售变更单",
+      "page_path": "/apps/kuaizhizao/sales-management/sales-order-changes",
+      "code_field": "change_code",
+      "code_field_label": "销售变更单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "SALES_ORDER_CHANGE_CODE",
       "allow_manual_edit": true
     },
     {
