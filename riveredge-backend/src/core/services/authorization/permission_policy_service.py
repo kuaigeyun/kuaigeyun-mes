@@ -189,8 +189,21 @@ class PermissionPolicyService:
             existing_by_key: dict[str, DataPermissionPolicy] = {}
             for row in existing:
                 key = cls._normalize_resource(row.resource)
-                if key not in existing_by_key:
+                if not key:
+                    continue
+                prev = existing_by_key.get(key)
+                if prev is None:
                     existing_by_key[key] = row
+                else:
+                    prev_active = prev.deleted_at is None
+                    row_active = row.deleted_at is None
+                    if row_active and not prev_active:
+                        existing_by_key[key] = row
+                    elif row_active == prev_active and (row.updated_at, row.id) > (
+                        prev.updated_at,
+                        prev.id,
+                    ):
+                        existing_by_key[key] = row
 
             for key, item in desired.items():
                 row = existing_by_key.get(key)
@@ -199,27 +212,60 @@ class PermissionPolicyService:
                     row.scope_type = item.scope_type
                     row.scope_payload = item.scope_payload
                     row.deleted_at = None
-                    await row.save(update_fields=["resource", "scope_type", "scope_payload", "deleted_at", "updated_at"])
-                else:
-                    await DataPermissionPolicy.create(
+                    await row.save(
+                        update_fields=["resource", "scope_type", "scope_payload", "deleted_at", "updated_at"]
+                    )
+                    existing_by_key[key] = row
+                    continue
+                try:
+                    created = await DataPermissionPolicy.create(
                         tenant_id=tenant_id,
                         role_uuid=role_uuid,
                         resource=key,
                         scope_type=item.scope_type,
                         scope_payload=item.scope_payload,
                     )
+                    existing_by_key[key] = created
+                except IntegrityError:
+                    conflict = await DataPermissionPolicy.filter(
+                        tenant_id=tenant_id,
+                        role_uuid=role_uuid,
+                        resource=key,
+                    ).order_by("-updated_at", "-id").first()
+                    if not conflict:
+                        raise
+                    conflict.resource = key
+                    conflict.scope_type = item.scope_type
+                    conflict.scope_payload = item.scope_payload
+                    conflict.deleted_at = None
+                    await conflict.save(
+                        update_fields=[
+                            "resource",
+                            "scope_type",
+                            "scope_payload",
+                            "deleted_at",
+                            "updated_at",
+                        ]
+                    )
+                    existing_by_key[key] = conflict
 
             active_rows = await DataPermissionPolicy.filter(
                 tenant_id=tenant_id,
                 role_uuid=role_uuid,
                 deleted_at__isnull=True,
             )
+            seen_desired: set[str] = set()
             for row in active_rows:
                 key = cls._normalize_resource(row.resource)
-                if key in desired:
+                if key not in desired:
+                    row.deleted_at = now
+                    await row.save(update_fields=["deleted_at", "updated_at"])
                     continue
-                row.deleted_at = now
-                await row.save(update_fields=["deleted_at", "updated_at"])
+                if key in seen_desired:
+                    row.deleted_at = now
+                    await row.save(update_fields=["deleted_at", "updated_at"])
+                    continue
+                seen_desired.add(key)
 
         return await cls.list_data_policies(tenant_id=tenant_id, role_uuid=role_uuid)
 
@@ -297,6 +343,86 @@ class PermissionPolicyService:
         return normalized_existing + synthetic
 
     @classmethod
+    def _field_policy_key(
+        cls,
+        resource: str,
+        field_name: str,
+        alias_map: dict[str, str],
+    ) -> tuple[str, str] | None:
+        normalized_resource = cls._normalize_resource(resource)
+        canonical_field = cls._canonicalize_field_name_with_aliases(field_name, alias_map)
+        if not canonical_field:
+            return None
+        return normalized_resource, canonical_field
+
+    @classmethod
+    def _pick_preferred_field_policy_row(
+        cls,
+        prev: FieldPermissionPolicy,
+        row: FieldPermissionPolicy,
+    ) -> FieldPermissionPolicy:
+        prev_active = prev.deleted_at is None
+        row_active = row.deleted_at is None
+        if row_active and not prev_active:
+            return row
+        if prev_active and not row_active:
+            return prev
+        if (row.updated_at, row.id) > (prev.updated_at, prev.id):
+            return row
+        return prev
+
+    @classmethod
+    async def _upsert_field_policy_row(
+        cls,
+        *,
+        tenant_id: int,
+        role_uuid: str,
+        item: FieldPermissionPolicyUpsert,
+        existing_by_key: dict[tuple[str, str], FieldPermissionPolicy],
+        key: tuple[str, str],
+    ) -> None:
+        row = existing_by_key.get(key)
+        if row:
+            row.resource = item.resource
+            row.field_name = item.field_name
+            row.mask_level = item.mask_level
+            row.deleted_at = None
+            await row.save(
+                update_fields=["resource", "field_name", "mask_level", "deleted_at", "updated_at"]
+            )
+            existing_by_key[key] = row
+            return
+
+        try:
+            created = await FieldPermissionPolicy.create(
+                tenant_id=tenant_id,
+                role_uuid=role_uuid,
+                resource=item.resource,
+                field_name=item.field_name,
+                mask_level=item.mask_level,
+            )
+            existing_by_key[key] = created
+            return
+        except IntegrityError:
+            # 唯一约束含已软删行：禁止 INSERT，须复用同键行
+            conflict = await FieldPermissionPolicy.filter(
+                tenant_id=tenant_id,
+                role_uuid=role_uuid,
+                resource=item.resource,
+                field_name=item.field_name,
+            ).order_by("-updated_at", "-id").first()
+            if not conflict:
+                raise
+            conflict.resource = item.resource
+            conflict.field_name = item.field_name
+            conflict.mask_level = item.mask_level
+            conflict.deleted_at = None
+            await conflict.save(
+                update_fields=["resource", "field_name", "mask_level", "deleted_at", "updated_at"]
+            )
+            existing_by_key[key] = conflict
+
+    @classmethod
     async def save_field_policies(
         cls,
         tenant_id: int,
@@ -314,16 +440,14 @@ class PermissionPolicyService:
             resource = cls._normalize_resource(item.resource)
             if resource not in allowed:
                 raise ValidationError(f"无效字段权限资源（非真源资源）: {item.resource}")
-            field_name = cls._canonicalize_field_name_with_aliases(item.field_name, alias_map)
-            if not field_name:
+            key = cls._field_policy_key(item.resource, item.field_name, alias_map)
+            if not key:
                 raise ValidationError("字段名不能为空")
-            explicit[(resource, field_name)] = FieldPermissionPolicyUpsert(
-                resource=resource,
-                field_name=field_name,
+            explicit[key] = FieldPermissionPolicyUpsert(
+                resource=key[0],
+                field_name=key[1],
                 mask_level=level,
             )
-
-        explicit_keys = set(explicit.keys())
 
         # 内置默认：对当前角色已配置的数据权限资源，自动补齐“金额/客户名”字段脱敏策略。
         data_resources = await DataPermissionPolicy.filter(
@@ -336,15 +460,16 @@ class PermissionPolicyService:
         )
         for resource in normalized_resources:
             for field_name in sorted(cls.BUILTIN_MASKED_FIELD_NAMES):
-                canonical_field = cls.canonicalize_field_name(field_name)
-                key = (resource, canonical_field)
-                if key in explicit_keys:
+                key = cls._field_policy_key(resource, field_name, alias_map)
+                if not key or key in explicit:
                     continue
                 explicit[key] = FieldPermissionPolicyUpsert(
-                    resource=resource,
-                    field_name=canonical_field,
+                    resource=key[0],
+                    field_name=key[1],
                     mask_level=FieldMaskLevel.MASKED,
                 )
+
+        desired_keys = set(explicit.keys())
 
         async with in_transaction():
             existing = await FieldPermissionPolicy.filter(
@@ -353,44 +478,43 @@ class PermissionPolicyService:
             ).order_by("-updated_at", "-id")
             existing_by_key: dict[tuple[str, str], FieldPermissionPolicy] = {}
             for row in existing:
-                key = (
-                    cls._normalize_resource(row.resource),
-                    cls._canonicalize_field_name_with_aliases(row.field_name, alias_map),
-                )
-                if key not in existing_by_key:
+                key = cls._field_policy_key(row.resource, row.field_name, alias_map)
+                if not key:
+                    continue
+                prev = existing_by_key.get(key)
+                if prev is None:
                     existing_by_key[key] = row
+                else:
+                    existing_by_key[key] = cls._pick_preferred_field_policy_row(prev, row)
 
             for key, item in explicit.items():
-                row = existing_by_key.get(key)
-                if row:
-                    row.resource = item.resource
-                    row.field_name = item.field_name
-                    row.mask_level = item.mask_level
-                    row.deleted_at = None
-                    await row.save(update_fields=["resource", "field_name", "mask_level", "deleted_at", "updated_at"])
-                else:
-                    await FieldPermissionPolicy.create(
-                        tenant_id=tenant_id,
-                        role_uuid=role_uuid,
-                        resource=item.resource,
-                        field_name=item.field_name,
-                        mask_level=item.mask_level,
-                    )
+                await cls._upsert_field_policy_row(
+                    tenant_id=tenant_id,
+                    role_uuid=role_uuid,
+                    item=item,
+                    existing_by_key=existing_by_key,
+                    key=key,
+                )
 
             active_rows = await FieldPermissionPolicy.filter(
                 tenant_id=tenant_id,
                 role_uuid=role_uuid,
                 deleted_at__isnull=True,
             )
+            seen_desired: set[tuple[str, str]] = set()
             for row in active_rows:
-                key = (
-                    cls._normalize_resource(row.resource),
-                    cls._canonicalize_field_name_with_aliases(row.field_name, alias_map),
-                )
-                if key in explicit:
+                key = cls._field_policy_key(row.resource, row.field_name, alias_map)
+                if not key:
                     continue
-                row.deleted_at = now
-                await row.save(update_fields=["deleted_at", "updated_at"])
+                if key not in desired_keys:
+                    row.deleted_at = now
+                    await row.save(update_fields=["deleted_at", "updated_at"])
+                    continue
+                if key in seen_desired:
+                    row.deleted_at = now
+                    await row.save(update_fields=["deleted_at", "updated_at"])
+                    continue
+                seen_desired.add(key)
 
         return await cls.list_field_policies(tenant_id=tenant_id, role_uuid=role_uuid)
 

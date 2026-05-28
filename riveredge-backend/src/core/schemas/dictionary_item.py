@@ -58,6 +58,10 @@ class DictionaryItemResponse(DictionaryItemBase):
     uuid: str = Field(..., description="字典项UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织ID")
     dictionary_uuid: str = Field(..., description="字典UUID")
+    is_system_managed: bool = Field(
+        default=False,
+        description="是否系统预置项（SYSTEM_DICTIONARIES 同步项，不可删除）",
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

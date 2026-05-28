@@ -193,6 +193,11 @@ export default {
   'menu.group.data-center': 'Data Center',
   'menu.group.process-management': 'Process Management',
   'menu.group.monitoring-ops': 'Monitoring & Operations',
+  'menu.group.settings': 'Core Configuration',
+  'menu.group.organization': 'User Management',
+  'menu.group.integration': 'Data Center',
+  'menu.group.workflow-and-message': 'Process Management',
+  'menu.group.security-and-logs': 'Monitoring & Operations',
   'menu.system.roles-permissions': 'Roles & Permissions',
   'menu.system.data-center': 'Data Center',
   'menu.system.process-management': 'Process Management',
@@ -5496,6 +5501,8 @@ export default {
   'field.dataDictionary.itemIconPlaceholder': 'Enter icon name',
   'field.dataDictionary.itemDeleteConfirm': 'Are you sure to delete this item?',
   'field.dataDictionary.systemItemNoDelete': 'System dictionary items cannot be deleted',
+  'field.dataDictionary.systemPresetItemNoDelete':
+    'Built-in system dictionary items cannot be deleted; items you added in this dictionary can be deleted',
   'field.dataDictionary.systemDictionaryNoDelete': 'System dictionary cannot be deleted',
 
   // Permission (read-only list)

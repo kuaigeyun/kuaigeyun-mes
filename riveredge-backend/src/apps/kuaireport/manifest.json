@@ -65,21 +65,25 @@
               {
                 "title": "app.kuaizhizao.menu.reports.sales-order-full-trace",
                 "path": "/apps/kuaireport/analysis-center/reports/sales-order-full-trace",
+                "permission": "kuaizhizao:sales-order-full-trace:read",
                 "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-full-trace",
                 "path": "/apps/kuaireport/analysis-center/reports/purchase-order-full-trace",
+                "permission": "kuaizhizao:purchase-order-full-trace:read",
                 "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.reports.material-lifecycle-trace",
                 "path": "/apps/kuaireport/analysis-center/reports/material-lifecycle-trace",
+                "permission": "kuaizhizao:material-lifecycle-trace:read",
                 "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.reports.business-status-dashboard",
                 "path": "/apps/kuaireport/analysis-center/reports/business-status-dashboard",
+                "permission": "kuaizhizao:business-status-dashboard:read",
                 "sort_order": 4
               }
             ]
@@ -100,7 +104,11 @@
     "kuaireport:report:print",
     "kuaireport:dashboard:print",
     "kuaizhizao:document-timing:print",
-    "kuaizhizao:document-efficiency:print"
+    "kuaizhizao:document-efficiency:print",
+    "kuaizhizao:sales-order-full-trace:read",
+    "kuaizhizao:purchase-order-full-trace:read",
+    "kuaizhizao:material-lifecycle-trace:read",
+    "kuaizhizao:business-status-dashboard:read"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

@@ -13,7 +13,7 @@ import re
 
 from core.models.menu import Menu
 from core.models.permission import Permission
-from core.config.system_menu_config import SYSTEM_MENU_CONFIG
+from core.config.system_menu_config import LEGACY_SYSTEM_GROUP_ALIASES, SYSTEM_MENU_CONFIG
 from core.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
 from core.services.application.application_service import ApplicationService
@@ -44,6 +44,37 @@ class MenuService:
         if matched:
             return f"{matched.group(1).lower()}:entry:read"
         return None
+
+    @staticmethod
+    async def _absorb_legacy_system_group_duplicates(
+        tenant_id: int,
+        parent_id: Optional[int],
+        canonical_menu: Menu,
+        legacy_names: List[str],
+    ) -> None:
+        """将同层旧英文 slug 分组并入现行 menu.group.* 行，避免菜单管理出现重复分组。"""
+        if not legacy_names:
+            return
+        for legacy_name in legacy_names:
+            filter_kw: Dict[str, Any] = dict(
+                tenant_id=tenant_id,
+                name=legacy_name,
+                application_uuid__isnull=True,
+                deleted_at__isnull=True,
+            )
+            if parent_id is None:
+                filter_kw["parent_id__isnull"] = True
+            else:
+                filter_kw["parent_id"] = parent_id
+            legacy = await Menu.filter(**filter_kw).first()
+            if not legacy or legacy.id == canonical_menu.id:
+                continue
+            await Menu.filter(parent_id=legacy.id, deleted_at__isnull=True).update(
+                parent_id=canonical_menu.id
+            )
+            legacy.deleted_at = now_utc()
+            legacy.is_active = False
+            await legacy.save()
 
     @staticmethod
     async def _sync_builtin_system_menu_tree(tenant_id: int) -> int:
@@ -125,6 +156,15 @@ class MenuService:
                     meta=meta,
                 )
 
+            legacy_aliases = LEGACY_SYSTEM_GROUP_ALIASES.get(title)
+            if legacy_aliases and not path:
+                await MenuService._absorb_legacy_system_group_duplicates(
+                    tenant_id=tenant_id,
+                    parent_id=parent_id,
+                    canonical_menu=menu_obj,
+                    legacy_names=legacy_aliases,
+                )
+
             processed = 1
             for child in children:
                 if isinstance(child, dict):
@@ -133,7 +173,9 @@ class MenuService:
 
         if not isinstance(SYSTEM_MENU_CONFIG, dict):
             return 0
-        return await _upsert_node(SYSTEM_MENU_CONFIG, None)
+        count = await _upsert_node(SYSTEM_MENU_CONFIG, None)
+        await MenuService._clear_menu_cache(tenant_id)
+        return count
 
     """
     菜单服务类

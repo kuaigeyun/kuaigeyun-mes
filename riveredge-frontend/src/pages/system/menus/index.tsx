@@ -8,7 +8,16 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined, HomeOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  AppstoreOutlined,
+  LinkOutlined,
+  CheckCircleOutlined,
+  SyncOutlined,
+  HomeOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
@@ -32,7 +41,10 @@ import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { translateAppMenuItemName } from '../../../utils/menuTranslation';
+import {
+  mapMenuTreeWithTranslatedLabels,
+  translateAppMenuItemName,
+} from '../../../utils/menuTranslation';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 // 动态图标组件
@@ -60,7 +72,7 @@ const IconItem = ({ icon }: { icon?: string }) => {
 const MenuListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { data: backendHome } = useQuery({
     queryKey: TENANT_BACKEND_HOME_QUERY_KEY,
@@ -146,6 +158,11 @@ const MenuListPage: React.FC = () => {
   
   // 菜单树数据缓存（用于父菜单选择）
   const [menuTreeData, setMenuTreeData] = useState<MenuTree[]>([]);
+  /** 父菜单 TreeSelect：展示译文，与列表列 translateAppMenuItemName 一致 */
+  const parentMenuTreeData = useMemo(
+    () => mapMenuTreeWithTranslatedLabels(menuTreeData, t),
+    [menuTreeData, t, i18n.language],
+  );
   // 应用列表
   const [applications, setApplications] = useState<Array<{ label: string; value: string }>>([]);
 
@@ -562,7 +579,9 @@ const MenuListPage: React.FC = () => {
               </Tag>
             </Tooltip>
           ) : (
-            <Tag>{t('menu.system.systemMenu')}</Tag>
+            <Tag color="geekblue" icon={<SettingOutlined />}>
+              {t('menu.system.systemMenu')}
+            </Tag>
           ),
     },
     {
@@ -746,7 +765,7 @@ const MenuListPage: React.FC = () => {
                 label={t('pages.system.menus.parentMenu')}
                 placeholder={t('pages.system.menus.parentMenuPlaceholder')}
                 fieldProps={{
-                    treeData: menuTreeData,
+                    treeData: parentMenuTreeData,
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
                     showSearch: true,
                     allowClear: true,

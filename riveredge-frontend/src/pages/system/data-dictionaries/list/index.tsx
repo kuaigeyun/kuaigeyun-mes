@@ -15,10 +15,11 @@ import {
   ProFormText,
   ProFormTextArea,
   ProFormSwitch,
+  ProFormDigit,
   ProFormInstance,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, Descriptions, theme } from 'antd';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, Descriptions, theme, Space } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -29,7 +30,6 @@ import {
 } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
-import { renderUniTableOperationCell } from '../../../../components/uni-action';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import {
   getDataDictionaryList,
@@ -284,18 +284,38 @@ const DataDictionaryListPage: React.FC = () => {
     }
   };
 
+  const normalizeDictionaryItemFormValues = (values: Record<string, unknown>): UpdateDictionaryItemData => {
+    const payload: UpdateDictionaryItemData = {
+      label: values.label as string,
+      value: values.value as string,
+      is_active: Boolean(values.is_active),
+    };
+    if (values.description !== undefined && values.description !== '') {
+      payload.description = String(values.description);
+    }
+    if (values.color !== undefined && values.color !== '') {
+      payload.color = String(values.color);
+    }
+    if (values.icon !== undefined && values.icon !== '') {
+      payload.icon = String(values.icon);
+    }
+    if (values.sort_order !== undefined && values.sort_order !== null && values.sort_order !== '') {
+      payload.sort_order = Number(values.sort_order);
+    }
+    return payload;
+  };
+
   const handleSubmitItem = async () => {
     try {
       if (!currentDictionaryForItems) return;
       setItemFormLoading(true);
       const values = await itemFormRef.current?.validateFields();
+      const payload = normalizeDictionaryItemFormValues(values);
       if (isEditItem && currentItemUuid) {
-        await updateDictionaryItem(currentItemUuid, values as UpdateDictionaryItemData);
+        await updateDictionaryItem(currentItemUuid, payload);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
-        await createDictionaryItem(currentDictionaryForItems.uuid, {
-          ...values,
-        } as Omit<CreateDictionaryItemData, 'dictionary_uuid'>);
+        await createDictionaryItem(currentDictionaryForItems.uuid, payload);
         messageApi.success(t('pages.system.createSuccess'));
       }
       setItemModalVisible(false);
@@ -458,30 +478,28 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 140,
+      width: 120,
+      fixed: 'right' as const,
       render: (_: any, record: DictionaryItem) => {
-        const actions = [
-          <Button key="edit" type="primary" size="small" onClick={() => handleEditItem(record)}>
-            {t('field.dataDictionary.edit')}
-          </Button>,
-          <Popconfirm
-            key="delete"
-            title={t('field.dataDictionary.itemDeleteConfirm')}
-            onConfirm={() => handleDeleteItem(record)}
-            disabled={currentDictionaryForItems?.is_system}
-          >
-            <Tooltip
-              title={currentDictionaryForItems?.is_system ? t('field.dataDictionary.systemItemNoDelete') : undefined}
+        const isPresetItem = Boolean(record.is_system_managed);
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" onClick={() => handleEditItem(record)}>
+              {t('field.dataDictionary.edit')}
+            </Button>
+            <Popconfirm
+              title={t('field.dataDictionary.itemDeleteConfirm')}
+              onConfirm={() => handleDeleteItem(record)}
+              disabled={isPresetItem}
             >
-              <span>
-                <Button type="default" danger size="small" disabled={currentDictionaryForItems?.is_system}>
+              <Tooltip title={isPresetItem ? t('field.dataDictionary.systemPresetItemNoDelete') : undefined}>
+                <Button type="link" danger size="small" disabled={isPresetItem}>
                   {t('field.dataDictionary.delete')}
                 </Button>
-              </span>
-            </Tooltip>
-          </Popconfirm>,
-        ];
-        return renderUniTableOperationCell(actions, `item-${record.uuid}`);
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        );
       },
     },
   ];
@@ -682,10 +700,11 @@ const DataDictionaryListPage: React.FC = () => {
             label={t('field.dataDictionary.itemIcon')}
             placeholder={t('field.dataDictionary.itemIconPlaceholder')}
           />
-          <ProFormText
+          <ProFormDigit
             name="sort_order"
             label={t('field.department.sortOrder')}
-            fieldProps={{ type: 'number' }}
+            min={0}
+            fieldProps={{ precision: 0 }}
             initialValue={0}
           />
           <ProFormTextArea

@@ -192,6 +192,12 @@ export default {
   'menu.group.data-center': '数据中心', // 数据接入、抽取与对外接口
   'menu.group.process-management': '流程管理',
   'menu.group.monitoring-ops': '监控运维',
+  /** 历史/同步落库的英文分组 slug（与上列分组同义，菜单管理展示用） */
+  'menu.group.settings': '核心配置',
+  'menu.group.organization': '用户管理',
+  'menu.group.integration': '数据中心',
+  'menu.group.workflow-and-message': '流程管理',
+  'menu.group.security-and-logs': '监控运维',
   'menu.system.roles-permissions': '角色权限',
   'menu.system.data-center': '数据中心',
   'menu.system.process-management': '流程管理',
@@ -5503,6 +5509,7 @@ export default {
   'field.dataDictionary.itemIconPlaceholder': '请输入图标名称',
   'field.dataDictionary.itemDeleteConfirm': '确定要删除这个字典项吗？',
   'field.dataDictionary.systemItemNoDelete': '系统字典项不允许删除',
+  'field.dataDictionary.systemPresetItemNoDelete': '系统预置字典项不允许删除；本字典下自行新增的项可删除',
   'field.dataDictionary.systemDictionaryNoDelete': '系统字典不可删除',
 
   // 权限管理（只读列表）

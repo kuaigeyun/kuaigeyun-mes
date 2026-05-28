@@ -1739,7 +1739,7 @@ const RolesPermissionsPage: React.FC = () => {
           </div>
 
           {/* 权限层 Tab */}
-            <div style={{ padding: '16px 24px 0 24px' }}>
+            <div style={{ padding: '0 24px' }}>
               <Tabs
                 activeKey={permissionLayer}
                 onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}

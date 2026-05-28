@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional, Dict, Any, Tuple, Set
+from functools import lru_cache
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import json
@@ -12,7 +13,11 @@ import json
 from core.models.data_dictionary import DataDictionary
 from core.models.dictionary_item import DictionaryItem
 from core.schemas.data_dictionary import DataDictionaryCreate, DataDictionaryUpdate
-from core.schemas.dictionary_item import DictionaryItemCreate, DictionaryItemUpdate
+from core.schemas.dictionary_item import (
+    DictionaryItemCreate,
+    DictionaryItemUpdate,
+    DictionaryItemResponse,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
@@ -383,6 +388,76 @@ class DataDictionaryService:
     
     # 字典项相关方法
     @staticmethod
+    @lru_cache(maxsize=1)
+    def _system_preset_values_by_code() -> Dict[str, Set[str]]:
+        """SYSTEM_DICTIONARIES 中各字典 code -> 预置 value 集合（用于识别不可删项）。"""
+        from core.config.system_dictionaries import SYSTEM_DICTIONARIES
+
+        mapping: Dict[str, Set[str]] = {}
+        for dict_config in SYSTEM_DICTIONARIES:
+            code = str(dict_config.get("code") or "").strip()
+            if not code:
+                continue
+            mapping[code] = {
+                str(item.get("value") or "").strip()
+                for item in dict_config.get("items", [])
+                if str(item.get("value") or "").strip()
+            }
+        return mapping
+
+    @staticmethod
+    def is_system_managed_item(dictionary: DataDictionary, item: DictionaryItem) -> bool:
+        """
+        系统预置字典项：字典 is_system 且 value 在 SYSTEM_DICTIONARIES 预置列表中。
+        非系统（APP/租户自定义）字典的字典项均返回 False。
+        """
+        if not dictionary.is_system:
+            return False
+        presets = DataDictionaryService._system_preset_values_by_code().get(dictionary.code, set())
+        return str(item.value or "").strip() in presets
+
+    @staticmethod
+    def build_item_response(item: DictionaryItem, dictionary: DataDictionary) -> DictionaryItemResponse:
+        """ORM 无 dictionary_uuid 字段，需显式组装响应（与 list_items API 一致）。"""
+        return DictionaryItemResponse.model_validate(
+            {
+                "uuid": str(item.uuid),
+                "tenant_id": item.tenant_id,
+                "dictionary_uuid": str(dictionary.uuid),
+                "label": item.label,
+                "value": item.value,
+                "description": item.description,
+                "color": item.color,
+                "icon": item.icon,
+                "sort_order": item.sort_order,
+                "is_active": item.is_active,
+                "is_system_managed": DataDictionaryService.is_system_managed_item(dictionary, item),
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
+        )
+
+    @staticmethod
+    async def get_dictionary_for_item(tenant_id: int, item: DictionaryItem) -> DataDictionary:
+        dictionary = await DataDictionary.filter(
+            tenant_id=tenant_id,
+            id=item.dictionary_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not dictionary:
+            raise NotFoundError("字典不存在")
+        return dictionary
+
+    @staticmethod
+    def _normalize_item_update_payload(update_data: Dict[str, Any]) -> Dict[str, Any]:
+        for key in ("color", "icon", "description"):
+            if key in update_data and update_data[key] == "":
+                update_data[key] = None
+        if "sort_order" in update_data and update_data["sort_order"] is not None:
+            update_data["sort_order"] = int(update_data["sort_order"])
+        return update_data
+
+    @staticmethod
     async def create_item(
         tenant_id: int,
         data: DictionaryItemCreate
@@ -502,7 +577,9 @@ class DataDictionaryService:
         """
         item = await DataDictionaryService.get_item_by_uuid(tenant_id, uuid)
         
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = DataDictionaryService._normalize_item_update_payload(
+            data.model_dump(exclude_unset=True)
+        )
         if update_data:
             try:
                 await item.update_from_dict(update_data)
@@ -519,21 +596,22 @@ class DataDictionaryService:
     ) -> None:
         """
         删除字典项（软删除）
-        
-        系统字典（is_system=True）的字典项不允许删除，但允许新增项。
-        
+
+        - 系统预置项（SYSTEM_DICTIONARIES 同步项）：不可删除
+        - 系统字典下租户新增项、非系统（APP/自定义）字典项：可删除
+
         Args:
             tenant_id: 组织ID
             uuid: 字典项UUID
-            
+
         Raises:
             NotFoundError: 当字典项不存在时抛出
-            ValidationError: 当字典项属于系统字典时抛出（系统字典项不允许删除）
+            ValidationError: 当字典项为系统预置项时抛出
         """
         item = await DataDictionaryService.get_item_by_uuid(tenant_id, uuid)
         await item.fetch_related("dictionary")
-        if item.dictionary.is_system:
-            raise ValidationError("系统字典项不允许删除")
+        if DataDictionaryService.is_system_managed_item(item.dictionary, item):
+            raise ValidationError("系统预置字典项不允许删除")
         
         # 软删除
         from datetime import datetime

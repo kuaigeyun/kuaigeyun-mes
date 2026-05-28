@@ -7,8 +7,6 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from core.models.data_dictionary import DataDictionary
-from core.models.dictionary_item import DictionaryItem
 from core.schemas.data_dictionary import (
     DataDictionaryCreate,
     DataDictionaryUpdate,
@@ -313,15 +311,11 @@ async def create_item(
             data=data
         )
         
-        # 获取字典UUID用于响应
         dictionary = await DataDictionaryService.get_dictionary_by_uuid(
             tenant_id=tenant_id,
-            uuid=dictionary_uuid
+            uuid=dictionary_uuid,
         )
-        
-        response = DictionaryItemResponse.model_validate(item)
-        response.dictionary_uuid = dictionary.uuid
-        return response
+        return DataDictionaryService.build_item_response(item, dictionary)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -369,26 +363,9 @@ async def list_items(
             uuid=dictionary_uuid
         )
         
-        result = []
-        for item in items:
-            # 手动构建响应数据，因为 DictionaryItem 模型没有 dictionary_uuid 字段
-            response_data = {
-                "uuid": str(item.uuid),
-                "tenant_id": item.tenant_id,
-                "dictionary_uuid": str(dictionary.uuid),
-                "label": item.label,
-                "value": item.value,
-                "description": item.description,
-                "color": item.color,
-                "icon": item.icon,
-                "sort_order": item.sort_order,
-                "is_active": item.is_active,
-                "created_at": item.created_at,
-                "updated_at": item.updated_at,
-            }
-            response = DictionaryItemResponse.model_validate(response_data)
-            result.append(response)
-        return result
+        return [
+            DataDictionaryService.build_item_response(item, dictionary) for item in items
+        ]
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -425,15 +402,8 @@ async def update_item(
             data=data
         )
         
-        # 获取字典UUID用于响应
-        dictionary = await DataDictionary.filter(
-            id=item.dictionary_id,
-            tenant_id=tenant_id
-        ).first()
-        
-        response = DictionaryItemResponse.model_validate(item)
-        response.dictionary_uuid = dictionary.uuid if dictionary else ""
-        return response
+        dictionary = await DataDictionaryService.get_dictionary_for_item(tenant_id, item)
+        return DataDictionaryService.build_item_response(item, dictionary)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

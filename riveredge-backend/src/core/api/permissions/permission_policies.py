@@ -15,6 +15,8 @@ from core.schemas.permission_policy import (
     FieldPermissionPolicyUpsert,
 )
 from core.services.authorization.permission_policy_service import PermissionPolicyService
+from tortoise.exceptions import IntegrityError
+
 from infra.exceptions.exceptions import ValidationError
 
 router = APIRouter(prefix="/permission-policies", tags=["Core · Permission Policies"])
@@ -44,6 +46,11 @@ async def replace_role_data_policies(
         )
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"数据权限记录冲突，请刷新后重试: {exc}",
+        )
 
 
 @router.get("/roles/{role_uuid}/field", response_model=List[FieldPermissionPolicyResponse])
@@ -70,6 +77,11 @@ async def replace_role_field_policies(
         )
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"字段权限记录冲突，请刷新后重试: {exc}",
+        )
 
 
 @router.post("/governance/field-canonicalize")

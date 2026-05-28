@@ -439,6 +439,7 @@ class ApplicationService:
         data: ApplicationUpdate,
         *,
         sync_derived_resources: bool = True,
+        skip_permission_sync: bool = False,
     ) -> ApplicationDict:
         """
         更新应用
@@ -532,7 +533,8 @@ class ApplicationService:
                         tenant_id=tenant_id,
                         application_uuid=uuid,
                         menu_config=updated_app['menu_config'],
-                        is_active=updated_app.get('is_active', True)
+                        is_active=updated_app.get('is_active', True),
+                        skip_permission_sync=skip_permission_sync,
                     )
                 elif is_active_changed:
                     # 如果只是应用状态变更，只更新菜单的启用状态

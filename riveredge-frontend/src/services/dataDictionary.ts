@@ -35,6 +35,8 @@ export interface DictionaryItem {
   icon?: string;
   sort_order: number;
   is_active: boolean;
+  /** 系统预置项（SYSTEM_DICTIONARIES），不可删除 */
+  is_system_managed?: boolean;
   tenant_id: number;
   created_at: string;
   updated_at: string;

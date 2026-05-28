@@ -195,6 +195,33 @@ export function getAppDisplayName(
   return fallback ?? '';
 }
 
+/** 系统菜单分组：库内英文 slug → 现行 menu.group.* key（与 system_menu_config 分组同义） */
+const SYSTEM_MENU_GROUP_SLUG_TO_I18N: Record<string, string> = {
+  settings: 'menu.group.core-config',
+  organization: 'menu.group.user-management',
+  integration: 'menu.group.data-center',
+  'workflow-and-message': 'menu.group.process-management',
+  'security-and-logs': 'menu.group.monitoring-ops',
+};
+
+function tryTranslateSystemMenuGroupSlug(
+  name: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.includes('.') || trimmed.startsWith('/')) return '';
+
+  const directKey = `menu.group.${trimmed}`;
+  let translated = t(directKey, { defaultValue: '' });
+  if (translated && translated !== directKey && translated.trim() !== '') return translated;
+
+  const legacyKey = SYSTEM_MENU_GROUP_SLUG_TO_I18N[trimmed];
+  if (!legacyKey) return '';
+  translated = t(legacyKey, { defaultValue: '' });
+  if (translated && translated !== legacyKey && translated.trim() !== '') return translated;
+  return '';
+}
+
 /**
  * 统一处理菜单名称翻译
  *
@@ -209,6 +236,9 @@ export function translateMenuName(
   path?: string
 ): string {
   if (!name) return '';
+
+  const slugTranslated = tryTranslateSystemMenuGroupSlug(name, t);
+  if (slugTranslated) return slugTranslated;
 
   // 1. 如果 name 是翻译 key（包含点号且不是路径），直接翻译
   if (name.includes('.') && !name.startsWith('/')) {
@@ -347,6 +377,25 @@ export function translateAppMenuItemName(
     if (pathTitle && pathTitle !== path) return pathTitle;
   }
   return translateMenuName(displayName, t, path);
+}
+
+/**
+ * 为 TreeSelect 等选择器生成展示用菜单树：保留 uuid/path 等字段，将 name 替换为译文。
+ */
+export function mapMenuTreeWithTranslatedLabels<
+  T extends { name?: string; path?: string; children?: T[] },
+>(nodes: T[] | undefined, t: (key: string, options?: { defaultValue?: string }) => string): T[] {
+  if (!nodes?.length) return [];
+  return nodes.map((node) => {
+    const children = node.children?.length
+      ? mapMenuTreeWithTranslatedLabels(node.children, t)
+      : node.children;
+    return {
+      ...node,
+      name: translateAppMenuItemName(node.name, node.path, t, children),
+      children,
+    };
+  });
 }
 
 /**

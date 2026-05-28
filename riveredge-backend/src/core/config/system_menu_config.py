@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
+# 历史落库曾用英文 slug 作分组 name；同步时合并到现行 menu.group.* 行并软删重复分组
+LEGACY_SYSTEM_GROUP_ALIASES: Dict[str, List[str]] = {
+    "menu.group.core-config": ["settings"],
+    "menu.group.user-management": ["organization"],
+    "menu.group.data-center": ["integration"],
+    "menu.group.process-management": ["workflow-and-message"],
+    "menu.group.monitoring-ops": ["security-and-logs"],
+}
 
 SYSTEM_MENU_CONFIG: Dict[str, Any] = {
     "title": "menu.system",

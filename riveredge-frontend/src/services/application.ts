@@ -289,6 +289,35 @@ export async function scanPlugins(): Promise<Application[]> {
  * @param appCode - 应用代码
  * @returns 同步结果
  */
+function formatSyncManifestApiError(
+  errorData: unknown,
+  status: number,
+  statusText: string,
+): string {
+  if (!errorData || typeof errorData !== 'object') {
+    return `HTTP ${status}: ${statusText}`;
+  }
+  const body = errorData as Record<string, unknown>;
+  if (typeof body.detail === 'string' && body.detail.trim()) {
+    return body.detail;
+  }
+  const err = body.error;
+  if (err && typeof err === 'object') {
+    const nested = err as Record<string, unknown>;
+    const details = nested.details;
+    if (details && typeof details === 'object') {
+      const detailMessage = (details as Record<string, unknown>).message;
+      if (typeof detailMessage === 'string' && detailMessage.trim()) {
+        return detailMessage;
+      }
+    }
+    if (typeof nested.message === 'string' && nested.message.trim()) {
+      return nested.message;
+    }
+  }
+  return `HTTP ${status}: ${statusText}`;
+}
+
 export async function syncApplicationManifest(appCode: string): Promise<{
   success: boolean;
   message: string;
@@ -308,7 +337,7 @@ export async function syncApplicationManifest(appCode: string): Promise<{
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || `HTTP ${response.status}: ${response.statusText}`);
+    throw new Error(formatSyncManifestApiError(errorData, response.status, response.statusText));
   }
 
   const result = await response.json();

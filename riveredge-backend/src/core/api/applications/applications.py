@@ -915,10 +915,12 @@ async def sync_application_manifest(
             sort_order=app_sort_order
         )
 
+        # 清单同步后由 sync-all 或单应用「同步菜单」收尾统一写权限，避免批量时每个应用全量 ensure_permissions 超时
         updated_app = await ApplicationService.update_application(
             tenant_id=tenant_id,
             uuid=str(app['uuid']),
-            data=update_data
+            data=update_data,
+            skip_permission_sync=True,
         )
 
         logger.info(f"✅ 应用清单同步成功: {app_code} v{version}")
