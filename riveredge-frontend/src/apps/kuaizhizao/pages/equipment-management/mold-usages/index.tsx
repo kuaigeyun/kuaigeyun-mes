@@ -116,7 +116,7 @@ const MoldUsagesPage: React.FC = () => {
     { title: '操作人', dataIndex: 'operator_name', width: 100 },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       fixed: 'right',
       align: 'left',

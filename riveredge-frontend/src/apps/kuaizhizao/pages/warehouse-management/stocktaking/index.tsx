@@ -20,6 +20,7 @@ import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 interface Stocktaking {
   id?: number;
@@ -377,7 +378,7 @@ const StocktakingPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       fixed: 'right',
       align: 'left',
@@ -471,14 +472,15 @@ const StocktakingPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="新建盘点单"
         onCreate={handleCreate}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
+            const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
             const result = await stocktakingApi.list({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
               code: params.code,
               warehouse_id: params.warehouse_id,
-              status: params.lifecycle ?? params.status,
+              status: lifecycleStage ?? params.status,
               stocktaking_type: params.stocktaking_type,
               keyword: (params as any).keyword,
             });

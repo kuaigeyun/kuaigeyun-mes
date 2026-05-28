@@ -207,7 +207,7 @@ const DeliveryNotesPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       align: 'left',
       fixed: 'right',

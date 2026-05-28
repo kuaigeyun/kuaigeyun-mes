@@ -107,7 +107,7 @@ const ToolCalibrationsPage: React.FC = () => {
     { title: '校验机构', dataIndex: 'calibration_org', width: 140, hideInSearch: true },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       fixed: 'right',
       align: 'left',

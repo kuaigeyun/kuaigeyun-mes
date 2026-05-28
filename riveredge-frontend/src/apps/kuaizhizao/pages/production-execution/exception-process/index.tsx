@@ -325,7 +325,7 @@ const ExceptionProcessPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 100,
       render: (_, record) => {
         const lifecycle = getExceptionProcessLifecycle(record as unknown as Record<string, unknown>);

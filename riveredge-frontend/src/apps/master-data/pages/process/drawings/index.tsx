@@ -233,6 +233,8 @@ const DrawingsPage: React.FC = () => {
   const [stepBomOpen, setStepBomOpen] = useState(false);
   const [stepBomDrawing, setStepBomDrawing] = useState<EngineeringDrawing | null>(null);
 
+  const showPreviewPane = showInlinePreview && !!inlinePreviewFile?.uuid;
+
   treeFilterRef.current = treeFilter;
 
   const typeLabel = (type: DrawingType) => t(`app.master-data.drawings.type.${type}`);
@@ -305,7 +307,7 @@ const DrawingsPage: React.FC = () => {
   const navModeBar = useMemo(
     () => (
       <div className="drawing-nav-mode-bar" role="tablist" aria-label={t('app.master-data.drawings.tree.navModes')}>
-        {DRAWING_NAV_MODES.map(({ mode, icon: Icon, color, labelKey }) => {
+        {DRAWING_NAV_MODES.map(({ mode, icon: Icon, labelKey }) => {
           const active = navMode === mode;
           return (
             <Tooltip key={mode} title={t(labelKey)}>
@@ -316,7 +318,7 @@ const DrawingsPage: React.FC = () => {
                 className={`drawing-nav-mode-btn${active ? ' drawing-nav-mode-btn-active' : ''}`}
                 onClick={() => handleNavModeChange(mode)}
               >
-                <Icon style={{ fontSize: 16, color: active ? color : undefined }} />
+                <Icon />
               </button>
             </Tooltip>
           );
@@ -331,6 +333,10 @@ const DrawingsPage: React.FC = () => {
       if (!keys.length) return;
       const key = String(keys[0]);
       if (key.endsWith(':empty')) return;
+
+      setSelectedRowUuid(null);
+      setInlinePreviewFile(null);
+      setSelectedDrawing(null);
 
       const nextFilter = parseDrawingTreeKey(key);
       const inferredMode = inferNavModeFromTreeKey(key);
@@ -364,8 +370,12 @@ const DrawingsPage: React.FC = () => {
     setSelectedRowUuid(record.uuid);
     startTransition(() => {
       setSelectedDrawing(record);
-      if (showInlinePreview && record.file?.uuid) {
-        setInlinePreviewFile(normalizeFileBrief(record.file) ?? record.file);
+      if (showInlinePreview) {
+        if (record.file?.uuid) {
+          setInlinePreviewFile(normalizeFileBrief(record.file) ?? record.file);
+        } else {
+          setInlinePreviewFile(null);
+        }
       }
     });
   }, [showInlinePreview]);
@@ -449,6 +459,24 @@ const DrawingsPage: React.FC = () => {
       messageApi.error(err?.message || t('common.operationFailed'));
     }
   };
+
+  const handleDeleteDrawing = useCallback(
+    async (record: EngineeringDrawing) => {
+      await drawingApi.delete(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      if (record.uuid === selectedRowUuid) {
+        setSelectedRowUuid(null);
+        setInlinePreviewFile(null);
+        setSelectedDrawing(null);
+      }
+      if (detail?.uuid === record.uuid) {
+        setDrawerVisible(false);
+        setDetail(null);
+      }
+      actionRef.current?.reload();
+    },
+    [messageApi, t, selectedRowUuid, detail?.uuid],
+  );
 
   const detailColumns: ProDescriptionsItemProps<EngineeringDrawing>[] = useMemo(
     () => [
@@ -666,13 +694,15 @@ const DrawingsPage: React.FC = () => {
                 </Button>
                 <Popconfirm
                   title={t('common.confirmDelete')}
-                  onConfirm={async () => {
-                    await drawingApi.delete(record.uuid);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
-                  }}
+                  onConfirm={() => handleDeleteDrawing(record)}
                 >
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {t('common.delete')}
                   </Button>
                 </Popconfirm>
@@ -688,29 +718,32 @@ const DrawingsPage: React.FC = () => {
                 </Button>
               </>
             )}
+            {record.status === 'Obsolete' && (
+              <Popconfirm
+                title={t('common.confirmDelete')}
+                onConfirm={() => handleDeleteDrawing(record)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </Popconfirm>
+            )}
             {record.file && !showInlinePreview && (
               <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.file)}>
                 {t('app.master-data.drawings.preview')}
-              </Button>
-            )}
-            {canImportStepBom(record) && (
-              <Button
-                type="link"
-                size="small"
-                icon={<PartitionOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openStepBomWizard(record);
-                }}
-              >
-                {t('app.master-data.drawings.importStepBom')}
               </Button>
             )}
           </Space>
         ),
       },
     ],
-    [t, messageApi, detail?.uuid, showInlinePreview, navigate, openStepBomWizard],
+    [t, messageApi, detail?.uuid, showInlinePreview, navigate, handleDeleteDrawing],
   );
 
   const tableQueryKey = useMemo(
@@ -737,12 +770,12 @@ const DrawingsPage: React.FC = () => {
       <div
         className="drawings-table-pane"
         style={{
-          flex: showInlinePreview ? '3 1 0' : 1,
+          flex: showPreviewPane ? '3 1 0' : 1,
           minWidth: 0,
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          padding: showInlinePreview ? '0 0 8px 8px' : '0 8px 8px',
+          padding: showPreviewPane ? '0 0 8px 8px' : '0 8px 8px',
           boxSizing: 'border-box',
           ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         }}
@@ -795,7 +828,7 @@ const DrawingsPage: React.FC = () => {
       </div>
     ),
     [
-      showInlinePreview,
+      showPreviewPane,
       tableScrollOffsetPx,
       tableQueryKey,
       columns,
@@ -856,13 +889,13 @@ const DrawingsPage: React.FC = () => {
               className="drawings-main-split"
               style={{
                 display: 'flex',
-                flexDirection: showInlinePreview ? 'row' : 'column',
+                flexDirection: showPreviewPane ? 'row' : 'column',
                 height: '100%',
                 minHeight: 0,
               }}
             >
               {tableBlock}
-              {showInlinePreview && (
+              {showPreviewPane && (
                 <InlinePreviewPane
                   file={deferredPreviewFile}
                   activeDrawing={selectedDrawing}

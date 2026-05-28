@@ -27,7 +27,7 @@ import {
   UpdateUserProfileData,
 } from '../../../services/userProfile';
 import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse } from '../../../services/file';
-import { getAvatarUrl } from '../../../utils/avatar';
+import { getAvatarUrl, setCachedAvatarUrl } from '../../../utils/avatar';
 import { ProfileNotionistsAvatar } from './ProfileNotionistsAvatar';
 import {
   PROFILE_AVATAR_USE_NOTIONISTS,
@@ -62,6 +62,8 @@ const UserProfilePage: React.FC = () => {
   const [applyingCandidateSeed, setApplyingCandidateSeed] = useState<string | null>(null);
   /** 与资料表单同步的性别，用于生成头像（换一换 / 默认图） */
   const [profileGender, setProfileGender] = useState<string | undefined>(undefined);
+  /** 用户主动清除头像后，不再自动展示 DiceBear 默认图 */
+  const [suppressAutoAvatar, setSuppressAutoAvatar] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -99,6 +101,9 @@ const UserProfilePage: React.FC = () => {
       const data = await getUserProfile();
       setProfileData(data);
       setProfileGender(data.gender ?? undefined);
+      if (data.avatar && data.avatar.trim() !== '') {
+        setSuppressAutoAvatar(false);
+      }
 
       // 设置表单值
       formRef.current?.setFieldsValue({
@@ -221,6 +226,7 @@ const UserProfilePage: React.FC = () => {
         
         onSuccess?.(response);
         setAvatarCandidates([]);
+        setSuppressAutoAvatar(false);
         messageApi.success(t('pages.personal.profile.avatarUploadSuccess'));
       } else {
         // 上传失败，释放本地预览 URL
@@ -240,7 +246,7 @@ const UserProfilePage: React.FC = () => {
   const resolveProfileGender = () => profileGender ?? profileData?.gender;
 
   const generatedAvatarSrc = useMemo(() => {
-    if (!PROFILE_AVATAR_USE_NOTIONISTS || !profileData) {
+    if (!PROFILE_AVATAR_USE_NOTIONISTS || !profileData || suppressAutoAvatar || avatarUrl) {
       return undefined;
     }
     const seed = resolveStableAvatarSeed({
@@ -253,7 +259,16 @@ const UserProfilePage: React.FC = () => {
       gender: resolveProfileGender(),
       size: 200,
     });
-  }, [profileData, profileGender]);
+  }, [profileData, profileGender, suppressAutoAvatar, avatarUrl]);
+
+  const profileAvatarPlaceholderStyle = useMemo(
+    () => ({
+      backgroundColor: suppressAutoAvatar ? token.colorFillTertiary : token.colorPrimary,
+      color: suppressAutoAvatar ? token.colorTextSecondary : '#fff',
+      fontWeight: 500 as const,
+    }),
+    [suppressAutoAvatar, token.colorFillTertiary, token.colorPrimary, token.colorTextSecondary],
+  );
 
   const applyAvatarBlob = async (blob: Blob, fileName: string) => {
     let localPreviewUrl: string | undefined;
@@ -319,6 +334,7 @@ const UserProfilePage: React.FC = () => {
       });
 
       setAvatarCandidates([]);
+      setSuppressAutoAvatar(false);
       messageApi.success(t('pages.personal.profile.shuffleAvatarSuccess'));
     } catch (error: unknown) {
       if (localPreviewUrl) {
@@ -359,23 +375,41 @@ const UserProfilePage: React.FC = () => {
   const handleClearAvatar = async () => {
     try {
       setLoading(true);
-      
+
+      const prevAvatarUuid = profileData?.avatar?.trim() || undefined;
+
       // 清除头像：将 avatar 设置为 null
       await updateUserProfile({ avatar: null });
-      
+
       // 清除本地状态
       setAvatarUrl(undefined);
       setAvatarFileList([]);
       setAvatarCandidates([]);
+      setSuppressAutoAvatar(true);
 
       // 更新表单字段
       formRef.current?.setFieldsValue({
         avatar: null,
       });
-      
-      // 重新加载个人资料
-      await loadProfile();
-      
+
+      setProfileData((prev) => (prev ? { ...prev, avatar: undefined } : prev));
+
+      const prevUser = currentUser;
+      if (prevUser) {
+        setGlobalUser({
+          ...prevUser,
+          avatar: undefined,
+        });
+      }
+      const prevLocal = getUserInfo() || {};
+      setUserInfo({
+        ...prevLocal,
+        avatar: null,
+      });
+      if (prevAvatarUuid) {
+        setCachedAvatarUrl(prevAvatarUuid, undefined);
+      }
+
       messageApi.success(t('pages.personal.profile.avatarCleared'));
     } catch (error: any) {
       console.error('❌ 清除头像失败:', error);
@@ -583,10 +617,7 @@ const UserProfilePage: React.FC = () => {
                 generatedSrc={generatedAvatarSrc}
                 fullName={profileData?.full_name}
                 username={profileData?.username}
-                style={{
-                  backgroundColor: token.colorPrimary,
-                  fontWeight: 500,
-                }}
+                style={profileAvatarPlaceholderStyle}
               />
               <div style={{ textAlign: 'center', width: '100%' }}>
                 <Title level={4} style={{ margin: '16px 0 8px 0' }}>
@@ -712,10 +743,7 @@ const UserProfilePage: React.FC = () => {
                     generatedSrc={generatedAvatarSrc}
                     fullName={profileData?.full_name}
                     username={profileData?.username}
-                    style={{
-                      backgroundColor: token.colorPrimary,
-                      fontWeight: 500,
-                    }}
+                    style={profileAvatarPlaceholderStyle}
                   />
                   <Space>
                     <Upload

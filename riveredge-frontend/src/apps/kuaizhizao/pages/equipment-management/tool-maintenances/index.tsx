@@ -89,7 +89,7 @@ const ToolMaintenancesPage: React.FC = () => {
     { title: '结果', dataIndex: 'result', width: 90 },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       fixed: 'right',
       align: 'left',

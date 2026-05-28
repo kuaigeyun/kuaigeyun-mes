@@ -69,7 +69,13 @@ async def create_requisition(
 async def list_requisitions(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    status: Optional[str] = Query(None),
+    status: Optional[str] = Query(
+        None,
+        description="已废弃：列表请用 lifecycle_stage。status 为库表字段，勿与生命周期钉住 Tab 混用。",
+    ),
+    lifecycle_stage: Optional[str] = Query(
+        None, description="生命周期阶段（与列表展示一致，如 草稿、已通过）"
+    ),
     source_type: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码"),
     requisition_code: Optional[str] = Query(None),
@@ -84,6 +90,7 @@ async def list_requisitions(
         skip=skip,
         limit=limit,
         status=status,
+        lifecycle_stage=lifecycle_stage,
         source_type=source_type,
         keyword=keyword,
         requisition_code=requisition_code,

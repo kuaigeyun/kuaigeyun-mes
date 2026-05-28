@@ -7,6 +7,7 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
+import { resolveListLifecycleStageFromSearch } from '../../../utils/listLifecycleStage';
 
 const MAIN_STAGE_KEYS_AUDIT = [
   'draft',
@@ -219,6 +220,18 @@ export function buildPurchaseOrderLifecycleValueEnum(
       { text: t(PURCHASE_ORDER_LIFECYCLE_STAGE_I18N[stage] ?? stage, stage) },
     ]),
   );
+}
+
+/** 从搜索表单解析阶段并映射为采购订单列表 API 的 status/review_status（无 lifecycle_stage 接口） */
+export function resolvePurchaseOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+  params?: Record<string, unknown> | null,
+): { status?: string; review_status?: string } {
+  const stage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+  if (!stage) {
+    return {};
+  }
+  return mapPurchaseOrderLifecycleStageToApiParams(stage);
 }
 
 export function mapPurchaseOrderLifecycleStageToApiParams(

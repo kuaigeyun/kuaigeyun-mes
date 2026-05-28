@@ -25,9 +25,10 @@ export interface UniAdvancedSearchProps {
   /** 与 UniTable 一致的全量重置（模糊词 + 表单 + 刷新）；传入后「重置」紧挨高级搜索按钮 */
   onReset?: () => void;
   /**
-   * 由 UniTable 在每次「重置」时递增，用于强制刷新钉住条件与当前 searchParamsRef 的激活态（ref 变更本身不触发渲染）。
+   * 由 UniTable 在 searchParamsRef 每次提交后递增，用于刷新钉住条件激活态。
    */
   pinnedSearchUiEpoch?: number;
+  onSearchParamsApplied?: () => void;
 }
 
 export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
@@ -37,6 +38,7 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
   searchParamsRef,
   onReset,
   pinnedSearchUiEpoch = 0,
+  onSearchParamsApplied,
 }) => {
   const { t } = useTranslation();
 
@@ -57,6 +59,7 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
           showReset={Boolean(onReset)}
           onReset={onReset}
           pinnedSearchUiEpoch={pinnedSearchUiEpoch}
+          onSearchParamsApplied={onSearchParamsApplied}
         />
       </Suspense>
     </ErrorBoundary>

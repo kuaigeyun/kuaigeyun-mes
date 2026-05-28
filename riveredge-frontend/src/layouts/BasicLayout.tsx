@@ -3860,8 +3860,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           box-shadow: none !important;
         }
         /* 用户头像按钮样式 */
-        .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar {
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar,
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar {
           border: none;
+          box-shadow: none;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar:has(img),
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar:has(img) {
+          background: transparent !important;
         }
         /* 租户选择器样式 - 胶囊型，与搜索框一致 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper,
@@ -5137,7 +5143,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     size={24}
                     src={avatarUrl}
                     style={{
-                      backgroundColor: token.colorPrimary,
+                      backgroundColor: avatarUrl ? 'transparent' : token.colorPrimary,
+                      border: 'none',
+                      boxShadow: 'none',
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',

@@ -39,7 +39,8 @@ import {
 } from './components/SalesOrderDetailBody';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, mapSalesOrderLifecycleStageToApiParams, isSalesOrderClosed, canWithdrawSalesOrderRecord, canUnapproveSalesOrderRecord } from '../../../utils/salesOrderLifecycle';
+import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams, isSalesOrderClosed, canWithdrawSalesOrderRecord, canUnapproveSalesOrderRecord } from '../../../utils/salesOrderLifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
   isAuditedStatus,
 } from '../../../constants/documentStatus';
@@ -2082,7 +2083,7 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
-      dataIndex: 'lifecycle',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       width: 140,
       align: 'left' as const,
       fixed: 'right' as const,
@@ -2264,7 +2265,7 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
-      dataIndex: 'lifecycle',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       width: 90,
       hideInSearch: false,
       valueType: 'select',
@@ -2499,11 +2500,7 @@ const SalesOrdersPage: React.FC = () => {
               limit: params.pageSize || 20,
             };
             // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status / review_status
-            if (searchFormValues?.lifecycle) {
-              const mapped = mapSalesOrderLifecycleStageToApiParams(searchFormValues.lifecycle);
-              if (mapped.status) apiParams.status = mapped.status;
-              if (mapped.review_status) apiParams.review_status = mapped.review_status;
-            }
+            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));
             if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
             if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
             if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
@@ -2527,6 +2524,8 @@ const SalesOrdersPage: React.FC = () => {
               skip: apiParams.skip,
               limit: apiParams.limit,
               status: apiParams.status,
+              review_status: apiParams.review_status,
+              lifecycle_stage: apiParams.lifecycle_stage,
               customer_name: apiParams.customer_name,
               order_code: apiParams.order_code,
               keyword: apiParams.keyword,

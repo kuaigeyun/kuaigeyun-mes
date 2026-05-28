@@ -298,7 +298,7 @@ const PaymentsPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       width: 120,

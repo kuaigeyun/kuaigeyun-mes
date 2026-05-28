@@ -110,7 +110,7 @@ const HourlyRatesPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 120,
       fixed: 'right',
       align: 'left',

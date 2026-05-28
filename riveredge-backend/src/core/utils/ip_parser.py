@@ -320,6 +320,49 @@ async def get_ip_location_detail(ip: str, timeout: float = 3.0) -> Optional[Dict
     return None
 
 
+async def reverse_geocode_label(
+    lat: float,
+    lon: float,
+    language: str = "zh",
+    timeout: float = 3.0,
+) -> Optional[str]:
+    """
+    按经纬度反查地名（供天气组件按界面语言显示城市名）。
+
+    使用 Nominatim（OpenStreetMap）；须在后端调用以满足其 Usage Policy 与避免浏览器 CORS。
+    Open-Meteo Geocoding API 仅提供 /v1/search，无 reverse 端点。
+    """
+    accept_lang = "zh-CN,zh" if str(language).lower().startswith("zh") else "en"
+    headers = {"User-Agent": "RiverEdge/1.0 (weather; https://riveredge.local)"}
+    try:
+        r = await get_http_client().get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+                "accept-language": accept_lang,
+                "zoom": 10,
+            },
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        address = data.get("address") or {}
+        for key in ("city", "town", "village", "municipality", "county", "state", "country"):
+            val = address.get(key)
+            if val:
+                return str(val).strip()
+        display = data.get("display_name")
+        if display:
+            return str(display).split(",")[0].strip()
+    except Exception as e:
+        logger.debug(f"逆地理编码失败: lat={lat}, lon={lon}, 错误: {e}")
+    return None
+
+
 async def get_ip_location(ip: str, timeout: float = 2.0) -> Optional[str]:
     """
     获取IP地址的地理位置信息

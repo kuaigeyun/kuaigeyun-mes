@@ -47,6 +47,7 @@ export async function listPurchaseRequisitions(params: {
   skip?: number;
   limit?: number;
   status?: string;
+  lifecycle_stage?: string;
   source_type?: string;
   keyword?: string;
   requisition_code?: string;

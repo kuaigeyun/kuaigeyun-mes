@@ -206,6 +206,20 @@ function toMenuItem(node: React.ReactNode, key: string) {
   }
 }
 
+/** Space 子项需稳定 key，避免 React 在表格 Cell 内报 list key 警告 */
+function withRowActionKeys(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode[] {
+  return nodes.map((node, index) => {
+    if (React.isValidElement(node) && node.key != null) {
+      return node
+    }
+    const key = `${keyPrefix}-inline-${index}`
+    if (React.isValidElement(node)) {
+      return React.cloneElement(node, { key })
+    }
+    return <React.Fragment key={key}>{node}</React.Fragment>
+  })
+}
+
 function parseOverflowArgs(directMaxOrOptions?: number | RenderRowActionsOverflowOptions): {
   directMax: number
   ctx: NormalizeActionContext
@@ -239,6 +253,8 @@ export function renderRowActionsOverflow(
     return null
   }
 
+  const keyedEnabled = withRowActionKeys(enabled, keyPrefix)
+
   if (enabled.length <= primarySlotsBeforeMore) {
     return (
       <Space
@@ -247,7 +263,7 @@ export function renderRowActionsOverflow(
         wrap={false}
         style={{ whiteSpace: 'nowrap' }}
       >
-        {enabled}
+        {keyedEnabled}
       </Space>
     )
   }
@@ -263,10 +279,12 @@ export function renderRowActionsOverflow(
         wrap={false}
         style={{ whiteSpace: 'nowrap' }}
       >
-        {enabled}
+        {keyedEnabled}
       </Space>
     )
   }
+
+  const keyedInline = withRowActionKeys(inline, keyPrefix)
 
   return (
     <Space
@@ -275,7 +293,7 @@ export function renderRowActionsOverflow(
       wrap={false}
       style={{ whiteSpace: 'nowrap' }}
     >
-      {inline}
+      {keyedInline}
       <Dropdown
         menu={{
           items: overflow.map((node, i) => toMenuItem(node, `${keyPrefix}-more-${i}`)),

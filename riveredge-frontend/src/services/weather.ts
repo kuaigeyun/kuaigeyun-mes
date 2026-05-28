@@ -109,26 +109,22 @@ async function geocodeCity(cityName: string, language: WeatherLang = 'zh'): Prom
   return null;
 }
 
-/** Open-Meteo 逆地理：按当前语言返回城市/地区名 */
+/** 逆地理：按当前语言返回城市/地区名（经后端代理，Open-Meteo 无 reverse 端点） */
 export async function reverseGeocodeLabel(
   lat: number,
   lon: number,
   language: WeatherLang = resolveWeatherLanguage()
 ): Promise<string | null> {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=${language}`;
-    const res = await window.fetch(url, { signal: (window.AbortSignal as any).timeout(5000) });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const results = data.results;
-    if (Array.isArray(results) && results.length > 0) {
-      const r = results[0];
-      return (r.name as string) || (r.admin1 as string) || null;
-    }
+    const { apiRequest } = await import('./api');
+    const data = await apiRequest<{ name?: string }>(
+      `/core/ip-location/reverse?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lon))}&language=${encodeURIComponent(language)}`
+    );
+    const name = data?.name?.trim();
+    return name || null;
   } catch {
-    // 静默失败
+    return null;
   }
-  return null;
 }
 
 /**

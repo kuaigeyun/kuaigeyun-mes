@@ -72,7 +72,8 @@ import {
   isAuditedStatus,
 } from '../../../constants/documentStatus';
 import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
-import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, mapPurchaseOrderLifecycleStageToApiParams } from '../../../utils/purchaseOrderLifecycle';
+import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams } from '../../../utils/purchaseOrderLifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -670,7 +671,7 @@ const PurchaseOrdersPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       width: 132,
       fixed: 'right',
       align: 'left',
@@ -1893,14 +1894,12 @@ const PurchaseOrdersPage: React.FC = () => {
                 limit: params.pageSize,
                 keyword: params.keyword,
               };
-              if (searchFormValues?.lifecycle) {
-                const mapped = mapPurchaseOrderLifecycleStageToApiParams(searchFormValues.lifecycle);
-                if (mapped.status) apiParams.status = mapped.status;
-                if (mapped.review_status) apiParams.review_status = mapped.review_status;
-              } else {
-                if (params.status) apiParams.status = params.status;
-                if (params.review_status) apiParams.review_status = params.review_status;
-              }
+              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(
+                searchFormValues,
+                params,
+              );
+              if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
+              if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
               const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
               lastOrdersCacheRef.current = response.data || [];
               return {

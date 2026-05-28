@@ -689,9 +689,19 @@ code {
   transition: all 0.2s;
   padding: 0;
 
+  .anticon {
+    font-size: 16px;
+    color: var(--ant-color-text-tertiary);
+    transition: color 0.2s;
+  }
+
   &:hover {
     border-color: var(--ant-color-primary);
     background: var(--ant-color-primary-bg);
+
+    .anticon {
+      color: var(--ant-color-primary);
+    }
   }
 }
 
@@ -699,6 +709,10 @@ code {
   border-color: var(--ant-color-primary);
   background: var(--ant-color-primary-bg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ant-color-primary) 24%, transparent);
+
+  .anticon {
+    color: var(--ant-color-primary) !important;
+  }
 }
 
 /* 图纸管理导航树：紧凑行高 + 图标与标题同行 */

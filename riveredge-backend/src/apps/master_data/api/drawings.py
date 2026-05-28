@@ -131,7 +131,7 @@ async def update_drawing(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete("/{drawing_uuid}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete drawing draft")
+@router.delete("/{drawing_uuid}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete drawing (draft or obsolete)")
 async def delete_drawing(
     drawing_uuid: str,
     tenant_id: Annotated[int, Depends(get_current_tenant)],

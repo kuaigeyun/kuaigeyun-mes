@@ -345,6 +345,20 @@ function finalizeUniTableColumns(columns: any[]): any[] {
   )
 }
 
+/** 工具栏节点并入 Space 前补 key（toolBarRender / toolBarActions* 常返回无 key 的组件） */
+function withToolbarItemKeys(nodes: ReactNode[], keyPrefix: string): ReactNode[] {
+  return React.Children.toArray(nodes).map((node, index) => {
+    if (React.isValidElement(node) && node.key != null) {
+      return node
+    }
+    const key = `${keyPrefix}-${index}`
+    if (React.isValidElement(node)) {
+      return React.cloneElement(node, { key })
+    }
+    return <React.Fragment key={key}>{node}</React.Fragment>
+  })
+}
+
 /** 与 ProTable genColumnKey / 列设置持久化 key 一致（无 key 且无 dataIndex 时用列下标） */
 function getProColumnStateKey(col: any, columnIndex: number): string {
   const key = col?.key ?? col?.dataIndex
@@ -1738,6 +1752,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           keyword: value.trim() || undefined,
         }
       }
+      setPinnedSearchUiEpoch((e) => e + 1)
 
       // 触发表格重新加载
       if (actionRefForProTable?.current) {
@@ -2038,7 +2053,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (toolBarActionsBeforeCreate.length > 0) {
-      actions.push(...toolBarActionsBeforeCreate)
+      actions.push(...withToolbarItemKeys(toolBarActionsBeforeCreate, 'uni-tb-before'))
     }
 
     // 新建按钮，带 Alt+N 快捷键提示
@@ -2051,7 +2066,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (toolBarActionsAfterCreate.length > 0) {
-      actions.push(...toolBarActionsAfterCreate)
+      actions.push(...withToolbarItemKeys(toolBarActionsAfterCreate, 'uni-tb-after-create'))
     }
 
     // ProTable `toolBarRender`：在 UniTable 中仅用于向左侧注入节点（非右侧工具栏）
@@ -2066,15 +2081,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       })
 
       if (Array.isArray(userResult)) {
-        actions.push(...userResult)
+        actions.push(...withToolbarItemKeys(userResult, 'uni-tb-render'))
       } else if (userResult) {
-        actions.push(userResult)
+        actions.push(...withToolbarItemKeys([userResult], 'uni-tb-render'))
       }
     }
 
     // 合并 toolBarActions（兼容历史用法，与 toolBarRender 等效）
     if (toolBarActions.length > 0) {
-      actions.push(...toolBarActions)
+      actions.push(...withToolbarItemKeys(toolBarActions, 'uni-tb-actions'))
     }
 
     // 批量删除（uni-batch 删除预设）
@@ -2093,11 +2108,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (toolBarActionsAfterDelete.length > 0) {
-      actions.push(...toolBarActionsAfterDelete)
+      actions.push(...withToolbarItemKeys(toolBarActionsAfterDelete, 'uni-tb-after-delete'))
     }
 
     if (toolBarActionsAfterBatch.length > 0) {
-      actions.push(...toolBarActionsAfterBatch)
+      actions.push(...withToolbarItemKeys(toolBarActionsAfterBatch, 'uni-tb-after-batch'))
     }
 
     // 修改按钮（需要选中一行）
@@ -2392,6 +2407,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const shouldDisableAutoScrollY = React.useMemo(() => {
     if (allowCustomScrollY) return false
     if (virtualized || restTableVirtual) return false
+    // ListPageTemplate 内：有数据即视口限高，避免「满页才限高、少行就撑满整页」的页面间差异
+    if (statCardsCtx?.tableBodyViewportScroll && tableData.length > 0) {
+      return false
+    }
     // 空表 / 未装满：优先走 natural-height；expandable/树表仅在确有数据且需限高时才启用 scroll.y
     if (tableData.length === 0 || tableData.length < currentPageSize) {
       return true
@@ -2410,6 +2429,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     virtualized,
     restTableVirtual,
     restTableExpandable,
+    statCardsCtx?.tableBodyViewportScroll,
     tableData,
     currentPageSize,
   ])
@@ -2722,6 +2742,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
                 searchParamsRef,
                 pinnedSearchUiEpoch,
+                onSearchParamsApplied: () => setPinnedSearchUiEpoch((e) => e + 1),
               }}
               afterSearch={afterSearchButtons}
               showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}

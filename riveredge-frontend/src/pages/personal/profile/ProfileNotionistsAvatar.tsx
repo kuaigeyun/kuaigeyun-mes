@@ -41,6 +41,15 @@ export const ProfileNotionistsAvatar: React.FC<ProfileNotionistsAvatarProps> = (
         : generatedSrc;
   const showInitials = !displaySrc;
 
+  const avatarStyle: AvatarProps['style'] = showInitials
+    ? style
+    : {
+        ...style,
+        backgroundColor: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+      };
+
   return (
     <Avatar
       size={size}
@@ -52,11 +61,7 @@ export const ProfileNotionistsAvatar: React.FC<ProfileNotionistsAvatarProps> = (
           setGeneratedFailed(true);
         }
       }}
-      style={{
-        ...style,
-        ...(showInitials ? { backgroundColor: style?.backgroundColor } : undefined),
-        ...(displaySrc && !uploadedSrc ? { backgroundColor: 'transparent' } : undefined),
-      }}
+      style={avatarStyle}
     >
       {showInitials ? getAvatarText(fullName, username) : null}
     </Avatar>

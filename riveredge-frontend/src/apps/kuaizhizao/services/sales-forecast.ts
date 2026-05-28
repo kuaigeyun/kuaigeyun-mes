@@ -217,7 +217,8 @@ export async function exportSalesForecasts(params?: SalesForecastListParams): Pr
 
 /** 销售预测统计（用于指标卡片） */
 export interface SalesForecastStatistics {
-  active_count: number;
+  /** 今日新增预测单数 */
+  today_new_count: number;
   pending_review_count: number;
   in_progress_count: number;
   overdue_count: number;
@@ -230,10 +231,9 @@ export interface SalesForecastStatistics {
 }
 
 /** 获取销售预测统计 */
-export async function getSalesForecastStatistics(params: { is_active?: boolean } = {}): Promise<SalesForecastStatistics> {
-  return apiRequest<SalesForecastStatistics>('/apps/kuaizhizao/reports/sales-forecasts/statistics', {
+export async function getSalesForecastStatistics(): Promise<SalesForecastStatistics> {
+  return apiRequest<SalesForecastStatistics>('/apps/kuaizhizao/sales-forecasts/statistics', {
     method: 'GET',
-    params: Object.keys(params).length > 0 ? params : undefined,
   });
 }
 

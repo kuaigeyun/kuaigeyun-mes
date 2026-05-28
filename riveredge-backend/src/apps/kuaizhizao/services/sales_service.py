@@ -8,7 +8,8 @@ Date: 2025-12-30
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import zoneinfo
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from tortoise.functions import Sum
@@ -198,40 +199,100 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         return {"data": result, "total": total, "success": True}
         
     async def get_forecast_statistics(self, tenant_id: int) -> Dict[str, Any]:
-        """获取销售预测统计"""
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-        
-        # 活动预测数（已审核/已确认且未下推计算）
-        active_count = await SalesForecast.filter(
-            tenant_id=tenant_id,
-            status__in=[DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value],
-            planning_pushed_to_computation=False,
-            deleted_at__isnull=True
-        ).count()
-        
-        # 待审核数
-        pending_review_count = await SalesForecast.filter(
-            tenant_id=tenant_id,
-            review_status=ReviewStatus.PENDING.value,
-            deleted_at__isnull=True
-        ).count()
+        """获取销售预测统计（列表页指标卡，字段与销售订单 statistics 对齐）"""
+        tz = zoneinfo.ZoneInfo("Asia/Shanghai")
+        today = datetime.now(tz).date()
+        base = SalesForecast.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
-        # 昨日新增（示例实现，按 created_at 判断）
-        from datetime import datetime, timedelta
-        yesterday_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        yesterday_end = yesterday_start + timedelta(days=1)
-        yesterday_new = await SalesForecast.filter(
-            tenant_id=tenant_id,
-            created_at__gte=yesterday_start,
-            created_at__lt=yesterday_end,
-            deleted_at__isnull=True
-        ).count()
-        
+        cancelled = ["CANCELLED", "已取消", "cancelled"]
+        rejected_review = ["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"]
+        pending_review_vals = ["PENDING", "PENDING_REVIEW", "待审核", "pending_review"]
+        in_progress_status = [
+            "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",
+            "AUDITED", "RELEASED", "执行中", "EFFECTIVE", "已生效",
+        ]
+        completed = ["COMPLETED", "已完成", "completed", "CLOSED", "已关闭"]
+
+        try:
+            pending_review_count = await base.filter(
+                review_status__in=pending_review_vals,
+            ).exclude(status__in=cancelled).count()
+        except Exception as e:
+            logger.warning(f"sales-forecast-statistics pending_review_count: {e}")
+            pending_review_count = 0
+
+        try:
+            today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=tz)
+            today_end = today_start + timedelta(days=1)
+            today_new_count = await base.filter(
+                created_at__gte=today_start,
+                created_at__lt=today_end,
+            ).count()
+        except Exception as e:
+            logger.warning(f"sales-forecast-statistics today_new_count: {e}")
+            today_new_count = 0
+
+        try:
+            in_progress_count = await base.filter(
+                status__in=in_progress_status,
+            ).exclude(review_status__in=rejected_review).exclude(status__in=cancelled + completed).count()
+        except Exception as e:
+            logger.warning(f"sales-forecast-statistics in_progress_count: {e}")
+            in_progress_count = 0
+
+        try:
+            overdue_count = await base.filter(
+                end_date__lt=today,
+            ).exclude(status__in=cancelled + completed).count()
+        except Exception as e:
+            logger.warning(f"sales-forecast-statistics overdue_count: {e}")
+            overdue_count = 0
+
+        total_amount = 0.0
+        trend_today_new: List[Dict[str, Any]] = []
+        trend_today_amount: List[Dict[str, Any]] = []
+        trend_pending_review: List[Dict[str, Any]] = []
+
+        try:
+            for i in range(6, -1, -1):
+                day = today - timedelta(days=i)
+                date_str = day.strftime("%Y-%m-%d")
+                day_start = datetime.combine(day, datetime.min.time()).replace(tzinfo=tz)
+                day_end = day_start + timedelta(days=1)
+                cnt = await base.filter(created_at__gte=day_start, created_at__lt=day_end).count()
+                trend_today_new.append({"date": date_str, "value": cnt})
+                trend_today_amount.append({"date": date_str, "value": 0})
+                try:
+                    pr_cnt = await base.filter(
+                        review_status__in=pending_review_vals,
+                        created_at__lte=day_end,
+                    ).exclude(status__in=cancelled).count()
+                except Exception:
+                    pr_cnt = pending_review_count if day == today else 0
+                trend_pending_review.append({"date": date_str, "value": pr_cnt})
+        except Exception as e:
+            logger.warning(f"sales-forecast-statistics trends: {e}")
+            fallback_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+            trend_today_new = [{"date": d, "value": 0} for d in fallback_dates]
+            trend_today_amount = [{"date": d, "value": 0} for d in fallback_dates]
+            trend_pending_review = [{"date": d, "value": 0} for d in fallback_dates]
+
+        yesterday_today_new = trend_today_new[-2]["value"] if len(trend_today_new) > 1 else 0
+        yesterday_pending_review = (
+            trend_pending_review[-2]["value"] if len(trend_pending_review) > 1 else 0
+        )
+
         return {
-            "active_forecasts": active_count,
-            "pending_review": pending_review_count,
-            "yesterday_new": yesterday_new,
-            "yesterday_pending_review": pending_review_count # 简化，展示当前待审核
+            "today_new_count": today_new_count,
+            "pending_review_count": pending_review_count,
+            "in_progress_count": in_progress_count,
+            "overdue_count": overdue_count,
+            "total_amount": round(total_amount, 2),
+            "yesterday_today_new": yesterday_today_new,
+            "yesterday_pending_review": yesterday_pending_review,
+            "trend_today_new": trend_today_new,
+            "trend_today_amount": trend_today_amount,
+            "trend_pending_review": trend_pending_review,
         }
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:

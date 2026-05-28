@@ -119,6 +119,8 @@ export interface SalesOrderListParams {
   limit?: number;
   status?: string;
   review_status?: string;
+  /** 生命周期阶段（与列表 UniLifecycle 展示一致） */
+  lifecycle_stage?: string;
   start_date?: string;
   end_date?: string;
   customer_name?: string;

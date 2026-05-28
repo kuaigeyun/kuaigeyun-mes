@@ -130,6 +130,18 @@ def _is_closed(status: Optional[str]) -> bool:
     return s in ("CLOSED", "已关闭", "closed")
 
 
+def normalize_sales_order_lifecycle_filter(stage: Optional[str]) -> str:
+    """列表 lifecycle_stage 筛选值归一化（与前端 normalizeStageName 对齐）。"""
+    s = _norm(stage)
+    if s == "已交货":
+        return "发货出库"
+    if s in ("账款发票", "invoicing"):
+        return "账款发票处理"
+    if s == "已确认":
+        return "已生效"
+    return s
+
+
 def _build_main_stages(
     stage_keys: List[Dict[str, str]],
     current_stage_key: str,
@@ -998,6 +1010,11 @@ PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT = [
     {"key": "partial", "label": "部分转单"},
     {"key": "full", "label": "全部转单"},
 ]
+
+
+def normalize_purchase_requisition_lifecycle_filter(stage: Optional[str]) -> str:
+    """列表 lifecycle_stage 筛选值归一化（与 get_purchase_requisition_lifecycle 的 current_stage_name 一致）。"""
+    return _norm(stage)
 
 
 def get_purchase_requisition_lifecycle(

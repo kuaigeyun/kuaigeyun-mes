@@ -29,13 +29,12 @@ export type DrawingNavMode = 'type' | 'status' | 'material' | 'route';
 export const DRAWING_NAV_MODES: {
   mode: DrawingNavMode;
   icon: React.ComponentType<{ style?: React.CSSProperties }>;
-  color: string;
   labelKey: string;
 }[] = [
-  { mode: 'type', icon: AppstoreOutlined, color: '#1890ff', labelKey: 'app.master-data.drawings.tree.byType' },
-  { mode: 'status', icon: AuditOutlined, color: '#52c41a', labelKey: 'app.master-data.drawings.tree.byStatus' },
-  { mode: 'material', icon: ProductOutlined, color: '#fa8c16', labelKey: 'app.master-data.drawings.tree.byMaterial' },
-  { mode: 'route', icon: BranchesOutlined, color: '#722ed1', labelKey: 'app.master-data.drawings.tree.byRoute' },
+  { mode: 'type', icon: AppstoreOutlined, labelKey: 'app.master-data.drawings.tree.byType' },
+  { mode: 'status', icon: AuditOutlined, labelKey: 'app.master-data.drawings.tree.byStatus' },
+  { mode: 'material', icon: ProductOutlined, labelKey: 'app.master-data.drawings.tree.byMaterial' },
+  { mode: 'route', icon: BranchesOutlined, labelKey: 'app.master-data.drawings.tree.byRoute' },
 ];
 
 const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other'];

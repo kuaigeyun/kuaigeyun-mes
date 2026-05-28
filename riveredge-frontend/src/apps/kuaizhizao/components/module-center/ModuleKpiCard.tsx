@@ -123,7 +123,7 @@ export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
                         showInfo={false}
                         strokeColor={visual.progressStroke}
                         railColor={visual.progressRail}
-                        strokeWidth={6}
+                        size={[-1, 6]}
                       />
                     </div>
                   ) : null}

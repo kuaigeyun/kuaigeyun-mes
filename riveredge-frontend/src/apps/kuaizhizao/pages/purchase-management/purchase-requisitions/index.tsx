@@ -49,7 +49,12 @@ import {
   getPushOptions,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
+import {
+  buildPurchaseRequisitionLifecycleValueEnum,
+  getPurchaseRequisitionLifecycle,
+  resolvePurchaseRequisitionListLifecycleParams,
+} from '../../../utils/purchaseRequisitionLifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -263,21 +268,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [messageApi, ensureSupplierList]
   );
 
-  const lifecycleValueEnum = purchaseRequestAuditEnabled
-    ? {
-        草稿: { text: '草稿', status: 'Default' as const },
-        待审核: { text: '待审核', status: 'Processing' as const },
-        已驳回: { text: '已驳回', status: 'Error' as const },
-        已通过: { text: '已通过', status: 'Success' as const },
-        部分转单: { text: '部分转单', status: 'Warning' as const },
-        全部转单: { text: '全部转单', status: 'Success' as const },
-      }
-    : {
-        草稿: { text: '草稿', status: 'Default' as const },
-        已通过: { text: '已通过', status: 'Success' as const },
-        部分转单: { text: '部分转单', status: 'Warning' as const },
-        全部转单: { text: '全部转单', status: 'Success' as const },
-      };
+  const lifecycleValueEnum = buildPurchaseRequisitionLifecycleValueEnum(purchaseRequestAuditEnabled);
 
   const columns: ProColumns<PurchaseRequisition>[] = [
     // 仅高级搜索、不在表身展示；必须放在最前，避免夹在可滚动列与右侧 fixed 列之间导致固定列顺序异常
@@ -357,7 +348,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     {
       title: '生命周期',
       key: 'lifecycle',
-      dataIndex: 'lifecycle',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       width: 132,
       fixed: 'right',
       align: 'center',
@@ -995,10 +986,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
           actionRef={actionRef}
           request={async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
             const s = searchFormValues || {};
+            const lifecycleParams = resolvePurchaseRequisitionListLifecycleParams(
+              searchFormValues,
+              params,
+            );
             const res = await listPurchaseRequisitions({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              status: s.lifecycle ?? s.status ?? params.lifecycle ?? params.status,
+              ...lifecycleParams,
               source_type: s.source_type,
               keyword: s.keyword,
               requisition_code: s.requisition_code,

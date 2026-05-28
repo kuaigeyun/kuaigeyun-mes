@@ -14,6 +14,7 @@ export interface UniPullCreateToolbarProps {
   onCreate: () => void;
   menuItems: UniPullMenuItem[];
   createIcon?: React.ReactNode;
+  /** 作为列表子项时的 React key（与 compactKey 默认同值） */
   compactKey?: string;
 }
 

@@ -284,12 +284,43 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         return {int(row["requisition_id"]): int(row["cnt"]) for row in rows}
 
+    async def _filter_requisitions_by_lifecycle_stage(
+        self,
+        tenant_id: int,
+        reqs: List[PurchaseRequisition],
+        lifecycle_stage: str,
+        *,
+        audit_required: bool,
+    ) -> List[PurchaseRequisition]:
+        """按后端 lifecycle 计算结果筛选（与列表展示阶段一致，避免 status 精确匹配漏单）。"""
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_purchase_requisition_lifecycle,
+            normalize_purchase_requisition_lifecycle_filter,
+        )
+
+        if not reqs:
+            return []
+
+        target = normalize_purchase_requisition_lifecycle_filter(lifecycle_stage)
+        matched: List[PurchaseRequisition] = []
+        for req in reqs:
+            lifecycle = get_purchase_requisition_lifecycle(
+                req, milestones=None, audit_required=audit_required
+            )
+            stage_name = normalize_purchase_requisition_lifecycle_filter(
+                lifecycle.get("current_stage_name"),
+            )
+            if stage_name == target:
+                matched.append(req)
+        return matched
+
     async def list_requisitions(
         self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 20,
         status: Optional[str] = None,
+        lifecycle_stage: Optional[str] = None,
         source_type: Optional[str] = None,
         keyword: Optional[str] = None,
         requisition_code: Optional[str] = None,
@@ -301,7 +332,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         query = PurchaseRequisition.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
         )
-        if status:
+        lifecycle_filter = (lifecycle_stage or "").strip()
+        if status and not lifecycle_filter:
             query = query.filter(status=status)
         if source_type:
             query = query.filter(source_type=source_type)
@@ -327,14 +359,27 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 required_date__isnull=False, required_date__lte=required_date_to
             )
 
-        total = await query.count()
-        reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
-        req_ids = [req.id for req in reqs if req.id is not None]
-
-        items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_request"
         )
+
+        if lifecycle_filter:
+            candidate_reqs = await query.order_by("-updated_at", "-id").all()
+            matched_reqs = await self._filter_requisitions_by_lifecycle_stage(
+                tenant_id,
+                candidate_reqs,
+                lifecycle_filter,
+                audit_required=audit_required,
+            )
+            total = len(matched_reqs)
+            reqs = matched_reqs[skip : skip + limit]
+        else:
+            total = await query.count()
+            reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
+
+        req_ids = [req.id for req in reqs if req.id is not None]
+
+        items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
         from apps.kuaizhizao.services.document_lifecycle_service import (
             get_purchase_requisition_lifecycle,
         )

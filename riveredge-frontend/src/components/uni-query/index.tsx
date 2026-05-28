@@ -24,6 +24,12 @@ import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterGroup, FilterConfigData } from './types';
 import { convertFiltersToApiParams } from './filterUtils';
 import {
+  LEGACY_LIST_LIFECYCLE_FIELD,
+  LIST_LIFECYCLE_STAGE_FIELD,
+  arePinnedSearchParamsActive,
+  commitListPageSearchParams,
+} from '../../utils/listLifecycleStage';
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -422,6 +428,8 @@ interface QuerySearchModalProps {
    * 搜索参数存储 ref（可选，用于直接传递搜索参数）
    */
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
+  /** searchParamsRef 提交后回调（UniTable 用于刷新钉住 Tab 激活态） */
+  onSearchParamsApplied?: () => void;
 }
 
 const BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX = '__builtin__:lifecycle-stage:';
@@ -456,11 +464,13 @@ const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
 
     const title = String(column.title ?? '');
     let score = 0;
-    if (/^status$/i.test(field)) score += 120;
+    if (field === LIST_LIFECYCLE_STAGE_FIELD) score += 200;
+    if (field === LEGACY_LIST_LIFECYCLE_FIELD) score += 150;
     if (/^operation_type$/i.test(field)) score += 120;
-    if (/lifecycle|status|stage|state/i.test(field)) score += 80;
+    if (/生命周期/.test(title)) score += 100;
+    if (/lifecycle|stage|state/i.test(field)) score += 60;
+    if (/^status$/i.test(field)) score += 40;
     if (/operation[\s_-]*type|action[\s_-]*type/i.test(field)) score += 80;
-    if (/生命周期/.test(title)) score += 90;
     if (/阶段/.test(title)) score += 70;
     if (/状态/.test(title)) score += 50;
     if (/操作类型|动作类型/.test(title)) score += 90;
@@ -501,7 +511,7 @@ const createBuiltinLifecycleStageSearches = (
       is_shared: true,
       is_pinned: true,
       search_params: {
-        [lifecycle.field]: stageValue,
+        [LIST_LIFECYCLE_STAGE_FIELD]: stageValue,
       },
       created_at: now,
       updated_at: now,
@@ -522,6 +532,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   visible,
   onClose,
   searchParamsRef,
+  onSearchParamsApplied,
 }) => {
   const { t } = useTranslation();
   const searchFormRef = useRef<ProFormInstance>();
@@ -930,7 +941,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⚠️ 修复：始终设置 searchParamsRef.current，即使 filteredValues 是空对象
       // 这样可以确保 handleRequest 能够正确获取搜索参数，避免时序问题
       if (searchParamsRef) {
-        searchParamsRef.current = finalSearchParams;
+        commitListPageSearchParams(searchParamsRef, finalSearchParams, onSearchParamsApplied);
         
         // 调试日志：确认 searchParamsRef 已设置
         if (process.env.NODE_ENV === 'development') {
@@ -974,7 +985,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       console.error('搜索处理失败:', error);
       messageApi.error(t('components.uniQuery.searchFailed'));
     }
-  }, [formRef, searchParamsRef, actionRef, onClose, filterEmptyValues, messageApi, columns, quickFilters, filterGroups]);
+  }, [formRef, searchParamsRef, actionRef, onClose, filterEmptyValues, messageApi, columns, quickFilters, filterGroups, onSearchParamsApplied]);
 
   /**
    * 处理重置（最佳实践：统一清空所有搜索相关状态）
@@ -991,7 +1002,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       
       // ⭐ 最佳实践：清空 searchParamsRef
       if (searchParamsRef) {
-        searchParamsRef.current = undefined;
+        commitListPageSearchParams(searchParamsRef, undefined, onSearchParamsApplied);
       }
       
       // ⭐ 筛选功能：清空筛选条件
@@ -1014,7 +1025,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     } catch (error) {
       console.error('重置失败:', error);
     }
-  }, [formRef, searchParamsRef, actionRef]);
+  }, [formRef, searchParamsRef, actionRef, onSearchParamsApplied]);
 
   /**
    * 处理保存搜索条件（最佳实践：统一空值过滤）
@@ -1184,7 +1195,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         formRef.current.setFieldsValue(emptyValues);
       }
       if (searchParamsRef) {
-        searchParamsRef.current = undefined;
+        commitListPageSearchParams(searchParamsRef, undefined, onSearchParamsApplied);
       }
       
       // ⭐ 最佳实践：等待清空完成
@@ -1210,17 +1221,17 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         }
       }
       
-      // ⭐ 最佳实践：设置到所有需要的地方
-      // 排除 _filterConfig，因为它不是搜索参数
       const searchParamsWithoutFilterConfig = { ...filteredParams };
       delete searchParamsWithoutFilterConfig._filterConfig;
       searchFormRef.current?.setFieldsValue(searchParamsWithoutFilterConfig);
       if (formRef.current) {
         formRef.current.setFieldsValue(searchParamsWithoutFilterConfig);
       }
-      if (searchParamsRef) {
-        searchParamsRef.current = searchParamsWithoutFilterConfig;
-      }
+      commitListPageSearchParams(
+        searchParamsRef,
+        searchParamsWithoutFilterConfig,
+        onSearchParamsApplied,
+      );
       
       // ⭐ 最佳实践：等待表单值更新后再触发搜索
       await new Promise<void>((resolve) => {
@@ -1242,7 +1253,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       console.error('应用搜索条件失败:', error);
       messageApi.error(t('components.uniQuery.applyFailed'));
     }
-  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues, messageApi, onClose]);
+  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues, messageApi, onClose, onSearchParamsApplied]);
   
   /**
    * 删除已保存的搜索条件
@@ -2549,6 +2560,8 @@ interface QuerySearchButtonProps {
    * 由 UniTable 在每次全量重置时递增，用于刷新钉住条件激活态（searchParamsRef 为 ref，变更不触发子组件渲染）。
    */
   pinnedSearchUiEpoch?: number;
+  /** searchParamsRef 提交后回调（UniTable 用于刷新钉住 Tab 激活态） */
+  onSearchParamsApplied?: () => void;
 }
 
 /**
@@ -2562,6 +2575,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   showReset = true,
   onReset: onResetProp,
   pinnedSearchUiEpoch = 0,
+  onSearchParamsApplied,
 }) => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -2790,39 +2804,11 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   /**
    * 修复：创建稳定的激活状态计算函数，避免无限循环
    */
-  const getSearchActiveState = useCallback((search: SavedSearch): boolean => {
-    const currentParams = searchParamsRef?.current;
-    if (!currentParams) {
-      return false;
-    }
-    const savedParams = search.search_params || {};
-    const savedKeys = Object.keys(savedParams);
-    if (savedKeys.length === 0) {
-      return false;
-    }
-
-    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
-    for (const key of savedKeys) {
-      const savedValue = savedParams[key];
-      const currentValue = currentParams[key];
-
-      // 处理数组类型的值（如多选）
-      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
-        if (savedValue.length !== currentValue.length) {
-          return false;
-        }
-        const sortedSaved = [...savedValue].sort();
-        const sortedCurrent = [...currentValue].sort();
-        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
-          return false;
-        }
-      } else if (savedValue !== currentValue) {
-        return false;
-      }
-    }
-
-    return true;
-  }, []); // 空依赖数组，确保函数引用稳定
+  const getSearchActiveState = useCallback(
+    (search: SavedSearch): boolean =>
+      arePinnedSearchParamsActive(searchParamsRef?.current, search.search_params),
+    [searchParamsRef, pinnedSearchUiEpoch],
+  );
 
   // ⚠️ 修复：使用稳定的函数计算激活状态
   const pinnedSearchActiveStates = useMemo(() => {
@@ -2886,7 +2872,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         formRef.current.setFieldsValue(emptyValues);
       }
       if (searchParamsRef) {
-        searchParamsRef.current = undefined;
+        commitListPageSearchParams(searchParamsRef, undefined, onSearchParamsApplied);
       }
       
       // ⭐ 最佳实践：等待清空完成
@@ -2898,34 +2884,28 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         });
       });
       
-      // ⭐ 最佳实践：使用统一的过滤函数
       const filteredParams = filterEmptyValues(search.search_params);
       
-      // ⭐ 最佳实践：设置到所有需要的地方
       if (formRef.current) {
         formRef.current.setFieldsValue(filteredParams);
       }
-      if (searchParamsRef) {
-        searchParamsRef.current = filteredParams;
-      }
+      commitListPageSearchParams(searchParamsRef, filteredParams, onSearchParamsApplied);
       
-      // ⭐ 最佳实践：等待表单值更新后再触发搜索
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
           setTimeout(() => {
             resolve();
-          }, 100);
+          }, 50);
         });
       });
       
-      // ⭐ 最佳实践：触发 ProTable 重新查询
       if (actionRef.current) {
         actionRef.current.reload(false);
       }
     } catch (error) {
       console.error('加载钉住的搜索条件失败:', error);
     }
-  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues]);
+  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues, onSearchParamsApplied]);
 
   /**
    * 重置所有筛选条件
@@ -2937,7 +2917,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     }
     // 清空搜索参数 ref
     if (searchParamsRef) {
-      searchParamsRef.current = undefined;
+      commitListPageSearchParams(searchParamsRef, undefined, onSearchParamsApplied);
     }
     // 重新加载表格数据
     if (actionRef.current) {
@@ -3252,6 +3232,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         visible={visible}
         onClose={() => setVisible(false)}
         searchParamsRef={searchParamsRef}
+        onSearchParamsApplied={onSearchParamsApplied}
       />
     </>
   );

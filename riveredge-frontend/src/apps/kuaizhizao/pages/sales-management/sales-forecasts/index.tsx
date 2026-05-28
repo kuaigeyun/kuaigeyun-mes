@@ -778,7 +778,7 @@ export default function SalesForecastsPage() {
     },
     {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       valueType: 'select',
       width: 108,
       align: 'left' as const,
@@ -967,9 +967,9 @@ export default function SalesForecastsPage() {
         {
           title: t('app.kuaizhizao.salesForecast.statTodayNew', '今日新增'),
           key: 'today_new_count',
-          value: statistics?.active_count ?? 0,
-          description: statistics?.active_count !== undefined && statistics?.yesterday_today_new !== undefined ? (
-            <div>今日: {statistics.active_count} {renderDOD(statistics.active_count, statistics.yesterday_today_new)}</div>
+          value: statistics?.today_new_count ?? 0,
+          description: statistics?.today_new_count !== undefined && statistics?.yesterday_today_new !== undefined ? (
+            <div>今日: {statistics.today_new_count} {renderDOD(statistics.today_new_count, statistics.yesterday_today_new)}</div>
           ) : undefined,
           valueStyle: { color: token.colorPrimary },
           backgroundChart: renderTrendChart(statistics?.trend_today_new ?? [], token.colorPrimary),

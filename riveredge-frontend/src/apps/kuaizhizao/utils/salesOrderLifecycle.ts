@@ -11,6 +11,10 @@ import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
+import {
+  resolveListLifecycleStageFromSearch,
+  toListLifecycleStageApiParams,
+} from '../../../utils/listLifecycleStage';
 
 const MAIN_STAGE_KEYS_AUDIT = [
   'draft',
@@ -250,40 +254,25 @@ export function buildSalesOrderLifecycleValueEnum(
   );
 }
 
-/** lifecycle Tab 值 → 列表 API 查询参数 */
+/** 从搜索表单 / 钉住条件解析列表筛选；仅 lifecycle_stage */
+export function resolveSalesOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+  params?: Record<string, unknown> | null,
+): { lifecycle_stage?: string } {
+  const stage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+  const normalized = stage ? normalizeStageName(stage) : '';
+  return toListLifecycleStageApiParams(normalized || undefined);
+}
+
+/** @deprecated 使用 resolveSalesOrderListLifecycleParams */
 export function mapSalesOrderLifecycleStageToApiParams(
   stage: string,
-): { status?: string; review_status?: string } {
+): { lifecycle_stage?: string } {
   const normalized = normalizeStageName(stage);
-  switch (normalized) {
-    case '草稿':
-      return { status: 'DRAFT' };
-    case '待审核':
-      return { status: 'PENDING_REVIEW' };
-    case '已审核':
-      return { status: 'AUDITED' };
-    case '已生效':
-      return { status: 'CONFIRMED' };
-    case '执行中':
-      return { status: 'IN_PROGRESS' };
-    case '发货出库':
-      return { status: 'IN_PROGRESS' };
-    case '账款发票处理':
-      return { status: 'IN_PROGRESS' };
-    case '已完成':
-      return { status: 'COMPLETED' };
-    case '已驳回':
-      return { review_status: 'REJECTED' };
-    case '已取消':
-      return { status: 'CANCELLED' };
-    case '已关闭':
-      return { status: 'CLOSED' };
-    default:
-      if (stage === '已确认') return { status: 'CONFIRMED' };
-      if (stage === '已交货') return { status: 'DELIVERED' };
-      if (stage === '账款发票') return { status: 'IN_PROGRESS' };
-      return { status: stage };
+  if (!normalized) {
+    return {};
   }
+  return { lifecycle_stage: normalized };
 }
 
 /**

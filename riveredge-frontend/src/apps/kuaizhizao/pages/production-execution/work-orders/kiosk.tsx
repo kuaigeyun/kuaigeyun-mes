@@ -623,7 +623,6 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                             type="circle"
                                                             percent={progress}
                                                             size={64}
-                                                            strokeWidth={12}
                                                             strokeColor={strokeColor}
                                                             railColor="rgba(255,255,255,0.1)"
                                                             showInfo={true}

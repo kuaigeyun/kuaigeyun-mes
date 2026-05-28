@@ -581,7 +581,7 @@ const CostCalculationPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       key: 'lifecycle',
       width: 200,
       fixed: 'right',

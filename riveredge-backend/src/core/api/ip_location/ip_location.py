@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Depends
 
-from core.utils.ip_parser import get_ip_location_detail
+from core.utils.ip_parser import get_ip_location_detail, reverse_geocode_label
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
@@ -44,3 +44,19 @@ async def get_ip_location(
     if detail:
         return detail
     return {"city": "", "region": "", "country": "", "lat": None, "lon": None}
+
+
+@router.get("/reverse")
+async def get_reverse_geocode(
+    latitude: float,
+    longitude: float,
+    language: str = "zh",
+    _user: User = Depends(get_current_user),
+):
+    """
+    按经纬度反查地名（工作台天气组件切换语言时使用）。
+
+    后端代理 Nominatim，避免浏览器 CORS 及 Open-Meteo 无 reverse 端点的问题。
+    """
+    name = await reverse_geocode_label(latitude, longitude, language=language)
+    return {"name": name or ""}

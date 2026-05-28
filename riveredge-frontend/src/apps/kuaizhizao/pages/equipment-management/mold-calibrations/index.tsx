@@ -105,7 +105,7 @@ const MoldCalibrationsPage: React.FC = () => {
     { title: '有效期至', dataIndex: 'expiry_date', valueType: 'date', width: 120 },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 132,
       fixed: 'right',
       align: 'left',

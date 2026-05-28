@@ -248,8 +248,8 @@ class DrawingService:
     @staticmethod
     async def delete_drawing(tenant_id: int, drawing_uuid: str) -> None:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
-        if (drawing.status or "") != "Draft":
-            raise ValidationError("仅草稿状态图纸可删除")
+        if (drawing.status or "") not in ("Draft", "Obsolete"):
+            raise ValidationError("仅草稿或已作废状态图纸可删除")
         drawing.deleted_at = _utcnow()
         await drawing.save()
 

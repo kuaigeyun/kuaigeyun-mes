@@ -253,7 +253,7 @@ const ProductionPlansPage: React.FC = () => {
     },
     {
       title: '生命周期',
-      dataIndex: 'lifecycle',
+      dataIndex: 'lifecycle_stage',
       width: 100,
       valueType: 'select',
       valueEnum: {
