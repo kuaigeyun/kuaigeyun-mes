@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+import re
 from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -52,6 +53,7 @@ from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
 from apps.haoligo.authorization.workflow_permissions import OUTSOURCE_COMPLETE_CREATE_PERMISSIONS
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.models.file import File as CoreFile
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
@@ -70,6 +72,9 @@ router = APIRouter(
 )
 
 _COMPLETION_TEXT_MAX = 4000
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
 
 
 def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
@@ -292,6 +297,58 @@ async def _not_found():
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
 
 
+async def _normalize_attachment_uuids_for_tenant(tenant_id: int, raw: Any) -> List[str]:
+    """
+    统一附件引用为 UUID：
+    - 保留合法 UUID 字符串
+    - 将历史遗留的 core_files.id（数字）转换为对应 UUID
+    """
+    if not raw:
+        return []
+    if not isinstance(raw, list):
+        return []
+
+    normalized: List[str] = []
+    legacy_ids: List[int] = []
+    for item in raw:
+        s = str(item or "").strip()
+        if not s:
+            continue
+        if _UUID_RE.match(s):
+            normalized.append(s.lower())
+            continue
+        if s.isdigit():
+            n = int(s)
+            if n > 0:
+                legacy_ids.append(n)
+
+    if legacy_ids:
+        rows = await CoreFile.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            id__in=legacy_ids,
+        ).values("id", "uuid")
+        uuid_by_id = {
+            int(r["id"]): str(r["uuid"]).strip().lower()
+            for r in rows
+            if str(r.get("uuid") or "").strip()
+        }
+        for legacy_id in legacy_ids:
+            mapped = uuid_by_id.get(legacy_id)
+            if mapped:
+                normalized.append(mapped)
+
+    # 去重并保持顺序
+    out: List[str] = []
+    seen = set()
+    for u in normalized:
+        if u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+    return out
+
+
 def _primary_mold(lines: List[OutsourceCompleteLineOut]) -> Optional[str]:
     if not lines:
         return None
@@ -318,15 +375,31 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
             deleted_at__isnull=True,
         ).first()
         if src_row:
-            src_header = _norm_uuid_list(list(src_row.header_attachment_file_uuids or []))
+            src_header = await _normalize_attachment_uuids_for_tenant(
+                int(tid), list(src_row.header_attachment_file_uuids or [])
+            )
             src_raw = src_row.line_items or []
+            src_lines_patched = False
             if isinstance(src_raw, list):
                 for it in src_raw:
                     if not isinstance(it, dict):
                         continue
                     mc = str(it.get("mold_code") or "").strip()
                     if mc:
-                        src_by_mold[mc] = _norm_uuid_list(it.get("attachment_file_uuids"))
+                        normalized_line_uuids = await _normalize_attachment_uuids_for_tenant(
+                            int(tid), it.get("attachment_file_uuids")
+                        )
+                        src_by_mold[mc] = normalized_line_uuids
+                        old_line_uuids = list(it.get("attachment_file_uuids") or [])
+                        if old_line_uuids != normalized_line_uuids:
+                            it["attachment_file_uuids"] = normalized_line_uuids
+                            src_lines_patched = True
+            old_header_uuids = list(src_row.header_attachment_file_uuids or [])
+            if old_header_uuids != src_header or src_lines_patched:
+                src_row.header_attachment_file_uuids = src_header
+                if src_lines_patched:
+                    src_row.line_items = src_raw
+                await src_row.save(update_fields=["header_attachment_file_uuids", "line_items", "updated_at"])
 
     tid_int = int(tid) if tid is not None else 0
     codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]

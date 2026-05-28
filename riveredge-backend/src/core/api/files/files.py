@@ -517,7 +517,6 @@ async def download_file(
 @router.get("/{uuid}/preview", response_model=FilePreviewResponse)
 async def get_file_preview(
     uuid: str,
-    _auth: object = Depends(require_access("system.file", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     for_avatar: bool = Query(False, description="头像场景：返回 128px 缩略图 URL"),
