@@ -9,27 +9,14 @@
   align-items: center;
 }
 
-/* 操作按钮基础样式：2026 柔和态 */
+/* 操作按钮：尺寸随 ProTable size="small"（Button size="small"），仅保留视觉态 */
 .ant-btn-row-action.ant-btn {
   color: var(--ant-colorText, #1e293b) !important;
-
-  /* 覆盖 Ant Design 默认固定 height（~32px），否则长文案会像「横扁条」、与「更多」药丸比例不一致 */
-  height: auto !important;
-  min-height: 0 !important;
-
-  /* 与「更多」一致：对称 padding，由内容撑高，避免上下视觉窄、左右宽 */
-  padding-block: 6px !important;
-  padding-inline: 6px !important;
-  gap: 6px !important;
   border-radius: var(--ant-border-radius, 8px) !important;
   box-shadow: none !important;
   transition:
     color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     background 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  line-height: 1.25 !important;
   font-weight: 500 !important;
   border: none !important;
   background: transparent !important;

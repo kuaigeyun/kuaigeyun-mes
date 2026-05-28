@@ -2547,9 +2547,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0;
           width: 100%;
         }
-        /* 仅压缩表身行高；表身行间线与顶栏底部框线同色 */
+        /* 表身行高/内边距由 ProTable size="small"（antd Table 密度）统一控制，勿在此覆盖 padding */
         .uni-table-container .ant-table-tbody > tr > td {
-          padding: 4px 8px !important;
           border-bottom-color: rgba(0, 0, 0, 0.12) !important;
         }
         /* scroll.x / 固定列时 rc-table 注入的测量行：折叠占位，避免表头与首行数据之间出现白缝 */

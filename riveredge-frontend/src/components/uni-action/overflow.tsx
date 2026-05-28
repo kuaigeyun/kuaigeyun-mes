@@ -282,7 +282,7 @@ export function renderRowActionsOverflow(
         }}
         trigger={['click']}
       >
-        <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
+        <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />}>
           {getMoreButtonLabel()}
         </Button>
       </Dropdown>

@@ -44,7 +44,7 @@ function rowActionToneMatchesProps(tone: ResolvedRowActionTone, props: Record<st
   return (
     props.type === tone.type &&
     !!props.danger === danger &&
-    props.size == null &&
+    props.size === 'small' &&
     props.style == null &&
     props.color === undefined &&
     props.variant === undefined
@@ -60,6 +60,7 @@ function clonePropsForRowTone(
     ...extra,
     type: tone.type,
     danger,
+    size: 'small',
     color: undefined,
     variant: undefined,
     style: undefined,
@@ -168,9 +169,6 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
       children: normalizedText,
     }) as Record<string, unknown>
     const merged = { ...(props as Record<string, unknown>), ...toneProps }
-    if (merged.size === 'small') {
-      delete merged.size
-    }
     return React.cloneElement(node as React.ReactElement<any>, merged as any)
   }
 
@@ -189,6 +187,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     }
     return (
       <Button
+        size="small"
         className={rowActionClassName(kind)}
         type={tone.type}
         danger={tone.mode === 'destructive' ? true : tone.danger}
