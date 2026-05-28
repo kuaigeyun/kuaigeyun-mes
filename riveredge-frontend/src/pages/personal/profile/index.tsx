@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid } from 'antd';
+import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid } from 'antd';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 
@@ -27,7 +27,8 @@ import {
   UpdateUserProfileData,
 } from '../../../services/userProfile';
 import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse } from '../../../services/file';
-import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../../utils/avatar';
+import { getAvatarUrl } from '../../../utils/avatar';
+import { ProfileNotionistsAvatar } from './ProfileNotionistsAvatar';
 import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
 import { apiRequest } from '../../../services/api';
 import { useGlobalStore } from '../../../stores';
@@ -442,17 +443,18 @@ const UserProfilePage: React.FC = () => {
             }}
           >
             <Space orientation="vertical" align="center" style={{ width: '100%' }}>
-              <Avatar
+              <ProfileNotionistsAvatar
                 size={120}
-                src={avatarUrl}
+                uploadedSrc={avatarUrl}
+                fullName={profileData?.full_name}
+                username={profileData?.username}
+                profileUuid={profileData?.uuid}
+                email={profileData?.email}
                 style={{
                   backgroundColor: token.colorPrimary,
-                  fontSize: getAvatarFontSize(120),
                   fontWeight: 500,
                 }}
-              >
-                {getAvatarText(profileData?.full_name, profileData?.username)}
-              </Avatar>
+              />
               <div style={{ textAlign: 'center', width: '100%' }}>
                 <Title level={4} style={{ margin: '16px 0 8px 0' }}>
                   {profileData?.full_name || profileData?.username || t('pages.personal.profile.noName')}
@@ -571,17 +573,18 @@ const UserProfilePage: React.FC = () => {
                     >
               <ProForm.Item name="avatar" label={t('pages.personal.profile.avatar')}>
                 <Space orientation="vertical" align="center">
-                  <Avatar
+                  <ProfileNotionistsAvatar
                     size={100}
-                    src={avatarUrl}
+                    uploadedSrc={avatarUrl}
+                    fullName={profileData?.full_name}
+                    username={profileData?.username}
+                    profileUuid={profileData?.uuid}
+                    email={profileData?.email}
                     style={{
                       backgroundColor: token.colorPrimary,
-                      fontSize: getAvatarFontSize(100),
                       fontWeight: 500,
                     }}
-                  >
-                    {getAvatarText(profileData?.full_name, profileData?.username)}
-                  </Avatar>
+                  />
                   <Space>
                     <Upload
                       customRequest={handleAvatarUpload}
