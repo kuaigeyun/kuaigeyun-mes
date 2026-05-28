@@ -52,7 +52,6 @@ import type { DataNode } from 'antd/es/tree';
 import {
   getRoleList,
   getRoleByUuid,
-  updateRole,
   deleteRole,
   getRoleFunctionGrants,
   replaceRoleFunctionGrants,
@@ -74,10 +73,13 @@ import {
 import { refreshCurrentUserInStore } from '../../../services/auth';
 import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
-import { PERMISSION_TEMPLATES, getPermissionUuidsByTemplate } from '../../../config/permission-modules';
-import { getMenuTree, EFFECTIVE_HOME_QUERY_KEY, type MenuTree } from '../../../services/menu';
-import { flattenMenuHomePathOptions } from '../../../utils/menuHomePathOptions';
-import { useQueryClient } from '@tanstack/react-query';
+import {
+  PERMISSION_TEMPLATES,
+  getPermissionCodesByTemplate,
+  getPermissionUuidsByTemplate,
+} from '../../../config/permission-modules';
+import { ThemedSegmented } from '../../../components/themed-segmented';
+import { getMenuTree, type MenuTree } from '../../../services/menu';
 import { useTrialRunMode } from '../../../hooks/useTrialRunMode';
 import {
   extractAppCodeFromPath,
@@ -90,7 +92,23 @@ import './roles-permissions.less';
 import {
   FunctionGrantTree,
   collectCodesFromGrantTree,
+  collectMenuExpandKeysFromGrantTree,
 } from './components/FunctionGrantTree';
+import {
+  collectGrantPickOptions,
+  filterFunctionGrantTreeDeep,
+  filterGrantTreeToSubtree,
+  type FunctionGrantFilterMode,
+} from './components/functionGrantTreeFilters';
+import {
+  collectDataAppPickOptions,
+  collectDataModulePickOptions,
+  filterDataResourceOptions,
+  permissionCodeToResourceKey,
+  type DataPermissionFilterMode,
+  type ResourceOption,
+} from './components/dataPermissionFilters';
+import { filterVisibleFieldPolicyIndexes } from './components/fieldPermissionFilters';
 
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
@@ -478,10 +496,6 @@ const RolesPermissionsPage: React.FC = () => {
   // 选中角色相关状态
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedRoleLoading, setSelectedRoleLoading] = useState(false);
-  const [roleHomePathDraft, setRoleHomePathDraft] = useState<string | undefined>();
-  const [savingRoleHome, setSavingRoleHome] = useState(false);
-  const queryClient = useQueryClient();
-
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
@@ -491,16 +505,21 @@ const RolesPermissionsPage: React.FC = () => {
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
   const [permissionSearchKeyword, setPermissionSearchKeyword] = useState('');
+  const [functionFilterMode, setFunctionFilterMode] = useState<FunctionGrantFilterMode>('all');
+  const [functionFilterMenuUuid, setFunctionFilterMenuUuid] = useState<string>('');
   const [permissionTreeExpandedKeys, setPermissionTreeExpandedKeys] = useState<React.Key[]>([]);
-  const [functionBatchApp, setFunctionBatchApp] = useState<string>('');
   const [dataPolicies, setDataPolicies] = useState<DataPermissionPolicy[]>([]);
   const [fieldPolicies, setFieldPolicies] = useState<FieldPermissionPolicy[]>([]);
   const [selectedDataResources, setSelectedDataResources] = useState<string[]>([]);
   const [dataBatchScope, setDataBatchScope] = useState<DataPermissionPolicy['scope_type']>('scope_self');
-  const [dataBatchApp, setDataBatchApp] = useState<string>('');
+  const [dataFilterMode, setDataFilterMode] = useState<DataPermissionFilterMode>('all');
+  const [dataFilterTarget, setDataFilterTarget] = useState<string>('');
+  const [dataSearchKeyword, setDataSearchKeyword] = useState('');
   const [selectedFieldIndexes, setSelectedFieldIndexes] = useState<number[]>([]);
   const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('masked');
-  const [fieldKeywordInput, setFieldKeywordInput] = useState('amount,price,customer_name');
+  const [fieldFilterMode, setFieldFilterMode] = useState<DataPermissionFilterMode>('all');
+  const [fieldFilterTarget, setFieldFilterTarget] = useState<string>('');
+  const [fieldSearchKeyword, setFieldSearchKeyword] = useState('');
   const initializedExpandRef = useRef(false);
   const grantedCodeSet = useMemo(() => new Set(grantedCodes), [grantedCodes]);
   // 角色编辑 Modal 相关状态
@@ -792,26 +811,43 @@ const RolesPermissionsPage: React.FC = () => {
     return data;
   }, []);
 
+  const functionGrantBaseTree = functionGrants?.tree ?? [];
+
+  const functionFilterPickOptions = useMemo(() => {
+    if (functionFilterMode === 'app') {
+      return collectGrantPickOptions(functionGrantBaseTree, 0, t);
+    }
+    if (functionFilterMode === 'module') {
+      return collectGrantPickOptions(functionGrantBaseTree, 1, t);
+    }
+    return [];
+  }, [functionGrantBaseTree, functionFilterMode, t]);
+
+  const filteredFunctionGrantTree = useMemo(() => {
+    if (functionFilterMode === 'all') {
+      return functionGrantBaseTree;
+    }
+    if (functionFilterMode === 'app' || functionFilterMode === 'module') {
+      if (!functionFilterMenuUuid) return [];
+      return filterGrantTreeToSubtree(functionGrantBaseTree, functionFilterMenuUuid);
+    }
+    return filterFunctionGrantTreeDeep(functionGrantBaseTree, permissionSearchKeyword, t);
+  }, [
+    functionGrantBaseTree,
+    functionFilterMode,
+    functionFilterMenuUuid,
+    permissionSearchKeyword,
+    t,
+  ]);
+
   const visibleFunctionPermissionCodes = useMemo(
-    () => collectCodesFromGrantTree(functionGrants?.tree ?? []),
-    [functionGrants]
+    () => collectCodesFromGrantTree(filteredFunctionGrantTree),
+    [filteredFunctionGrantTree]
   );
 
   const assignedFunctionPermissionCount = grantedCodes.length;
   const treeVisibleAssignedCount = functionGrants?.stats?.granted_visible_on_tree ?? 0;
   const grantedNotOnTree = functionGrants?.stats?.granted_not_on_tree ?? 0;
-
-  const functionBatchAppOptions = useMemo(() => {
-    const byApp = new Set<string>();
-    allPermissions.forEach((p) => {
-      const code = (p.code || '').trim();
-      const i = code.indexOf(':');
-      if (i > 0) byApp.add(code.slice(0, i));
-    });
-    return Array.from(byApp)
-      .sort((a, b) => a.localeCompare(b))
-      .map((app) => ({ value: app, label: getAppDisplayName(app, t, app) }));
-  }, [allPermissions, t]);
 
   const resourceLabelMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -849,17 +885,190 @@ const RolesPermissionsPage: React.FC = () => {
       });
   }, [resourceLabelMap, t]);
 
-  const dataBatchAppOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const opts: Array<{ value: string; label: string }> = [];
-    resourceOptions.forEach((item) => {
-      const app = item.value.split(':')[0] || '';
-      if (!app || seen.has(app)) return;
-      seen.add(app);
-      opts.push({ value: app, label: getAppDisplayName(app, t, app) });
-    });
-    return opts.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
-  }, [resourceOptions, t]);
+  /** 功能权限已勾选 code 推导出的数据资源键（app:resource） */
+  const grantedDataResourceKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const code of grantedCodes) {
+      const norm = normalizeFunctionPermissionCode(code);
+      if (isGenericMenuPermissionCode(norm)) continue;
+      const key = permissionCodeToResourceKey(code);
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [grantedCodes]);
+
+  /** 数据权限仅展示已授予功能权限对应的资源 */
+  const functionScopedResourceOptions = useMemo((): ResourceOption[] => {
+    if (grantedDataResourceKeys.size === 0) return [];
+    const byKey = new Map<string, ResourceOption>();
+    for (const opt of resourceOptions) {
+      const nk = normalizeResourceKey(opt.value);
+      if (grantedDataResourceKeys.has(nk)) {
+        byKey.set(nk, opt);
+      }
+    }
+    for (const key of grantedDataResourceKeys) {
+      if (byKey.has(key)) continue;
+      const [app, ...rest] = key.split(':');
+      const resource = rest.join(':');
+      const appName = getAppDisplayName(app, t, app);
+      byKey.set(key, {
+        value: key,
+        label: `${appName} / ${resource}`,
+      });
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+  }, [resourceOptions, grantedDataResourceKeys, t]);
+
+  useEffect(() => {
+    setSelectedDataResources((prev) =>
+      prev.filter((r) => grantedDataResourceKeys.has(normalizeResourceKey(r)))
+    );
+  }, [grantedDataResourceKeys]);
+
+  const dataFilterPickOptions = useMemo(() => {
+    if (dataFilterMode === 'app') {
+      return collectDataAppPickOptions(menuTree, t);
+    }
+    if (dataFilterMode === 'module') {
+      return collectDataModulePickOptions(menuTree, t);
+    }
+    return [];
+  }, [menuTree, dataFilterMode, t]);
+
+  const visibleDataResourceOptions = useMemo(
+    () =>
+      filterDataResourceOptions(
+        functionScopedResourceOptions,
+        menuTree,
+        dataFilterMode,
+        dataFilterTarget,
+        dataSearchKeyword
+      ),
+    [
+      functionScopedResourceOptions,
+      menuTree,
+      dataFilterMode,
+      dataFilterTarget,
+      dataSearchKeyword,
+    ]
+  );
+
+  const visibleDataResourceKeys = useMemo(
+    () => visibleDataResourceOptions.map((o) => o.value),
+    [visibleDataResourceOptions]
+  );
+
+  const dataPolicyByResource = useMemo(() => {
+    const map = new Map<string, DataPermissionPolicy>();
+    dataPolicies.forEach((p) => map.set(p.resource, p));
+    return map;
+  }, [dataPolicies]);
+
+  const DATA_SCOPE_OPTIONS: Array<{ value: DataPermissionPolicy['scope_type']; label: string }> = [
+    { value: 'scope_all', label: '全部' },
+    { value: 'scope_department', label: '本部门' },
+    { value: 'scope_self', label: '本人' },
+    { value: 'scope_custom', label: '自定义' },
+  ];
+
+  const FIELD_MASK_OPTIONS: Array<{ value: FieldPermissionPolicy['mask_level']; label: string }> = [
+    { value: 'full', label: '明文' },
+    { value: 'masked', label: '脱敏' },
+    { value: 'hidden', label: '隐藏' },
+  ];
+
+  const fieldResourceLabelByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    functionScopedResourceOptions.forEach((o) => map.set(normalizeResourceKey(o.value), o.label));
+    return map;
+  }, [functionScopedResourceOptions]);
+
+  const fieldFilterPickOptions = useMemo(() => {
+    if (fieldFilterMode === 'app') {
+      return collectDataAppPickOptions(menuTree, t);
+    }
+    if (fieldFilterMode === 'module') {
+      return collectDataModulePickOptions(menuTree, t);
+    }
+    return [];
+  }, [menuTree, fieldFilterMode, t]);
+
+  const visibleFieldPolicyIndexes = useMemo(
+    () =>
+      filterVisibleFieldPolicyIndexes(
+        fieldPolicies,
+        grantedDataResourceKeys,
+        fieldResourceLabelByKey,
+        menuTree,
+        fieldFilterMode,
+        fieldFilterTarget,
+        fieldSearchKeyword,
+        fieldNameDisplayLabel
+      ),
+    [
+      fieldPolicies,
+      grantedDataResourceKeys,
+      fieldResourceLabelByKey,
+      menuTree,
+      fieldFilterMode,
+      fieldFilterTarget,
+      fieldSearchKeyword,
+    ]
+  );
+
+  useEffect(() => {
+    const visible = new Set(visibleFieldPolicyIndexes);
+    setSelectedFieldIndexes((prev) => prev.filter((i) => visible.has(i)));
+  }, [visibleFieldPolicyIndexes]);
+
+  const defaultCustomPayloadForResource = (resource: string) => {
+    if (/outsource-maintenance|outsource-complete/.test(resource)) {
+      return { resolver: 'outsourced_unit' };
+    }
+    if (/molds-documents-trial|molds-reports-trial-record/.test(resource)) {
+      return { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' };
+    }
+    return undefined;
+  };
+
+  const upsertDataPolicyScope = useCallback(
+    (resource: string, scopeType: DataPermissionPolicy['scope_type']) => {
+      setDataPolicies((prev) => {
+        const idx = prev.findIndex((p) => p.resource === resource);
+        if (idx >= 0) {
+          return prev.map((p, i) => {
+            if (i !== idx) return p;
+            return {
+              ...p,
+              scope_type: scopeType,
+              scope_payload:
+                scopeType === 'scope_custom'
+                  ? p.scope_payload ?? defaultCustomPayloadForResource(resource)
+                  : undefined,
+            };
+          });
+        }
+        return [
+          ...prev,
+          {
+            uuid: `tmp-data-${Date.now()}-${resource}`,
+            role_uuid: selectedRole?.uuid || '',
+            resource,
+            scope_type: scopeType,
+            scope_payload:
+              scopeType === 'scope_custom' ? defaultCustomPayloadForResource(resource) : undefined,
+          },
+        ].sort((a, b) => a.resource.localeCompare(b.resource));
+      });
+    },
+    [selectedRole?.uuid]
+  );
+
+  const removeDataPolicy = useCallback((resource: string) => {
+    setDataPolicies((prev) => prev.filter((p) => p.resource !== resource));
+    setSelectedDataResources((prev) => prev.filter((r) => r !== resource));
+  }, []);
 
   const applyScopeToResources = useCallback(
     (resources: string[], scope: DataPermissionPolicy['scope_type']) => {
@@ -869,11 +1078,7 @@ const RolesPermissionsPage: React.FC = () => {
         resources.forEach((r) => {
           const row = map.get(r);
           const defaultCustomPayload =
-            scope === 'scope_custom' && /outsource-maintenance|outsource-complete/.test(r)
-              ? { resolver: 'outsourced_unit' }
-              : scope === 'scope_custom' && /molds-documents-trial|molds-reports-trial-record/.test(r)
-                ? { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' }
-                : undefined;
+            scope === 'scope_custom' ? defaultCustomPayloadForResource(r) : undefined;
           if (row) {
             map.set(r, {
               ...row,
@@ -910,12 +1115,18 @@ const RolesPermissionsPage: React.FC = () => {
   }, []);
 
   const applyFieldMaskByKeywords = useCallback(
-    (keywords: string[], level: FieldPermissionPolicy['mask_level']) => {
+    (
+      keywords: string[],
+      level: FieldPermissionPolicy['mask_level'],
+      scopeIndexes: number[]
+    ) => {
       const norms = keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
-      if (norms.length === 0) return 0;
+      if (norms.length === 0 || scopeIndexes.length === 0) return 0;
+      const indexSet = new Set(scopeIndexes);
       let affected = 0;
       setFieldPolicies((prev) =>
-        prev.map((item) => {
+        prev.map((item, idx) => {
+          if (!indexSet.has(idx)) return item;
           const fieldLower = (item.field_name || '').toLowerCase();
           const labelLower = (item.field_label || '').toLowerCase();
           const hit = norms.some((k) => fieldLower.includes(k) || labelLower.includes(k));
@@ -928,6 +1139,50 @@ const RolesPermissionsPage: React.FC = () => {
     },
     []
   );
+
+  const selectAllVisibleFieldPolicies = useCallback(() => {
+    setSelectedFieldIndexes(visibleFieldPolicyIndexes);
+  }, [visibleFieldPolicyIndexes]);
+
+  const clearVisibleFieldPolicies = useCallback(() => {
+    setSelectedFieldIndexes([]);
+  }, []);
+
+  const invertVisibleFieldPolicies = useCallback(() => {
+    const visible = new Set(visibleFieldPolicyIndexes);
+    setSelectedFieldIndexes((prev) => {
+      const next = prev.filter((i) => !visible.has(i));
+      visible.forEach((i) => {
+        if (!prev.includes(i)) next.push(i);
+      });
+      return next;
+    });
+  }, [visibleFieldPolicyIndexes]);
+
+  const applyFieldMaskToVisibleSelection = useCallback(() => {
+    const visible = new Set(visibleFieldPolicyIndexes);
+    const targets = selectedFieldIndexes.filter((i) => visible.has(i));
+    if (targets.length === 0) {
+      messageApi.warning(
+        t('pages.system.roles.selectFieldPolicyFirst', { defaultValue: '请先勾选要批量处理的字段策略' })
+      );
+      return;
+    }
+    const n = applyFieldMaskToIndexes(targets, fieldBatchMaskLevel);
+    messageApi.success(
+      t('pages.system.roles.fieldMaskApplied', {
+        defaultValue: '已更新 {{count}} 条字段权限',
+        count: n,
+      })
+    );
+  }, [
+    applyFieldMaskToIndexes,
+    fieldBatchMaskLevel,
+    messageApi,
+    selectedFieldIndexes,
+    t,
+    visibleFieldPolicyIndexes,
+  ]);
 
   /**
    * 应用权限模板
@@ -965,38 +1220,105 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 选择角色
    */
-  const homePathOptions = useMemo(
-    () =>
-      flattenMenuHomePathOptions(menuTree, (menuName, path) => {
-        const label = translateMenuName(menuName, t, path);
-        return `${label} (${path})`;
-      }),
-    [menuTree, t],
-  );
-
-  const handleSaveRoleHomePath = async () => {
-    if (!selectedRole || selectedRole.is_system) return;
-    try {
-      setSavingRoleHome(true);
-      const home_path = roleHomePathDraft?.trim() || null;
-      const updated = await updateRole(selectedRole.uuid, { home_path });
-      setSelectedRole(updated);
-      setRoles((prev) => prev.map((r) => (r.uuid === updated.uuid ? { ...r, ...updated } : r)));
-      void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
-      messageApi.success(t('pages.system.roles.roleHomeSaved', { defaultValue: '角色首页已保存' }));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('common.saveFailed'));
-    } finally {
-      setSavingRoleHome(false);
+  useEffect(() => {
+    if (functionFilterMode === 'search') {
+      const kw = permissionSearchKeyword.trim();
+      if (!kw || filteredFunctionGrantTree.length === 0) return;
+      setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(filteredFunctionGrantTree));
+      return;
     }
-  };
+    if (filteredFunctionGrantTree.length > 0) {
+      setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(filteredFunctionGrantTree));
+    }
+  }, [functionFilterMode, permissionSearchKeyword, filteredFunctionGrantTree]);
+
+  useEffect(() => {
+    if (functionFilterMode === 'search' || functionFilterMode === 'all') return;
+    if (functionFilterPickOptions.length === 0) {
+      setFunctionFilterMenuUuid('');
+      return;
+    }
+    if (!functionFilterPickOptions.some((o) => o.value === functionFilterMenuUuid)) {
+      setFunctionFilterMenuUuid(functionFilterPickOptions[0].value);
+    }
+  }, [functionFilterMode, functionFilterPickOptions, functionFilterMenuUuid]);
+
+  useEffect(() => {
+    if (dataFilterMode === 'search' || dataFilterMode === 'all') return;
+    if (dataFilterPickOptions.length === 0) {
+      setDataFilterTarget('');
+      return;
+    }
+    if (!dataFilterPickOptions.some((o) => o.value === dataFilterTarget)) {
+      setDataFilterTarget(dataFilterPickOptions[0].value);
+    }
+  }, [dataFilterMode, dataFilterPickOptions, dataFilterTarget]);
+
+  useEffect(() => {
+    if (fieldFilterMode === 'search' || fieldFilterMode === 'all') return;
+    if (fieldFilterPickOptions.length === 0) {
+      setFieldFilterTarget('');
+      return;
+    }
+    if (!fieldFilterPickOptions.some((o) => o.value === fieldFilterTarget)) {
+      setFieldFilterTarget(fieldFilterPickOptions[0].value);
+    }
+  }, [fieldFilterMode, fieldFilterPickOptions, fieldFilterTarget]);
+
+  const selectAllVisibleDataResources = useCallback(() => {
+    setSelectedDataResources(visibleDataResourceKeys);
+  }, [visibleDataResourceKeys]);
+
+  const clearVisibleDataResources = useCallback(() => {
+    setSelectedDataResources([]);
+  }, []);
+
+  const invertVisibleDataResources = useCallback(() => {
+    const visible = new Set(visibleDataResourceKeys);
+    setSelectedDataResources((prev) => {
+      const next = prev.filter((r) => !visible.has(r));
+      visible.forEach((r) => {
+        if (!prev.includes(r)) next.push(r);
+      });
+      return next;
+    });
+  }, [visibleDataResourceKeys]);
+
+  const applyDataScopeToVisibleSelection = useCallback(
+    (scope: DataPermissionPolicy['scope_type']) => {
+      const visible = new Set(visibleDataResourceKeys);
+      const targets = selectedDataResources.filter((r) => visible.has(r));
+      if (targets.length === 0) {
+        messageApi.warning(t('pages.system.roles.selectScopeFirst', { defaultValue: '请先选择筛选范围' }));
+        return;
+      }
+      const n = applyScopeToResources(targets, scope);
+      messageApi.success(
+        t('pages.system.roles.dataScopeApplied', {
+          defaultValue: '已对 {{count}} 条资源应用数据范围',
+          count: n,
+        })
+      );
+    },
+    [applyScopeToResources, messageApi, selectedDataResources, t, visibleDataResourceKeys]
+  );
 
   const handleSelectRole = async (role: Role) => {
     try {
       setSelectedRoleLoading(true);
+      setPermissionSearchKeyword('');
+      setFunctionFilterMode('all');
+      setFunctionFilterMenuUuid('');
+      setDataFilterMode('all');
+      setDataFilterTarget('');
+      setDataSearchKeyword('');
+      setSelectedDataResources([]);
+      setFieldFilterMode('all');
+      setFieldFilterTarget('');
+      setFieldSearchKeyword('');
+      setSelectedFieldIndexes([]);
       const detail = await getRoleByUuid(role.uuid);
       setSelectedRole(detail);
-      setRoleHomePathDraft(detail.home_path || undefined);
 
       // 并行加载三层权限数据
       initializedExpandRef.current = false;
@@ -1032,7 +1354,10 @@ const RolesPermissionsPage: React.FC = () => {
         messageApi.success(`功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项`);
       } else if (permissionLayer === 'data') {
         const payload = dataPolicies
-          .filter((x) => x.resource)
+          .filter(
+            (x) =>
+              x.resource && grantedDataResourceKeys.has(normalizeResourceKey(x.resource))
+          )
           .map((x) => ({
             resource: x.resource,
             scope_type: x.scope_type,
@@ -1049,6 +1374,7 @@ const RolesPermissionsPage: React.FC = () => {
           const resource = (x.resource || '').trim();
           const fieldName = (x.field_name || '').trim();
           if (!resource || !fieldName) return;
+          if (!grantedDataResourceKeys.has(normalizeResourceKey(resource))) return;
           const key = `${resource}::${fieldName}`;
           dedupMap.set(key, {
             resource,
@@ -1173,25 +1499,36 @@ const RolesPermissionsPage: React.FC = () => {
     });
   }, [visibleFunctionPermissionCodes]);
 
-  const selectByFunctionModule = useCallback(() => {
-    if (!functionBatchApp) return;
-    const codes = allPermissions
-      .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
-      .map((p) => normalizeFunctionPermissionCode(p.code || ''))
-      .filter(Boolean);
-    setGrantedCodes((prev) => Array.from(new Set([...prev, ...codes])));
-  }, [functionBatchApp, allPermissions]);
-
-  const clearByFunctionModule = useCallback(() => {
-    if (!functionBatchApp) return;
-    const target = new Set(
-      allPermissions
-        .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
-        .map((p) => normalizeFunctionPermissionCode(p.code || ''))
-        .filter(Boolean)
-    );
-    setGrantedCodes((prev) => prev.filter((c) => !target.has(c)));
-  }, [functionBatchApp, allPermissions]);
+  const applyFunctionTemplateToVisible = useCallback(
+    (templateKey: string) => {
+      if (!visibleFunctionPermissionCodes.length) {
+        messageApi.warning(t('pages.system.roles.selectScopeFirst', { defaultValue: '请先选择筛选范围' }));
+        return;
+      }
+      const visible = new Set(visibleFunctionPermissionCodes);
+      const templateCodes = new Set(getPermissionCodesByTemplate(templateKey, allPermissions));
+      setGrantedCodes((prev) => {
+        const kept = prev.filter((c) => !visible.has(c));
+        const next = [...kept];
+        visible.forEach((code) => {
+          if (templateCodes.has(code)) next.push(code);
+        });
+        return Array.from(new Set(next));
+      });
+      const template = PERMISSION_TEMPLATES.find((item) => item.key === templateKey);
+      const name =
+        templateKey === 'manager'
+          ? t('pages.system.roles.templateManager', { defaultValue: '管理者' })
+          : template?.name || templateKey;
+      messageApi.success(
+        t('pages.system.roles.templateAppliedToVisible', {
+          defaultValue: '已对当前范围应用「{{name}}」模板',
+          name,
+        })
+      );
+    },
+    [allPermissions, messageApi, t, visibleFunctionPermissionCodes]
+  );
 
   return (
     <>
@@ -1315,6 +1652,7 @@ const RolesPermissionsPage: React.FC = () => {
         style={{
           flex: 1,
           minWidth: 0,
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: token.colorBgContainer,
@@ -1400,41 +1738,6 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
           </div>
 
-          <div
-            style={{
-              padding: '12px 24px',
-              borderBottom: `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span style={{ fontWeight: 500, flexShrink: 0 }}>
-              {t('field.role.homePath', { defaultValue: 'UniTabs 首页' })}
-            </span>
-            <Select
-              style={{ minWidth: 320, flex: 1, maxWidth: 560 }}
-              allowClear
-              showSearch
-              placeholder={t('field.role.homePathPlaceholder', { defaultValue: '选择页面路径，留空则按全局规则' })}
-              value={roleHomePathDraft}
-              onChange={(v) => setRoleHomePathDraft(v)}
-              options={homePathOptions}
-              optionFilterProp="label"
-              disabled={selectedRole.is_system}
-            />
-            <Button
-              type="primary"
-              ghost
-              loading={savingRoleHome}
-              disabled={selectedRole.is_system}
-              onClick={() => void handleSaveRoleHomePath()}
-            >
-              {t('pages.system.roles.saveRoleHome', { defaultValue: '保存首页' })}
-            </Button>
-          </div>
-
           {/* 权限层 Tab */}
             <div style={{ padding: '16px 24px 0 24px' }}>
               <Tabs
@@ -1451,58 +1754,131 @@ const RolesPermissionsPage: React.FC = () => {
             </div>
         </div>
 
-        {/* 权限编辑区域 */}
-        <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
+        {/* 权限编辑区域：功能权限占满可滚动；数据/字段随内容高度，避免列表下方大块空白 */}
+        <div
+          className="scrollbar-like-modal"
+          style={
+            permissionLayer === 'function'
+              ? { flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }
+              : {
+                  flex: '0 1 auto',
+                  alignSelf: 'stretch',
+                  maxHeight: '100%',
+                  minHeight: 0,
+                  overflow: 'auto',
+                  padding: '24px',
+                }
+          }
+        >
             <Spin spinning={selectedRoleLoading || permissionsLoading}>
               {permissionLayer === 'function' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                    功能权限用于控制“能看/能操作哪些功能”。支持搜索、全选、全不选、反选及按模块批量授权。
+                    {t('pages.system.roles.functionGrantHint', {
+                      defaultValue:
+                        '功能权限控制可访问的菜单与操作。可选全部、按 APP（一级）、模块（二级）或搜索（三级及以上）筛选；快捷操作仅作用于当前可见范围。',
+                    })}
                   </div>
                   <Flex gap={8} wrap="wrap" align="center">
-                    <Input
-                      size="small"
-                      placeholder={t('pages.system.roles.searchPermission')}
-                      prefix={<SearchOutlined />}
-                      value={permissionSearchKeyword}
-                      onChange={(e) => setPermissionSearchKeyword(e.target.value)}
-                      allowClear
-                      style={{ width: 220 }}
+                    <ThemedSegmented
+                      surfaceBackground
+                      size="middle"
+                      value={functionFilterMode}
+                      options={[
+                        {
+                          label: t('pages.system.roles.filterAll', { defaultValue: '全部' }),
+                          value: 'all',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByApp', { defaultValue: '按 APP' }),
+                          value: 'app',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByModule', { defaultValue: '按模块' }),
+                          value: 'module',
+                        },
+                        {
+                          label: t('pages.system.roles.filterBySearch', { defaultValue: '按搜索' }),
+                          value: 'search',
+                        },
+                      ]}
+                      onChange={(value) => {
+                        setFunctionFilterMode(value as FunctionGrantFilterMode);
+                        setFunctionFilterMenuUuid('');
+                        if (value !== 'search') setPermissionSearchKeyword('');
+                      }}
                     />
-                    <Button size="small" onClick={selectAllVisibleFunctionPermissions}>
-                      全选
+                    {functionFilterMode === 'app' || functionFilterMode === 'module' ? (
+                      <Select
+                        style={{ width: 168, flex: '0 0 auto' }}
+                        value={functionFilterMenuUuid || undefined}
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder={
+                          functionFilterMode === 'app'
+                            ? t('pages.system.roles.pickAppPlaceholder', { defaultValue: '选择应用（一级）' })
+                            : t('pages.system.roles.pickModulePlaceholder', { defaultValue: '选择模块（二级）' })
+                        }
+                        options={functionFilterPickOptions}
+                        onChange={(val) => setFunctionFilterMenuUuid(val)}
+                      />
+                    ) : functionFilterMode === 'search' ? (
+                      <Input
+                        placeholder={t('pages.system.roles.searchPermission')}
+                        prefix={<SearchOutlined />}
+                        value={permissionSearchKeyword}
+                        onChange={(e) => setPermissionSearchKeyword(e.target.value)}
+                        allowClear
+                        style={{ width: 168, flex: '0 0 auto' }}
+                      />
+                    ) : null}
+                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Button type="primary" onClick={selectAllVisibleFunctionPermissions}>
+                      {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>
-                    <Button size="small" onClick={clearVisibleFunctionPermissions}>
-                      全不选
+                    <Button onClick={clearVisibleFunctionPermissions}>
+                      {t('pages.system.roles.clearAllVisible', { defaultValue: '全不选' })}
                     </Button>
-                    <Button size="small" onClick={invertVisibleFunctionPermissions}>
-                      反选
+                    <Button onClick={invertVisibleFunctionPermissions}>
+                      {t('pages.system.roles.invertVisible', { defaultValue: '反选' })}
                     </Button>
-                    <Select
-                      size="small"
-                      style={{ width: 180 }}
-                      value={functionBatchApp || undefined}
-                      allowClear
-                      placeholder="按模块权限"
-                      options={functionBatchAppOptions}
-                      onChange={(val) => setFunctionBatchApp(val || '')}
-                    />
-                    <Button size="small" onClick={selectByFunctionModule}>
-                      模块全选
+                    <Button variant="outlined" onClick={() => applyFunctionTemplateToVisible('viewer')}>
+                      {t('pages.system.roles.templateViewer', { defaultValue: '查看者' })}
                     </Button>
-                    <Button size="small" onClick={clearByFunctionModule}>
-                      模块清空
+                    <Button variant="outlined" onClick={() => applyFunctionTemplateToVisible('editor')}>
+                      {t('pages.system.roles.templateEditor', { defaultValue: '编辑者' })}
+                    </Button>
+                    <Button
+                      color="primary"
+                      variant="outlined"
+                      onClick={() => applyFunctionTemplateToVisible('manager')}
+                    >
+                      {t('pages.system.roles.templateManager', { defaultValue: '管理者' })}
                     </Button>
                   </Flex>
                   {functionGrants?.tree?.length ? (
-                    <FunctionGrantTree
-                      tree={functionGrants.tree}
-                      grantedCodes={grantedCodeSet}
-                      expandedKeys={permissionTreeExpandedKeys}
-                      onExpand={(keys) => setPermissionTreeExpandedKeys(keys)}
-                      onToggle={toggleGrantedCodes}
-                      t={t}
-                    />
+                    filteredFunctionGrantTree.length > 0 ? (
+                      <FunctionGrantTree
+                        tree={filteredFunctionGrantTree}
+                        grantedCodes={grantedCodeSet}
+                        expandedKeys={permissionTreeExpandedKeys}
+                        onExpand={(keys) => setPermissionTreeExpandedKeys(keys)}
+                        onToggle={toggleGrantedCodes}
+                        t={t}
+                      />
+                    ) : (
+                      <Empty
+                        description={
+                          functionFilterMode === 'search' && !permissionSearchKeyword.trim()
+                            ? t('pages.system.roles.searchPermissionNeedKeyword', {
+                                defaultValue: '请输入关键词搜索三级菜单及操作权限',
+                              })
+                            : t('pages.system.roles.searchPermissionEmpty', {
+                                defaultValue: '未找到匹配的权限，请尝试其他关键词',
+                              })
+                        }
+                      />
+                    )
                   ) : (
                     <Empty description="暂无功能权限树，请检查菜单与权限同步" />
                   )}
@@ -1511,268 +1887,363 @@ const RolesPermissionsPage: React.FC = () => {
               {permissionLayer === 'data' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                    数据权限用于控制“看哪些数据”。支持按资源/应用批量设置范围，减少逐条维护。
+                    {t('pages.system.roles.dataGrantHint', {
+                      defaultValue:
+                        '仅展示已在「功能权限」中勾选的业务资源。数据范围在能访问该功能的前提下生效；可用全部、按 APP、按模块或搜索在当前列表内筛选，勾选后批量设置范围并保存。',
+                    })}
                   </div>
                   <Flex gap={8} wrap="wrap" align="center">
-                    <Button size="small" onClick={() => setSelectedDataResources(dataPolicies.map((x) => x.resource))}>
-                      全选当前
+                    <ThemedSegmented
+                      surfaceBackground
+                      size="middle"
+                      value={dataFilterMode}
+                      options={[
+                        {
+                          label: t('pages.system.roles.filterAll', { defaultValue: '全部' }),
+                          value: 'all',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByApp', { defaultValue: '按 APP' }),
+                          value: 'app',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByModule', { defaultValue: '按模块' }),
+                          value: 'module',
+                        },
+                        {
+                          label: t('pages.system.roles.filterBySearch', { defaultValue: '按搜索' }),
+                          value: 'search',
+                        },
+                      ]}
+                      onChange={(value) => {
+                        setDataFilterMode(value as DataPermissionFilterMode);
+                        setDataFilterTarget('');
+                        if (value !== 'search') setDataSearchKeyword('');
+                      }}
+                    />
+                    {dataFilterMode === 'app' || dataFilterMode === 'module' ? (
+                      <Select
+                        style={{ width: 168, flex: '0 0 auto' }}
+                        value={dataFilterTarget || undefined}
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder={
+                          dataFilterMode === 'app'
+                            ? t('pages.system.roles.pickAppPlaceholder', { defaultValue: '选择应用（一级）' })
+                            : t('pages.system.roles.pickModulePlaceholder', { defaultValue: '选择模块（二级）' })
+                        }
+                        options={dataFilterPickOptions}
+                        onChange={(val) => setDataFilterTarget(val)}
+                      />
+                    ) : dataFilterMode === 'search' ? (
+                      <Input
+                        placeholder={t('pages.system.roles.searchDataResource', {
+                          defaultValue: '搜索资源名称或编码',
+                        })}
+                        prefix={<SearchOutlined />}
+                        value={dataSearchKeyword}
+                        onChange={(e) => setDataSearchKeyword(e.target.value)}
+                        allowClear
+                        style={{ width: 168, flex: '0 0 auto' }}
+                      />
+                    ) : null}
+                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Button type="primary" onClick={selectAllVisibleDataResources}>
+                      {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>
-                    <Button size="small" onClick={() => setSelectedDataResources([])}>
-                      清空选择
+                    <Button onClick={clearVisibleDataResources}>
+                      {t('pages.system.roles.clearAllVisible', { defaultValue: '全不选' })}
+                    </Button>
+                    <Button onClick={invertVisibleDataResources}>
+                      {t('pages.system.roles.invertVisible', { defaultValue: '反选' })}
                     </Button>
                     <Select
-                      size="small"
-                      style={{ width: 160 }}
+                      style={{ width: 120, flex: '0 0 auto' }}
                       value={dataBatchScope}
-                      options={[
-                        { value: 'scope_all', label: '全部' },
-                        { value: 'scope_department', label: '本部门' },
-                        { value: 'scope_self', label: '本人' },
-                        { value: 'scope_custom', label: '自定义' },
-                      ]}
+                      options={DATA_SCOPE_OPTIONS}
                       onChange={(val) => setDataBatchScope(val as DataPermissionPolicy['scope_type'])}
                     />
-                    <Button
-                      size="small"
-                      type="primary"
-                      onClick={() => {
-                        const n = applyScopeToResources(selectedDataResources, dataBatchScope);
-                        messageApi.info(`已批量更新 ${n} 条数据权限`);
-                      }}
-                    >
-                      批量应用到已选
-                    </Button>
-                    <Select
-                      size="small"
-                      style={{ width: 180 }}
-                      value={dataBatchApp || undefined}
-                      allowClear
-                      placeholder="按应用批量"
-                      options={dataBatchAppOptions}
-                      onChange={(val) => setDataBatchApp(val || '')}
-                    />
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        if (!dataBatchApp) return;
-                        const targets = resourceOptions
-                          .map((x) => x.value)
-                          .filter((x) => x.startsWith(`${dataBatchApp}:`));
-                        const n = applyScopeToResources(targets, dataBatchScope);
-                        messageApi.info(`已按应用批量更新 ${n} 条数据权限`);
-                      }}
-                    >
-                      应用到应用全部资源
+                    <Button type="primary" onClick={() => applyDataScopeToVisibleSelection(dataBatchScope)}>
+                      {t('pages.system.roles.applyScopeToSelected', { defaultValue: '应用到已选' })}
                     </Button>
                   </Flex>
-                  {dataPolicies.map((item, idx) => (
-                    <Flex key={`data-${idx}`} gap={8}>
-                      <Checkbox
-                        checked={selectedDataResources.includes(item.resource)}
-                        onChange={(e) =>
-                          setSelectedDataResources((prev) =>
-                            e.target.checked ? Array.from(new Set([...prev, item.resource])) : prev.filter((x) => x !== item.resource)
-                          )
-                        }
-                      />
-                      <Select
-                        style={{ width: 360 }}
-                        value={item.resource}
-                        showSearch
-                        options={resourceOptions}
-                        onChange={(val) =>
-                          setDataPolicies((prev) => prev.map((x, i) => (i === idx ? { ...x, resource: val } : x)))
-                        }
-                      />
-                      <Select
-                        style={{ width: 180 }}
-                        value={item.scope_type}
-                        options={[
-                          { value: 'scope_all', label: '全部' },
-                          { value: 'scope_department', label: '本部门' },
-                          { value: 'scope_self', label: '本人' },
-                          { value: 'scope_custom', label: '自定义' },
-                        ]}
-                        onChange={(val) => {
-                          const nextScope = val as DataPermissionPolicy['scope_type'];
-                          setDataPolicies((prev) =>
-                            prev.map((x, i) => {
-                              if (i !== idx) return x;
-                              const defaultCustomPayload =
-                                nextScope === 'scope_custom' &&
-                                /outsource-maintenance|outsource-complete/.test(x.resource)
-                                  ? { resolver: 'outsourced_unit' }
-                                  : nextScope === 'scope_custom' &&
-                                      /molds-documents-trial|molds-reports-trial-record/.test(x.resource)
-                                    ? { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' }
-                                    : undefined;
-                              return {
-                                ...x,
-                                scope_type: nextScope,
-                                scope_payload:
-                                  nextScope === 'scope_custom'
-                                    ? x.scope_payload ?? defaultCustomPayload
-                                    : undefined,
-                              };
-                            })
+                  {visibleDataResourceOptions.length > 0 ? (
+                      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
+                        {visibleDataResourceOptions.map((opt) => {
+                          const policy = dataPolicyByResource.get(opt.value);
+                          const scopeType = policy?.scope_type ?? 'scope_self';
+                          const configured = Boolean(policy);
+                          return (
+                            <Flex key={opt.value} gap={8} align="center" style={{ width: '100%' }}>
+                              <Checkbox
+                                checked={selectedDataResources.includes(opt.value)}
+                                onChange={(e) =>
+                                  setSelectedDataResources((prev) =>
+                                    e.target.checked
+                                      ? Array.from(new Set([...prev, opt.value]))
+                                      : prev.filter((x) => x !== opt.value)
+                                  )
+                                }
+                              />
+                              <span
+                                style={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  color: configured ? token.colorText : token.colorTextSecondary,
+                                }}
+                              >
+                                {opt.label}
+                                {!configured && (
+                                  <span style={{ marginLeft: 6, fontSize: 12, color: token.colorTextQuaternary }}>
+                                    ({t('pages.system.roles.dataNotConfigured', { defaultValue: '未配置' })})
+                                  </span>
+                                )}
+                              </span>
+                              <Select
+                                style={{ width: 140, flexShrink: 0 }}
+                                value={scopeType}
+                                options={DATA_SCOPE_OPTIONS}
+                                onChange={(val) =>
+                                  upsertDataPolicyScope(opt.value, val as DataPermissionPolicy['scope_type'])
+                                }
+                              />
+                              {configured && (
+                                <Button danger type="text" onClick={() => removeDataPolicy(opt.value)}>
+                                  {t('common.delete', { defaultValue: '删除' })}
+                                </Button>
+                              )}
+                            </Flex>
                           );
-                        }}
-                      />
-                      <Button danger onClick={() => setDataPolicies((prev) => prev.filter((_, i) => i !== idx))}>
-                        删除
-                      </Button>
-                    </Flex>
-                  ))}
-                  <Button
-                    onClick={() =>
-                      setDataPolicies((prev) => [
-                        ...prev,
-                        {
-                          uuid: `tmp-data-${Date.now()}`,
-                          role_uuid: selectedRole.uuid,
-                          resource: resourceOptions[0]?.value || '',
-                          scope_type: 'scope_self',
-                        },
-                      ])
-                    }
-                  >
-                    新增数据权限策略
-                  </Button>
+                        })}
+                      </Space>
+                  ) : (
+                    <Empty
+                      description={
+                        grantedDataResourceKeys.size === 0
+                          ? t('pages.system.roles.dataGrantNeedFunction', {
+                              defaultValue: '请先在「功能权限」中勾选至少一项，再配置数据范围',
+                            })
+                          : dataFilterMode === 'search' && !dataSearchKeyword.trim()
+                            ? t('pages.system.roles.searchDataNeedKeyword', {
+                                defaultValue: '请输入关键词搜索数据资源',
+                              })
+                            : t('pages.system.roles.searchDataEmpty', {
+                                defaultValue: '当前筛选下无匹配的数据资源',
+                              })
+                      }
+                    />
+                  )}
                 </Space>
               )}
               {permissionLayer === 'field' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                    字段权限用于控制“看见什么样子”（明文/脱敏/隐藏）。支持金额与客户名关键词批量处理。
+                    {t('pages.system.roles.fieldGrantHint', {
+                      defaultValue:
+                        '仅展示「功能权限」已授权资源下的字段策略（明文/脱敏/隐藏）。可用全部、按 APP、按模块或搜索筛选当前列表；勾选后批量设置显示方式并保存。',
+                    })}
                   </div>
                   <Flex gap={8} wrap="wrap" align="center">
-                    <Button size="small" onClick={() => setSelectedFieldIndexes(fieldPolicies.map((_, i) => i))}>
-                      全选当前
+                    <ThemedSegmented
+                      surfaceBackground
+                      size="middle"
+                      value={fieldFilterMode}
+                      options={[
+                        {
+                          label: t('pages.system.roles.filterAll', { defaultValue: '全部' }),
+                          value: 'all',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByApp', { defaultValue: '按 APP' }),
+                          value: 'app',
+                        },
+                        {
+                          label: t('pages.system.roles.filterByModule', { defaultValue: '按模块' }),
+                          value: 'module',
+                        },
+                        {
+                          label: t('pages.system.roles.filterBySearch', { defaultValue: '按搜索' }),
+                          value: 'search',
+                        },
+                      ]}
+                      onChange={(value) => {
+                        setFieldFilterMode(value as DataPermissionFilterMode);
+                        setFieldFilterTarget('');
+                        if (value !== 'search') setFieldSearchKeyword('');
+                      }}
+                    />
+                    {fieldFilterMode === 'app' || fieldFilterMode === 'module' ? (
+                      <Select
+                        style={{ width: 168, flex: '0 0 auto' }}
+                        value={fieldFilterTarget || undefined}
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder={
+                          fieldFilterMode === 'app'
+                            ? t('pages.system.roles.pickAppPlaceholder', { defaultValue: '选择应用（一级）' })
+                            : t('pages.system.roles.pickModulePlaceholder', { defaultValue: '选择模块（二级）' })
+                        }
+                        options={fieldFilterPickOptions}
+                        onChange={(val) => setFieldFilterTarget(val)}
+                      />
+                    ) : fieldFilterMode === 'search' ? (
+                      <Input
+                        placeholder={t('pages.system.roles.searchFieldPolicy', {
+                          defaultValue: '搜索资源或字段名',
+                        })}
+                        prefix={<SearchOutlined />}
+                        value={fieldSearchKeyword}
+                        onChange={(e) => setFieldSearchKeyword(e.target.value)}
+                        allowClear
+                        style={{ width: 168, flex: '0 0 auto' }}
+                      />
+                    ) : null}
+                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Button type="primary" onClick={selectAllVisibleFieldPolicies}>
+                      {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>
-                    <Button size="small" onClick={() => setSelectedFieldIndexes([])}>
-                      清空选择
+                    <Button onClick={clearVisibleFieldPolicies}>
+                      {t('pages.system.roles.clearAllVisible', { defaultValue: '全不选' })}
+                    </Button>
+                    <Button onClick={invertVisibleFieldPolicies}>
+                      {t('pages.system.roles.invertVisible', { defaultValue: '反选' })}
                     </Button>
                     <Select
-                      size="small"
-                      style={{ width: 140 }}
+                      style={{ width: 120, flex: '0 0 auto' }}
                       value={fieldBatchMaskLevel}
-                      options={[
-                        { value: 'full', label: '明文' },
-                        { value: 'masked', label: '脱敏' },
-                        { value: 'hidden', label: '隐藏' },
-                      ]}
+                      options={FIELD_MASK_OPTIONS}
                       onChange={(val) => setFieldBatchMaskLevel(val as FieldPermissionPolicy['mask_level'])}
                     />
-                    <Button
-                      size="small"
-                      type="primary"
-                      onClick={() => {
-                        const n = applyFieldMaskToIndexes(selectedFieldIndexes, fieldBatchMaskLevel);
-                        messageApi.info(`已批量更新 ${n} 条字段权限`);
-                      }}
-                    >
-                      批量应用到已选
+                    <Button type="primary" onClick={applyFieldMaskToVisibleSelection}>
+                      {t('pages.system.roles.applyFieldMaskToSelected', { defaultValue: '应用到已选' })}
                     </Button>
-                    <Input
-                      size="small"
-                      style={{ width: 280 }}
-                      value={fieldKeywordInput}
-                      onChange={(e) => setFieldKeywordInput(e.target.value)}
-                      placeholder="关键词，逗号分隔：amount,price,customer_name"
-                    />
+                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
                     <Button
-                      size="small"
-                      onClick={() => {
-                        const ks = fieldKeywordInput.split(',');
-                        const n = applyFieldMaskByKeywords(ks, fieldBatchMaskLevel);
-                        messageApi.info(`关键词匹配并更新 ${n} 条字段权限`);
-                      }}
-                    >
-                      关键词批量应用
-                    </Button>
-                    <Button
-                      size="small"
+                      variant="outlined"
                       onClick={() => {
                         const n = applyFieldMaskByKeywords(
                           ['amount', 'price', 'unit_price', 'total_amount', 'tax_amount'],
-                          'masked'
+                          'masked',
+                          visibleFieldPolicyIndexes
                         );
-                        messageApi.info(`金额模板已应用 ${n} 条`);
+                        messageApi.success(
+                          t('pages.system.roles.fieldTemplateAmountApplied', {
+                            defaultValue: '已对当前范围内 {{count}} 条金额类字段应用脱敏',
+                            count: n,
+                          })
+                        );
                       }}
                     >
-                      金额字段模板
+                      {t('pages.system.roles.fieldTemplateAmount', { defaultValue: '金额字段脱敏' })}
                     </Button>
                     <Button
-                      size="small"
+                      variant="outlined"
                       onClick={() => {
-                        const n = applyFieldMaskByKeywords(['customer_name', 'customername', 'client_name', 'clientname'], 'masked');
-                        messageApi.info(`客户名称模板已应用 ${n} 条`);
+                        const n = applyFieldMaskByKeywords(
+                          ['customer_name', 'customername', 'client_name', 'clientname'],
+                          'masked',
+                          visibleFieldPolicyIndexes
+                        );
+                        messageApi.success(
+                          t('pages.system.roles.fieldTemplateCustomerApplied', {
+                            defaultValue: '已对当前范围内 {{count}} 条客户名称字段应用脱敏',
+                            count: n,
+                          })
+                        );
                       }}
                     >
-                      客户名称模板
+                      {t('pages.system.roles.fieldTemplateCustomer', { defaultValue: '客户名称脱敏' })}
                     </Button>
                   </Flex>
-                  {fieldPolicies.map((item, idx) => (
-                    <Flex key={`field-${idx}`} gap={8}>
-                      <Checkbox
-                        checked={selectedFieldIndexes.includes(idx)}
-                        onChange={(e) =>
-                          setSelectedFieldIndexes((prev) =>
-                            e.target.checked ? Array.from(new Set([...prev, idx])) : prev.filter((x) => x !== idx)
-                          )
-                        }
-                      />
-                      <Select
-                        style={{ width: 320 }}
-                        value={item.resource}
-                        showSearch
-                        options={resourceOptions}
-                        onChange={(val) =>
-                          setFieldPolicies((prev) => prev.map((x, i) => (i === idx ? { ...x, resource: val } : x)))
-                        }
-                      />
-                      <FieldNameInput
-                        item={item}
-                        onChange={(val) =>
-                          setFieldPolicies((prev) =>
-                            prev.map((x, i) => (i === idx ? { ...x, field_name: val } : x))
-                          )
-                        }
-                      />
-                      <Select
-                        style={{ width: 160 }}
-                        value={item.mask_level}
-                        options={[
-                          { value: 'full', label: '明文' },
-                          { value: 'masked', label: '脱敏' },
-                          { value: 'hidden', label: '隐藏' },
-                        ]}
-                        onChange={(val) =>
-                          setFieldPolicies((prev) =>
-                            prev.map((x, i) => (i === idx ? { ...x, mask_level: val as FieldPermissionPolicy['mask_level'] } : x))
-                          )
-                        }
-                      />
-                      <Button danger onClick={() => setFieldPolicies((prev) => prev.filter((_, i) => i !== idx))}>
-                        删除
-                      </Button>
-                    </Flex>
-                  ))}
+                  {visibleFieldPolicyIndexes.length > 0 ? (
+                    <Space orientation="vertical" style={{ width: '100%' }} size={8}>
+                      {visibleFieldPolicyIndexes.map((idx) => {
+                        const item = fieldPolicies[idx];
+                        if (!item) return null;
+                        return (
+                          <Flex key={`field-${idx}`} gap={8} align="center" style={{ width: '100%' }}>
+                            <Checkbox
+                              checked={selectedFieldIndexes.includes(idx)}
+                              onChange={(e) =>
+                                setSelectedFieldIndexes((prev) =>
+                                  e.target.checked
+                                    ? Array.from(new Set([...prev, idx]))
+                                    : prev.filter((x) => x !== idx)
+                                )
+                              }
+                            />
+                            <Select
+                              style={{ width: 280, flexShrink: 0 }}
+                              value={item.resource}
+                              showSearch
+                              optionFilterProp="label"
+                              options={functionScopedResourceOptions}
+                              onChange={(val) =>
+                                setFieldPolicies((prev) =>
+                                  prev.map((x, i) => (i === idx ? { ...x, resource: val } : x))
+                                )
+                              }
+                            />
+                            <FieldNameInput
+                              item={item}
+                              onChange={(val) =>
+                                setFieldPolicies((prev) =>
+                                  prev.map((x, i) => (i === idx ? { ...x, field_name: val } : x))
+                                )
+                              }
+                            />
+                            <Select
+                              style={{ width: 120, flexShrink: 0 }}
+                              value={item.mask_level}
+                              options={FIELD_MASK_OPTIONS}
+                              onChange={(val) =>
+                                setFieldPolicies((prev) =>
+                                  prev.map((x, i) =>
+                                    i === idx ? { ...x, mask_level: val as FieldPermissionPolicy['mask_level'] } : x
+                                  )
+                                )
+                              }
+                            />
+                            <Button danger type="text" onClick={() => setFieldPolicies((prev) => prev.filter((_, i) => i !== idx))}>
+                              {t('common.delete', { defaultValue: '删除' })}
+                            </Button>
+                          </Flex>
+                        );
+                      })}
+                    </Space>
+                  ) : (
+                    <Empty
+                      description={
+                        grantedDataResourceKeys.size === 0
+                          ? t('pages.system.roles.fieldGrantNeedFunction', {
+                              defaultValue: '请先在「功能权限」中勾选至少一项，再配置字段显示方式',
+                            })
+                          : fieldFilterMode === 'search' && !fieldSearchKeyword.trim()
+                            ? t('pages.system.roles.searchFieldNeedKeyword', {
+                                defaultValue: '请输入关键词搜索资源或字段名',
+                              })
+                            : t('pages.system.roles.searchFieldEmpty', {
+                                defaultValue: '当前筛选下无匹配的字段策略',
+                              })
+                      }
+                    />
+                  )}
                   <Button
+                    disabled={functionScopedResourceOptions.length === 0}
                     onClick={() =>
                       setFieldPolicies((prev) => [
                         ...prev,
                         {
                           uuid: `tmp-field-${Date.now()}`,
                           role_uuid: selectedRole.uuid,
-                          resource: resourceOptions[0]?.value || '',
+                          resource: functionScopedResourceOptions[0]?.value || '',
                           field_name: '',
                           mask_level: 'full',
                         },
                       ])
                     }
                   >
-                    新增字段权限策略
+                    {t('pages.system.roles.addFieldPolicy', { defaultValue: '新增字段权限策略' })}
                   </Button>
                 </Space>
               )}

@@ -40,8 +40,12 @@ class RoleCreate(RoleBase):
         code: 角色代码（必填，1-50 字符，组织内唯一）
         description: 角色描述（可选）
         is_active: 是否启用（默认 True）
+        create_position: 是否同步创建同名同代码职位（默认 False）
     """
-    pass
+    create_position: bool = Field(
+        default=False,
+        description="是否根据角色信息同步创建职位（名称、代码、备注、启用状态一致）",
+    )
 
 
 class RoleUpdate(BaseModel):

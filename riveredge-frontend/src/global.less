@@ -892,11 +892,33 @@ code {
   font-weight: 600;
 }
 
-/* Select / TreeSelect / Cascader 等：去掉聚焦、下拉展开时的外圈光晕（保留边框高亮） */
+/* 全局：输入类控件聚焦时去掉外圈光晕（保留边框/主题色描边，与 ConfigProvider controlOutlineWidth=0 配套） */
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-outlined:focus,
+.ant-input-outlined:focus-within,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused,
+.ant-input-affix-wrapper-outlined:focus,
+.ant-input-affix-wrapper-outlined:focus-within,
+.ant-input-number:focus,
+.ant-input-number-focused,
+.ant-input-number-outlined:focus,
+.ant-input-number-outlined:focus-within,
+.ant-input-textarea-affix-wrapper-focused,
+.ant-input-textarea-affix-wrapper-outlined:focus-within,
+.ant-picker-focused,
+.ant-picker-outlined:focus,
+.ant-picker-outlined:focus-within,
+.ant-mentions-focused,
+.ant-mentions-outlined:focus-within,
 .ant-select:not(.ant-select-disabled).ant-select-focused,
 .ant-select:not(.ant-select-disabled).ant-select-open,
 .ant-select:not(.ant-select-disabled).ant-select-focused .ant-select-selector,
-.ant-select:not(.ant-select-disabled).ant-select-open .ant-select-selector {
+.ant-select:not(.ant-select-disabled).ant-select-open .ant-select-selector,
+.ant-cascader-focused .ant-select-selector,
+.ant-tree-select-focused .ant-select-selector,
+.ant-input-number-group-wrapper-outlined:focus-within {
   box-shadow: none !important;
   outline: none !important;
 }

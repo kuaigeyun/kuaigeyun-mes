@@ -89,6 +89,7 @@ class MoldTrialSheetOut(BaseModel):
     trial_user_name: Optional[str] = None
     failure_handling: Optional[str] = None
     pending_notify_user_ids: List[int] = Field(default_factory=list)
+    pending_notify_users: List["MoldTrialSupplierNotifyUserOut"] = Field(default_factory=list)
     repair_warehouse_id: Optional[int] = None
     dispatch_origin_warehouse_id: Optional[int] = None
     result_attachment_file_uuids: List[str] = Field(default_factory=list)
@@ -231,7 +232,32 @@ async def _resolve_next_trial_times(
     return 1
 
 
-def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
+async def _resolve_notify_users(
+    tenant_id: int,
+    user_ids: List[int],
+) -> List[MoldTrialSupplierNotifyUserOut]:
+    if not user_ids:
+        return []
+    rows = await User.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at=None,
+        id__in=user_ids,
+    ).values("id", "full_name", "username")
+    name_by_id = {
+        int(r["id"]): (str(r.get("full_name") or "").strip() or str(r.get("username") or "").strip())
+        for r in rows
+    }
+    return [
+        MoldTrialSupplierNotifyUserOut(id=uid, name=name_by_id[uid])
+        for uid in user_ids
+        if uid in name_by_id
+    ]
+
+
+async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
+    notify_ids = normalize_report_user_ids(row.pending_notify_user_ids)
+    notify_users = await _resolve_notify_users(row.tenant_id, notify_ids)
     return MoldTrialSheetOut(
         id=row.id,
         uuid=row.uuid,
@@ -244,7 +270,8 @@ def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         trial_user_id=row.trial_user_id,
         trial_user_name=row.trial_user_name,
         failure_handling=row.failure_handling,
-        pending_notify_user_ids=normalize_report_user_ids(row.pending_notify_user_ids),
+        pending_notify_user_ids=notify_ids,
+        pending_notify_users=notify_users,
         repair_warehouse_id=row.repair_warehouse_id,
         dispatch_origin_warehouse_id=getattr(row, "dispatch_origin_warehouse_id", None),
         result_attachment_file_uuids=list(row.result_attachment_file_uuids or []),
@@ -354,8 +381,11 @@ async def list_trial_sheets(
     )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
+    items: List[MoldTrialSheetOut] = []
+    for r in rows:
+        items.append(await _serialize(r))
     return {
-        "items": [_serialize(r) for r in rows],
+        "items": items,
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -414,7 +444,7 @@ async def create_trial_sheet(
         trial_result=body.trial_result,
         sheet_status=SHEET_STATUS_PENDING,
     )
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.get(
@@ -475,7 +505,7 @@ async def get_trial_sheet(
     if not row:
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.patch("/{row_id}", response_model=MoldTrialSheetOut, summary="更新试模单")
@@ -567,7 +597,7 @@ async def update_trial_sheet(
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.post("/{row_id}/approve", response_model=MoldTrialSheetOut, summary="审核通过试模单")
@@ -587,7 +617,7 @@ async def approve_trial_sheet(
     await row.save()
     if (row.trial_result or "").strip() == "不合格":
         await apply_trial_failure_after_save(tenant_id, row, send_notify=True)
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.post("/{row_id}/reject", response_model=MoldTrialSheetOut, summary="审核驳回试模单")
@@ -605,7 +635,7 @@ async def reject_trial_sheet(
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
     await row.save()
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.post("/{row_id}/dispatch", response_model=MoldTrialSheetOut, summary="待处理试模单发出至供应商仓")
@@ -621,7 +651,7 @@ async def dispatch_trial_sheet(
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     await dispatch_trial_pending_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.post("/{row_id}/recall", response_model=MoldTrialSheetOut, summary="已发出/立即送修试模单收回")
@@ -637,7 +667,7 @@ async def recall_trial_sheet(
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.post(
@@ -669,7 +699,10 @@ async def recall_trial_sheet_and_retrial(
         )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
-    return MoldTrialRecallRetrialOut(recalled=_serialize(row), new_sheet=_serialize(new_row))
+    return MoldTrialRecallRetrialOut(
+        recalled=await _serialize(row),
+        new_sheet=await _serialize(new_row),
+    )
 
 
 @router.post(
@@ -691,7 +724,7 @@ async def revoke_trial_sheet_approval(
     row.audited_at = None
     row.audited_by_user_id = None
     await row.save()
-    return _serialize(row)
+    return await _serialize(row)
 
 
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除试模单")

@@ -509,6 +509,9 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [recallModalLoading, setRecallModalLoading] = useState(false);
   const [trialUserPresets, setTrialUserPresets] = useState<UniUserIdSelectPreset[]>([]);
   const [pendingNotifyLabelRef] = useState(() => new Map<number, string>());
+  const [pendingNotifyPresetOptions, setPendingNotifyPresetOptions] = useState<
+    Array<{ value: number; label: string }>
+  >([]);
   const [datasetBinding, setDatasetBinding] = useState<MoldTrialDatasetBindingPayload | null>(null);
   const [bindingModalOpen, setBindingModalOpen] = useState(false);
   const [datasetSelectOptions, setDatasetSelectOptions] = useState<{ label: string; value: string }[]>([]);
@@ -531,6 +534,10 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   /** 从待启用模具创建时跳过采购订单号必填 */
   const [skipPurchaseOrder, setSkipPurchaseOrder] = useState(false);
+  const canReadMoldLedger = useMemo(
+    () => hasPermission(currentUser, buildPermissionCode('haoligo:molds-ledger', 'read')),
+    [currentUser],
+  );
 
   const loadBindingDatasetColumns = useCallback(
     async (datasetUuid: string | undefined, opts?: { silent?: boolean }) => {
@@ -1146,13 +1153,28 @@ const MoldTrialSheetsPage: React.FC = () => {
   const openSheetForm = async (record: MoldTrialSheetRow, detailOnly: boolean) => {
     try {
       const detail = await getMoldTrialSheet(record.id);
-      const ledgerMold = detail.mold_code ? await findMoldByCode(detail.mold_code) : undefined;
+      let ledgerMold: MoldRow | undefined;
+      if (canReadMoldLedger && detail.mold_code) {
+        try {
+          ledgerMold = await findMoldByCode(detail.mold_code);
+        } catch {
+          ledgerMold = undefined;
+        }
+      }
       setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(detail.id);
       setAuditSheetStatus(detail.sheet_status);
       setSkipPurchaseOrder(!String(detail.purchase_order_no ?? '').trim());
       setTrialUserPresets(buildTrialUserPresets(detail));
+      const notifyOptions = (detail.pending_notify_users || [])
+        .map((u) => ({
+          value: u.id,
+          label: u.name,
+        }))
+        .filter((x) => x.value > 0 && x.label.trim());
+      notifyOptions.forEach((o) => pendingNotifyLabelRef.set(o.value, o.label));
+      setPendingNotifyPresetOptions(notifyOptions);
       setFormInitialValues({
         purchase_order_no: detail.purchase_order_no,
         supplier_name: detail.supplier_name ?? undefined,
@@ -1388,6 +1410,11 @@ const MoldTrialSheetsPage: React.FC = () => {
     },
     [applyPendingNotifyMemoryForMoldCode, datasetBinding, messageApi],
   );
+
+  useEffect(() => {
+    if (!modalVisible || isEdit || isDetailView) return;
+    setPendingNotifyPresetOptions([]);
+  }, [isDetailView, isEdit, modalVisible]);
 
   const handleDatasetConfig = useCallback(() => {
     setBindingTestResult(null);
@@ -2049,6 +2076,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                           debounceTime={300}
                           rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
                           request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
+                          options={pendingNotifyPresetOptions}
                           fieldProps={{
                             style: { width: '100%' },
                             placeholder: '搜索并选择接收站内信的人员',

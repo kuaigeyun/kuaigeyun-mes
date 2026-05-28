@@ -3,11 +3,7 @@ import { Checkbox, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
-import {
-  extractAppCodeFromPath,
-  translateAppMenuItemName,
-  translateMenuName,
-} from '../../../../utils/menuTranslation';
+import { translateGrantMenuTitle } from './functionGrantTreeFilters';
 
 function simpleActionLabel(
   action: FunctionGrantAction,
@@ -66,18 +62,74 @@ export function collectCodesFromGrantTree(nodes: FunctionGrantMenuNode[]): strin
   return [...new Set(codes)];
 }
 
-function translateMenuTitle(node: FunctionGrantMenuNode, t: (k: string, o?: { defaultValue?: string }) => string): string {
-  const path = node.path || '';
-  if (path.startsWith('/apps/')) {
-    const normalized = path.replace(/\/$/, '');
-    const isAppRoot = /^\/apps\/[^/]+$/.test(normalized);
-    if (isAppRoot) {
-      const appCode = extractAppCodeFromPath(path);
-      if (appCode) return node.title;
-    }
-    return translateAppMenuItemName(node.title, path, t, undefined);
+function actionMatchesSearch(
+  action: FunctionGrantAction,
+  kw: string,
+  t: (key: string, opts?: { defaultValue?: string }) => string
+): boolean {
+  if ((action.code || '').toLowerCase().includes(kw)) return true;
+  if ((action.label || '').toLowerCase().includes(kw)) return true;
+  if ((action.action || '').toLowerCase().includes(kw)) return true;
+  if (simpleActionLabel(action, t).toLowerCase().includes(kw)) return true;
+  return (action.merged_codes || []).some((c) => c.toLowerCase().includes(kw));
+}
+
+function filterGrantNode(
+  node: FunctionGrantMenuNode,
+  kw: string,
+  t: (key: string, opts?: { defaultValue?: string }) => string
+): FunctionGrantMenuNode | null {
+  const titleText = translateGrantMenuTitle(node, t).toLowerCase();
+  const titleMatch =
+    titleText.includes(kw) ||
+    (node.title || '').toLowerCase().includes(kw) ||
+    (node.path || '').toLowerCase().includes(kw) ||
+    (node.resource || '').toLowerCase().includes(kw);
+
+  const matchingActions = node.actions.filter((a) => actionMatchesSearch(a, kw, t));
+  const filteredChildren = (node.children || [])
+    .map((child) => filterGrantNode(child, kw, t))
+    .filter((child): child is FunctionGrantMenuNode => child !== null);
+
+  if (titleMatch) {
+    return { ...node, children: node.children || [], actions: node.actions };
   }
-  return translateMenuName(node.title, t, path);
+  if (matchingActions.length > 0) {
+    return {
+      ...node,
+      actions: matchingActions,
+      children: filteredChildren,
+    };
+  }
+  if (filteredChildren.length > 0) {
+    return { ...node, actions: node.actions, children: filteredChildren };
+  }
+  return null;
+}
+
+/** 按菜单标题、路径、权限码、操作名筛选功能权限树（保留匹配节点的祖先路径） */
+export function filterFunctionGrantTree(
+  nodes: FunctionGrantMenuNode[],
+  keyword: string,
+  t: (key: string, opts?: { defaultValue?: string }) => string
+): FunctionGrantMenuNode[] {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) return nodes;
+  return nodes
+    .map((node) => filterGrantNode(node, kw, t))
+    .filter((node): node is FunctionGrantMenuNode => node !== null);
+}
+
+export function collectMenuExpandKeysFromGrantTree(nodes: FunctionGrantMenuNode[]): React.Key[] {
+  const keys: React.Key[] = [];
+  const walk = (list: FunctionGrantMenuNode[]) => {
+    for (const n of list) {
+      keys.push(`menu-${n.menu_uuid}`);
+      if (n.children?.length) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return keys;
 }
 
 type Props = {
@@ -106,7 +158,7 @@ export const FunctionGrantTree: React.FC<Props> = ({
 
   const antTreeData: DataNode[] = useMemo(() => {
     const mapNode = (node: FunctionGrantMenuNode): DataNode => {
-      const title = translateMenuTitle(node, t);
+      const title = translateGrantMenuTitle(node, t);
       const children = (node.children || []).map(mapNode);
       return {
         key: `menu-${node.menu_uuid}`,

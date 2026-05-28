@@ -60,4 +60,10 @@ export interface FieldConfig {
   fieldProps?: Record<string, any>;
   /** 编辑模式下禁用（如语言代码创建后不可改） */
   disabledWhenEdit?: boolean;
+  /** 仅新建时展示（编辑弹窗隐藏） */
+  createOnly?: boolean;
+  /** 表单项初始值（如 switch 默认关） */
+  initialValue?: unknown;
+  /** 当指定字段等于某值时显示本字段 */
+  visibleWhen?: { field: string; equals: unknown };
 }

@@ -14,7 +14,11 @@ from core.models.permission import Permission
 from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
 from core.models.field_permission_policy import FieldPermissionPolicy, FieldMaskLevel
 from core.models.user_role import UserRole
+from core.models.position import Position
+from core.schemas.position import PositionCreate
 from core.schemas.role import RoleCreate, RoleUpdate
+from core.services.authorization.position_service import PositionService
+from tortoise.transactions import in_transaction
 from core.services.authorization.permission_version_service import PermissionVersionService
 from core.services.authorization.permission_registry_service import PermissionRegistryService
 from core.services.authorization.permission_policy_service import PermissionPolicyService
@@ -107,24 +111,46 @@ class RoleService:
         if existing_role:
             raise ValidationError(f"角色代码 {data.code} 已存在")
         
-        # 创建角色
         role_type, external_partner_type = RoleService._normalize_role_type_pair(
             getattr(data, "role_type", None),
             getattr(data, "external_partner_type", None),
         )
         home_path = RoleService._normalize_home_path(getattr(data, "home_path", None))
-        role = await Role.create(
-            tenant_id=tenant_id,
-            name=data.name,
-            code=data.code,
-            description=data.description,
-            role_type=role_type,
-            external_partner_type=external_partner_type,
-            home_path=home_path,
-            is_active=data.is_active if data.is_active is not None else True,
-            is_system=False,  # 系统角色只能由系统创建
-        )
-        
+        create_position = bool(getattr(data, "create_position", False))
+
+        if create_position:
+            existing_position = await Position.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=True,
+            ).first()
+            if existing_position:
+                raise ValidationError(f"职位代码 {data.code} 已存在，无法同步创建职位")
+
+        async with in_transaction():
+            role = await Role.create(
+                tenant_id=tenant_id,
+                name=data.name,
+                code=data.code,
+                description=data.description,
+                role_type=role_type,
+                external_partner_type=external_partner_type,
+                home_path=home_path,
+                is_active=data.is_active if data.is_active is not None else True,
+                is_system=False,  # 系统角色只能由系统创建
+            )
+            if create_position:
+                await PositionService.create_position(
+                    tenant_id=tenant_id,
+                    data=PositionCreate(
+                        name=data.name,
+                        code=data.code,
+                        description=data.description,
+                        is_active=data.is_active if data.is_active is not None else True,
+                    ),
+                    current_user_id=current_user_id,
+                )
+
         return role
     
     @staticmethod

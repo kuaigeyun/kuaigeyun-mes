@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { ProFormSelect } from '@ant-design/pro-components';
+import { Space, Tooltip } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { MenuTree } from '../../../../services/menu';
 import { flattenMenuHomePathOptions } from '../../../../utils/menuHomePathOptions';
@@ -26,10 +28,23 @@ export const RoleHomePathSelect: React.FC<RoleHomePathSelectProps> = ({
     [menuTree, t],
   );
 
+  const labelText = t('field.role.homePath', { defaultValue: 'UniTabs 首页' });
+  const extraText = t('field.role.homePathExtra', {
+    defaultValue: '优先级高于「菜单设为主页」；未设置时依次使用菜单主页、系统工作台或系统兜底页。',
+  });
+
   return (
     <ProFormSelect
       name={name}
-      label={t('field.role.homePath', { defaultValue: 'UniTabs 首页' })}
+      colProps={{ span: 24 }}
+      label={
+        <Space size={4}>
+          <span>{labelText}</span>
+          <Tooltip title={extraText}>
+            <QuestionCircleOutlined style={{ color: 'rgba(0,0,0,0.45)', fontSize: 12, cursor: 'help' }} />
+          </Tooltip>
+        </Space>
+      }
       placeholder={t('field.role.homePathPlaceholder', { defaultValue: '选择页面路径，留空则按全局规则' })}
       allowClear
       showSearch
@@ -38,9 +53,6 @@ export const RoleHomePathSelect: React.FC<RoleHomePathSelectProps> = ({
         optionFilterProp: 'label',
         listHeight: 320,
       }}
-      extra={t('field.role.homePathExtra', {
-        defaultValue: '优先级高于「菜单设为主页」；未设置时依次使用菜单主页、系统工作台或系统兜底页。',
-      })}
     />
   );
 };

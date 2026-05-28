@@ -667,10 +667,19 @@ export default function App() {
      * 与 64px 侧栏不同宽时，inline-collapsed 用「百分比 padding」的居中在错误宽度上计算，整列会表现成贴左。 */
     const proLayoutSiderCollapsedWidth = 64;
 
+    const noFocusHalo = {
+      activeShadow: 'none',
+      errorActiveShadow: 'none',
+      warningActiveShadow: 'none',
+    } as const;
+
     return {
       algorithm,
       token: {
         ...token,
+        // 全局去掉控件聚焦外圈光晕（保留边框色变化）
+        controlOutlineWidth: 0,
+        controlOutline: 'transparent',
         // 缩小内容区边距
         paddingContentHorizontal: isSmall ? 10 : 16,
         paddingContentVertical: isSmall ? 10 : 16,
@@ -681,6 +690,18 @@ export default function App() {
       components: {
         Menu: {
           collapsedWidth: proLayoutSiderCollapsedWidth,
+        },
+        Input: noFocusHalo,
+        InputNumber: noFocusHalo,
+        Select: {
+          activeOutlineColor: 'transparent',
+        },
+        DatePicker: noFocusHalo,
+        Cascader: {
+          activeOutlineColor: 'transparent',
+        },
+        TreeSelect: {
+          activeOutlineColor: 'transparent',
         },
       },
     };

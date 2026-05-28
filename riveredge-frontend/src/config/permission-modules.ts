@@ -72,38 +72,62 @@ export const PERMISSION_TEMPLATES: Array<{
   description?: string;
   codes: string[];
 }> = [
-  { key: 'viewer', name: '查看者', description: '仅有查看权限（read）', codes: [] },
+  { key: 'viewer', name: '查看者', description: '仅有查看权限（read/view/list/query/detail）', codes: [] },
   { key: 'editor', name: '编辑者', description: '查看 + 创建 + 更新', codes: [] },
   { key: 'admin', name: '管理员', description: '全部权限', codes: [] },
 ];
+
+function permissionMatchesTemplateKey(code: string, templateKey: string): boolean {
+  if (templateKey === 'admin' || templateKey === 'manager') {
+    return true;
+  }
+  if (templateKey === 'viewer') {
+    return (
+      code.endsWith(':read') ||
+      code.endsWith(':view') ||
+      code.endsWith(':list') ||
+      code.endsWith(':query') ||
+      code.endsWith(':detail')
+    );
+  }
+  if (templateKey === 'editor') {
+    return (
+      code.endsWith(':read') ||
+      code.endsWith(':view') ||
+      code.endsWith(':list') ||
+      code.endsWith(':query') ||
+      code.endsWith(':detail') ||
+      code.endsWith(':create') ||
+      code.endsWith(':update')
+    );
+  }
+  const template = PERMISSION_TEMPLATES.find((item) => item.key === templateKey);
+  if (!template) return false;
+  return template.codes.some((c) => code === c || code.startsWith(c));
+}
+
+/** 按模板返回权限 code 列表（功能权限勾选使用 code 真源） */
+export function getPermissionCodesByTemplate(
+  templateKey: string,
+  allPermissions: Array<{ code: string }>
+): string[] {
+  const normalized = allPermissions
+    .map((p) => (p.code || '').trim().toLowerCase())
+    .filter(Boolean);
+  if (templateKey === 'admin' || templateKey === 'manager') {
+    return [...new Set(normalized)];
+  }
+  return [...new Set(normalized.filter((code) => permissionMatchesTemplateKey(code, templateKey)))];
+}
 
 export function getPermissionUuidsByTemplate(
   templateKey: string,
   allPermissions: Array<{ uuid: string; code: string }>
 ): string[] {
-  const template = PERMISSION_TEMPLATES.find((t) => t.key === templateKey);
+  const template = PERMISSION_TEMPLATES.find((item) => item.key === templateKey);
   if (!template) return [];
-  if (templateKey === 'admin') {
-    return allPermissions.map((p) => p.uuid);
-  }
-  if (templateKey === 'viewer') {
-    return allPermissions
-      .filter((p) => p.code.endsWith(':read') || p.code.endsWith(':view'))
-      .map((p) => p.uuid);
-  }
-  if (templateKey === 'editor') {
-    return allPermissions
-      .filter(
-        (p) =>
-          p.code.endsWith(':read') ||
-          p.code.endsWith(':view') ||
-          p.code.endsWith(':create') ||
-          p.code.endsWith(':update')
-      )
-      .map((p) => p.uuid);
-  }
   return allPermissions
-    .filter((p) => template.codes.some((c) => p.code === c || p.code.startsWith(c)))
+    .filter((p) => permissionMatchesTemplateKey((p.code || '').trim().toLowerCase(), templateKey))
     .map((p) => p.uuid);
 }
 

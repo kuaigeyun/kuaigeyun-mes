@@ -56,7 +56,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true, role_type: 'internal' });
+    formRef.current?.setFieldsValue({
+      is_active: true,
+      role_type: 'internal',
+      create_position: false,
+    });
     if (!editUuid) return;
     getRoleByUuid(editUuid)
       .then((detail: Role) => {
@@ -89,12 +93,18 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       if (payload.home_path === undefined || payload.home_path === '') {
         payload.home_path = null;
       }
+      const createPosition = Boolean(payload.create_position);
+      delete payload.create_position;
       if (isEdit && editUuid) {
         await updateRole(editUuid, payload as UpdateRoleData);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
-        await createRole(payload as CreateRoleData);
-        messageApi.success(t('pages.system.createSuccess'));
+        await createRole({ ...payload, create_position: createPosition } as CreateRoleData);
+        messageApi.success(
+          createPosition
+            ? t('field.role.createSuccessWithPosition')
+            : t('pages.system.createSuccess'),
+        );
       }
       void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
       onClose();
@@ -122,11 +132,20 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       loading={formLoading}
       width={MODAL_CONFIG.SMALL_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
-      initialValues={{ is_active: true }}
+      initialValues={{ is_active: true, role_type: 'internal', create_position: false }}
       layout="vertical"
+      grid
+      onValuesChange={(changed) => {
+        if ('role_type' in changed && changed.role_type !== 'external') {
+          formRef.current?.setFieldsValue({ external_partner_type: undefined });
+        }
+      }}
     >
-      <SchemaFormRenderer schema={roleFormSchema} isEdit={isEdit} />
-      <RoleHomePathSelect menuTree={menuTree} />
+      <SchemaFormRenderer
+        schema={roleFormSchema}
+        isEdit={isEdit}
+        slots={{ homePath: <RoleHomePathSelect menuTree={menuTree} /> }}
+      />
     </FormModalTemplate>
   );
 };

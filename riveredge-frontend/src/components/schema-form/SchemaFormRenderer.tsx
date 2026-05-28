@@ -19,6 +19,7 @@ import {
   ProFormTreeSelect,
   ProFormRadio,
   ProFormField,
+  ProFormDependency,
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../uni-dropdown';
 import type { QuickCreateConfig, AdvancedSearchConfig } from '../uni-dropdown';
@@ -92,9 +93,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
     return labelText;
   };
 
-  return (
-    <>
-      {schema.map((field) => {
+  const renderField = (field: FieldConfig): React.ReactNode => {
         if (field.type === 'slot' && field.slotKey) {
           const slotContent = slots[field.slotKey];
           return slotContent ? <React.Fragment key={field.name}>{slotContent}</React.Fragment> : null;
@@ -239,7 +238,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               label={label}
               colProps={{ span: colSpan }}
               extra={extraContent}
-              initialValue={true}
+              initialValue={field.initialValue !== undefined ? field.initialValue : true}
             />
           );
         }
@@ -303,6 +302,24 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
             fieldProps={textFieldProps}
             extra={undefined}
           />
+        );
+  };
+
+  return (
+    <>
+      {schema.map((field) => {
+        if (field.createOnly && isEdit) {
+          return null;
+        }
+        const element = renderField(field);
+        if (!field.visibleWhen) {
+          return element;
+        }
+        const { field: depField, equals } = field.visibleWhen;
+        return (
+          <ProFormDependency key={field.name} name={[depField]}>
+            {(deps) => (deps[depField] === equals ? element : null)}
+          </ProFormDependency>
         );
       })}
     </>

@@ -1238,6 +1238,7 @@ export interface MoldTrialSheetRow {
   trial_user_name?: string | null;
   failure_handling?: string | null;
   pending_notify_user_ids?: number[];
+  pending_notify_users?: Array<{ id: number; name: string }>;
   repair_warehouse_id?: number | null;
   dispatch_origin_warehouse_id?: number | null;
   result_attachment_file_uuids: string[];

@@ -85,6 +85,8 @@ export interface CreateRoleData {
   external_partner_type?: 'customer' | 'supplier';
   is_active?: boolean;
   home_path?: string | null;
+  /** 是否同步创建同名同代码职位 */
+  create_position?: boolean;
 }
 
 /**
