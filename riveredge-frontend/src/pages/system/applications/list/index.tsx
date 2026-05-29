@@ -75,7 +75,6 @@ import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOver
 /** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
 const OTHER_PLACEHOLDER_CODES = [
   'kuaicrm',
-  'kuaiplm',
   'kuaisrm',
   'kuaiasms',
   'kuaitms',
@@ -104,12 +103,12 @@ const INDUSTRY_VALUE_PACK_CODES = [
   'kuaisemiconductor',
 ];
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 通用应用保持现有编号（不变）
+  // 通用应用
+  kuaiplm: 25,
   kuaicaiwu: 40,
   kuaireport: 46,
   // 其他类：从 100 开始
   kuaicrm: 100,
-  kuaiplm: 101,
   kuaisrm: 102,
   kuaiasms: 103,
   kuaitms: 104,
@@ -151,7 +150,6 @@ const PRO_KNOWN_CODES = [
   'kuaiai',
   'bi',
   'kuaicrm',
-  'kuaiplm',
   'kuaisrm',
   ...INDUSTRY_VALUE_PACK_CODES,
   ...OTHER_PLACEHOLDER_CODES,
@@ -1446,8 +1444,8 @@ const ApplicationListPage: React.FC = () => {
             }}
           >
             {(() => {
-              const isPro = application.is_pro || ['bi', 'kuaiiot', 'kuaiai', 'kuaicrm', 'kuaiplm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code);
-              const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaicaiwu', 'kuaireport'].includes(application.code);
+              const isPro = application.is_pro || ['bi', 'kuaiiot', 'kuaiai', 'kuaicrm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code);
+              const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaiplm', 'kuaicaiwu', 'kuaireport'].includes(application.code);
 
               return (
                 <>
@@ -1845,19 +1843,6 @@ const ApplicationListPage: React.FC = () => {
                   is_active: false,
                   is_system: false,
                   sort_order: 100,
-                  version: 'Beta',
-                },
-                {
-                  uuid: 'placeholder-kuaiplm',
-                  code: 'kuaiplm',
-                  name: '快研发',
-                  description: '新一代产品全生命周期管理系统，敬请期待',
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 101,
                   version: 'Beta',
                 },
                 {

@@ -1,0 +1,160 @@
+{
+  "code": "kuaiplm",
+  "name": "快研发",
+  "version": "1.0.0",
+  "description": "研发项目、NPI 阶段门、设计变更与知识中心",
+  "icon": "experiment",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaiplm/index.tsx",
+  "route_path": "/apps/kuaiplm",
+  "is_pro": false,
+  "sort_order": 25,
+  "menu_config": {
+    "title": "app.kuaiplm.name",
+    "icon": "experiment",
+    "path": "/apps/kuaiplm",
+    "permission": "kuaiplm:entry:read",
+    "children": [
+      {
+        "title": "app.kuaiplm.menu.group.project-center",
+        "icon": "project",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaiplm.menu.dashboard",
+            "path": "/apps/kuaiplm/dashboard",
+            "permission": "kuaiplm:dashboard:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiplm.menu.rd-projects",
+            "path": "/apps/kuaiplm/rd-projects",
+            "permission": "kuaiplm:project:read",
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "title": "app.kuaiplm.menu.engineering-data",
+        "icon": "workflow",
+        "sort_order": 2,
+        "meta": {
+          "menu_takeover": "master-data-process"
+        },
+        "children": [
+          {
+            "title": "app.kuaiplm.menu.change-management",
+            "path": "/apps/kuaiplm/change-management",
+            "permission": "kuaiplm:change:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.process.defect-types",
+            "path": "/apps/master-data/process/defect-types",
+            "permission": "master-data:process:defect-type:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.process.operations",
+            "path": "/apps/master-data/process/operations",
+            "permission": "master-data:process:operation:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.process.routes",
+            "path": "/apps/master-data/process/routes",
+            "permission": "master-data:process:route:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.master-data.menu.process.drawings",
+            "path": "/apps/master-data/process/drawings",
+            "permission": "master-data:process:drawing:read",
+            "sort_order": 5
+          },
+          {
+            "title": "app.master-data.menu.process.engineering-bom",
+            "path": "/apps/master-data/process/engineering-bom",
+            "permission": "master-data:process:engineering-bom:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.master-data.menu.process.sop",
+            "path": "/apps/master-data/process/sop",
+            "permission": "master-data:process:sop:read",
+            "sort_order": 7
+          }
+        ]
+      },
+      {
+        "title": "app.kuaiplm.menu.phase2",
+        "icon": "users",
+        "sort_order": 3,
+        "children": [
+          {
+            "title": "app.kuaiplm.menu.phase2.requirements",
+            "path": "/apps/kuaiplm/phase2/requirements",
+            "permission": "kuaiplm:requirement:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiplm.menu.phase2.design-reviews",
+            "path": "/apps/kuaiplm/phase2/design-reviews",
+            "permission": "kuaiplm:design-review:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiplm.menu.phase2.fmea",
+            "path": "/apps/kuaiplm/phase2/fmea",
+            "permission": "kuaiplm:fmea:read",
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.kuaiplm.menu.knowledge-center",
+        "icon": "bookOpen",
+        "sort_order": 4,
+        "children": [
+          {
+            "title": "app.kuaiplm.menu.knowledge-base",
+            "path": "/apps/kuaiplm/knowledge-base",
+            "permission": "kuaiplm:knowledge:read",
+            "sort_order": 1
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaiplm:dashboard:read",
+    "kuaiplm:project:read",
+    "kuaiplm:project:create",
+    "kuaiplm:project:update",
+    "kuaiplm:project:delete",
+    "kuaiplm:project:export",
+    "kuaiplm:change:read",
+    "kuaiplm:change:approve",
+    "kuaiplm:change:execute",
+    "kuaiplm:knowledge:read",
+    "kuaiplm:knowledge:create",
+    "kuaiplm:knowledge:update",
+    "kuaiplm:knowledge:delete",
+    "kuaiplm:requirement:read",
+    "kuaiplm:requirement:create",
+    "kuaiplm:requirement:update",
+    "kuaiplm:requirement:delete",
+    "kuaiplm:design-review:read",
+    "kuaiplm:design-review:create",
+    "kuaiplm:design-review:update",
+    "kuaiplm:design-review:delete",
+    "kuaiplm:fmea:read",
+    "kuaiplm:fmea:create",
+    "kuaiplm:fmea:update",
+    "kuaiplm:fmea:delete"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

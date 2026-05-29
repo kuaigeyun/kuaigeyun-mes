@@ -365,7 +365,7 @@ class ApplicationRegistryService:
         """
         registered_routes = []
         # 在 main.py 中已静态注册的应用，此处跳过避免重复注册
-        statically_registered_apps = {"master-data", "kuaireport", "kuaizhizao"}
+        statically_registered_apps = {"master-data", "kuaireport", "kuaizhizao", "kuaiplm"}
 
         for app in apps:
             app_code = app['code']

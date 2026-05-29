@@ -825,6 +825,32 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     ruleCode: 'OUTSOURCE_WORK_ORDER_CODE',
     allowManualEdit: true,
   },
+
+  // ==================== 快研发 APP ====================
+  {
+    pageCode: 'kuaiplm-rd-project',
+    pageName: '研发项目',
+    pagePath: '/apps/kuaiplm/rd-projects',
+    codeField: 'project_code',
+    codeFieldLabel: '项目编号',
+    module: '快研发',
+    moduleIcon: 'experiment',
+    autoGenerate: true,
+    ruleCode: 'RD_PROJECT_CODE',
+    allowManualEdit: true,
+  },
+  {
+    pageCode: 'kuaiplm-delivery-project',
+    pageName: '交付项目',
+    pagePath: '/apps/kuaiplm/rd-projects',
+    codeField: 'project_code',
+    codeFieldLabel: '项目编号',
+    module: '快研发',
+    moduleIcon: 'experiment',
+    autoGenerate: true,
+    ruleCode: 'DELIVERY_PROJECT_CODE',
+    allowManualEdit: true,
+  },
 ];
 
 /**

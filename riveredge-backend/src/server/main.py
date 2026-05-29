@@ -839,6 +839,12 @@ try:
     app.include_router(kuaizhizao_router, prefix="/api/v1/apps/kuaizhizao")
 except ImportError as e:
     logger.warning(f"⚠️ 无法加载 kuaizhizao 路由: {e}")
+# kuaiplm：快研发（研发项目 / NPI / 变更 / 知识库）— 与 kuaizhizao 同级静态挂载
+try:
+    from apps.kuaiplm.api.router import router as kuaiplm_router
+    app.include_router(kuaiplm_router, prefix="/api/v1/apps/kuaiplm")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法加载 kuaiplm 路由: {e}")
 # haoligo：好力GO（客户专用应用）— 与 master-data / kuaizhizao 同级静态挂载
 try:
     from apps.haoligo.api.router import router as haoligo_router

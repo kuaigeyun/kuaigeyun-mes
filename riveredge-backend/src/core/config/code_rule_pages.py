@@ -87,6 +87,8 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-finance-payable": "PY",              # 应付
     "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
     "kuaicaiwu-finance-settlement": "HX",           # 核销
+    "kuaiplm-rd-project": "YFXM",                   # 研发项目
+    "kuaiplm-delivery-project": "JFXM",             # 交付项目
 }
 
 # 页面配置数据结构
@@ -1228,6 +1230,31 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "PARTNER_STATEMENT_CODE",
         "allow_manual_edit": True,
     },
+    # ==================== 快研发 APP ====================
+    {
+        "page_code": "kuaiplm-rd-project",
+        "page_name": "研发项目",
+        "page_path": "/apps/kuaiplm/rd-projects",
+        "code_field": "project_code",
+        "code_field_label": "项目编码",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "RD_PROJECT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaiplm-delivery-project",
+        "page_name": "交付项目",
+        "page_path": "/apps/kuaiplm/rd-projects",
+        "code_field": "project_code",
+        "code_field_label": "项目编码",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "DELIVERY_PROJECT_CODE",
+        "allow_manual_edit": True,
+    },
 ]
 
 
@@ -1378,5 +1405,9 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     ),
     "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
     "kuaizhizao-sales-order": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
+    "RD_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
+    "kuaiplm-rd-project": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
+    "DELIVERY_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
+    "kuaiplm-delivery-project": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
 }
 

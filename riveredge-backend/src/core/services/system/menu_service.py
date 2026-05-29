@@ -1318,6 +1318,10 @@ class MenuService:
             except Exception as e:
                 logger.warning(f"菜单同步后权限同步失败: {e}")
 
+        if app and app.get("code"):
+            from core.services.system.menu_takeover_service import MenuTakeoverService
+            await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, str(app["code"]))
+
         return created_count
 
     @staticmethod

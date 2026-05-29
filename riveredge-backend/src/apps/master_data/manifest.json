@@ -135,6 +135,9 @@
         "path": "/apps/master-data/process",
         "permission": "master-data:process:read",
         "sort_order": 4,
+        "meta": {
+          "takeover_by": "kuaiplm"
+        },
         "children": [
           {
             "title": "app.master-data.menu.process.defect-types",

@@ -2,6 +2,7 @@
 
 .uni-lifecycle-stepper,
 .uni-lifecycle {
+  overflow: visible;
   /* 柔和薄荷绿：基于主题 success 与画布底色混合 */
   --uni-lc-done-solid: color-mix(in srgb, var(--ant-color-success) 62%, var(--ant-color-bg-container));
   --uni-lc-done-label: color-mix(in srgb, var(--ant-color-success) 34%, var(--ant-color-text));
@@ -40,6 +41,20 @@
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
+}
+
+.uni-lifecycle-stepper__step--clickable {
+  overflow: visible;
+}
+
+.uni-lifecycle-stepper__step--clickable:hover .uni-lifecycle-stepper__node {
+  transform: scale(1.06);
+}
+
+.uni-lifecycle-stepper__step--clickable:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .uni-lifecycle-stepper__next {

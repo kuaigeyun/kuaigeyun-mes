@@ -673,6 +673,12 @@ class ApplicationService:
         application['is_installed'] = False
         application['is_active'] = False
 
+        app_code = str(application.get("code") or "")
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+        await MenuTakeoverService.sync_for_application_lifecycle(
+            tenant_id, app_code, enabled=False
+        )
+
         # 自动删除关联菜单（软删除）
         from core.models.menu import Menu
         await Menu.filter(
@@ -748,6 +754,11 @@ class ApplicationService:
                 await conn.execute(menu_update_query, tenant_id, str(uuid))
             finally:
                 await conn.close()
+
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+        await MenuTakeoverService.sync_for_application_lifecycle(
+            tenant_id, app_code, enabled=True
+        )
         
         return application
     
@@ -797,6 +808,11 @@ class ApplicationService:
             await conn.execute(menu_update_query, tenant_id, str(uuid))
         finally:
             await conn.close()
+
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+        await MenuTakeoverService.sync_for_application_lifecycle(
+            tenant_id, str(application.get("code") or ""), enabled=False
+        )
         
         return application
     

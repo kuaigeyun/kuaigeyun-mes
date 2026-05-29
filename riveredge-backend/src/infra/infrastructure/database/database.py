@@ -281,6 +281,10 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.partner_statement",  # 往来对账单
                 "apps.kuaicaiwu.models.accounting_event",  # 会计事件链路
                 "apps.kuaicaiwu.models.standard_cost",  # 标准成本
+                # 快研发 kuaiplm
+                "apps.kuaiplm.models.rd_project",
+                "apps.kuaiplm.models.knowledge_base",
+                "apps.kuaiplm.models.phase2",
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型

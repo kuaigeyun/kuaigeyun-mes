@@ -12,6 +12,7 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
+import { removeCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
 import {
   useConfigStore,
   resolveEffectiveHomePath,
@@ -378,6 +379,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 移除标签
    */
   const removeTab = useCallback((targetKey: string) => {
+    removeCustomPageTitle(targetKey);
     setTabs((prevTabs) => {
       const newTabs = prevTabs.filter((tab) => tab.key !== targetKey);
       return newTabs;
@@ -520,6 +522,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const handleUpdateTabTitle = (event: CustomEvent<{ key?: string; path?: string; title: string }>) => {
       const { key, path, title } = event.detail;
       if (!title) return;
+
+      if (key) setCustomPageTitle(key, title);
+      if (path) setCustomPageTitle(path, title);
 
       setTabs((prevTabs) => {
         return prevTabs.map((tab) => {

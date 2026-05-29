@@ -16,6 +16,8 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
   approveSalesOrderChange,
   createSalesOrderChangeFromOrder,
@@ -59,6 +61,13 @@ const SalesOrderChangesPage: React.FC = () => {
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewSalesOrderChangeImpact>> | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
+
+  const openCreate = useCallback(() => {
+    setSelectedSourceOrder(null);
+    setCreateReason('订单变更');
+    setCreateOpen(true);
+  }, []);
+  useNewShortcut(openCreate);
 
   const openDetail = async (record: SalesOrderChange) => {
     const full = await getSalesOrderChange(record.id!);
@@ -239,13 +248,9 @@ const SalesOrderChangesPage: React.FC = () => {
             key="create"
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => {
-              setSelectedSourceOrder(null);
-              setCreateReason('订单变更');
-              setCreateOpen(true);
-            }}
+            onClick={openCreate}
           >
-            选单创建
+            {'选单创建' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
       />

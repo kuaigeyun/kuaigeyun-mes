@@ -459,9 +459,188 @@ async def list_process_routes(
     return ProcessRouteListResponse(data=items, total=total)
 
 
+# ==================== 工艺路线变更管理相关接口 ====================
+# 列表使用 /route-change-records，避免 GET /routes/changes 与 /routes/{process_route_uuid} 冲突
+
+@router.get("/route-change-records", response_model=ProcessRouteChangeListResponse, summary="List process route change records")
+async def list_route_change_records(
+    process_route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选条件）"),
+    change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
+    status: Optional[str] = Query(None, description="变更状态（筛选条件）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
+):
+    """获取工艺路线变更记录列表（推荐路径，不与 /routes/{process_route_uuid} 冲突）"""
+    try:
+        return await ProcessRouteChangeService.list_changes(
+            tenant_id=tenant_id,
+            process_route_uuid=process_route_uuid,
+            change_type=change_type,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取变更记录列表失败: {str(e)}",
+        )
+
+
+@router.post("/routes/changes", response_model=ProcessRouteChangeResponse, summary="Create process route change record")
+async def create_process_route_change(
+    data: ProcessRouteChangeCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建工艺路线变更记录
+    
+    - **process_route_uuid**: 工艺路线UUID（必填）
+    - **change_type**: 变更类型（operation_change:工序变更, time_change:标准工时变更, sop_change:SOP变更, other:其他）
+    - **change_content**: 变更内容（JSON格式，可选）
+    - **change_reason**: 变更原因（可选）
+    - **change_impact**: 变更影响分析（JSON格式，可选）
+    - **status**: 变更状态（默认：pending）
+    - **approval_comment**: 审批意见（可选）
+    """
+    try:
+        return await ProcessRouteChangeService.create_change(tenant_id, data, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/routes/changes", response_model=ProcessRouteChangeListResponse, summary="List process route change records")
+async def list_process_route_changes(
+    process_route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选条件）"),
+    change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
+    status: Optional[str] = Query(None, description="变更状态（筛选条件）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    获取工艺路线变更记录列表
+    
+    支持按工艺路线、变更类型、状态筛选和搜索。
+    """
+    try:
+        return await ProcessRouteChangeService.list_changes(
+            tenant_id=tenant_id,
+            process_route_uuid=process_route_uuid,
+            change_type=change_type,
+            status=status,
+            page=page,
+            page_size=page_size
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取变更记录列表失败: {str(e)}"
+        )
+
+
+@router.get("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Get process route change record")
+async def get_process_route_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取工艺路线变更记录详情
+    """
+    try:
+        return await ProcessRouteChangeService.get_change_by_uuid(tenant_id, change_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Update process route change record")
+async def update_process_route_change(
+    change_uuid: str,
+    data: ProcessRouteChangeUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新工艺路线变更记录
+    """
+    try:
+        return await ProcessRouteChangeService.update_change(tenant_id, change_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/routes/changes/{change_uuid}/approve", response_model=ProcessRouteChangeResponse, summary="Approve process route change record")
+async def approve_process_route_change(
+    change_uuid: str,
+    approved: bool = Query(..., description="是否同意（true:同意, false:拒绝）"),
+    approval_comment: Optional[str] = Query(None, description="审批意见（可选）"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    审批工艺路线变更记录
+    
+    - **change_uuid**: 变更记录UUID
+    - **approved**: 是否同意（true:同意, false:拒绝）
+    - **approval_comment**: 审批意见（可选）
+    """
+    try:
+        return await ProcessRouteChangeService.approve_change(
+            tenant_id, change_uuid, current_user.id, approved, approval_comment
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/routes/changes/{change_uuid}/execute", response_model=ProcessRouteChangeResponse, summary="Execute process route change record")
+async def execute_process_route_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    执行工艺路线变更记录
+    
+    将已审批的变更记录应用到工艺路线，创建新版本。
+    """
+    try:
+        return await ProcessRouteChangeService.execute_change(tenant_id, change_uuid, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/routes/changes/{change_uuid}", summary="Delete process route change record")
+async def delete_process_route_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除工艺路线变更记录（软删除）
+    """
+    try:
+        await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
+        return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.get("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="Get process route")
 async def get_process_route(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
@@ -471,14 +650,14 @@ async def get_process_route(
     - **process_route_uuid**: 工艺路线UUID
     """
     try:
-        return await ProcessService.get_process_route_by_uuid(tenant_id, process_route_uuid)
+        return await ProcessService.get_process_route_by_uuid(tenant_id, str(process_route_uuid))
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="Update process route")
 async def update_process_route(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     data: ProcessRouteUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
@@ -494,7 +673,7 @@ async def update_process_route(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.update_process_route(tenant_id, process_route_uuid, data)
+        return await ProcessService.update_process_route(tenant_id, str(process_route_uuid), data)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -503,7 +682,7 @@ async def update_process_route(
 
 @router.delete("/routes/{process_route_uuid}", summary="Delete process route")
 async def delete_process_route(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
@@ -513,7 +692,7 @@ async def delete_process_route(
     - **process_route_uuid**: 工艺路线UUID
     """
     try:
-        await ProcessService.delete_process_route(tenant_id, process_route_uuid)
+        await ProcessService.delete_process_route(tenant_id, str(process_route_uuid))
         return {"message": "工艺路线删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -631,7 +810,7 @@ async def rollback_process_route_version(
 
 @router.post("/routes/{process_route_uuid}/bind-material-group", summary="Bind process route to material group")
 async def bind_material_group(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     material_group_uuid: str = Query(..., description="物料分组UUID")
@@ -647,7 +826,7 @@ async def bind_material_group(
     绑定后，该物料分组下的所有物料（如果没有单独绑定工艺路线）将自动使用此工艺路线。
     """
     try:
-        await ProcessService.bind_material_group(tenant_id, process_route_uuid, material_group_uuid)
+        await ProcessService.bind_material_group(tenant_id, str(process_route_uuid), material_group_uuid)
         return {"message": "绑定成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -655,7 +834,7 @@ async def bind_material_group(
 
 @router.delete("/routes/{process_route_uuid}/unbind-material-group", summary="Unbind process route from material group")
 async def unbind_material_group(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     material_group_uuid: str = Query(..., description="物料分组UUID")
@@ -675,7 +854,7 @@ async def unbind_material_group(
 
 @router.post("/routes/{process_route_uuid}/bind-material", summary="Bind process route to material")
 async def bind_material(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     material_uuid: str = Query(..., description="物料UUID")
@@ -692,7 +871,7 @@ async def bind_material(
     绑定后，该物料将优先使用此工艺路线（即使物料所属分组也绑定了其他工艺路线）。
     """
     try:
-        await ProcessService.bind_material(tenant_id, process_route_uuid, material_uuid)
+        await ProcessService.bind_material(tenant_id, str(process_route_uuid), material_uuid)
         return {"message": "绑定成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -700,7 +879,7 @@ async def bind_material(
 
 @router.delete("/routes/{process_route_uuid}/unbind-material", summary="Unbind process route from material")
 async def unbind_material(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     material_uuid: str = Query(..., description="物料UUID")
@@ -720,7 +899,7 @@ async def unbind_material(
 
 @router.get("/routes/{process_route_uuid}/bound-materials", summary="List materials and groups bound to process route")
 async def get_bound_materials(
-    process_route_uuid: str,
+    process_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
@@ -732,7 +911,7 @@ async def get_bound_materials(
     返回该工艺路线绑定的所有物料和物料分组列表。
     """
     try:
-        return await ProcessService.get_bound_materials(tenant_id, process_route_uuid)
+        return await ProcessService.get_bound_materials(tenant_id, str(process_route_uuid))
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -788,7 +967,7 @@ async def get_process_route_for_material_group(
 
 @router.post("/routes/{parent_route_uuid}/sub-routes", response_model=ProcessRouteResponse, summary="Create sub process route")
 async def create_sub_route(
-    parent_route_uuid: str,
+    parent_route_uuid: uuid.UUID,
     data: ProcessRouteCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -806,7 +985,7 @@ async def create_sub_route(
     系统会自动设置嵌套层级，最多支持3层嵌套。
     """
     try:
-        return await ProcessService.create_sub_route(tenant_id, parent_route_uuid, parent_operation_uuid, data)
+        return await ProcessService.create_sub_route(tenant_id, str(parent_route_uuid), parent_operation_uuid, data)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -815,7 +994,7 @@ async def create_sub_route(
 
 @router.get("/routes/{parent_route_uuid}/sub-routes", response_model=List[ProcessRouteResponse], summary="List sub process routes")
 async def get_sub_routes(
-    parent_route_uuid: str,
+    parent_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     parent_operation_uuid: Optional[str] = Query(None, description="父工序UUID（可选，如果提供则只返回该工序的子工艺路线）")
@@ -829,14 +1008,14 @@ async def get_sub_routes(
     返回该父工艺路线的所有子工艺路线列表。
     """
     try:
-        return await ProcessService.get_sub_routes(tenant_id, parent_route_uuid, parent_operation_uuid)
+        return await ProcessService.get_sub_routes(tenant_id, str(parent_route_uuid), parent_operation_uuid)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.delete("/routes/sub-routes/{sub_route_uuid}", summary="Delete sub process route")
 async def delete_sub_route(
-    sub_route_uuid: str,
+    sub_route_uuid: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
@@ -848,7 +1027,7 @@ async def delete_sub_route(
     如果子工艺路线下还有嵌套子工艺路线，则无法删除。
     """
     try:
-        await ProcessService.delete_sub_route(tenant_id, sub_route_uuid)
+        await ProcessService.delete_sub_route(tenant_id, str(sub_route_uuid))
         return {"message": "子工艺路线删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1166,157 +1345,6 @@ async def delete_sop(
     try:
         await ProcessService.delete_sop(tenant_id, sop_uuid)
         return {"message": "SOP删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-# ==================== 工艺路线变更管理相关接口 ====================
-
-@router.post("/routes/changes", response_model=ProcessRouteChangeResponse, summary="Create process route change record")
-async def create_process_route_change(
-    data: ProcessRouteChangeCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    创建工艺路线变更记录
-    
-    - **process_route_uuid**: 工艺路线UUID（必填）
-    - **change_type**: 变更类型（operation_change:工序变更, time_change:标准工时变更, sop_change:SOP变更, other:其他）
-    - **change_content**: 变更内容（JSON格式，可选）
-    - **change_reason**: 变更原因（可选）
-    - **change_impact**: 变更影响分析（JSON格式，可选）
-    - **status**: 变更状态（默认：pending）
-    - **approval_comment**: 审批意见（可选）
-    """
-    try:
-        return await ProcessRouteChangeService.create_change(tenant_id, data, current_user.id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.get("/routes/changes", response_model=ProcessRouteChangeListResponse, summary="List process route change records")
-async def list_process_route_changes(
-    process_route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选条件）"),
-    change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
-    status: Optional[str] = Query(None, description="变更状态（筛选条件）"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
-):
-    """
-    获取工艺路线变更记录列表
-    
-    支持按工艺路线、变更类型、状态筛选和搜索。
-    """
-    try:
-        return await ProcessRouteChangeService.list_changes(
-            tenant_id=tenant_id,
-            process_route_uuid=process_route_uuid,
-            change_type=change_type,
-            status=status,
-            page=page,
-            page_size=page_size
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取变更记录列表失败: {str(e)}"
-        )
-
-
-@router.get("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Get process route change record")
-async def get_process_route_change(
-    change_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    获取工艺路线变更记录详情
-    """
-    try:
-        return await ProcessRouteChangeService.get_change_by_uuid(tenant_id, change_uuid)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-@router.put("/routes/changes/{change_uuid}", response_model=ProcessRouteChangeResponse, summary="Update process route change record")
-async def update_process_route_change(
-    change_uuid: str,
-    data: ProcessRouteChangeUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    更新工艺路线变更记录
-    """
-    try:
-        return await ProcessRouteChangeService.update_change(tenant_id, change_uuid, data)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/routes/changes/{change_uuid}/approve", response_model=ProcessRouteChangeResponse, summary="Approve process route change record")
-async def approve_process_route_change(
-    change_uuid: str,
-    approved: bool = Query(..., description="是否同意（true:同意, false:拒绝）"),
-    approval_comment: Optional[str] = Query(None, description="审批意见（可选）"),
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
-):
-    """
-    审批工艺路线变更记录
-    
-    - **change_uuid**: 变更记录UUID
-    - **approved**: 是否同意（true:同意, false:拒绝）
-    - **approval_comment**: 审批意见（可选）
-    """
-    try:
-        return await ProcessRouteChangeService.approve_change(
-            tenant_id, change_uuid, current_user.id, approved, approval_comment
-        )
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/routes/changes/{change_uuid}/execute", response_model=ProcessRouteChangeResponse, summary="Execute process route change record")
-async def execute_process_route_change(
-    change_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    执行工艺路线变更记录
-    
-    将已审批的变更记录应用到工艺路线，创建新版本。
-    """
-    try:
-        return await ProcessRouteChangeService.execute_change(tenant_id, change_uuid, current_user.id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/routes/changes/{change_uuid}", summary="Delete process route change record")
-async def delete_process_route_change(
-    change_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    删除工艺路线变更记录（软删除）
-    """
-    try:
-        await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
-        return {"message": "删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

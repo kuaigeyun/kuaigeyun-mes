@@ -36,6 +36,7 @@ import { RightOutlined } from '@ant-design/icons';
 import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
 import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
+import { resolveCustomPageTitle } from '../utils/customPageTitle';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
@@ -789,6 +790,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [systemSettingsPanelMounted, setSystemSettingsPanelMounted] = useState(false);
   const [systemSettingsPanelExiting, setSystemSettingsPanelExiting] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
+  /** 详情页等通过 riveredge:update-tab-title 推送的单号，用于面包屑末级展示 */
+  const [customPageLabel, setCustomPageLabel] = useState<string | undefined>();
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
@@ -1868,13 +1871,45 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 站点名称统一从 configStore 获取
     const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
 
+    const customTitle = resolveCustomPageTitle(location.pathname, location.search);
+    if (customTitle) {
+      document.title = `${customTitle} - ${currentSiteName}`;
+      return;
+    }
+
     // 设置文档标题，使用站点名称作为后缀
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
       document.title = `${pageTitle} - ${currentSiteName}`;
     } else {
       document.title = `${currentSiteName} - ${t('common.docTitleSuffix')}`;
     }
-  }, [location.pathname, breadcrumbMenuData, t, siteName, currentUser]);
+  }, [location.pathname, location.search, breadcrumbMenuData, t, siteName, currentUser]);
+
+  /** 路由切换时从缓存恢复详情页单号（标签栏已写入 customPageTitles） */
+  useEffect(() => {
+    setCustomPageLabel(resolveCustomPageTitle(location.pathname, location.search));
+  }, [location.pathname, location.search]);
+
+  /**
+   * 页面加载后通过 riveredge:update-tab-title 推送的单号/名称，同步更新浏览器标签标题
+   */
+  useEffect(() => {
+    const handleUpdateTabTitle = (event: Event) => {
+      const { key, path, title } = (event as CustomEvent<{ key?: string; path?: string; title: string }>).detail ?? {};
+      if (!title) return;
+      const currentKey = location.pathname + location.search;
+      const matches =
+        (key && key === currentKey) ||
+        (path && path === location.pathname) ||
+        (path && currentKey.split('?')[0] === path);
+      if (!matches) return;
+      setCustomPageLabel(title);
+      const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
+      document.title = `${title} - ${currentSiteName}`;
+    };
+    window.addEventListener('riveredge:update-tab-title', handleUpdateTabTitle);
+    return () => window.removeEventListener('riveredge:update-tab-title', handleUpdateTabTitle);
+  }, [location.pathname, location.search]);
 
   /**
    * 根据用户权限过滤菜单
@@ -2150,8 +2185,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
     }
 
+    const labelOverride =
+      customPageLabel ?? resolveCustomPageTitle(location.pathname, location.search);
+    if (labelOverride && breadcrumbItems.length > 0) {
+      const lastIdx = breadcrumbItems.length - 1;
+      breadcrumbItems[lastIdx] = { ...breadcrumbItems[lastIdx], title: labelOverride };
+    }
+
     return breadcrumbItems.filter(item => item.title);
-  }, [location.pathname, breadcrumbMenuData, navigate, t]);
+  }, [location.pathname, location.search, breadcrumbMenuData, navigate, t, customPageLabel]);
 
   // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
   const requiredOpenKeys = useMemo(() => {

@@ -1,0 +1,227 @@
+"""
+快研发二期服务：需求 / 设计评审 / FMEA
+
+Author: RiverEdge Team
+Date: 2026-05-28
+"""
+
+from datetime import datetime
+from typing import List, Optional
+
+from tortoise.expressions import Q
+
+from apps.common.base_service import AppBaseService
+from apps.kuaiplm.models import RdDesignReview, RdFmeaRecord, RdRequirement
+from apps.kuaiplm.schemas.phase2 import (
+    RdDesignReviewCreate,
+    RdDesignReviewResponse,
+    RdDesignReviewUpdate,
+    RdFmeaRecordCreate,
+    RdFmeaRecordResponse,
+    RdFmeaRecordUpdate,
+    RdRequirementCreate,
+    RdRequirementResponse,
+    RdRequirementUpdate,
+)
+from infra.exceptions.exceptions import NotFoundError
+
+
+class Phase2Service(AppBaseService[RdRequirement]):
+    def __init__(self):
+        super().__init__(RdRequirement)
+
+    # ---------- Requirements ----------
+
+    async def list_requirements(
+        self,
+        tenant_id: int,
+        project_id: Optional[int] = None,
+        status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> List[RdRequirementResponse]:
+        qs = RdRequirement.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        if status:
+            qs = qs.filter(status=status)
+        if keyword:
+            qs = qs.filter(Q(title__icontains=keyword) | Q(requirement_code__icontains=keyword))
+        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
+        return [RdRequirementResponse.model_validate(r) for r in rows]
+
+    async def create_requirement(
+        self, tenant_id: int, data: RdRequirementCreate, created_by: int
+    ) -> RdRequirementResponse:
+        row = await RdRequirement.create(
+            tenant_id=tenant_id,
+            project_id=data.project_id,
+            requirement_code=data.requirement_code,
+            title=data.title,
+            description=data.description,
+            priority=data.priority,
+            status=data.status,
+            source_type=data.source_type,
+            source_id=data.source_id,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+        return RdRequirementResponse.model_validate(row)
+
+    async def update_requirement(
+        self, tenant_id: int, requirement_id: int, data: RdRequirementUpdate, updated_by: int
+    ) -> RdRequirementResponse:
+        row = await RdRequirement.get_or_none(
+            tenant_id=tenant_id, id=requirement_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"需求不存在: {requirement_id}")
+        update_fields = {"updated_by": updated_by}
+        for field in (
+            "project_id", "title", "description", "priority", "status", "source_type", "source_id",
+        ):
+            val = getattr(data, field, None)
+            if val is not None:
+                update_fields[field] = val
+        await row.update_from_dict(update_fields).save()
+        return RdRequirementResponse.model_validate(row)
+
+    async def delete_requirement(self, tenant_id: int, requirement_id: int, deleted_by: int) -> None:
+        row = await RdRequirement.get_or_none(
+            tenant_id=tenant_id, id=requirement_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"需求不存在: {requirement_id}")
+        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+
+    # ---------- Design Reviews ----------
+
+    async def list_design_reviews(
+        self,
+        tenant_id: int,
+        project_id: Optional[int] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> List[RdDesignReviewResponse]:
+        qs = RdDesignReview.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        if status:
+            qs = qs.filter(status=status)
+        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
+        return [RdDesignReviewResponse.model_validate(r) for r in rows]
+
+    async def create_design_review(
+        self, tenant_id: int, data: RdDesignReviewCreate, created_by: int
+    ) -> RdDesignReviewResponse:
+        row = await RdDesignReview.create(
+            tenant_id=tenant_id,
+            project_id=data.project_id,
+            review_code=data.review_code,
+            title=data.title,
+            review_type=data.review_type,
+            status=data.status,
+            material_id=data.material_id,
+            material_code=data.material_code,
+            material_name=data.material_name,
+            reviewer_id=data.reviewer_id,
+            reviewer_name=data.reviewer_name,
+            review_date=data.review_date,
+            review_notes=data.review_notes,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+        return RdDesignReviewResponse.model_validate(row)
+
+    async def update_design_review(
+        self, tenant_id: int, review_id: int, data: RdDesignReviewUpdate, updated_by: int
+    ) -> RdDesignReviewResponse:
+        row = await RdDesignReview.get_or_none(
+            tenant_id=tenant_id, id=review_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"设计评审不存在: {review_id}")
+        update_fields = {"updated_by": updated_by}
+        for field in (
+            "project_id", "title", "review_type", "status", "material_id", "material_code",
+            "material_name", "reviewer_id", "reviewer_name", "review_date", "review_notes",
+        ):
+            val = getattr(data, field, None)
+            if val is not None:
+                update_fields[field] = val
+        await row.update_from_dict(update_fields).save()
+        return RdDesignReviewResponse.model_validate(row)
+
+    async def delete_design_review(self, tenant_id: int, review_id: int, deleted_by: int) -> None:
+        row = await RdDesignReview.get_or_none(
+            tenant_id=tenant_id, id=review_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"设计评审不存在: {review_id}")
+        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+
+    # ---------- FMEA ----------
+
+    async def list_fmea_records(
+        self,
+        tenant_id: int,
+        project_id: Optional[int] = None,
+        fmea_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> List[RdFmeaRecordResponse]:
+        qs = RdFmeaRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        if fmea_type:
+            qs = qs.filter(fmea_type=fmea_type)
+        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
+        return [RdFmeaRecordResponse.model_validate(r) for r in rows]
+
+    async def create_fmea_record(
+        self, tenant_id: int, data: RdFmeaRecordCreate, created_by: int
+    ) -> RdFmeaRecordResponse:
+        row = await RdFmeaRecord.create(
+            tenant_id=tenant_id,
+            project_id=data.project_id,
+            fmea_code=data.fmea_code,
+            title=data.title,
+            fmea_type=data.fmea_type,
+            status=data.status,
+            material_id=data.material_id,
+            material_code=data.material_code,
+            material_name=data.material_name,
+            risk_items=data.risk_items,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+        return RdFmeaRecordResponse.model_validate(row)
+
+    async def update_fmea_record(
+        self, tenant_id: int, fmea_id: int, data: RdFmeaRecordUpdate, updated_by: int
+    ) -> RdFmeaRecordResponse:
+        row = await RdFmeaRecord.get_or_none(
+            tenant_id=tenant_id, id=fmea_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"FMEA 记录不存在: {fmea_id}")
+        update_fields = {"updated_by": updated_by}
+        for field in (
+            "project_id", "title", "fmea_type", "status", "material_id",
+            "material_code", "material_name", "risk_items",
+        ):
+            val = getattr(data, field, None)
+            if val is not None:
+                update_fields[field] = val
+        await row.update_from_dict(update_fields).save()
+        return RdFmeaRecordResponse.model_validate(row)
+
+    async def delete_fmea_record(self, tenant_id: int, fmea_id: int, deleted_by: int) -> None:
+        row = await RdFmeaRecord.get_or_none(
+            tenant_id=tenant_id, id=fmea_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"FMEA 记录不存在: {fmea_id}")
+        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()

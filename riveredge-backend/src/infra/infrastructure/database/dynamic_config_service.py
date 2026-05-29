@@ -147,6 +147,12 @@ class DynamicDatabaseConfigService:
 
             # Aerich 模型（数据库迁移）
             "aerich.models",
+
+            # 快研发 (kuaiplm) — 随代码部署，与静态 TORTOISE_ORM 一致；
+            # 避免 API 路由可访问但 RdProject 等模型未注册导致 default_connection=None
+            "apps.kuaiplm.models.rd_project",
+            "apps.kuaiplm.models.knowledge_base",
+            "apps.kuaiplm.models.phase2",
         ]
 
         # 验证模型模块是否存在，只包含存在的模块

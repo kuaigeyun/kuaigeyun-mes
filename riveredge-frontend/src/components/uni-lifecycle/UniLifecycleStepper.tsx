@@ -58,6 +58,8 @@ export interface UniLifecycleStepperProps {
   connectorWidth?: number;
   /** 单列文案展示宽度下限（列宽取 max(nodeSize, stepLabelMaxWidth)，防止标签区窄于节点宽度） */
   stepLabelMaxWidth?: number;
+  /** 点击某一阶段节点/标签时回调（用于 NPI 阶段门切换等） */
+  onStepClick?: (key: string, step: SubStage, index: number) => void;
 }
 
 const NODE_SIZE = 44;
@@ -230,30 +232,35 @@ function NodeCircle({
       )}
     </span>
   );
+
+  if (!showLabelBelow) {
+    if (!wrapWithTooltip) return node;
+    const tooltipTitle = percent != null ? `${step.label} ${Math.round(percent)}%` : step.label;
+    return <Tooltip title={tooltipTitle}>{node}</Tooltip>;
+  }
+
   const content = (
     <span
       style={{
         display: 'inline-flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: showLabelBelow ? 8 : 4,
+        gap: 8,
         width: '100%',
         minWidth: 0,
         overflow: 'hidden',
       }}
     >
       {node}
-      {showLabelBelow && (
-        <span
-          style={{
-            ...stepLabelInlineStyle(step, !!isException),
-            width: '100%',
-            minWidth: 0,
-          }}
-        >
-          {step.label}
-        </span>
-      )}
+      <span
+        style={{
+          ...stepLabelInlineStyle(step, !!isException),
+          width: '100%',
+          minWidth: 0,
+        }}
+      >
+        {step.label}
+      </span>
     </span>
   );
   const tooltipTitle = percent != null ? `${step.label} ${Math.round(percent)}%` : step.label;
@@ -331,18 +338,37 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
   hideNextStepSuggestions = false,
   connectorWidth = CONNECTOR_WIDTH_DEFAULT,
   stepLabelMaxWidth = STEP_LABEL_MAX_WIDTH_DEFAULT,
+  onStepClick,
 }) => {
   const { t } = useTranslation();
   const isException = status === 'exception';
   if (!steps.length) return null;
 
   const n = steps.length;
+  /** 节点外圈（box-shadow）与 hover 放大需额外留白，避免被固定高度裁切 */
+  const nodeOuterPadding = 4;
   /** 步骤多时缩短连线，与 flex 均分列宽配合，尽量一屏排开（抽屉等窄容器） */
   const connectorPx = Math.min(
     connectorWidth,
     n >= 9 ? 14 : n >= 8 ? 16 : n >= 7 ? 18 : n >= 6 ? 22 : n >= 5 ? 28 : connectorWidth,
   );
   const labelFontSize = n >= 8 ? 11 : n >= 6 ? 12 : 13;
+
+  const bindStepClick = (step: SubStage, idx: number) =>
+    onStepClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          className: 'uni-lifecycle-stepper__step--clickable',
+          onClick: () => onStepClick(step.key, step, idx),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onStepClick(step.key, step, idx);
+            }
+          },
+        }
+      : {};
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', minWidth: 0 }}>
@@ -365,8 +391,9 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
             justifyContent: 'stretch',
             width: '100%',
             minWidth: 0,
-            height: nodeSize,
-            minHeight: nodeSize,
+            minHeight: nodeSize + nodeOuterPadding * 2,
+            padding: `${nodeOuterPadding}px 0`,
+            overflow: 'visible',
           }}
         >
           {steps.map((step, idx) => {
@@ -380,36 +407,27 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                 )}
                 <Tooltip title={tooltipTitle}>
                   <div
+                    {...bindStepClick(step, idx)}
                     style={{
                       flex: '1 1 0',
                       minWidth: 0,
-                      height: nodeSize,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      overflow: 'visible',
+                      cursor: onStepClick ? 'pointer' : undefined,
                     }}
                   >
-                    <div
-                      style={{
-                        width: nodeSize,
-                        height: nodeSize,
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <NodeCircle
-                        status={step.status}
-                        isException={stepIsException}
-                        size={nodeSize}
-                        step={step}
-                        showLabelBelow={false}
-                        wrapWithTooltip={false}
-                        innerFontSize={innerFontSize}
-                        percent={step.percent}
-                      />
-                    </div>
+                    <NodeCircle
+                      status={step.status}
+                      isException={stepIsException}
+                      size={nodeSize}
+                      step={step}
+                      showLabelBelow={false}
+                      wrapWithTooltip={false}
+                      innerFontSize={innerFontSize}
+                      percent={step.percent}
+                    />
                   </div>
                 </Tooltip>
               </React.Fragment>
@@ -434,6 +452,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                     <div style={{ width: connectorPx, flexShrink: 0, height: 1 }} aria-hidden />
                   )}
                   <div
+                    {...bindStepClick(step, idx)}
                     style={{
                       flex: '1 1 0',
                       minWidth: 0,
@@ -444,6 +463,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                       paddingLeft: 2,
                       paddingRight: 2,
                       boxSizing: 'border-box',
+                      cursor: onStepClick ? 'pointer' : undefined,
                     }}
                   >
                     <span
