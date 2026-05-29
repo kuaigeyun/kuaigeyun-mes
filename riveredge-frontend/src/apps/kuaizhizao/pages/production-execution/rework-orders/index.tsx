@@ -248,7 +248,6 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
-      width: 100,
       valueEnum: {
         draft: { text: '草稿', status: 'Default' },
         released: { text: '已下达', status: 'Processing' },

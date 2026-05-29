@@ -573,7 +573,6 @@ const EquipmentPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
-      width: 132,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,

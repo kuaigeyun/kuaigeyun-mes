@@ -12,6 +12,9 @@ import type { MutableRefObject } from 'react';
  *
  * 禁止：列表 request 中同时传 lifecycle_stage 与 status 表达同一阶段筛选。
  * 禁止：钉住 Tab 使用 dataIndex `lifecycle` 或裸 `status` 作为阶段键（`lifecycle` 仅作遗留读取）。
+ *
+ * 列宽：生命周期 / 操作列宽度由 UniTable 统一注入，见 `utils/uniTableLayoutColumns.ts`；
+ * 页面列定义勿再写 width / minWidth。
  */
 
 /** 搜索表单、钉住条件、列表 API 共用的阶段筛选键 */

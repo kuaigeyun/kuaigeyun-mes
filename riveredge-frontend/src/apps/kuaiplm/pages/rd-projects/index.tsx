@@ -157,7 +157,6 @@ const RdProjectsListPage: React.FC = () => {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      width: 130,
       hideInSearch: true,
       render: (_, record) => {
         const lc = getRdProjectLifecycle(record as unknown as Record<string, unknown>);

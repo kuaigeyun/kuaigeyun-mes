@@ -518,7 +518,6 @@ const DemandManagementPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
-      width: 132,
       align: 'center' as const,
       fixed: 'right' as const,
       hideInSearch: true,

@@ -13,7 +13,7 @@
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
- * 4. **表格**：右侧固定列顺序由 `normalizeFixedRightColumnOrder` 规范 — **uni-lifecycle**（`lifecycle`）、**uni-action**（`uni-action` 模块约定，固定列垫后）。
+ * 4. **表格**：右侧固定列顺序由 `normalizeFixedRightColumnOrder` 规范 — **uni-lifecycle**（`lifecycle_stage` / `lifecycle`）、**uni-action**（`uni-action` 模块约定，固定列垫后）。
  * 5. **详情 uni-detail**：列表侧由 `onDetail`、行内操作列等与页面级 **uni-detail**（如 `DetailDrawerTemplate`）配合；本文件不渲染详情壳。
  *
  * **组装清单（子模块）**：`UniSearch`、`UniView`、`UniPushToolbarButton`、`UniBatchDeleteButton`（及通用 `UniBatchButton`）、`UniImportToolbarButton` + `UniImport`、`UniExportMenuButton`、`UniSyncButton`；列侧 `uni-action` / `uni-lifecycle` 在列定义中接入。
@@ -124,9 +124,15 @@ import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
+import {
+  isUniTableLifecycleColumn,
+  UNI_TABLE_LIFECYCLE_MIN_WIDTH,
+  UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR,
+  UNI_TABLE_OPERATION_MIN_WIDTH,
+} from '../../utils/uniTableLayoutColumns'
 
 /**
- * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（key/dataIndex=lifecycle）→ 操作列。
+ * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（lifecycle_stage / lifecycle）→ 操作列。
  * 避免列设置持久化 order 与拖拽把生命周期挤到操作列右侧或中间。
  */
 function normalizeFixedRightColumnOrder<T extends Record<string, any>>(columns: T[]): T[] {
@@ -139,8 +145,7 @@ function normalizeFixedRightColumnOrder<T extends Record<string, any>>(columns: 
   }
   if (fixedRight.length <= 1) return columns
 
-  const isLifecycle = (c: any) =>
-    String(c.key ?? c.dataIndex ?? '') === 'lifecycle' || c.dataIndex === 'lifecycle'
+  const isLifecycle = (c: any) => isUniTableLifecycleColumn(c)
 
   fixedRight.sort((a: any, b: any) => {
     const rank = (c: any) => (isUniTableOperationColumn(c) ? 2 : isLifecycle(c) ? 1 : 0)
@@ -149,12 +154,6 @@ function normalizeFixedRightColumnOrder<T extends Record<string, any>>(columns: 
   return [...rest, ...fixedRight]
 }
 
-function isUniTableLifecycleColumn(col: any): boolean {
-  const key = String(col?.key ?? col?.dataIndex ?? '')
-  return key === 'lifecycle' || col?.dataIndex === 'lifecycle'
-}
-
-/** 规范：生命周期列表头与单元格左对齐（统一覆盖各页面残留的 align: center） */
 function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T[]): T[] {
   if (!columns?.length) return columns
   return columns.map((col: any) => {
@@ -162,11 +161,6 @@ function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T
     return { ...col, align: 'left' as const }
   })
 }
-
-/** 生命周期列内容自适应策略：注入收缩锚点并保底最小宽度，避免吃掉右侧剩余空白。 */
-const UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR = 1
-const UNI_TABLE_LIFECYCLE_MIN_WIDTH = 80
-const UNI_TABLE_OPERATION_MIN_WIDTH = 120
 
 /** 短人名类字段保留页面 width（如销售员/采购员），不做内容撑宽。 */
 const UNI_TABLE_SHORT_NAME_FIELDS = new Set([
@@ -1440,11 +1434,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白。 */
       if (isUniTableLifecycleColumn(col)) {
-        const userOnCell = col.onCell
+        const { width: _w, minWidth: _mw, ...lifecycleRest } = col
+        const userOnCell = lifecycleRest.onCell
         return {
-          ...col,
+          ...lifecycleRest,
           width: UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR,
-          minWidth: col.minWidth ?? UNI_TABLE_LIFECYCLE_MIN_WIDTH,
+          minWidth: UNI_TABLE_LIFECYCLE_MIN_WIDTH,
           resizable: false,
           onCell: (record: any, rowIndex?: number) => {
             const base =
@@ -1460,13 +1455,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const {
           uniActionRenderOptions,
           render: baseRender,
-          minWidth: userOperationMinWidth,
+          width: _width,
+          minWidth: _minWidth,
           ...rest
         } = col
         return {
           ...rest,
           width: undefined,
-          minWidth: userOperationMinWidth ?? UNI_TABLE_OPERATION_MIN_WIDTH,
+          minWidth: UNI_TABLE_OPERATION_MIN_WIDTH,
           resizable: false,
           render: baseRender
             ? (...args: any[]) => {
@@ -2604,6 +2600,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell,
         .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell {
           white-space: nowrap;
+          width: 1px;
+          max-width: fit-content;
         }
         .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-sorters,
         .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {

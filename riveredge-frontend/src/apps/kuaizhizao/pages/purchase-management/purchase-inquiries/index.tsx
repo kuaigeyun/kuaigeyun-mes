@@ -449,7 +449,6 @@ const PurchaseInquiriesPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 110,
       valueType: 'select',
       valueEnum: buildPurchaseInquiryLifecycleValueEnum(),
       render: (_, record) => {

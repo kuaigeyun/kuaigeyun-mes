@@ -2084,7 +2084,6 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 140,
       align: 'left' as const,
       fixed: 'right' as const,
       valueType: 'select',
@@ -2266,7 +2265,6 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 90,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: lifecycleValueEnum,

@@ -682,7 +682,6 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 132,
       fixed: 'right',
       align: 'left',
       valueType: 'select',

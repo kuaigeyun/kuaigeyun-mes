@@ -176,7 +176,6 @@ const SalesOrderChangesPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 120,
       valueType: 'select',
       valueEnum: buildOrderChangeLifecycleValueEnum(),
       render: (_, record) => {
