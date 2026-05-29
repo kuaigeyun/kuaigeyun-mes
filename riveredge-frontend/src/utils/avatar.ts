@@ -7,6 +7,7 @@
  * - 支持 URL 缓存，减少重复请求和首屏闪烁
  */
 
+import type { CSSProperties } from 'react';
 import { getFilePreview } from '../services/file';
 
 const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
@@ -137,5 +138,39 @@ export function getAvatarFontSize(avatarSize: number): number {
   } else {
     return Math.round(avatarSize * 0.6);
   }
+}
+
+export type TextAvatarThemeToken = {
+  colorPrimary: string;
+  colorTextLightSolid?: string;
+};
+
+/** 是否应展示文字头像（无图或图片加载失败） */
+export function isTextAvatarDisplay(src?: string | null, imageFailed?: boolean): boolean {
+  return !src || !!imageFailed;
+}
+
+/** 文字头像圆形样式：背景跟随主题色 */
+export function getTextAvatarCircleStyle(
+  token: TextAvatarThemeToken,
+  extra?: CSSProperties,
+): CSSProperties {
+  return {
+    backgroundColor: token.colorPrimary,
+    color: token.colorTextLightSolid ?? '#ffffff',
+    border: 'none',
+    boxShadow: 'none',
+    ...extra,
+  };
+}
+
+/** 图片头像圆形样式 */
+export function getImageAvatarCircleStyle(extra?: CSSProperties): CSSProperties {
+  return {
+    backgroundColor: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+    ...extra,
+  };
 }
 

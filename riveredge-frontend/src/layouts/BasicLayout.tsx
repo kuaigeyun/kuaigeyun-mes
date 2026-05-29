@@ -94,7 +94,7 @@ import {
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
-import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost, isTextAvatarDisplay, getTextAvatarCircleStyle, getImageAvatarCircleStyle } from '../utils/avatar';
 import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
@@ -831,6 +831,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const lockScreen = useGlobalStore((s) => s.lockScreen);
   // 头像 URL：优先从缓存读取以消除首屏闪烁，再异步拉取最新
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
 
   // 版权声明关键字段校验（Layout 挂载时执行一次）
   useEffect(() => {
@@ -886,6 +887,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       loadAvatarUrl();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    setAvatarImageFailed(false);
+  }, [avatarUrl]);
+
+  const headerTextAvatar = isTextAvatarDisplay(avatarUrl, avatarImageFailed);
 
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
@@ -3911,6 +3918,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar:has(img) {
           background: transparent !important;
         }
+        /* 顶栏文字头像：背景/字色跟随主题（避免透明底 + antd 默认灰底白字） */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar:not(:has(img)),
+        .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-avatar:not(:has(img)) {
+          background-color: var(--ant-colorPrimary) !important;
+          color: var(--ant-colorTextLightSolid, #ffffff) !important;
+        }
         /* 租户选择器样式 - 胶囊型，与搜索框一致 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper {
@@ -5183,11 +5196,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 >
                   <Avatar
                     size={24}
-                    src={avatarUrl}
+                    src={headerTextAvatar ? undefined : avatarUrl}
+                    onError={() => setAvatarImageFailed(true)}
                     style={{
-                      backgroundColor: avatarUrl ? 'transparent' : token.colorPrimary,
-                      border: 'none',
-                      boxShadow: 'none',
+                      ...(headerTextAvatar
+                        ? getTextAvatarCircleStyle(token)
+                        : getImageAvatarCircleStyle()),
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
@@ -5196,7 +5210,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       fontWeight: 500,
                     }}
                   >
-                    {getAvatarText(currentUser.full_name, currentUser.username)}
+                    {headerTextAvatar
+                      ? getAvatarText(currentUser.full_name, currentUser.username)
+                      : null}
                   </Avatar>
                   <span
                     style={{

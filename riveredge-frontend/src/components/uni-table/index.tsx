@@ -126,6 +126,7 @@ import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-a
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 import {
   shouldEnableUniTableBodyScrollY,
+  measureTableBodyOverflowsViewport,
 } from './uniTableScrollPolicy'
 import {
   getUniTableLifecycleCellClassName,
@@ -225,6 +226,20 @@ function isUniTableFlexTextColumn(col: any): boolean {
   return col?.ellipsis === true && !col?.valueType
 }
 
+/** 页面标记的主信息列：释放 width、保留 minWidth，用于吃掉表格剩余横向空间（如客户/名称） */
+function isUniTablePrimaryFlexColumn(col: any): boolean {
+  return col?.uniTablePrimaryFlex === true
+}
+
+/** 结构化/短名列不参与「兜底 strip」，避免更新时间/金额等被拉宽 */
+function isUniTableProtectedWidthColumn(col: any): boolean {
+  if (col?.uniTableKeepWidth === true || col?.resizable === false) return true
+  const dataIndex = typeof col?.dataIndex === 'string' ? col.dataIndex : ''
+  if (dataIndex && UNI_TABLE_SHORT_NAME_FIELDS.has(dataIndex)) return true
+  if (col?.valueType && UNI_TABLE_STRUCTURED_VALUE_TYPES.has(String(col.valueType))) return true
+  return false
+}
+
 function stripUniTableColumnWidth(col: any): any {
   if (col?.width == null) return col
   const { width: _width, ...rest } = col
@@ -233,8 +248,8 @@ function stripUniTableColumnWidth(col: any): any {
 
 /**
  * 全项目列宽策略（与 scroll.x=max-content 配合）：
- * 1. 主文本列去掉 width，由单元格内容撑开；
- * 2. 若可见数据列仍全部带 width，则再释放一列非 fixed 列，避免整表宽度锁死。
+ * 1. 主文本列 / uniTablePrimaryFlex 列去掉 width，由内容或 minWidth 撑开；
+ * 2. 若可见数据列仍全部带 width，仅从 flex 候选列释放一列（禁止误伤 dateTime/金额等定宽列）。
  */
 function hasUniTableFixedColumns(columns: any[]): boolean {
   return columns.some(
@@ -246,7 +261,9 @@ function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false):
   if (!columns?.length || preserveWidths) return columns
 
   let result = columns.map((col) =>
-    isUniTableFlexTextColumn(col) ? stripUniTableColumnWidth(col) : col,
+    isUniTableFlexTextColumn(col) || isUniTablePrimaryFlexColumn(col)
+      ? stripUniTableColumnWidth(col)
+      : col,
   )
 
   const dataCols = result.filter((col) => !isUniTableLayoutColumn(col))
@@ -256,16 +273,8 @@ function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false):
   let stripIdx = -1
   for (let i = result.length - 1; i >= 0; i--) {
     const col = result[i]
-    if (isUniTableLayoutColumn(col) || col?.fixed) continue
-    if (isUniTableFlexTextColumn(col)) {
-      stripIdx = i
-      break
-    }
-  }
-  if (stripIdx < 0) {
-    for (let i = result.length - 1; i >= 0; i--) {
-      const col = result[i]
-      if (isUniTableLayoutColumn(col) || col?.fixed) continue
+    if (isUniTableLayoutColumn(col) || col?.fixed || isUniTableProtectedWidthColumn(col)) continue
+    if (isUniTableFlexTextColumn(col) || isUniTablePrimaryFlexColumn(col)) {
       stripIdx = i
       break
     }
@@ -2402,11 +2411,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ],
   )
 
-  /** 唯一源：见 uniTableScrollPolicy.ts */
-  const proTableBodyScrollYEnabled = React.useMemo(
+  /** 策略层 scroll.y（按行数）；未装满页默认 natural-height */
+  const policyScrollYEnabled = React.useMemo(
     () => shouldEnableUniTableBodyScrollY(scrollPolicyInput),
     [scrollPolicyInput],
   )
+  /** 实测表体超出视口时补开 scroll.y（多行单元格、树表展开等） */
+  const [viewportScrollForced, setViewportScrollForced] = useState(false)
+  const proTableBodyScrollYEnabled = policyScrollYEnabled || viewportScrollForced
 
   const isEmptyTable = tableData.length === 0
   const emptyTableHasFixedColumns =
@@ -2426,6 +2438,52 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (statCardsCtx?.tableScrollOffsetPx == null) return
     window.dispatchEvent(new Event('resize'))
   }, [statCardsCtx?.tableScrollOffsetPx])
+
+  React.useLayoutEffect(() => {
+    if (policyScrollYEnabled) {
+      setViewportScrollForced(false)
+      return
+    }
+    if (tableData.length === 0) {
+      setViewportScrollForced(false)
+      return
+    }
+    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
+      setViewportScrollForced(false)
+      return
+    }
+
+    const root = containerRef.current
+    if (!root) return
+
+    const measure = () => {
+      setViewportScrollForced(measureTableBodyOverflowsViewport(root))
+    }
+
+    measure()
+    const raf = window.requestAnimationFrame(measure)
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => measure())
+        : null
+    const tbody = root.querySelector('.ant-table-tbody')
+    if (ro && tbody) ro.observe(tbody)
+    const tableWrapper = root.querySelector('.ant-table-wrapper')
+    if (ro && tableWrapper) ro.observe(tableWrapper)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [
+    policyScrollYEnabled,
+    tableData,
+    currentViewType,
+    effectiveTableColumns,
+    showDelayedLoading,
+    currentPageSize,
+  ])
 
   React.useLayoutEffect(() => {
     const root = containerRef.current

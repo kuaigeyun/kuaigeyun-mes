@@ -794,12 +794,11 @@ const QuotationsPage: React.FC = () => {
   /** 高级搜索与列表列统一定义，避免 dataIndex 重复 */
   const columns: ProColumns<Quotation>[] = [
     {
-      title: '报价单编号',
+      title: '客户 / 报价单',
       key: 'quotation_code',
       dataIndex: 'quotation_code',
-      /** 树形展开 + 复制占宽；关闭列级 ellipsis，避免 rc-table 与 Typography 双重省略号 */
-      width: 240,
-      /** 统一由列定义控制宽度：禁用该列拖拽改宽，避免持久化覆盖 */
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: false,
       fixed: 'left',
@@ -807,10 +806,20 @@ const QuotationsPage: React.FC = () => {
       fieldProps: { placeholder: '支持模糊匹配' },
       render: (_, r) => {
         const code = String(r.quotation_code ?? '-');
+        const customer = String(r.customer_name ?? '').trim() || '-';
         return (
-          <Typography.Text copyable={{ text: code }} style={{ whiteSpace: 'nowrap' }}>
-            {code}
-          </Typography.Text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, lineHeight: 1.35 }}>
+            <Typography.Text ellipsis={{ tooltip: customer }} style={{ fontSize: token.fontSize, maxWidth: '100%' }}>
+              {customer}
+            </Typography.Text>
+            <Typography.Text
+              type="secondary"
+              copyable={{ text: code }}
+              style={{ fontSize: token.fontSizeSM, whiteSpace: 'nowrap' }}
+            >
+              {code}
+            </Typography.Text>
+          </div>
         );
       },
     },
@@ -837,6 +846,7 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'customer_name',
       width: 260,
       ellipsis: true,
+      hideInTable: true,
       order: 20,
       fieldProps: { placeholder: '客户名称' },
     },
@@ -883,6 +893,7 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'updated_at',
       valueType: 'dateTime',
       width: 168,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
     },
