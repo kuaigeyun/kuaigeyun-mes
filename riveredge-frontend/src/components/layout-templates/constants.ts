@@ -242,6 +242,7 @@ export const CANVAS_GRID_REACTFLOW = {
 /**
  * 列表页（ListPageTemplate / MultiTabListPageTemplate）内 ProTable 表体 `scroll.y` 的视口扣减。
  * 用于 `calc(100vh - Npx)`：区分是否有指标卡行（与 ListPageTemplate 展示条件一致）、是否多 Tab 模板（额外套一层 Card.Tab）。
+ * 是否注入 scroll.y 由 `components/uni-table/uniTableScrollPolicy.ts` 决策；此处仅负责限高表达式中的 N。
  * 数值为经验值，可按全局顶栏/页签高度微调 `BASE_OFFSET_PX`。
  */
 export const LIST_PAGE_TABLE_SCROLL = {

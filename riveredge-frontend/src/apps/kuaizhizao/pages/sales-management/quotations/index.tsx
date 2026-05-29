@@ -114,6 +114,13 @@ const QUOTATION_STATUS_FILTER_ENUM = {
 
 type QuotationListScope = 'all' | 'mine' | 'department';
 
+/** 列表数据范围默认值：管理员看全部，其余看「我的」（与 main 中 persist 预水合后的 currentUser 一致） */
+function resolveDefaultQuotationListScope(): QuotationListScope {
+  const u = useGlobalStore.getState().currentUser;
+  if (u?.is_tenant_admin || u?.is_infra_admin) return 'all';
+  return 'mine';
+}
+
 /** 与后端 LEGACY_PENDING_VALUES 一致 */
 const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
 
@@ -583,10 +590,9 @@ const QuotationsPage: React.FC = () => {
   });
   const actionRef = useRef<ActionType>(null);
   const lastQuotationsFlatCacheRef = useRef<Quotation[]>([]);
-  const listScopeSkipReloadRef = useRef(true);
-  const listScopeDefaultAppliedRef = useRef(false);
-  const currentUser = useGlobalStore((s) => s.currentUser);
-  const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>('mine');
+  const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>(resolveDefaultQuotationListScope);
+  const listScopeFilterRef = useRef(listScopeFilter);
+  listScopeFilterRef.current = listScopeFilter;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const invalidateSalesOrderList = useInvalidateSalesOrderList();
   const tableSearchFormRef = useRef<any>(null);
@@ -679,21 +685,12 @@ const QuotationsPage: React.FC = () => {
   const [rejectingRecord, setRejectingRecord] = useState<Quotation | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
 
-  useEffect(() => {
-    if (listScopeDefaultAppliedRef.current || !currentUser) return;
-    listScopeDefaultAppliedRef.current = true;
-    setListScopeFilter(
-      currentUser.is_tenant_admin || currentUser.is_infra_admin ? 'all' : 'mine',
-    );
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (listScopeSkipReloadRef.current) {
-      listScopeSkipReloadRef.current = false;
-      return;
-    }
+  const handleListScopeFilterChange = useCallback((v: QuotationListScope) => {
+    if (v === listScopeFilterRef.current) return;
+    listScopeFilterRef.current = v;
+    setListScopeFilter(v);
     actionRef.current?.reload();
-  }, [listScopeFilter]);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -2864,7 +2861,7 @@ const QuotationsPage: React.FC = () => {
               surfaceBackground
               size="middle"
               value={listScopeFilter}
-              onChange={(v) => setListScopeFilter(v as QuotationListScope)}
+              onChange={(v) => handleListScopeFilterChange(v as QuotationListScope)}
               options={[
                 { label: t('app.kuaizhizao.quotation.listScopeAll'), value: 'all' },
                 { label: t('app.kuaizhizao.quotation.listScopeMine'), value: 'mine' },
@@ -2959,7 +2956,7 @@ const QuotationsPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listQuotations({ skip: 0, limit: 10000, list_scope: listScopeFilter });
+              const res = await listQuotations({ skip: 0, limit: 10000, list_scope: listScopeFilterRef.current });
               let items = res.data || [];
               if (type === 'currentPage' && pageData?.length) {
                 items = flattenQuotationTableRows(pageData as QuotationTableRow[]);
@@ -3002,7 +2999,7 @@ const QuotationsPage: React.FC = () => {
                 customer_name: searchFormValues?.customer_name,
                 start_date: startDate,
                 end_date: endDate,
-                list_scope: listScopeFilter,
+                list_scope: listScopeFilterRef.current,
               });
               setListTotal(response.total ?? 0);
               const flat = response.data || [];

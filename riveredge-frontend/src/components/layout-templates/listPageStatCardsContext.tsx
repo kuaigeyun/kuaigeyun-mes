@@ -8,11 +8,6 @@ export interface ListPageStatCardsContextValue {
   toggle: () => void;
   /** 列表页表体 scroll.y 视口扣减（px），随指标卡显隐变化 */
   tableScrollOffsetPx: number;
-  /**
-   * 在 ListPageTemplate 内：有数据时表体始终按视口限高（scroll.y），不因「当前页未装满」降为 natural-height。
-   * 保证销售/采购等列表页表现一致。
-   */
-  tableBodyViewportScroll: boolean;
 }
 
 const ListPageStatCardsContext = createContext<ListPageStatCardsContextValue | null>(null);

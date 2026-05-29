@@ -174,7 +174,6 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
       visible: statCardsVisible,
       toggle: toggleStatCardsVisible,
       tableScrollOffsetPx,
-      tableBodyViewportScroll: true,
     }),
     [hasStatCardsRow, statCardsVisible, toggleStatCardsVisible, tableScrollOffsetPx],
   );

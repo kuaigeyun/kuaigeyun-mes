@@ -125,10 +125,17 @@ import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 import {
+  shouldEnableUniTableBodyScrollY,
+} from './uniTableScrollPolicy'
+import {
+  getUniTableLifecycleCellClassName,
   isUniTableLifecycleColumn,
+  resolveUniTableLifecycleColumnWidth,
+  resolveUniTableOperationColumnWidth,
   UNI_TABLE_LIFECYCLE_MIN_WIDTH,
-  UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR,
   UNI_TABLE_OPERATION_MIN_WIDTH,
+  UNI_TABLE_SELECTION_COL_WIDTH,
+  computeUniTableMinScrollX,
 } from '../../utils/uniTableLayoutColumns'
 
 /**
@@ -229,38 +236,10 @@ function stripUniTableColumnWidth(col: any): any {
  * 1. 主文本列去掉 width，由单元格内容撑开；
  * 2. 若可见数据列仍全部带 width，则再释放一列非 fixed 列，避免整表宽度锁死。
  */
-const UNI_TABLE_SELECTION_COL_WIDTH = 48
-const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120
-
-function parseUniTableColumnWidth(width: unknown): number | undefined {
-  if (typeof width === 'number' && Number.isFinite(width)) return width
-  if (typeof width === 'string') {
-    const n = parseInt(width, 10)
-    if (Number.isFinite(n)) return n
-  }
-  return undefined
-}
-
 function hasUniTableFixedColumns(columns: any[]): boolean {
   return columns.some(
     (c) => !c.hideInTable && (c.fixed === 'left' || c.fixed === 'right'),
   )
-}
-
-/** 空表 + 固定列：按列宽求和得到 scroll.x，保证表头与固定列对齐（antd 固定列依赖 scroll.x）。 */
-function computeUniTableMinScrollX(
-  columns: any[],
-  options?: { includeSelection?: boolean },
-): number {
-  let total = options?.includeSelection ? UNI_TABLE_SELECTION_COL_WIDTH : 0
-  for (const col of columns) {
-    if (col.hideInTable) continue
-    total +=
-      parseUniTableColumnWidth(col.width) ??
-      parseUniTableColumnWidth(col.minWidth) ??
-      UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH
-  }
-  return total
 }
 
 function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false): any[] {
@@ -327,7 +306,7 @@ function applyUniTableHeaderCellPolicy(columns: any[]): any[] {
       return mergeUniTableHeaderCell(col, 'uni-table-operation-cell')
     }
     if (isUniTableLifecycleColumn(col)) {
-      return mergeUniTableHeaderCell(col, 'uni-table-lifecycle-cell')
+      return mergeUniTableHeaderCell(col, getUniTableLifecycleCellClassName(col))
     }
     return mergeUniTableHeaderCell(col)
   })
@@ -1436,9 +1415,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (isUniTableLifecycleColumn(col)) {
         const { width: _w, minWidth: _mw, ...lifecycleRest } = col
         const userOnCell = lifecycleRest.onCell
+        const lifecycleCellClass = getUniTableLifecycleCellClassName(lifecycleRest)
         return {
           ...lifecycleRest,
-          width: UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR,
+          width: resolveUniTableLifecycleColumnWidth(lifecycleRest),
           minWidth: UNI_TABLE_LIFECYCLE_MIN_WIDTH,
           resizable: false,
           onCell: (record: any, rowIndex?: number) => {
@@ -1446,7 +1426,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
             return {
               ...base,
-              className: `uni-table-lifecycle-cell ${base.className || ''}`.trim(),
+              className: `${lifecycleCellClass} ${base.className || ''}`.trim(),
             }
           },
         }
@@ -1455,13 +1435,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const {
           uniActionRenderOptions,
           render: baseRender,
-          width: _width,
+          width: pageWidth,
           minWidth: _minWidth,
           ...rest
         } = col
+        const resolvedWidth = resolveUniTableOperationColumnWidth({
+          width: pageWidth,
+          minWidth: UNI_TABLE_OPERATION_MIN_WIDTH,
+          fixed: rest.fixed,
+        })
         return {
           ...rest,
-          width: undefined,
+          width: resolvedWidth,
           minWidth: UNI_TABLE_OPERATION_MIN_WIDTH,
           resizable: false,
           render: baseRender
@@ -2396,56 +2381,37 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }), [defaultPageSize, t, restProps.pagination])
   const effectiveTableAlertRender = (restProps as any).tableAlertRender ?? false
   const restTableVirtual = (restProps as any).virtual === true
-  const restTableExpandable = (restProps as any).expandable
   const restTableScrollY = (restProps as any).scroll?.y
 
-  /** 当前页未装满或空表：内容高度不可能触达限高，不注入 scroll.y（避免空滚动条轨道） */
-  const shouldDisableAutoScrollY = React.useMemo(() => {
-    if (allowCustomScrollY) return false
-    if (virtualized || restTableVirtual) return false
-    // ListPageTemplate 内：有数据即视口限高，避免「满页才限高、少行就撑满整页」的页面间差异
-    if (statCardsCtx?.tableBodyViewportScroll && tableData.length > 0) {
-      return false
-    }
-    // 空表 / 未装满：优先走 natural-height；expandable/树表仅在确有数据且需限高时才启用 scroll.y
-    if (tableData.length === 0 || tableData.length < currentPageSize) {
-      return true
-    }
-    const hasTreeRows =
-      Array.isArray(tableData) &&
-      tableData.some(
-        (row) =>
-          Array.isArray((row as { children?: unknown[] })?.children) &&
-          (row as { children?: unknown[] }).children!.length > 0,
-      )
-    if (restTableExpandable || hasTreeRows) return false
-    return false
-  }, [
-    allowCustomScrollY,
-    virtualized,
-    restTableVirtual,
-    restTableExpandable,
-    statCardsCtx?.tableBodyViewportScroll,
-    tableData,
-    currentPageSize,
-  ])
+  const scrollPolicyInput = React.useMemo(
+    () => ({
+      allowCustomScrollY,
+      restTableScrollY,
+      virtualized,
+      restTableVirtual,
+      tableDataLength: tableData.length,
+      currentPageSize,
+    }),
+    [
+      allowCustomScrollY,
+      restTableScrollY,
+      virtualized,
+      restTableVirtual,
+      tableData.length,
+      currentPageSize,
+    ],
+  )
+
+  /** 唯一源：见 uniTableScrollPolicy.ts */
+  const proTableBodyScrollYEnabled = React.useMemo(
+    () => shouldEnableUniTableBodyScrollY(scrollPolicyInput),
+    [scrollPolicyInput],
+  )
 
   const isEmptyTable = tableData.length === 0
   const emptyTableHasFixedColumns =
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
   const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
-
-  const proTableBodyScrollYEnabled = React.useMemo(() => {
-    if (allowCustomScrollY && restTableScrollY != null) return true
-    if (virtualized || restTableVirtual) return true
-    return !shouldDisableAutoScrollY
-  }, [
-    allowCustomScrollY,
-    virtualized,
-    restTableVirtual,
-    restTableScrollY,
-    shouldDisableAutoScrollY,
-  ])
 
   const listPageScrollY = React.useMemo(() => {
     if (!proTableBodyScrollYEnabled) return undefined
@@ -2600,6 +2566,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell,
         .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell {
           white-space: nowrap;
+        }
+        /* 非 fixed：收缩锚点；fixed right 由列 width 控制，禁止 1px 以免与操作列重叠 */
+        .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell:not(.uni-table-lifecycle-fixed-right),
+        .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell:not(.uni-table-lifecycle-fixed-right) {
           width: 1px;
           max-width: fit-content;
         }
@@ -2874,16 +2844,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   const { y: _omitScrollY, ...scrollWithoutY } = mergedScroll
                   mergedScroll = scrollWithoutY
                 }
-                /** 空表 + natural-height：无固定列时不注入 scroll.x；有固定列时按列宽求和注入 scroll.x 以保证表头对齐 */
-                if (!proTableBodyScrollYEnabled && isEmptyTable) {
+                /** 空表 + 固定列：必须注入数值 scroll.x（antd 固定列定位依赖列 width 与 scroll.x 一致） */
+                if (isEmptyTable && emptyTableHasFixedColumns) {
+                  const minScrollX = computeUniTableMinScrollX(effectiveTableColumns, {
+                    includeSelection: tableHasRowSelection,
+                  })
+                  if (minScrollX > 0) {
+                    const keepY = proTableBodyScrollYEnabled ? mergedScroll?.y : undefined
+                    mergedScroll =
+                      keepY != null
+                        ? ({ x: minScrollX, y: keepY } as typeof mergedScroll)
+                        : ({ x: minScrollX } as typeof mergedScroll)
+                  }
+                } else if (!proTableBodyScrollYEnabled && isEmptyTable) {
                   if (ourScrollX != null) {
                     mergedScroll = { x: ourScrollX } as typeof mergedScroll
-                  } else if (emptyTableHasFixedColumns) {
-                    const minScrollX = computeUniTableMinScrollX(effectiveTableColumns, {
-                      includeSelection: tableHasRowSelection,
-                    })
-                    mergedScroll =
-                      minScrollX > 0 ? ({ x: minScrollX } as typeof mergedScroll) : undefined
                   } else {
                     mergedScroll = undefined
                   }
