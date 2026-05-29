@@ -107,6 +107,7 @@ from .shipment_notice_item import ShipmentNoticeItem
 from .receipt_notice import ReceiptNotice
 from .receipt_notice_item import ReceiptNoticeItem
 from .customer_follow_up import CustomerFollowUp
+from .sales_opportunity import SalesOpportunity
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem
@@ -244,6 +245,7 @@ __all__ = [
     'ReceiptNotice',
     'ReceiptNoticeItem',
     'CustomerFollowUp',
+    'SalesOpportunity',
 
     # 统一需求管理模块（新设计）
     'Demand',

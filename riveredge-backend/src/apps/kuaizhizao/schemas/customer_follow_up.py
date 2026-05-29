@@ -25,6 +25,9 @@ class CustomerFollowUpBase(BaseSchema):
     quotation_code: Optional[str] = Field(None, max_length=50, description="关联报价单编码")
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="关联销售订单编码")
+    opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
+    stage_code_before: Optional[str] = Field(None, max_length=50, description="跟进时商机阶段（变更前）")
+    stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后商机阶段（变更后）")
 
 
 class CustomerFollowUpCreate(BaseSchema):
@@ -37,6 +40,8 @@ class CustomerFollowUpCreate(BaseSchema):
     next_follow_up_at: Optional[datetime] = Field(None, description="计划下次跟进时间")
     quotation_id: Optional[int] = Field(None, description="关联报价单ID")
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
+    opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
+    stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
 
 
 class CustomerFollowUpUpdate(BaseSchema):
@@ -49,6 +54,8 @@ class CustomerFollowUpUpdate(BaseSchema):
     next_follow_up_at: Optional[datetime] = Field(None, description="计划下次跟进时间")
     quotation_id: Optional[int] = Field(None, description="关联报价单ID")
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
+    opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
+    stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
 
 
 class CustomerFollowUpResponse(CustomerFollowUpBase):

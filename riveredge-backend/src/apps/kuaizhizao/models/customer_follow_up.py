@@ -28,6 +28,10 @@ class CustomerFollowUp(BaseModel):
     sales_order_id = fields.IntField(null=True, description="关联销售订单ID")
     sales_order_code = fields.CharField(max_length=50, null=True, description="关联销售订单编码")
 
+    opportunity_id = fields.IntField(null=True, description="关联销售商机ID")
+    stage_code_before = fields.CharField(max_length=50, null=True, description="跟进时商机阶段（变更前）")
+    stage_code_after = fields.CharField(max_length=50, null=True, description="跟进后商机阶段（变更后）")
+
     created_by = fields.IntField(null=True, description="创建人ID")
     updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -39,6 +43,7 @@ class CustomerFollowUp(BaseModel):
             ("tenant_id", "customer_id"),
             ("tenant_id", "next_follow_up_at"),
             ("tenant_id", "occurred_at"),
+            ("tenant_id", "opportunity_id"),
         ]
 
     class PydanticMeta:

@@ -2,23 +2,27 @@
  * 客户跟进新建/编辑弹窗（供客户跟进列表、报价单、销售订单等复用）
  */
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography, Tag, Empty, Spin } from 'antd';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography, Tag, Empty, Spin, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { DictionarySelect } from '../../../components/dictionary-select';
 import { UniDropdown } from '../../../components/uni-dropdown';
+import { ThemedSegmented } from '../../../components/themed-segmented';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { customerFollowUpApi, type CustomerFollowUp } from '../services/customer-follow-up';
+import { salesOpportunityApi, type SalesOpportunity } from '../services/sales-opportunity';
 import { listQuotations, type Quotation } from '../services/quotation';
 import { listSalesOrders, type SalesOrder } from '../services/sales-order';
-import { customerApi, getDictionaryOptions } from '../../master-data/services/supply-chain';
+import { customerApi, getDictionaryOptions, getDictionaryOptionsSync } from '../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../master-data/components/CustomerFormModal';
 import type { Customer } from '../../master-data/types/supply-chain';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
+const STAGE_DICT_CODE = 'SALES_OPPORTUNITY_STAGE';
+const TERMINAL_STAGES = new Set(['WON', 'LOST']);
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -38,6 +42,7 @@ export type CustomerFollowUpPreset = {
   quotation_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  opportunity_id?: number;
 };
 
 export interface CustomerFollowUpFormModalProps {
@@ -77,6 +82,50 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   const contentInputRef = useRef<any>(null);
   const modalQuotationId = Form.useWatch('quotation_id', form);
   const modalSalesOrderId = Form.useWatch('sales_order_id', form);
+  const [opportunities, setOpportunities] = useState<SalesOpportunity[]>([]);
+  const [stageOptions, setStageOptions] = useState<{ label: string; value: string }[]>([]);
+  const [targetStageCode, setTargetStageCode] = useState<string | null>(null);
+  const [resolvingOpportunity, setResolvingOpportunity] = useState(false);
+
+  const selectedOpportunity = useMemo(
+    () => opportunities[0] ?? null,
+    [opportunities],
+  );
+
+  const currentStageCode = selectedOpportunity?.stage_code ?? 'INITIAL';
+  const effectiveTargetStage = targetStageCode ?? currentStageCode;
+
+  const resolveOpportunityForQuotation = useCallback(async () => {
+    const customerId = Number(form.getFieldValue('customer_id'));
+    const quotationId = form.getFieldValue('quotation_id');
+    if (!Number.isFinite(customerId) || quotationId == null) return null;
+    setResolvingOpportunity(true);
+    try {
+      const opp = await salesOpportunityApi.ensure({
+        customer_id: customerId,
+        quotation_id: quotationId,
+        sales_order_id: null,
+      });
+      form.setFieldValue('opportunity_id', opp.id);
+      setOpportunities([opp]);
+      return opp;
+    } catch {
+      return null;
+    } finally {
+      setResolvingOpportunity(false);
+    }
+  }, [form]);
+
+  const loadStageOptions = useCallback(async () => {
+    const cached = getDictionaryOptionsSync(STAGE_DICT_CODE);
+    if (cached?.length) setStageOptions(cached);
+    try {
+      const opts = await getDictionaryOptions(STAGE_DICT_CODE);
+      setStageOptions(opts || []);
+    } catch {
+      if (!cached?.length) setStageOptions([]);
+    }
+  }, []);
 
   const loadDictAndCustomers = async () => {
     const [custRes, dictRes] = await Promise.allSettled([
@@ -112,6 +161,46 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   useEffect(() => {
     loadDictAndCustomers();
   }, []);
+
+  useEffect(() => {
+    if (open) loadStageOptions();
+  }, [open, loadStageOptions]);
+
+  const hasLinkedQuotation =
+    modalQuotationId != null && modalQuotationId !== '' && Number.isFinite(Number(modalQuotationId));
+
+  useEffect(() => {
+    if (!open) return;
+    if (!hasLinkedQuotation) {
+      setOpportunities([]);
+      form.setFieldValue('opportunity_id', undefined);
+      setTargetStageCode(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await resolveOpportunityForQuotation();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    hasLinkedQuotation,
+    modalQuotationId,
+    modalCustomerId,
+    editing?.id,
+    editing?.quotation_id,
+    editing?.opportunity_id,
+    resolveOpportunityForQuotation,
+    form,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTargetStageCode(null);
+  }, [open, modalQuotationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -151,6 +240,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         next_follow_up_at: editing.next_follow_up_at ? dayjs(editing.next_follow_up_at) : undefined,
         quotation_id: editing.quotation_id ?? undefined,
         sales_order_id: editing.sales_order_id ?? undefined,
+        opportunity_id: editing.quotation_id ? editing.opportunity_id ?? undefined : undefined,
       });
       setTimeout(() => contentInputRef.current?.focus(), 100);
       return;
@@ -161,6 +251,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         customer_id: preset.customer_id,
         quotation_id: preset.quotation_id,
         sales_order_id: preset.sales_order_id,
+        opportunity_id: preset.opportunity_id,
         occurred_at: dayjs(),
       });
     } else {
@@ -256,6 +347,25 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
     };
   }, [open, modalCustomerId, modalQuotationId, modalSalesOrderId, editing?.id]);
 
+  const handleStagePick = (next: string | number) => {
+    const code = String(next);
+    if (code === currentStageCode) {
+      setTargetStageCode(null);
+      return;
+    }
+    if (TERMINAL_STAGES.has(code)) {
+      Modal.confirm({
+        title: t('app.kuaizhizao.quotationStage.closeStageConfirmTitle'),
+        content: t('app.kuaizhizao.quotationStage.closeStageConfirmContent', {
+          stage: stageOptions.find((s) => s.value === code)?.label || code,
+        }),
+        onOk: () => setTargetStageCode(code),
+      });
+      return;
+    }
+    setTargetStageCode(code);
+  };
+
   const submit = async () => {
     try {
       const v = await form.validateFields();
@@ -265,11 +375,26 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         message.error(t('app.kuaizhizao.customerFollowUp.customerRequired'));
         return;
       }
+      const hasQuotation = v.quotation_id != null;
+      if (hasQuotation && v.opportunity_id == null) {
+        const ensured = await resolveOpportunityForQuotation();
+        if (!ensured) {
+          message.error(t('common.operationFailed'));
+          return;
+        }
+        v.opportunity_id = ensured.id;
+      }
       const occurred = (v.occurred_at as dayjs.Dayjs).toISOString();
       const next =
         v.next_follow_up_at != null && v.next_follow_up_at !== ''
           ? (v.next_follow_up_at as dayjs.Dayjs).toISOString()
           : null;
+      const stageAfter =
+        hasQuotation && effectiveTargetStage && effectiveTargetStage !== currentStageCode
+          ? effectiveTargetStage
+          : undefined;
+      const opportunityId =
+        hasQuotation && v.opportunity_id != null ? Number(v.opportunity_id) : undefined;
       if (editing) {
         await customerFollowUpApi.update(editing.id, {
           customer_name: (customer as any).name ?? (customer as any).customer_name ?? '',
@@ -279,6 +404,8 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           next_follow_up_at: next,
           quotation_id: v.quotation_id ?? null,
           sales_order_id: v.sales_order_id ?? null,
+          opportunity_id: opportunityId ?? null,
+          stage_code_after: stageAfter,
         });
         message.success(t('pages.system.siteSettings.saveSuccess'));
       } else {
@@ -290,6 +417,9 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           next_follow_up_at: next,
           quotation_id: v.quotation_id ?? null,
           sales_order_id: v.sales_order_id ?? null,
+          ...(hasQuotation
+            ? { opportunity_id: opportunityId, stage_code_after: stageAfter }
+            : {}),
         });
         message.success(t('common.createSuccess'));
       }
@@ -322,6 +452,9 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         <Row gutter={[24, 0]}>
           <Col xs={24} lg={16}>
             <Row gutter={[24, 0]}>
+              <Form.Item name="opportunity_id" hidden>
+                <Input />
+              </Form.Item>
               <Col xs={24} md={12}>
                 <Form.Item
                   name="customer_id"
@@ -348,7 +481,12 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                         .filter(Boolean) as Array<{ label: string; value: number }>
                     }
                     onChange={() => {
-                      form.setFieldsValue({ quotation_id: undefined, sales_order_id: undefined });
+                      form.setFieldsValue({
+                        quotation_id: undefined,
+                        sales_order_id: undefined,
+                        opportunity_id: undefined,
+                      });
+                      setTargetStageCode(null);
                     }}
                   />
                 </Form.Item>
@@ -409,6 +547,13 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                         : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
                     }
                     options={quotationSelectOptions}
+                    onChange={(val) => {
+                      if (val == null) {
+                        form.setFieldsValue({ opportunity_id: undefined });
+                        setTargetStageCode(null);
+                        setOpportunities([]);
+                      }
+                    }}
                   />
                 </Form.Item>
               </Col>
@@ -434,7 +579,6 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
               name="content"
               label={t('app.kuaizhizao.customerFollowUp.fieldContent')}
               rules={[{ required: true, message: t('common.required') }]}
-              style={{ marginBottom: 0 }}
             >
               <Input.TextArea
                 ref={contentInputRef}
@@ -445,6 +589,34 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                 style={{ resize: 'vertical' }}
               />
             </Form.Item>
+            {hasLinkedQuotation ? (
+              <Form.Item label={t('app.kuaizhizao.quotationStage.fieldLabel')} style={{ marginBottom: 0 }}>
+                {resolvingOpportunity ? (
+                  <Spin size="small" />
+                ) : stageOptions.length > 0 ? (
+                  <>
+                    <ThemedSegmented
+                      block
+                      className="quotation-stage-segmented"
+                      options={stageOptions.map((s) => ({ label: s.label, value: s.value }))}
+                      value={effectiveTargetStage}
+                      onChange={handleStagePick}
+                      disabled={selectedOpportunity != null && selectedOpportunity.status !== 'open'}
+                    />
+                    {targetStageCode && targetStageCode !== currentStageCode ? (
+                      <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+                        {t('app.kuaizhizao.quotationStage.stageWillChange', {
+                          from: stageOptions.find((s) => s.value === currentStageCode)?.label || currentStageCode,
+                          to: stageOptions.find((s) => s.value === targetStageCode)?.label || targetStageCode,
+                        })}
+                      </Typography.Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.customerStage.dictMissing')}</Typography.Text>
+                )}
+              </Form.Item>
+            ) : null}
           </Col>
           <Col xs={24} lg={8}>
             <div style={{ marginBottom: 8, fontWeight: 600 }}>
@@ -525,6 +697,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           loadDictAndCustomers();
         }}
       />
+
     </>
   );
 };

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Optional, Set, Tuple
 
 from tortoise.models import Q
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
 from apps.kuaizhizao.models.quotation import Quotation
@@ -19,6 +20,8 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpListResponse,
     CustomerFollowUpListEnvelope,
 )
+from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
+from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
 from apps.master_data.models.customer import Customer
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -26,6 +29,70 @@ from infra.models.user import User
 
 class CustomerFollowUpService:
     """客户跟进业务逻辑"""
+
+    _opportunity_service = SalesOpportunityService()
+
+    @classmethod
+    async def _resolve_opportunity_id(
+        cls,
+        tenant_id: int,
+        customer_id: int,
+        current_user: User,
+        *,
+        opportunity_id: Optional[int],
+        quotation_id: Optional[int],
+        sales_order_id: Optional[int],
+    ) -> Optional[int]:
+        if opportunity_id is not None:
+            await cls._opportunity_service.load_for_customer(
+                tenant_id, opportunity_id, customer_id, current_user
+            )
+            return opportunity_id
+
+        if quotation_id is None and sales_order_id is None:
+            return None
+
+        ensured = await cls._opportunity_service.ensure(
+            tenant_id,
+            SalesOpportunityEnsure(
+                customer_id=customer_id,
+                quotation_id=quotation_id,
+                sales_order_id=sales_order_id,
+            ),
+            current_user,
+        )
+        return ensured.id
+
+    @classmethod
+    async def _apply_opportunity_stage(
+        cls,
+        tenant_id: int,
+        customer_id: int,
+        opportunity_id: int,
+        current_user: User,
+        *,
+        stage_code_after: Optional[str],
+        occurred_at: datetime,
+        next_follow_up_at: Optional[datetime],
+    ) -> tuple[Optional[str], Optional[str]]:
+        opp = await cls._opportunity_service.load_for_customer(
+            tenant_id, opportunity_id, customer_id, current_user
+        )
+        if stage_code_after:
+            return await cls._opportunity_service.apply_stage_change(
+                opp,
+                stage_code_after,
+                occurred_at=occurred_at,
+                next_follow_up_at=next_follow_up_at,
+                updated_by=current_user.id,
+            )
+        await cls._opportunity_service.touch_follow_up_times(
+            opp,
+            occurred_at=occurred_at,
+            next_follow_up_at=next_follow_up_at,
+            updated_by=current_user.id,
+        )
+        return None, None
 
     @staticmethod
     async def _load_customer(
@@ -118,21 +185,46 @@ class CustomerFollowUpService:
         qid, qcode = await cls._resolve_quotation(tenant_id, customer.id, data.quotation_id)
         sid, scode = await cls._resolve_sales_order(tenant_id, customer.id, data.sales_order_id)
 
-        row = await CustomerFollowUp.create(
-            tenant_id=tenant_id,
-            customer_id=customer.id,
-            customer_name=customer.name,
-            activity_type_code=data.activity_type_code,
-            content=data.content,
-            occurred_at=data.occurred_at,
-            next_follow_up_at=data.next_follow_up_at,
-            quotation_id=qid,
-            quotation_code=qcode,
-            sales_order_id=sid,
-            sales_order_code=scode,
-            created_by=current_user.id,
-            updated_by=current_user.id,
-        )
+        async with in_transaction():
+            opportunity_id = await cls._resolve_opportunity_id(
+                tenant_id,
+                customer.id,
+                current_user,
+                opportunity_id=data.opportunity_id,
+                quotation_id=qid,
+                sales_order_id=sid,
+            )
+            stage_before, stage_after = (None, None)
+            if opportunity_id is not None:
+                stage_before, stage_after = await cls._apply_opportunity_stage(
+                    tenant_id,
+                    customer.id,
+                    opportunity_id,
+                    current_user,
+                    stage_code_after=data.stage_code_after,
+                    occurred_at=data.occurred_at,
+                    next_follow_up_at=data.next_follow_up_at,
+                )
+
+            row = await CustomerFollowUp.create(
+                tenant_id=tenant_id,
+                customer_id=customer.id,
+                customer_name=customer.name,
+                activity_type_code=data.activity_type_code,
+                content=data.content,
+                occurred_at=data.occurred_at,
+                next_follow_up_at=data.next_follow_up_at,
+                quotation_id=qid,
+                quotation_code=qcode,
+                sales_order_id=sid,
+                sales_order_code=scode,
+                opportunity_id=opportunity_id,
+                stage_code_before=stage_before,
+                stage_code_after=stage_after,
+                created_by=current_user.id,
+                updated_by=current_user.id,
+            )
+
         await cls._attach_creator_names([row])
         resp = CustomerFollowUpResponse.model_validate(row)
         resp.created_by_name = getattr(row, "_creator_name", None)
@@ -157,6 +249,9 @@ class CustomerFollowUpService:
         customer = await cls._load_customer(tenant_id, row.customer_id, current_user)
 
         dump = data.model_dump(exclude_unset=True)
+        stage_code_after = dump.pop("stage_code_after", None)
+        opportunity_id_in = dump.pop("opportunity_id", None)
+
         if "quotation_id" in dump:
             qid = dump["quotation_id"]
             if qid is None:
@@ -176,7 +271,56 @@ class CustomerFollowUpService:
 
         dump["updated_by"] = current_user.id
 
-        await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(**dump)
+        occurred_at = dump.get("occurred_at", row.occurred_at)
+        next_follow_up_at = dump.get("next_follow_up_at", row.next_follow_up_at) if "next_follow_up_at" in dump else row.next_follow_up_at
+        opportunity_id = opportunity_id_in if opportunity_id_in is not None else row.opportunity_id
+
+        async with in_transaction():
+            final_quotation_id = dump.get("quotation_id", row.quotation_id)
+            final_sales_order_id = dump.get("sales_order_id", row.sales_order_id)
+
+            if opportunity_id_in is not None:
+                opportunity_id = await cls._resolve_opportunity_id(
+                    tenant_id,
+                    customer.id,
+                    current_user,
+                    opportunity_id=opportunity_id_in,
+                    quotation_id=final_quotation_id,
+                    sales_order_id=final_sales_order_id,
+                )
+                dump["opportunity_id"] = opportunity_id
+            elif final_quotation_id is not None or final_sales_order_id is not None:
+                opportunity_id = await cls._resolve_opportunity_id(
+                    tenant_id,
+                    customer.id,
+                    current_user,
+                    opportunity_id=opportunity_id,
+                    quotation_id=final_quotation_id,
+                    sales_order_id=final_sales_order_id,
+                )
+                dump["opportunity_id"] = opportunity_id
+            else:
+                opportunity_id = None
+                dump["opportunity_id"] = None
+                dump["stage_code_before"] = None
+                dump["stage_code_after"] = None
+
+            if opportunity_id is not None:
+                stage_before, stage_after = await cls._apply_opportunity_stage(
+                    tenant_id,
+                    customer.id,
+                    opportunity_id,
+                    current_user,
+                    stage_code_after=stage_code_after,
+                    occurred_at=occurred_at,
+                    next_follow_up_at=next_follow_up_at,
+                )
+                if stage_before is not None or stage_after is not None:
+                    dump["stage_code_before"] = stage_before
+                    dump["stage_code_after"] = stage_after
+
+            await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(**dump)
+
         row = await CustomerFollowUp.get(id=follow_id, tenant_id=tenant_id)
         await cls._attach_creator_names([row])
         resp = CustomerFollowUpResponse.model_validate(row)

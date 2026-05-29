@@ -440,6 +440,19 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "SALES_OPPORTUNITY_STAGE",
+        "name": "销售商机阶段",
+        "description": "销售商机漏斗阶段（sort_order 为漏斗顺序）",
+        "items": [
+            {"label": "初步接洽", "value": "INITIAL", "description": "线索进入", "sort_order": 1},
+            {"label": "需求确认", "value": "QUALIFIED", "description": "意向明确", "sort_order": 2},
+            {"label": "方案报价", "value": "PROPOSAL", "description": "方案与报价", "sort_order": 3},
+            {"label": "商务谈判", "value": "NEGOTIATION", "description": "议价与合同", "sort_order": 4},
+            {"label": "赢单", "value": "WON", "description": "成交关闭", "sort_order": 5},
+            {"label": "丢单", "value": "LOST", "description": "丢单关闭", "sort_order": 6},
+        ],
+    },
+    {
         "code": "FEE_TYPE",
         "name": "费用类型",
         "description": "订单（销售/采购）涉及的附加费用类型",

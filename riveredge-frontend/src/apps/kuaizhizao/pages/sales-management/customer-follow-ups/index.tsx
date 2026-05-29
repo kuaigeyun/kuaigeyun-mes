@@ -359,35 +359,11 @@ const CustomerFollowUpsPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.customerFollowUp.colQuotation'),
-      dataIndex: 'quotation_code',
-      width: 120,
-      ellipsis: true,
-      hideInSearch: true,
-      render: (v) => v || '—',
-    },
-    {
-      title: t('app.kuaizhizao.customerFollowUp.colSalesOrder'),
-      dataIndex: 'sales_order_code',
-      width: 120,
-      ellipsis: true,
-      hideInSearch: true,
-      render: (v) => v || '—',
-    },
-    {
       title: t('app.kuaizhizao.customerFollowUp.colCreator'),
       dataIndex: 'created_by_name',
       width: 100,
       ellipsis: true,
       hideInSearch: true,
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) =>
-        row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm:ss') : '—',
     },
     {
       title: '生命周期',

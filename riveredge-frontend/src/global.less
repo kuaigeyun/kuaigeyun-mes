@@ -125,6 +125,15 @@
     inset-inline-end: 10px !important;
     z-index: 1;
   }
+
+  /* 报价阶段分段：与表单 Input/Select 默认高度一致（勿用工具栏 segmented 的 compact 尺寸） */
+  .quotation-stage-segmented.ant-segmented {
+    .ant-segmented-item-label {
+      min-height: var(--ant-control-height);
+      line-height: calc(var(--ant-control-height) - 2px);
+      padding-inline: calc(var(--ant-control-padding-horizontal) - 1px);
+    }
+  }
 }
 
 /* 固定底栏变体（若使用 .modal-content-scroll）滚动条样式 */

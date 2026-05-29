@@ -18,6 +18,9 @@ export interface CustomerFollowUp {
   quotation_code?: string | null;
   sales_order_id?: number | null;
   sales_order_code?: string | null;
+  opportunity_id?: number | null;
+  stage_code_before?: string | null;
+  stage_code_after?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by?: number | null;
@@ -55,6 +58,8 @@ export const customerFollowUpApi = {
     next_follow_up_at?: string | null;
     quotation_id?: number | null;
     sales_order_id?: number | null;
+    opportunity_id?: number | null;
+    stage_code_after?: string | null;
   }): Promise<CustomerFollowUp> =>
     apiRequest('/apps/kuaizhizao/customer-follow-ups', { method: 'POST', data }),
 
@@ -68,6 +73,8 @@ export const customerFollowUpApi = {
       next_follow_up_at: string | null;
       quotation_id: number | null;
       sales_order_id: number | null;
+      opportunity_id?: number | null;
+      stage_code_after?: string | null;
     }>
   ): Promise<CustomerFollowUp> =>
     apiRequest(`/apps/kuaizhizao/customer-follow-ups/${id}`, { method: 'PUT', data }),

@@ -28,6 +28,7 @@ from .delivery_notices.delivery_notices import router as delivery_notice_router
 from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
 from .customer_follow_ups.customer_follow_ups import router as customer_follow_up_router
+from .sales_opportunities.sales_opportunities import router as sales_opportunity_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
 from .document_relations.document_relations import router as document_relation_router
@@ -73,6 +74,7 @@ router.include_router(delivery_notice_router)  # 送货单管理
 router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
+router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(purchase_requisition_router)

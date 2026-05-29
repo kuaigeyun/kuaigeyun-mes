@@ -34,6 +34,10 @@ import {
 } from '../../../utils/partner-static-labels';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import {
+  CustomerFollowUpFormModal,
+  type CustomerFollowUpPreset,
+} from '../../../../kuaizhizao/components/CustomerFollowUpFormModal';
 
 /**
  * 客户管理列表页面组件
@@ -66,6 +70,8 @@ const CustomersPage: React.FC = () => {
     return seed;
   });
   const customerDetailReqRef = useRef(0);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +204,12 @@ const CustomersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setCustomerDetail(null);
+  };
+
+  const handleOpenFollowUp = () => {
+    if (!customerDetail?.id) return;
+    setFollowUpPreset({ customer_id: customerDetail.id });
+    setFollowUpModalOpen(true);
   };
 
   const handleCloseModal = () => {
@@ -921,11 +933,19 @@ const CustomersPage: React.FC = () => {
                   items={detailDrawerDescriptionItems(detailColumnsInvoice, customerDetail)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabExtended')} marginBottom={0}>
+              <DetailDrawerSection title={t('field.partner.tabExtended')}>
                 <Descriptions
                   column={2}
                   items={detailDrawerDescriptionItems(detailColumnsExtended, customerDetail)}
                 />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('app.kuaizhizao.customerFollowUp.new')} marginBottom={0}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                  {t('app.kuaizhizao.quotationStage.detailHint')}
+                </Typography.Text>
+                <Button type="primary" size="small" onClick={handleOpenFollowUp}>
+                  {t('app.kuaizhizao.customerFollowUp.new')}
+                </Button>
               </DetailDrawerSection>
             </>
           ) : null
@@ -938,6 +958,15 @@ const CustomersPage: React.FC = () => {
         onClose={handleCloseModal}
         editUuid={editUuid}
         onSuccess={() => actionRef.current?.reload()}
+      />
+
+      <CustomerFollowUpFormModal
+        open={followUpModalOpen}
+        preset={followUpPreset}
+        onClose={() => {
+          setFollowUpModalOpen(false);
+          setFollowUpPreset(null);
+        }}
       />
     </>
   );
