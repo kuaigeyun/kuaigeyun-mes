@@ -18,6 +18,10 @@ import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -797,31 +801,16 @@ const QuotationsPage: React.FC = () => {
       title: '客户 / 报价单',
       key: 'quotation_code',
       dataIndex: 'quotation_code',
-      minWidth: 200,
-      uniTablePrimaryFlex: true,
-      resizable: false,
-      ellipsis: false,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       order: 10,
       fieldProps: { placeholder: '支持模糊匹配' },
-      render: (_, r) => {
-        const code = String(r.quotation_code ?? '-');
-        const customer = String(r.customer_name ?? '').trim() || '-';
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, lineHeight: 1.35 }}>
-            <Typography.Text ellipsis={{ tooltip: customer }} style={{ fontSize: token.fontSize, maxWidth: '100%' }}>
-              {customer}
-            </Typography.Text>
-            <Typography.Text
-              type="secondary"
-              copyable={{ text: code }}
-              style={{ fontSize: token.fontSizeSM, whiteSpace: 'nowrap' }}
-            >
-              {code}
-            </Typography.Text>
-          </div>
-        );
-      },
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={String(r.customer_name ?? '')}
+          secondary={String(r.quotation_code ?? '')}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.quotation.colSeries'),
