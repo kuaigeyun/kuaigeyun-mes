@@ -58,6 +58,7 @@ import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '..
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
+import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 
 const { Panel } = Collapse;
 
@@ -1346,6 +1347,7 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
 
   return (
     <div style={{ padding: '0 0 16px 0' }}>
+      <QualityMasterDataHint scope="material" />
       <ProFormSelect
         name="inspectionMode"
         label={t('app.master-data.materialForm.inspectionMode')}

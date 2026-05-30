@@ -14,6 +14,7 @@ from core.schemas.base import BaseSchema
 
 class Quality8DBase(BaseSchema):
     quality_exception_id: Optional[int] = Field(None, description="关联质量异常ID")
+    defect_record_id: Optional[int] = Field(None, description="关联不合格品台账ID")
     title: str = Field(..., description="8D 标题")
     status: str = Field("d1_team", description="8D 当前阶段")
     severity: str = Field("major", description="严重级别")
@@ -85,6 +86,10 @@ class OQCInspectionBase(BaseSchema):
     source_code: str = Field(..., description="来源单据编码")
     shipment_notice_id: Optional[int] = Field(None, description="发货通知ID")
     shipment_notice_code: Optional[str] = Field(None, description="发货通知编码")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, description="销售订单编码")
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, description="客户名称")
     material_id: int = Field(..., description="成品物料ID")
     material_code: str = Field(..., description="成品物料编码")
     material_name: str = Field(..., description="成品物料名称")
@@ -111,6 +116,8 @@ class OQCInspectionConduct(BaseSchema):
     release_decision: str = Field("pending", description="放行结论")
     release_note: Optional[str] = Field(None, description="放行说明")
     notes: Optional[str] = Field(None, description="备注")
+    measurement_data: Optional[dict] = Field(None, description="测量数据")
+    item_results: Optional[dict] = Field(None, description="检验项判定结果")
 
 
 class OQCInspectionResponse(OQCInspectionBase):
@@ -126,6 +133,8 @@ class OQCInspectionResponse(OQCInspectionBase):
     review_time: Optional[datetime]
     review_status: str
     status: str
+    inspection_standard: Optional[str] = None
+    other_checks: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

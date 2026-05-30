@@ -1507,6 +1507,36 @@ class ReportService:
             return {"data": items, "success": True}
         return {"data": [], "success": True}
 
+    @staticmethod
+    def _apply_inspection_date_filter(query, date_start: Optional[datetime], date_end: Optional[datetime], time_field: str = "inspection_time"):
+        if date_start:
+            query = query.filter(**{f"{time_field}__gte": date_start})
+        if date_end:
+            query = query.filter(**{f"{time_field}__lte": date_end})
+        return query
+
+    @staticmethod
+    def _monthly_pass_rate_buckets(rows: List[Dict[str, Any]], time_field: str = "inspection_time") -> Dict[str, Dict[str, float]]:
+        buckets: Dict[str, Dict[str, float]] = {}
+        for row in rows:
+            inspected_at = row.get(time_field)
+            if not inspected_at:
+                continue
+            month = inspected_at.strftime("%Y-%m")
+            total = float(row.get("inspection_quantity") or 0)
+            qualified = float(row.get("qualified_quantity") or 0)
+            if month not in buckets:
+                buckets[month] = {"qualified": 0.0, "total": 0.0}
+            buckets[month]["qualified"] += qualified
+            buckets[month]["total"] += total
+        return buckets
+
+    @staticmethod
+    def _pass_rate_from_bucket(bucket: Optional[Dict[str, float]]) -> Optional[float]:
+        if not bucket or float(bucket.get("total") or 0) <= 0:
+            return None
+        return float(bucket["qualified"]) / float(bucket["total"])
+
     async def get_quality_report(self, tenant_id: int, report_type: str = "quality-rate-trend", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None, material_id: Optional[int] = None, **kwargs) -> Dict[str, Any]:
         """质量报表汇总"""
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
@@ -1514,67 +1544,135 @@ class ReportService:
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
         from apps.kuaizhizao.models.defect_record import DefectRecord
         from apps.kuaizhizao.models.quality_exception import QualityException
-        from tortoise.functions import Sum, Count
+        from tortoise.functions import Sum
 
-        if report_type in ["incoming-inspection-report", "incoming"]:
-            # 来料检验报表
-            query = IncomingInspection.filter(tenant_id=tenant_id)
+        if report_type in ["incoming-inspection-report", "incoming", "incoming_pass_rate"]:
+            query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
-            items = await query.limit(100).values("inspection_code", "material_name", "status")
+            query = self._apply_inspection_date_filter(query, date_start, date_end)
+            items = await query.order_by("-inspection_time").limit(100).values(
+                "inspection_code", "material_name", "inspection_time", "status"
+            )
+            for it in items:
+                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
+                it["batch_no"] = None
             return {"data": items, "success": True}
-        elif report_type in ["process-inspection-report", "process"]:
-            # 过程检验报表
-            query = ProcessInspection.filter(tenant_id=tenant_id)
+        elif report_type in ["process-inspection-report", "process", "process_pass_rate"]:
+            query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
-            items = await query.limit(100).values("inspection_code", "material_name", "status")
+            query = self._apply_inspection_date_filter(query, date_start, date_end)
+            items = await query.order_by("-inspection_time").limit(100).values(
+                "inspection_code", "material_name", "work_order_code", "inspection_time", "status"
+            )
+            for it in items:
+                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
             return {"data": items, "success": True}
-        elif report_type in ["finished-inspection-report", "finished"]:
-            # 成品检验报表
-            query = FinishedGoodsInspection.filter(tenant_id=tenant_id)
+        elif report_type in ["finished-inspection-report", "finished", "final_pass_rate"]:
+            query = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
-            items = await query.limit(100).values("inspection_code", "material_name", "status")
+            query = self._apply_inspection_date_filter(query, date_start, date_end)
+            items = await query.order_by("-inspection_time").limit(100).values(
+                "inspection_code", "material_name", "batch_number", "inspection_time", "status"
+            )
+            for it in items:
+                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
+                it["batch_no"] = it.pop("batch_number", None)
             return {"data": items, "success": True}
-        elif report_type in ["quality-exception-tracking", "exception_tracking"]:
-            # 质量异常跟踪
-            query = QualityException.filter(tenant_id=tenant_id)
+        elif report_type in ["quality-exception-tracking", "exception_tracking", "quality_exception"]:
+            query = QualityException.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
-            items = await query.limit(100).values("id", "material_name", "status", "created_at")
+            if date_start:
+                query = query.filter(created_at__gte=date_start)
+            if date_end:
+                query = query.filter(created_at__lte=date_end)
+            items = await query.order_by("-created_at").limit(100).values(
+                "id",
+                "exception_type",
+                "problem_description",
+                "root_cause",
+                "status",
+                "created_at",
+                "material_name",
+            )
+            for it in items:
+                it["exception_code"] = f"QE-{it['id']}"
+                it["discovery_date"] = it["created_at"].date().isoformat() if it["created_at"] else None
+                it["type"] = it["exception_type"]
+                it["reason"] = it["root_cause"] or it["problem_description"]
             return {"data": items, "success": True}
-        elif report_type in ["nonconforming-summary", "defect_summary"]:
-            # 不良品汇总
-            query = DefectRecord.filter(tenant_id=tenant_id)
+        elif report_type in ["nonconforming-summary", "defect_summary", "nonconforming_summary"]:
+            query = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
-                query = query.filter(material_id=material_id)
-            stats = await query.annotate(total_qty=Sum("defect_quantity")).group_by("defect_type").values("defect_type", "total_qty")
+                query = query.filter(product_id=material_id)
+            if date_start:
+                query = query.filter(created_at__gte=date_start)
+            if date_end:
+                query = query.filter(created_at__lte=date_end)
+            items = await query.order_by("-created_at").limit(100).values(
+                "code", "product_name", "defect_quantity", "disposition", "processed_at"
+            )
+            for it in items:
+                it["handle_code"] = it["code"]
+                it["material_name"] = it["product_name"]
+                it["unqualified_qty"] = float(it["defect_quantity"] or 0)
+                it["disposal_method"] = it["disposition"]
+                it["disposal_date"] = it["processed_at"].date().isoformat() if it["processed_at"] else None
+            return {"data": items, "success": True}
+        elif report_type in ["quality-rate-trend", "quality_trend", "quality_rate_trend"]:
+            iqc_query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            ipqc_query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            fqc_query = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if material_id:
+                iqc_query = iqc_query.filter(material_id=material_id)
+                ipqc_query = ipqc_query.filter(material_id=material_id)
+                fqc_query = fqc_query.filter(material_id=material_id)
+            iqc_query = self._apply_inspection_date_filter(iqc_query, date_start, date_end)
+            ipqc_query = self._apply_inspection_date_filter(ipqc_query, date_start, date_end)
+            fqc_query = self._apply_inspection_date_filter(fqc_query, date_start, date_end)
+
+            iqc_rows = await iqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
+            ipqc_rows = await ipqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
+            fqc_rows = await fqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
+
+            iqc_buckets = self._monthly_pass_rate_buckets(iqc_rows)
+            ipqc_buckets = self._monthly_pass_rate_buckets(ipqc_rows)
+            fqc_buckets = self._monthly_pass_rate_buckets(fqc_rows)
+            all_months = sorted(set(iqc_buckets) | set(ipqc_buckets) | set(fqc_buckets))
+
+            stats = []
+            for month in all_months:
+                iqc_rate = self._pass_rate_from_bucket(iqc_buckets.get(month))
+                ipqc_rate = self._pass_rate_from_bucket(ipqc_buckets.get(month))
+                fqc_rate = self._pass_rate_from_bucket(fqc_buckets.get(month))
+                stage_rates = [r for r in (iqc_rate, ipqc_rate, fqc_rate) if r is not None]
+                stats.append({
+                    "month": month,
+                    "iqc_rate": iqc_rate,
+                    "ipqc_rate": ipqc_rate,
+                    "fqc_rate": fqc_rate,
+                    "overall_rate": sum(stage_rates) / len(stage_rates) if stage_rates else None,
+                })
             return {"data": stats, "success": True}
-        elif report_type in ["quality-rate-trend", "quality_trend"]:
-            # 质量合格率趋势
-            query = IncomingInspection.filter(tenant_id=tenant_id)
+        elif report_type in ["defect-pareto-analysis", "pareto", "analysis"]:
+            query = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
-                query = query.filter(material_id=material_id)
-            data = await query.values("inspection_time", "status")
-            if not data: return {"data": [], "success": True}
-            
-            # 使用原生 Python 进行按月分组统计
-            res_dict = {}
-            for row in data:
-                if not row["inspection_time"]: continue
-                month = row["inspection_time"].strftime('%Y-%m')
-                res_dict[month] = res_dict.get(month, 0) + 1
-            
-            stats = [{"month": k, "count": v} for k, v in sorted(res_dict.items())]
-            return {"data": stats, "success": True}
-        elif report_type in ["defect-pareto-analysis", "pareto"]:
-            # 不良原因柏拉图分析
-            query = DefectRecord.filter(tenant_id=tenant_id)
-            if material_id:
-                query = query.filter(material_id=material_id)
-            stats = await query.annotate(total_qty=Sum("defect_quantity")).group_by("defect_reason").values("defect_reason", "total_qty")
-            return {"data": stats, "success": True}
+                query = query.filter(product_id=material_id)
+            if date_start:
+                query = query.filter(created_at__gte=date_start)
+            if date_end:
+                query = query.filter(created_at__lte=date_end)
+            items = await query.order_by("-created_at").limit(100).values(
+                "code", "product_name", "defect_type", "defect_quantity", "created_at", "defect_reason"
+            )
+            for it in items:
+                it["defect_code"] = it["code"]
+                it["material_name"] = it["product_name"]
+                it["defect_quantity"] = float(it["defect_quantity"] or 0)
+            return {"data": items, "success": True}
         return {"data": [], "success": True}
 
     async def get_equipment_report(self, tenant_id: int, report_type: str = "equipment-oee-analysis", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:

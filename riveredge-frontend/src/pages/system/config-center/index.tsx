@@ -39,6 +39,7 @@ import {
 } from './configTree';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
 import { WorkOrderScoreProfilesPanel } from './WorkOrderScoreProfilesPanel';
+import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
 import type { Color } from 'antd/es/color-picker';
 
@@ -53,6 +54,38 @@ export const PARAM_GUIDANCE_I18N_KEY_MAP: Record<string, string> = {
 
 export function getParamGuidanceI18nKey(paramKey: string): string | undefined {
   return PARAM_GUIDANCE_I18N_KEY_MAP[paramKey];
+}
+
+/** 质检参数：上级环节/模块关闭时禁用子项（与后端 validate_quality_business_parameters 一致） */
+export function isQualityParamDisabled(paramKey: string, values: Record<string, any> | undefined): boolean {
+  if (!values) return false;
+  const incoming = values['quality.incoming_inspection'] !== false;
+  const iqcStage = values['quality_stage.iqc_enabled'] !== false;
+  const process = values['quality.process_inspection'] !== false;
+  const ipqcStage = values['quality_stage.ipqc_enabled'] !== false;
+  const finished = values['quality.finished_inspection'] !== false;
+  const fqcStage = values['quality_stage.fqc_enabled'] !== false;
+  const oqcStage = values['quality_stage.oqc_enabled'] !== false;
+
+  if (
+    paramKey === 'quality.require_incoming_inspection_for_receipt'
+    || paramKey === 'quality.auto_create_iqc_on_purchase_receipt'
+  ) {
+    return !(incoming && iqcStage);
+  }
+  if (paramKey === 'quality.auto_create_ipqc_on_reporting') {
+    return !(process && ipqcStage);
+  }
+  if (paramKey === 'quality.auto_create_fqc_on_last_reporting') {
+    return !(finished && fqcStage);
+  }
+  if (
+    paramKey === 'quality.auto_create_oqc_on_shipment_notice_notify'
+    || paramKey === 'quality.auto_create_oqc_on_sales_delivery'
+  ) {
+    return !oqcStage;
+  }
+  return false;
 }
 
 /** 从 business_config 提取 parameters 下的值到扁平 key */
@@ -201,6 +234,7 @@ const ConfigCenterPage: React.FC = () => {
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
 
   const [form] = Form.useForm();
+  const qualityFormValues = Form.useWatch([], form);
   const [saving, setSaving] = useState(false);
   const containerRef = useRef<any>(null);
   const [containerHeight, setContainerHeight] = useState<number>(400);
@@ -389,6 +423,11 @@ const ConfigCenterPage: React.FC = () => {
     const tVal = searchParams.get('tab');
     const normalized = tVal === 'flow' ? 'parameters' : tVal;
     if (normalized && validTabs.includes(normalized) && activeMainTab !== normalized) setActiveMainTab(normalized);
+    const moduleId = searchParams.get('module');
+    if (moduleId) {
+      setSelectedParamCat(moduleId);
+      setSelectedAutoCat(moduleId);
+    }
   }, [searchParams, activeMainTab, validTabs]);
 
   useEffect(() => {
@@ -406,6 +445,14 @@ const ConfigCenterPage: React.FC = () => {
   useEffect(() => {
     const initialValues = flattenBusinessParams(bizRes?.parameters || {});
     form.setFieldsValue(initialValues);
+    void qualityApi.stageToggles.get().then((toggles) => {
+      form.setFieldsValue({
+        'quality_stage.iqc_enabled': toggles.iqc_enabled,
+        'quality_stage.ipqc_enabled': toggles.ipqc_enabled,
+        'quality_stage.fqc_enabled': toggles.fqc_enabled,
+        'quality_stage.oqc_enabled': toggles.oqc_enabled,
+      });
+    }).catch(() => {});
   }, [bizRes, form]);
 
   const handleSave = async (categories: ConfigCategory[]) => {
@@ -426,6 +473,26 @@ const ConfigCenterPage: React.FC = () => {
       const bizParams = toBusinessParams(values, bizKeys);
       if (Object.keys(bizParams).length > 0) {
         await batchUpdateProcessParameters({ parameters: bizParams });
+      }
+
+      const stageFieldMap: Record<string, keyof import('../../../apps/kuaizhizao/services/quality-execution').QualityInspectionStageToggles> = {
+        'quality_stage.iqc_enabled': 'iqc_enabled',
+        'quality_stage.ipqc_enabled': 'ipqc_enabled',
+        'quality_stage.fqc_enabled': 'fqc_enabled',
+        'quality_stage.oqc_enabled': 'oqc_enabled',
+      };
+      const stageUpdate: Partial<import('../../../apps/kuaizhizao/services/quality-execution').QualityInspectionStageToggles> = {};
+      for (const cat of categories) {
+        for (const param of cat.params) {
+          if (param.source !== 'quality_stage_toggle') continue;
+          const apiKey = stageFieldMap[param.key];
+          if (apiKey && param.key in values) {
+            stageUpdate[apiKey] = Boolean(values[param.key]);
+          }
+        }
+      }
+      if (Object.keys(stageUpdate).length > 0) {
+        await qualityApi.stageToggles.update(stageUpdate);
       }
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
       await refetchBusinessConfig();
@@ -739,12 +806,30 @@ const ConfigCenterPage: React.FC = () => {
             {!showAuditSection && (
               <>
                 <Spin spinning={loading}>
-                  <Form form={form} layout="vertical">
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    onValuesChange={(changedValues) => {
+                      if (
+                        changedValues['quality.require_incoming_inspection_for_receipt'] === true
+                        && !form.getFieldValue('quality.auto_create_iqc_on_purchase_receipt')
+                      ) {
+                        Modal.confirm({
+                          title: t('pages.system.configCenter.quality.gateRecommendAutoIqcTitle'),
+                          content: t('pages.system.configCenter.quality.gateRecommendAutoIqcContent'),
+                          okText: t('pages.system.configCenter.quality.gateRecommendAutoIqcEnableBoth'),
+                          cancelText: t('pages.system.configCenter.quality.gateRecommendAutoIqcSkip'),
+                          onOk: () => form.setFieldValue('quality.auto_create_iqc_on_purchase_receipt', true),
+                        });
+                      }
+                    }}
+                  >
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
                       {currentCat.params
-                        .filter((param) => isImplementedParam(param.sourcePath))
+                        .filter((param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath))
                         .map(param => {
                         const implemented = isImplementedParam(param.sourcePath);
+                        const switchDisabled = !implemented || isQualityParamDisabled(param.key, qualityFormValues);
                         return (
                           <Card key={param.key} size="small">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -763,7 +848,7 @@ const ConfigCenterPage: React.FC = () => {
                                     : undefined
                                 }
                               >
-                                {param.type === 'boolean' ? <Switch disabled={!implemented} /> :
+                                {param.type === 'boolean' ? <Switch disabled={switchDisabled} /> :
                                  param.type === 'number' ? <InputNumber size="middle" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
                                  param.type === 'select' ? <Select size="middle" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
                                  param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}

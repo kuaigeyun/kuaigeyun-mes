@@ -266,6 +266,11 @@ PARAMETER_KEYS = {
     "parameters.quality.process_inspection",
     "parameters.quality.finished_inspection",
     "parameters.quality.defect_handling",
+    "parameters.quality.auto_create_iqc_on_purchase_receipt",
+    "parameters.quality.auto_create_ipqc_on_reporting",
+    "parameters.quality.auto_create_fqc_on_last_reporting",
+    "parameters.quality.auto_create_oqc_on_shipment_notice_notify",
+    "parameters.quality.auto_create_oqc_on_sales_delivery",
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
     "parameters.finance.auto_write_off_precision_limit",
@@ -312,6 +317,11 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.quality.process_inspection",
     "parameters.quality.finished_inspection",
     "parameters.quality.defect_handling",
+    "parameters.quality.auto_create_iqc_on_purchase_receipt",
+    "parameters.quality.auto_create_ipqc_on_reporting",
+    "parameters.quality.auto_create_fqc_on_last_reporting",
+    "parameters.quality.auto_create_oqc_on_shipment_notice_notify",
+    "parameters.quality.auto_create_oqc_on_sales_delivery",
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
     "parameters.finance.auto_write_off_precision_limit",
@@ -416,6 +426,11 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "process_inspection": True,
         "finished_inspection": True,
         "defect_handling": True,
+        "auto_create_iqc_on_purchase_receipt": False,
+        "auto_create_ipqc_on_reporting": True,
+        "auto_create_fqc_on_last_reporting": True,
+        "auto_create_oqc_on_shipment_notice_notify": False,
+        "auto_create_oqc_on_sales_delivery": False,
     },
     "sales": {
         "audit_enabled": False,
@@ -1005,6 +1020,11 @@ class BusinessConfigService:
         business_config.setdefault("parameters", {})
         for category, params in parameters.items():
             business_config["parameters"].setdefault(category, {}).update(params)
+        if "quality" in parameters:
+            from apps.kuaizhizao.services.inspection_policy_service import validate_quality_business_parameters
+
+            merged_quality = business_config["parameters"].get("quality") or {}
+            validate_quality_business_parameters(merged_quality)
         if "finance" in business_config["parameters"]:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]

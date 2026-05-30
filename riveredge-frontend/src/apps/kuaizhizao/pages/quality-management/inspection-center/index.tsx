@@ -1,5 +1,5 @@
 import React, { useMemo, Suspense, lazy } from 'react';
-import { App, Button, Space, Typography, Tag, Skeleton } from 'antd';
+import { App, Button, Space, Typography, Tag, Skeleton, Card, Descriptions } from 'antd';
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
@@ -10,8 +10,13 @@ import {
   FileDoneOutlined,
   PartitionOutlined,
   DatabaseOutlined,
+  ExportOutlined,
+  AuditOutlined,
+  LineChartOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useRequest } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -65,6 +70,7 @@ function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
 
 const InspectionCenter: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message } = App.useApp();
 
   const { data: summary, loading: summaryLoading } = useRequest(
@@ -85,7 +91,19 @@ const InspectionCenter: React.FC = () => {
   const qualityTodos = todosData?.items ?? [];
 
   const pendingTotal =
-    (summary?.pending_incoming || 0) + (summary?.pending_process || 0) + (summary?.pending_finished || 0);
+    (summary?.pending_incoming || 0) +
+    (summary?.pending_process || 0) +
+    (summary?.pending_finished || 0) +
+    (summary?.pending_oqc || 0);
+
+  const { data: stageToggles } = useRequest(() => qualityApi.stageToggles.get(), {
+    onError: (e: any) => message.error(e?.message || '加载质检环节开关失败'),
+  });
+
+  const stageOn = (enabled?: boolean) =>
+    enabled !== false
+      ? t('common.enabled', { defaultValue: '开启' })
+      : t('common.disabled', { defaultValue: '关闭' });
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
@@ -99,7 +117,7 @@ const InspectionCenter: React.FC = () => {
         onClick: () => navigate('/apps/kuaizhizao/quality-management/incoming-inspection'),
         sideMetrics: [
           { label: '来料/过程', value: `${summary?.pending_incoming || 0} / ${summary?.pending_process || 0}` },
-          { label: '成品待检', value: summary?.pending_finished || 0 },
+          { label: '成品/OQC', value: `${summary?.pending_finished || 0} / ${summary?.pending_oqc || 0}` },
         ],
       },
       {
@@ -152,9 +170,39 @@ const InspectionCenter: React.FC = () => {
     },
     {
       key: 'finished',
-      title: '成品检验',
+      title: '成品检验 (FQC)',
       icon: <SafetyCertificateOutlined style={{ fontSize: 20, color: '#52c41a' }} />,
       path: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+    },
+    {
+      key: 'oqc',
+      title: '出货检验 (OQC)',
+      icon: <ExportOutlined style={{ fontSize: 20, color: '#13c2c2' }} />,
+      path: '/apps/kuaizhizao/quality-management/oqc-inspection',
+    },
+    {
+      key: 'nc',
+      title: '不合格品台账',
+      icon: <AlertOutlined style={{ fontSize: 20, color: '#f5222d' }} />,
+      path: '/apps/kuaizhizao/quality-management/nonconforming-ledger',
+    },
+    {
+      key: '8d',
+      title: '8D 报告',
+      icon: <AuditOutlined style={{ fontSize: 20, color: '#eb2f96' }} />,
+      path: '/apps/kuaizhizao/quality-management/eight-d-reports',
+    },
+    {
+      key: 'trace',
+      title: '质量追溯',
+      icon: <NodeIndexOutlined style={{ fontSize: 20, color: '#2f54eb' }} />,
+      path: '/apps/kuaizhizao/quality-management/traceability',
+    },
+    {
+      key: 'reports',
+      title: '质量报表',
+      icon: <LineChartOutlined style={{ fontSize: 20, color: '#fa541c' }} />,
+      path: '/apps/kuaizhizao/quality-management/reports/incoming-inspection',
     },
     {
       key: 'plans',
@@ -255,6 +303,27 @@ const InspectionCenter: React.FC = () => {
       }
       chartRow={
         <ModuleChartRow>
+          <ModuleChartPanel title={t('app.kuaizhizao.quality.inspectionCenter.stageTogglesTitle')} lg={8}>
+            <Card size="small" variant="borderless">
+              <Descriptions column={1} size="small">
+                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageIqc')}>{stageOn(stageToggles?.iqc_enabled)}</Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageIpqc')}>{stageOn(stageToggles?.ipqc_enabled)}</Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageFqc')}>{stageOn(stageToggles?.fqc_enabled)}</Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageOqc')}>{stageOn(stageToggles?.oqc_enabled)}</Descriptions.Item>
+              </Descriptions>
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                {t('app.kuaizhizao.quality.inspectionCenter.stageReadonlyHint')}
+              </Text>
+              <Button
+                type="link"
+                size="small"
+                style={{ paddingLeft: 0, marginTop: 4 }}
+                onClick={() => navigate('/system/config-center?tab=parameters&module=quality')}
+              >
+                {t('app.kuaizhizao.quality.inspectionCenter.gotoConfigCenter')}
+              </Button>
+            </Card>
+          </ModuleChartPanel>
           <ModuleChartPanel
             title={
               <Space>
@@ -262,7 +331,7 @@ const InspectionCenter: React.FC = () => {
                 <span>质量合格率趋势</span>
               </Space>
             }
-            lg={24}
+            lg={16}
           >
             <Suspense fallback={<Skeleton active />}>
               <PassRateLineChart {...trendConfig} height={300} />

@@ -63,6 +63,7 @@ async def push_document(
     - demand_computation -> work_order: 从需求计算下推到工单
     - demand_computation -> purchase_order: 从需求计算下推到采购单
     - demand_computation -> production_plan: 从需求计算下推到生产计划
+    - purchase_receipt -> incoming_inspection: 从采购入库单下推来料检验
     """
     try:
         service = DocumentPushPullService()

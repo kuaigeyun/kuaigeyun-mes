@@ -72,6 +72,7 @@ class DocumentPushPullService:
         - demand -> demand_computation: 从需求下推到需求计算
         - demand_computation -> work_order: 从需求计算下推到工单
         - demand_computation -> purchase_order: 从需求计算下推到采购单
+        - purchase_receipt -> incoming_inspection: 从采购入库单下推来料检验
         
         Args:
             tenant_id: 租户ID
@@ -121,6 +122,10 @@ class DocumentPushPullService:
                 )
             elif source_type == "production_plan" and target_type == "work_order":
                 return await self._push_production_plan_to_work_order(
+                    tenant_id, source_id, push_params, created_by
+                )
+            elif source_type == "purchase_receipt" and target_type == "incoming_inspection":
+                return await self._push_purchase_receipt_to_incoming_inspection(
                     tenant_id, source_id, push_params, created_by
                 )
             else:
@@ -830,6 +835,45 @@ class DocumentPushPullService:
             "relations": [r.model_dump() if hasattr(r, "model_dump") else r for r in relations],
         }
 
+    async def _push_purchase_receipt_to_incoming_inspection(
+        self,
+        tenant_id: int,
+        purchase_receipt_id: int,
+        push_params: Optional[Dict[str, Any]],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """从采购入库单下推来料检验单"""
+        from apps.kuaizhizao.services.quality_service import IncomingInspectionService
+
+        inspections = await IncomingInspectionService().create_inspection_from_purchase_receipt(
+            tenant_id=tenant_id,
+            purchase_receipt_id=purchase_receipt_id,
+            created_by=created_by,
+        )
+        if len(inspections) == 1:
+            insp = inspections[0]
+            return {
+                "success": True,
+                "message": "下推成功，已生成来料检验单",
+                "target_document": {
+                    "type": "incoming_inspection",
+                    "id": insp.id,
+                    "code": insp.inspection_code,
+                },
+            }
+        return {
+            "success": True,
+            "message": f"下推成功，共生成 {len(inspections)} 张来料检验单",
+            "target_documents": [
+                {
+                    "type": "incoming_inspection",
+                    "id": insp.id,
+                    "code": insp.inspection_code,
+                }
+                for insp in inspections
+            ],
+        }
+
     async def _push_computation_to_purchase_order(
         self,
         tenant_id: int,
@@ -990,6 +1034,9 @@ class DocumentPushPullService:
         elif document_type == "production_plan":
             from apps.kuaizhizao.models.production_plan import ProductionPlan
             return await ProductionPlan.get_or_none(tenant_id=tenant_id, id=document_id)
+        elif document_type == "purchase_receipt":
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            return await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
         else:
             return None
     
@@ -1001,6 +1048,8 @@ class DocumentPushPullService:
             return source_doc.computation_status == "完成"
         elif source_type == "production_plan":
             return getattr(source_doc, "status", None) in ("草稿", "已审核")
+        elif source_type == "purchase_receipt":
+            return getattr(source_doc, "status", None) in ("待入库", "已入库")
         else:
             return True
     
@@ -1016,6 +1065,8 @@ class DocumentPushPullService:
             return doc.order_code
         elif doc_type == "production_plan":
             return getattr(doc, "plan_code", None)
+        elif doc_type == "purchase_receipt":
+            return getattr(doc, "receipt_code", None)
         else:
             return None
     

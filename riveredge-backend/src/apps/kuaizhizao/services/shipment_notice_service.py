@@ -373,12 +373,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
 
         notice_items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+
+        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
+
+        await QualityAutomationService().maybe_auto_create_oqc_from_shipment_notice(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            user_id=notified_by,
+        )
         await assert_oqc_for_outbound_lines(
             tenant_id,
             sales_order_id=notice.sales_order_id,
             customer_id=notice.customer_id,
             lines=list(notice_items),
             quantity_attr="notice_quantity",
+            shipment_notice_id=notice.id,
         )
 
         # 生成相应的销售出库单

@@ -3,6 +3,7 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import ReportBase from '../../../components/ReportBase';
 import { getQualityReport } from '../../../services/reports';
+import { QUALITY_REPORT_TYPES } from '../../../constants/qualityReportTypes';
 
 const DefectParetoAnalysis: React.FC = () => {
   const { t } = useTranslation();
@@ -17,13 +18,13 @@ const DefectParetoAnalysis: React.FC = () => {
   return (
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.defect-pareto-analysis')}
-      reportType="analysis"
+      reportType={QUALITY_REPORT_TYPES.DEFECT_PARETO}
       columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.DefectParetoAnalysis"
       columns={columns}
       request={async (params: any) => {
         const res = await getQualityReport({
           ...params,
-          report_type: 'analysis',
+          report_type: QUALITY_REPORT_TYPES.DEFECT_PARETO,
         });
         return {
           data: res.data || [],

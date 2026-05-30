@@ -41,7 +41,15 @@ def _require_tenant_or_platform_admin(auth: AuthContext) -> None:
     if not (auth.is_tenant_admin or auth.is_infra_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="仅组织管理员或平台管理员可安装、卸载、启停应用或激活专业版授权。",
+            detail="仅组织管理员或平台管理员可安装、卸载应用或激活专业版授权。",
+        )
+
+
+def _require_platform_admin(auth: AuthContext) -> None:
+    if not auth.is_infra_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅平台管理员可安装、卸载、启用或禁用应用。",
         )
 
 
@@ -495,7 +503,7 @@ async def install_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_tenant_or_platform_admin(auth)
+        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.install_application(
@@ -546,7 +554,7 @@ async def uninstall_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_tenant_or_platform_admin(auth)
+        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.uninstall_application(
@@ -597,7 +605,7 @@ async def enable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_tenant_or_platform_admin(auth)
+        _require_platform_admin(auth)
         app_detail = await ApplicationService.get_application_by_uuid(
             tenant_id=tenant_id,
             uuid=uuid,
@@ -722,7 +730,7 @@ async def disable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_tenant_or_platform_admin(auth)
+        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
         application = await ApplicationService.disable_application(

@@ -5,7 +5,7 @@
  * 每个大类内部按 8 个系统模块（销售、计划等）组织，实现 1 对 1 菜单映射。
  */
 
-export type ConfigSource = 'business_config' | 'site_setting' | 'system_parameter';
+export type ConfigSource = 'business_config' | 'site_setting' | 'system_parameter' | 'quality_stage_toggle';
 export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select';
 
 /** 下拉选项（label 使用 i18n key，由页面 t(labelKey) 渲染） */
@@ -103,6 +103,17 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'warehouse.lifo', nameKey: 'pages.system.configCenter.param.warehouse_lifo', descriptionKey: 'pages.system.configCenter.param.warehouse_lifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.lifo', type: 'boolean' },
     { key: 'warehouse.location_management', nameKey: 'pages.system.configCenter.param.warehouse_location_management', descriptionKey: 'pages.system.configCenter.param.warehouse_location_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.location_management', type: 'boolean' },
   ],
+  quality: [
+    { key: 'quality_stage.iqc_enabled', nameKey: 'pages.system.configCenter.param.quality_stage_iqc_enabled', descriptionKey: 'pages.system.configCenter.param.quality_stage_iqc_enabled_desc', source: 'quality_stage_toggle', sourcePath: 'quality_stage.iqc_enabled', type: 'boolean' },
+    { key: 'quality_stage.ipqc_enabled', nameKey: 'pages.system.configCenter.param.quality_stage_ipqc_enabled', descriptionKey: 'pages.system.configCenter.param.quality_stage_ipqc_enabled_desc', source: 'quality_stage_toggle', sourcePath: 'quality_stage.ipqc_enabled', type: 'boolean' },
+    { key: 'quality_stage.fqc_enabled', nameKey: 'pages.system.configCenter.param.quality_stage_fqc_enabled', descriptionKey: 'pages.system.configCenter.param.quality_stage_fqc_enabled_desc', source: 'quality_stage_toggle', sourcePath: 'quality_stage.fqc_enabled', type: 'boolean' },
+    { key: 'quality_stage.oqc_enabled', nameKey: 'pages.system.configCenter.param.quality_stage_oqc_enabled', descriptionKey: 'pages.system.configCenter.param.quality_stage_oqc_enabled_desc', source: 'quality_stage_toggle', sourcePath: 'quality_stage.oqc_enabled', type: 'boolean' },
+    { key: 'quality.incoming_inspection', nameKey: 'pages.system.configCenter.param.quality_incoming_inspection', descriptionKey: 'pages.system.configCenter.param.quality_incoming_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.incoming_inspection', type: 'boolean' },
+    { key: 'quality.process_inspection', nameKey: 'pages.system.configCenter.param.quality_process_inspection', descriptionKey: 'pages.system.configCenter.param.quality_process_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.process_inspection', type: 'boolean' },
+    { key: 'quality.finished_inspection', nameKey: 'pages.system.configCenter.param.quality_finished_inspection', descriptionKey: 'pages.system.configCenter.param.quality_finished_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.finished_inspection', type: 'boolean' },
+    { key: 'quality.defect_handling', nameKey: 'pages.system.configCenter.param.quality_defect_handling', descriptionKey: 'pages.system.configCenter.param.quality_defect_handling_desc', source: 'business_config', sourcePath: 'parameters.quality.defect_handling', type: 'boolean' },
+    { key: 'quality.require_incoming_inspection_for_receipt', nameKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt', descriptionKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.require_incoming_inspection_for_receipt', type: 'boolean' },
+  ],
   finance: [
     { key: 'finance.auto_write_off_precision_limit', nameKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit', descriptionKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit_desc', source: 'business_config', sourcePath: 'parameters.finance.auto_write_off_precision_limit', type: 'number', min: 0, max: 100 },
     {
@@ -199,6 +210,13 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.finance.auto_generate_payable_from_purchase_invoice',
       type: 'boolean',
     },
+  ],
+  quality: [
+    { key: 'quality.auto_create_iqc_on_purchase_receipt', nameKey: 'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_iqc_on_purchase_receipt', type: 'boolean' },
+    { key: 'quality.auto_create_ipqc_on_reporting', nameKey: 'pages.system.configCenter.param.quality_auto_create_ipqc_on_reporting', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_ipqc_on_reporting_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_ipqc_on_reporting', type: 'boolean' },
+    { key: 'quality.auto_create_fqc_on_last_reporting', nameKey: 'pages.system.configCenter.param.quality_auto_create_fqc_on_last_reporting', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_fqc_on_last_reporting_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_fqc_on_last_reporting', type: 'boolean' },
+    { key: 'quality.auto_create_oqc_on_shipment_notice_notify', nameKey: 'pages.system.configCenter.param.quality_auto_create_oqc_on_shipment_notice_notify', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_oqc_on_shipment_notice_notify_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_oqc_on_shipment_notice_notify', type: 'boolean' },
+    { key: 'quality.auto_create_oqc_on_sales_delivery', nameKey: 'pages.system.configCenter.param.quality_auto_create_oqc_on_sales_delivery', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_oqc_on_sales_delivery_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_oqc_on_sales_delivery', type: 'boolean' },
   ],
 });
 

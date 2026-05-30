@@ -106,6 +106,263 @@ def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
     }
 
 
+async def _resolve_inspection_template_fields(
+    tenant_id: int,
+    material_id: Optional[int],
+    standard_type: str,
+    operation_id: Optional[int] = None,
+    explicit_plan_id: Optional[int] = None,
+    use_quality_characteristics: bool = False,
+) -> Dict[str, Any]:
+    """按物料质检模式（plan/simple）填充检验项模板。"""
+    from apps.master_data.models.material import Material
+    from apps.master_data.models.process import Operation as MasterOperation
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
+    from apps.kuaizhizao.models.quality_standard import QualityStandard
+    from apps.kuaizhizao.services.inspection_policy_service import normalize_inspection_mode
+
+    if not material_id:
+        return {}
+
+    mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+    if not mat:
+        return {}
+
+    mode = normalize_inspection_mode(getattr(mat, "inspection_mode", None))
+    if mode == "none":
+        return {}
+
+    def _items_field(items_payload: dict) -> Dict[str, Any]:
+        if use_quality_characteristics:
+            return {"quality_characteristics": items_payload}
+        return {"other_checks": items_payload}
+
+    plan_id = explicit_plan_id or getattr(mat, "default_inspection_plan_id", None)
+    if mode == "plan" and operation_id:
+        op = await MasterOperation.get_or_none(
+            tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
+        )
+        if op and getattr(op, "default_inspection_plan_id", None):
+            plan_id = op.default_inspection_plan_id
+
+    if mode == "plan":
+        plan = None
+        if plan_id:
+            plan = await InspectionPlan.filter(
+                tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True, is_active=True
+            ).first()
+        if not plan:
+            plan = await InspectionPlan.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                plan_type=standard_type,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).order_by("-created_at").first()
+        if plan:
+            steps = await InspectionPlanStep.filter(plan_id=plan.id).order_by("sequence").all()
+            items: List[Dict[str, Any]] = []
+            for step in steps:
+                item: Dict[str, Any] = {
+                    "sequence": step.sequence,
+                    "inspection_item": step.inspection_item,
+                    "inspection_method": step.inspection_method,
+                    "acceptance_criteria": step.acceptance_criteria,
+                    "sampling_type": step.sampling_type,
+                }
+                if step.quality_standard_id:
+                    std = await QualityStandard.get_or_none(
+                        tenant_id=tenant_id, id=step.quality_standard_id, deleted_at__isnull=True
+                    )
+                    if std:
+                        item["standard"] = {
+                            "standard_code": std.standard_code,
+                            "inspection_items": std.inspection_items,
+                            "acceptance_criteria": std.acceptance_criteria,
+                        }
+                items.append(item)
+            payload = {"plan_id": plan.id, "plan_code": plan.plan_code, "items": items}
+            return {
+                "inspection_standard": f"{plan.plan_name} ({plan.plan_code})",
+                **_items_field(payload),
+            }
+
+    if mode == "simple":
+        std = await QualityStandard.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            standard_type=standard_type,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").first()
+        if not std:
+            std = await QualityStandard.filter(
+                tenant_id=tenant_id,
+                material_id__isnull=True,
+                standard_type=standard_type,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).order_by("-created_at").first()
+        if std:
+            methods = std.inspection_methods
+            first_method = methods[0] if isinstance(methods, list) and methods else None
+            payload = {
+                "standard_id": std.id,
+                "inspection_items": std.inspection_items,
+                "inspection_methods": std.inspection_methods,
+                "acceptance_criteria": std.acceptance_criteria,
+            }
+            return {
+                "inspection_standard": f"{std.standard_name} ({std.standard_code})",
+                "inspection_method": first_method,
+                **_items_field(payload),
+            }
+    return {}
+
+
+def _validate_inspection_template_conduct(
+    template_json: Any,
+    conduct_data: Dict[str, Any],
+) -> None:
+    """plan 模式须逐项填写 item_results 或 measurement_data 后方可提交。"""
+    from infra.exceptions.exceptions import ValidationError
+
+    if not template_json or not isinstance(template_json, dict):
+        return
+    items = template_json.get("items")
+    if not items or not isinstance(items, list):
+        if template_json.get("plan_id"):
+            item_results = conduct_data.get("item_results") or {}
+            if not item_results:
+                raise ValidationError("检验方案模式下须填写检验项判定结果")
+        return
+
+    measurement = conduct_data.get("measurement_data") or {}
+    item_results = conduct_data.get("item_results") or {}
+    missing: List[str] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("inspection_item") or f"项{idx + 1}"
+        key = str(idx)
+        filled = (
+            key in item_results and item_results[key] not in (None, "")
+        ) or (
+            name in measurement and measurement[name] not in (None, "")
+        )
+        if not filled:
+            missing.append(str(name))
+    if missing:
+        raise ValidationError(f"请完成检验项：{'、'.join(missing)}")
+
+
+def _apply_template_conduct_to_payload(
+    inspection: Any,
+    template_attr: str,
+    inspection_data: dict,
+) -> dict:
+    """校验方案项并返回可写入 ORM 的 conduct 附加字段。"""
+    template = getattr(inspection, template_attr, None)
+    _validate_inspection_template_conduct(template, inspection_data)
+    payload = {
+        k: v
+        for k, v in inspection_data.items()
+        if k not in ("item_results",) and v is not None
+    }
+    if template and (
+        inspection_data.get("item_results") or inspection_data.get("measurement_data")
+    ):
+        payload[template_attr] = _merge_template_conduct_results(template, inspection_data)
+    elif "item_results" in payload:
+        payload.pop("item_results", None)
+    return payload
+
+
+def _merge_template_conduct_results(
+    template_json: Any,
+    conduct_data: Dict[str, Any],
+) -> Any:
+    """将 conduct 的 item_results / measurement_data 写回模板 JSON 副本。"""
+    if not template_json or not isinstance(template_json, dict):
+        return template_json
+    merged = dict(template_json)
+    if conduct_data.get("item_results"):
+        merged["conduct_item_results"] = conduct_data["item_results"]
+    if conduct_data.get("measurement_data"):
+        merged["conduct_measurement_data"] = conduct_data["measurement_data"]
+    return merged
+
+
+async def _maybe_create_quality_exception_from_inspection(
+    tenant_id: int,
+    source_type: str,
+    source_id: int,
+    inspected_by: int,
+    problem_description: Optional[str] = None,
+    severity: str = "major",
+) -> None:
+    """检验不合格时自动创建质量异常（幂等：同检验单不重复）。"""
+    from apps.kuaizhizao.models.quality_exception import QualityException
+    from apps.kuaizhizao.services.exception_service import ExceptionService
+
+    existing = await QualityException.filter(
+        tenant_id=tenant_id,
+        inspection_record_id=source_id,
+        inspection_source_type=source_type,
+        exception_type="inspection_failure",
+        status__in=["pending", "investigating", "correcting"],
+        deleted_at__isnull=True,
+    ).first()
+    if existing:
+        return
+
+    await ExceptionService().create_from_inspection(
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
+        created_by=inspected_by,
+        problem_description=problem_description,
+        severity=severity,
+    )
+
+
+async def _maybe_record_spc_samples_from_ipqc(
+    tenant_id: int,
+    inspection_id: int,
+    inspection_code: str,
+    measurement_data: Any,
+    user_id: int,
+) -> None:
+    """IPQC 检验含测量数据时写入 SPC 样本。"""
+    if not measurement_data or not isinstance(measurement_data, dict):
+        return
+
+    from apps.kuaizhizao.schemas.quality_improvement import SPCSampleCreate
+    from apps.kuaizhizao.services.quality_improvement_service import SPCService
+
+    spc_svc = SPCService()
+    sample_time = datetime.now()
+    for key, value in measurement_data.items():
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        await spc_svc.create_sample(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            payload=SPCSampleCreate(
+                characteristic_name=str(key),
+                sample_time=sample_time,
+                sample_value=numeric,
+                source_type="process_inspection",
+                source_id=inspection_id,
+                source_code=inspection_code,
+            ),
+        )
+
+
 class IncomingInspectionService(AppBaseService[IncomingInspection]):
     """来料检验单服务"""
 
@@ -124,6 +381,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                create_data.get("material_id"),
+                "incoming",
+            )
+            for k, v in template.items():
+                create_data.setdefault(k, v)
             # 检查业务配置：若无需审核，则创建时直接设为已审核（考虑中小企业实情）
             from apps.kuaizhizao.constants import ReviewStatus
             audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
@@ -167,6 +431,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             query = query.filter(supplier_id=filters['supplier_id'])
         if filters.get('material_id'):
             query = query.filter(material_id=filters['material_id'])
+        if filters.get('purchase_receipt_id'):
+            query = query.filter(purchase_receipt_id=filters['purchase_receipt_id'])
 
         # 获取总数
         total = await query.count()
@@ -211,6 +477,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
+            conduct_payload = _apply_template_conduct_to_payload(
+                inspection, "other_checks", inspection_data
+            )
+
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 qualified_quantity=qualified_quantity,
                 unqualified_quantity=unqualified_quantity,
@@ -221,11 +491,21 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 inspection_time=datetime.now(),
                 status="已检验",
                 updated_by=inspected_by,
-                **inspection_data
+                **conduct_payload
             )
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             
+            if updated_inspection.quality_status == "不合格" and updated_inspection.unqualified_quantity > 0:
+                await _maybe_create_quality_exception_from_inspection(
+                    tenant_id=tenant_id,
+                    source_type="incoming_inspection",
+                    source_id=inspection_id,
+                    inspected_by=inspected_by,
+                    problem_description=inspection_data.get("nonconformance_reason")
+                    or f"来料检验不合格：{updated_inspection.inspection_code}",
+                )
+
             # 如果合格，可以增加逻辑确保其可以正式入库（如果入库单是待入库状态）
             if updated_inspection.quality_status == "合格" and updated_inspection.qualified_quantity > 0:
                 try:
@@ -402,6 +682,12 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 )
                 if eff == "none":
                     continue
+
+                template = await _resolve_inspection_template_fields(
+                    tenant_id,
+                    item.material_id,
+                    "incoming",
+                )
                 
                 # 创建检验单
                 today = datetime.now().strftime("%Y%m%d")
@@ -426,6 +712,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     quality_status="待判定",
                     status="待检验",
                     created_by=created_by,
+                    **template,
                 )
                 inspections.append(IncomingInspectionResponse.model_validate(inspection))
 
@@ -690,6 +977,15 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                create_data.get("material_id"),
+                "process",
+                operation_id=create_data.get("operation_id"),
+                use_quality_characteristics=True,
+            )
+            for k, v in template.items():
+                create_data.setdefault(k, v)
             from apps.kuaizhizao.constants import ReviewStatus
             audit_required = await _is_quality_audit_required(tenant_id, "process_inspection")
             if not audit_required:
@@ -755,6 +1051,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
+            conduct_payload = _apply_template_conduct_to_payload(
+                inspection, "quality_characteristics", inspection_data
+            )
+
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 qualified_quantity=qualified_quantity,
                 unqualified_quantity=unqualified_quantity,
@@ -765,11 +1065,31 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 inspection_time=datetime.now(),
                 status="已检验",
                 updated_by=inspected_by,
-                **inspection_data
+                **conduct_payload
             )
 
             updated_inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
             
+            if updated_inspection.quality_status == "不合格" and updated_inspection.unqualified_quantity > 0:
+                await _maybe_create_quality_exception_from_inspection(
+                    tenant_id=tenant_id,
+                    source_type="process_inspection",
+                    source_id=inspection_id,
+                    inspected_by=inspected_by,
+                    problem_description=inspection_data.get("nonconformance_reason")
+                    or f"过程检验不合格：{updated_inspection.inspection_code}",
+                )
+
+            measurement_data = inspection_data.get("measurement_data")
+            if measurement_data:
+                await _maybe_record_spc_samples_from_ipqc(
+                    tenant_id=tenant_id,
+                    inspection_id=inspection_id,
+                    inspection_code=updated_inspection.inspection_code,
+                    measurement_data=measurement_data,
+                    user_id=inspected_by,
+                )
+
             # 自动更新报工合格数
             if inspection.work_order_id:
                 await self._update_reporting_qualified_quantity(
@@ -842,7 +1162,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         tenant_id: int,
         work_order_id: int,
         operation_id: int,
-        created_by: int
+        created_by: int,
+        reporting_record_id: Optional[int] = None,
     ) -> ProcessInspectionResponse:
         """
         从工单和工序创建过程检验单
@@ -917,6 +1238,15 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     "当前工单工序未配置过程检验（工序/成品质检模式均为无质检），无需下推过程检验单"
                 )
 
+            if reporting_record_id:
+                existing_by_report = await ProcessInspection.filter(
+                    tenant_id=tenant_id,
+                    reporting_record_id=reporting_record_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing_by_report:
+                    return ProcessInspectionResponse.model_validate(existing_by_report)
+
             # 检查是否已存在检验单（与报工相同的工序主键）
             existing = await ProcessInspection.filter(
                 tenant_id=tenant_id,
@@ -942,10 +1272,19 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             
             planned_qty = wf.get("planned_qty") or work_order.quantity
             inspection_quantity = reporting.completed_quantity if reporting else planned_qty
+
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                wf["material_id"],
+                "process",
+                operation_id=master_op_id,
+                use_quality_characteristics=True,
+            )
             
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
+                reporting_record_id=reporting_record_id,
                 work_order_id=work_order_id,
                 work_order_code=work_order.code,
                 operation_id=master_op_id,
@@ -965,8 +1304,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 quality_status="待判定",
                 status="待检验",
                 created_by=created_by,
+                **template,
             )
-            # 建立工单→过程检验 的 DocumentRelation
             try:
                 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
                 from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -1203,6 +1542,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                create_data.get("material_id"),
+                "finished",
+            )
+            for k, v in template.items():
+                create_data.setdefault(k, v)
             from apps.kuaizhizao.constants import ReviewStatus
             audit_required = await _is_quality_audit_required(tenant_id, "finished_goods_inspection")
             if not audit_required:
@@ -1268,6 +1614,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
+            conduct_payload = _apply_template_conduct_to_payload(
+                inspection, "other_checks", inspection_data
+            )
+
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 qualified_quantity=qualified_quantity,
                 unqualified_quantity=unqualified_quantity,
@@ -1278,10 +1628,21 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 inspection_time=datetime.now(),
                 status="已检验",
                 updated_by=inspected_by,
-                **inspection_data
+                **conduct_payload
             )
 
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+
+            if updated_inspection.quality_status == "不合格" and updated_inspection.unqualified_quantity > 0:
+                await _maybe_create_quality_exception_from_inspection(
+                    tenant_id=tenant_id,
+                    source_type="finished_goods_inspection",
+                    source_id=inspection_id,
+                    inspected_by=inspected_by,
+                    problem_description=inspection_data.get("nonconformance_reason")
+                    or f"成品检验不合格：{updated_inspection.inspection_code}",
+                )
+
             return updated_inspection
 
     async def approve_inspection(
@@ -1522,7 +1883,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         self,
         tenant_id: int,
         work_order_id: int,
-        created_by: int
+        created_by: int,
+        reporting_record_id: Optional[int] = None,
     ) -> FinishedGoodsInspectionResponse:
         """
         从工单创建成品检验单
@@ -1567,6 +1929,15 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 raise BusinessLogicError(
                     "当前成品物料未配置成品检验（质检模式为无质检），无需下推成品检验单"
                 )
+
+            if reporting_record_id:
+                existing_by_report = await FinishedGoodsInspection.filter(
+                    tenant_id=tenant_id,
+                    reporting_record_id=reporting_record_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing_by_report:
+                    return FinishedGoodsInspectionResponse.model_validate(existing_by_report)
             
             # 检查是否已存在检验单
             existing = await FinishedGoodsInspection.filter(
@@ -1583,10 +1954,17 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             inspection_qty = wf.get("planned_qty") or work_order.quantity
+
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                wf["material_id"],
+                "finished",
+            )
             
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
+                reporting_record_id=reporting_record_id,
                 source_type="work_order",
                 source_id=work_order_id,
                 source_code=work_order.code,
@@ -1608,6 +1986,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 quality_status="待判定",
                 status="待检验",
                 created_by=created_by,
+                **template,
             )
             # 建立工单→成品检验 的 DocumentRelation
             try:
@@ -2143,6 +2522,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         from datetime import datetime, timedelta
         from decimal import Decimal
         from tortoise.functions import Sum
+        from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 
         now = datetime.now()
         today_start = datetime(now.year, now.month, now.day)
@@ -2154,7 +2534,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         pending_tasks = [
             IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
             ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
-            FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count()
+            FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
+            OQCInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
         ]
 
         async def sum_qualified_between(start: datetime, end: datetime, *, end_inclusive: bool = False) -> tuple:
@@ -2181,7 +2562,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
         # 2. 获取汇总数据（今日、本月、上月）
         (
-            (pending_incoming, pending_process, pending_finished), 
+            (pending_incoming, pending_process, pending_finished, pending_oqc), 
             (t_today, q_today),
             (t_month, q_month),
             (t_last_month, q_last_month)
@@ -2225,6 +2606,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             "pending_incoming": pending_incoming,
             "pending_process": pending_process,
             "pending_finished": pending_finished,
+            "pending_oqc": pending_oqc,
             "total_inspected_today": total_inspected_today,
             "today_qualified_rate": round(today_qualified_rate, 2),
             "month_qualified_rate": round(month_qualified_rate, 2),

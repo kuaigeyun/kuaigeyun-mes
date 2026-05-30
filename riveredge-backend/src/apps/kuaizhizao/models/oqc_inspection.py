@@ -16,6 +16,8 @@ class OQCInspection(BaseModel):
             ("inspection_code",),
             ("source_type", "source_id"),
             ("shipment_notice_id",),
+            ("sales_order_id",),
+            ("customer_id",),
             ("material_id",),
             ("status",),
             ("quality_status",),
@@ -31,6 +33,10 @@ class OQCInspection(BaseModel):
     source_code = fields.CharField(max_length=50, description="来源单据编码")
     shipment_notice_id = fields.IntField(null=True, description="发货通知单ID")
     shipment_notice_code = fields.CharField(max_length=50, null=True, description="发货通知单编码")
+    sales_order_id = fields.IntField(null=True, description="销售订单ID")
+    sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码")
+    customer_id = fields.IntField(null=True, description="客户ID")
+    customer_name = fields.CharField(max_length=200, null=True, description="客户名称")
 
     material_id = fields.IntField(description="成品物料ID")
     material_code = fields.CharField(max_length=50, description="成品物料编码")
@@ -56,4 +62,6 @@ class OQCInspection(BaseModel):
 
     status = fields.CharField(max_length=20, default="待检验", description="单据状态")
     notes = fields.TextField(null=True, description="备注")
+    inspection_standard = fields.TextField(null=True, description="检验标准")
+    other_checks = fields.JSONField(null=True, description="检验方案/标准模板（JSON）")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

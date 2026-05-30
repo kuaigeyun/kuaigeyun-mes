@@ -870,6 +870,12 @@ class MaterialService:
             resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(tenant_id, data.defaults)
             if resolved_pr_id:
                 material_data["process_route_id"] = resolved_pr_id
+
+        material_mode = material_data.get("inspection_mode") or getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None)
+        if material_mode and str(material_mode).strip().lower() != "none":
+            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+
+            await assert_master_data_inspection_mode_allowed(tenant_id, material_mode=material_mode)
         
         # 创建物料（属性 SKU 并发导入时 code 可能冲突，自动重试下一序号或返回已存在组合）
         material = None
@@ -2119,6 +2125,12 @@ class MaterialService:
             update_data = data.model_dump(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
         else:
             update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+
+        if "inspection_mode" in update_data or getattr(data, "inspection_mode", None) is not None or getattr(data, "inspectionMode", None) is not None:
+            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+
+            new_mode = update_data.get("inspection_mode", getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None))
+            await assert_master_data_inspection_mode_allowed(tenant_id, material_mode=new_mode)
         
         # 处理属性：确保JSON键顺序一致（用于数据库唯一性索引）
         if "variant_attributes" in update_data and update_data["variant_attributes"]:

@@ -15,6 +15,7 @@ class Quality8DReport(BaseModel):
             ("tenant_id",),
             ("report_code",),
             ("quality_exception_id",),
+            ("defect_record_id",),
             ("status",),
             ("owner_id",),
             ("due_date",),
@@ -25,6 +26,7 @@ class Quality8DReport(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     report_code = fields.CharField(max_length=50, description="8D 报告编码")
     quality_exception_id = fields.IntField(null=True, description="关联质量异常ID")
+    defect_record_id = fields.IntField(null=True, description="关联不合格品台账ID")
     title = fields.CharField(max_length=200, description="报告标题")
     status = fields.CharField(max_length=30, default="d1_team", description="8D 阶段")
     severity = fields.CharField(max_length=20, default="major", description="严重程度")

@@ -430,6 +430,8 @@ class ExceptionService:
         work_order_id: Optional[int] = None,
         status: Optional[str] = None,
         severity: Optional[str] = None,
+        inspection_record_id: Optional[int] = None,
+        inspection_source_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[QualityExceptionListResponse]:
@@ -458,9 +460,125 @@ class ExceptionService:
             query = query.filter(status=status)
         if severity:
             query = query.filter(severity=severity)
+        if inspection_record_id:
+            query = query.filter(inspection_record_id=inspection_record_id)
+        if inspection_source_type:
+            query = query.filter(inspection_source_type=inspection_source_type)
 
         exceptions = await query.order_by('-severity', '-created_at').offset(skip).limit(limit)
         return [QualityExceptionListResponse.model_validate(e) for e in exceptions]
+
+    async def create_from_inspection(
+        self,
+        tenant_id: int,
+        source_type: str,
+        source_id: int,
+        created_by: Optional[int] = None,
+        problem_description: Optional[str] = None,
+        severity: str = "major",
+        remarks: Optional[str] = None,
+    ) -> QualityExceptionResponse:
+        """
+        从检验单创建质量异常记录。
+
+        source_type: incoming_inspection | process_inspection | finished_goods_inspection | oqc_inspection
+        """
+        import uuid
+
+        work_order_id = None
+        work_order_code = None
+        material_id = None
+        material_code = None
+        material_name = None
+        batch_no = None
+        desc = problem_description
+
+        if source_type == "incoming_inspection":
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            insp = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"来料检验单不存在: {source_id}")
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            if not desc:
+                desc = insp.nonconformance_reason or f"来料检验不合格：{insp.inspection_code}"
+        elif source_type == "process_inspection":
+            from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+            insp = await ProcessInspection.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"过程检验单不存在: {source_id}")
+            work_order_id = insp.work_order_id
+            work_order_code = insp.work_order_code
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            batch_no = insp.batch_number
+            if not desc:
+                desc = insp.nonconformance_reason or f"过程检验不合格：{insp.inspection_code}"
+        elif source_type == "finished_goods_inspection":
+            from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+            insp = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"成品检验单不存在: {source_id}")
+            work_order_id = insp.work_order_id
+            work_order_code = insp.work_order_code
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            batch_no = insp.batch_number
+            if not desc:
+                desc = insp.nonconformance_reason or f"成品检验不合格：{insp.inspection_code}"
+        elif source_type == "oqc_inspection":
+            from apps.kuaizhizao.models.oqc_inspection import OQCInspection
+
+            insp = await OQCInspection.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"出货检验单不存在: {source_id}")
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            batch_no = insp.batch_number
+            if not desc:
+                desc = f"出货检验不合格：{insp.inspection_code}"
+        else:
+            raise ValidationError(f"不支持的检验来源类型: {source_type}")
+
+        exception = await QualityException.create(
+            uuid=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            exception_type="inspection_failure",
+            work_order_id=work_order_id,
+            work_order_code=work_order_code,
+            material_id=material_id,
+            material_code=material_code,
+            material_name=material_name,
+            batch_no=batch_no,
+            inspection_record_id=source_id,
+            inspection_source_type=source_type,
+            problem_description=desc,
+            severity=severity,
+            status="pending",
+            remarks=remarks,
+        )
+        logger.info(
+            "从检验单创建质量异常: source=%s#%s exception_id=%s",
+            source_type,
+            source_id,
+            exception.id,
+        )
+        return QualityExceptionResponse.model_validate(exception)
 
     async def handle_quality_exception(
         self,

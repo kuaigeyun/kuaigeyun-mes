@@ -1987,6 +1987,8 @@ async def list_quality_exceptions(
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     status: Optional[str] = Query(None, description="状态"),
     severity: Optional[str] = Query(None, description="严重程度"),
+    inspection_record_id: Optional[int] = Query(None, description="关联检验记录ID"),
+    inspection_source_type: Optional[str] = Query(None, description="关联检验类型"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     current_user: User = Depends(get_current_user),
@@ -2003,6 +2005,8 @@ async def list_quality_exceptions(
         work_order_id=work_order_id,
         status=status,
         severity=severity,
+        inspection_record_id=inspection_record_id,
+        inspection_source_type=inspection_source_type,
         skip=skip,
         limit=limit,
     )

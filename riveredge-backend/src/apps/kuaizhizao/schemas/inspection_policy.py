@@ -1,6 +1,6 @@
 """组织级质检环节开关（IQC/IPQC/FQC/OQC）API Schema。"""
 
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic import Field
 
@@ -23,3 +23,12 @@ class QualityInspectionStageTogglesUpdate(BaseSchema):
     ipqc_enabled: Optional[bool] = Field(None, description="过程检（IPQC）")
     fqc_enabled: Optional[bool] = Field(None, description="成品检（FQC）")
     oqc_enabled: Optional[bool] = Field(None, description="出货检（OQC）")
+
+
+class QualityEffectiveConfigResponse(BaseSchema):
+    """聚合的组织质检有效配置（环节开关 + 业务参数）。"""
+
+    stage_enabled: Dict[str, bool] = Field(..., description="环节总开关 iqc/ipqc/fqc/oqc")
+    module_enabled: Dict[str, bool] = Field(..., description="模块能力 incoming/process/finished/defect_handling")
+    auto_create: Dict[str, bool] = Field(..., description="各节点自动建单开关")
+    gate: Dict[str, bool] = Field(..., description="门禁 require_iqc_before_receipt_confirm / oqc_before_outbound")

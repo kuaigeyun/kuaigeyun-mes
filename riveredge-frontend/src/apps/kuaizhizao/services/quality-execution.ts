@@ -17,6 +17,7 @@ export interface InspectionCenterSummary {
   pending_incoming: number;
   pending_process: number;
   pending_finished: number;
+  pending_oqc?: number;
   total_inspected_today: number;
   today_qualified_rate: number;
   month_qualified_rate: number;
@@ -143,6 +144,15 @@ export const qualityApi = {
         method: 'PUT',
         data,
       }),
+  },
+  effectiveConfig: {
+    get: async () =>
+      apiRequest<{
+        stage_enabled: Record<string, boolean>;
+        module_enabled: Record<string, boolean>;
+        auto_create: Record<string, boolean>;
+        gate: Record<string, boolean>;
+      }>('/apps/kuaizhizao/quality-effective-config', { method: 'GET' }),
   },
   qualityStatistics: {
     getStatistics: async (params?: any) => apiRequest('/apps/kuaizhizao/quality/statistics', { method: 'GET', params }),

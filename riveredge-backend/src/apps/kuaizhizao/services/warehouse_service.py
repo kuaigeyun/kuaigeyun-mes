@@ -2303,6 +2303,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     logger.warning("建立销售预测→销售出库 单据关联失败: %s", e)
             created_delivery_id = delivery.id
 
+        if created_delivery_id:
+            from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
+
+            await QualityAutomationService().maybe_auto_create_oqc_from_sales_delivery(
+                tenant_id=tenant_id,
+                delivery_id=created_delivery_id,
+                user_id=created_by,
+            )
+
         # 未在创建时校验批号的单据（如发货通知下推）不能自动确认出库，否则 confirm 会因缺批号失败
         if (
             auto_outbound_enabled
@@ -2776,6 +2785,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 sales_order_id=delivery.sales_order_id,
                 customer_id=delivery.customer_id,
                 delivery_items=list(delivery.items or []),
+                sales_delivery_id=delivery_id,
             )
 
             if item_batches is not None:
@@ -3260,6 +3270,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
     async def create_purchase_receipt(self, tenant_id: int, receipt_data: PurchaseReceiptCreate, created_by: int) -> PurchaseReceiptResponse:
         """创建采购入库单"""
+        created_receipt_id: Optional[int] = None
+        response: Optional[PurchaseReceiptResponse] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -3422,7 +3434,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 except Exception as e:
                     logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
             
-            return PurchaseReceiptResponse.model_validate(receipt)
+            created_receipt_id = receipt.id
+            response = PurchaseReceiptResponse.model_validate(receipt)
+
+        if created_receipt_id is not None:
+            from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
+
+            await QualityAutomationService().maybe_auto_create_iqc_from_purchase_receipt(
+                tenant_id=tenant_id,
+                purchase_receipt_id=created_receipt_id,
+                created_by=created_by,
+            )
+        return response
 
     async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptWithItemsResponse:
         """根据ID获取采购入库单（含明细）"""

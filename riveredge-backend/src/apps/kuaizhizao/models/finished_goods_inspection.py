@@ -20,6 +20,9 @@ class FinishedGoodsInspection(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     inspection_code = fields.CharField(max_length=50, unique=True, description="检验单编码")
 
+    # 关联报工（自动触发时幂等关联）
+    reporting_record_id = fields.IntField(null=True, description="报工记录ID（自动触发成品检验时关联）")
+
     # 关联来源单据
     source_type = fields.CharField(max_length=20, description="来源单据类型")
     source_id = fields.IntField(description="来源单据ID")
@@ -103,6 +106,7 @@ class FinishedGoodsInspection(BaseModel):
         indexes = [
             ("tenant_id", "work_order_id"),
             ("tenant_id", "source_id"),
+            ("reporting_record_id",),
             ("material_id",),
             ("sales_order_id",),
             ("inspection_result",),

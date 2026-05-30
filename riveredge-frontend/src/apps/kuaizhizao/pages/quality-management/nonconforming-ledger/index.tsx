@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Space, Tag } from 'antd';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Empty, Modal, Space, Tag } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quality-improvement';
@@ -9,8 +9,31 @@ import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 
+function sourceInspectionPath(row: DefectLedgerItem): string | null {
+  if (row.incoming_inspection_id) {
+    return `/apps/kuaizhizao/quality-management/incoming-inspection?incoming_inspection_id=${row.incoming_inspection_id}`;
+  }
+  if (row.process_inspection_id) {
+    return `/apps/kuaizhizao/quality-management/process-inspection?process_inspection_id=${row.process_inspection_id}`;
+  }
+  if (row.finished_goods_inspection_id) {
+    return `/apps/kuaizhizao/quality-management/finished-goods-inspection?finished_goods_inspection_id=${row.finished_goods_inspection_id}`;
+  }
+  return null;
+}
+
+function sourceInspectionLabel(row: DefectLedgerItem): string | null {
+  return (
+    row.incoming_inspection_code ||
+    row.process_inspection_code ||
+    row.finished_goods_inspection_code ||
+    null
+  );
+}
+
 const NonconformingLedgerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -18,18 +41,49 @@ const NonconformingLedgerPage: React.FC = () => {
   const [currentRow, setCurrentRow] = useState<DefectLedgerItem | null>(null);
   const [open, setOpen] = useState(false);
   const canUpdate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-nonconforming-ledger:update');
+  const canStart8d = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:create');
 
   const initialFilter = useMemo(
     () => ({
       incoming_inspection_id: searchParams.get('incoming_inspection_id') || undefined,
       process_inspection_id: searchParams.get('process_inspection_id') || undefined,
       finished_goods_inspection_id: searchParams.get('finished_goods_inspection_id') || undefined,
+      defect_id: searchParams.get('defect_id') || undefined,
     }),
-    [searchParams]
+    [searchParams],
   );
+
+  const handleStart8d = (row: DefectLedgerItem) => {
+    Modal.confirm({
+      title: '发起 8D 报告',
+      content: `从不合格品台账 ${row.code} 创建 8D 报告？`,
+      onOk: async () => {
+        const report = await qualityImprovementApi.nonconformingLedger.start8d(
+          row.id,
+          `8D - ${row.product_name || row.code}`,
+        );
+        messageApi.success(`8D 报告已创建：${report.report_code}`);
+        navigate('/apps/kuaizhizao/quality-management/eight-d-reports');
+      },
+    });
+  };
 
   const columns: ProColumns<DefectLedgerItem>[] = [
     { title: '台账编号', dataIndex: 'code', width: 150 },
+    {
+      title: '源检验单',
+      width: 150,
+      render: (_, row) => {
+        const label = sourceInspectionLabel(row);
+        const path = sourceInspectionPath(row);
+        if (!label || !path) return '-';
+        return (
+          <Button type="link" size="small" onClick={() => navigate(path)}>
+            {label}
+          </Button>
+        );
+      },
+    },
     { title: '工单', dataIndex: 'work_order_code', width: 120 },
     { title: '工序', dataIndex: 'operation_name', width: 120 },
     { title: '物料', dataIndex: 'product_name', width: 180, ellipsis: true },
@@ -59,7 +113,7 @@ const NonconformingLedgerPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 120,
+      width: 180,
       render: (_, row) => (
         <Space>
           {canUpdate && (
@@ -72,6 +126,11 @@ const NonconformingLedgerPage: React.FC = () => {
               }}
             >
               更新处置
+            </Button>
+          )}
+          {canStart8d && (
+            <Button type="link" onClick={() => handleStart8d(row)}>
+              发起 8D
             </Button>
           )}
         </Space>
@@ -100,7 +159,16 @@ const NonconformingLedgerPage: React.FC = () => {
               disposition: params.disposition,
               status: params.status,
               defect_type: params.defect_type,
-              ...initialFilter,
+              defect_id: initialFilter.defect_id ? Number(initialFilter.defect_id) : undefined,
+              incoming_inspection_id: initialFilter.incoming_inspection_id
+                ? Number(initialFilter.incoming_inspection_id)
+                : undefined,
+              process_inspection_id: initialFilter.process_inspection_id
+                ? Number(initialFilter.process_inspection_id)
+                : undefined,
+              finished_goods_inspection_id: initialFilter.finished_goods_inspection_id
+                ? Number(initialFilter.finished_goods_inspection_id)
+                : undefined,
             });
             return {
               success: true,

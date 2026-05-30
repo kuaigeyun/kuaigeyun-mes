@@ -26,6 +26,12 @@ export interface DefectLedgerItem {
   disposition: string;
   status: string;
   created_at?: string;
+  incoming_inspection_id?: number;
+  incoming_inspection_code?: string;
+  process_inspection_id?: number;
+  process_inspection_code?: string;
+  finished_goods_inspection_id?: number;
+  finished_goods_inspection_code?: string;
 }
 
 export interface OQCInspection {
@@ -42,6 +48,12 @@ export interface OQCInspection {
   release_decision: string;
   review_status: string;
   status: string;
+  shipment_notice_id?: number;
+  shipment_notice_code?: string;
+  sales_order_code?: string;
+  customer_name?: string;
+  inspection_standard?: string;
+  other_checks?: Record<string, unknown>;
   created_at?: string;
 }
 
@@ -98,12 +110,27 @@ export const qualityImprovementApi = {
         method: 'PUT',
         data,
       }),
+    start8d: async (defectId: number, title: string) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/nonconforming-ledger/${defectId}/start-8d`, {
+        method: 'POST',
+        data: { title },
+      }),
   },
 
   oqc: {
     list: async (params?: any) =>
       apiRequest<{ items: OQCInspection[]; total: number }>('/apps/kuaizhizao/oqc-inspections', { method: 'GET', params }),
     create: async (data: any) => apiRequest<OQCInspection>('/apps/kuaizhizao/oqc-inspections', { method: 'POST', data }),
+    createFromShipmentNotice: async (noticeId: number, lineIds?: number[]) =>
+      apiRequest<OQCInspection[]>(`/apps/kuaizhizao/oqc-inspections/from-shipment-notice/${noticeId}`, {
+        method: 'POST',
+        data: lineIds?.length ? { line_ids: lineIds } : {},
+      }),
+    createFromSalesDelivery: async (deliveryId: number, lineIds?: number[]) =>
+      apiRequest<OQCInspection[]>(`/apps/kuaizhizao/oqc-inspections/from-sales-delivery/${deliveryId}`, {
+        method: 'POST',
+        data: lineIds?.length ? { line_ids: lineIds } : {},
+      }),
     conduct: async (id: number, data: any) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/conduct`, { method: 'POST', data }),
     approve: async (id: number, approve = true) =>

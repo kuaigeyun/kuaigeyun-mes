@@ -616,6 +616,11 @@ class ProcessService:
             deleted_at__isnull=False
         ).first()
         if existing_deleted:
+            restore_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
+            if restore_mode and str(restore_mode).strip().lower() != "none":
+                from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+
+                await assert_master_data_inspection_mode_allowed(tenant_id, operation_mode=restore_mode)
             default_operator_uuids = getattr(data, "default_operator_uuids", None) or getattr(data, "defaultOperatorUuids", None) or []
             oids = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids)
             existing_deleted.deleted_at = None
@@ -668,6 +673,12 @@ class ProcessService:
             is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None)
             create_data["is_active"] = is_active if is_active is not None else True
         create_data["default_operator_ids"] = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids)
+
+        create_mode = create_data.get("inspection_mode") or getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None)
+        if create_mode and str(create_mode).strip().lower() != "none":
+            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+
+            await assert_master_data_inspection_mode_allowed(tenant_id, operation_mode=create_mode)
 
         try:
             operation = await Operation.create(tenant_id=tenant_id, **create_data)
@@ -862,6 +873,11 @@ class ProcessService:
                 raise ValidationError(f"工序编码 {data.code} 已存在")
         
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        if "inspection_mode" in update_data or getattr(data, "inspection_mode", None) is not None:
+            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+
+            new_mode = update_data.get("inspection_mode", getattr(data, "inspection_mode", None))
+            await assert_master_data_inspection_mode_allowed(tenant_id, operation_mode=new_mode)
         # 从 update_data 中移除关系字段，避免 setattr 到 ORM 上；并从 data 上取以保证请求里带了的都能同步
         defect_type_uuids = update_data.pop("defect_type_uuids", None)
         if defect_type_uuids is None:

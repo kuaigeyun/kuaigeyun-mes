@@ -36,10 +36,12 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionListResponse,
 )
 from apps.kuaizhizao.schemas.inspection_policy import (
+    QualityEffectiveConfigResponse,
     QualityInspectionStageTogglesResponse,
     QualityInspectionStageTogglesUpdate,
 )
 from apps.kuaizhizao.services.inspection_policy_service import (
+    get_quality_effective_config,
     get_quality_inspection_stage_toggles,
     set_quality_inspection_stage_toggles,
 )
@@ -152,6 +154,7 @@ async def list_incoming_inspections(
     quality_status: Optional[str] = Query(None, description="质量状态"),
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
     material_id: Optional[int] = Query(None, description="物料ID"),
+    purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -169,6 +172,7 @@ async def list_incoming_inspections(
         quality_status=quality_status,
         supplier_id=supplier_id,
         material_id=material_id,
+        purchase_receipt_id=purchase_receipt_id,
     )
 
 
@@ -902,3 +906,17 @@ async def api_put_quality_inspection_stage_toggles(
         description="API 更新质检环节开关",
     )
     return QualityInspectionStageTogglesResponse.model_validate(saved)
+
+
+@router.get(
+    "/quality-effective-config",
+    response_model=QualityEffectiveConfigResponse,
+    summary="Aggregated quality effective config",
+)
+async def api_get_quality_effective_config(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityEffectiveConfigResponse:
+    """返回环节开关、模块能力、自动建单与门禁的聚合配置。"""
+    data = await get_quality_effective_config(tenant_id)
+    return QualityEffectiveConfigResponse.model_validate(data)

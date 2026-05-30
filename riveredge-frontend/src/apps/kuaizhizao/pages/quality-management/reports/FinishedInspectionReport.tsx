@@ -3,6 +3,7 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import ReportBase from '../../../components/ReportBase';
 import { getQualityReport } from '../../../services/reports';
+import { QUALITY_REPORT_TYPES } from '../../../constants/qualityReportTypes';
 
 const FinishedInspectionReport: React.FC = () => {
   const { t } = useTranslation();
@@ -17,13 +18,13 @@ const FinishedInspectionReport: React.FC = () => {
   return (
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.finished-inspection-report')}
-      reportType="final_pass_rate"
+      reportType={QUALITY_REPORT_TYPES.FINAL_PASS_RATE}
       columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.FinishedInspectionReport"
       columns={columns}
       request={async (params: any) => {
         const res = await getQualityReport({
           ...params,
-          report_type: 'final_pass_rate',
+          report_type: QUALITY_REPORT_TYPES.FINAL_PASS_RATE,
         });
         return {
           data: res.data || [],

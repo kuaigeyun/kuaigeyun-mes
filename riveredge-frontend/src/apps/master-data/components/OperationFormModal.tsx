@@ -20,6 +20,7 @@ import {
 } from '../services/factory';
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
+import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 import { useGlobalStore } from '../../../stores';
 import { searchUserDisplay } from '../../../services/user';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
@@ -488,6 +489,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         slots={{
           inspectionBlock: (
             <>
+              <QualityMasterDataHint scope="operation" />
               <ProFormSelect
                 name="inspectionMode"
                 label={t('field.operation.inspectionMode')}

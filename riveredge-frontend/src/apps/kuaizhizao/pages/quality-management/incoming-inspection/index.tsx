@@ -51,7 +51,14 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
-import { qualityApi, warehouseApi } from '../../../services/production';
+import { qualityApi } from '../../../services/production';
+import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
+import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import {
+  fetchPurchaseReceiptsForIqc,
+  type InspectionDropdownOption,
+} from '../components/inspectionCreateSourceUtils';
 import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -183,6 +190,8 @@ const IncomingInspectionPage: React.FC = () => {
   // 从采购入库单创建Modal状态
   const [createFromReceiptModalVisible, setCreateFromReceiptModalVisible] = useState(false);
   const createFromReceiptFormRef = useRef<any>(null);
+  const [purchaseReceiptOptions, setPurchaseReceiptOptions] = useState<InspectionDropdownOption[]>([]);
+  const [purchaseReceiptOptionsLoading, setPurchaseReceiptOptionsLoading] = useState(false);
 
   // 批量导入状态
   // 创建不合格品记录Modal状态
@@ -223,6 +232,8 @@ const IncomingInspectionPage: React.FC = () => {
           qualified_quantity: values.qualified_quantity,
           unqualified_quantity: values.unqualified_quantity,
           notes: values.notes,
+          nonconformance_reason: values.nonconformance_reason,
+          ...pickInspectionConductExtras(values),
         });
       }
 
@@ -298,8 +309,18 @@ const IncomingInspectionPage: React.FC = () => {
   };
 
   // 从采购入库单创建来料检验单
-  const handleCreateFromReceipt = () => {
+  const handleCreateFromReceipt = async () => {
     setCreateFromReceiptModalVisible(true);
+    createFromReceiptFormRef.current?.resetFields();
+    setPurchaseReceiptOptions([]);
+    setPurchaseReceiptOptionsLoading(true);
+    try {
+      setPurchaseReceiptOptions(await fetchPurchaseReceiptsForIqc());
+    } catch {
+      messageApi.error('加载采购入库单失败');
+    } finally {
+      setPurchaseReceiptOptionsLoading(false);
+    }
   };
 
   const handleCreateFromReceiptSubmit = async (values: any) => {
@@ -779,7 +800,7 @@ const IncomingInspectionPage: React.FC = () => {
             unqualified_quantity: 0,
           } : {}
         }
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (
@@ -799,6 +820,7 @@ const IncomingInspectionPage: React.FC = () => {
             </Row>
           </Card>
         )}
+        <InspectionTemplateConductFields inspection={currentInspection as Record<string, unknown>} />
         <ProFormDigit
           name="qualified_quantity"
           label="合格数量"
@@ -840,6 +862,13 @@ const IncomingInspectionPage: React.FC = () => {
             }),
           ]}
           fieldProps={{ precision: 2 }}
+        />
+        <ProFormTextArea
+          name="nonconformance_reason"
+          label="不合格原因"
+          placeholder="存在不合格数量时请填写原因"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
         />
         <ProFormTextArea
           name="notes"
@@ -900,6 +929,12 @@ const IncomingInspectionPage: React.FC = () => {
         customContent={
           inspectionDetail ? (
             <>
+              <InspectionDetailQualityActions
+                inspection={inspectionDetail}
+                inspectionType="incoming"
+                onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
+                canRegisterDefect={hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-incoming-inspection:update')}
+              />
               <DetailDrawerSection title="基本信息">
                 <Descriptions
                   column={3}
@@ -991,25 +1026,15 @@ const IncomingInspectionPage: React.FC = () => {
           <UniDropdown
             placeholder="请选择采购入库单"
             showSearch
+            loading={purchaseReceiptOptionsLoading}
+            options={purchaseReceiptOptions}
             advancedSearch={{
               label: '高级搜索采购入库单',
               fields: [
                 { name: 'receipt_code', label: '入库单号', type: 'text' },
                 { name: 'supplier_name', label: '供应商名称', type: 'text' },
               ],
-              onSearch: async (params) => {
-                const response = await warehouseApi.purchaseReceipt.list({
-                  ...params,
-                  skip: 0,
-                  limit: 100,
-                  status: '已入库',
-                });
-                const data = Array.isArray(response) ? response : (response.data || []);
-                return data.map((receipt: any) => ({
-                  label: `${receipt.receipt_code} - ${receipt.supplier_name}`,
-                  value: receipt.id,
-                }));
-              },
+              onSearch: (params) => fetchPurchaseReceiptsForIqc(params),
             }}
           />
         </ProFormItem>

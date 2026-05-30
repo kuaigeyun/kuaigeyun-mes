@@ -293,6 +293,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         incoming_inspection_id: Optional[int] = None,
         process_inspection_id: Optional[int] = None,
         finished_goods_inspection_id: Optional[int] = None,
+        defect_id: Optional[int] = None,
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None
     ) -> List[DefectRecordListResponse]:
@@ -333,6 +334,8 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             query &= Q(process_inspection_id=process_inspection_id)
         if finished_goods_inspection_id:
             query &= Q(finished_goods_inspection_id=finished_goods_inspection_id)
+        if defect_id:
+            query &= Q(id=defect_id)
         if date_start:
             query &= Q(created_at__gte=date_start)
         if date_end:
@@ -354,31 +357,152 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         remarks: Optional[str] = None,
     ) -> DefectRecordResponse:
         """更新不合格品台账处置信息。"""
-        defect_record = await DefectRecord.get_or_none(
-            id=defect_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-        if not defect_record:
-            raise NotFoundError(f"不良品记录不存在: {defect_id}")
+        async with in_transaction():
+            defect_record = await DefectRecord.get_or_none(
+                id=defect_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not defect_record:
+                raise NotFoundError(f"不良品记录不存在: {defect_id}")
 
-        user_info = await self.get_user_info(updated_by)
-        defect_record.disposition = disposition
-        if status:
-            defect_record.status = status
-            if status == "processed":
-                defect_record.processed_at = datetime.now()
-                defect_record.processed_by = updated_by
-                defect_record.processed_by_name = user_info["name"]
-        if quarantine_location is not None:
-            defect_record.quarantine_location = quarantine_location
-        if remarks:
-            append_line = f"[处置更新 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {remarks}"
-            defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
-        defect_record.updated_by = updated_by
-        defect_record.updated_by_name = user_info["name"]
-        await defect_record.save()
-        return DefectRecordResponse.model_validate(defect_record)
+            user_info = await self.get_user_info(updated_by)
+            previous_disposition = defect_record.disposition
+            defect_record.disposition = disposition
+            if status:
+                defect_record.status = status
+                if status == "processed":
+                    defect_record.processed_at = datetime.now()
+                    defect_record.processed_by = updated_by
+                    defect_record.processed_by_name = user_info["name"]
+            if quarantine_location is not None:
+                defect_record.quarantine_location = quarantine_location
+            if remarks:
+                append_line = f"[处置更新 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {remarks}"
+                defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
+            defect_record.updated_by = updated_by
+            defect_record.updated_by_name = user_info["name"]
+            await defect_record.save()
+
+            if disposition != previous_disposition or status == "processed":
+                await self._execute_disposition_side_effects(
+                    tenant_id=tenant_id,
+                    defect_record=defect_record,
+                    updated_by=updated_by,
+                    quarantine_location=quarantine_location,
+                )
+                defect_record = await DefectRecord.get(id=defect_record.id)
+
+            return DefectRecordResponse.model_validate(defect_record)
+
+    async def _execute_disposition_side_effects(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
+        quarantine_location: Optional[str] = None,
+    ) -> None:
+        """处置为返工/报废/隔离时调用对应业务服务，失败则显式抛出。"""
+        disposition = defect_record.disposition
+
+        if disposition == "rework":
+            if not defect_record.work_order_id:
+                raise BusinessLogicError("来料不合格品无法直接返工，请先关联工单或选择其他处置方式")
+            if defect_record.rework_order_id:
+                return
+            from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+            from apps.kuaizhizao.schemas.rework_order import ReworkOrderCreate
+
+            work_order = await WorkOrder.get_or_none(
+                id=defect_record.work_order_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not work_order:
+                raise NotFoundError(f"工单不存在: {defect_record.work_order_id}")
+
+            rework_order = await ReworkOrderService().create_rework_order(
+                tenant_id=tenant_id,
+                rework_order_data=ReworkOrderCreate(
+                    original_work_order_id=work_order.id,
+                    original_work_order_uuid=work_order.uuid,
+                    product_id=defect_record.product_id,
+                    product_code=defect_record.product_code,
+                    product_name=defect_record.product_name,
+                    quantity=defect_record.defect_quantity,
+                    rework_reason=defect_record.defect_reason,
+                    rework_type="返工",
+                    workshop_id=work_order.workshop_id,
+                    workshop_name=work_order.workshop_name,
+                    work_center_id=work_order.work_center_id,
+                    work_center_name=work_order.work_center_name,
+                    remarks=f"从不合格品台账 {defect_record.code} 处置返工",
+                ),
+                created_by=updated_by,
+            )
+            defect_record.rework_order_id = rework_order.id
+            await defect_record.save()
+            logger.info(f"不合格品 {defect_record.code} 已创建返工单 {rework_order.code}")
+
+        elif disposition == "scrap":
+            if not defect_record.work_order_id or not defect_record.operation_id:
+                raise BusinessLogicError("报废处置需要工单与工序信息，来料不合格品请走退货流程")
+            if defect_record.scrap_record_id:
+                return
+            import uuid
+            from decimal import Decimal
+            from apps.kuaizhizao.models.scrap_record import ScrapRecord
+
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="SCRAP_RECORD_CODE",
+                prefix=f"SC{today}",
+            )
+            scrap_record = await ScrapRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                reporting_record_id=defect_record.reporting_record_id,
+                work_order_id=defect_record.work_order_id,
+                work_order_code=defect_record.work_order_code,
+                operation_id=defect_record.operation_id,
+                operation_code=defect_record.operation_code or "",
+                operation_name=defect_record.operation_name or "",
+                product_id=defect_record.product_id,
+                product_code=defect_record.product_code,
+                product_name=defect_record.product_name,
+                scrap_quantity=defect_record.defect_quantity,
+                total_cost=Decimal("0"),
+                scrap_reason=f"不合格品报废：{defect_record.defect_reason}",
+                scrap_type="quality",
+                status="draft",
+                remarks=f"从不合格品台账 {defect_record.code} 创建",
+                created_by=updated_by,
+                created_by_name=(await self.get_user_info(updated_by))["name"],
+                updated_by=updated_by,
+                updated_by_name=(await self.get_user_info(updated_by))["name"],
+            )
+            defect_record.scrap_record_id = scrap_record.id
+            await defect_record.save()
+            logger.info(f"不合格品 {defect_record.code} 已创建报废记录 {scrap_record.code}")
+
+        elif disposition == "quarantine":
+            location = quarantine_location or defect_record.quarantine_location
+            if not location:
+                from apps.master_data.models.warehouse import Warehouse
+
+                wh = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    warehouse_type="quarantine",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ).order_by("id").first()
+                if wh:
+                    location = wh.name
+                else:
+                    raise BusinessLogicError("未配置待检仓（quarantine）且未指定隔离库位")
+            defect_record.quarantine_location = location
+            await defect_record.save()
+            logger.info(f"不合格品 {defect_record.code} 已隔离至 {location}")
 
     async def create_defect_from_incoming_inspection(
         self,
@@ -466,6 +590,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
 
             logger.info(f"从来料检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
+
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="incoming_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=defect_data.defect_reason,
+            )
 
             return DefectRecordResponse.model_validate(defect_record)
 
@@ -561,6 +694,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
 
             logger.info(f"从过程检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
 
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="process_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=defect_data.defect_reason,
+            )
+
             return DefectRecordResponse.model_validate(defect_record)
 
     async def create_defect_from_finished_goods_inspection(
@@ -651,5 +793,14 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
 
             logger.info(f"从成品检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
+
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="finished_goods_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=defect_data.defect_reason,
+            )
 
             return DefectRecordResponse.model_validate(defect_record)

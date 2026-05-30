@@ -45,7 +45,6 @@ export function WipOperationCardView({
     [colorIndex, isDark, themeStyle, token.colorPrimary, token.colorPrimaryBg],
   );
   const progressPct = Math.min(100, Math.max(0, Math.round(item.current_progress ?? 0)));
-  const nameOnFill = progressPct >= 28;
 
   return (
     <button
@@ -70,31 +69,11 @@ export function WipOperationCardView({
         <div className="dashboard-wip-operation-card__head-content">
           <span
             className="dashboard-wip-operation-card__head-name"
-            style={{
-              color: isPlain
-                ? nameOnFill
-                  ? '#fff'
-                  : token.colorPrimary
-                : nameOnFill
-                  ? '#fff'
-                  : headerColors.solid,
-            }}
             title={item.process_name}
           >
             {item.process_name}
           </span>
-          <span
-            className="dashboard-wip-operation-card__head-progress"
-            style={{
-              color: isPlain
-                ? progressPct >= 92
-                  ? '#fff'
-                  : token.colorPrimary
-                : progressPct >= 92
-                  ? '#fff'
-                  : headerColors.solid,
-            }}
-          >
+          <span className="dashboard-wip-operation-card__head-progress">
             {t('pages.dashboard.wipOperationCurrentProgress', { value: progressPct })}
           </span>
         </div>

@@ -1,12 +1,20 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, Suspense, lazy } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormDigit, ProFormText } from '@ant-design/pro-components';
-import { App, Button, Card, Empty, Space, Tag, Typography } from 'antd';
+import { App, Button, Card, Empty, Skeleton, Space, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityImprovementApi, SPCSample } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+
+const SpcLineChart = lazy(async () => {
+  const { Line } = await import('@ant-design/charts');
+  return {
+    default: (props: React.ComponentProps<typeof Line>) => <Line {...props} />,
+  };
+});
 
 const SPCMonitorPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -26,12 +34,28 @@ const SPCMonitorPage: React.FC = () => {
     { title: '采样时间', dataIndex: 'sample_time', width: 180, valueType: 'dateTime' },
   ];
 
-  const chartLines = useMemo(() => {
-    if (!chartData?.points) return [] as string[];
-    return chartData.points.map((p: any, idx: number) => {
-      const flag = p.out_of_control ? ' [超限]' : '';
-      return `${idx + 1}. ${p.sample_time} => ${p.sample_value}${flag}`;
-    });
+  const lineChartConfig = useMemo(() => {
+    const points = chartData?.points || [];
+    const data = points.map((p: any, idx: number) => ({
+      index: idx + 1,
+      value: Number(p.sample_value),
+      out_of_control: p.out_of_control,
+    }));
+    return {
+      data: data.length ? data : [{ index: 0, value: 0 }],
+      xField: 'index',
+      yField: 'value',
+      smooth: true,
+      animation: false,
+      point: { size: 4 },
+      annotations: chartData
+        ? [
+            { type: 'line', start: ['min', chartData.mean], end: ['max', chartData.mean], style: { stroke: '#52c41a' } },
+            { type: 'line', start: ['min', chartData.ucl], end: ['max', chartData.ucl], style: { stroke: '#f5222d', lineDash: [4, 4] } },
+            { type: 'line', start: ['min', chartData.lcl], end: ['max', chartData.lcl], style: { stroke: '#f5222d', lineDash: [4, 4] } },
+          ]
+        : [],
+    };
   }, [chartData]);
 
   return (
@@ -92,7 +116,7 @@ const SPCMonitorPage: React.FC = () => {
           })}
         />
 
-        <Card title={`控制线 - ${characteristicName || '-'}`} style={{ marginTop: 16 }}>
+        <Card title={`控制图 - ${characteristicName || '-'}`} style={{ marginTop: 16 }}>
           {chartData ? (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <Typography.Text>中心线(CL): {Number(chartData.mean || 0).toFixed(4)}</Typography.Text>
@@ -105,14 +129,12 @@ const SPCMonitorPage: React.FC = () => {
                   </Tag>
                 ))}
               </div>
-              <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #f0f0f0', padding: 8 }}>
-                {chartLines.map((line) => (
-                  <div key={line}>{line}</div>
-                ))}
-              </div>
+              <Suspense fallback={<Skeleton active paragraph={{ rows: 6 }} />}>
+                <SpcLineChart {...lineChartConfig} height={280} />
+              </Suspense>
             </Space>
           ) : (
-            <Typography.Text type="secondary">点击任一采样记录即可加载该质量特性的控制线。</Typography.Text>
+            <Typography.Text type="secondary">点击任一采样记录即可加载该质量特性的 I-MR 控制图。</Typography.Text>
           )}
         </Card>
 

@@ -566,9 +566,7 @@ const ApplicationListPage: React.FC = () => {
   /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
   const infraCategoryDefaultAppliedRef = useRef(false);
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const canManageAppLifecycle = Boolean(
-    currentUser?.is_tenant_admin || currentUser?.is_infra_admin,
-  );
+  const canManageAppLifecycle = Boolean(currentUser?.is_infra_admin);
 
   /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */
   const customAppsContactQrSrc = `${import.meta.env.BASE_URL}img/qr_code.png`;
@@ -773,7 +771,7 @@ const ApplicationListPage: React.FC = () => {
    */
   const handleInstall = async (record: Application) => {
     if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
       return;
     }
     try {
@@ -791,7 +789,7 @@ const ApplicationListPage: React.FC = () => {
    */
   const handleUninstall = async (record: Application) => {
     if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
       return;
     }
     try {
@@ -825,7 +823,7 @@ const ApplicationListPage: React.FC = () => {
    */
   const handleToggleActive = async (record: Application, checked: boolean) => {
     if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
       return;
     }
     try {
@@ -903,7 +901,7 @@ const ApplicationListPage: React.FC = () => {
   const handleActivateProKey = async (values: { license_key: string }) => {
     if (!proKeyTargetApp) return;
     if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.tenantAdminOnlyLifecycle'));
+      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
       return;
     }
     try {
@@ -1702,7 +1700,7 @@ const ApplicationListPage: React.FC = () => {
         actions={[
           <div key="active" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
-            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.tenantAdminOnlyLifecycle') : undefined}>
+            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
               <span style={{ display: 'inline-flex' }}>
                 <Switch
                   checked={application.is_active}

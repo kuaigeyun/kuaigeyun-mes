@@ -28,6 +28,7 @@ class QualityExceptionBase(BaseModel):
     material_name: Optional[str] = Field(None, description="关联物料名称")
     batch_no: Optional[str] = Field(None, description="批次号")
     inspection_record_id: Optional[int] = Field(None, description="关联检验记录ID")
+    inspection_source_type: Optional[str] = Field(None, description="关联检验类型")
     problem_description: str = Field(..., description="问题描述")
     severity: str = Field("minor", description="严重程度")
     status: str = Field("pending", description="处理状态")

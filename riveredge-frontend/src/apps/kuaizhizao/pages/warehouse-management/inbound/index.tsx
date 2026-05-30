@@ -39,6 +39,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter'
 import CodeField from '../../../../../components/code-field';
 import dayjs from 'dayjs';
 import { warehouseApi, workOrderApi } from '../../../services/production';
+import { LinkedIqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import {
   warehouseApi as masterWarehouseApi,
@@ -2457,6 +2458,19 @@ const InboundPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
+
+              {currentOrder.receipt_type === 'purchase' && currentOrder.id ? (
+                <DetailDrawerSection title="来料检验 (IQC)">
+                  <LinkedIqcPanel
+                    purchaseReceiptId={currentOrder.id}
+                    active={detailDrawerVisible}
+                    onNavigate={(path) => {
+                      setDetailDrawerVisible(false);
+                      navigate(path);
+                    }}
+                  />
+                </DetailDrawerSection>
+              ) : null}
 
               <DetailDrawerSection
                 title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '明细信息'}

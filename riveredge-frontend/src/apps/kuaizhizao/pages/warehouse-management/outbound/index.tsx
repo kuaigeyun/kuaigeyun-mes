@@ -29,6 +29,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter'
 import CodeField from '../../../../../components/code-field';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
+import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
@@ -1281,6 +1282,20 @@ const OutboundPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
+
+              {currentOrder.outbound_type === 'sales_delivery' && currentOrder.id ? (
+                <DetailDrawerSection title="出货检验 (OQC)">
+                  <LinkedOqcPanel
+                    salesDeliveryId={currentOrder.id}
+                    active={detailDrawerVisible}
+                    onNavigate={(path) => {
+                      setDetailDrawerVisible(false);
+                      setCurrentOrder(null);
+                      navigate(path);
+                    }}
+                  />
+                </DetailDrawerSection>
+              ) : null}
 
               {/* 出库单明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (

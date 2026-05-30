@@ -205,6 +205,33 @@ async def start_8d_from_exception(
     )
 
 
+@router.post("/nonconforming-ledger/{defect_id}/start-8d", response_model=Quality8DResponse, summary="Start 8D from defect record")
+async def start_8d_from_defect(
+    defect_id: int = Path(..., description="不合格品台账ID"),
+    title: str = Body(..., embed=True, description="8D 标题"),
+    _auth=_8D_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Quality8DResponse:
+    from apps.kuaizhizao.models.defect_record import DefectRecord
+    from infra.exceptions.exceptions import NotFoundError
+
+    defect = await DefectRecord.get_or_none(
+        id=defect_id, tenant_id=tenant_id, deleted_at__isnull=True
+    )
+    if not defect:
+        raise NotFoundError(f"不合格品记录不存在: {defect_id}")
+    return await quality_8d_service.create_report(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        payload=Quality8DCreate(
+            defect_record_id=defect_id,
+            title=title,
+            d2_problem=defect.defect_reason,
+        ),
+    )
+
+
 @router.get("/nonconforming-ledger", response_model=List[DefectRecordListResponse], summary="List nonconforming ledger")
 async def list_nonconforming_ledger(
     skip: int = Query(0, ge=0),
@@ -215,6 +242,7 @@ async def list_nonconforming_ledger(
     incoming_inspection_id: Optional[int] = Query(None),
     process_inspection_id: Optional[int] = Query(None),
     finished_goods_inspection_id: Optional[int] = Query(None),
+    defect_id: Optional[int] = Query(None, description="台账ID"),
     _auth= _NC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -229,6 +257,7 @@ async def list_nonconforming_ledger(
         incoming_inspection_id=incoming_inspection_id,
         process_inspection_id=process_inspection_id,
         finished_goods_inspection_id=finished_goods_inspection_id,
+        defect_id=defect_id,
     )
 
 
@@ -256,11 +285,16 @@ async def list_oqc_inspections(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None),
+    shipment_notice_id: Optional[int] = Query(None, description="发货通知单ID"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
     _auth= _OQC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await oqc_service.list(tenant_id=tenant_id, skip=skip, limit=limit, status=status)
+    return await oqc_service.list(
+        tenant_id=tenant_id, skip=skip, limit=limit, status=status,
+        shipment_notice_id=shipment_notice_id, sales_delivery_id=sales_delivery_id,
+    )
 
 
 @router.post("/oqc-inspections", response_model=OQCInspectionResponse, summary="Create OQC inspection")
@@ -271,6 +305,46 @@ async def create_oqc_inspection(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OQCInspectionResponse:
     return await oqc_service.create(tenant_id=tenant_id, user_id=current_user.id, payload=payload)
+
+
+@router.post(
+    "/oqc-inspections/from-shipment-notice/{notice_id}",
+    response_model=List[OQCInspectionResponse],
+    summary="Create OQC inspections from shipment notice",
+)
+async def create_oqc_from_shipment_notice(
+    notice_id: int = Path(...),
+    line_ids: Optional[List[int]] = Body(None, embed=True),
+    _auth=_OQC_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OQCInspectionResponse]:
+    return await oqc_service.create_from_shipment_notice(
+        tenant_id=tenant_id,
+        notice_id=notice_id,
+        user_id=current_user.id,
+        line_ids=line_ids,
+    )
+
+
+@router.post(
+    "/oqc-inspections/from-sales-delivery/{delivery_id}",
+    response_model=List[OQCInspectionResponse],
+    summary="Create OQC inspections from sales delivery",
+)
+async def create_oqc_from_sales_delivery(
+    delivery_id: int = Path(...),
+    line_ids: Optional[List[int]] = Body(None, embed=True),
+    _auth=_OQC_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OQCInspectionResponse]:
+    return await oqc_service.create_from_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        user_id=current_user.id,
+        line_ids=line_ids,
+    )
 
 
 @router.post("/oqc-inspections/{inspection_id}/conduct", response_model=OQCInspectionResponse, summary="Conduct OQC inspection")

@@ -10,14 +10,104 @@
 config_value 示例：{"iqc_enabled": true, "ipqc_enabled": true, "fqc_enabled": true, "oqc_enabled": true}
 缺省均为 True（不改变现有行为）。
 
-IQC/IPQC/FQC 已在质量管理服务中接入；OQC 在销售出库确认出库、发货通知「通知仓库」等节点校验成品检验放行记录。
+IQC/IPQC/FQC 已在质量管理服务中接入；OQC 在销售出库确认出库、发货通知「通知仓库」等节点校验 OQC 出货检验单放行记录。
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
+from infra.exceptions.exceptions import ValidationError
 from infra.services.tenant_service import TenantService
+
+
+class QualityEffectiveConfig(TypedDict):
+    stage_enabled: Dict[str, bool]
+    module_enabled: Dict[str, bool]
+    auto_create: Dict[str, bool]
+    gate: Dict[str, bool]
+
+
+def _quality_params_from_business_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    return (cfg.get("parameters") or {}).get("quality") or {}
+
+
+async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig:
+    """聚合 TenantConfig 环节开关与 business_config 质量参数（单一读取入口）。"""
+    from infra.services.business_config_service import BusinessConfigService
+
+    stages = await get_quality_inspection_stage_toggles(tenant_id)
+    biz = await BusinessConfigService().get_business_config(tenant_id)
+    q = _quality_params_from_business_config(biz)
+    return {
+        "stage_enabled": {
+            "iqc": bool(stages.get("iqc_enabled", True)),
+            "ipqc": bool(stages.get("ipqc_enabled", True)),
+            "fqc": bool(stages.get("fqc_enabled", True)),
+            "oqc": bool(stages.get("oqc_enabled", True)),
+        },
+        "module_enabled": {
+            "incoming": bool(q.get("incoming_inspection", True)),
+            "process": bool(q.get("process_inspection", True)),
+            "finished": bool(q.get("finished_inspection", True)),
+            "defect_handling": bool(q.get("defect_handling", True)),
+        },
+        "auto_create": {
+            "iqc_on_purchase_receipt": bool(q.get("auto_create_iqc_on_purchase_receipt", False)),
+            "ipqc_on_reporting": bool(q.get("auto_create_ipqc_on_reporting", True)),
+            "fqc_on_last_reporting": bool(q.get("auto_create_fqc_on_last_reporting", True)),
+            "oqc_on_shipment_notice_notify": bool(q.get("auto_create_oqc_on_shipment_notice_notify", False)),
+            "oqc_on_sales_delivery": bool(q.get("auto_create_oqc_on_sales_delivery", False)),
+        },
+        "gate": {
+            "require_iqc_before_receipt_confirm": bool(q.get("require_incoming_inspection_for_receipt", False)),
+            "oqc_before_outbound": bool(stages.get("oqc_enabled", True)),
+        },
+    }
+
+
+def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None:
+    """保存业务配置时拒绝矛盾的质检参数组合。"""
+    incoming = bool(quality_params.get("incoming_inspection", True))
+    iqc_auto = bool(quality_params.get("auto_create_iqc_on_purchase_receipt", False))
+    iqc_gate = bool(quality_params.get("require_incoming_inspection_for_receipt", False))
+    if not incoming and (iqc_auto or iqc_gate):
+        raise ValidationError("未启用来料检验时，不能开启来料自动建单或收货门禁")
+    process = bool(quality_params.get("process_inspection", True))
+    if not process and bool(quality_params.get("auto_create_ipqc_on_reporting", True)):
+        raise ValidationError("未启用过程检验时，不能开启报工自动创建过程检验单")
+    finished = bool(quality_params.get("finished_inspection", True))
+    if not finished and bool(quality_params.get("auto_create_fqc_on_last_reporting", True)):
+        raise ValidationError("未启用成品检验时，不能开启末道报工自动创建成品检验单")
+
+
+async def assert_master_data_inspection_mode_allowed(
+    tenant_id: int,
+    *,
+    material_mode: Optional[str] = None,
+    operation_mode: Optional[str] = None,
+) -> None:
+    """主数据保存时：质检模式非 none 须至少有一个对应组织环节可用。"""
+    from infra.exceptions.exceptions import ConflictError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    mat = normalize_inspection_mode(material_mode) if material_mode is not None else None
+    op = normalize_inspection_mode(operation_mode) if operation_mode is not None else None
+
+    if mat and mat != "none":
+        iqc_ok = cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"]
+        fqc_ok = cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"]
+        oqc_ok = cfg["stage_enabled"]["oqc"]
+        if not (iqc_ok or fqc_ok or oqc_ok):
+            raise ConflictError(
+                "组织未启用来料/成品/出货检验环节，无法将物料质检模式设为简易或方案质检"
+            )
+
+    if op and op != "none":
+        if not (cfg["stage_enabled"]["ipqc"] and cfg["module_enabled"]["process"]):
+            raise ConflictError(
+                "组织未启用过程检验环节，无法将工序质检模式设为简易或方案质检"
+            )
 
 QUALITY_INSPECTION_STAGES_CONFIG_KEY = "quality_inspection_stages"
 
@@ -130,16 +220,18 @@ async def assert_oqc_for_outbound_lines(
     customer_id: Optional[int],
     lines: List[Any],
     quantity_attr: str = "delivery_quantity",
+    shipment_notice_id: Optional[int] = None,
+    source_type: Optional[str] = None,
+    source_id: Optional[int] = None,
 ) -> None:
     """
     出库相关动作前的出货检（OQC）校验（销售出库确认、发货通知仓库等共用）。
 
-    当组织开启 OQC 且行物料解析为需质检时，要求存在至少一张「已检验/已审核且合格」的成品检验单，
-    并与销售订单或客户维度匹配。
+    当组织开启 OQC 且行物料解析为需质检时，要求存在至少一张已审核、合格且放行的 OQC 出货检验单。
     """
     from decimal import Decimal
 
-    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.oqc_inspection import OQCInspection
     from apps.master_data.models.material import Material
     from infra.exceptions.exceptions import BusinessLogicError
 
@@ -164,21 +256,33 @@ async def assert_oqc_for_outbound_lines(
             continue
 
         mc = getattr(item, "material_code", None) or str(mid)
-        q = FinishedGoodsInspection.filter(
+        q = OQCInspection.filter(
             tenant_id=tenant_id,
             material_id=int(mid),
             quality_status="合格",
-            status__in=["已审核", "已检验"],
+            release_decision="released",
+            status="已审核",
+            review_status="已审核",
             deleted_at__isnull=True,
         )
-        if sales_order_id:
+        if shipment_notice_id:
+            q = q.filter(shipment_notice_id=int(shipment_notice_id))
+        elif source_type and source_id:
+            q = q.filter(source_type=str(source_type), source_id=int(source_id))
+        elif sales_order_id:
             q = q.filter(sales_order_id=int(sales_order_id))
         elif customer_id is not None:
             q = q.filter(customer_id=int(customer_id))
         if not await q.exists():
-            hint = "（需与销售订单关联的成品检验记录一致）" if sales_order_id else "（需与客户关联的成品检验记录一致）"
+            hint = ""
+            if shipment_notice_id:
+                hint = "（需与本发货通知关联且已审核放行的 OQC 检验单一致）"
+            elif sales_order_id:
+                hint = "（需与销售订单关联的 OQC 检验单一致）"
+            elif customer_id is not None:
+                hint = "（需与客户关联的 OQC 检验单一致）"
             raise BusinessLogicError(
-                f"出货检（OQC）未通过：物料 {mc} 需存在已检验且合格的成品检验单后方可继续{hint}"
+                f"出货检（OQC）未通过：物料 {mc} 需存在已审核、合格且放行的 OQC 检验单后方可继续{hint}"
             )
 
 
@@ -188,6 +292,7 @@ async def assert_oqc_before_sales_delivery_confirm(
     sales_order_id: Optional[int],
     customer_id: Optional[int],
     delivery_items: List[Any],
+    sales_delivery_id: Optional[int] = None,
 ) -> None:
     """销售出库「确认出库」前的 OQC 校验。"""
     await assert_oqc_for_outbound_lines(
@@ -196,4 +301,6 @@ async def assert_oqc_before_sales_delivery_confirm(
         customer_id=customer_id,
         lines=list(delivery_items),
         quantity_attr="delivery_quantity",
+        source_type="sales_delivery" if sales_delivery_id else None,
+        source_id=sales_delivery_id,
     )

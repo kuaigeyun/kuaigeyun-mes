@@ -32,6 +32,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, Fo
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
+import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -1196,6 +1197,20 @@ const ShipmentNoticesPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
+
+              {noticeDetail.id != null ? (
+                <DetailDrawerSection title="出货检验 (OQC)">
+                  <LinkedOqcPanel
+                    shipmentNoticeId={noticeDetail.id}
+                    active={detailDrawerVisible}
+                    onNavigate={(path) => {
+                      setDetailDrawerVisible(false);
+                      setNoticeDetail(null);
+                      navigate(path);
+                    }}
+                  />
+                </DetailDrawerSection>
+              ) : null}
 
               <DetailDrawerSection title="明细信息">
                 {noticeDetail.items && noticeDetail.items.length > 0 ? (

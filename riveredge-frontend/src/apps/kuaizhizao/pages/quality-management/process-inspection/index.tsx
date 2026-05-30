@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -38,7 +38,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -53,6 +53,13 @@ import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectio
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, workOrderApi } from '../../../services/production';
+import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
+import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import {
+  fetchWorkOrdersForInspection,
+  type InspectionDropdownOption,
+} from '../components/inspectionCreateSourceUtils';
 import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -236,9 +243,8 @@ const ProcessInspectionPage: React.FC = () => {
   // 从工单创建Modal状态
   const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
   const createFromWorkOrderFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
-
-  // 扫码检验Modal状态
-  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [workOrderOptions, setWorkOrderOptions] = useState<InspectionDropdownOption[]>([]);
+  const [workOrderOptionsLoading, setWorkOrderOptionsLoading] = useState(false);
 
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
@@ -270,10 +276,6 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
-  const handleOpenScanInspection = useCallback(() => {
-    setScanModalVisible(true);
-  }, []);
-
   // 处理检验
   const handleInspect = (record: ProcessInspection) => {
     setCurrentInspection(record);
@@ -294,6 +296,8 @@ const ProcessInspectionPage: React.FC = () => {
           qualified_quantity: values.qualified_quantity,
           unqualified_quantity: values.unqualified_quantity,
           notes: values.notes,
+          nonconformance_reason: values.nonconformance_reason,
+          ...pickInspectionConductExtras(values),
         });
       }
 
@@ -357,8 +361,18 @@ const ProcessInspectionPage: React.FC = () => {
   };
 
   // 从工单创建过程检验单
-  const handleCreateFromWorkOrder = () => {
+  const handleCreateFromWorkOrder = async () => {
     setCreateFromWorkOrderModalVisible(true);
+    createFromWorkOrderFormRef.current?.resetFields();
+    setWorkOrderOptions([]);
+    setWorkOrderOptionsLoading(true);
+    try {
+      setWorkOrderOptions(await fetchWorkOrdersForInspection());
+    } catch {
+      messageApi.error('加载工单列表失败');
+    } finally {
+      setWorkOrderOptionsLoading(false);
+    }
   };
 
   const handleCreateFromWorkOrderSubmit = async (values: any) => {
@@ -789,11 +803,6 @@ const ProcessInspectionPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="从工单创建"
         onCreate={handleCreateFromWorkOrder}
-        toolBarRender={() => [
-          <Button key="scan-inspection" type="default" icon={<ScanOutlined />} onClick={handleOpenScanInspection}>
-            扫码检验
-          </Button>,
-        ]}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
@@ -845,7 +854,7 @@ const ProcessInspectionPage: React.FC = () => {
           unqualified_quantity: 0,
           notes: '',
         }}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (
@@ -873,6 +882,7 @@ const ProcessInspectionPage: React.FC = () => {
             </Row>
           </Card>
         )}
+        <InspectionTemplateConductFields inspection={currentInspection as Record<string, unknown>} />
         <ProFormDigit
           name="qualified_quantity"
           label="合格数量"
@@ -916,6 +926,13 @@ const ProcessInspectionPage: React.FC = () => {
           fieldProps={{ precision: 2 }}
         />
         <ProFormTextArea
+          name="nonconformance_reason"
+          label="不合格原因"
+          placeholder="存在不合格数量时请填写原因"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormTextArea
           name="notes"
           label="检验备注"
           placeholder="请输入检验详情、发现的问题或处理意见"
@@ -944,25 +961,15 @@ const ProcessInspectionPage: React.FC = () => {
           <UniDropdown
             placeholder="请选择工单"
             showSearch
+            loading={workOrderOptionsLoading}
+            options={workOrderOptions}
             advancedSearch={{
               label: '高级搜索工单',
               fields: [
                 { name: 'code', label: '工单编号', type: 'text' },
                 { name: 'name', label: '工单名称', type: 'text' },
               ],
-              onSearch: async (params) => {
-                const response = await workOrderApi.list({
-                  ...params,
-                  skip: 0,
-                  limit: 100,
-                  status: '进行中',
-                });
-                const data = Array.isArray(response) ? response : (response.data || []);
-                return data.map((wo: any) => ({
-                  label: `${wo.code} - ${wo.name}`,
-                  value: wo.id,
-                }));
-              },
+              onSearch: (params) => fetchWorkOrdersForInspection(params),
             }}
           />
         </ProFormItem>
@@ -1033,6 +1040,12 @@ const ProcessInspectionPage: React.FC = () => {
         customContent={
           inspectionDetail ? (
             <>
+              <InspectionDetailQualityActions
+                inspection={inspectionDetail}
+                inspectionType="process"
+                onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
+                canRegisterDefect={hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-process-inspection:update')}
+              />
               <DetailDrawerSection title="基本信息">
                 <Descriptions
                   column={3}
@@ -1189,35 +1202,6 @@ const ProcessInspectionPage: React.FC = () => {
           fieldProps={{ rows: 2 }}
         />
       </FormModalTemplate>
-
-      {/* 扫码检验Modal - 保留原有Modal，因为这是特殊功能 */}
-      <Modal
-        title="扫码过程检验"
-        open={scanModalVisible}
-        onCancel={() => setScanModalVisible(false)}
-        footer={null}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-      >
-        <div style={{ textAlign: 'center', padding: '24px' }}>
-          <div style={{
-            width: 120,
-            height: 120,
-            margin: '0 auto 24px auto',
-            border: '1px dashed var(--river-border-color)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#999'
-          }}>
-            <ScanOutlined style={{ fontSize: '48px' }} />
-          </div>
-          <p>请使用手机扫描工单二维码进行过程检验</p>
-          <p style={{ color: '#666', fontSize: '12px', marginTop: '8px' }}>
-            扫码后将自动跳转到检验页面
-          </p>
-        </div>
-      </Modal>
     </ListPageTemplate>
   );
 };

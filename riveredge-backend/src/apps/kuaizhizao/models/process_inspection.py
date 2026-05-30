@@ -20,6 +20,9 @@ class ProcessInspection(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     inspection_code = fields.CharField(max_length=50, unique=True, description="检验单编码")
 
+    # 关联报工（自动触发时幂等关联）
+    reporting_record_id = fields.IntField(null=True, description="报工记录ID（自动触发过程检验时关联）")
+
     # 关联工单和工序
     work_order_id = fields.IntField(description="工单ID")
     work_order_code = fields.CharField(max_length=50, description="工单编码")
@@ -90,6 +93,7 @@ class ProcessInspection(BaseModel):
         indexes = [
             ("tenant_id", "work_order_id"),
             ("tenant_id", "operation_id"),
+            ("reporting_record_id",),
             ("material_id",),
             ("inspection_result",),
             ("quality_status",),

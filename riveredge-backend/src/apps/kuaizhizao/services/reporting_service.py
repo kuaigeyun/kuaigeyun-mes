@@ -1741,61 +1741,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
         created_by: int
     ) -> None:
         """从报工记录触发质量检验需求"""
-        try:
-            from apps.kuaizhizao.services.quality_service import ProcessInspectionService, FinishedGoodsInspectionService
-            from infra.services.business_config_service import BusinessConfigService
-            
-            # 判断是否为工单的最后一道工序（粗略判断：基于 sequence）
-            # 在实际业务中，最后一道工序通常触发成品检验，中间工序触发过程检验
-            all_ops = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order.id,
-                deleted_at__isnull=True
-            ).order_by('sequence').all()
-            
-            is_last_op = False
-            if all_ops and all_ops[-1].id == work_order_operation.id:
-                is_last_op = True
-                
-            if is_last_op:
-                # 触发成品检验
-                quality_params = (
-                    (await BusinessConfigService().get_business_config(tenant_id))
-                    .get("parameters", {})
-                    .get("quality", {})
-                )
-                if not quality_params.get("finished_inspection", False):
-                    logger.info(f"成品检验开关关闭，跳过自动触发成品检验: 工单 {work_order.code}")
-                    return
-                fg_qc_svc = FinishedGoodsInspectionService()
-                await fg_qc_svc.create_inspection_from_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order.id,
-                    created_by=created_by
-                    # 这里的 create_inspection_from_work_order 可能需要优化以支持传入特定的报工记录/批次
-                )
-                logger.info(f"末道工序报工 -> 自动触发成品检验需求: 工单 {work_order.code}")
-            else:
-                # 触发过程检验
-                quality_params = (
-                    (await BusinessConfigService().get_business_config(tenant_id))
-                    .get("parameters", {})
-                    .get("quality", {})
-                )
-                if not quality_params.get("process_inspection", False):
-                    logger.info(
-                        f"过程检验开关关闭，跳过自动触发过程检验: 工单 {work_order.code}, 工序 {work_order_operation.operation_name}"
-                    )
-                    return
-                proc_qc_svc = ProcessInspectionService()
-                await proc_qc_svc.create_inspection_from_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order.id,
-                    operation_id=work_order_operation.operation_id,
-                    created_by=created_by
-                )
-                logger.info(f"中间工序报工 -> 自动触发过程检验需求: 工单 {work_order.code}, 工序 {work_order_operation.operation_name}")
-                
-        except Exception as e:
-            logger.error(f"工厂自动触发质量检验失败: {e}")
-            raise e
+        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
+
+        await QualityAutomationService().maybe_auto_create_ipqc_fqc_from_reporting(
+            tenant_id=tenant_id,
+            work_order=work_order,
+            work_order_operation=work_order_operation,
+            reporting_record=reporting_record,
+            created_by=created_by,
+        )

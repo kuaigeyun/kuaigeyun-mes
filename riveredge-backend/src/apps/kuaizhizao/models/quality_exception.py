@@ -76,6 +76,9 @@ class QualityException(BaseModel):
     material_name = fields.CharField(max_length=200, null=True, description="关联物料名称")
     batch_no = fields.CharField(max_length=50, null=True, description="批次号")
     inspection_record_id = fields.IntField(null=True, description="关联检验记录ID")
+    inspection_source_type = fields.CharField(
+        max_length=50, null=True, description="关联检验类型"
+    )
 
     # 问题描述
     problem_description = fields.TextField(description="问题描述")

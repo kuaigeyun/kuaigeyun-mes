@@ -19,7 +19,6 @@ import {
 } from '@ant-design/icons';
 import { qualityApi } from '../../../../services/production';
 import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useGlobalStore } from '../../../../../../stores/globalStore';
 
 export interface ProcessInspectionModalProps {
   visible: boolean;
@@ -40,35 +39,31 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const currentUser = useGlobalStore((s) => s.currentUser);
 
   const handleSubmit = async (values: any) => {
     if (!workOrderId || !operationId) {
       message.error('由于缺少工单或工序信息，无法提交检验');
       return;
     }
-    const inspectorId = currentUser?.id;
-    if (inspectorId == null || !Number.isFinite(Number(inspectorId))) {
-      message.error('未获取到当前登录用户，无法记录检验人');
-      return;
-    }
 
     try {
       setLoading(true);
-      const data = {
-        inspection_type: values.inspection_type,
-        work_order_id: workOrderId,
-        work_order_code: workOrderCode,
-        operation_id: operationId,
-        operation_name: operationName,
-        check_points: values.check_points,
-        conclusion: values.conclusion,
-        inspector_id: Number(inspectorId),
-        inspected_at: new Date().toISOString(),
-        remarks: values.remarks,
-      };
-
-      await qualityApi.processInspection.create(data);
+      const created = await qualityApi.processInspection.createFromWorkOrder(
+        String(workOrderId),
+        String(operationId),
+      );
+      const inspectionId = (created as { id?: number })?.id;
+      if (!inspectionId) {
+        message.error('创建过程检验单失败');
+        return;
+      }
+      const isPass = values.conclusion === 'pass';
+      await qualityApi.processInspection.conduct(String(inspectionId), {
+        qualified_quantity: isPass ? 1 : 0,
+        unqualified_quantity: isPass ? 0 : 1,
+        inspection_quantity: 1,
+        notes: [values.inspection_type, values.remarks].filter(Boolean).join(' · '),
+      });
       message.success('检验记录已提交');
       form.resetFields();
       onCancel();

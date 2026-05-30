@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Divider, Typography } from 'antd';
@@ -19,6 +20,7 @@ import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
+import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 
@@ -34,6 +36,8 @@ interface QualityException {
   material_code?: string;
   material_name?: string;
   batch_no?: string;
+  inspection_record_id?: number;
+  inspection_source_type?: string;
   problem_description?: string;
   severity?: string;
   status?: string;
@@ -55,6 +59,10 @@ interface QualityException {
  */
 const QualityExceptionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const [urlSearchParams] = useSearchParams();
+  const initialInspectionRecordId = urlSearchParams.get('inspection_record_id');
+  const initialInspectionSourceType = urlSearchParams.get('inspection_source_type');
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -353,6 +361,8 @@ const QualityExceptionsPage: React.FC = () => {
                 exception_type: params.exception_type,
                 status: params.status,
                 severity: params.severity,
+                inspection_record_id: initialInspectionRecordId || undefined,
+                inspection_source_type: initialInspectionSourceType || undefined,
               },
             });
             const rows = Array.isArray(result) ? result : (result as { items?: QualityException[] })?.items ?? [];
@@ -401,6 +411,44 @@ const QualityExceptionsPage: React.FC = () => {
                 <p><strong>批次号：</strong>{currentRecord.batch_no}</p>
               )}
               <p><strong>问题描述：</strong>{currentRecord.problem_description}</p>
+              {currentRecord.inspection_record_id ? (
+                <Space wrap style={{ marginBottom: 8 }}>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      const path = buildInspectionDetailPath(
+                        currentRecord.inspection_source_type,
+                        currentRecord.inspection_record_id,
+                      );
+                      if (path) {
+                        setDetailDrawerVisible(false);
+                        navigate(path);
+                      }
+                    }}
+                  >
+                    查看源检验单
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      setDetailDrawerVisible(false);
+                      const q = new URLSearchParams();
+                      if (currentRecord.inspection_source_type === 'incoming_inspection') {
+                        q.set('incoming_inspection_id', String(currentRecord.inspection_record_id));
+                      } else if (currentRecord.inspection_source_type === 'process_inspection') {
+                        q.set('process_inspection_id', String(currentRecord.inspection_record_id));
+                      } else if (currentRecord.inspection_source_type === 'finished_goods_inspection') {
+                        q.set('finished_goods_inspection_id', String(currentRecord.inspection_record_id));
+                      }
+                      navigate(`/apps/kuaizhizao/quality-management/nonconforming-ledger?${q.toString()}`);
+                    }}
+                  >
+                    查看不合格品台账
+                  </Button>
+                </Space>
+              ) : null}
               <p><strong>严重程度：</strong>
                 <Tag color={
                   currentRecord.severity === 'critical' ? 'red' :
