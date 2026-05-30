@@ -36,9 +36,20 @@
 
 ## 立即体验与接入
 
-- **在线演示**：<https://kuaigeyun.com>（支持免注册体验）
+<div style="padding:12px 16px;margin:12px 0;background-color:#fffbe6;border:1px solid #ffe58f;border-left:4px solid #faad14;border-radius:4px;color:#614700;">
+<strong style="color:#d48806;">⚠️ 预览说明</strong><br/>
+快格云制造仍在<strong>积极开发中</strong>，功能、数据模型与界面可能频繁变更；在线演示与本地部署<strong>仅供预览与评估</strong>，请勿用于正式生产或承载真实业务数据。
+</div>
+
+- **在线演示**：<https://kuaigeyun.com>（支持免注册体验，数据可能定期重置）
 - **部署入口**：[`fast-deploy/deploy.sh`](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[`docs/部署指南.md`](docs/部署指南.md)
+
+<div style="padding:12px 16px;margin:12px 0;background-color:#fff2f0;border:1px solid #ffccc7;border-left:4px solid #ff4d4f;border-radius:4px;color:#434343;">
+<strong style="color:#cf1322;">⛔ 部署建议</strong><br/>
+<strong>建议在独立空白服务器或虚拟机环境中进行安装与验证</strong>，避免与既有业务系统产生端口、数据库或配置冲突。<strong>不建议</strong>在已承载生产业务的服务器上直接试装或试升级。<br/>
+若因业务需要必须在生产服务器上部署或升级，<strong style="color:#cf1322;">须事先完成完整备份</strong>（PostgreSQL 全库、<code>.env</code> / <code>deploy.env</code>、上传文件等），并在隔离环境中验证备份可成功还原；<strong style="color:#cf1322;">未备份即执行上述操作，可能导致数据不可恢复。</strong>
+</div>
 
 ## 微信沟通反馈群
 
@@ -53,19 +64,6 @@
 - **低运维负担**：默认 PostgreSQL + Taskiq，无 Redis 依赖；部署路径标准化。
 - **高配置灵活性**：业务蓝图、流程开关、自定义字段、打印与报表能力内建，适配多工厂差异流程。
 - **可追溯与可审计**：从需求到执行全链路留痕，便于交付核对、异常定位与持续改进。
-
----
-
-## 目录
-
-- [15 秒了解快格云制造](#15-秒了解快格云制造)
-- [立即体验与接入](#立即体验与接入)
-- [为什么选择快格云制造](#为什么选择快格云制造)
-- [核心能力](#核心能力)
-- [插件应用矩阵](#插件应用矩阵)
-- [技术架构](#技术架构)
-- [快速开始](#快速开始)
-- [文档导航](#文档导航)
 
 ---
 
@@ -137,7 +135,7 @@ cd kuaigeyun
 | 生产 | `http://<服务器IP>:8080` | `/api`（经 Caddy 转发） |
 | 开发 | `http://<服务器IP>:8100` | `http://<服务器IP>:8200` |
 
-- 部署文档：[docs/部署指南.md](docs/部署指南.md)
+- 部署文档：[docs/部署指南.md](docs/部署指南.md)（含**开发预览**与**备份**警告）
 - 脚本速查：[fast-deploy/README.md](fast-deploy/README.md)
 
 ---

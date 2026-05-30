@@ -2,6 +2,19 @@
 
 统一部署入口，支持 **Linux** 与 **Windows（Git Bash）**。完整部署说明见 [docs/部署指南.md](../docs/部署指南.md)。
 
+<div style="padding:12px 16px;margin:12px 0;background-color:#fffbe6;border:1px solid #ffe58f;border-left:4px solid #faad14;border-radius:4px;color:#614700;">
+<strong style="color:#d48806;">⚠️ 预览说明</strong><br/>
+当前版本仍在开发中，API 与数据库结构可能随版本变化，<strong>不适合作为正式生产环境</strong>长期运行。
+</div>
+
+<div style="padding:12px 16px;margin:12px 0;background-color:#fff2f0;border:1px solid #ffccc7;border-left:4px solid #ff4d4f;border-radius:4px;color:#434343;">
+<strong style="color:#cf1322;">⛔ 部署建议</strong><br/>
+<ol style="margin:8px 0 0 0;padding-left:20px;">
+<li><strong>部署环境</strong>：<strong>建议在空白服务器或虚拟机</strong>上完成首次部署与升级验证；<strong>不建议</strong>在已运行生产业务的服务器上进行试装或试升级，以免对现有系统造成影响。</li>
+<li><strong>生产环境部署</strong>：若必须在已有业务的服务器上执行安装、<code>update</code> 或数据库迁移，<strong style="color:#cf1322;">须先完成完整备份</strong>（PostgreSQL 全库、<code>riveredge-backend/.env</code>、<code>fast-deploy/deploy.env</code>、上传目录等），并验证备份可还原；<strong style="color:#cf1322;">未备份即操作，相关风险由部署方自行承担。</strong></li>
+</ol>
+</div>
+
 ## 推荐入口
 
 ```bash
