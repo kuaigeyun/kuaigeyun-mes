@@ -19,6 +19,7 @@ import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
+import { storageAreaApi, storageLocationApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
@@ -42,6 +43,7 @@ interface InventoryTransfer {
   executed_at?: string;
   created_at?: string;
   updated_at?: string;
+  transfer_mode?: 'transfer' | 'bin_relocation';
   items?: InventoryTransferItem[];
 }
 
@@ -74,6 +76,7 @@ const InventoryTransferPage: React.FC = () => {
   // Modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
+  const [createTransferMode, setCreateTransferMode] = useState<'transfer' | 'bin_relocation'>('transfer');
   const formRef = useRef<any>(null);
   const itemFormRef = useRef<any>(null);
 
@@ -84,8 +87,11 @@ const InventoryTransferPage: React.FC = () => {
   // 仓库列表状态 (交由 UniWarehouseSelect 管理)
   // 物料列表状态
   const [materialList, setMaterialList] = useState<any[]>([]);
+  const [storageAreaList, setStorageAreaList] = useState<any[]>([]);
+  const [storageLocationList, setStorageLocationList] = useState<any[]>([]);
   // 当前调拨单ID（用于添加明细）
   const [currentTransferId, setCurrentTransferId] = useState<number | null>(null);
+  const [currentItemTransferMode, setCurrentItemTransferMode] = useState<'transfer' | 'bin_relocation'>('transfer');
 
   // 加载仓库逻辑移除
 
@@ -105,14 +111,33 @@ const InventoryTransferPage: React.FC = () => {
     loadMaterials();
   }, []);
 
+  React.useEffect(() => {
+    const loadStorageMetadata = async () => {
+      try {
+        const [areas, locations] = await Promise.all([
+          storageAreaApi.list({ limit: 10000, is_active: true }),
+          storageLocationApi.list({ limit: 10000, is_active: true }),
+        ]);
+        setStorageAreaList(areas?.items || []);
+        setStorageLocationList(locations?.items || []);
+      } catch {
+        setStorageAreaList([]);
+        setStorageLocationList([]);
+      }
+    };
+    loadStorageMetadata();
+  }, []);
+
   /**
    * 处理创建调拨单
    */
   const handleCreate = () => {
     setCreateModalVisible(true);
+    setCreateTransferMode('transfer');
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       transfer_date: dayjs(),
+      transfer_mode: 'transfer',
     });
   };
 
@@ -121,12 +146,17 @@ const InventoryTransferPage: React.FC = () => {
    */
   const handleCreateSubmit = async (values: any) => {
     try {
-      if (values.from_warehouse_id === values.to_warehouse_id) {
-        messageApi.error('调出仓库和调入仓库不能相同');
-        throw new Error('调出仓库和调入仓库不能相同');
+      const mode = values.transfer_mode || 'transfer';
+      if (mode === 'transfer' && values.from_warehouse_id === values.to_warehouse_id) {
+        messageApi.error('跨仓调拨时，调出仓库和调入仓库不能相同');
+        throw new Error('跨仓调拨时，调出仓库和调入仓库不能相同');
+      }
+      if (mode === 'bin_relocation' && values.from_warehouse_id !== values.to_warehouse_id) {
+        messageApi.error('库内移位时，调出仓库和调入仓库必须相同');
+        throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
-      await inventoryTransferApi.create({
+      const payload = {
         from_warehouse_id: values.from_warehouse_id,
         from_warehouse_name: values._from_warehouse_name || '',
         to_warehouse_id: values.to_warehouse_id,
@@ -134,15 +164,25 @@ const InventoryTransferPage: React.FC = () => {
         transfer_date: values.transfer_date?.toISOString() || new Date().toISOString(),
         transfer_reason: values.transfer_reason,
         remarks: values.remarks,
-      });
-      messageApi.success('调拨单创建成功');
+        allow_same_warehouse: mode === 'bin_relocation',
+      };
+      if (mode === 'bin_relocation') {
+        await inventoryTransferApi.createBinTransfer(payload);
+        messageApi.success('库内移位单创建成功');
+      } else {
+        await inventoryTransferApi.create(payload);
+        messageApi.success('调拨单创建成功');
+      }
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      if (error.message !== '调出仓库和调入仓库不能相同') {
+      if (
+        error.message !== '跨仓调拨时，调出仓库和调入仓库不能相同' &&
+        error.message !== '库内移位时，调出仓库和调入仓库必须相同'
+      ) {
         messageApi.error(error.message || '创建调拨单失败');
       }
       throw error;
@@ -189,6 +229,9 @@ const InventoryTransferPage: React.FC = () => {
   const handleAddItem = (record: InventoryTransfer) => {
     setCurrentTransferId(record.id!);
     setItemModalVisible(true);
+    setCurrentItemTransferMode(
+      record.transfer_mode || (record.from_warehouse_id === record.to_warehouse_id ? 'bin_relocation' : 'transfer')
+    );
     itemFormRef.current?.resetFields();
     // 自动填充调出和调入仓库
     itemFormRef.current?.setFieldsValue({
@@ -213,6 +256,20 @@ const InventoryTransferPage: React.FC = () => {
         return;
       }
 
+      if (currentItemTransferMode === 'bin_relocation') {
+        if (!values.from_location_id || !values.to_location_id) {
+          messageApi.error('库内移位必须选择调出库位和调入库位');
+          return;
+        }
+        if (values.from_location_id === values.to_location_id) {
+          messageApi.error('库内移位时调出库位和调入库位不能相同');
+          return;
+        }
+      }
+
+      const fromLocation = storageLocationList.find((x: any) => x.id === values.from_location_id);
+      const toLocation = storageLocationList.find((x: any) => x.id === values.to_location_id);
+
       await inventoryTransferApi.createItem(currentTransferId.toString(), {
         transfer_id: currentTransferId,
         material_id: values.material_id,
@@ -220,10 +277,10 @@ const InventoryTransferPage: React.FC = () => {
         material_name: material.name,
         from_warehouse_id: values.from_warehouse_id,
         from_location_id: values.from_location_id,
-        from_location_code: values.from_location_code,
+        from_location_code: fromLocation?.code || values.from_location_code,
         to_warehouse_id: values.to_warehouse_id,
         to_location_id: values.to_location_id,
-        to_location_code: values.to_location_code,
+        to_location_code: toLocation?.code || values.to_location_code,
         batch_no: values.batch_no,
         quantity: values.quantity,
         unit_price: values.unit_price || 0,
@@ -256,6 +313,20 @@ const InventoryTransferPage: React.FC = () => {
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
         </Typography.Text>
+      ),
+    },
+    {
+      title: '单据模式',
+      dataIndex: 'transfer_mode',
+      width: 110,
+      valueEnum: {
+        transfer: { text: '跨仓调拨', status: 'processing' },
+        bin_relocation: { text: '库内移位', status: 'warning' },
+      },
+      render: (_, record) => (
+        <Tag color={record.transfer_mode === 'bin_relocation' ? 'gold' : 'blue'}>
+          {record.transfer_mode === 'bin_relocation' ? '库内移位' : '跨仓调拨'}
+        </Tag>
       ),
     },
     {
@@ -374,6 +445,16 @@ const InventoryTransferPage: React.FC = () => {
     },
   ];
 
+  const getAreaOptions = (warehouseId?: number) =>
+    storageAreaList
+      .filter((a: any) => !warehouseId || a.warehouseId === warehouseId)
+      .map((a: any) => ({ label: `${a.code} - ${a.name}`, value: a.id }));
+
+  const getLocationOptions = (storageAreaId?: number) =>
+    storageLocationList
+      .filter((l: any) => !storageAreaId || l.storageAreaId === storageAreaId)
+      .map((l: any) => ({ label: `${l.code} - ${l.name}`, value: l.id }));
+
   return (
     <ListPageTemplate>
       <UniTable
@@ -396,6 +477,7 @@ const InventoryTransferPage: React.FC = () => {
               from_warehouse_id: params.from_warehouse_id,
               to_warehouse_id: params.to_warehouse_id,
               status: lifecycleStage ?? params.status,
+              transfer_mode: (params as any).transfer_mode,
               keyword: (params as any).keyword,
             });
             return {
@@ -448,6 +530,31 @@ const InventoryTransferPage: React.FC = () => {
         grid={false}
         {...MODAL_CONFIG}
       >
+        <ProFormSelect
+          name="transfer_mode"
+          label="单据模式"
+          initialValue="transfer"
+          rules={[{ required: true, message: '请选择单据模式' }]}
+          options={[
+            { label: '跨仓调拨', value: 'transfer' },
+            { label: '库内移位（同仓）', value: 'bin_relocation' },
+          ]}
+          fieldProps={{
+            onChange: (v: 'transfer' | 'bin_relocation') => {
+              setCreateTransferMode(v);
+              if (v === 'bin_relocation') {
+                const fromId = formRef.current?.getFieldValue?.('from_warehouse_id');
+                const fromName = formRef.current?.getFieldValue?.('_from_warehouse_name');
+                if (fromId) {
+                  formRef.current?.setFieldsValue({
+                    to_warehouse_id: fromId,
+                    _to_warehouse_name: fromName || '',
+                  });
+                }
+              }
+            },
+          }}
+        />
         <Row gutter={16}>
           <Col span={12}>
             <UniWarehouseSelect
@@ -455,15 +562,24 @@ const InventoryTransferPage: React.FC = () => {
               label="调出仓库"
               placeholder="请选择调出仓库"
               required
-              onChange={(_, option) => formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name })}
+              onChange={(value, option) => {
+                formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name });
+                if (createTransferMode === 'bin_relocation') {
+                  formRef.current?.setFieldsValue({
+                    to_warehouse_id: value,
+                    _to_warehouse_name: option?.name,
+                  });
+                }
+              }}
             />
           </Col>
           <Col span={12}>
             <UniWarehouseSelect
               name="to_warehouse_id"
-              label="调入仓库"
-              placeholder="请选择调入仓库"
+              label={createTransferMode === 'bin_relocation' ? '所在仓库（同仓）' : '调入仓库'}
+              placeholder={createTransferMode === 'bin_relocation' ? '与调出仓库相同' : '请选择调入仓库'}
               required
+              disabled={createTransferMode === 'bin_relocation'}
               onChange={(_, option) => formRef.current?.setFieldsValue({ _to_warehouse_name: option?.name })}
             />
           </Col>
@@ -536,16 +652,68 @@ const InventoryTransferPage: React.FC = () => {
           min={0}
           fieldProps={{ precision: 2 }}
         />
-        <ProFormText
-          name="from_location_code"
-          label="调出库位编号（可选）"
-          placeholder="请输入调出库位编号"
-        />
-        <ProFormText
-          name="to_location_code"
-          label="调入库位编号（可选）"
-          placeholder="请输入调入库位编号"
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="from_storage_area_id"
+              label="调出库区"
+              placeholder="请选择调出库区"
+              options={getAreaOptions(itemFormRef.current?.getFieldValue?.('from_warehouse_id'))}
+              fieldProps={{
+                showSearch: true,
+                onChange: () => {
+                  itemFormRef.current?.setFieldsValue({ from_location_id: undefined });
+                },
+              }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="from_location_id"
+              label="调出库位"
+              placeholder="请选择调出库位"
+              rules={
+                currentItemTransferMode === 'bin_relocation'
+                  ? [{ required: true, message: '库内移位必须选择调出库位' }]
+                  : undefined
+              }
+              options={getLocationOptions(itemFormRef.current?.getFieldValue?.('from_storage_area_id'))}
+              fieldProps={{ showSearch: true }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="to_storage_area_id"
+              label="调入库区"
+              placeholder="请选择调入库区"
+              options={getAreaOptions(itemFormRef.current?.getFieldValue?.('to_warehouse_id'))}
+              fieldProps={{
+                showSearch: true,
+                onChange: () => {
+                  itemFormRef.current?.setFieldsValue({ to_location_id: undefined });
+                },
+              }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="to_location_id"
+              label="调入库位"
+              placeholder="请选择调入库位"
+              rules={
+                currentItemTransferMode === 'bin_relocation'
+                  ? [{ required: true, message: '库内移位必须选择调入库位' }]
+                  : undefined
+              }
+              options={getLocationOptions(itemFormRef.current?.getFieldValue?.('to_storage_area_id'))}
+              fieldProps={{ showSearch: true }}
+            />
+          </Col>
+        </Row>
+        <ProFormText name="from_location_code" hidden />
+        <ProFormText name="to_location_code" hidden />
         <ProFormText
           name="batch_no"
           label="批次号（可选）"

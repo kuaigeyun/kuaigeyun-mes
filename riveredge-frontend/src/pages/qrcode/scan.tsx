@@ -91,7 +91,8 @@ const QRCodeScanPage: React.FC = () => {
           // 装箱码：跳转到装箱详情
           const boxUuid = data.box_uuid;
           if (boxUuid) {
-            navigate(`/apps/kuaizhizao/warehouse-management/packing?uuid=${boxUuid}&action=detail`);
+            const encoded = encodeURIComponent(boxUuid);
+            navigate(`/apps/kuaizhizao/production-execution/packing-binding?uuid=${encoded}&box_no=${encoded}&action=detail`);
             messageApi.success(t('pages.qrcode.scan.navigatingToBox'));
           } else {
             messageApi.error(t('pages.qrcode.scan.boxDataIncomplete'));

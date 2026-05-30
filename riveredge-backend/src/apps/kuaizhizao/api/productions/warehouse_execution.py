@@ -58,6 +58,7 @@ customer_material_registration_service = CustomerMaterialRegistrationService()
 
 from apps.kuaizhizao.schemas.warehouse import (
     ProductionPickingCreate,
+    ProductionPickingUpdate,
     ProductionPickingResponse,
     ProductionPickingListResponse,
     ProductionPickingWithItemsResponse,
@@ -75,6 +76,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SemiFinishedGoodsReceiptResponse,
     SemiFinishedGoodsReceiptWithItemsResponse,
     SalesDeliveryCreate,
+    SalesDeliveryUpdate,
     SalesDeliveryResponse,
     SalesDeliveryWithItemsResponse,
     SalesDeliveryConfirmRequest,
@@ -86,6 +88,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReceiptResponse,
     PurchaseReceiptWithItemsResponse,
     PurchaseReturnCreate,
+    PurchaseReturnUpdate,
     PurchaseReturnResponse,
     OtherInboundCreate,
     OtherInboundUpdate,
@@ -130,6 +133,9 @@ from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingUpdate,
     PackingBindingResponse,
     PackingBindingListResponse,
+    PackingBindingPageResponse,
+    PackingBindingStatisticsResponse,
+    PackingBindingTaskPoolResponse,
 )
 from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleCreate,
@@ -318,6 +324,21 @@ async def get_production_picking(
     )
 
 
+@router.put("/production-pickings/{picking_id}", response_model=ProductionPickingResponse, summary="Update production picking")
+async def update_production_picking(
+    picking_id: int,
+    picking: ProductionPickingUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    return await ProductionPickingService().update_production_picking(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+        picking_data=picking,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/production-pickings/{picking_id}/confirm", response_model=ProductionPickingResponse, summary="Confirm picking")
 async def confirm_production_picking(
     picking_id: int,
@@ -333,6 +354,18 @@ async def confirm_production_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
         confirmed_by=current_user.id
+    )
+
+
+@router.delete("/production-pickings/{picking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete production picking")
+async def delete_production_picking(
+    picking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await ProductionPickingService().delete_production_picking(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
     )
 
 
@@ -1403,6 +1436,7 @@ async def list_packing_bindings(
     sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
     product_id: Optional[int] = Query(None, description="产品ID"),
     box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
+    uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[PackingBindingListResponse]:
@@ -1427,6 +1461,51 @@ async def list_packing_bindings(
         sales_delivery_id=sales_delivery_id,
         product_id=product_id,
         box_no=box_no,
+        uuid_value=uuid,
+    )
+
+
+@router.get("/packing-bindings/page", response_model=PackingBindingPageResponse, summary="List packing bindings page")
+async def list_packing_bindings_page(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
+    receipt_id: Optional[int] = Query(None, description="成品入库单ID"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
+    uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingPageResponse:
+    return await packing_binding_service.list_packing_bindings_page(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        receipt_id=receipt_id,
+        sales_delivery_id=sales_delivery_id,
+        product_id=product_id,
+        box_no=box_no,
+        uuid_value=uuid,
+    )
+
+
+@router.get("/packing-bindings/statistics", response_model=PackingBindingStatisticsResponse, summary="Get packing binding statistics")
+async def get_packing_binding_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingStatisticsResponse:
+    return await packing_binding_service.get_packing_binding_statistics(tenant_id=tenant_id)
+
+
+@router.get("/packing-bindings/task-pool", response_model=PackingBindingTaskPoolResponse, summary="Get packing task pool")
+async def get_packing_binding_task_pool(
+    limit: int = Query(20, ge=1, le=200, description="返回任务数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingTaskPoolResponse:
+    return await packing_binding_service.get_task_pool_summary(
+        tenant_id=tenant_id,
+        limit=limit,
     )
 
 
@@ -2136,6 +2215,21 @@ async def get_sales_delivery(
     )
 
 
+@router.put("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryResponse, summary="Update sales delivery")
+async def update_sales_delivery(
+    delivery_id: int,
+    delivery: SalesDeliveryUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    return await SalesDeliveryService().update_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        delivery_data=delivery,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/sales-deliveries/{delivery_id}/confirm", response_model=SalesDeliveryResponse, summary="Confirm sales delivery")
 async def confirm_sales_delivery(
     delivery_id: int,
@@ -2155,6 +2249,31 @@ async def confirm_sales_delivery(
         delivery_id=delivery_id,
         confirmed_by=current_user.id,
         item_batches=batches,
+    )
+
+
+@router.post("/sales-deliveries/{delivery_id}/withdraw", response_model=SalesDeliveryResponse, summary="Withdraw sales delivery")
+async def withdraw_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    return await SalesDeliveryService().withdraw_delivery_confirmation(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete("/sales-deliveries/{delivery_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete sales delivery")
+async def delete_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await SalesDeliveryService().delete_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
     )
 
 
@@ -2976,6 +3095,21 @@ async def get_purchase_return(
     )
 
 
+@router.put("/purchase-returns/{return_id}", response_model=PurchaseReturnResponse, summary="Update purchase return")
+async def update_purchase_return(
+    return_id: int,
+    body: PurchaseReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    return await PurchaseReturnService().update_purchase_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=body,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/purchase-returns/{return_id}/confirm", response_model=PurchaseReturnResponse, summary="Confirm purchase return")
 async def confirm_purchase_return(
     return_id: int,
@@ -2991,6 +3125,19 @@ async def confirm_purchase_return(
         tenant_id=tenant_id,
         return_id=return_id,
         confirmed_by=current_user.id
+    )
+
+
+@router.post("/purchase-returns/{return_id}/withdraw", response_model=PurchaseReturnResponse, summary="Withdraw purchase return posting")
+async def withdraw_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    return await PurchaseReturnService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
     )
 
 

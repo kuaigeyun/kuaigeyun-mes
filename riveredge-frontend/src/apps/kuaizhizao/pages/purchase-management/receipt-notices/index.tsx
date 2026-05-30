@@ -33,7 +33,7 @@ import {
   Spin,
   theme,
 } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -44,7 +44,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -843,7 +843,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const renderCreateForm = () => (
     <>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText
             name="notice_code"
             label="通知单号"
@@ -851,7 +851,7 @@ const ReceiptNoticesPage: React.FC = () => {
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProForm.Item name="purchase_order_id" label="采购订单" rules={[{ required: true, message: '请选择采购订单' }]}>
             <Select
               placeholder="请选择采购订单"
@@ -865,22 +865,20 @@ const ReceiptNoticesPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
+        <Col span={8}>
+          <ProFormText name="supplier_name" label="供应商" placeholder="供应商名称" rules={[{ required: true, message: '请输入供应商' }]} />
+        </Col>
       </Row>
       <ProFormText name="purchase_order_code" hidden />
       <ProFormText name="supplier_id" hidden />
       <Row gutter={16}>
-        <Col span={12}>
-          <ProFormText name="supplier_name" label="供应商" placeholder="供应商名称" rules={[{ required: true, message: '请输入供应商' }]} />
-        </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="supplier_contact" label="联系人" placeholder="联系人" />
         </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="supplier_phone" label="电话" placeholder="电话" />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
             label="入库仓库"
@@ -891,17 +889,47 @@ const ReceiptNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormDatePicker name="planned_receipt_date" label="计划收货日期" fieldProps={{ style: { width: '100%' } }} />
         </Col>
-        <Col span={12} />
+        <Col span={8} />
+        <Col span={8} />
       </Row>
-      <div className="uni-table-detail" style={{ width: '100%' }}>
-        <UniTableDetailHeader title="通知明细" required />
-        <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
-          <AntForm.List name="items">
-            {(fields, { add, remove }) => {
-              const cols = [
+      <UniTableDetail
+        name="items"
+        title="通知明细"
+        required
+        requiredMessage="请至少添加一条通知明细"
+        headerExtra={(
+          <Space size={8}>
+            <Button
+              type="default"
+              icon={<ImportOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              导入明细
+            </Button>
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                items.push({ ...defaultReceiptItem });
+                formRef.current?.setFieldsValue({ items });
+              }}
+            >
+              添加明细
+            </Button>
+            <Button
+              type="default"
+              icon={<AppstoreAddOutlined />}
+              onClick={() => setMaterialPickerOpen(true)}
+            >
+              {t('app.kuaizhizao.common.materialBatchSelect')}
+            </Button>
+          </Space>
+        )}
+        columns={[
                 {
                   title: '物料',
                   dataIndex: 'material_id',
@@ -970,44 +998,15 @@ const ReceiptNoticesPage: React.FC = () => {
                     </AntForm.Item>
                   ),
                 },
-                {
-                  title: '操作',
-                  width: 60,
-                  render: (_: any, __: any, index: number) => (
-                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
-                  ),
-                },
-              ];
-              return (
-                <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <Table
-                    size="small"
-                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                    rowKey="key"
-                    pagination={false}
-                    columns={cols}
-                    footer={() => (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultReceiptItem)}>
-                          添加明细
-                        </Button>
-                        <Button
-                          type="default"
-                          icon={<ShoppingOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
-                          onClick={() => setMaterialPickerOpen(true)}
-                        >
-                          {t('app.kuaizhizao.common.materialBatchSelect')}
-                        </Button>
-                      </div>
-                    )}
-                  />
-                </div>
-              );
-            }}
-          </AntForm.List>
-        </ProForm.Item>
-      </div>
+              ]}
+        disabledAdd
+        minRows={1}
+        initialValue={{ ...defaultReceiptItem }}
+        tableProps={{
+          size: 'small',
+          style: { width: '100%', margin: 0 },
+        }}
+      />
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );
@@ -1015,24 +1014,21 @@ const ReceiptNoticesPage: React.FC = () => {
   const renderEditForm = () => (
     <>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="purchase_order_code" label="采购订单号" disabled />
         </Col>
-        <Col span={12} />
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="supplier_name" label="供应商" disabled />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="supplier_contact" label="联系人" placeholder="联系人" />
         </Col>
       </Row>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="supplier_phone" label="电话" placeholder="电话" />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
             label="入库仓库"
@@ -1040,16 +1036,13 @@ const ReceiptNoticesPage: React.FC = () => {
             onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
-      </Row>
-      <ProFormText name="warehouse_name" hidden />
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormDatePicker name="planned_receipt_date" label="计划收货日期" fieldProps={{ style: { width: '100%' } }} />
         </Col>
-        <Col span={12} />
       </Row>
+      <ProFormText name="warehouse_name" hidden />
       <div className="uni-table-detail" style={{ width: '100%' }}>
-        <UniTableDetailHeader title="通知明细" />
+        <div style={{ fontWeight: 500, marginBottom: 8 }}>通知明细</div>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
           {({ getFieldValue }: any) => {
             const items = getFieldValue('items') ?? [];
@@ -1165,7 +1158,7 @@ const ReceiptNoticesPage: React.FC = () => {
       <Modal
         title={pullFromPurchaseOrderAction.label}
         open={pullFromPurchaseOrderVisible}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => {
           if (pullPurchaseOrderSubmitting) return;
           setPullFromPurchaseOrderVisible(false);

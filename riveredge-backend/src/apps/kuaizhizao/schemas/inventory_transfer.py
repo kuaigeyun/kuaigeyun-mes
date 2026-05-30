@@ -36,7 +36,7 @@ class InventoryTransferCreate(InventoryTransferBase):
 
     用于创建新库存调拨单的数据验证。
     """
-    pass
+    allow_same_warehouse: bool = Field(False, description="是否允许同仓调拨（用于库内移位）")
 
 
 class InventoryTransferUpdate(BaseModel):
@@ -54,6 +54,7 @@ class InventoryTransferUpdate(BaseModel):
     transfer_date: Optional[datetime] = Field(None, description="调拨日期")
     transfer_reason: Optional[str] = Field(None, description="调拨原因")
     remarks: Optional[str] = Field(None, description="备注")
+    allow_same_warehouse: Optional[bool] = Field(None, description="是否允许同仓调拨（用于库内移位）")
 
 
 class InventoryTransferResponse(InventoryTransferBase):
@@ -76,6 +77,7 @@ class InventoryTransferResponse(InventoryTransferBase):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    transfer_mode: Optional[str] = Field(None, description="单据模式：transfer|bin_relocation")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
 

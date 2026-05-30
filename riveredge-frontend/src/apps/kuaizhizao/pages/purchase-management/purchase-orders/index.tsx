@@ -15,7 +15,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -28,7 +28,7 @@ import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-mo
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -1941,7 +1941,7 @@ const PurchaseOrdersPage: React.FC = () => {
       <Modal
         title={pullFromRequisitionAction.label}
         open={pullFromRequisitionVisible}
-        width={1280}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => setPullFromRequisitionVisible(false)}
         onOk={handlePullFromRequisitionConfirm}
         okText="创建采购订单"
@@ -2220,32 +2220,62 @@ const PurchaseOrdersPage: React.FC = () => {
         </Row>
 
         {/* 已生效/执行中订单须通过变更单修改，不再支持直改填写变更原因 */}
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <UniTableDetailHeader
-            title="采购明细"
-            required
-            leftExtra={(
-              <ProForm.Item
-                name="price_type"
-                initialValue="tax_exclusive"
-                noStyle
-                valuePropName="checked"
-                getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-              >
-                <Switch checkedChildren="含税" unCheckedChildren="不含税" />
-              </ProForm.Item>
-            )}
-          />
-          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
-            {({ getFieldValue: getFormValue }: any) => {
-              const priceType = getFormValue('price_type') ?? 'tax_exclusive';
-              const showTaxColumns = priceType === 'tax_inclusive';
-              return (
-        <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条采购明细' }]}>
-          <AntForm.List name="items">
-            {(fields, { add, remove }) => {
-              const orderDetailColumns = [
+        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+          {({ getFieldValue: getFormValue }: any) => {
+            const priceType = getFormValue('price_type') ?? 'tax_exclusive';
+            const showTaxColumns = priceType === 'tax_inclusive';
+            return (
+              <UniTableDetail
+                name="items"
+                title="采购明细"
+                required
+                requiredMessage="请至少添加一条采购明细"
+                leftExtra={(
+                  <ProForm.Item
+                    name="price_type"
+                    initialValue="tax_exclusive"
+                    noStyle
+                    valuePropName="checked"
+                    getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
+                    getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
+                  >
+                    <Switch checkedChildren="含税" unCheckedChildren="不含税" />
+                  </ProForm.Item>
+                )}
+                headerExtra={(
+                  <Space size={8}>
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                        const defaultDate =
+                          mainDelivery != null
+                            ? dayjs.isDayjs(mainDelivery)
+                              ? mainDelivery
+                              : dayjs(mainDelivery)
+                            : dayjs();
+                        const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                        items.push({
+                          ...defaultOrderItem,
+                          tax_rate: 0,
+                          required_date: defaultDate,
+                        });
+                        formRef.current?.setFieldsValue({ items });
+                      }}
+                    >
+                      添加明细
+                    </Button>
+                    <Button
+                      type="default"
+                      icon={<AppstoreAddOutlined />}
+                      onClick={() => setMaterialPickerOpen(true)}
+                    >
+                      {t('app.kuaizhizao.common.materialBatchSelect')}
+                    </Button>
+                  </Space>
+                )}
+                columns={[
                 {
                   title: '物料',
                   dataIndex: 'material_id',
@@ -2476,67 +2506,19 @@ const PurchaseOrdersPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: '操作',
-                    width: 60,
-                    render: (_: any, __: any, index: number) => (
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
-                    ),
-                  },
-                ];
-                return (
-                  <div style={{ width: '100%', overflowX: 'auto' }}>
-                    <Table
-                      size="small"
-                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                      rowKey="key"
-                      pagination={false}
-                      columns={orderDetailColumns}
-                      tableLayout="auto"
-                      scroll={fields.length > 0 ? { x: 'max-content' } : undefined}
-                      footer={() => (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => {
-                              const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                              const defaultDate =
-                                mainDelivery != null
-                                  ? dayjs.isDayjs(mainDelivery)
-                                    ? mainDelivery
-                                    : dayjs(mainDelivery)
-                                  : dayjs();
-                              add({
-                                ...defaultOrderItem,
-                                tax_rate: 0,
-                                required_date: defaultDate,
-                              });
-                            }}
-                          >
-                            添加明细
-                          </Button>
-                          <Button
-                            type="default"
-                            icon={<ShoppingOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => setMaterialPickerOpen(true)}
-                          >
-                            {t('app.kuaizhizao.common.materialBatchSelect')}
-                          </Button>
-                        </div>
-                      )}
-                    />
-                  </div>
-                );
-            }}
-          </AntForm.List>
+                ]}
+                disabledAdd
+                minRows={1}
+                initialValue={{ ...defaultOrderItem, tax_rate: 0, required_date: dayjs() }}
+                tableProps={{
+                  size: 'small',
+                  tableLayout: 'auto',
+                  scroll: { x: 'max-content' },
+                }}
+              />
+            );
+          }}
         </AntForm.Item>
-              );
-            }}
-          </AntForm.Item>
-        </div>
 
         <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
 

@@ -2368,6 +2368,133 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
         return [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
 
+    async def update_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        delivery_data: SalesDeliveryUpdate,
+        updated_by: int,
+    ) -> SalesDeliveryResponse:
+        """更新销售出库单（仅待出库可改）。"""
+        async with in_transaction():
+            delivery = await SalesDelivery.get_or_none(
+                id=delivery_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not delivery:
+                raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+            if delivery.status not in ["待出库", "draft", "草稿"]:
+                raise ValidationError(f"销售出库单状态为{delivery.status}，不能修改")
+
+            user_info = await self.get_user_info(updated_by)
+            if delivery_data.delivery_time is not None:
+                delivery.delivery_time = delivery_data.delivery_time
+            if delivery_data.shipping_method is not None:
+                delivery.shipping_method = delivery_data.shipping_method
+            if delivery_data.tracking_number is not None:
+                delivery.tracking_number = delivery_data.tracking_number
+            if delivery_data.shipping_address is not None:
+                delivery.shipping_address = delivery_data.shipping_address
+            if delivery_data.notes is not None:
+                delivery.notes = delivery_data.notes
+            if delivery_data.warehouse_id is not None:
+                delivery.warehouse_id = delivery_data.warehouse_id
+            if delivery_data.warehouse_name is not None:
+                delivery.warehouse_name = delivery_data.warehouse_name
+            delivery.updated_by = updated_by
+            delivery.updated_by_name = user_info.get("name", "")
+            await delivery.save()
+            return SalesDeliveryResponse.model_validate(delivery)
+
+    async def delete_sales_delivery(self, tenant_id: int, delivery_id: int) -> None:
+        """删除销售出库单（软删除，仅待出库可删）。"""
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        if delivery.status not in ["待出库", "draft", "草稿", "已取消", "cancelled"]:
+            raise BusinessLogicError("只有待出库或已取消状态的销售出库单才能删除")
+        delivery.deleted_at = datetime.now()
+        await delivery.save()
+
+    async def withdraw_delivery_confirmation(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        updated_by: int,
+    ) -> SalesDeliveryResponse:
+        """撤回销售出库确认（库存回冲并恢复待出库）。"""
+        async with in_transaction():
+            delivery = await SalesDelivery.get_or_none(
+                id=delivery_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not delivery:
+                raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+            if delivery.status != "已出库":
+                raise ValidationError("只有已出库状态的销售出库单才能撤回")
+
+            items = await SalesDeliveryItem.filter(
+                tenant_id=tenant_id,
+                delivery_id=delivery_id,
+                deleted_at__isnull=True,
+            ).all()
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+            from apps.master_data.models.material import Material
+
+            material_ids = list({it.material_id for it in items if getattr(it, "material_id", None)})
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=material_ids,
+                deleted_at__isnull=True,
+            ).all() if material_ids else []
+            material_by_id = {m.id: m for m in materials}
+
+            for item in items:
+                qty = item.delivery_quantity or Decimal(0)
+                if qty <= 0:
+                    continue
+                base_qty = _to_base_quantity(
+                    quantity=Decimal(str(qty)),
+                    material_unit=getattr(item, "material_unit", None),
+                    material=material_by_id.get(item.material_id),
+                )
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=base_qty,
+                    warehouse_id=delivery.warehouse_id,
+                    batch_no=item.batch_number or None,
+                    source_type="sales_delivery_withdraw",
+                    source_doc_id=delivery_id,
+                    source_doc_code=delivery.delivery_code,
+                )
+                item.status = "待出库"
+                item.delivery_time = None
+                await item.save()
+
+            if getattr(delivery, "sales_order_id", None):
+                await self._rollback_confirmed_delivery_from_sales_order_items(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(delivery.sales_order_id),
+                    delivery_items=items,
+                )
+
+            user_info = await self.get_user_info(updated_by)
+            delivery.status = "待出库"
+            delivery.deliverer_id = None
+            delivery.deliverer_name = None
+            delivery.delivery_time = None
+            delivery.updated_by = updated_by
+            delivery.updated_by_name = user_info.get("name", "")
+            await delivery.save()
+            return SalesDeliveryResponse.model_validate(delivery)
+
     async def pull_from_sales_order(
         self,
         tenant_id: int,
@@ -2777,6 +2904,57 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     mid,
                     sales_order_id,
                 )
+
+    async def _rollback_confirmed_delivery_from_sales_order_items(
+        self,
+        *,
+        tenant_id: int,
+        sales_order_id: int,
+        delivery_items: List[SalesDeliveryItem],
+    ) -> None:
+        """销售出库撤回后，将本单已交数量从销售订单明细中回退。"""
+        if not sales_order_id or not delivery_items:
+            return
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+        if not order_items:
+            return
+
+        by_material: Dict[int, List[SalesOrderItem]] = {}
+        for oi in order_items:
+            mid = int(oi.material_id or 0)
+            if mid > 0:
+                by_material.setdefault(mid, []).append(oi)
+
+        # 逆序回退，尽量对应确认时的分摊顺序
+        for d_item in sorted(delivery_items, key=lambda x: int(x.id or 0), reverse=True):
+            qty = Decimal(str(d_item.delivery_quantity or 0))
+            if qty <= 0:
+                continue
+            mid = int(d_item.material_id or 0)
+            if mid <= 0:
+                continue
+            candidates = list(by_material.get(mid) or [])
+            candidates.reverse()
+            for oi in candidates:
+                if qty <= 0:
+                    break
+                delivered = Decimal(str(oi.delivered_quantity or 0))
+                if delivered <= 0:
+                    continue
+                take = min(delivered, qty)
+                new_delivered = delivered - take
+                order_qty = Decimal(str(oi.order_quantity or 0))
+                oi.delivered_quantity = new_delivered
+                oi.remaining_quantity = max(order_qty - new_delivered, Decimal("0"))
+                oi.delivery_status = "待交货" if new_delivered <= 0 else "部分交货"
+                await oi.save()
+                qty -= take
 
     async def confirm_delivery(
         self,
@@ -5436,6 +5614,135 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
             return updated_return
+
+    async def update_purchase_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        return_data: Any,
+        updated_by: int,
+    ) -> PurchaseReturnResponse:
+        """更新采购退货单（仅待退货/草稿状态）。"""
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnUpdate
+        from apps.master_data.models.material import Material
+
+        async with in_transaction():
+            return_obj = await PurchaseReturn.get_or_none(
+                tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+            )
+            if not return_obj:
+                raise NotFoundError(f"采购退货单不存在: {return_id}")
+            if return_obj.status not in ("待退货", "草稿"):
+                raise BusinessLogicError("仅「待退货」或「草稿」状态的采购退货单可编辑")
+
+            if not isinstance(return_data, PurchaseReturnUpdate):
+                return_data = PurchaseReturnUpdate.model_validate(return_data)
+
+            payload = return_data.model_dump(exclude_unset=True, exclude={"items"})
+            for key, val in payload.items():
+                if key in ("id", "tenant_id", "uuid", "created_at", "updated_at"):
+                    continue
+                if hasattr(return_obj, key):
+                    setattr(return_obj, key, val)
+
+            items = getattr(return_data, "items", None)
+            if items is not None:
+                await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).delete()
+                total_quantity = Decimal(0)
+                total_amount = Decimal(0)
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                for item_data in items:
+                    material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
+                    batch_number = getattr(item_data, "batch_number", None)
+                    serial_numbers = getattr(item_data, "serial_numbers", None)
+                    if material:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=material,
+                            batch_number=batch_number,
+                            serial_numbers=serial_numbers,
+                            quantity=getattr(item_data, "return_quantity", None),
+                            scene="采购退货",
+                        )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        scene="采购退货",
+                        material_label=getattr(item_data, "material_name", None)
+                        or getattr(item_data, "material_code", "未知物料"),
+                    )
+                    if serial_numbers and isinstance(serial_numbers, list):
+                        serial_numbers_json = json.dumps(serial_numbers)
+                    elif serial_numbers:
+                        serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
+                    else:
+                        serial_numbers_json = None
+
+                    await PurchaseReturnItem.create(
+                        tenant_id=tenant_id,
+                        return_id=return_obj.id,
+                        purchase_receipt_item_id=getattr(item_data, "purchase_receipt_item_id", None),
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, "material_spec", None),
+                        material_unit=item_data.material_unit,
+                        return_quantity=item_data.return_quantity,
+                        unit_price=item_data.unit_price,
+                        total_amount=item_data.total_amount,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        batch_number=batch_number,
+                        expiry_date=getattr(item_data, "expiry_date", None),
+                        serial_numbers=serial_numbers_json,
+                        status=getattr(item_data, "status", "待退货"),
+                        return_time=getattr(item_data, "return_time", None),
+                        notes=getattr(item_data, "notes", None),
+                    )
+                    total_quantity += Decimal(str(item_data.return_quantity or 0))
+                    total_amount += Decimal(str(item_data.total_amount or 0))
+                return_obj.total_quantity = total_quantity
+                return_obj.total_amount = total_amount
+
+            return_obj.updated_by = updated_by
+            await return_obj.save()
+            return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+    async def withdraw_confirmation(self, tenant_id: int, return_id: int, updated_by: int) -> PurchaseReturnResponse:
+        """撤回采购退货确认（已退货 -> 待退货），并回滚库存扣减。"""
+        async with in_transaction():
+            return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+            if not return_obj:
+                raise NotFoundError(f"采购退货单不存在: {return_id}")
+            if return_obj.status != "已退货":
+                raise BusinessLogicError("只有已退货状态的采购退货单才能撤回")
+
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+            items = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            for item in items:
+                qty = item.return_quantity or Decimal(0)
+                if qty <= 0:
+                    continue
+                await InventoryService._increase_stock_no_atomic(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=qty,
+                    warehouse_id=return_obj.warehouse_id if return_obj.warehouse_id else None,
+                    batch_no=item.batch_number or None,
+                    source_type="purchase_return_withdraw",
+                    source_doc_id=return_id,
+                    source_doc_code=return_obj.return_code,
+                )
+
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status="待退货",
+                return_time=None,
+                returner_id=None,
+                returner_name=None,
+                updated_by=updated_by,
+            )
+            return await self.get_purchase_return_by_id(tenant_id, return_id)
 
     async def delete_purchase_return(self, tenant_id: int, return_id: int) -> bool:
         """删除采购退货单（软删除，仅待退货状态可删）"""

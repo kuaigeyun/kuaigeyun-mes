@@ -2089,14 +2089,13 @@ async def get_menu_badge_counts(
         counts["outsource_work_order"] = 0
 
     try:
-        # 装箱打包：与待出库销售出库队列一致（同一执行口径）
-        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
-        sd2 = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        pb_p = await sd2.filter(review_status__in=_rv_pending).exclude(
-            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED"]
+        # 装箱绑定菜单徽标口径：仅统计装箱绑定记录本身，不复用销售出库队列
+        from apps.kuaizhizao.models.packing_binding import PackingBinding
+        pb_total = await PackingBinding.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
         ).count()
-        pb_x = await sd2.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
-        counts["packing_binding"] = {"overdue": 0, "pending": pb_p, "in_progress": pb_x}
+        counts["packing_binding"] = {"overdue": 0, "pending": 0, "in_progress": pb_total}
     except Exception as e:
         logger.warning(f"menu-badge-counts packing_binding: {e}")
         counts["packing_binding"] = 0

@@ -22,15 +22,17 @@ import {
 } from '@ant-design/pro-components';
 import {
   App,
+  Alert,
   Button,
   Popconfirm,
   Row,
   Col,
   Descriptions,
   Typography,
-  Dropdown,
   Empty,
   Spin,
+  Modal,
+  Table,
   theme as AntdTheme,
   Tag,
 } from 'antd';
@@ -81,6 +83,27 @@ interface PackingBinding {
   updated_at?: string;
 }
 
+interface PackingBindingPageResult {
+  items: PackingBinding[];
+  total: number;
+}
+
+interface PackingTaskPoolItem {
+  id: number;
+  delivery_code: string;
+  customer_name: string;
+  review_status: string;
+  status: string;
+  updated_at: string;
+}
+
+interface PackingTaskPoolResult {
+  pending_review: number;
+  pending_outbound: number;
+  total: number;
+  items: PackingTaskPoolItem[];
+}
+
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -112,6 +135,12 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 
 function renderPbRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, keyPrefix);
+}
+
+function getBindingSourceLabel(record: PackingBinding): string {
+  if (record.sales_delivery_id) return '销售出库';
+  if (record.finished_goods_receipt_id) return '成品入库';
+  return '其他来源';
 }
 
 const PB_STAT_SPARK_1 = [3, 4, 5, 4, 6, 5, 7];
@@ -150,20 +179,47 @@ const PackingBindingPage: React.FC = () => {
   }, [messageApi]);
 
   const [localStats, setLocalStats] = useState({ total: 0, scan: 0, manual: 0 });
+  const [taskPoolVisible, setTaskPoolVisible] = useState(false);
+  const [taskPoolLoading, setTaskPoolLoading] = useState(false);
+  const [taskPool, setTaskPool] = useState<PackingTaskPoolResult>({
+    pending_review: 0,
+    pending_outbound: 0,
+    total: 0,
+    items: [],
+  });
+
+  const getErrorMessage = (error: any, fallback: string) => error?.message || fallback;
 
   const refreshLocalStats = useCallback(async () => {
     try {
-      const result = await packingBindingApi.list({ skip: 0, limit: 5000 });
-      const arr = Array.isArray(result) ? result : [];
+      const stats = await packingBindingApi.statistics();
       setLocalStats({
-        total: arr.length,
-        scan: arr.filter((x: PackingBinding) => (x.binding_method || '').trim() === 'scan').length,
-        manual: arr.filter((x: PackingBinding) => (x.binding_method || '').trim() === 'manual').length,
+        total: Number(stats?.total || 0),
+        scan: Number(stats?.scan || 0),
+        manual: Number(stats?.manual || 0),
       });
     } catch {
       setLocalStats({ total: 0, scan: 0, manual: 0 });
     }
   }, []);
+
+  const openTaskPool = useCallback(async () => {
+    setTaskPoolVisible(true);
+    setTaskPoolLoading(true);
+    try {
+      const result = await packingBindingApi.taskPool({ limit: 20 });
+      setTaskPool({
+        pending_review: Number(result?.pending_review || 0),
+        pending_outbound: Number(result?.pending_outbound || 0),
+        total: Number(result?.total || 0),
+        items: Array.isArray(result?.items) ? result.items : [],
+      });
+    } catch (error: any) {
+      messageApi.error(getErrorMessage(error, '获取待装箱任务池失败'));
+    } finally {
+      setTaskPoolLoading(false);
+    }
+  }, [messageApi]);
 
   useEffect(() => {
     void refreshLocalStats();
@@ -180,22 +236,34 @@ const PackingBindingPage: React.FC = () => {
 
   useEffect(() => {
     const boxUuid = searchParams.get('uuid');
+    const boxNo = searchParams.get('box_no');
     const action = searchParams.get('action');
 
-    if (boxUuid && action === 'detail') {
-      packingBindingApi
-        .list({ box_no: boxUuid })
-        .then((list) => {
-          if (list && list.length > 0) {
-            void handleDetail(list[0]);
-            setSearchParams({}, { replace: true });
-          } else {
-            messageApi.warning('未找到对应的装箱记录');
+    if (action === 'detail' && (boxUuid || boxNo)) {
+      const load = async () => {
+        try {
+          // 先按 uuid 精确匹配（新协议），找不到再回退箱号模糊匹配（兼容旧参数）
+          if (boxUuid) {
+            const byUuid = await packingBindingApi.list({ uuid: boxUuid, skip: 0, limit: 1 });
+            if (Array.isArray(byUuid) && byUuid.length > 0) {
+              await handleDetail(byUuid[0]);
+              setSearchParams({}, { replace: true });
+              return;
+            }
           }
-        })
-        .catch(() => {
+          const fallbackBoxNo = boxNo || boxUuid;
+          const byBoxNo = await packingBindingApi.list({ box_no: fallbackBoxNo, skip: 0, limit: 1 });
+          if (Array.isArray(byBoxNo) && byBoxNo.length > 0) {
+            await handleDetail(byBoxNo[0]);
+            setSearchParams({}, { replace: true });
+            return;
+          }
+          messageApi.warning('未找到对应的装箱记录');
+        } catch {
           messageApi.error('获取装箱记录失败');
-        });
+        }
+      };
+      void load();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
@@ -206,37 +274,37 @@ const PackingBindingPage: React.FC = () => {
       return;
     }
 
-    try {
-      const bindings = await Promise.all(
-        selectedRowKeys.map(async (key) => {
-          try {
-            return await packingBindingApi.get(key.toString());
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      const validBindings = bindings.filter((binding) => binding !== null) as PackingBinding[];
-
-      if (validBindings.length === 0) {
-        messageApi.error('无法获取选中的装箱记录数据');
-        return;
-      }
-
-      const qrcodePromises = validBindings.map((binding) =>
-        qrcodeApi.generateBox({
+    const failed: string[] = [];
+    let successCount = 0;
+    for (const key of selectedRowKeys) {
+      try {
+        const binding = await packingBindingApi.get(String(key));
+        await qrcodeApi.generateBox({
           box_uuid: binding.box_no || binding.uuid || '',
           box_code: binding.box_no || '',
           material_codes: binding.product_code ? [binding.product_code] : [],
-        })
-      );
-
-      const qrcodes = await Promise.all(qrcodePromises);
-      messageApi.success(`成功生成 ${qrcodes.length} 个装箱二维码`);
-    } catch (error: any) {
-      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+        });
+        successCount += 1;
+      } catch (error: any) {
+        failed.push(`${String(key)}: ${getErrorMessage(error, '生成失败')}`);
+      }
     }
+    if (failed.length === 0) {
+      messageApi.success(`成功生成 ${successCount} 个装箱二维码`);
+      return;
+    }
+    messageApi.warning(`成功 ${successCount} 条，失败 ${failed.length} 条`);
+    Modal.error({
+      title: '批量生成二维码存在失败项',
+      content: (
+        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+          {failed.map((msg) => (
+            <div key={msg}>{msg}</div>
+          ))}
+        </div>
+      ),
+      width: 640,
+    });
   };
 
 
@@ -281,6 +349,7 @@ const PackingBindingPage: React.FC = () => {
         try {
           const fresh = await packingBindingApi.get(String(oid));
           setCurrentBinding(fresh);
+          setPbTrackingRefreshKey((k) => k + 1);
         } catch {
           /* ignore */
         }
@@ -314,20 +383,43 @@ const PackingBindingPage: React.FC = () => {
       messageApi.warning('请选择要删除的装箱绑定记录');
       return;
     }
+    const failed: string[] = [];
+    let successCount = 0;
+    for (const key of keys) {
+      try {
+        await packingBindingApi.delete(String(key));
+        successCount += 1;
+      } catch (error: any) {
+        failed.push(`${String(key)}: ${getErrorMessage(error, '删除失败')}`);
+      }
+    }
     try {
-      await Promise.all(keys.map((k) => packingBindingApi.delete(String(k))));
-      messageApi.success(`已删除 ${keys.length} 条记录`);
       setSelectedRowKeys([]);
       if (currentBinding?.id != null && keys.map(Number).includes(currentBinding.id)) {
         setDetailDrawerVisible(false);
         setCurrentBinding(null);
       }
+      actionRef.current?.reload();
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
+      if (failed.length === 0) {
+        messageApi.success(`已删除 ${successCount} 条记录`);
+        return;
+      }
+      messageApi.warning(`删除成功 ${successCount} 条，失败 ${failed.length} 条`);
+      Modal.error({
+        title: '批量删除存在失败项',
+        content: (
+          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+            {failed.map((msg) => (
+              <div key={msg}>{msg}</div>
+            ))}
+          </div>
+        ),
+        width: 640,
+      });
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(getErrorMessage(error, '批量删除失败'));
     }
   };
 
@@ -498,6 +590,20 @@ const PackingBindingPage: React.FC = () => {
       render: (_, r) => bindingMethodTag(r.binding_method),
     },
     {
+      title: '来源',
+      dataIndex: 'source_type',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => <Tag>{getBindingSourceLabel(r)}</Tag>,
+    },
+    {
+      title: '状态',
+      dataIndex: 'binding_status',
+      width: 90,
+      hideInSearch: true,
+      render: () => <Tag color="processing">已绑定</Tag>,
+    },
+    {
       title: '绑定人',
       dataIndex: 'bound_by_name',
       width: 100,
@@ -553,22 +659,23 @@ const PackingBindingPage: React.FC = () => {
 
   const handleRequest = async (params: any) => {
     try {
-      const result = await packingBindingApi.list({
+      const searchBoxNo = params.box_no || params.keyword;
+      const result = (await packingBindingApi.listPage({
         skip: (params.current! - 1) * params.pageSize!,
         limit: params.pageSize,
         receipt_id: params.receipt_id,
         product_id: params.product_id,
-        box_no: params.box_no,
-        keyword: params.keyword,
-      });
-      const data = result || [];
+        box_no: searchBoxNo,
+        uuid: params.uuid,
+      })) as PackingBindingPageResult;
+      const data = Array.isArray(result?.items) ? result.items : [];
       return {
         data,
         success: true,
-        total: data?.length || 0,
+        total: Number(result?.total || 0),
       };
-    } catch {
-      messageApi.error('获取装箱绑定列表失败');
+    } catch (error: any) {
+      messageApi.error(getErrorMessage(error, '获取装箱绑定列表失败'));
       return {
         data: [],
         success: false,
@@ -601,6 +708,12 @@ const PackingBindingPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate statCards={statCards}>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="口径说明：本页“装箱绑定总数”仅统计已创建的装箱绑定记录；“待装箱任务池”统计来自销售出库单待审核/待出库任务。"
+        />
         <UniTable<PackingBinding>
           headerTitle="装箱绑定"
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding"
@@ -615,6 +728,9 @@ const PackingBindingPage: React.FC = () => {
           onDelete={handleBatchDelete}
           scroll={{ x: 1900 }}
           toolBarRender={() => [
+            <Button key="task-pool" onClick={() => void openTaskPool()}>
+              待装箱任务池
+            </Button>,
             <Button
               key="batch-qrcode"
               icon={<QrcodeOutlined />}
@@ -730,7 +846,56 @@ const PackingBindingPage: React.FC = () => {
               </DetailDrawerSection>
 
               <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="装箱绑定无明细行表" />
+                <Descriptions
+                  size="small"
+                  column={2}
+                  items={[
+                    {
+                      key: 'sourceDoc',
+                      label: '来源单据',
+                      children: currentBinding.sales_delivery_id
+                        ? `销售出库单 #${currentBinding.sales_delivery_id}`
+                        : currentBinding.finished_goods_receipt_id
+                          ? `成品入库单 #${currentBinding.finished_goods_receipt_id}`
+                          : '-',
+                    },
+                    {
+                      key: 'sourceType',
+                      label: '创建来源',
+                      children: getBindingSourceLabel(currentBinding),
+                    },
+                    {
+                      key: 'status',
+                      label: '状态',
+                      children: <Tag color="processing">已绑定</Tag>,
+                    },
+                    {
+                      key: 'bindingMethod',
+                      label: '绑定方式',
+                      children: bindingMethodTag(currentBinding.binding_method),
+                    },
+                    {
+                      key: 'boxNo',
+                      label: '箱号',
+                      children: currentBinding.box_no || '-',
+                    },
+                    {
+                      key: 'qty',
+                      label: '数量',
+                      children: currentBinding.packing_quantity != null ? String(currentBinding.packing_quantity) : '-',
+                    },
+                    {
+                      key: 'operator',
+                      label: '操作人',
+                      children: currentBinding.bound_by_name || '-',
+                    },
+                    {
+                      key: 'opTime',
+                      label: '操作时间',
+                      children: currentBinding.bound_at ? dayjs(currentBinding.bound_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                    },
+                  ]}
+                />
               </DetailDrawerSection>
 
               <DetailDrawerSection title="操作记录">
@@ -753,6 +918,39 @@ const PackingBindingPage: React.FC = () => {
           )
         }
       />
+
+      <Modal
+        title="待装箱任务池（只读）"
+        open={taskPoolVisible}
+        onCancel={() => setTaskPoolVisible(false)}
+        footer={null}
+        width={920}
+      >
+        <Alert
+          showIcon
+          type="info"
+          message={`待审核 ${taskPool.pending_review} / 待出库 ${taskPool.pending_outbound} / 总计 ${taskPool.total}`}
+          style={{ marginBottom: 12 }}
+        />
+        <Table<PackingTaskPoolItem>
+          rowKey="id"
+          loading={taskPoolLoading}
+          dataSource={taskPool.items}
+          pagination={false}
+          size="small"
+          columns={[
+            { title: '出库单号', dataIndex: 'delivery_code', width: 180 },
+            { title: '客户', dataIndex: 'customer_name', width: 200 },
+            { title: '审核状态', dataIndex: 'review_status', width: 120 },
+            { title: '单据状态', dataIndex: 'status', width: 120 },
+            {
+              title: '更新时间',
+              dataIndex: 'updated_at',
+              render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            },
+          ]}
+        />
+      </Modal>
     </>
   );
 };

@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise.expressions import F
 
 from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
 from apps.kuaizhizao.schemas.inventory_transfer import (
@@ -43,6 +44,15 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         super().__init__(InventoryTransfer)
         self.business_config_service = BusinessConfigService()
 
+    @staticmethod
+    def _infer_transfer_mode(transfer: InventoryTransfer) -> str:
+        return "bin_relocation" if transfer.from_warehouse_id == transfer.to_warehouse_id else "transfer"
+
+    def _to_transfer_response(self, transfer: InventoryTransfer) -> InventoryTransferResponse:
+        resp = InventoryTransferResponse.model_validate(transfer)
+        resp.transfer_mode = self._infer_transfer_mode(transfer)
+        return resp
+
     async def create_inventory_transfer(
         self,
         tenant_id: int,
@@ -68,7 +78,8 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             raise BusinessLogicError("调拨单节点未启用，无法创建调拨单")
         async with in_transaction():
             # 验证调出和调入仓库不能相同
-            if transfer_data.from_warehouse_id == transfer_data.to_warehouse_id:
+            allow_same = bool(getattr(transfer_data, "allow_same_warehouse", False))
+            if transfer_data.from_warehouse_id == transfer_data.to_warehouse_id and not allow_same:
                 raise ValidationError("调出仓库和调入仓库不能相同")
 
             # 生成调拨单号
@@ -104,7 +115,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 updated_by_name=user_info["name"],
             )
 
-            return InventoryTransferResponse.model_validate(transfer)
+            return self._to_transfer_response(transfer)
 
     async def get_inventory_transfer_by_id(
         self,
@@ -145,6 +156,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         milestones = await get_document_milestones(transfer.tenant_id, "inventory_transfer", transfer.id)
 
         response = InventoryTransferWithItemsResponse.model_validate(transfer)
+        response.transfer_mode = self._infer_transfer_mode(transfer)
         response.items = [InventoryTransferItemResponse.model_validate(item) for item in items]
         response.lifecycle = get_inventory_transfer_lifecycle(transfer, milestones=milestones)
 
@@ -207,7 +219,8 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             # 验证调出和调入仓库不能相同
             from_warehouse_id = transfer_data.from_warehouse_id if transfer_data.from_warehouse_id is not None else transfer.from_warehouse_id
             to_warehouse_id = transfer_data.to_warehouse_id if transfer_data.to_warehouse_id is not None else transfer.to_warehouse_id
-            if from_warehouse_id == to_warehouse_id:
+            allow_same = bool(getattr(transfer_data, "allow_same_warehouse", False))
+            if from_warehouse_id == to_warehouse_id and not allow_same:
                 raise ValidationError("调出仓库和调入仓库不能相同")
 
             # 获取更新人信息
@@ -234,7 +247,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             await transfer.save()
 
-            return InventoryTransferResponse.model_validate(transfer)
+            return self._to_transfer_response(transfer)
 
     async def list_inventory_transfers(
         self,
@@ -245,6 +258,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         from_warehouse_id: Optional[int] = None,
         to_warehouse_id: Optional[int] = None,
         status: Optional[str] = None,
+        transfer_mode: Optional[str] = None,
     ) -> InventoryTransferListResponse:
         """
         获取库存调拨单列表
@@ -275,6 +289,11 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         if status:
             query = query.filter(status=status)
 
+        if transfer_mode == "bin_relocation":
+            query = query.filter(from_warehouse_id=F("to_warehouse_id"))
+        elif transfer_mode == "transfer":
+            query = query.exclude(from_warehouse_id=F("to_warehouse_id"))
+
         # 获取总数
         total = await query.count()
 
@@ -283,7 +302,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
         # 返回分页响应
         return InventoryTransferListResponse(
-            items=[InventoryTransferResponse.model_validate(t) for t in transfers],
+            items=[self._to_transfer_response(t) for t in transfers],
             total=total
         )
 
@@ -510,7 +529,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             await transfer.save()
 
-            return InventoryTransferResponse.model_validate(transfer)
+            return self._to_transfer_response(transfer)
 
     async def _update_transfer_statistics(
         self,

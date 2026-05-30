@@ -7,10 +7,19 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormText,
+  ProFormDatePicker,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormInstance,
+} from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import {
   App,
@@ -22,10 +31,16 @@ import {
   Descriptions,
   Empty,
   Dropdown,
+  Space,
+  Row,
+  Col,
+  Form as AntForm,
+  InputNumber,
+  Input,
   Spin,
   theme,
 } from 'antd';
-import { EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -35,11 +50,21 @@ import {
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
+  FormModalTemplate,
   DetailDrawerSection, DetailDrawerInlineFullChain,
   DetailDrawerActions,
+  MODAL_CONFIG,
   DRAWER_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import type { Material } from '../../../../master-data/types/material';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -47,6 +72,8 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
+import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
+import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
@@ -103,6 +130,32 @@ interface PurchaseReturnItem {
 
 const PR_DETAIL_ITEMS_MIN_WIDTH = 1000;
 
+const FALLBACK_RETURN_REASON: { label: string; value: string }[] = [
+  { label: '质量问题', value: 'QUALITY_ISSUE' },
+  { label: '规格不符', value: 'SPEC_MISMATCH' },
+  { label: '数量错误', value: 'QTY_ERROR' },
+  { label: '包装破损', value: 'PACKAGE_DAMAGE' },
+  { label: '客户取消', value: 'CUSTOMER_CANCEL' },
+  { label: '其他', value: 'OTHER' },
+];
+
+const FALLBACK_RETURN_TYPE: { label: string; value: string }[] = [
+  { label: '换货', value: 'EXCHANGE' },
+  { label: '退款', value: 'REFUND' },
+  { label: '返修', value: 'REWORK' },
+  { label: '报废退货', value: 'SCRAP_RETURN' },
+  { label: '其他', value: 'OTHER' },
+];
+
+const FALLBACK_SHIPPING_METHOD: { label: string; value: string }[] = [
+  { label: '快递', value: 'EXPRESS' },
+  { label: '物流', value: 'LOGISTICS' },
+  { label: '自提', value: 'SELF_PICKUP' },
+  { label: '专车配送', value: 'DEDICATED' },
+  { label: '空运', value: 'AIR' },
+  { label: '海运', value: 'SEA' },
+];
+
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -146,6 +199,16 @@ const PurchaseReturnsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const queryClient = useQueryClient();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingDetail, setEditingDetail] = useState<PurchaseReturnDetail | null>(null);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const formRef = useRef<ProFormInstance>(null);
+  const [returnReasonOptions, setReturnReasonOptions] = useState(FALLBACK_RETURN_REASON);
+  const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
+  const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
+  const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
 
   const invalidatePurchaseReturnStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['purchaseReturnStatistics'] });
@@ -155,6 +218,43 @@ const PurchaseReturnsPage: React.FC = () => {
     queryKey: ['purchaseReturnStatistics'],
     queryFn: () => warehouseApi.purchaseReturn.statistics(),
   });
+
+  useEffect(() => {
+    if (!modalVisible) return;
+    let cancelled = false;
+    (async () => {
+      setDictOptionsLoading(true);
+      const loadAll = async () => {
+        const [reason, rtype, ship] = await Promise.all([
+          getDictionaryOptions('RETURN_REASON'),
+          getDictionaryOptions('RETURN_TYPE'),
+          getDictionaryOptions('SHIPPING_METHOD'),
+        ]);
+        return { reason, rtype, ship };
+      };
+      try {
+        let { reason, rtype, ship } = await loadAll();
+        if (!cancelled && (reason.length === 0 || rtype.length === 0 || ship.length === 0)) {
+          try {
+            await initializeSystemDictionaries();
+            if (!cancelled) ({ reason, rtype, ship } = await loadAll());
+          } catch (e) {
+            console.warn('initializeSystemDictionaries failed:', e);
+          }
+        }
+        if (!cancelled) {
+          setReturnReasonOptions(reason.length ? reason : FALLBACK_RETURN_REASON);
+          setReturnTypeOptions(rtype.length ? rtype : FALLBACK_RETURN_TYPE);
+          setShippingMethodOptions(ship.length ? ship : FALLBACK_SHIPPING_METHOD);
+        }
+      } finally {
+        if (!cancelled) setDictOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<PurchaseReturnDetail | null>(null);
@@ -198,6 +298,184 @@ const PurchaseReturnsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleCreate = () => {
+    setEditingId(null);
+    setEditingDetail(null);
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({
+        return_time: dayjs(),
+        items: [],
+      });
+    }, 0);
+  };
+
+  const handleEdit = async (record: PurchaseReturn) => {
+    if (record.status !== '待退货' && record.status !== '草稿') {
+      messageApi.warning('仅「待退货」或「草稿」状态可编辑');
+      return;
+    }
+    try {
+      const detail = (await warehouseApi.purchaseReturn.get(record.id!.toString())) as PurchaseReturnDetail;
+      setEditingId(record.id!);
+      setEditingDetail(detail);
+      setModalVisible(true);
+      formRef.current?.setFieldsValue({
+        supplier_id: detail.supplier_id,
+        supplier_name: detail.supplier_name,
+        warehouse_id: detail.warehouse_id,
+        warehouse_name: detail.warehouse_name,
+        return_time: detail.return_time ? dayjs(detail.return_time) : dayjs(),
+        return_reason: detail.return_reason,
+        return_type: detail.return_type,
+        shipping_method: detail.shipping_method,
+        notes: detail.notes,
+        items: (detail.items || []).map((it) => ({
+          material_id: (it as any).material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          return_quantity: it.return_quantity,
+          unit_price: it.unit_price,
+          batch_number: it.batch_number,
+          notes: it.notes,
+          purchase_receipt_item_id: (it as any).purchase_receipt_item_id,
+          material_spec: (it as any).material_spec,
+          material_unit: (it as any).material_unit ?? '件',
+        })),
+      });
+    } catch {
+      messageApi.error('加载退货单失败');
+    }
+  };
+
+  const handleWithdraw = async (record: PurchaseReturn) => {
+    Modal.confirm({
+      title: '撤回退货确认',
+      content: `确定要撤回采购退货单 "${record.return_code}" 的确认状态吗？`,
+      onOk: async () => {
+        try {
+          await warehouseApi.purchaseReturn.withdraw(record.id!.toString());
+          messageApi.success('已撤回到待退货');
+          invalidatePurchaseReturnStatistics();
+          invalidateMenuBadgeCounts();
+          if (returnDetail?.id === record.id) {
+            const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
+            setReturnDetail(fresh as PurchaseReturnDetail);
+            setPrRetTrackingRefreshKey((k) => k + 1);
+          }
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
+        }
+      },
+    });
+  };
+
+  const buildPurchaseReturnItemsPayload = (items: any[]) =>
+    (items || []).map((it) => {
+      const qty = Number(it.return_quantity ?? 0);
+      const price = Number(it.unit_price ?? 0);
+      const total = Number((it.total_amount != null ? it.total_amount : qty * price).toFixed(2));
+      return {
+        purchase_receipt_item_id: it.purchase_receipt_item_id ?? undefined,
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        material_spec: it.material_spec ?? undefined,
+        material_unit: it.material_unit || '件',
+        return_quantity: qty,
+        unit_price: price,
+        total_amount: total,
+        batch_number: it.batch_number ?? undefined,
+        location_code: it.location_code ?? undefined,
+        notes: it.notes ?? undefined,
+      };
+    });
+
+  const onFinish = async (values: any) => {
+    try {
+      const itemsPayload = buildPurchaseReturnItemsPayload(values.items);
+      const returnTime =
+        values.return_time && typeof values.return_time.format === 'function'
+          ? values.return_time.format('YYYY-MM-DD')
+          : values.return_time;
+      if (editingId) {
+        const detail = editingDetail;
+        if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
+          messageApi.warning('当前状态不允许编辑');
+          return;
+        }
+        await warehouseApi.purchaseReturn.update(editingId.toString(), {
+          supplier_id: values.supplier_id,
+          supplier_name: values.supplier_name ?? detail.supplier_name,
+          warehouse_id: values.warehouse_id,
+          warehouse_name: values.warehouse_name ?? detail.warehouse_name,
+          return_time: returnTime,
+          return_reason: values.return_reason ?? null,
+          return_type: values.return_type ?? detail.return_type ?? '质量问题',
+          shipping_method: values.shipping_method ?? null,
+          tracking_number: detail.tracking_number ?? null,
+          shipping_address: detail.shipping_address ?? null,
+          notes: values.notes ?? null,
+          purchase_receipt_id: detail.purchase_receipt_id ?? null,
+          purchase_receipt_code: detail.purchase_receipt_code ?? null,
+          purchase_order_id: detail.purchase_order_id ?? null,
+          purchase_order_code: detail.purchase_order_code ?? null,
+          status: detail.status,
+          items: itemsPayload,
+        });
+        messageApi.success('采购退货单已更新');
+      } else {
+        await warehouseApi.purchaseReturn.create({
+          ...values,
+          return_time: returnTime,
+          items: itemsPayload,
+        });
+        messageApi.success('采购退货单创建成功');
+      }
+      setModalVisible(false);
+      setEditingId(null);
+      setEditingDetail(null);
+      invalidatePurchaseReturnStatistics();
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+    }
+  };
+
+  const appendItemsFromMaterials = (materials: Material[]) => {
+    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const newItems = materials.map((m) => ({
+      material_id: m.id,
+      material_code: m.mainCode,
+      material_name: m.name,
+      material_spec: m.specification,
+      material_unit: m.baseUnit,
+      return_quantity: 1,
+      unit_price: m.defaults?.defaultPurchasePrice ?? 0,
+    }));
+    formRef.current?.setFieldsValue({
+      items: [...currentItems, ...newItems],
+    });
+    setMaterialPickerOpen(false);
+  };
+
+  const handleImport = (data: any[]) => {
+    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const newItems = data.map((row) => ({
+      material_code: row['物料编号'],
+      return_quantity: Number(row['退货数量'] || 1),
+      unit_price: Number(row['单价'] || 0),
+      batch_number: row['批次号'],
+      notes: row['备注'],
+    }));
+    formRef.current?.setFieldsValue({
+      items: [...currentItems, ...newItems],
+    });
+    setImportModalVisible(false);
   };
 
   const detailColumns: ProDescriptionsItemProps<PurchaseReturnDetail>[] = [
@@ -369,7 +647,7 @@ const PurchaseReturnsPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 160,
+      width: 220,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -387,6 +665,22 @@ const PurchaseReturnsPage: React.FC = () => {
             详情
           </Button>,
         ];
+        if (record.status === '待退货' || record.status === '草稿') {
+          parts.push(
+            <Button
+              key="e"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleEdit(record);
+              }}
+            >
+              编辑
+            </Button>
+          );
+        }
         if (record.status === '待退货') {
           parts.push(
             <Button
@@ -401,6 +695,21 @@ const PurchaseReturnsPage: React.FC = () => {
               }}
             >
               确认退货
+            </Button>
+          );
+        }
+        if (record.status === '已退货') {
+          parts.push(
+            <Button
+              key="w"
+              type="link"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleWithdraw(record);
+              }}
+            >
+              撤回确认
             </Button>
           );
         }
@@ -450,6 +759,9 @@ const PurchaseReturnsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          showCreateButton={true}
+          createButtonText="新建采购退货单"
+          onCreate={handleCreate}
           request={async (params) => {
             try {
               const response = await warehouseApi.purchaseReturn.list({
@@ -511,6 +823,204 @@ const PurchaseReturnsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
+      <FormModalTemplate
+        title={editingId ? '编辑采购退货单' : '新增采购退货单'}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingId(null);
+          setEditingDetail(null);
+        }}
+        onFinish={onFinish}
+        formRef={formRef}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormSelect
+              name="supplier_id"
+              label="供应商"
+              placeholder="请选择供应商"
+              required
+              request={async () => {
+                const res = await supplierApi.list({ limit: 1000, isActive: true });
+                const list = Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || [];
+                return list.map((s: any) => ({
+                  label: s.name || s.supplier_name || s.code || `供应商${s.id}`,
+                  value: s.id ?? s.supplier_id,
+                }));
+              }}
+              fieldProps={{
+                showSearch: true,
+                optionFilterProp: 'label',
+                onChange: (_, option) => {
+                  formRef.current?.setFieldsValue({ supplier_name: (option as any)?.label ?? '' });
+                },
+              }}
+              rules={[{ required: true, message: '请选择供应商' }]}
+            />
+            <ProFormText name="supplier_name" hidden />
+          </Col>
+          <Col span={8}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="退入仓库"
+              placeholder="请选择仓库"
+              required
+              onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              rules={[{ required: true, message: '请选择仓库' }]}
+            />
+            <ProFormText name="warehouse_name" hidden />
+          </Col>
+          <Col span={8}>
+            <ProFormDatePicker
+              name="return_time"
+              label="退货日期"
+              required
+              fieldProps={{ style: { width: '100%' } }}
+              initialValue={dayjs()}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormSelect
+              name="return_reason"
+              label="退货原因"
+              placeholder="请选择退货原因"
+              options={returnReasonOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect
+              name="return_type"
+              label="退货类型"
+              placeholder="请选择退货类型"
+              options={returnTypeOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect
+              name="shipping_method"
+              label="发货方式"
+              placeholder="请选择发货方式"
+              options={shippingMethodOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+            />
+          </Col>
+        </Row>
+
+        <UniTableDetail
+          name="items"
+          title="退货明细"
+          required
+          requiredMessage="请添加至少一项明细"
+          headerExtra={(
+            <Space size={8}>
+              <Button
+                type="default"
+                icon={<ImportOutlined />}
+                onClick={() => setImportModalVisible(true)}
+              >
+                导入明细
+              </Button>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                  items.push({ return_quantity: 1, unit_price: 0 });
+                  formRef.current?.setFieldsValue({ items });
+                }}
+              >
+                添加明细
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMaterialPickerOpen(true)}
+              >
+                {t('app.kuaizhizao.common.materialBatchSelect')}
+              </Button>
+            </Space>
+          )}
+          columns={[
+            {
+              title: '物料',
+              dataIndex: 'material_id',
+              width: 260,
+              render: (_: unknown, __: unknown, index: number) => (
+                <UniMaterialSelect
+                  name={[index, 'material_id']}
+                  label=""
+                  placeholder="选择物料"
+                  required
+                  size="small"
+                  listFieldKey={index}
+                  listFieldName="items"
+                  fillMapping={{
+                    material_code: 'mainCode',
+                    material_name: 'name',
+                    material_spec: 'specification',
+                    material_unit: 'baseUnit',
+                  }}
+                  showAdvancedSearch
+                />
+              ),
+            },
+            {
+              title: '退货数量',
+              dataIndex: 'return_quantity',
+              width: 120,
+              align: 'right' as const,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'return_quantity']} noStyle>
+                  <InputNumber size="small" style={{ width: '100%' }} min={1} />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: '单价',
+              dataIndex: 'unit_price',
+              width: 120,
+              align: 'right' as const,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'unit_price']} noStyle>
+                  <InputNumber size="small" style={{ width: '100%' }} min={0} prefix="¥" />
+                </AntForm.Item>
+              ),
+            },
+          ]}
+          disabledAdd
+          initialValue={{ return_quantity: 1, unit_price: 0 }}
+          tableProps={{
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+          }}
+        />
+
+        <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
+      </FormModalTemplate>
+
+      <UniMaterialBatchPicker
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendItemsFromMaterials}
+      />
+
+      <Suspense fallback={null}>
+        <LazyUniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleImport}
+          title="导入采购退货明细"
+          headers={['物料编号', '退货数量', '单价', '批次号', '备注']}
+          exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
+        />
+      </Suspense>
+
       <DetailDrawerTemplate
         title={`采购退货单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
@@ -524,11 +1034,21 @@ const PurchaseReturnsPage: React.FC = () => {
         column={3}
         dataSource={returnDetail || undefined}
         extra={
-          returnDetail && returnDetail.status === '待退货' ? (
+          returnDetail ? (
             <DetailDrawerActions
               items={[
                 {
+                  key: 'edit',
+                  visible: returnDetail.status === '待退货' || returnDetail.status === '草稿',
+                  render: () => (
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(returnDetail)}>
+                      编辑
+                    </Button>
+                  ),
+                },
+                {
                   key: 'confirm',
+                  visible: returnDetail.status === '待退货',
                   render: () => (
                     <Button
                       type="link"
@@ -538,6 +1058,15 @@ const PurchaseReturnsPage: React.FC = () => {
                       onClick={() => handleConfirm(returnDetail)}
                     >
                       确认退货
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'withdraw',
+                  visible: returnDetail.status === '已退货',
+                  render: () => (
+                    <Button type="link" size="small" onClick={() => void handleWithdraw(returnDetail)}>
+                      撤回确认
                     </Button>
                   ),
                 },

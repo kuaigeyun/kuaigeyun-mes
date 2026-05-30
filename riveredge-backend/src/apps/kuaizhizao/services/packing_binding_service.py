@@ -9,7 +9,7 @@ Date: 2025-01-04
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -24,6 +24,10 @@ from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingUpdate,
     PackingBindingResponse,
     PackingBindingListResponse,
+    PackingBindingPageResponse,
+    PackingBindingStatisticsResponse,
+    PackingBindingTaskPoolResponse,
+    PackingBindingTaskPoolItemResponse,
 )
 
 from apps.common.base_service import AppBaseService
@@ -329,6 +333,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         sales_delivery_id: Optional[int] = None,
         product_id: Optional[int] = None,
         box_no: Optional[str] = None,
+        uuid_value: Optional[str] = None,
     ) -> List[PackingBindingListResponse]:
         """
         获取装箱绑定记录列表
@@ -357,10 +362,93 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             query = query.filter(product_id=product_id)
         if box_no:
             query = query.filter(box_no__icontains=box_no)
+        if uuid_value:
+            query = query.filter(uuid=uuid_value)
 
         bindings = await query.order_by('-bound_at').offset(skip).limit(limit)
 
         return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+
+    async def list_packing_bindings_page(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        receipt_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        box_no: Optional[str] = None,
+        uuid_value: Optional[str] = None,
+    ) -> PackingBindingPageResponse:
+        """分页获取装箱绑定记录（含 total）。"""
+        query = PackingBinding.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if receipt_id:
+            query = query.filter(finished_goods_receipt_id=receipt_id)
+        if sales_delivery_id:
+            query = query.filter(sales_delivery_id=sales_delivery_id)
+        if product_id:
+            query = query.filter(product_id=product_id)
+        if box_no:
+            query = query.filter(box_no__icontains=box_no)
+        if uuid_value:
+            query = query.filter(uuid=uuid_value)
+
+        total = await query.count()
+        rows = await query.order_by('-bound_at').offset(skip).limit(limit)
+        return PackingBindingPageResponse(
+            items=[PackingBindingListResponse.model_validate(r) for r in rows],
+            total=total,
+        )
+
+    async def get_packing_binding_statistics(self, tenant_id: int) -> PackingBindingStatisticsResponse:
+        """装箱绑定统计（总数/扫码/手动）。"""
+        base = PackingBinding.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        total = await base.count()
+        scan = await base.filter(binding_method='scan').count()
+        manual = await base.filter(binding_method='manual').count()
+        return PackingBindingStatisticsResponse(total=total, scan=scan, manual=manual)
+
+    async def get_task_pool_summary(self, tenant_id: int, limit: int = 20) -> PackingBindingTaskPoolResponse:
+        """待装箱任务池（只读）：来自销售出库单。"""
+        pending_review_qs = SalesDelivery.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            review_status='待审核',
+        ).exclude(status__in=["已完成", "COMPLETED", "已取消", "CANCELLED"])
+        pending_outbound_qs = SalesDelivery.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status='待出库',
+        ).exclude(review_status='待审核')
+
+        pending_review = await pending_review_qs.count()
+        pending_outbound = await pending_outbound_qs.count()
+        rows = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(
+            Q(review_status='待审核') | Q(status='待出库')
+        ).order_by('-updated_at').limit(limit)
+
+        return PackingBindingTaskPoolResponse(
+            pending_review=pending_review,
+            pending_outbound=pending_outbound,
+            total=pending_review + pending_outbound,
+            items=[
+                PackingBindingTaskPoolItemResponse(
+                    id=row.id,
+                    delivery_code=row.delivery_code,
+                    customer_name=row.customer_name,
+                    review_status=row.review_status,
+                    status=row.status,
+                    updated_at=row.updated_at,
+                )
+                for row in rows
+            ],
+        )
 
     async def get_packing_binding_by_id(
         self,

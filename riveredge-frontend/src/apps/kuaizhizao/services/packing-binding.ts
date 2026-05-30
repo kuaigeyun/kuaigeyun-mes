@@ -10,6 +10,21 @@ export const packingBindingApi = {
     return apiRequest('/apps/kuaizhizao/packing-bindings', { method: 'GET', params });
   },
 
+  // 获取装箱绑定记录分页（含总数）
+  listPage: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/page', { method: 'GET', params });
+  },
+
+  // 获取装箱绑定统计
+  statistics: async () => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/statistics', { method: 'GET' });
+  },
+
+  // 获取待装箱任务池（只读）
+  taskPool: async (params?: { limit?: number }) => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/task-pool', { method: 'GET', params });
+  },
+
   // 获取装箱绑定记录详情
   get: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'GET' });

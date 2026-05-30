@@ -155,6 +155,7 @@ export const warehouseApi = {
       id: string,
       data?: { item_batches?: { item_id: number; batch_no: string }[] },
     ) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST', data: data ?? {} }),
+    withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/withdraw`, { method: 'POST' }),
     import: async (data: any[][]) => apiRequest('/apps/kuaizhizao/sales-deliveries/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>
       apiRequest('/apps/kuaizhizao/sales-deliveries/export', { method: 'GET', params, responseType: 'blob' }),
@@ -175,6 +176,10 @@ export const warehouseApi = {
       warehouse_id: number;
       warehouse_name?: string;
     }) => apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-forecast', { method: 'POST', data }),
+  },
+  wavePicking: {
+    generate: async (data: { picking_ids: number[] }) =>
+      apiRequest('/apps/kuaizhizao/wave-pickings/generate', { method: 'POST', data }),
   },
   salesReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/sales-returns', { method: 'GET', params }),
@@ -206,9 +211,12 @@ export const warehouseApi = {
         trend_cancelled: number[];
       }>('/apps/kuaizhizao/purchase-returns/statistics', { method: 'GET' }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'POST', data }),
+    update: async (id: string, data: any) =>
+      apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/confirm`, { method: 'POST' }),
+    withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/withdraw`, { method: 'POST' }),
     pullFromPurchaseOrder: async (data: {
       purchase_order_id: number;
       warehouse_id: number;

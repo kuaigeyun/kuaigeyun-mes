@@ -10,9 +10,19 @@ export const inventoryTransferApi = {
     return apiRequest('/apps/kuaizhizao/inventory-transfers', { method: 'GET', params });
   },
 
+  // 获取库内移位单列表
+  listBinTransfers: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/bin-transfers', { method: 'GET', params });
+  },
+
   // 创建调拨单
   create: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/inventory-transfers', { method: 'POST', data });
+  },
+
+  // 创建库内移位单
+  createBinTransfer: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/bin-transfers', { method: 'POST', data });
   },
 
   // 更新调拨单

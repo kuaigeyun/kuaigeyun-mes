@@ -2772,6 +2772,26 @@ async def create_inventory_transfer(
         raise _http_exception_with_trace(500, f"创建调拨单失败: {str(e)}", "/inventory-transfers", tenant_id)
 
 
+@router.post("/bin-transfers", response_model=InventoryTransferResponse, summary="Create bin relocation")
+async def create_bin_transfer(
+    transfer: InventoryTransferCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferResponse:
+    """创建库内移位单（允许同仓调拨，建议配套库位填写）。"""
+    try:
+        transfer.allow_same_warehouse = True
+        return await inventory_transfer_service.create_inventory_transfer(
+            tenant_id=tenant_id,
+            transfer_data=transfer,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/bin-transfers", tenant_id)
+    except Exception as e:
+        raise _http_exception_with_trace(500, f"创建库内移位单失败: {str(e)}", "/bin-transfers", tenant_id)
+
+
 @router.get("/inventory-transfers", response_model=InventoryTransferListResponse, summary="List inventory transfers")
 async def list_inventory_transfers(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -2780,6 +2800,7 @@ async def list_inventory_transfers(
     from_warehouse_id: Optional[int] = Query(None, description="调出仓库ID"),
     to_warehouse_id: Optional[int] = Query(None, description="调入仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
+    transfer_mode: Optional[str] = Query(None, description="单据模式：transfer|bin_relocation"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> InventoryTransferListResponse:
@@ -2805,6 +2826,29 @@ async def list_inventory_transfers(
         from_warehouse_id=from_warehouse_id,
         to_warehouse_id=to_warehouse_id,
         status=status,
+        transfer_mode=transfer_mode,
+    )
+
+
+@router.get("/bin-transfers", response_model=InventoryTransferListResponse, summary="List bin relocations")
+async def list_bin_transfers(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="移位单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferListResponse:
+    return await inventory_transfer_service.list_inventory_transfers(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        from_warehouse_id=warehouse_id,
+        to_warehouse_id=warehouse_id,
+        status=status,
+        transfer_mode="bin_relocation",
     )
 
 

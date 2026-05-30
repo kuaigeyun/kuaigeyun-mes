@@ -27,7 +27,7 @@ import {
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -1142,7 +1142,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <Modal
         title="从需求运算创建采购申请"
         open={pullFromComputationVisible}
-        width={1280}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => {
           if (pullComputationSubmitting) return;
           setPullFromComputationVisible(false);
@@ -1239,7 +1239,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }}
         onFinish={handleModalSubmit}
         formRef={createFormRef}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
         initialValues={{ items: initialCreateItems }}
       >
@@ -1297,16 +1297,34 @@ const PurchaseRequisitionsPage: React.FC = () => {
           <Col span={12} />
         </Row>
         {/* 申请明细：与销售订单 Modal 同款 — AntForm.List + Table + 内联样式 + 操作列 fixed right */}
-        <div className="uni-table-detail" style={{ marginBottom: 24, width: '100%' }}>
-          <UniTableDetailHeader title="申请明细" required />
-          <AntForm.Item
-            name="items"
-            noStyle
-            rules={[{ type: 'array', min: 1, message: '请至少添加一条申请明细' }]}
-          >
-            <AntForm.List name="items">
-              {(fields, { add, remove }) => {
-                const prDetailColumns = [
+        <UniTableDetail
+          name="items"
+          title="申请明细"
+          required
+          requiredMessage="请至少添加一条申请明细"
+          headerExtra={(
+            <Space size={8}>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                  items.push({ ...INITIAL_PR_FORM_ITEM_ROW });
+                  formRef.current?.setFieldsValue({ items });
+                }}
+              >
+                添加明细
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMaterialPickerOpen(true)}
+              >
+                {t('app.kuaizhizao.common.materialBatchSelect')}
+              </Button>
+            </Space>
+          )}
+          columns={[
                   {
                     title: '物料',
                     dataIndex: 'material_id',
@@ -1330,7 +1348,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           return (
                             <>
                               <div
-                                className="purchase-requisition-material-cell"
+                                className="uni-detail-material-cell"
                                 style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}
                               >
                                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -1477,110 +1495,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: '操作',
-                    width: 70,
-                    fixed: 'right' as const,
-                    onHeaderCell: () => ({ className: 'purchase-requisition-fixed-op-header' }),
-                    render: (_: any, __: any, index: number) => (
-                      <Button
-                        type="link"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        disabled={fields.length <= 1}
-                        onClick={() => remove(index)}
-                      >
-                        删除
-                      </Button>
-                    ),
-                  },
-                ];
-                const totalWidth = prDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
-                return (
-                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                    <style>{`
-                      .purchase-requisition-detail-table .ant-table-thead > tr > th {
-                        background-color: var(--ant-color-fill-alter) !important;
-                        font-weight: 600;
-                      }
-                      .purchase-requisition-detail-table .ant-table-thead > tr > th.purchase-requisition-fixed-op-header {
-                        background: var(--ant-color-fill-alter) !important;
-                      }
-                      .purchase-requisition-detail-table .ant-table-cell-fix-right {
-                        background: var(--ant-color-bg-container) !important;
-                      }
-                      .purchase-requisition-detail-table .ant-table {
-                        border-top: 1px solid var(--ant-color-border);
-                      }
-                      .purchase-requisition-detail-table .ant-table-tbody > tr > td {
-                        border-bottom: 1px solid var(--ant-color-border);
-                        overflow: visible !important;
-                      }
-                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item,
-                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item-control,
-                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item-control-input,
-                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-select {
-                        width: 100% !important;
-                        min-width: 0;
-                      }
-                      .purchase-requisition-detail-table .ant-form-item-explain,
-                      .purchase-requisition-detail-table .ant-form-item-explain-error {
-                        display: none !important;
-                      }
-                      .purchase-requisition-detail-table .ant-input-number-input::selection,
-                      .purchase-requisition-detail-table .ant-input::selection {
-                        background-color: var(--ant-color-primary);
-                        color: #fff;
-                        border-radius: 0;
-                      }
-                    `}</style>
-                    <div style={{ width: '100%', overflowX: 'auto' }}>
-                      <Table
-                        className="purchase-requisition-detail-table"
-                        size="small"
-                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                        rowKey="key"
-                        pagination={false}
-                        columns={prDetailColumns}
-                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                        style={{ width: '100%', margin: 0 }}
-                        footer={() => (
-                          <div
-                            style={{
-                              display: 'flex',
-                              gap: 8,
-                              width: '100%',
-                              flexWrap: 'wrap',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <Button
-                              type="dashed"
-                              icon={<PlusOutlined />}
-                              style={{ flex: 1, minWidth: 120 }}
-                              onClick={() => add({ ...INITIAL_PR_FORM_ITEM_ROW })}
-                            >
-                              添加明细
-                            </Button>
-                            <Button
-                              type="default"
-                              icon={<AppstoreAddOutlined />}
-                              style={{ flex: 1, minWidth: 120 }}
-                              onClick={() => setMaterialPickerOpen(true)}
-                            >
-                              {t('app.kuaizhizao.common.materialBatchSelect')}
-                            </Button>
-                          </div>
-                        )}
-                      />
-                    </div>
-                  </div>
-                );
-              }}
-            </AntForm.List>
-          </AntForm.Item>
-        </div>
+                ]}
+          disabledAdd
+          minRows={1}
+          initialValue={{ ...INITIAL_PR_FORM_ITEM_ROW }}
+          tableProps={{
+            className: 'purchase-requisition-detail-table',
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+          }}
+        />
         <ProFormTextArea name="notes" label="备注" placeholder="备注" />
         <UniMaterialBatchPicker
           open={materialPickerOpen}

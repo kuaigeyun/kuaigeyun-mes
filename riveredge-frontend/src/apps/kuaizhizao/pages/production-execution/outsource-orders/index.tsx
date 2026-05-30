@@ -381,12 +381,17 @@ export const OutsourceOrdersTable: React.FC = () => {
     });
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
+  /** 工序委外单需从工单工序下推创建，本页不提供直建 */
   const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentOutsourceOrder(null);
-    setModalVisible(true);
-    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
+    Modal.confirm({
+      title: '创建方式说明',
+      content: '工序委外单请从「工单详情 > 工序 > 创建委外」发起，以保证工单工序与可委外数量一致。',
+      okText: '前往工单页',
+      cancelText: '取消',
+      onOk: () => {
+        navigate('/apps/kuaizhizao/production-execution/work-orders');
+      },
+    });
   };
 
   /**

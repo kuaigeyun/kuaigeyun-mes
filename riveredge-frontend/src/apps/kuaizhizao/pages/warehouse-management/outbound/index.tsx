@@ -78,6 +78,23 @@ interface OutboundOrderItem {
   notes?: string;
 }
 
+interface WaveMergedItem {
+  warehouse_name?: string;
+  location_code?: string;
+  material_code?: string;
+  material_name?: string;
+  total_quantity?: number;
+  unit?: string;
+  source_pickings?: string[];
+}
+
+interface WavePickingResult {
+  wave_code: string;
+  source_picking_ids: number[];
+  total_items: number;
+  merged_items: WaveMergedItem[];
+}
+
 type SalesBatchPickOption = { value: string; label: string };
 
 function normalizeSalesBatchFormValue(raw: unknown): string {
@@ -173,6 +190,10 @@ const OutboundPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [executionConfig, setExecutionConfig] = useState<any>(null);
+  const [selectedOutboundKeys, setSelectedOutboundKeys] = useState<React.Key[]>([]);
+  const [waveModalVisible, setWaveModalVisible] = useState(false);
+  const [waveGenerating, setWaveGenerating] = useState(false);
+  const [waveResult, setWaveResult] = useState<WavePickingResult | null>(null);
 
   /** 销售出库确认前批号预览 */
   const [salesConfirmOpen, setSalesConfirmOpen] = useState(false);
@@ -503,6 +524,52 @@ const OutboundPage: React.FC = () => {
     }
   };
 
+  const selectedProductionPickingIds = useMemo(
+    () =>
+      selectedOutboundKeys
+        .map((key) => String(key).split('::'))
+        .filter(([type, id]) => type === 'production_picking' && Number(id) > 0)
+        .map(([, id]) => Number(id)),
+    [selectedOutboundKeys],
+  );
+
+  const handleGenerateWave = async () => {
+    if (!selectedProductionPickingIds.length) {
+      messageApi.warning('请先勾选生产领料单');
+      return;
+    }
+    try {
+      setWaveGenerating(true);
+      const result = await warehouseApi.wavePicking.generate({
+        picking_ids: selectedProductionPickingIds,
+      });
+      setWaveResult(result as WavePickingResult);
+      setWaveModalVisible(true);
+      messageApi.success('波次拣货单生成成功');
+    } catch (e: any) {
+      messageApi.error(e?.message || '生成波次拣货单失败');
+    } finally {
+      setWaveGenerating(false);
+    }
+  };
+
+  const handleWithdrawSalesDelivery = (record: OutboundOrder) => {
+    Modal.confirm({
+      title: '撤回销售出库',
+      content: `确定撤回单据 "${record.delivery_code || record.id}" 吗？系统将回冲库存并恢复待出库状态。`,
+      onOk: async () => {
+        try {
+          await warehouseApi.salesDelivery.withdraw(String(record.id));
+          messageApi.success('撤回成功');
+          invalidateMenuBadgeCounts();
+          await refreshOrderAfterConfirm(record);
+        } catch (e: any) {
+          messageApi.error(e?.message || '撤回失败');
+        }
+      },
+    });
+  };
+
   const salesDeliveryConfirmColumns: ColumnsType<any> = useMemo(
     () => [
       {
@@ -763,6 +830,16 @@ const OutboundPage: React.FC = () => {
               </Button>
             </Tooltip>
           )}
+          {record.outbound_type === 'sales_delivery' && record.status === '已出库' && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => handleWithdrawSalesDelivery(record)}
+            >
+              撤回
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -884,6 +961,7 @@ const OutboundPage: React.FC = () => {
           }
         }}
         enableRowSelection={true}
+        onRowSelectionChange={setSelectedOutboundKeys}
         showDeleteButton={true}
         onDelete={async (keys) => {
           Modal.confirm({
@@ -936,6 +1014,14 @@ const OutboundPage: React.FC = () => {
               },
             ])}
           />,
+          <Button
+            key="wave-picking"
+            loading={waveGenerating}
+            disabled={!selectedProductionPickingIds.length}
+            onClick={handleGenerateWave}
+          >
+            生成波次拣货单
+          </Button>,
           <Button
             key="batch"
             icon={<InboxOutlined />}
@@ -1174,6 +1260,43 @@ const OutboundPage: React.FC = () => {
         </Form>
       </Modal>
 
+      <Modal
+        title={`波次拣货单${waveResult?.wave_code ? ` - ${waveResult.wave_code}` : ''}`}
+        open={waveModalVisible}
+        footer={null}
+        width={980}
+        onCancel={() => setWaveModalVisible(false)}
+      >
+        <Typography.Paragraph type="secondary">
+          已合并 {waveResult?.source_picking_ids?.length || 0} 张生产领料单，生成 {waveResult?.total_items || 0} 条拣货路线。
+        </Typography.Paragraph>
+        <Table<WaveMergedItem>
+          size="small"
+          rowKey={(row, idx) => `${row.material_code || 'm'}-${row.location_code || 'l'}-${idx}`}
+          dataSource={waveResult?.merged_items || []}
+          pagination={false}
+          columns={[
+            { title: '仓库', dataIndex: 'warehouse_name', width: 130 },
+            { title: '库位', dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
+            { title: '物料编码', dataIndex: 'material_code', width: 130 },
+            { title: '物料名称', dataIndex: 'material_name' },
+            {
+              title: '需求数量',
+              dataIndex: 'total_quantity',
+              width: 130,
+              align: 'right',
+              render: (v, row) => `${Number(v || 0)} ${row.unit || ''}`.trim(),
+            },
+            {
+              title: '来源领料单',
+              dataIndex: 'source_pickings',
+              width: 260,
+              render: (v: string[]) => (Array.isArray(v) ? v.join('、') : '-'),
+            },
+          ]}
+        />
+      </Modal>
+
       <DetailDrawerTemplate
         title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
@@ -1185,21 +1308,30 @@ const OutboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
-          currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') &&
-            currentOrder.outbound_type !== 'outsource_issue' && (
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(currentOrder)}
-              disabled={
-                currentOrder.outbound_type === 'production_picking' &&
-                executionConfig &&
-                executionConfig.current_user_can_confirm_picking === false
-              }
-            >
-              确认出库
-            </Button>
-          )
+          currentOrder ? (
+            <Space>
+              {['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') &&
+                currentOrder.outbound_type !== 'outsource_issue' && (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleConfirm(currentOrder)}
+                  disabled={
+                    currentOrder.outbound_type === 'production_picking' &&
+                    executionConfig &&
+                    executionConfig.current_user_can_confirm_picking === false
+                  }
+                >
+                  确认出库
+                </Button>
+              )}
+              {currentOrder.outbound_type === 'sales_delivery' && currentOrder.status === '已出库' && (
+                <Button danger onClick={() => handleWithdrawSalesDelivery(currentOrder)}>
+                  撤回
+                </Button>
+              )}
+            </Space>
+          ) : null
         }
         customContent={
           currentOrder ? (

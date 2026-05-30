@@ -136,4 +136,36 @@ class PackingBindingListResponse(BaseModel):
     bound_by_name: str = Field(..., description="绑定人姓名")
     bound_at: datetime = Field(..., description="绑定时间")
     created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class PackingBindingPageResponse(BaseModel):
+    """装箱绑定分页响应"""
+    items: List[PackingBindingListResponse] = Field(default_factory=list, description="分页数据")
+    total: int = Field(0, description="总数")
+
+
+class PackingBindingStatisticsResponse(BaseModel):
+    """装箱绑定统计响应"""
+    total: int = Field(0, description="装箱绑定总数")
+    scan: int = Field(0, description="扫码绑定数")
+    manual: int = Field(0, description="手动绑定数")
+
+
+class PackingBindingTaskPoolItemResponse(BaseModel):
+    """待装箱任务项（只读）"""
+    id: int = Field(..., description="销售出库单ID")
+    delivery_code: str = Field(..., description="销售出库单编号")
+    customer_name: str = Field(..., description="客户名称")
+    review_status: str = Field(..., description="审核状态")
+    status: str = Field(..., description="出库状态")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class PackingBindingTaskPoolResponse(BaseModel):
+    """待装箱任务池（只读）"""
+    pending_review: int = Field(0, description="待审核数量")
+    pending_outbound: int = Field(0, description="待出库数量")
+    total: int = Field(0, description="任务总数")
+    items: List[PackingBindingTaskPoolItemResponse] = Field(default_factory=list, description="最近任务")
 

@@ -24,13 +24,11 @@ import {
   ProFormDatePicker,
   ProFormDigit,
   ProFormTextArea,
-  ProFormItem,
 } from '@ant-design/pro-components';
 import {
   App,
   Button,
   Tag,
-  Divider,
   Modal,
   Descriptions,
   Typography,
@@ -41,7 +39,6 @@ import {
 } from 'antd';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -1251,10 +1248,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         isEdit={isEdit}
         initialValues={isEdit && currentWorkOrder ? { ...currentWorkOrder, productId: currentWorkOrder.productId ?? currentWorkOrder.product_id, supplierId: currentWorkOrder.supplierId ?? currentWorkOrder.supplier_id } : undefined}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={true}
         formRef={formRef}
       >
-        {/* 基本信息组 */}
-        <Divider>基本信息</Divider>
         {!isEdit && (
           <CodeField
             pageCode="kuaizhizao-production-outsource-work-order"
@@ -1272,25 +1268,25 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
-        <ProFormItem
+        <ProFormSelect
           name="productId"
           label="产品选择"
+          placeholder="请选择产品（委外件）"
           rules={[{ required: true, message: '请选择产品' }]}
-        >
-          <UniDropdown
-            placeholder="请选择产品（委外件）"
-            showSearch
-            allowClear
-            disabled={isEdit}
-            style={{ width: '100%' }}
-            options={productList.map((product: any) => ({
-              label: `${product.code || product.mainCode || ''} - ${product.name || ''}`.trim() || String(product.id),
-              value: product.id,
-            }))}
-            quickCreate={{ label: '物料管理', onClick: () => navigate('/apps/master-data/materials') }}
-            onChange={handleProductChange}
-          />
-        </ProFormItem>
+          colProps={{ span: 12 }}
+          options={productList.map((product: any) => ({
+            label: `${product.code || product.mainCode || ''} - ${product.name || ''}`.trim() || String(product.id),
+            value: product.id,
+          }))}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+            disabled: isEdit,
+            optionFilterProp: 'label',
+            onChange: (value) => handleProductChange(value),
+            style: { width: '100%' },
+          }}
+        />
         {/* 物料来源信息显示 */}
         {
           selectedMaterialSourceInfo && (
@@ -1360,29 +1356,23 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }}
           colProps={{ span: 12 }}
         />
-        <ProFormItem
+        <ProFormSelect
           name="supplierId"
           label="委外供应商"
+          placeholder="请选择委外供应商"
           rules={[{ required: true, message: '请选择委外供应商' }]}
-        >
-          <UniDropdown
-            placeholder="请选择委外供应商"
-            showSearch
-            allowClear
-            disabled={isEdit}
-            style={{ width: '100%' }}
-            options={supplierList.map((supplier: any) => ({
-              label: `${supplier.code ?? supplier.supplier_code ?? ''} - ${supplier.name ?? supplier.supplier_name ?? ''}`.trim() || String(supplier.id),
-              value: supplier.id,
-            }))}
-            quickCreate={{ label: '供应商管理', onClick: () => navigate('/apps/master-data/supply-chain/suppliers') }}
-          />
-        </ProFormItem>
-        <ProFormText
-          name="outsourceOperation"
-          label="委外工序"
-          placeholder="请输入委外工序（将从物料配置中自动填充）"
           colProps={{ span: 12 }}
+          options={supplierList.map((supplier: any) => ({
+            label: `${supplier.code ?? supplier.supplier_code ?? ''} - ${supplier.name ?? supplier.supplier_name ?? ''}`.trim() || String(supplier.id),
+            value: supplier.id,
+          }))}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+            disabled: isEdit,
+            optionFilterProp: 'label',
+            style: { width: '100%' },
+          }}
         />
         <ProFormDigit
           name="unitPrice"
@@ -1419,36 +1409,36 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }}
         />
 
-        {/* 优先级和时间组 */}
-        <Divider>优先级和时间</Divider>
-        <ProFormItem name="priority" label="优先级" initialValue="normal">
-          <UniDropdown
-            placeholder="请选择优先级"
-            showSearch
-            allowClear
-            loading={priorityLoading}
-            style={{ width: '100%' }}
-            options={priorityOptions}
-            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
-          />
-        </ProFormItem>
+        <ProFormSelect
+          name="priority"
+          label="优先级"
+          initialValue="normal"
+          placeholder="请选择优先级"
+          colProps={{ span: 12 }}
+          options={priorityOptions}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+            loading: priorityLoading,
+            optionFilterProp: 'label',
+            style: { width: '100%' },
+          }}
+        />
         <ProFormDatePicker
           name="plannedStartDate"
           label="计划开始时间"
           placeholder="请选择计划开始时间"
-          width="md"
+          fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="plannedEndDate"
           label="计划结束时间"
           placeholder="请选择计划结束时间"
-          width="md"
+          fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
 
-        {/* 备注组 */}
-        <Divider>备注信息</Divider>
         <ProFormTextArea
           name="remarks"
           label="备注"
