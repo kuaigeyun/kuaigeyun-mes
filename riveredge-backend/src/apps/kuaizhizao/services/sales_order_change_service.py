@@ -509,6 +509,8 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id, deleted_at__isnull=True)
         if not order:
             raise NotFoundError("原销售订单不存在")
+        old_total = Decimal(str(order.total_amount or 0))
+        old_qty = Decimal(str(order.total_quantity or 0))
         items = await SalesOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
 
         async with in_transaction():
@@ -574,6 +576,39 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             order.total_amount = sum((Decimal(str(i.total_amount or 0)) for i in remaining_items), Decimal("0"))
             order.updated_by = operator_id
             await order.save()
+
+            contract_id = getattr(order, "contract_id", None)
+            if contract_id:
+                from apps.kuaizhizao.models.sales_contract import SalesContract
+
+                contract = await SalesContract.get_or_none(
+                    tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+                )
+                if contract:
+                    delta_amt = Decimal(str(order.total_amount or 0)) - old_total
+                    delta_qty = Decimal(str(order.total_quantity or 0)) - old_qty
+                    if delta_amt != 0 or delta_qty != 0:
+                        new_released_amt = Decimal(str(contract.released_amount or 0)) + delta_amt
+                        new_released_qty = Decimal(str(contract.released_quantity or 0)) + delta_qty
+                        if new_released_amt < 0 or new_released_qty < 0:
+                            raise BusinessLogicError("变更导致合同释放量为负，请先调整变更内容")
+                        total_amt = Decimal(str(contract.total_amount or 0))
+                        total_qty = Decimal(str(contract.total_quantity or 0))
+                        if total_amt > 0 and new_released_amt > total_amt:
+                            raise BusinessLogicError("变更导致合同释放金额超过合同总额")
+                        if total_qty > 0 and new_released_qty > total_qty:
+                            raise BusinessLogicError("变更导致合同释放数量超过合同总量")
+                        contract.released_amount = new_released_amt
+                        contract.released_quantity = new_released_qty
+                        contract.updated_by = operator_id
+                        await contract.save(
+                            update_fields=[
+                                "released_amount",
+                                "released_quantity",
+                                "updated_by",
+                                "updated_at",
+                            ]
+                        )
 
             doc.status = OrderChangeApplyStatus.APPLIED.value
             doc.applied_at = datetime.now()

@@ -4,22 +4,25 @@
 
 import { createLifecycleResolver } from './createLifecycleResolver';
 
-/** 绩效汇总：待计算 → 已计算 */
+/** 绩效汇总：待计算 → 已计算 → 已确认 */
 export const getPerformanceSummaryLifecycle = createLifecycleResolver({
   stageDefs: [
     { key: 'pending', label: '待计算' },
     { key: 'calculated', label: '已计算' },
+    { key: 'confirmed', label: '已确认' },
   ],
   statusToKey: {
     pending: 'pending',
     calculated: 'calculated',
+    confirmed: 'confirmed',
     draft: 'pending',
   },
   nextStepSuggestions: {
     pending: ['计算绩效'],
-    calculated: [],
+    calculated: ['确认绩效'],
+    confirmed: [],
   },
-  successKeys: ['calculated'],
+  successKeys: ['confirmed'],
 });
 
 /** 配置类 is_active / isActive：启用 / 停用 */

@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -57,6 +57,7 @@ import {
   FormModalTemplate,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
+  MODAL_CONFIG,
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   type StatCard,
@@ -64,7 +65,7 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
 import {
@@ -1873,6 +1874,26 @@ const SalesOrdersPage: React.FC = () => {
     [messageApi, t, materials],
   );
 
+  const appendEmptyOrderItem = React.useCallback(() => {
+    const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+    const defaultDelivery =
+      mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+    const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+    items.push({
+      material_id: undefined,
+      material_code: '',
+      material_name: '',
+      material_spec: '',
+      material_unit: '',
+      required_quantity: 0,
+      delivery_date: defaultDelivery,
+      unit_price: 0,
+      tax_rate: 0,
+      variant_attributes: '',
+    });
+    formRef.current?.setFieldsValue({ items });
+  }, []);
+
   const selectedOrderForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const orderId = resolveOrderIdByRowKey(selectedRowKeys[0]);
@@ -2838,7 +2859,7 @@ const SalesOrdersPage: React.FC = () => {
         }}
         isEdit={isEdit}
         formRef={formRef}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         loading={modalSubmitting}
         grid={false}
         extraFooter={!isEdit ? <Button onClick={handleSaveDraft}>{t('app.kuaizhizao.salesOrder.saveDraft')}</Button> : undefined}
@@ -3023,39 +3044,11 @@ const SalesOrdersPage: React.FC = () => {
           </Row>
 
 
-          {/* 订单明细：标题 + 价格类型开关 + 导入按钮 */}
-          <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-            <UniTableDetailHeader
-              title={t('app.kuaizhizao.salesOrder.orderItems')}
-              required
-              leftExtra={(
-                <ProForm.Item
-                  name="price_type"
-                  initialValue="tax_exclusive"
-                  noStyle
-                  valuePropName="checked"
-                  getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                  getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-                >
-                  <Switch
-                    checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
-                    unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
-                    onChange={handlePriceTypeToggle}
-                  />
-                </ProForm.Item>
-              )}
-              onImport={() => setImportModalVisible(true)}
-              importText={t('app.kuaizhizao.salesOrder.importItems')}
-            />
-            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
-              {({ getFieldValue: getFormValue }: any) => {
-                const priceType = getFormValue('price_type') ?? 'tax_exclusive';
-                const showTaxColumns = priceType === 'tax_inclusive';
-                return (
-            <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesOrder.itemsRequired') }]}>
-              <AntForm.List name="items">
-                {(fields, { add, remove }) => {
-                  const orderDetailColumns = [
+          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+            {({ getFieldValue: getFormValue }: any) => {
+              const priceType = getFormValue('price_type') ?? 'tax_exclusive';
+              const showTaxColumns = priceType === 'tax_inclusive';
+              const orderDetailColumns = [
                     {
                       title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
@@ -3069,7 +3062,7 @@ const SalesOrdersPage: React.FC = () => {
                               ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
                               : undefined;
                             return (
-                              <div className="sales-order-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
+                              <div className="uni-detail-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
                                 <MaterialInventoryIndicator
                                   materialId={mid}
                                   requiredQuantity={Number(row?.required_quantity) || 0}
@@ -3360,131 +3353,81 @@ const SalesOrdersPage: React.FC = () => {
                         </AntForm.Item>
                       ),
                     },
-                    {
-                      title: '操作',
-                      width: 70,
-                      fixed: 'right' as const,
-                      onHeaderCell: () => ({ className: 'sales-order-fixed-op-header' }),
-                      render: (_: any, __: any, index: number) => (
-                        <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                          {t('app.kuaizhizao.salesOrder.delete')}
-                        </Button>
-                      ),
-                    },
                   ];
-                  const totalWidth = orderDetailColumns.reduce((s, c) => s + (c.width as number || 0), 0);
-                  return (
-                    <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                      <style>{`
-                        .sales-order-detail-table .ant-table-thead > tr > th {
-                          background-color: var(--ant-color-fill-alter) !important;
-                          font-weight: 600;
-                        }
-                        /* 固定操作列表头：不透明背景，避免与下拉/相邻列重叠；使用主题变量以兼容暗色模式 */
-                        .sales-order-detail-table .ant-table-thead > tr > th.sales-order-fixed-op-header {
-                          background: var(--ant-color-fill-alter) !important;
-                        }
-                        /* 固定操作列 body 单元格背景，随主题变化（暗色模式不再亮白） */
-                        .sales-order-detail-table .ant-table-cell-fix-right {
-                          background: var(--ant-color-bg-container) !important;
-                        }
-                        .sales-order-detail-table .ant-table {
-                          border-top: 1px solid var(--ant-color-border);
-                        }
-                        .sales-order-detail-table .ant-table-tbody > tr > td {
-                          border-bottom: 1px solid var(--ant-color-border);
-                          overflow: visible !important;
-                        }
-                        /* 物料列：确保 Select 占满可用宽度 */
-                        .sales-order-detail-table .sales-order-material-cell .ant-form-item,
-                        .sales-order-detail-table .sales-order-material-cell .ant-form-item-control,
-                        .sales-order-detail-table .sales-order-material-cell .ant-form-item-control-input,
-                        .sales-order-detail-table .sales-order-material-cell .ant-select {
-                          width: 100% !important;
-                          min-width: 0;
-                        }
-                        /* 明细行验证错误：仅红色边框提示，不显示文字 */
-                        .sales-order-detail-table .ant-form-item-explain,
-                        .sales-order-detail-table .ant-form-item-explain-error {
-                          display: none !important;
-                        }
-                        /* 选中文字背景样式 */
-                        .sales-order-detail-table .ant-input-number-input::selection,
-                        .sales-order-detail-table .ant-input::selection {
-                          background-color: var(--ant-color-primary);
-                          color: #fff;
-                          border-radius: 0;
-                        }
-                      `}</style>
-                      <div style={{ width: '100%', overflowX: 'auto' }}>
-                        <Table
-                          className="sales-order-detail-table"
-                          size="small"
-                          dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                          rowKey="key"
-                          pagination={false}
-                          columns={orderDetailColumns}
-                          scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                          style={{ width: '100%', margin: 0 }}
-                          footer={() => (
-                            <div
-                              style={{
-                                display: 'flex',
-                                gap: 8,
-                                width: '100%',
-                                flexWrap: 'wrap',
-                                boxSizing: 'border-box',
-                              }}
-                            >
-                              <Button
-                                type="dashed"
-                                icon={<PlusOutlined />}
-                                style={{ flex: 1, minWidth: 120 }}
-                                onClick={() => {
-                                  const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                                  const defaultDelivery =
-                                    mainDelivery != null
-                                      ? dayjs.isDayjs(mainDelivery)
-                                        ? mainDelivery
-                                        : dayjs(mainDelivery)
-                                      : dayjs();
-                                  add({
-                                    material_id: undefined,
-                                    material_code: '',
-                                    material_name: '',
-                                    material_spec: '',
-                                    material_unit: '',
-                                    required_quantity: 0,
-                                    delivery_date: defaultDelivery,
-                                    unit_price: 0,
-                                    tax_rate: 0,
-                                    variant_attributes: '',
-                                  });
-                                }}
-                              >
-                                {t('app.kuaizhizao.salesOrder.addItem')}
-                              </Button>
-                              <Button
-                                type="default"
-                                icon={<AppstoreAddOutlined />}
-                                style={{ flex: 1, minWidth: 120 }}
-                                onClick={() => setMaterialPickerOpen(true)}
-                              >
-                                {t('app.kuaizhizao.salesOrder.selectProducts')}
-                              </Button>
-                            </div>
-                          )}
-                        />
-                      </div>
-                    </div>
-                  );
-                }}
-              </AntForm.List>
-            </AntForm.Item>
-                );
-              }}
-            </AntForm.Item>
-          </div>
+              return (
+                <UniTableDetail
+                  name="items"
+                  title={t('app.kuaizhizao.salesOrder.orderItems')}
+                  required
+                  requiredMessage={t('app.kuaizhizao.salesOrder.itemsRequired')}
+                  leftExtra={(
+                    <ProForm.Item
+                      name="price_type"
+                      initialValue="tax_exclusive"
+                      noStyle
+                      valuePropName="checked"
+                      getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
+                      getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
+                    >
+                      <Switch
+                        checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
+                        unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
+                        onChange={handlePriceTypeToggle}
+                      />
+                    </ProForm.Item>
+                  )}
+                  headerExtra={(
+                    <Space size={8}>
+                      <Button
+                        type="default"
+                        icon={<ImportOutlined />}
+                        onClick={() => setImportModalVisible(true)}
+                      >
+                        {t('app.kuaizhizao.salesOrder.importItems')}
+                      </Button>
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={appendEmptyOrderItem}
+                      >
+                        {t('app.kuaizhizao.salesOrder.addItem')}
+                      </Button>
+                      <Button
+                        type="default"
+                        icon={<AppstoreAddOutlined />}
+                        onClick={() => setMaterialPickerOpen(true)}
+                      >
+                        {t('app.kuaizhizao.salesOrder.selectProducts')}
+                      </Button>
+                    </Space>
+                  )}
+                  columns={orderDetailColumns}
+                  disabledAdd
+                  initialValue={() => {
+                    const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                    const defaultDelivery =
+                      mainDelivery != null
+                        ? dayjs.isDayjs(mainDelivery)
+                          ? mainDelivery
+                          : dayjs(mainDelivery)
+                        : dayjs();
+                    return {
+                      material_id: undefined,
+                      material_code: '',
+                      material_name: '',
+                      material_spec: '',
+                      material_unit: '',
+                      required_quantity: 0,
+                      delivery_date: defaultDelivery,
+                      unit_price: 0,
+                      tax_rate: 0,
+                      variant_attributes: '',
+                    };
+                  }}
+                />
+              );
+            }}
+          </AntForm.Item>
 
         <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
 

@@ -90,6 +90,8 @@ async def create_receipt(
         receipt_date=data.receipt_date,
         payment_method=data.payment_method,
         bank_account=data.bank_account,
+        bank_account_id=data.bank_account_id,
+        settlement_type=data.settlement_type or "normal",
         status="Draft",
         notes=data.notes,
         created_by=current_user.id,
@@ -104,6 +106,7 @@ async def list_receipts(
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
     unsettled_only: bool = Query(False, description="仅返回有余额的收款单（unsettled_amount > 0）"),
+    settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     _auth: object = Depends(
@@ -135,6 +138,8 @@ async def list_receipts(
         query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if customer_id:
         query = query.filter(customer_id=customer_id)
+    if settlement_type:
+        query = query.filter(settlement_type=settlement_type)
     if start_date:
         query = query.filter(receipt_date__gte=start_date)
     if end_date:
@@ -207,6 +212,16 @@ async def confirm_receipt(
     receipt = await _get_or_404(tenant_id, id)
     if receipt.status != "Draft":
         raise _http_exception_with_trace(400, "只有草稿状态的收款单可以确认", "/receipts/{id}/confirm", tenant_id)
+    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+    from infra.exceptions.exceptions import ValidationError
+
+    if receipt.bank_account_id:
+        try:
+            await BankAccountService().sync_from_confirmed_voucher(
+                tenant_id, voucher_type="receipt", voucher_id=id
+            )
+        except ValidationError as exc:
+            raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/confirm", tenant_id)
     await Receipt.filter(id=id).update(status="Confirmed")
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 

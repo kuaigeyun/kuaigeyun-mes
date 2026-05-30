@@ -7,7 +7,8 @@ import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-compone
 import { App, Popconfirm, Button, Tag, Space, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
+import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker } from '@ant-design/pro-components';
+import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -22,11 +23,21 @@ const PieceRatesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [operations, setOperations] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [materials, setMaterials] = useState<{ id: number; label: string }[]>([]);
 
   useEffect(() => {
     operationApi.list({ limit: 1000, is_active: true }).then((list) => {
       setOperations(list.map((o) => ({ id: o.id, code: o.code, name: o.name })));
     }).catch(() => {});
+    apiRequest<unknown>('/apps/master-data/materials', { params: { limit: 1000, is_active: true } })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+        setMaterials((Array.isArray(list) ? list : []).map((m: any) => ({
+          id: m.id,
+          label: `${m.code || ''} ${m.name || ''}`.trim() || String(m.id),
+        })));
+      })
+      .catch(() => setMaterials([]));
   }, []);
 
   useEffect(() => {
@@ -39,7 +50,10 @@ const PieceRatesPage: React.FC = () => {
     employeePerformanceApi.getPieceRate(editId).then((r) => {
       formRef.current?.setFieldsValue({
         operation_id: r.operation_id,
+        material_id: r.material_id,
         rate: r.rate,
+        effective_from: r.effective_from ? dayjs(r.effective_from) : undefined,
+        effective_to: r.effective_to ? dayjs(r.effective_to) : undefined,
         is_active: r.is_active !== false,
       });
     }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
@@ -194,7 +208,16 @@ const PieceRatesPage: React.FC = () => {
         }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
-          const payload = { operation_id: values.operation_id, rate: values.rate, is_active: values.is_active !== false };
+          const mat = materials.find((m) => m.id === values.material_id);
+          const payload = {
+            operation_id: values.operation_id,
+            material_id: values.material_id,
+            material_code: mat ? mat.label.split(' ')[0] : undefined,
+            rate: values.rate,
+            effective_from: values.effective_from?.format?.('YYYY-MM-DD') ?? values.effective_from,
+            effective_to: values.effective_to?.format?.('YYYY-MM-DD') ?? values.effective_to,
+            is_active: values.is_active !== false,
+          };
           if (editId) {
             await employeePerformanceApi.updatePieceRate(editId, payload);
             messageApi.success('更新成功');
@@ -217,7 +240,18 @@ const PieceRatesPage: React.FC = () => {
           colProps={{ span: 12 }}
           disabled={!!editId}
         />
+        <ProFormSelect
+          name="material_id"
+          label="物料（可选）"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          options={materials.map((m) => ({ label: m.label, value: m.id }))}
+          colProps={{ span: 12 }}
+        />
         <ProFormDigit name="rate" label="单价（元/件）" rules={[{ required: true }]} min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_from" label="生效日期" colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_to" label="失效日期" colProps={{ span: 12 }} />
         <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>

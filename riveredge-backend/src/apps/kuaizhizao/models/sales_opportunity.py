@@ -30,6 +30,8 @@ class SalesOpportunity(BaseModel):
     quotation_code = fields.CharField(max_length=50, null=True, description="关联报价单编码")
     sales_order_id = fields.IntField(null=True, description="关联销售订单ID")
     sales_order_code = fields.CharField(max_length=50, null=True, description="关联销售订单编码")
+    contract_id = fields.IntField(null=True, description="关联销售合同ID")
+    contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")
 
     last_follow_up_at = fields.DatetimeField(null=True, description="最近跟进时间")
     next_follow_up_at = fields.DatetimeField(null=True, description="计划下次跟进时间")

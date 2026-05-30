@@ -211,6 +211,14 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.finance.auto_generate_payable_from_purchase_invoice',
       type: 'boolean',
     },
+    {
+      key: 'finance.credit_limit_enabled',
+      nameKey: 'pages.system.configCenter.param.finance_credit_limit_enabled',
+      descriptionKey: 'pages.system.configCenter.param.finance_credit_limit_enabled_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.credit_limit_enabled',
+      type: 'boolean',
+    },
   ],
   quality: [
     { key: 'quality.auto_create_iqc_on_purchase_receipt', nameKey: 'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt', descriptionKey: 'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.auto_create_iqc_on_purchase_receipt', type: 'boolean' },

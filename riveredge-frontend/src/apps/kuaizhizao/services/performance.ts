@@ -179,4 +179,32 @@ export const employeePerformanceApi = {
   calculate: async (period: string): Promise<PerformanceSummary[]> => {
     return api.post(`${PERF_BASE}/calculate`, null, { params: { period } });
   },
+  confirmSummary: async (id: number): Promise<PerformanceSummary> => {
+    return api.post(`${PERF_BASE}/summaries/${id}/confirm`);
+  },
+  reopenSummary: async (id: number): Promise<PerformanceSummary> => {
+    return api.post(`${PERF_BASE}/summaries/${id}/reopen`);
+  },
+  batchConfirm: async (period: string): Promise<{ period: string; confirmed_count: number; skipped_count: number }> => {
+    return api.post(`${PERF_BASE}/summaries/batch-confirm`, null, { params: { period } });
+  },
+  exportSummaries: async (period: string, status = 'confirmed'): Promise<{ csv: string; totalAmount: number }> => {
+    const csv = await api.get<string>(`${PERF_BASE}/summaries/export`, {
+      params: { period, status },
+      responseType: 'text',
+    });
+    const lines = String(csv).trim().split('\n');
+    const last = lines[lines.length - 1]?.split(',') ?? [];
+    const totalAmount = Number(last[last.length - 1]) || 0;
+    return { csv: String(csv), totalAmount };
+  },
+  getPayrollTotal: async (period: string): Promise<{ period: string; total_amount: number; employee_count: number }> => {
+    return api.get(`${PERF_BASE}/summaries/payroll-total`, { params: { period } });
+  },
+  listKpiScores: async (params?: { period?: string; employee_id?: number }) => {
+    return api.get<Array<{ kpi_code: string; score: number; source_data_json?: Record<string, unknown> }>>(
+      `${PERF_BASE}/kpi-scores`,
+      { params },
+    );
+  },
 };

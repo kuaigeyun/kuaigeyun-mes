@@ -62,6 +62,10 @@ class SalesOrder(BaseModel):
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种（如 CNY 人民币）")
 
+    contract_id = fields.IntField(null=True, description="关联销售合同ID")
+    contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")
+    is_release_order = fields.BooleanField(default=False, description="是否为框架合同释放单")
+
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
 

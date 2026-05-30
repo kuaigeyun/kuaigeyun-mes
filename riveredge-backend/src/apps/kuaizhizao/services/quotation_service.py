@@ -234,6 +234,8 @@ class QuotationService:
             "currency_code": quotation.currency_code or "CNY",
             "sales_order_id": quotation.sales_order_id,
             "sales_order_code": quotation.sales_order_code,
+            "contract_id": getattr(quotation, "contract_id", None),
+            "contract_code": getattr(quotation, "contract_code", None),
             "notes": quotation.notes,
             "is_active": quotation.is_active,
             "created_by": quotation.created_by,
@@ -1270,6 +1272,11 @@ class QuotationService:
             raise BusinessLogicError("该报价单已转为销售订单，无法重复转换")
         if quotation.sales_order_id:
             raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
+        if getattr(quotation, "contract_id", None):
+            raise BusinessLogicError("该报价已关联销售合同，请从「销售合同」下推销售订单")
+        biz = await self.business_config_service.get_business_config(tenant_id)
+        if biz.get("parameters", {}).get("sales", {}).get("require_contract_before_order"):
+            raise BusinessLogicError("当前配置要求经销售合同转单，请先将报价转为销售合同并从合同下推订单")
 
         if not getattr(quotation, "is_latest_in_series", True):
             raise BusinessLogicError("仅能对当前系列的最新版本报价单转销售订单")

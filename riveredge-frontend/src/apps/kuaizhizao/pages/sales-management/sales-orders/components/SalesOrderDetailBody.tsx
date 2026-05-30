@@ -216,6 +216,7 @@ function SalesOrderDetailCollaborationDrawerTitle() {
 
 export const SalesOrderDetailBasicPane: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { order, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder } = useSalesOrderDetailContext();
   return (
@@ -261,6 +262,26 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         { key: 'delivery_date', label: t('app.kuaizhizao.salesOrder.deliveryDate'), children: order.delivery_date || '-' },
         // 客户联系
         { key: 'customer_name', label: t('app.kuaizhizao.salesOrder.customerName'), children: order.customer_name || '-' },
+        {
+          key: 'contract_code',
+          label: t('app.kuaizhizao.salesContract.linkedContract', { defaultValue: '关联合同' }),
+          children: order.contract_code ? (
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0, height: 'auto' }}
+              onClick={() =>
+                navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                  state: { openContractId: order.contract_id },
+                })
+              }
+            >
+              {order.contract_code}
+            </Button>
+          ) : (
+            '-'
+          ),
+        },
         { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
         { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
         {

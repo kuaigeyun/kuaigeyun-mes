@@ -36,6 +36,12 @@ class Receipt(BaseModel):
     receipt_date = fields.DateField(description="收款日期")
     payment_method = fields.CharField(max_length=50, description="收款方式 (银行转账/现金/票据等)")
     bank_account = fields.CharField(max_length=100, null=True, description="收款账号")
+    bank_account_id = fields.IntField(null=True, description="银行账户ID")
+    settlement_type = fields.CharField(
+        max_length=20,
+        default="normal",
+        description="结算类型 normal/prepayment（预收）",
+    )
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Cancelled)")
     

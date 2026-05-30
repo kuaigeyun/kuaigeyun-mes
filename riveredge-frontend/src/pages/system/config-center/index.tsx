@@ -88,6 +88,21 @@ export function isQualityParamDisabled(paramKey: string, values: Record<string, 
   return false;
 }
 
+/** 财务参数：收入/应付确认策略与自动生成开关互斥（与后端 coerce_finance_parameter_dict 一致） */
+export function isFinanceParamDisabled(paramKey: string, values: Record<string, any> | undefined): boolean {
+  if (!values) return false;
+  const revenueRecognition = values['finance.revenue_recognition'] ?? 'on_shipment';
+  const payableRecognition = values['finance.payable_recognition'] ?? 'on_receipt';
+
+  if (paramKey === 'finance.auto_generate_receivable_from_sales_invoice') {
+    return revenueRecognition !== 'on_invoice';
+  }
+  if (paramKey === 'finance.auto_generate_payable_from_purchase_invoice') {
+    return payableRecognition !== 'on_purchase_invoice';
+  }
+  return false;
+}
+
 /** 从 business_config 提取 parameters 下的值到扁平 key */
 function flattenBusinessParams(parameters: Record<string, Record<string, any>>): Record<string, any> {
   const flat: Record<string, any> = {};
@@ -829,7 +844,9 @@ const ConfigCenterPage: React.FC = () => {
                         .filter((param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath))
                         .map(param => {
                         const implemented = isImplementedParam(param.sourcePath);
-                        const switchDisabled = !implemented || isQualityParamDisabled(param.key, qualityFormValues);
+                        const switchDisabled = !implemented
+                          || isQualityParamDisabled(param.key, qualityFormValues)
+                          || isFinanceParamDisabled(param.key, qualityFormValues);
                         return (
                           <Card key={param.key} size="small">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -11,7 +11,7 @@
 import React, { ReactNode } from 'react';
 import { Steps, Card, Button, Space, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { ANT_DESIGN_TOKENS, PAGE_SPACING } from './constants';
+import { ANT_DESIGN_TOKENS, PAGE_SPACING, uniTabsChildPageVerticalInsetStyle } from './constants';
 
 const { useToken } = theme;
 
@@ -143,7 +143,8 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
+        // 左右留白由 UniTabs `.uni-tabs-content-page-outer` 统一承担，勿再叠加 16px
+        ...uniTabsChildPageVerticalInsetStyle(),
         ...style,
       }}
     >

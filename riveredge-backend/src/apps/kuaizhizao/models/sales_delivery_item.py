@@ -28,6 +28,7 @@ class SalesDeliveryItem(BaseModel):
     # 出库数量和价格
     delivery_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="出库数量")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价")
+    unit_cost = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="出库单位成本")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
 
     # 库位信息

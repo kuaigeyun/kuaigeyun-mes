@@ -38,6 +38,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
     "kuaizhizao-sales-order": "XS",             # 销售
     "kuaizhizao-quotation": "BJ",              # 报价
+    "kuaizhizao-sales-contract": "XSHT",       # 销售合同
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
     "kuaizhizao-delivery-notice": "SHD",        # 送货单
     "kuaizhizao-shipment-notice": "FHTZ",       # 发货通知单
@@ -484,6 +485,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "QUOTATION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-sales-contract",
+        "page_name": "销售合同",
+        "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+        "code_field": "contract_code",
+        "code_field_label": "合同编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "KUAIZHIZAO_SALES_CONTRACT",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-sales-contract-change",
+        "page_name": "销售合同变更",
+        "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+        "code_field": "change_code",
+        "code_field_label": "合同变更编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "KUAIZHIZAO_SALES_CONTRACT_CHANGE",
         "allow_manual_edit": True,
     },
     {

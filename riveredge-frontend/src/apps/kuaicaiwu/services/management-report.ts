@@ -41,4 +41,31 @@ export const managementReportService = {
       method: 'GET',
     });
   },
+
+  getFinanceSummary: () => {
+    return apiRequest<Record<string, number>>(`${REPORT_API}/finance-summary`, {
+      method: 'GET',
+    });
+  },
+
+  getMarginByProduct: (days: number = 30) => {
+    return apiRequest<any[]>(`${REPORT_API}/margin-by-product`, {
+      method: 'GET',
+      params: { days },
+    });
+  },
+
+  getMarginByCustomer: (days: number = 30) => {
+    return apiRequest<any[]>(`${REPORT_API}/margin-by-customer`, {
+      method: 'GET',
+      params: { days },
+    });
+  },
+
+  getMarginByOrder: (days: number = 30) => {
+    return apiRequest<any[]>(`${REPORT_API}/margin-by-order`, {
+      method: 'GET',
+      params: { days },
+    });
+  },
 };

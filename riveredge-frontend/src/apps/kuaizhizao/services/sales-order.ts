@@ -64,6 +64,9 @@ export interface SalesOrder {
     duration_to_review?: number | null;
     duration_submit_to_review?: number | null;
   };
+  /** 关联销售合同 */
+  contract_id?: number;
+  contract_code?: string;
   /** 交货进度 0-100（列表接口返回） */
   delivery_progress?: number | null;
   /** 开票进度 0-100（列表接口返回） */

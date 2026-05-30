@@ -275,6 +275,7 @@ export interface PerformanceDetail {
   period: string;
   summary?: PerformanceSummary;
   items: PerformanceDetailItem[];
+  kpi_scores?: Array<{ kpi_code: string; score: number; source_data_json?: Record<string, unknown> }>;
 }
 
 /** 工序（用于计件单价选择，从主数据 process API 获取） */

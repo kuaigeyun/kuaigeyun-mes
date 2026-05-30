@@ -20,6 +20,7 @@ from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.quotation import Quotation
+from apps.kuaizhizao.models.sales_contract import SalesContract
 from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.demand import Demand
@@ -89,6 +90,7 @@ class DocumentRelationService:
         "sales_forecast": {"model": SalesForecast, "code_field": "forecast_code", "name_field": "forecast_name"},
         "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": "order_name"},
         "quotation": {"model": Quotation, "code_field": "quotation_code", "name_field": None},
+        "sales_contract": {"model": SalesContract, "code_field": "contract_code", "name_field": None},
         "material_borrow": {"model": MaterialBorrow, "code_field": "borrow_code", "name_field": None},
         "material_return": {"model": MaterialReturn, "code_field": "return_code", "name_field": None},
         "demand_computation": {"model": DemandComputation, "code_field": "computation_code", "name_field": None},
@@ -264,8 +266,25 @@ class DocumentRelationService:
         return []
 
     async def _get_sales_order_upstream(self, tenant_id: int, order_id: int) -> List[Dict[str, Any]]:
-        """获取销售订单的上游单据（通常没有）"""
-        return []
+        """获取销售订单的上游单据（关联销售合同）"""
+        upstream: List[Dict[str, Any]] = []
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if order and order.contract_id:
+            contract = await SalesContract.get_or_none(
+                tenant_id=tenant_id, id=order.contract_id, deleted_at__isnull=True
+            )
+            if contract:
+                upstream.append({
+                    "document_type": "sales_contract",
+                    "document_id": contract.id,
+                    "document_code": contract.contract_code,
+                    "document_name": None,
+                    "status": contract.status,
+                    "created_at": contract.created_at.isoformat() if contract.created_at else None,
+                })
+        return upstream
 
     async def _get_demand_computation_upstream(self, tenant_id: int, computation_id: int) -> List[Dict[str, Any]]:
         """获取需求计算的上游单据。
@@ -2267,6 +2286,15 @@ class DocumentRelationService:
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
+        if quotation and quotation.contract_id:
+            downstream.append({
+                "document_type": "sales_contract",
+                "document_id": quotation.contract_id,
+                "document_code": quotation.contract_code,
+                "document_name": None,
+                "status": None,
+                "created_at": None,
+            })
         if quotation and quotation.sales_order_id:
             downstream.append({
                 "document_type": "sales_order",
@@ -2275,6 +2303,54 @@ class DocumentRelationService:
                 "document_name": None,
                 "status": None,
                 "created_at": None,
+            })
+        return downstream
+
+    async def _get_sales_contract_upstream(
+        self,
+        tenant_id: int,
+        contract_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取销售合同的上游单据（来源报价单）"""
+        upstream: List[Dict[str, Any]] = []
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if contract and contract.quotation_id:
+            quotation = await Quotation.get_or_none(
+                tenant_id=tenant_id, id=contract.quotation_id, deleted_at__isnull=True
+            )
+            if quotation:
+                upstream.append({
+                    "document_type": "quotation",
+                    "document_id": quotation.id,
+                    "document_code": quotation.quotation_code,
+                    "document_name": None,
+                    "status": quotation.status,
+                    "created_at": quotation.created_at.isoformat() if quotation.created_at else None,
+                })
+        return upstream
+
+    async def _get_sales_contract_downstream(
+        self,
+        tenant_id: int,
+        contract_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取销售合同的下游单据（释放的销售订单）"""
+        downstream: List[Dict[str, Any]] = []
+        orders = await SalesOrder.filter(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(20)
+        for order in orders:
+            downstream.append({
+                "document_type": "sales_order",
+                "document_id": order.id,
+                "document_code": order.order_code,
+                "document_name": order.order_name,
+                "status": order.status,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
             })
         return downstream
 
@@ -2969,10 +3045,17 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         return [], await svc._get_sales_forecast_downstream(tenant_id, document_id)
 
     async def strat_sales_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
-        return [], await svc._get_sales_order_downstream(tenant_id, document_id)
+        upstream = await svc._get_sales_order_upstream(tenant_id, document_id)
+        downstream = await svc._get_sales_order_downstream(tenant_id, document_id)
+        return upstream, downstream
 
     async def strat_quotation(svc: DocumentRelationService, tenant_id: int, document_id: int):
         return [], await svc._get_quotation_downstream(tenant_id, document_id)
+
+    async def strat_sales_contract(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream = await svc._get_sales_contract_upstream(tenant_id, document_id)
+        downstream = await svc._get_sales_contract_downstream(tenant_id, document_id)
+        return upstream, downstream
 
     async def strat_material_borrow(svc: DocumentRelationService, tenant_id: int, document_id: int):
         return [], await svc._get_material_borrow_downstream(tenant_id, document_id)
@@ -3139,6 +3222,7 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "sales_forecast": strat_sales_forecast,
         "sales_order": strat_sales_order,
         "quotation": strat_quotation,
+        "sales_contract": strat_sales_contract,
         "material_borrow": strat_material_borrow,
         "material_return": strat_material_return,
         "demand_computation": strat_demand_computation,

@@ -96,6 +96,34 @@ async def list_receivables(
     )
 
 
+@router.get("/statistics")
+async def get_receivable_statistics(
+    _auth: object = Depends(
+        require_access(
+            "finance.receivable",
+            "read",
+            required_permissions=["kuaicaiwu:receivable:view"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await receivable_service.get_receivable_statistics(tenant_id)
+
+
+@router.get("/aging")
+async def get_receivable_aging(
+    _auth: object = Depends(
+        require_access(
+            "finance.receivable",
+            "read",
+            required_permissions=["kuaicaiwu:receivable:view"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await receivable_service.get_receivable_aging_analysis(tenant_id)
+
+
 @router.get("/{id}", response_model=ReceivableResponse)
 async def get_receivable(
     id: int,

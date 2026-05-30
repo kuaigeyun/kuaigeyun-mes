@@ -10,7 +10,7 @@ Date: 2026-01-16
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
 
@@ -38,6 +38,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
     def __init__(self):
         super().__init__(OutsourceMaterialReceipt)
+        from infra.services.business_config_service import BusinessConfigService
+
+        self.business_config_service = BusinessConfigService()
 
     async def create_material_receipt(
         self,
@@ -169,13 +172,98 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     source_doc_code=code,
                 )
 
-            # TODO: 自动生成应付单（委外费用，待财务模块实现后补充）
-            # await accounts_payable_service.create_payable(...)
-
             logger.info(f"创建委外收货单成功: {code}")
 
             await material_receipt.refresh_from_db()
-            return OutsourceMaterialReceiptResponse.model_validate(material_receipt)
+            response = OutsourceMaterialReceiptResponse.model_validate(material_receipt)
+
+        await self._maybe_auto_create_payable_for_outsource_receipt(
+            tenant_id=tenant_id,
+            material_receipt=material_receipt,
+            outsource_work_order=outsource_work_order,
+            receipt_data=receipt_data,
+            created_by=created_by,
+        )
+        return response
+
+    async def _maybe_auto_create_payable_for_outsource_receipt(
+        self,
+        *,
+        tenant_id: int,
+        material_receipt: OutsourceMaterialReceipt,
+        outsource_work_order: OutsourceWorkOrder,
+        receipt_data: OutsourceMaterialReceiptCreate,
+        created_by: int,
+    ) -> None:
+        """委外收货确认后自动生成应付单（策略与采购入库一致：按入库/收货确认）。"""
+        from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_OUTSOURCE_RECEIPT
+        from apps.kuaicaiwu.services.finance_service import PayableService
+        from apps.kuaicaiwu.schemas.finance import PayableCreate
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            link_finance_document_relation,
+            record_finance_accounting_event,
+        )
+
+        _sup_id = getattr(outsource_work_order, "supplier_id", None)
+        if not await self.business_config_service.should_auto_generate_payable_on_purchase_receipt(
+            tenant_id, int(_sup_id) if _sup_id is not None else None
+        ):
+            return
+
+        receipt_qty = Decimal(str(receipt_data.qualified_quantity or receipt_data.quantity or 0))
+        unit_price = Decimal(str(outsource_work_order.unit_price or 0))
+        total_amount = (receipt_qty * unit_price).quantize(Decimal("0.01"))
+        if total_amount <= 0:
+            return
+
+        try:
+            payable_service = PayableService()
+            payable_data = PayableCreate(
+                source_type=PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
+                source_id=material_receipt.id,
+                source_code=material_receipt.code,
+                supplier_id=outsource_work_order.supplier_id,
+                supplier_name=outsource_work_order.supplier_name,
+                total_amount=float(total_amount),
+                paid_amount=0.0,
+                remaining_amount=float(total_amount),
+                due_date=(datetime.now() + timedelta(days=30)).date(),
+                business_date=datetime.now().date(),
+                status="未付款",
+                notes=f"由委外收货单 {material_receipt.code} 自动生成",
+            )
+            payable = await payable_service.create_payable(
+                tenant_id=tenant_id,
+                payable_data=payable_data,
+                created_by=created_by,
+            )
+            await link_finance_document_relation(
+                tenant_id=tenant_id,
+                source_type="outsource_material_receipt",
+                source_id=material_receipt.id,
+                source_code=material_receipt.code,
+                target_type="payable",
+                target_id=payable.id,
+                target_code=getattr(payable, "payable_code", None),
+                relation_desc="委外收货自动生成应付单",
+                created_by=created_by,
+            )
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="OUTSOURCE_RECEIPT_TO_PAYABLE",
+                business_type="payable",
+                source_doc_type="outsource_material_receipt",
+                source_doc_id=material_receipt.id,
+                source_doc_code=material_receipt.code,
+                target_doc_type="Payable",
+                target_doc_id=payable.id,
+                target_doc_code=payable.payable_code,
+                amount=total_amount,
+                operator_id=created_by,
+                notes=f"委外收货单 {material_receipt.code} 自动生成应付单",
+            )
+        except Exception as e:
+            logger.warning("委外收货自动生成应付单失败（不影响收货结果）: %s", e)
 
     async def _normalize_legacy_draft_receipts(
         self, receipts: List[OutsourceMaterialReceipt]

@@ -1586,6 +1586,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
                     )
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().apply_finished_goods_receipt_cost(
+                    tenant_id, receipt_id, receipt.work_order_id
+                )
             except Exception as inv_e:
                 logger.error("成品入库确认-更新库存失败: %s", inv_e)
                 raise
@@ -2797,6 +2801,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 sales_delivery_id=delivery_id,
             )
 
+            from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
+            await CreditLimitService().validate_customer_exposure(
+                tenant_id=tenant_id,
+                customer_id=delivery.customer_id,
+                customer_name=delivery.customer_name,
+                additional_amount=Decimal(str(delivery.total_amount or 0)),
+                scene="销售出库确认",
+            )
+
             if item_batches is not None:
                 line_rows = await SalesDeliveryItem.filter(
                     tenant_id=tenant_id, delivery_id=delivery_id
@@ -2848,6 +2861,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 items = await SalesDeliveryItem.filter(
                     tenant_id=tenant_id, delivery_id=delivery_id
                 ).all()
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().apply_sales_delivery_outbound_costs(tenant_id, items)
                 material_ids = list({it.material_id for it in items if getattr(it, "material_id", None)})
                 materials = await Material.filter(
                     tenant_id=tenant_id,
@@ -2938,9 +2953,20 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         try:
             from apps.kuaicaiwu.services.finance_service import ReceivableService
             from apps.kuaicaiwu.schemas.finance import ReceivableCreate
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.services.contract_milestone_billing_service import ContractMilestoneBillingService
 
             receivable_service = ReceivableService()
             delivery_row = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
+            if delivery_row.sales_order_id:
+                so = await SalesOrder.get_or_none(
+                    tenant_id=tenant_id, id=int(delivery_row.sales_order_id), deleted_at__isnull=True
+                )
+                if so and getattr(so, "contract_id", None):
+                    if await ContractMilestoneBillingService().should_skip_shipment_receivable_for_order(
+                        tenant_id, so.customer_id, int(so.contract_id)
+                    ):
+                        return updated_delivery
             total_amount = Decimal(str(delivery_row.total_amount))
             receivable_data = ReceivableCreate(
                 source_type="销售出库",
@@ -2962,29 +2988,38 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 created_by=confirmed_by,
             )
             try:
-                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                from apps.kuaicaiwu.services.finance_integration_hooks import (
+                    link_finance_document_relation,
+                    record_finance_accounting_event,
+                )
 
-                rel_svc = DocumentRelationNewService()
-                await rel_svc.create_relation(
+                await link_finance_document_relation(
                     tenant_id=tenant_id,
-                    relation_data=DocumentRelationCreate(
-                        source_type="sales_delivery",
-                        source_id=delivery_id,
-                        source_code=delivery_row.delivery_code,
-                        source_name=None,
-                        target_type="receivable",
-                        target_id=receivable.id,
-                        target_code=getattr(receivable, "receivable_code", None),
-                        target_name=None,
-                        relation_type="source",
-                        relation_mode="push",
-                        relation_desc="销售出库确认自动生成应收单",
-                    ),
+                    source_type="sales_delivery",
+                    source_id=delivery_id,
+                    source_code=delivery_row.delivery_code,
+                    target_type="receivable",
+                    target_id=receivable.id,
+                    target_code=getattr(receivable, "receivable_code", None),
+                    relation_desc="销售出库确认自动生成应收单",
                     created_by=confirmed_by,
                 )
+                await record_finance_accounting_event(
+                    tenant_id=tenant_id,
+                    event_type="SALES_DELIVERY_TO_RECEIVABLE",
+                    business_type="receivable",
+                    source_doc_type="sales_delivery",
+                    source_doc_id=delivery_id,
+                    source_doc_code=delivery_row.delivery_code,
+                    target_doc_type="Receivable",
+                    target_doc_id=receivable.id,
+                    target_doc_code=receivable.receivable_code,
+                    amount=total_amount,
+                    operator_id=confirmed_by,
+                    notes=f"销售出库单 {delivery_row.delivery_code} 自动生成应收单",
+                )
             except Exception as rel_e:
-                logger.warning("创建销售出库→应收单 单据关联失败: %s", rel_e)
+                logger.warning("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
         except Exception as e:
             logger.error("自动生成应收单失败: %s", e)
 
@@ -3854,6 +3889,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
                     )
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
                 # #region agent log
                 _agent_debug_ndjson(
                     "warehouse_service.confirm_receipt:stock",
@@ -3912,31 +3949,39 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         payable_data=payable_data,
                         created_by=confirmed_by
                     )
-                    # 建立采购入库→应付单 的 DocumentRelation
                     try:
-                        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                        from apps.kuaicaiwu.services.finance_integration_hooks import (
+                            link_finance_document_relation,
+                            record_finance_accounting_event,
+                        )
 
-                        rel_svc = DocumentRelationNewService()
-                        await rel_svc.create_relation(
+                        await link_finance_document_relation(
                             tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="purchase_receipt",
-                                source_id=receipt_id,
-                                source_code=receipt_for_payable.receipt_code,
-                                source_name=None,
-                                target_type="payable",
-                                target_id=payable.id,
-                                target_code=getattr(payable, "payable_code", None),
-                                target_name=None,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="采购入库确认自动生成应付单",
-                            ),
+                            source_type="purchase_receipt",
+                            source_id=receipt_id,
+                            source_code=receipt_for_payable.receipt_code,
+                            target_type="payable",
+                            target_id=payable.id,
+                            target_code=getattr(payable, "payable_code", None),
+                            relation_desc="采购入库确认自动生成应付单",
                             created_by=confirmed_by,
                         )
+                        await record_finance_accounting_event(
+                            tenant_id=tenant_id,
+                            event_type="PURCHASE_RECEIPT_TO_PAYABLE",
+                            business_type="payable",
+                            source_doc_type="purchase_receipt",
+                            source_doc_id=receipt_id,
+                            source_doc_code=receipt_for_payable.receipt_code,
+                            target_doc_type="Payable",
+                            target_doc_id=payable.id,
+                            target_doc_code=payable.payable_code,
+                            amount=total_amount,
+                            operator_id=confirmed_by,
+                            notes=f"采购入库单 {receipt_for_payable.receipt_code} 自动生成应付单",
+                        )
                     except Exception as rel_e:
-                        logger.warning("创建采购入库→应付单 单据关联失败: %s", rel_e)
+                        logger.warning("创建采购入库→应付单 单据关联/会计事件失败: %s", rel_e)
             except Exception as e:
                 logger.warning(f"自动生成应付单失败（不影响入库确认结果）: {str(e)}")
         # #region agent log
@@ -4746,6 +4791,12 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
                 raise
 
+            try:
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().on_sales_return_confirmed(tenant_id, return_id)
+            except Exception as cost_e:
+                logger.warning("销售退货确认-成本处理失败: %s", cost_e)
+
             # 创建红字应收单（销售退货冲减）
             try:
                 from apps.kuaicaiwu.services.finance_service import ReceivableService
@@ -4769,11 +4820,44 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         status="已冲减",
                         notes=f"销售退货冲减-由销售退货单 {ret_obj.return_code} 自动生成",
                     )
-                    await receivable_service.create_receivable(
+                    receivable = await receivable_service.create_receivable(
                         tenant_id=tenant_id,
                         receivable_data=receivable_data,
                         created_by=confirmed_by,
                     )
+                    try:
+                        from apps.kuaicaiwu.services.finance_integration_hooks import (
+                            link_finance_document_relation,
+                            record_finance_accounting_event,
+                        )
+
+                        await link_finance_document_relation(
+                            tenant_id=tenant_id,
+                            source_type="sales_return",
+                            source_id=return_id,
+                            source_code=ret_obj.return_code,
+                            target_type="receivable",
+                            target_id=receivable.id,
+                            target_code=getattr(receivable, "receivable_code", None),
+                            relation_desc="销售退货确认自动生成红字应收单",
+                            created_by=confirmed_by,
+                        )
+                        await record_finance_accounting_event(
+                            tenant_id=tenant_id,
+                            event_type="SALES_RETURN_TO_RECEIVABLE",
+                            business_type="receivable",
+                            source_doc_type="sales_return",
+                            source_doc_id=return_id,
+                            source_doc_code=ret_obj.return_code,
+                            target_doc_type="Receivable",
+                            target_doc_id=receivable.id,
+                            target_doc_code=receivable.receivable_code,
+                            amount=Decimal(str(total_amount)),
+                            operator_id=confirmed_by,
+                            notes=f"销售退货单 {ret_obj.return_code} 自动生成红字应收单",
+                        )
+                    except Exception as rel_e:
+                        logger.warning("销售退货确认-创建应收单关联/会计事件失败: %s", rel_e)
             except Exception as fin_e:
                 logger.warning("销售退货确认-创建红字应收单失败: %s", fin_e)
 
@@ -5280,6 +5364,12 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 logger.error("采购退货确认-更新库存失败: %s", inv_e)
                 raise
 
+            try:
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().on_purchase_return_confirmed(tenant_id, return_id)
+            except Exception as cost_e:
+                logger.warning("采购退货确认-成本处理失败: %s", cost_e)
+
             # 创建红字应付单（采购退货冲减）
             try:
                 from apps.kuaicaiwu.services.finance_service import PayableService
@@ -5303,11 +5393,44 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         status="已冲减",
                         notes=f"采购退货冲减-由采购退货单 {ret_obj.return_code} 自动生成",
                     )
-                    await payable_service.create_payable(
+                    payable = await payable_service.create_payable(
                         tenant_id=tenant_id,
                         payable_data=payable_data,
                         created_by=confirmed_by,
                     )
+                    try:
+                        from apps.kuaicaiwu.services.finance_integration_hooks import (
+                            link_finance_document_relation,
+                            record_finance_accounting_event,
+                        )
+
+                        await link_finance_document_relation(
+                            tenant_id=tenant_id,
+                            source_type="purchase_return",
+                            source_id=return_id,
+                            source_code=ret_obj.return_code,
+                            target_type="payable",
+                            target_id=payable.id,
+                            target_code=getattr(payable, "payable_code", None),
+                            relation_desc="采购退货确认自动生成红字应付单",
+                            created_by=confirmed_by,
+                        )
+                        await record_finance_accounting_event(
+                            tenant_id=tenant_id,
+                            event_type="PURCHASE_RETURN_TO_PAYABLE",
+                            business_type="payable",
+                            source_doc_type="purchase_return",
+                            source_doc_id=return_id,
+                            source_doc_code=ret_obj.return_code,
+                            target_doc_type="Payable",
+                            target_doc_id=payable.id,
+                            target_doc_code=payable.payable_code,
+                            amount=Decimal(str(total_amount)),
+                            operator_id=confirmed_by,
+                            notes=f"采购退货单 {ret_obj.return_code} 自动生成红字应付单",
+                        )
+                    except Exception as rel_e:
+                        logger.warning("采购退货确认-创建应付单关联/会计事件失败: %s", rel_e)
             except Exception as fin_e:
                 logger.warning("采购退货确认-创建红字应付单失败: %s", fin_e)
 
@@ -5647,6 +5770,12 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)
                 raise
 
+            try:
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                await InventoryCostService().on_other_inbound_confirmed(tenant_id, inbound_id)
+            except Exception as cost_e:
+                logger.warning("其他入库确认-成本处理失败: %s", cost_e)
+
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
@@ -5921,6 +6050,16 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             except Exception as inv_e:
                 logger.error("其他出库确认-更新库存失败: %s", inv_e)
                 raise
+
+            try:
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                fresh_items = await OtherOutboundItem.filter(
+                    tenant_id=tenant_id, outbound_id=outbound_id
+                ).all()
+                await InventoryCostService().apply_other_outbound_costs(tenant_id, fresh_items)
+            except Exception as cost_e:
+                logger.error("其他出库确认-成本回写失败: %s", cost_e)
+                raise BusinessLogicError(f"出库成本回写失败: {cost_e}")
 
             return OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)

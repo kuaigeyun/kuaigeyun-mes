@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from tortoise.functions import Sum
 from loguru import logger
 
 from apps.kuaicaiwu.models.payable import Payable
@@ -36,6 +37,16 @@ from apps.common.base_service import AppBaseService
 from core.services.logging.operation_log_service import OperationLogService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+
+
+def _serialize_aging_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        bucket: {
+            "count": data["count"],
+            "amount": float(data["amount"]),
+        }
+        for bucket, data in analysis.items()
+    }
 
 
 class PayableService(AppBaseService[Payable]):
@@ -253,7 +264,28 @@ class PayableService(AppBaseService[Payable]):
             analysis[key]["count"] += 1
             analysis[key]["amount"] = self._money(analysis[key]["amount"] + p.remaining_amount)
             
-        return analysis
+        return _serialize_aging_analysis(analysis)
+
+    async def get_payable_statistics(self, tenant_id: int) -> Dict[str, Any]:
+        """应付单列表页指标"""
+        today = date.today()
+        base = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        totals = await base.aggregate(
+            total_amount_sum=Sum("total_amount"),
+            paid_amount_sum=Sum("paid_amount"),
+            remaining_amount_sum=Sum("remaining_amount"),
+        )
+        return {
+            "total_count": await base.count(),
+            "unsettled_count": await base.filter(remaining_amount__gt=0).count(),
+            "settled_count": await base.filter(status="已结清").count(),
+            "overdue_count": await base.filter(
+                remaining_amount__gt=0, due_date__lt=today
+            ).count(),
+            "total_amount": float(totals.get("total_amount_sum") or 0),
+            "paid_amount": float(totals.get("paid_amount_sum") or 0),
+            "remaining_amount": float(totals.get("remaining_amount_sum") or 0),
+        }
 
     async def delete_payable(self, tenant_id: int, payable_id: int) -> None:
         """删除应付单"""
@@ -670,7 +702,28 @@ class ReceivableService(AppBaseService[Receivable]):
             analysis[key]["count"] += 1
             analysis[key]["amount"] = self._money(analysis[key]["amount"] + r.remaining_amount)
             
-        return analysis
+        return _serialize_aging_analysis(analysis)
+
+    async def get_receivable_statistics(self, tenant_id: int) -> Dict[str, Any]:
+        """应收单列表页指标"""
+        today = date.today()
+        base = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        totals = await base.aggregate(
+            total_amount_sum=Sum("total_amount"),
+            received_amount_sum=Sum("received_amount"),
+            remaining_amount_sum=Sum("remaining_amount"),
+        )
+        return {
+            "total_count": await base.count(),
+            "unsettled_count": await base.filter(remaining_amount__gt=0).count(),
+            "settled_count": await base.filter(status="已结清").count(),
+            "overdue_count": await base.filter(
+                remaining_amount__gt=0, due_date__lt=today
+            ).count(),
+            "total_amount": float(totals.get("total_amount_sum") or 0),
+            "received_amount": float(totals.get("received_amount_sum") or 0),
+            "remaining_amount": float(totals.get("remaining_amount_sum") or 0),
+        }
 
     async def delete_receivable(self, tenant_id: int, receivable_id: int) -> None:
         """删除应收单"""
@@ -1295,6 +1348,14 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 remaining_amount=new_rem_receivable,
                 status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款"
             )
+            if new_rem_receivable <= Decimal("0.00"):
+                from apps.kuaizhizao.services.contract_milestone_billing_service import (
+                    ContractMilestoneBillingService,
+                )
+
+                await ContractMilestoneBillingService().sync_milestone_on_receivable_settled(
+                    tenant_id, receivable_id
+                )
             await self._log_settlement_amount_audit(
                 tenant_id=tenant_id,
                 operator_id=operator_id,

@@ -694,6 +694,23 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 item.status = "adjusted"
                 await item.save()
 
+            # 盘盈回写移动加权平均（盘亏仅减库存，均价不变）
+            try:
+                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                cost_svc = InventoryCostService()
+                for item in items:
+                    if Decimal(str(item.difference_quantity or 0)) <= 0:
+                        continue
+                    await cost_svc.on_stocktaking_difference_adjusted(
+                        tenant_id,
+                        material_id=int(item.material_id),
+                        difference_quantity=item.difference_quantity,
+                        unit_price=item.unit_price,
+                    )
+            except Exception as cost_e:
+                import logging
+                logging.getLogger(__name__).warning("盘点差异成本回写失败: %s", cost_e)
+
             # 获取调整人信息
             user_info = await self.get_user_info(adjusted_by)
 

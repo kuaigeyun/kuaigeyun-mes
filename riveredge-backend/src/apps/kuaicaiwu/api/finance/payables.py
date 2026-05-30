@@ -96,6 +96,34 @@ async def list_payables(
     )
 
 
+@router.get("/statistics")
+async def get_payable_statistics(
+    _auth: object = Depends(
+        require_access(
+            "finance.payable",
+            "read",
+            required_permissions=["kuaicaiwu:payable:view"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await payable_service.get_payable_statistics(tenant_id)
+
+
+@router.get("/aging")
+async def get_payable_aging(
+    _auth: object = Depends(
+        require_access(
+            "finance.payable",
+            "read",
+            required_permissions=["kuaicaiwu:payable:view"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await payable_service.get_payable_aging_analysis(tenant_id)
+
+
 @router.get("/{id}", response_model=PayableResponse)
 async def get_payable(
     id: int,

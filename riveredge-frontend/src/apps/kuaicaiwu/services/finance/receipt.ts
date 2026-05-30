@@ -11,7 +11,9 @@ export interface ReceiptVoucher {
   receipt_date: string;
   payment_method: string;
   bank_account?: string;
+  bank_account_id?: number;
   status: string;
+  settlement_type?: string;
   notes?: string;
   created_at: string;
 }

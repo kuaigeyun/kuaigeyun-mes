@@ -1,26 +1,32 @@
 """
 库存分析业务服务模块
 
-提供库存分析相关的业务逻辑处理，包括库存周转率计算、ABC分析、呆滞料分析等。
-
-Author: Luigi Lu
-Date: 2025-01-04
+提供库存周转率、ABC 分析、呆滞料分析等（基于 MaterialBatch 与出入库单据）。
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from apps.common.base_service import AppBaseService
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from tortoise.expressions import Q
+
+from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+from apps.master_data.models.material import Material
+from apps.master_data.models.material_batch import MaterialBatch
 
 
 class InventoryAnalysisService:
-    """
-    库存分析服务类
+    """库存分析服务类"""
 
-    处理库存分析相关的所有业务逻辑。
-    """
+    def __init__(self):
+        self._cost_svc = InventoryCostService()
+
+    async def _material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
+        return await self._cost_svc.get_material_unit_cost(tenant_id, material_id)
 
     async def get_inventory_analysis(
         self,
@@ -29,46 +35,51 @@ class InventoryAnalysisService:
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        获取库存分析数据
-
-        Args:
-            tenant_id: 组织ID
-            date_start: 开始日期（可选，用于计算周转率）
-            date_end: 结束日期（可选，用于计算周转率）
-            warehouse_id: 仓库ID（可选）
-
-        Returns:
-            Dict[str, Any]: 库存分析数据
-        """
-        # TODO: 从库存服务获取库存数据
-        # 这里简化处理，返回分析结果结构
-
-        # 库存周转率计算
         turnover_rate = await self._calculate_turnover_rate(
             tenant_id=tenant_id,
             date_start=date_start,
             date_end=date_end,
-            warehouse_id=warehouse_id
+            warehouse_id=warehouse_id,
         )
-
-        # ABC分析
         abc_analysis = await self._calculate_abc_analysis(
             tenant_id=tenant_id,
-            warehouse_id=warehouse_id
+            warehouse_id=warehouse_id,
         )
-
-        # 呆滞料分析
         slow_moving_analysis = await self._calculate_slow_moving_analysis(
             tenant_id=tenant_id,
-            warehouse_id=warehouse_id
+            warehouse_id=warehouse_id,
         )
-
         return {
-            'turnover_rate': turnover_rate,
-            'abc_analysis': abc_analysis,
-            'slow_moving_analysis': slow_moving_analysis,
+            "turnover_rate": turnover_rate,
+            "abc_analysis": abc_analysis,
+            "slow_moving_analysis": slow_moving_analysis,
         }
+
+    async def _inventory_value_by_material(
+        self, tenant_id: int
+    ) -> Dict[int, Dict[str, Any]]:
+        today = date.today()
+        batches = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            quantity__gt=0,
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).all()
+
+        result: Dict[int, Dict[str, Any]] = {}
+        for batch in batches:
+            mid = int(batch.material_id)
+            qty = Decimal(str(batch.quantity or 0))
+            unit_cost = await self._material_unit_cost(tenant_id, mid)
+            value = qty * unit_cost
+            bucket = result.setdefault(
+                mid,
+                {"quantity": Decimal("0"), "inventory_value": Decimal("0")},
+            )
+            bucket["quantity"] += qty
+            bucket["inventory_value"] += value
+        return result
 
     async def _calculate_turnover_rate(
         self,
@@ -77,42 +88,68 @@ class InventoryAnalysisService:
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        计算库存周转率
+        if not date_end:
+            date_end = datetime.now()
+        if not date_start:
+            date_start = date_end - timedelta(days=30)
 
-        Args:
-            tenant_id: 组织ID
-            date_start: 开始日期
-            date_end: 结束日期
-            warehouse_id: 仓库ID（可选）
+        outbound_q = SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            status="已出库",
+            delivery_time__gte=date_start,
+            delivery_time__lte=date_end,
+        )
+        if warehouse_id:
+            delivery_ids = await SalesDelivery.filter(
+                tenant_id=tenant_id, warehouse_id=warehouse_id, deleted_at__isnull=True
+            ).values_list("id", flat=True)
+            outbound_q = outbound_q.filter(delivery_id__in=list(delivery_ids))
 
-        Returns:
-            Dict[str, Any]: 周转率数据
-        """
-        # TODO: 从库存服务获取期初库存、期末库存、出库数量
-        # 周转率 = 出库数量 / 平均库存
-        # 平均库存 = (期初库存 + 期末库存) / 2
+        outbound_items = await outbound_q.all()
+        outbound_qty_by_material: Dict[int, Decimal] = {}
+        outbound_value = Decimal("0")
+        for row in outbound_items:
+            mid = int(row.material_id)
+            qty = Decimal(str(row.delivery_quantity or 0))
+            unit_cost = Decimal(str(row.unit_cost or 0))
+            if unit_cost <= 0:
+                unit_cost = await self._material_unit_cost(tenant_id, mid)
+            outbound_qty_by_material[mid] = outbound_qty_by_material.get(mid, Decimal("0")) + qty
+            outbound_value += qty * unit_cost
 
-        # 简化处理，返回示例数据
+        inv_by_material = await self._inventory_value_by_material(tenant_id)
+        avg_inventory = sum(v["inventory_value"] for v in inv_by_material.values()) or Decimal("1")
+        total_turnover = float(outbound_value / avg_inventory) if avg_inventory > 0 else 0.0
+
+        top_materials = []
+        material_ids = sorted(
+            outbound_qty_by_material.keys(),
+            key=lambda m: outbound_qty_by_material[m],
+            reverse=True,
+        )[:10]
+        if material_ids:
+            materials = {
+                m.id: m
+                for m in await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            }
+            for mid in material_ids:
+                mat = materials.get(mid)
+                inv_val = inv_by_material.get(mid, {}).get("inventory_value", Decimal("0"))
+                qty = outbound_qty_by_material[mid]
+                rate = float(qty / inv_by_material.get(mid, {}).get("quantity", Decimal("1"))) if mid in inv_by_material else 0.0
+                top_materials.append({
+                    "material_id": mid,
+                    "material_code": getattr(mat, "main_code", None) or getattr(mat, "code", str(mid)),
+                    "material_name": getattr(mat, "name", ""),
+                    "turnover_rate": round(rate, 2),
+                    "inventory_value": float(inv_val),
+                })
+
         return {
-            'total_turnover_rate': 4.5,  # 总周转率
-            'average_turnover_rate': 4.2,  # 平均周转率
-            'top_materials': [
-                {
-                    'material_id': 1,
-                    'material_code': 'MAT001',
-                    'material_name': '物料A',
-                    'turnover_rate': 8.5,
-                    'inventory_value': 50000.00,
-                },
-                {
-                    'material_id': 2,
-                    'material_code': 'MAT002',
-                    'material_name': '物料B',
-                    'turnover_rate': 7.2,
-                    'inventory_value': 45000.00,
-                },
-            ],
+            "total_turnover_rate": round(total_turnover, 2),
+            "average_turnover_rate": round(total_turnover, 2),
+            "period": {"start": date_start.isoformat(), "end": date_end.isoformat()},
+            "top_materials": top_materials,
         }
 
     async def _calculate_abc_analysis(
@@ -120,53 +157,61 @@ class InventoryAnalysisService:
         tenant_id: int,
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        计算ABC分析
+        inv_by_material = await self._inventory_value_by_material(tenant_id)
+        if not inv_by_material:
+            return {
+                "category_a": {"count": 0, "percentage": 0, "value": 0, "value_percentage": 0, "materials": []},
+                "category_b": {"count": 0, "percentage": 0, "value": 0, "value_percentage": 0, "materials": []},
+                "category_c": {"count": 0, "percentage": 0, "value": 0, "value_percentage": 0, "materials": []},
+            }
 
-        Args:
-            tenant_id: 组织ID
-            warehouse_id: 仓库ID（可选）
+        material_ids = list(inv_by_material.keys())
+        materials = {
+            m.id: m for m in await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+        }
+        rows = []
+        total_value = Decimal("0")
+        for mid, data in inv_by_material.items():
+            val = data["inventory_value"]
+            total_value += val
+            mat = materials.get(mid)
+            rows.append({
+                "material_id": mid,
+                "material_code": getattr(mat, "main_code", None) or getattr(mat, "code", str(mid)),
+                "material_name": getattr(mat, "name", ""),
+                "inventory_value": float(val),
+            })
+        rows.sort(key=lambda x: x["inventory_value"], reverse=True)
 
-        Returns:
-            Dict[str, Any]: ABC分析数据
-        """
-        # TODO: 从库存服务获取所有物料的库存金额
-        # 按库存金额从高到低排序
-        # A类：累计金额占比0-80%
-        # B类：累计金额占比80-95%
-        # C类：累计金额占比95-100%
+        def _bucket(items, value_pct_label):
+            count = len(items)
+            value = sum(i["inventory_value"] for i in items)
+            total_count = len(rows) or 1
+            return {
+                "count": count,
+                "percentage": round(count / total_count * 100, 1),
+                "value": round(value, 2),
+                "value_percentage": value_pct_label,
+                "materials": items[:20],
+            }
 
-        # 简化处理，返回示例数据
+        cumulative = Decimal("0")
+        a_items, b_items, c_items = [], [], []
+        for row in rows:
+            cumulative += Decimal(str(row["inventory_value"]))
+            pct = float(cumulative / total_value * 100) if total_value > 0 else 0
+            if pct <= 80:
+                row["percentage"] = round(float(Decimal(str(row["inventory_value"])) / total_value * 100), 2) if total_value else 0
+                a_items.append(row)
+            elif pct <= 95:
+                b_items.append(row)
+            else:
+                c_items.append(row)
+
         return {
-            'category_a': {
-                'count': 15,
-                'percentage': 6.1,
-                'value': 800000.00,
-                'value_percentage': 80.0,
-                'materials': [
-                    {
-                        'material_id': 1,
-                        'material_code': 'MAT001',
-                        'material_name': '物料A',
-                        'inventory_value': 150000.00,
-                        'percentage': 15.0,
-                    },
-                ],
-            },
-            'category_b': {
-                'count': 30,
-                'percentage': 12.2,
-                'value': 150000.00,
-                'value_percentage': 15.0,
-                'materials': [],
-            },
-            'category_c': {
-                'count': 200,
-                'percentage': 81.7,
-                'value': 50000.00,
-                'value_percentage': 5.0,
-                'materials': [],
-            },
+            "category_a": _bucket(a_items, 80.0),
+            "category_b": _bucket(b_items, 15.0),
+            "category_c": _bucket(c_items, 5.0),
         }
 
     async def _calculate_slow_moving_analysis(
@@ -175,45 +220,50 @@ class InventoryAnalysisService:
         warehouse_id: Optional[int] = None,
         days_threshold: int = 90,
     ) -> Dict[str, Any]:
-        """
-        计算呆滞料分析
+        inv_by_material = await self._inventory_value_by_material(tenant_id)
+        cutoff = datetime.now() - timedelta(days=days_threshold)
 
-        Args:
-            tenant_id: 组织ID
-            warehouse_id: 仓库ID（可选）
-            days_threshold: 呆滞天数阈值（默认90天）
+        outbound_rows = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            status="已出库",
+            delivery_time__isnull=False,
+        ).all()
+        last_outbound: Dict[int, datetime] = {}
+        for row in outbound_rows:
+            mid = int(row.material_id)
+            ts = row.delivery_time
+            if ts and (mid not in last_outbound or ts > last_outbound[mid]):
+                last_outbound[mid] = ts
 
-        Returns:
-            Dict[str, Any]: 呆滞料分析数据
-        """
-        # TODO: 从库存服务获取库存数据
-        # 计算每个物料的最后出库日期
-        # 如果最后出库日期距离现在超过阈值天数，则认为是呆滞料
+        materials = []
+        total_value = Decimal("0")
+        now = datetime.now()
+        for mid, data in inv_by_material.items():
+            qty = data["quantity"]
+            if qty <= 0:
+                continue
+            last = last_outbound.get(mid)
+            if last and last >= cutoff:
+                continue
+            days_since = (now - last).days if last else days_threshold + 1
+            mat = await Material.get_or_none(tenant_id=tenant_id, id=mid)
+            value = data["inventory_value"]
+            total_value += value
+            materials.append({
+                "material_id": mid,
+                "material_code": getattr(mat, "main_code", None) or getattr(mat, "code", str(mid)),
+                "material_name": getattr(mat, "name", ""),
+                "inventory_quantity": float(qty),
+                "inventory_value": float(value),
+                "last_outbound_date": last.isoformat() if last else None,
+                "days_since_last_outbound": days_since,
+            })
 
-        # 简化处理，返回示例数据
+        materials.sort(key=lambda x: x["inventory_value"], reverse=True)
         return {
-            'total_count': 25,
-            'total_value': 120000.00,
-            'materials': [
-                {
-                    'material_id': 10,
-                    'material_code': 'MAT010',
-                    'material_name': '物料J',
-                    'inventory_quantity': 100.00,
-                    'inventory_value': 50000.00,
-                    'last_outbound_date': (datetime.now() - timedelta(days=120)).isoformat(),
-                    'days_since_last_outbound': 120,
-                },
-                {
-                    'material_id': 11,
-                    'material_code': 'MAT011',
-                    'material_name': '物料K',
-                    'inventory_quantity': 50.00,
-                    'inventory_value': 30000.00,
-                    'last_outbound_date': (datetime.now() - timedelta(days=95)).isoformat(),
-                    'days_since_last_outbound': 95,
-                },
-            ],
+            "total_count": len(materials),
+            "total_value": float(total_value),
+            "materials": materials[:50],
         }
 
     async def get_inventory_cost_analysis(
@@ -223,73 +273,60 @@ class InventoryAnalysisService:
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        获取库存成本分析
-
-        Args:
-            tenant_id: 组织ID
-            date_start: 开始日期（可选）
-            date_end: 结束日期（可选）
-            warehouse_id: 仓库ID（可选）
-
-        Returns:
-            Dict[str, Any]: 库存成本分析数据
-        """
-        # TODO: 从库存服务获取库存成本数据
-        # 计算总库存成本、平均库存成本、成本趋势等
-
-        # 简化处理，返回示例数据
         if not date_start:
             date_start = datetime.now() - timedelta(days=30)
         if not date_end:
             date_end = datetime.now()
 
+        inv_by_material = await self._inventory_value_by_material(tenant_id)
+        total_cost = sum(v["inventory_value"] for v in inv_by_material.values())
+
+        by_category: Dict[str, Decimal] = {}
+        for mid, data in inv_by_material.items():
+            mat = await Material.get_or_none(tenant_id=tenant_id, id=mid)
+            cat = getattr(mat, "material_type", None) or getattr(mat, "category", None) or "未分类"
+            by_category[str(cat)] = by_category.get(str(cat), Decimal("0")) + data["inventory_value"]
+
+        by_category_rows = [
+            {
+                "category": k,
+                "cost": float(v),
+                "percentage": round(float(v / total_cost * 100), 1) if total_cost else 0,
+            }
+            for k, v in sorted(by_category.items(), key=lambda x: x[1], reverse=True)
+        ]
+
+        inbound_rows = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            status="已入库",
+            receipt_time__gte=date_start,
+            receipt_time__lte=date_end,
+        ).all()
+        daily_inbound: Dict[str, Decimal] = {}
+        for row in inbound_rows:
+            if not row.receipt_time:
+                continue
+            key = row.receipt_time.date().isoformat()
+            qty = Decimal(str(row.receipt_quantity or 0))
+            unit = Decimal(str(row.unit_price or 0))
+            daily_inbound[key] = daily_inbound.get(key, Decimal("0")) + qty * unit
+
+        trend_data = []
+        day_count = max((date_end.date() - date_start.date()).days, 0)
+        running = float(total_cost)
+        for i in range(day_count + 1):
+            d = (date_start.date() + timedelta(days=i)).isoformat()
+            running += float(daily_inbound.get(d, Decimal("0")))
+            trend_data.append({"date": d, "cost": round(running, 2)})
+
         return {
-            'period': {
-                'start': date_start.isoformat(),
-                'end': date_end.isoformat(),
+            "period": {"start": date_start.isoformat(), "end": date_end.isoformat()},
+            "summary": {
+                "total_cost": float(total_cost),
+                "average_cost": float(total_cost / len(inv_by_material)) if inv_by_material else 0.0,
+                "cost_trend": "stable",
             },
-            'summary': {
-                'total_cost': 1000000.00,  # 总库存成本
-                'average_cost': 50000.00,  # 平均库存成本
-                'cost_trend': 'increasing',  # 成本趋势（increasing/decreasing/stable）
-            },
-            'by_category': [
-                {
-                    'category': '原材料',
-                    'cost': 600000.00,
-                    'percentage': 60.0,
-                },
-                {
-                    'category': '半成品',
-                    'cost': 300000.00,
-                    'percentage': 30.0,
-                },
-                {
-                    'category': '成品',
-                    'cost': 100000.00,
-                    'percentage': 10.0,
-                },
-            ],
-            'by_warehouse': [
-                {
-                    'warehouse_id': 1,
-                    'warehouse_name': '主仓库',
-                    'cost': 800000.00,
-                    'percentage': 80.0,
-                },
-                {
-                    'warehouse_id': 2,
-                    'warehouse_name': '辅仓库',
-                    'cost': 200000.00,
-                    'percentage': 20.0,
-                },
-            ],
-            'trend_data': [
-                {
-                    'date': (date_start + timedelta(days=i)).strftime('%Y-%m-%d'),
-                    'cost': 950000.00 + i * 1000,
-                }
-                for i in range((date_end - date_start).days + 1)
-            ],
+            "by_category": by_category_rows,
+            "by_warehouse": [{"warehouse_id": warehouse_id or 0, "warehouse_name": "全部", "cost": float(total_cost), "percentage": 100.0}],
+            "trend_data": trend_data,
         }

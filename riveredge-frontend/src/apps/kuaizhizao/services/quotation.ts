@@ -62,6 +62,8 @@ export interface Quotation {
   currency_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  contract_id?: number;
+  contract_code?: string;
   /** 报价系列编码（首版通常与 quotation_code 相同） */
   quotation_series_code?: string;
   root_quotation_id?: number;

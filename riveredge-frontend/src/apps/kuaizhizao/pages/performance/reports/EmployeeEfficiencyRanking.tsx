@@ -3,27 +3,26 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import ReportBase from '../../../components/ReportBase';
 import { getPerformanceReport } from '../../../services/reports';
-import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 
 const EmployeeEfficiencyRanking: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = [
-    copyableCodeColumn('工单号', 'code', 150),
-    { title: '物料名称', dataIndex: 'material_name', width: 200 },
-    { title: '实际产出', dataIndex: 'actual_quantity', valueType: 'digit', width: 100 },
-    { title: '完成日期', dataIndex: 'actual_end_date', valueType: 'date', width: 120 },
+    { title: '员工', dataIndex: 'worker_name', width: 140 },
+    { title: '总产出', dataIndex: 'total_pieces', valueType: 'digit', width: 100, align: 'right' },
+    { title: '总工时', dataIndex: 'total_hours', valueType: 'digit', width: 100, align: 'right' },
+    { title: '件/小时', dataIndex: 'pieces_per_hour', valueType: 'digit', width: 100, align: 'right' },
   ];
 
   return (
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.employee-efficiency-ranking')}
-      reportType="efficiency_ranking"
+      reportType="employee-efficiency-ranking"
       columnPersistenceId="apps.kuaizhizao.pages.performance.reports.EmployeeEfficiencyRanking"
       columns={columns}
       request={async (params: any) => {
         const res = await getPerformanceReport({
           ...params,
-          report_type: 'efficiency_ranking',
+          report_type: 'employee-efficiency-ranking',
         });
         return {
           data: res.data || [],
@@ -34,6 +33,5 @@ const EmployeeEfficiencyRanking: React.FC = () => {
     />
   );
 };
-
 
 export default EmployeeEfficiencyRanking;

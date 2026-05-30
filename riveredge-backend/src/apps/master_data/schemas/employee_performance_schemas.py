@@ -6,7 +6,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -226,5 +226,6 @@ class PerformanceDetailResponse(BaseModel):
     period: str = Field(..., description="周期（YYYY-MM）")
     summary: Optional[PerformanceSummaryResponse] = Field(None, description="汇总信息")
     items: List[PerformanceDetailItem] = Field(default_factory=list, description="报工明细列表")
+    kpi_scores: List[Dict[str, Any]] = Field(default_factory=list, description="KPI 分项得分")
 
     model_config = ConfigDict(populate_by_name=True)

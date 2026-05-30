@@ -443,10 +443,13 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             return CostCalculationResponse.model_validate(cost_calculation)
 
     async def _calculate_material_cost(self, tenant_id: int, work_order: WorkOrder) -> Decimal:
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        cost_svc = InventoryCostService()
         pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
             work_order_id=work_order.id,
-            status="已确认",
+            status__in=("已确认", "已完成"),
             deleted_at__isnull=True
         ).all()
         total_material_cost = Decimal(0)
@@ -457,10 +460,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                 deleted_at__isnull=True
             ).all()
             for item in items:
-                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
-                if material:
-                    unit_price = await self._get_standard_value(tenant_id, "material", material.id, "material_cost")
-                    total_material_cost += item.picked_quantity * unit_price
+                unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(item.material_id))
+                total_material_cost += item.picked_quantity * unit_price
         return total_material_cost
 
     async def _calculate_labor_cost(self, tenant_id: int, work_order: WorkOrder) -> Decimal:
@@ -504,12 +505,77 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return total_manufacturing_cost
 
     async def _calculate_product_material_cost(self, tenant_id: int, product: Material, quantity: Decimal) -> Decimal:
-        return Decimal(0)
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+
+        cost_svc = InventoryCostService()
+        bom_items = await get_bom_items_by_material_id(
+            tenant_id=tenant_id,
+            material_id=product.id,
+            only_approved=True,
+        )
+        if not bom_items:
+            unit = await cost_svc.get_material_unit_cost(tenant_id, product.id)
+            return unit * quantity
+
+        total = Decimal(0)
+        for bom_item in bom_items:
+            component = await bom_item.component
+            if not component:
+                continue
+            component_qty = Decimal(str(bom_item.quantity)) * quantity * (
+                Decimal(1) + Decimal(str(bom_item.waste_rate or 0)) / Decimal(100)
+            )
+            unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(component.id))
+            total += component_qty * unit_price
+        return total
 
     async def _calculate_product_labor_cost(self, tenant_id: int, product: Material, quantity: Decimal) -> Decimal:
-        standard_hours = Decimal(2.0)
-        hourly_rate = Decimal(50.00)
-        return standard_hours * quantity * hourly_rate
+        from apps.master_data.models.process import ProcessRoute
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        total_hours = Decimal("0")
+        if product.process_route_id:
+            route = await ProcessRoute.filter(
+                tenant_id=tenant_id, id=product.process_route_id, deleted_at__isnull=True
+            ).first()
+            if route and isinstance(route.operation_sequence, list):
+                for op_data in route.operation_sequence:
+                    if not isinstance(op_data, dict):
+                        continue
+                    std_time = Decimal(str(
+                        op_data.get("std_time") or op_data.get("standard_time") or 0
+                    ))
+                    total_hours += std_time
+
+        if total_hours <= 0:
+            recent_wos = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                deleted_at__isnull=True,
+            ).order_by("-updated_at").limit(20).values_list("id", flat=True)
+            if recent_wos:
+                records = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id__in=list(recent_wos),
+                    status="approved",
+                    deleted_at__isnull=True,
+                ).all()
+                total_qty = sum((Decimal(str(r.qualified_quantity or 0)) for r in records), Decimal("0"))
+                total_report_hours = sum((Decimal(str(r.work_hours or 0)) for r in records), Decimal("0"))
+                if total_qty > 0:
+                    total_hours = total_report_hours / total_qty
+
+        if total_hours <= 0:
+            total_hours = Decimal("2.0")
+
+        hourly_rate = await self._get_standard_value(
+            tenant_id, "work_center", product.id, "labor_rate"
+        )
+        if hourly_rate <= 0:
+            hourly_rate = Decimal("50.00")
+        return total_hours * quantity * hourly_rate
 
     async def _calculate_product_manufacturing_cost(self, tenant_id: int, product: Material, quantity: Decimal) -> Decimal:
         rules = await CostRule.filter(
@@ -527,12 +593,17 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return total_manufacturing_cost
 
     async def _get_material_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        pickings = await ProductionPicking.filter(tenant_id=tenant_id, work_order_id=work_order.id, status="已完成").all()
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        cost_svc = InventoryCostService()
+        pickings = await ProductionPicking.filter(
+            tenant_id=tenant_id, work_order_id=work_order.id, status__in=("已确认", "已完成")
+        ).all()
         breakdown = []
         for p in pickings:
             items = await ProductionPickingItem.filter(picking_id=p.id).all()
             for item in items:
-                unit_price = await self._get_standard_value(tenant_id, "material", item.material_id, "material_cost")
+                unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(item.material_id))
                 breakdown.append({
                     "material_code": item.material_code,
                     "material_name": item.material_name,
@@ -561,7 +632,39 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return [{"item": "工得分摊制造费用", "amount": float(await self._calculate_manufacturing_cost(tenant_id, work_order))}]
 
     async def _get_product_material_cost_breakdown(self, tenant_id: int, product: Material, quantity: Decimal) -> List[Dict[str, Any]]:
-        return []
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+
+        cost_svc = InventoryCostService()
+        bom_items = await get_bom_items_by_material_id(
+            tenant_id=tenant_id, material_id=product.id, only_approved=True
+        )
+        breakdown: List[Dict[str, Any]] = []
+        for bom_item in bom_items:
+            component = await bom_item.component
+            if not component:
+                continue
+            component_qty = Decimal(str(bom_item.quantity)) * quantity * (
+                Decimal(1) + Decimal(str(bom_item.waste_rate or 0)) / Decimal(100)
+            )
+            unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(component.id))
+            breakdown.append({
+                "material_code": component.main_code or component.code,
+                "material_name": component.name,
+                "quantity": float(component_qty),
+                "unit_price": float(unit_price),
+                "total": float(component_qty * unit_price),
+            })
+        if not breakdown:
+            unit_price = await cost_svc.get_material_unit_cost(tenant_id, product.id)
+            breakdown.append({
+                "material_code": product.main_code or product.code,
+                "material_name": product.name,
+                "quantity": float(quantity),
+                "unit_price": float(unit_price),
+                "total": float(quantity * unit_price),
+            })
+        return breakdown
 
     async def _get_product_labor_cost_breakdown(self, tenant_id: int, product: Material, quantity: Decimal) -> List[Dict[str, Any]]:
         return []

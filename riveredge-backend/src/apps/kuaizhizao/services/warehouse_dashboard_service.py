@@ -96,29 +96,32 @@ async def _inventory_statistics_core(
 async def _total_inventory_value(tenant_id: int) -> float:
     """在库批次按物料汇总数量 × defaults 单价。"""
     try:
-        batch_rows = await MaterialBatch.filter(
+        batches = await MaterialBatch.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             quantity__gt=0,
             status="in_stock",
-        ).group_by("material_id").values("material_id", total_qty=Sum("quantity"))
+        ).all()
     except Exception as e:
         logger.warning(f"warehouse-dashboard value batches: {e}")
         return 0.0
 
-    if not batch_rows:
+    if not batches:
         return 0.0
 
-    material_ids = [r["material_id"] for r in batch_rows]
+    qty_by_material: dict[int, Decimal] = {}
+    for batch in batches:
+        mid = int(batch.material_id)
+        qty_by_material[mid] = qty_by_material.get(mid, Decimal("0")) + Decimal(str(batch.quantity or 0))
+
+    material_ids = list(qty_by_material.keys())
     materials = await Material.filter(
         tenant_id=tenant_id, id__in=material_ids, deleted_at__isnull=True
     ).all()
     mid_defaults = {m.id: m.defaults for m in materials}
 
     total = Decimal("0")
-    for row in batch_rows:
-        mid = row["material_id"]
-        qty = Decimal(str(row["total_qty"] or 0))
+    for mid, qty in qty_by_material.items():
         unit = _unit_price_from_defaults(mid_defaults.get(mid))
         total += qty * unit
 

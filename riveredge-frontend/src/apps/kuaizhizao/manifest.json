@@ -52,6 +52,16 @@
             "permission": "kuaizhizao:customer-follow-up:read"
           },
           {
+            "title": "app.kuaizhizao.menu.sales-management.sales-contracts",
+            "path": "/apps/kuaizhizao/sales-management/sales-contracts",
+            "sort_order": 3,
+            "meta": {
+              "node": "sales_contract",
+              "module": "sales"
+            },
+            "permission": "kuaizhizao:sales-contract:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
             "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
             "sort_order": 4,
@@ -147,6 +157,12 @@
                 "path": "/apps/kuaizhizao/sales-management/reports/quotation-query",
                 "sort_order": 7,
                 "permission": "kuaizhizao:sales-management-reports-quotation-query:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.contract-execution",
+                "path": "/apps/kuaizhizao/sales-management/reports/contract-execution",
+                "sort_order": 8,
+                "permission": "kuaizhizao:sales-management-reports-contract-execution:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-trend-analysis",
@@ -1998,7 +2014,13 @@
     "kuaizhizao:quotation:revoke",
     "kuaizhizao:quotation:submit",
     "kuaizhizao:quotation:update",
-    "kuaizhizao:quotation:read",
+    "kuaizhizao:sales-contract:approve",
+    "kuaizhizao:sales-contract:create",
+    "kuaizhizao:sales-contract:delete",
+    "kuaizhizao:sales-contract:read",
+    "kuaizhizao:sales-contract:reject",
+    "kuaizhizao:sales-contract:submit",
+    "kuaizhizao:sales-contract:update",
     "kuaizhizao:receipt-notice:approve",
     "kuaizhizao:receipt-notice:audit",
     "kuaizhizao:receipt-notice:create",
@@ -2635,6 +2657,30 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "QUOTATION_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-sales-contract",
+      "page_name": "销售合同",
+      "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+      "code_field": "contract_code",
+      "code_field_label": "合同编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "KUAIZHIZAO_SALES_CONTRACT",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-sales-contract-change",
+      "page_name": "销售合同变更",
+      "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+      "code_field": "change_code",
+      "code_field_label": "合同变更编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "KUAIZHIZAO_SALES_CONTRACT_CHANGE",
       "allow_manual_edit": true
     },
     {

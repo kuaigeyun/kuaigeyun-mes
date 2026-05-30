@@ -28,7 +28,7 @@ import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../comp
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -2233,6 +2233,23 @@ const QuotationsPage: React.FC = () => {
     [messageApi, t]
   );
 
+  const appendEmptyQuotationItem = useCallback(() => {
+    const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+    items.push({
+      material_id: undefined,
+      material_code: '',
+      material_name: '',
+      material_spec: '',
+      material_unit: '',
+      quote_quantity: 1,
+      unit_price: undefined,
+      tax_rate: 0,
+      delivery_date: undefined,
+      notes: '',
+    });
+    formRef.current?.setFieldsValue({ items });
+  }, []);
+
   const formItemContent = (
     <>
       <Row gutter={16}>
@@ -2401,42 +2418,11 @@ const QuotationsPage: React.FC = () => {
       </Row>
       <ProFormText name="customer_name" hidden />
 
-      <div className="uni-table-detail">
-        <UniTableDetailHeader
-          title="物料明细"
-          required
-          leftExtra={(
-            <ProForm.Item
-              name="price_type"
-              initialValue="tax_exclusive"
-              noStyle
-              valuePropName="checked"
-              getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-              getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-            >
-              <Switch
-                checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
-                unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
-                onChange={handleQuotationPriceTypeToggle}
-              />
-            </ProForm.Item>
-          )}
-          onImport={() => setImportModalVisible(true)}
-          importText="导入明细"
-        />
-        <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
-          {({ getFieldValue }: any) => {
-            const priceType = getFieldValue('price_type') ?? 'tax_exclusive';
-            const showTaxColumns = priceType === 'tax_inclusive';
-            return (
-              <Form.Item
-                name="items"
-                noStyle
-                rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}
-              >
-                <Form.List name="items">
-                  {(fields, { add, remove }) => {
-                    const quotationDetailColumns = [
+      <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+        {({ getFieldValue }: any) => {
+          const priceType = getFieldValue('price_type') ?? 'tax_exclusive';
+          const showTaxColumns = priceType === 'tax_inclusive';
+          const quotationDetailColumns = [
                       {
                         title: '物料',
                         dataIndex: 'material_id',
@@ -2732,25 +2718,11 @@ const QuotationsPage: React.FC = () => {
                           </Form.Item>
                         ),
                       },
-                      {
-                        title: '操作',
-                        width: 70,
-                        fixed: 'right' as const,
-                        onHeaderCell: () => ({ className: 'quotation-fixed-op-header' }),
-                        render: (_: unknown, __: unknown, index: number) => (
-                          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                            删除
-                          </Button>
-                        ),
-                      },
                     ];
-                    const totalWidth = quotationDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
-                    return (
-                      <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                        {/* 通用表格样式（thead/fix-right/border 等）已迁移到 uni-table-detail/index.less，
-                            外层 <div className="uni-table-detail"> 即可生效；这里只保留业务专属的两条：
-                            1) 物料列让 Select 占满；2) 数字/文本输入选中态颜色。 */}
-                        <style>{`
+          return (
+            <>
+              {/* 业务专属样式：1) 物料列让 Select 占满；2) 数字/文本输入选中态颜色。 */}
+              <style>{`
                     .quotation-detail-table .quotation-material-cell .ant-form-item,
                     .quotation-detail-table .quotation-material-cell .ant-form-item-control,
                     .quotation-detail-table .quotation-material-cell .ant-form-item-control-input,
@@ -2765,68 +2737,76 @@ const QuotationsPage: React.FC = () => {
                       border-radius: 0;
                     }
                   `}</style>
-                        <div style={{ width: '100%', overflowX: 'auto' }}>
-                          <Table
-                            className="quotation-detail-table"
-                            size="small"
-                            dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                            rowKey="key"
-                            pagination={false}
-                            columns={quotationDetailColumns}
-                            scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                            style={{ width: '100%', margin: 0 }}
-                            footer={() => (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  gap: 8,
-                                  width: '100%',
-                                  flexWrap: 'wrap',
-                                  boxSizing: 'border-box',
-                                }}
-                              >
-                                <Button
-                                  type="dashed"
-                                  icon={<PlusOutlined />}
-                                  style={{ flex: 1, minWidth: 120 }}
-                                  onClick={() => {
-                                    add({
-                                      material_id: undefined,
-                                      material_code: '',
-                                      material_name: '',
-                                      material_spec: '',
-                                      material_unit: '',
-                                      quote_quantity: 1,
-                                      unit_price: undefined,
-                                      tax_rate: 0,
-                                      delivery_date: undefined,
-                                      notes: '',
-                                    });
-                                  }}
-                                >
-                                  添加明细
-                                </Button>
-                                <Button
-                                  type="default"
-                                  icon={<AppstoreAddOutlined />}
-                                  style={{ flex: 1, minWidth: 120 }}
-                                  onClick={() => setMaterialPickerOpen(true)}
-                                >
-                                  {t('app.kuaizhizao.common.materialBatchSelect')}
-                                </Button>
-                              </div>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }}
-                </Form.List>
-              </Form.Item>
-            );
-          }}
-        </Form.Item>
-      </div>
+              <UniTableDetail
+                name="items"
+                title="物料明细"
+                required
+                leftExtra={(
+                  <ProForm.Item
+                    name="price_type"
+                    initialValue="tax_exclusive"
+                    noStyle
+                    valuePropName="checked"
+                    getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
+                    getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
+                  >
+                    <Switch
+                      checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
+                      unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
+                      onChange={handleQuotationPriceTypeToggle}
+                    />
+                  </ProForm.Item>
+                )}
+                headerExtra={(
+                  <Space size={8}>
+                    <Button
+                      type="default"
+                      icon={<ImportOutlined />}
+                      onClick={() => setImportModalVisible(true)}
+                    >
+                      导入明细
+                    </Button>
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={appendEmptyQuotationItem}
+                    >
+                      添加明细
+                    </Button>
+                    <Button
+                      type="default"
+                      icon={<AppstoreAddOutlined />}
+                      onClick={() => setMaterialPickerOpen(true)}
+                    >
+                      {t('app.kuaizhizao.common.materialBatchSelect')}
+                    </Button>
+                  </Space>
+                )}
+                requiredMessage="请至少添加一条明细"
+                columns={quotationDetailColumns}
+                disabledAdd
+                initialValue={{
+                  material_id: undefined,
+                  material_code: '',
+                  material_name: '',
+                  material_spec: '',
+                  material_unit: '',
+                  quote_quantity: 1,
+                  unit_price: undefined,
+                  tax_rate: 0,
+                  delivery_date: undefined,
+                  notes: '',
+                }}
+                tableProps={{
+                  className: 'quotation-detail-table',
+                  size: 'small',
+                  style: { width: '100%', margin: 0 },
+                }}
+              />
+            </>
+          );
+        }}
+      </Form.Item>
       <QuotationFormSummary />
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <UniMaterialBatchPicker
@@ -3311,7 +3291,7 @@ const QuotationsPage: React.FC = () => {
         }}
         isEdit={editingId != null}
         formRef={formRef}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         layout="vertical"
         extraFooter={
           editingId == null ? (

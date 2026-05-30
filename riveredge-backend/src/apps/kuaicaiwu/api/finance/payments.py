@@ -85,6 +85,8 @@ async def create_payment(
         payment_date=data.payment_date,
         payment_method=data.payment_method,
         bank_account=data.bank_account,
+        bank_account_id=data.bank_account_id,
+        settlement_type=data.settlement_type or "normal",
         status="Draft",
         notes=data.notes,
         created_by=current_user.id,
@@ -99,6 +101,7 @@ async def list_payments(
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
     unsettled_only: bool = Query(False, description="仅返回有余额的付款单（unsettled_amount > 0）"),
+    settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     _auth: object = Depends(
@@ -118,6 +121,8 @@ async def list_payments(
         query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if supplier_id:
         query = query.filter(supplier_id=supplier_id)
+    if settlement_type:
+        query = query.filter(settlement_type=settlement_type)
     if start_date:
         query = query.filter(payment_date__gte=start_date)
     if end_date:
@@ -188,6 +193,16 @@ async def confirm_payment(
     payment = await _get_or_404(tenant_id, id)
     if payment.status != "Draft":
         raise _http_exception_with_trace(400, "只有草稿状态的付款单可以确认", "/payments/{id}/confirm", tenant_id)
+    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+    from infra.exceptions.exceptions import ValidationError
+
+    if payment.bank_account_id:
+        try:
+            await BankAccountService().sync_from_confirmed_voucher(
+                tenant_id, voucher_type="payment", voucher_id=id
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail={"message": str(exc)})
     await Payment.filter(id=id).update(status="Confirmed")
     return _serialize(await _get_or_404(tenant_id, id))
 

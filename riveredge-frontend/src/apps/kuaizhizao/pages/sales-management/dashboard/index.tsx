@@ -35,6 +35,7 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
+import salesContractApi from '../../../services/sales-contract';
 import { AmountDisplay } from '../../../../../components/permission';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useThemeStore } from '../../../../../stores/themeStore';
@@ -175,6 +176,22 @@ const SalesDashboard: React.FC = () => {
     try {
       const res = await customerFollowUpApi.list({ pending_only: true, limit: 5 });
       return res?.items || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const { data: contractAlerts = [], loading: contractAlertsLoading } = useRequest(async () => {
+    try {
+      return await salesContractApi.listAlerts();
+    } catch {
+      return [];
+    }
+  });
+
+  const { data: frameworkContracts = [], loading: frameworkLoading } = useRequest(async () => {
+    try {
+      return await salesContractApi.executionSummary();
     } catch {
       return [];
     }
@@ -834,6 +851,118 @@ const SalesDashboard: React.FC = () => {
                   )
                 )}
               </div>
+            </ProCard>
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} lg={12}>
+            <ProCard
+              title="合同预警"
+              headerBordered
+              extra={
+                <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
+                  查看全部
+                </Button>
+              }
+              style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
+            >
+              {contractAlertsLoading ? (
+                <Spin />
+              ) : contractAlerts.length === 0 ? (
+                <Empty description="暂无合同预警" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              ) : (
+                contractAlerts.slice(0, 6).map((item) => (
+                  <div
+                    key={`${item.alert_type}-${item.contract_id}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                        state: { openContractId: item.contract_id },
+                      })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                          state: { openContractId: item.contract_id },
+                        });
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 0',
+                      borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <Text strong>{item.contract_code}</Text>
+                      <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{item.customer_name}</div>
+                      <Text type={item.severity === 'high' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+                        {item.message}
+                      </Text>
+                    </div>
+                    <Tag color={item.severity === 'high' ? 'error' : 'warning'}>
+                      {item.alert_type === 'expiry' ? '到期' : item.alert_type === 'low_balance' ? '余量' : '里程碑'}
+                    </Tag>
+                  </div>
+                ))
+              )}
+            </ProCard>
+          </Col>
+          <Col xs={24} lg={12}>
+            <ProCard
+              title="框架合同执行"
+              headerBordered
+              style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
+            >
+              {frameworkLoading ? (
+                <Spin />
+              ) : frameworkContracts.length === 0 ? (
+                <Empty description="暂无执行中的框架合同" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              ) : (
+                frameworkContracts.slice(0, 6).map((item) => {
+                  const pct =
+                    Number(item.total_amount) > 0
+                      ? Math.round((Number(item.released_amount) / Number(item.total_amount)) * 100)
+                      : 0;
+                  return (
+                    <div
+                      key={item.contract_id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                          state: { openContractId: item.contract_id },
+                        })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                            state: { openContractId: item.contract_id },
+                          });
+                        }
+                      }}
+                      style={{ marginBottom: 12, cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text strong ellipsis>{item.contract_code}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          剩余 ¥{Number(item.remaining_amount).toLocaleString()}
+                        </Text>
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {item.customer_name}
+                        {item.valid_to ? ` · 至 ${item.valid_to}` : ''}
+                      </Text>
+                      <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
+                    </div>
+                  );
+                })
+              )}
             </ProCard>
           </Col>
         </Row>

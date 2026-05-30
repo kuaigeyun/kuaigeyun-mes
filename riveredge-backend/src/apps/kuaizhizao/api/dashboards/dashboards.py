@@ -3059,7 +3059,7 @@ async def get_performance_summary(
 
     pending = await PerformanceSummary.filter(
         tenant_id=tenant_id,
-        status__in=["draft", "calculated", "草稿", "已计算"],
+        status="calculated",
         deleted_at__isnull=True,
     ).count()
     confirmed = await PerformanceSummary.filter(

@@ -41,9 +41,14 @@ const MonthlySettlementPage = lazy(() => import('./pages/cost-management/monthly
 // 管理报表
 const FinanceCenterDashboard = lazy(() => import('./pages/finance-management/dashboard'));
 const ManagementDashboard = lazy(() => import('./pages/management-dashboard'));
+const MarginReportPage = lazy(() => import('./pages/management-analysis/margin-report'));
 const SettlementPage = lazy(() => import('./pages/finance-management/settlement'));
 const PartnerStatementsPage = lazy(() => import('./pages/finance-management/partner-statements'));
 const PartnerStatementDetailPage = lazy(() => import('./pages/finance-management/partner-statements/detail'));
+const DocumentReconciliationPage = lazy(() => import('./pages/finance-management/document-reconciliation'));
+const BankAccountsPage = lazy(() => import('./pages/finance-management/bank-accounts'));
+const PrepaymentsPage = lazy(() => import('./pages/finance-management/prepayments'));
+const StandardCostsPage = lazy(() => import('./pages/cost-management/standard-costs'));
 
 const KuaicaiwuApp: React.FC = () => {
   return (
@@ -65,6 +70,13 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
       <Route path="finance-management/partner-statements" element={withPageSuspense(PartnerStatementsPage)} />
       <Route path="finance-management/partner-statements/:id" element={withPageSuspense(PartnerStatementDetailPage)} />
+      <Route
+        path="finance-management/aging-analysis"
+        element={<Navigate to="/apps/kuaicaiwu/finance-management/dashboard" replace />}
+      />
+      <Route path="finance-management/document-reconciliation" element={withPageSuspense(DocumentReconciliationPage)} />
+      <Route path="finance-management/bank-accounts" element={withPageSuspense(BankAccountsPage)} />
+      <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
@@ -90,7 +102,9 @@ const KuaicaiwuApp: React.FC = () => {
         element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=quality" replace />}
       />
       <Route path="cost-management/monthly-settlement" element={withPageSuspense(MonthlySettlementPage)} />
+      <Route path="cost-management/standard-costs" element={withPageSuspense(StandardCostsPage)} />
       <Route path="management-dashboard" element={withPageSuspense(ManagementDashboard)} />
+      <Route path="management-analysis/margin-report" element={withPageSuspense(MarginReportPage)} />
 
       {/* 默认路由 */}
       <Route path="" element={

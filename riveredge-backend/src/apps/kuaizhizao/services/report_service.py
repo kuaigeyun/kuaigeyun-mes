@@ -370,6 +370,16 @@ class ReportService:
                 skip=skip,
                 limit=limit,
             )
+        elif report_type in ["contract-execution", "sales-contract-execution", "contract_execution"]:
+            return await self._get_sales_contract_execution(
+                tenant_id,
+                date_start,
+                date_end,
+                customer_id,
+                skip=skip,
+                limit=limit,
+                customer_keyword=customer_keyword,
+            )
         elif report_type in ["sales-trend-analysis", "trend", "sales_trend_analysis"]:
             from apps.kuaizhizao.models.sales_order import SalesOrder
             so_q = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -919,6 +929,100 @@ class ReportService:
             "salesman_name",
         )
         return {"data": items, "success": True, "total": total}
+
+    async def _get_sales_contract_execution(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        customer_id: Optional[int],
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        customer_keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """销售合同执行率与框架释放明细报表。"""
+        from apps.kuaizhizao.models.sales_contract import SalesContract
+        from apps.kuaizhizao.models.sales_contract_milestone import SalesContractMilestone
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+
+        query = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if date_start:
+            query = query.filter(contract_date__gte=date_start.date())
+        if date_end:
+            query = query.filter(contract_date__lte=date_end.date())
+        if customer_id:
+            query = query.filter(customer_id=customer_id)
+        if customer_keyword and str(customer_keyword).strip():
+            query = query.filter(customer_name__icontains=str(customer_keyword).strip())
+
+        total = await query.count()
+        lim = max(1, min(int(limit or 100), 500))
+        sk = max(0, int(skip or 0))
+        contracts = await query.order_by("-contract_date").offset(sk).limit(lim)
+
+        contract_ids = [c.id for c in contracts]
+        release_counts: Dict[int, int] = {}
+        payment_rates: Dict[int, float] = {}
+        if contract_ids:
+            orders = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                contract_id__in=contract_ids,
+                deleted_at__isnull=True,
+                is_release_order=True,
+            ).values("contract_id")
+            for row in orders:
+                cid = row.get("contract_id")
+                if cid:
+                    release_counts[int(cid)] = release_counts.get(int(cid), 0) + 1
+
+            milestones = await SalesContractMilestone.filter(
+                tenant_id=tenant_id, contract_id__in=contract_ids
+            ).values("contract_id", "planned_amount", "status")
+            planned_by_contract: Dict[int, Decimal] = {}
+            collected_by_contract: Dict[int, Decimal] = {}
+            for m in milestones:
+                cid = int(m["contract_id"])
+                amt = Decimal(str(m.get("planned_amount") or 0))
+                planned_by_contract[cid] = planned_by_contract.get(cid, Decimal("0")) + amt
+                if (m.get("status") or "") == "collected":
+                    collected_by_contract[cid] = collected_by_contract.get(cid, Decimal("0")) + amt
+            for cid, planned in planned_by_contract.items():
+                collected = collected_by_contract.get(cid, Decimal("0"))
+                payment_rates[cid] = float(collected / planned * 100) if planned > 0 else 0.0
+
+        items = []
+        for c in contracts:
+            total_amt = Decimal(str(c.total_amount or 0))
+            released_amt = Decimal(str(c.released_amount or 0))
+            execution_rate = float(released_amt / total_amt * 100) if total_amt > 0 else 0.0
+            remaining_amt = max(Decimal("0"), total_amt - released_amt)
+            items.append(
+                {
+                    "contract_code": c.contract_code,
+                    "contract_type": c.contract_type,
+                    "customer_name": c.customer_name,
+                    "contract_date": c.contract_date.isoformat() if c.contract_date else None,
+                    "valid_to": c.valid_to.isoformat() if c.valid_to else None,
+                    "status": c.status,
+                    "total_amount": float(total_amt),
+                    "released_amount": float(released_amt),
+                    "remaining_amount": float(remaining_amt),
+                    "execution_rate": round(execution_rate, 2),
+                    "payment_collection_rate": round(payment_rates.get(c.id, 0.0), 2),
+                    "release_order_count": release_counts.get(c.id, 0),
+                }
+            )
+
+        summary_rate = (
+            round(sum(it["execution_rate"] for it in items) / len(items), 2) if items else 0.0
+        )
+        return {
+            "data": items,
+            "success": True,
+            "total": total,
+            "summary": {"avg_execution_rate": summary_rate},
+        }
 
     async def _load_inventory_rows(
         self,
@@ -1856,16 +1960,87 @@ class ReportService:
 
     async def get_performance_report(self, tenant_id: int, report_type: str = "employee-efficiency-ranking", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
         """绩效报表汇总"""
-        from apps.kuaizhizao.models.work_order_reporting import WorkOrderReporting
-        from tortoise.functions import Sum
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.master_data.models.employee_performance import PerformanceSummary
+        from decimal import Decimal as D
 
-        if report_type == "employee-efficiency-ranking":
-            # 员工生产效率排行
-            stats = await WorkOrderReporting.filter(tenant_id=tenant_id, status="已审核").annotate(total_qty=Sum("qualified_quantity")).group_by("worker_name").order_by("-total_qty").values("worker_name", "total_qty")
+        normalized = (report_type or "").strip().lower().replace("_", "-")
+        alias_map = {
+            "efficiency-ranking": "employee-efficiency-ranking",
+            "employee-efficiency-ranking": "employee-efficiency-ranking",
+            "piece-rate": "piece-rate-salary-summary",
+            "piece-rate-salary-summary": "piece-rate-salary-summary",
+        }
+        normalized = alias_map.get(normalized, normalized)
+
+        if normalized == "employee-efficiency-ranking":
+            query = ReportingRecord.filter(
+                tenant_id=tenant_id,
+                status="approved",
+                deleted_at__isnull=True,
+            )
+            if date_start:
+                query = query.filter(reported_at__gte=date_start)
+            if date_end:
+                query = query.filter(reported_at__lte=date_end)
+            records = await query.all()
+            agg: Dict[int, Dict[str, Any]] = {}
+            for r in records:
+                wid = r.worker_id
+                if wid not in agg:
+                    agg[wid] = {
+                        "worker_id": wid,
+                        "worker_name": r.worker_name or str(wid),
+                        "total_pieces": D("0"),
+                        "total_hours": D("0"),
+                    }
+                agg[wid]["total_pieces"] += r.qualified_quantity or D("0")
+                agg[wid]["total_hours"] += r.work_hours or D("0")
+            stats = []
+            for row in agg.values():
+                hours = row["total_hours"]
+                pieces = row["total_pieces"]
+                pph = float(pieces / hours) if hours > 0 else 0.0
+                stats.append({
+                    "worker_name": row["worker_name"],
+                    "total_pieces": float(pieces),
+                    "total_hours": float(hours),
+                    "pieces_per_hour": round(pph, 4),
+                })
+            stats.sort(key=lambda x: x["pieces_per_hour"], reverse=True)
             return {"data": stats, "success": True}
-        elif report_type == "piece-rate-salary-summary":
-            # 计件工资汇总表
-            stats = await WorkOrderReporting.filter(tenant_id=tenant_id, status="已审核").annotate(total_pay=Sum("qualified_quantity")).group_by("worker_name").values("worker_name", "total_pay")
-            for s in stats: s["total_pay"] = float(s["total_pay"]) * 0.5  # 简化：每件0.5元
+
+        if normalized == "piece-rate-salary-summary":
+            query = PerformanceSummary.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if date_start:
+                period_start = date_start.strftime("%Y-%m")
+                query = query.filter(period__gte=period_start)
+            if date_end:
+                period_end = date_end.strftime("%Y-%m")
+                query = query.filter(period__lte=period_end)
+            summaries = await query.order_by("-period", "employee_name").all()
+            preferred: Dict[tuple, PerformanceSummary] = {}
+            status_rank = {"confirmed": 2, "calculated": 1, "draft": 0}
+            for s in summaries:
+                key = (s.employee_id, s.period)
+                existing = preferred.get(key)
+                if not existing or status_rank.get(s.status or "", 0) > status_rank.get(existing.status or "", 0):
+                    preferred[key] = s
+            stats = [
+                {
+                    "employee_name": s.employee_name,
+                    "period": s.period,
+                    "total_hours": float(s.total_hours or 0),
+                    "total_pieces": float(s.total_pieces or 0),
+                    "time_amount": float(s.time_amount or 0),
+                    "piece_amount": float(s.piece_amount or 0),
+                    "kpi_coefficient": float(s.kpi_coefficient or 1),
+                    "total_amount": float(s.total_amount or 0),
+                    "status": s.status,
+                }
+                for s in preferred.values()
+            ]
+            stats.sort(key=lambda x: x["total_amount"], reverse=True)
             return {"data": stats, "success": True}
+
         return {"data": [], "success": True}

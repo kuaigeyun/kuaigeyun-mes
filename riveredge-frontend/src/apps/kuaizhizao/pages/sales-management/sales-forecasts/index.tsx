@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -28,7 +28,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail'
+import { UniTableDetail } from '../../../../../components/uni-table-detail'
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 )
@@ -1309,25 +1309,48 @@ export default function SalesForecastsPage() {
           </Col>
         </Row>
 
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <UniTableDetailHeader
-            title={t('app.kuaizhizao.salesForecast.forecastItems')}
-            required
-            onImport={() => setImportModalVisible(true)}
-            importText="导入明细"
-            actions={[
-              {
-                key: 'matrix-entry',
-                label: '矩阵录入',
-                icon: <AppstoreAddOutlined />,
-                onClick: openMatrixEntry,
-              },
-            ]}
-          />
-          <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesForecast.itemsRequired') }]}>
-            <AntForm.List name="items">
-              {(fields, { add, remove }) => {
-                const forecastItemColumns = [
+        <UniTableDetail
+          name="items"
+          title={t('app.kuaizhizao.salesForecast.forecastItems')}
+          required
+          requiredMessage={t('app.kuaizhizao.salesForecast.itemsRequired')}
+          headerExtra={(
+            <Space size={8}>
+              <Button
+                type="default"
+                icon={<ImportOutlined />}
+                onClick={() => setImportModalVisible(true)}
+              >
+                导入明细
+              </Button>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const items = [...(formRef.current?.getFieldValue('items') ?? [])]
+                  items.push({ ...defaultForecastItem })
+                  formRef.current?.setFieldsValue({ items })
+                }}
+              >
+                添加明细
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMaterialPickerOpen(true)}
+              >
+                {t('app.kuaizhizao.common.materialBatchSelect')}
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={openMatrixEntry}
+              >
+                矩阵录入
+              </Button>
+            </Space>
+          )}
+          columns={[
                   {
                     title: t('app.kuaizhizao.salesForecast.material'),
                     dataIndex: 'material_id',
@@ -1370,6 +1393,7 @@ export default function SalesForecastsPage() {
                     title: t('app.kuaizhizao.salesForecast.forecastQuantity'),
                     dataIndex: 'forecast_quantity',
                     width: 100,
+                    align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         name={[index, 'forecast_quantity']}
@@ -1403,64 +1427,15 @@ export default function SalesForecastsPage() {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('common.actions'),
-                    width: 70,
-                    fixed: 'right' as const,
-                    render: (_: any, __: any, index: number) => (
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                        {t('common.delete')}
-                      </Button>
-                    ),
-                  },
-                ];
-                return (
-                  <div style={{ width: '100%' }}>
-                    <style>{`
-                      .forecast-detail-table .ant-table-thead > tr > th {
-                        background-color: var(--ant-color-fill-alter) !important;
-                        font-weight: 600;
-                      }
-                      .forecast-detail-table .ant-form-item-explain,
-                      .forecast-detail-table .ant-form-item-explain-error {
-                        display: none !important;
-                      }
-                    `}</style>
-                    <Table
-                      className="forecast-detail-table"
-                      size="small"
-                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                      rowKey="key"
-                      pagination={false}
-                      columns={forecastItemColumns}
-                      footer={() => (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => add(defaultForecastItem)}
-                          >
-                            添加明细
-                          </Button>
-                          <Button
-                            type="default"
-                            icon={<AppstoreAddOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => setMaterialPickerOpen(true)}
-                          >
-                            {t('app.kuaizhizao.common.materialBatchSelect')}
-                          </Button>
-                        </div>
-                      )}
-                    />
-                  </div>
-                );
-              }}
-            </AntForm.List>
-          </ProForm.Item>
-          <SalesForecastFormSummary />
-        </div>
+                ]}
+          disabledAdd
+          initialValue={{ ...defaultForecastItem }}
+          tableProps={{
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+          }}
+        />
+        <SalesForecastFormSummary />
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder="-" />
       </FormModalTemplate>
 

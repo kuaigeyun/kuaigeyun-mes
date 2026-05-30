@@ -13,18 +13,18 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, MoreOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -648,6 +648,7 @@ const SalesReturnsPage: React.FC = () => {
         }}
         onFinish={onFinish}
         formRef={formRef}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <Row gutter={16}>
           <Col span={8}>
@@ -726,33 +727,53 @@ const SalesReturnsPage: React.FC = () => {
           </Col>
         </Row>
 
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <UniTableDetailHeader
-            title="退货明细"
-            onImport={() => setImportModalVisible(true)}
-            importText="导入明细"
-          />
-          <ProForm.Item name="items" noStyle rules={[{ required: true, message: '请添加至少一项明细' }]}>
-            <AntForm.List name="items">
-              {(fields, { add, remove }) => (
-                <Table
-                  size="small"
-                  dataSource={fields}
-                  pagination={false}
-                  rowKey="key"
-                  columns={[
+        <UniTableDetail
+          name="items"
+          title="退货明细"
+          required
+          requiredMessage="请添加至少一项明细"
+          headerExtra={(
+            <Space size={8}>
+              <Button
+                type="default"
+                icon={<ImportOutlined />}
+                onClick={() => setImportModalVisible(true)}
+              >
+                导入明细
+              </Button>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                  items.push({ return_quantity: 1, unit_price: 0 });
+                  formRef.current?.setFieldsValue({ items });
+                }}
+              >
+                添加明细
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMaterialPickerOpen(true)}
+              >
+                {t('app.kuaizhizao.common.materialBatchSelect')}
+              </Button>
+            </Space>
+          )}
+          columns={[
                     {
                       title: '物料',
                       dataIndex: 'material_id',
                       width: 260,
-                      render: (_, field) => (
+                      render: (_: unknown, __: unknown, index: number) => (
                         <UniMaterialSelect
-                          name={[field.name, 'material_id']}
+                          name={[index, 'material_id']}
                           label=""
                           placeholder="选择物料"
                           required
                           size="small"
-                          listFieldKey={field.name}
+                          listFieldKey={index}
                           listFieldName="items"
                           fillMapping={{
                             material_code: 'mainCode',
@@ -768,8 +789,9 @@ const SalesReturnsPage: React.FC = () => {
                       title: '退货数量',
                       dataIndex: 'return_quantity',
                       width: 120,
-                      render: (_, field) => (
-                        <AntForm.Item name={[field.name, 'return_quantity']} noStyle>
+                      align: 'right' as const,
+                      render: (_: unknown, __: unknown, index: number) => (
+                        <AntForm.Item name={[index, 'return_quantity']} noStyle>
                           <InputNumber size="small" style={{ width: '100%' }} min={1} />
                         </AntForm.Item>
                       ),
@@ -778,45 +800,21 @@ const SalesReturnsPage: React.FC = () => {
                       title: '单价',
                       dataIndex: 'unit_price',
                       width: 120,
-                      render: (_, field) => (
-                        <AntForm.Item name={[field.name, 'unit_price']} noStyle>
+                      align: 'right' as const,
+                      render: (_: unknown, __: unknown, index: number) => (
+                        <AntForm.Item name={[index, 'unit_price']} noStyle>
                           <InputNumber size="small" style={{ width: '100%' }} min={0} prefix="¥" />
                         </AntForm.Item>
                       ),
                     },
-                    {
-                      title: '操作',
-                      width: 60,
-                      render: (_, field) => (
-                        <Button type="link" danger onClick={() => remove(field.name)}>删除</Button>
-                      ),
-                    },
                   ]}
-                  footer={() => (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        style={{ flex: 1, minWidth: 120 }}
-                        onClick={() => add({ return_quantity: 1, unit_price: 0 })}
-                      >
-                        添加明细
-                      </Button>
-                      <Button
-                        type="default"
-                        icon={<AppstoreAddOutlined />}
-                        style={{ flex: 1, minWidth: 120 }}
-                        onClick={() => setMaterialPickerOpen(true)}
-                      >
-                        {t('app.kuaizhizao.common.materialBatchSelect')}
-                      </Button>
-                    </div>
-                  )}
-                />
-              )}
-            </AntForm.List>
-          </ProForm.Item>
-        </div>
+          disabledAdd
+          initialValue={{ return_quantity: 1, unit_price: 0 }}
+          tableProps={{
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+          }}
+        />
 
         <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
       </FormModalTemplate>

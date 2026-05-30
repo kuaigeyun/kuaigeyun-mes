@@ -225,6 +225,8 @@ class PaymentVoucherBase(BaseSchema):
     payment_date: date = Field(..., description="付款日期")
     payment_method: str = Field(..., max_length=50, description="付款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="出款账号")
+    bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -238,6 +240,8 @@ class PaymentVoucherUpdate(BaseSchema):
     payment_date: Optional[date] = None
     payment_method: Optional[str] = Field(None, max_length=50)
     bank_account: Optional[str] = Field(None, max_length=100)
+    bank_account_id: Optional[int] = None
+    settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
 
 
@@ -274,6 +278,8 @@ class ReceiptVoucherBase(BaseSchema):
     receipt_date: date = Field(..., description="收款日期")
     payment_method: str = Field(..., max_length=50, description="收款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
+    bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -287,6 +293,8 @@ class ReceiptVoucherUpdate(BaseSchema):
     receipt_date: Optional[date] = None
     payment_method: Optional[str] = Field(None, max_length=50)
     bank_account: Optional[str] = Field(None, max_length=100)
+    bank_account_id: Optional[int] = None
+    settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
 
 

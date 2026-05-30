@@ -121,6 +121,9 @@ class SalesOrderBase(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    contract_id: Optional[int] = Field(None, description="关联销售合同ID")
+    contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
+    is_release_order: bool = Field(False, description="是否为框架合同释放单")
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY）")
     
     notes: Optional[str] = Field(None, description="备注")

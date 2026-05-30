@@ -1659,6 +1659,71 @@ def get_quotation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
+# 销售合同生命周期（草稿→待审核→已生效→执行中→已关闭/已到期）
+# ---------------------------------------------------------------------------
+SALES_CONTRACT_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "effective", "label": "已生效"},
+    {"key": "executing", "label": "执行中"},
+    {"key": "closed", "label": "已关闭"},
+]
+
+
+def get_sales_contract_lifecycle(
+    contract: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """销售合同生命周期。"""
+    status = _norm(getattr(contract, "status", None))
+    review_status = _norm(getattr(contract, "review_status", None))
+    milestones = milestones or []
+
+    def _ret(
+        key: str,
+        stage_name: str,
+        st: str = "normal",
+        suggestions: Optional[List[str]] = None,
+        exc: bool = False,
+    ) -> Dict[str, Any]:
+        return {
+            "current_stage_key": key,
+            "current_stage_name": stage_name,
+            "status": st,
+            "main_stages": _build_main_stages(SALES_CONTRACT_MAIN_STAGES, key, is_exception=exc),
+            "sub_stages": None,
+            "next_step_suggestions": suggestions or [],
+            "milestones": milestones,
+        }
+
+    if status in ("已拒绝", "rejected") or _is_rejected(review_status):
+        return _ret("draft", "已驳回", "warning", ["修改后重新提交"], exc=True)
+
+    if status in ("草稿", "draft"):
+        return _ret("draft", "草稿", "normal", ["提交审核"])
+
+    if status in ("待审核", "pending_review"):
+        if _quotation_review_pending(review_status) or review_status in ("", "pending", "待审核"):
+            return _ret("pending_review", "待审核", "normal", ["审核通过", "审核驳回"])
+        if _is_approved(review_status):
+            return _ret("effective", "已生效", "success", ["下推销售订单"])
+
+    if status in ("已生效", "effective"):
+        return _ret("effective", "已生效", "success", ["下推销售订单"])
+
+    if status in ("执行中", "executing"):
+        return _ret("executing", "执行中", "success", ["下推释放订单", "发起合同变更"])
+
+    if status in ("已关闭", "closed"):
+        return _ret("closed", "已关闭", "normal", [])
+
+    if status in ("已到期", "expired"):
+        return _ret("closed", "已到期", "warning", ["续签或关闭合同"], exc=True)
+
+    return _ret("draft", status or "草稿", "normal", [])
+
+
+# ---------------------------------------------------------------------------
 # 入库单生命周期（草稿→已确认/待退料→已退料/已完成）
 # ---------------------------------------------------------------------------
 INBOUND_MAIN_STAGES = [

@@ -53,6 +53,7 @@ const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purch
 const SalesDashboardPage = lazy(() => import('./pages/sales-management/dashboard'));
 const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
 const QuotationsPage = lazy(() => import('./pages/sales-management/quotations'));
+const SalesContractsPage = lazy(() => import('./pages/sales-management/sales-contracts'));
 const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders'));
 const SalesOrderChangesPage = lazy(() => import('./pages/sales-management/sales-order-changes'));
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
@@ -162,6 +163,7 @@ const QuotationQueryPage = lazy(() => import('./pages/sales-management/reports/Q
 const SalesTrendAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesTrendAnalysis'));
 const SalesReturnAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesReturnAnalysis'));
 const SalespersonPerformancePage = lazy(() => import('./pages/sales-management/reports/SalespersonPerformance'));
+const ContractExecutionReportPage = lazy(() => import('./pages/sales-management/reports/contract-execution'));
 
 // 计划管理报表
 const DemandPlanDetailPage = lazy(() => import('./pages/plan-management/reports/DemandPlanDetail'));
@@ -271,6 +273,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/dashboard" element={withPageSuspense(SalesDashboardPage)} />
       <Route path="sales-management/sales-forecasts" element={withPageSuspense(SalesForecastsPage)} />
       <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
+      <Route path="sales-management/sales-contracts" element={withPageSuspense(SalesContractsPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-order-changes" element={withPageSuspense(SalesOrderChangesPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
@@ -365,6 +368,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/reports/sales-trend-analysis" element={withPageSuspense(SalesTrendAnalysisPage)} />
       <Route path="sales-management/reports/sales-return-analysis" element={withPageSuspense(SalesReturnAnalysisPage)} />
       <Route path="sales-management/reports/salesperson-performance" element={withPageSuspense(SalespersonPerformancePage)} />
+      <Route path="sales-management/reports/contract-execution" element={withPageSuspense(ContractExecutionReportPage)} />
 
       {/* 计划管理报表 */}
       <Route path="plan-management/reports/demand-plan-detail" element={withPageSuspense(DemandPlanDetailPage)} />

@@ -27,6 +27,7 @@ class FinishedGoodsReceiptItem(BaseModel):
 
     # 入库数量
     receipt_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="入库数量")
+    unit_cost = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="入库单位成本")
     qualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="不合格数量")
 

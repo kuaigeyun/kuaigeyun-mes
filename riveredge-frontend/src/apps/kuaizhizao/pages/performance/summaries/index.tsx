@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table, Spin, Empty, theme as AntdTheme } from 'antd';
-import { CalculatorOutlined, EyeOutlined } from '@ant-design/icons';
+import { CalculatorOutlined, EyeOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -74,6 +74,54 @@ const SummariesPage: React.FC = () => {
     }
   };
 
+  const handleConfirm = async (record: PerformanceSummary) => {
+    try {
+      await employeePerformanceApi.confirmSummary(record.id);
+      messageApi.success('已确认');
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '确认失败');
+    }
+  };
+
+  const handleReopen = async (record: PerformanceSummary) => {
+    try {
+      await employeePerformanceApi.reopenSummary(record.id);
+      messageApi.success('已退回重算');
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '退回失败');
+    }
+  };
+
+  const handleBatchConfirm = async () => {
+    try {
+      setCalcLoading(true);
+      const res = await employeePerformanceApi.batchConfirm(period);
+      messageApi.success(`已确认 ${res.confirmed_count} 条，跳过 ${res.skipped_count} 条`);
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '批量确认失败');
+    } finally {
+      setCalcLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const { csv } = await employeePerformanceApi.exportSummaries(period, 'confirmed');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `performance-${period}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      messageApi.error(e?.message || '导出失败');
+    }
+  };
+
   const handleViewDetail = async (record: PerformanceSummary) => {
     try {
       setSummaryTrackingId(record.id);
@@ -98,6 +146,8 @@ const SummariesPage: React.FC = () => {
     { title: '总工时', dataIndex: ['summary', 'total_hours'], render: (_, r) => r?.summary?.total_hours ?? '-' },
     { title: '总件数', dataIndex: ['summary', 'total_pieces'], render: (_, r) => r?.summary?.total_pieces ?? '-' },
     { title: '应发金额', dataIndex: ['summary', 'total_amount'], render: (_, r) => r?.summary?.total_amount ?? '-' },
+    { title: 'KPI综合分', dataIndex: ['summary', 'kpi_score'], render: (_, r) => r?.summary?.kpi_score ?? '-' },
+    { title: '绩效系数', dataIndex: ['summary', 'kpi_coefficient'], render: (_, r) => r?.summary?.kpi_coefficient ?? '-' },
   ];
 
   const columns: ProColumns<PerformanceSummary>[] = [
@@ -118,6 +168,8 @@ const SummariesPage: React.FC = () => {
     { title: '计时金额', dataIndex: 'time_amount', width: 110, align: 'right' },
     { title: '计件金额', dataIndex: 'piece_amount', width: 110, align: 'right' },
     { title: '应发总额', dataIndex: 'total_amount', width: 110, align: 'right' },
+    { title: 'KPI综合分', dataIndex: 'kpi_score', width: 100, align: 'right' },
+    { title: '绩效系数', dataIndex: 'kpi_coefficient', width: 90, align: 'right' },
     {
       title: '状态',
       dataIndex: 'status',
@@ -125,6 +177,7 @@ const SummariesPage: React.FC = () => {
       valueEnum: {
         pending: { text: '待计算' },
         calculated: { text: '已计算' },
+        confirmed: { text: '已确认' },
         draft: { text: '草稿' },
       },
     },
@@ -158,12 +211,24 @@ const SummariesPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 100,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-          明细
-        </Button>
+        <Space size={0}>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+            明细
+          </Button>
+          {record.status === 'calculated' ? (
+            <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+              确认
+            </Button>
+          ) : null}
+          {record.status === 'confirmed' ? (
+            <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleReopen(record)}>
+              退回
+            </Button>
+          ) : null}
+        </Space>
       ),
     },
   ];
@@ -221,6 +286,12 @@ const SummariesPage: React.FC = () => {
               />
               <Button type="primary" icon={<CalculatorOutlined />} loading={calcLoading} onClick={handleCalculate}>
                 计算绩效
+              </Button>
+              <Button icon={<CheckOutlined />} loading={calcLoading} onClick={handleBatchConfirm}>
+                批量确认
+              </Button>
+              <Button icon={<DownloadOutlined />} onClick={handleExport}>
+                导出已确认
               </Button>
             </Space>,
           ]}
@@ -280,6 +351,20 @@ const SummariesPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
+              {detail.kpi_scores && detail.kpi_scores.length > 0 ? (
+                <DetailDrawerSection title="KPI 分项得分">
+                  <Table
+                    size="small"
+                    rowKey="kpi_code"
+                    pagination={false}
+                    dataSource={detail.kpi_scores}
+                    columns={[
+                      { title: '指标', dataIndex: 'kpi_code', width: 120 },
+                      { title: '得分', dataIndex: 'score', width: 80, align: 'right' },
+                    ]}
+                  />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title="报工明细">
                 {detail.items && detail.items.length > 0 ? (
                   <Table<PerformanceDetailItem>

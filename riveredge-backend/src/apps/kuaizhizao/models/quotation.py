@@ -73,6 +73,8 @@ class Quotation(BaseModel):
     # 转订单后关联
     sales_order_id = fields.IntField(null=True, description="关联销售订单ID（转订单后）")
     sales_order_code = fields.CharField(max_length=50, null=True, description="关联销售订单编码")
+    contract_id = fields.IntField(null=True, description="关联销售合同ID")
+    contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")
 
     notes = fields.TextField(null=True, description="备注")
     is_active = fields.BooleanField(default=True, description="是否有效")

@@ -12,6 +12,7 @@ from datetime import date
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_access
 from infra.models.user import User
 from apps.master_data.services.performance_service import PerformanceService
 from apps.master_data.schemas.performance_schemas import (
@@ -25,6 +26,7 @@ from apps.master_data.services.employee_performance_service import (
     KPIDefinitionService,
 )
 from apps.master_data.services.performance_calc_service import PerformanceCalcService
+from apps.master_data.services.kpi_evaluator_service import KPIEvaluatorService
 from apps.master_data.schemas.employee_performance_schemas import (
     EmployeePerformanceConfigCreate,
     EmployeePerformanceConfigUpdate,
@@ -596,6 +598,10 @@ async def delete_kpi_definition(
 
 @router.get("/summaries", response_model=List[PerformanceSummaryResponse], summary="List performance summaries")
 async def get_performance_summaries(
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "read",
+        required_permissions=["kuaizhizao:performance-summaries:read"],
+    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: Optional[str] = Query(None, description="周期（YYYY-MM）"),
@@ -609,6 +615,10 @@ async def get_performance_summaries(
 
 @router.get("/details", response_model=PerformanceDetailResponse, summary="Get performance detail")
 async def get_performance_details(
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "read",
+        required_permissions=["kuaizhizao:performance-summaries:read"],
+    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: str = Query(..., description="周期（YYYY-MM）"),
@@ -620,12 +630,19 @@ async def get_performance_details(
 
 @router.post("/calculate", response_model=List[PerformanceSummaryResponse], summary="Trigger performance calculation")
 async def calculate_performance(
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "update",
+        required_permissions=["kuaizhizao:performance-summaries:update"],
+    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: str = Query(..., description="周期（YYYY-MM）"),
 ):
     """触发指定周期的绩效计算，汇总报工并计算应发金额"""
-    return await PerformanceCalcService.calculate_period(tenant_id, period)
+    try:
+        return await PerformanceCalcService.calculate_period(tenant_id, period)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(
@@ -666,4 +683,128 @@ async def distribute_by_work_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/summaries/{summary_id}/confirm", response_model=PerformanceSummaryResponse, summary="Confirm performance summary")
+async def confirm_performance_summary(
+    summary_id: int = Path(..., description="汇总ID"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "audit",
+        required_permissions=["kuaizhizao:performance-summaries:approve"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PerformanceCalcService.confirm_summary(tenant_id, summary_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/summaries/{summary_id}/reopen", response_model=PerformanceSummaryResponse, summary="Reopen confirmed summary")
+async def reopen_performance_summary(
+    summary_id: int = Path(..., description="汇总ID"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "audit",
+        required_permissions=["kuaizhizao:performance-summaries:approve"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PerformanceCalcService.reopen_summary(tenant_id, summary_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/summaries/batch-confirm", summary="Batch confirm summaries by period")
+async def batch_confirm_summaries(
+    period: str = Query(..., description="周期（YYYY-MM）"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "audit",
+        required_permissions=["kuaizhizao:performance-summaries:approve"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PerformanceCalcService.batch_confirm_period(tenant_id, period)
+
+
+@router.get("/summaries/payroll-total", summary="Confirmed payroll total for finance import")
+async def get_payroll_total(
+    period: str = Query(..., description="周期（YYYY-MM）"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "read",
+        required_permissions=["kuaizhizao:performance-summaries:read"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _, total = await PerformanceCalcService.export_summaries_csv(
+        tenant_id, period=period, status="confirmed",
+    )
+    from apps.master_data.models.employee_performance import PerformanceSummary
+
+    count = await PerformanceSummary.filter(
+        tenant_id=tenant_id,
+        period=period,
+        status="confirmed",
+        deleted_at__isnull=True,
+    ).count()
+    return {"period": period, "total_amount": float(total), "employee_count": count}
+
+
+@router.get("/summaries/export", summary="Export confirmed summaries as CSV")
+async def export_performance_summaries(
+    period: str = Query(..., description="周期（YYYY-MM）"),
+    status_filter: str = Query("confirmed", alias="status", description="汇总状态"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-summaries", "export",
+        required_permissions=["kuaizhizao:performance-summaries:export"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from fastapi.responses import PlainTextResponse
+
+    csv_text, total = await PerformanceCalcService.export_summaries_csv(
+        tenant_id, period=period, status=status_filter,
+    )
+    return PlainTextResponse(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="performance-{period}.csv"',
+            "X-Total-Amount": str(total),
+        },
+    )
+
+
+@router.get("/kpi-scores", summary="List employee KPI scores")
+async def list_kpi_scores(
+    period: Optional[str] = Query(None, description="周期（YYYY-MM）"),
+    employee_id: Optional[int] = Query(None, description="员工ID"),
+    _auth: object = Depends(require_access(
+        "kuaizhizao:performance-kpi-definitions", "read",
+        required_permissions=["kuaizhizao:performance-kpi-definitions:read"],
+    )),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    rows = await KPIEvaluatorService.list_scores(tenant_id, employee_id=employee_id, period=period)
+    return [
+        {
+            "employee_id": r.employee_id,
+            "employee_name": r.employee_name,
+            "period": r.period,
+            "kpi_code": r.kpi_code,
+            "score": float(r.score or 0),
+            "source_data_json": r.source_data_json,
+        }
+        for r in rows
+    ]
 

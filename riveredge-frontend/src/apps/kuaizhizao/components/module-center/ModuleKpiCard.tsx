@@ -49,7 +49,13 @@ function KpiSideBlock({
   );
 }
 
-export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
+export function ModuleKpiRow({
+  items,
+  colProps = { xs: 24, lg: 8 },
+}: {
+  items: ModuleKpiDef[];
+  colProps?: { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
+}) {
   const { token } = theme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
   const plain = isModuleDashboardPlain(themeStyle);
@@ -59,7 +65,7 @@ export function ModuleKpiRow({ items }: { items: ModuleKpiDef[] }) {
       {items.map((kpi) => {
         const visual = resolveModuleKpiVisual(kpi.gradient, kpi.boxShadow, plain, token);
         return (
-          <Col xs={24} lg={8} key={kpi.key} style={{ display: 'flex' }}>
+          <Col {...colProps} key={kpi.key} style={{ display: 'flex' }}>
             <Card
               hoverable={!!kpi.onClick}
               onClick={kpi.onClick}

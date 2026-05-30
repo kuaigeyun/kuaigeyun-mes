@@ -7,7 +7,7 @@ import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-compone
 import { App, Popconfirm, Button, Space, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { ProFormText, ProFormDigit, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
+import { ProFormText, ProFormDigit, ProFormSelect, ProFormSwitch, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -20,6 +20,7 @@ const CALC_TYPE_OPTIONS = [
   { label: '效率', value: 'efficiency' },
   { label: '出勤', value: 'attendance' },
   { label: '产量', value: 'output' },
+  { label: '自定义公式', value: 'formula' },
 ];
 
 const KpiDefinitionsPage: React.FC = () => {
@@ -43,6 +44,7 @@ const KpiDefinitionsPage: React.FC = () => {
         weight: r.weight,
         calc_type: r.calc_type,
         is_active: r.is_active !== false,
+        formula_json: r.formula_json ? JSON.stringify(r.formula_json, null, 2) : '',
       });
     }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
   }, [modalVisible, editId]);
@@ -202,12 +204,22 @@ const KpiDefinitionsPage: React.FC = () => {
         }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
+          let formula_json: Record<string, unknown> | undefined;
+          if (values.formula_json) {
+            try {
+              formula_json = JSON.parse(values.formula_json);
+            } catch {
+              messageApi.error('formula_json 必须是合法 JSON');
+              return;
+            }
+          }
           const payload = {
             code: values.code,
             name: values.name,
             weight: values.weight || 1,
             calc_type: values.calc_type,
             is_active: values.is_active !== false,
+            formula_json,
           };
           if (editId) {
             await employeePerformanceApi.updateKpiDefinition(editId, payload);
@@ -227,6 +239,13 @@ const KpiDefinitionsPage: React.FC = () => {
         <ProFormText name="name" label="名称" rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormDigit name="weight" label="权重" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormSelect name="calc_type" label="计算类型" rules={[{ required: true }]} options={CALC_TYPE_OPTIONS} colProps={{ span: 12 }} />
+        <ProFormTextArea
+          name="formula_json"
+          label="公式配置 (JSON)"
+          colProps={{ span: 24 }}
+          fieldProps={{ rows: 4 }}
+          placeholder={'质量/效率/出勤/产量示例: {"targets":{"min_rate":0.95}}\n自定义公式: {"expression":"quality_rate * 100"}'}
+        />
         <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>

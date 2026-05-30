@@ -108,6 +108,12 @@ class Customer(BaseModel):
         max_length=32, null=True, description="应收确认覆盖：on_shipment / on_invoice"
     )
     
+    contract_billing_mode = fields.CharField(
+        max_length=32,
+        null=True,
+        description="合同收款模式覆盖：follow_org / on_shipment / on_milestone / mixed",
+    )
+
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_public = fields.BooleanField(default=False, description="是否公共（false=私有，true=公共）")

@@ -166,6 +166,8 @@ class QuotationResponse(QuotationBase):
     )
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="关联销售订单编码")
+    contract_id: Optional[int] = Field(None, description="关联销售合同ID")
+    contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
     is_active: bool = Field(True, description="是否有效")
     created_by: Optional[int] = None
     updated_by: Optional[int] = None

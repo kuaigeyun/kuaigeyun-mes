@@ -14,6 +14,11 @@ from .partner_statement import PartnerStatement
 from .receipt import Receipt
 from .payment import Payment
 from .accounting_event import AccountingEvent
+from .bank_account import BankAccount
+from .bank_transaction import BankTransaction
+from .chart_of_account import ChartOfAccount
+from .voucher import Voucher
+from .voucher_line import VoucherLine
 
 __all__ = [
     "Receivable",
@@ -29,4 +34,9 @@ __all__ = [
     "Receipt",
     "Payment",
     "AccountingEvent",
+    "BankAccount",
+    "BankTransaction",
+    "ChartOfAccount",
+    "Voucher",
+    "VoucherLine",
 ]

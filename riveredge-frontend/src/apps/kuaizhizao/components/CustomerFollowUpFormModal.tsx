@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography, Tag, Empty, Spin, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { FormModalTemplate } from '../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { DictionarySelect } from '../../../components/dictionary-select';
 import { UniDropdown } from '../../../components/uni-dropdown';
@@ -446,7 +446,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         onClose={handleClose}
         onFinish={submit}
         form={form}
-        width={1280}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         zIndex={zIndex}
       >
         <Row gutter={[24, 0]}>

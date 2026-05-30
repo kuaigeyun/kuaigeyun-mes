@@ -13,10 +13,11 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App, Form, Table, Typography, Alert, Divider, Result, Button } from 'antd';
+import { App, Form, Table, Typography, Alert, Divider, Result, Button, Space } from 'antd';
 import { ProForm, ProFormDatePicker, ProFormMoney } from '@ant-design/pro-components';
 import { WizardTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { costCalculationApi } from '../../../services/cost';
+import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -44,14 +45,11 @@ const MonthlySettlementPage: React.FC = () => {
     totalHours?: number;
   }>({
     period: dayjs().subtract(1, 'month'),
-    productionData: [
-      { key: '1', product: '精密模具A', quantity: 100, hours: 200, material_cost: 50000 },
-      { key: '2', product: '注塑件B', quantity: 5000, hours: 150, material_cost: 15000 },
-    ],
+    productionData: [],
     indirectCosts: {
-      payroll: 30000,
-      electricity: 5000,
-      rent: 10000,
+      payroll: 0,
+      electricity: 0,
+      rent: 0,
     },
   });
 
@@ -84,6 +82,23 @@ const MonthlySettlementPage: React.FC = () => {
     setCurrentStep(currentStep + 1);
   };
   const handlePrev = () => setCurrentStep(currentStep - 1);
+
+  const [payrollImportHint, setPayrollImportHint] = useState<string>('');
+
+  const handleImportPayrollFromPerformance = async () => {
+    const period = settlementData.period.format('YYYY-MM');
+    try {
+      const res = await apiRequest<{ period: string; total_amount: number; employee_count: number }>(
+        '/apps/master-data/performance/summaries/payroll-total',
+        { params: { period } },
+      );
+      form.setFieldValue('payroll', res.total_amount);
+      setPayrollImportHint(`已从 ${period} 绩效已确认汇总导入（${res.employee_count} 人，合计 ¥${res.total_amount.toFixed(2)}），可手工调整`);
+      messageApi.success('已填入绩效薪资参考总额');
+    } catch (error: any) {
+      messageApi.error(error?.message || '导入失败，请确认该月绩效已确认');
+    }
+  };
 
   const handleFinish = async () => {
     setLoading(true);
@@ -157,6 +172,10 @@ const MonthlySettlementPage: React.FC = () => {
         <DetailDrawerSection title="录入当期待分摊费用">
           <Text type="secondary">请输入当期发生的制造费用、人工工资等，系统将按照预设规则进行自动分摊。</Text>
           <Divider />
+          <Space style={{ marginBottom: 16 }}>
+            <Button onClick={handleImportPayrollFromPerformance}>从绩效导入薪资总额</Button>
+          </Space>
+          {payrollImportHint ? <Alert type="info" message={payrollImportHint} showIcon style={{ marginBottom: 16 }} /> : null}
           <Form form={form} layout="vertical" initialValues={settlementData.indirectCosts}>
             <ProFormMoney name="payroll" label="当期生产人员薪资总额" placeholder="请输入薪资总额" rules={[{ required: true }]} />
             <ProFormMoney name="electricity" label="当期电费/动力费" placeholder="请输入电量费用" />

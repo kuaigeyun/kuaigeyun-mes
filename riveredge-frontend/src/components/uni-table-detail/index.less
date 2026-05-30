@@ -3,10 +3,8 @@
  *
  * 设计原则：
  *   1. 只写组件自身元素（.uni-table-detail-header / .detail-table-footer 等）的样式。
- *   2. 不再尝试用 Less 选择器覆盖 antd v6 CSS-in-JS 生成的 .ant-table-* 内部样式，
- *      那样做在 antd v6 中不可靠（哈希类优先级 / inline style 优先级问题）。
- *   3. 固定列（fixed:'right'）的表头 / 单元格背景色通过 onHeaderCell / onCell 的
- *      inline style 在 UniTableDetail.tsx 中直接注入，与 CSS 层完全解耦。
+ *   2. 固定列背景：antd v6 须 CSS 变量 + !important（见下方 thead / fix-right 规则）。
+ *   3. 表格 DOM 结构由 UniTableDetail.tsx 与报价单 hand-roll 对齐（外层 overflowX: auto）。
  */
 
 .uni-table-detail {
@@ -47,12 +45,33 @@
     }
   }
 
-  /* ===== 表格容器 ===== */
-  .detail-table-wrapper {
-    width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    box-sizing: border-box;
+  /*
+   * fixed:'right' 操作列：仅作用于 UniTableDetail 的 .uni-detail-table。
+   * 不得写在 .uni-table-detail 根下——报价单等 hand-roll 页也包在该 class 内。
+   */
+  .uni-detail-table {
+    .ant-table-thead > tr > th {
+      background-color: var(--ant-color-bg-container, #ffffff) !important;
+    }
+
+    .ant-table-thead > tr > th.uni-detail-fixed-op-header,
+    .ant-table-thead > tr > th.ant-table-cell-fix-right,
+    .ant-table-thead > tr > th.ant-table-cell-fix-right-first {
+      background: var(--ant-color-bg-container, #ffffff) !important;
+      z-index: calc(var(--ant-z-index-table-fixed, 2) + 1);
+    }
+
+    .ant-table-tbody > tr > td.ant-table-cell-fix-right,
+    .ant-table-tbody > tr > td.ant-table-cell-fix-right-first {
+      background: var(--ant-color-bg-container, #ffffff) !important;
+    }
+
+    .ant-input-number-input::selection,
+    .ant-input::selection {
+      background-color: var(--ant-color-primary, #1677ff);
+      color: #fff;
+      border-radius: 0;
+    }
   }
 
   /* ===== 顶部边框 ===== */
@@ -87,6 +106,25 @@
   /* ===== 紧凑模式下表单项零外边距 ===== */
   .ant-form-item {
     margin-bottom: 0 !important;
+  }
+
+  /* ===== 物料列：Select 占满可用宽度 ===== */
+  .uni-detail-material-cell {
+    .ant-form-item,
+    .ant-form-item-control,
+    .ant-form-item-control-input,
+    .ant-select {
+      width: 100% !important;
+      min-width: 0;
+    }
+  }
+
+  /* ===== 输入选中态 ===== */
+  .uni-detail-table .ant-input-number-input::selection,
+  .uni-detail-table .ant-input::selection {
+    background-color: var(--ant-color-primary, #1677ff);
+    color: #fff;
+    border-radius: 0;
   }
 
   /* ===== 表格 footer（添加行 / 批量选择 按钮区） ===== */

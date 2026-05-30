@@ -1,6 +1,7 @@
-import React, { Suspense, lazy, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRequest } from 'ahooks';
+import { useQuery } from '@tanstack/react-query';
 import {
   WalletOutlined,
   DollarOutlined,
@@ -10,7 +11,9 @@ import {
   AlertOutlined,
 } from '@ant-design/icons';
 import { managementReportService } from '../../../services/management-report';
+import { agingService } from '../../../services/statistics/aging';
 import { apiRequest } from '../../../../../services/api';
+import FinanceAgingPanel from '../../../components/FinanceAgingPanel';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -22,17 +25,21 @@ import {
 } from '../../../../kuaizhizao/components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../../kuaizhizao/components/module-center';
 
-const FinancePie = lazy(async () => {
-  const { Pie } = await import('@ant-design/charts');
-  return { default: (props: React.ComponentProps<typeof Pie>) => <Pie {...props} /> };
-});
-
 const FinanceCenterDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { data: financeSummary, loading: summaryLoading } = useRequest(() =>
     apiRequest<Record<string, number>>('/apps/kuaicaiwu/management-report/finance-summary', { method: 'GET' }),
   );
   const { data: kpis, loading: kpiLoading } = useRequest(() => managementReportService.getKPIs(30));
+
+  const { data: receivableAging, isLoading: loadingArAging } = useQuery({
+    queryKey: ['receivableAging'],
+    queryFn: () => agingService.getReceivableAging(),
+  });
+  const { data: payableAging, isLoading: loadingApAging } = useQuery({
+    queryKey: ['payableAging'],
+    queryFn: () => agingService.getPayableAging(),
+  });
 
   const s = financeSummary;
   const loading = summaryLoading || kpiLoading;
@@ -41,7 +48,7 @@ const FinanceCenterDashboard: React.FC = () => {
     () => [
       {
         key: 'pending',
-        title: '待审核收付款',
+        title: '待确认收付款',
         value: (s?.pending_receipts ?? 0) + (s?.pending_payments ?? 0),
         subtitle: `收款 ${s?.pending_receipts ?? 0} · 付款 ${s?.pending_payments ?? 0}`,
         icon: <WalletOutlined style={{ fontSize: 24, color: '#fff' }} />,
@@ -65,7 +72,7 @@ const FinanceCenterDashboard: React.FC = () => {
         key: 'ap',
         title: '逾期应付',
         value: s?.overdue_payables ?? 0,
-        subtitle: `DSO ${kpis?.dso ?? 0} 天`,
+        subtitle: `平均回款约 ${kpis?.dso ?? 0} 天`,
         icon: <CreditCardOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/payables'),
@@ -83,21 +90,13 @@ const FinanceCenterDashboard: React.FC = () => {
     { key: 'partner-stmt', title: '往来对账', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/kuaicaiwu/finance-management/partner-statements' },
   ];
 
-  const agingData = useMemo(() => {
-    if (!kpis?.receivable_aging) return [];
-    return Object.entries(kpis.receivable_aging).map(([key, val]: [string, { amount?: number }]) => ({
-      type: key,
-      value: val?.amount ?? 0,
-    }));
-  }, [kpis]);
-
   const todoItems = useMemo(() => {
     const list = [];
     if ((s?.pending_receipts ?? 0) > 0) {
       list.push({
         id: 'fin-receipt',
         type: 'finance',
-        title: `${s?.pending_receipts} 笔收款单待审核`,
+        title: `${s?.pending_receipts} 笔收款单待确认`,
         priority: 'medium',
         status: 'pending',
         link: '/apps/kuaicaiwu/finance-management/receipts',
@@ -130,17 +129,19 @@ const FinanceCenterDashboard: React.FC = () => {
       }
       chartRow={
         <ModuleChartRow>
-          <ModuleChartPanel title="应收账龄分布" lg={24}>
-            <Suspense fallback={null}>
-              <FinancePie
-                data={agingData}
-                angleField="value"
-                colorField="type"
-                radius={0.75}
-                height={260}
-                label={{ type: 'outer' }}
-              />
-            </Suspense>
+          <ModuleChartPanel title="应收账龄" lg={12} loading={loadingArAging} height={360}>
+            <FinanceAgingPanel
+              data={receivableAging}
+              detailPath="/apps/kuaicaiwu/finance-management/receivables"
+              onOpenDetail={navigate}
+            />
+          </ModuleChartPanel>
+          <ModuleChartPanel title="应付账龄" lg={12} loading={loadingApAging} height={360}>
+            <FinanceAgingPanel
+              data={payableAging}
+              detailPath="/apps/kuaicaiwu/finance-management/payables"
+              onOpenDetail={navigate}
+            />
           </ModuleChartPanel>
         </ModuleChartRow>
       }

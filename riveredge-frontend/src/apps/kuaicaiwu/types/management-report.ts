@@ -4,6 +4,7 @@ export interface FinancialKPIs {
   ar_balance: number;
   dso: number;
   gross_margin_rate: number;
+  inventory_total?: number;
   inventory_turnover: number;
   receivable_aging: Record<string, { count: number; amount: number }>;
 }

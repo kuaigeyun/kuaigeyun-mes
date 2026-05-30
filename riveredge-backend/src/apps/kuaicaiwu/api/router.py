@@ -26,10 +26,15 @@ from .cost import (
     cost_comparison_router,
     cost_optimization_router,
     cost_report_router,
+    standard_costs_router,
 )
 from .management_report import router as management_report_router
 from .finance_settlement import router as settlement_router
 from .finance.partner_statements import router as partner_statements_router
+from .document_reconciliation import router as document_reconciliation_router
+from .bank_accounts import router as bank_accounts_router
+from .prepayments import router as prepayments_router
+from .gl import router as gl_router
 
 router = APIRouter(tags=["App · Kuaicaiwu · Overview"])
 
@@ -52,9 +57,14 @@ router.include_router(quality_cost_router)
 router.include_router(cost_comparison_router)
 router.include_router(cost_optimization_router)
 router.include_router(cost_report_router)
+router.include_router(standard_costs_router)
 router.include_router(management_report_router)
 router.include_router(settlement_router)
 router.include_router(partner_statements_router)
+router.include_router(document_reconciliation_router)
+router.include_router(bank_accounts_router)
+router.include_router(prepayments_router)
+router.include_router(gl_router)
 
 
 @router.get("/health")

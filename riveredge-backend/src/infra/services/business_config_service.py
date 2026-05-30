@@ -30,10 +30,10 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     """
     fin = dict(finance or {})
     rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
-    if rev not in ("on_shipment", "on_invoice"):
+    if rev not in ("on_shipment", "on_invoice", "on_milestone", "mixed"):
         rev = "on_shipment"
     fin["revenue_recognition"] = rev
-    if rev == "on_shipment":
+    if rev in ("on_shipment", "on_milestone", "mixed"):
         fin["auto_generate_receivable_from_sales_invoice"] = False
     pay = str(fin.get("payable_recognition") or "on_receipt").strip()
     if pay not in ("on_receipt", "on_purchase_invoice"):
@@ -188,6 +188,14 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
                 "value": "on_invoice",
                 "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice",
             },
+            {
+                "value": "on_milestone",
+                "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_on_milestone",
+            },
+            {
+                "value": "mixed",
+                "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_mixed",
+            },
         ],
     },
     "parameters.finance.payable_recognition": {
@@ -205,6 +213,10 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     },
     "parameters.sales.low_margin_threshold_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
+    "parameters.sales.require_contract_before_order": {"type": "boolean"},
+    "parameters.sales.contract_expiry_alert_days": {"type": "number", "min": 1, "max": 365},
+    "parameters.sales.contract_auto_close_on_full_release": {"type": "boolean"},
+    "parameters.sales.contract_milestone_required": {"type": "boolean"},
     "parameters.automation.push_default_mode": {
         "type": "select",
         "options": [
@@ -279,8 +291,15 @@ PARAMETER_KEYS = {
     "parameters.finance.payable_recognition",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
+    "parameters.finance.credit_limit_enabled",
+    "parameters.finance.gl_period_close_enabled",
+    "parameters.finance.gl_closed_periods",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
+    "parameters.sales.require_contract_before_order",
+    "parameters.sales.contract_expiry_alert_days",
+    "parameters.sales.contract_auto_close_on_full_release",
+    "parameters.sales.contract_milestone_required",
     "parameters.automation.push_default_mode",
 }
 
@@ -331,8 +350,15 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.finance.payable_recognition",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
+    "parameters.finance.credit_limit_enabled",
+    "parameters.finance.gl_period_close_enabled",
+    "parameters.finance.gl_closed_periods",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
+    "parameters.sales.require_contract_before_order",
+    "parameters.sales.contract_expiry_alert_days",
+    "parameters.sales.contract_auto_close_on_full_release",
+    "parameters.sales.contract_milestone_required",
     "parameters.automation.push_default_mode",
 }
 
@@ -439,6 +465,10 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "audit_enabled": False,
         "low_margin_threshold_percent": 0,
         "price_deviation_approval_threshold_percent": 0,
+        "require_contract_before_order": False,
+        "contract_expiry_alert_days": 30,
+        "contract_auto_close_on_full_release": True,
+        "contract_milestone_required": False,
     },
     "purchase": {
         "auto_approval": False,
@@ -465,6 +495,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "payable_recognition": "on_receipt",
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
+        "credit_limit_enabled": False,
+        "gl_period_close_enabled": False,
+        "gl_closed_periods": [],
     },
 }
 
@@ -797,7 +830,7 @@ class BusinessConfigService:
         config = await self.get_business_config(tenant_id)
         fin = config["parameters"].get("finance", {}) or {}
         org_rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
-        if org_rev not in ("on_shipment", "on_invoice"):
+        if org_rev not in ("on_shipment", "on_invoice", "on_milestone", "mixed"):
             org_rev = "on_shipment"
         if not customer_id:
             return org_rev
@@ -807,7 +840,7 @@ class BusinessConfigService:
         if not cust or not cust.revenue_recognition_override:
             return org_rev
         ov = str(cust.revenue_recognition_override).strip()
-        return ov if ov in ("on_shipment", "on_invoice") else org_rev
+        return ov if ov in ("on_shipment", "on_invoice", "on_milestone", "mixed") else org_rev
 
     async def resolve_payable_recognition(self, tenant_id: int, supplier_id: Optional[int]) -> str:
         """有效应付确认策略：供应商覆盖非空则用覆盖，否则用组织 finance.payable_recognition（已 coerce）。"""
@@ -829,7 +862,8 @@ class BusinessConfigService:
     async def should_auto_generate_receivable_on_sales_delivery(
         self, tenant_id: int, customer_id: Optional[int] = None
     ) -> bool:
-        return (await self.resolve_revenue_recognition(tenant_id, customer_id)) == "on_shipment"
+        resolved = await self.resolve_revenue_recognition(tenant_id, customer_id)
+        return resolved in ("on_shipment", "mixed")
 
     async def should_auto_generate_receivable_from_sales_invoice_effective(
         self, tenant_id: int, customer_id: Optional[int] = None

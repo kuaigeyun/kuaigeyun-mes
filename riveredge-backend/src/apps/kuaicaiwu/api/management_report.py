@@ -29,13 +29,22 @@ async def get_finance_summary(
 
     tenant_id = current_user.tenant_id
     today = date.today()
-    pending_review = ["待审核", "PENDING_REVIEW", "pending"]
 
     r_pending, p_pending, r_overdue, p_overdue = await asyncio.gather(
-        Receipt.filter(tenant_id=tenant_id, review_status__in=pending_review, deleted_at__isnull=True).count(),
-        Payment.filter(tenant_id=tenant_id, review_status__in=pending_review, deleted_at__isnull=True).count(),
-        Receivable.filter(tenant_id=tenant_id, status="未收款", due_date__lt=today, deleted_at__isnull=True).count(),
-        Payable.filter(tenant_id=tenant_id, status="未付款", due_date__lt=today, deleted_at__isnull=True).count(),
+        Receipt.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
+        Payment.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
+        Receivable.filter(
+            tenant_id=tenant_id,
+            remaining_amount__gt=0,
+            due_date__lt=today,
+            deleted_at__isnull=True,
+        ).count(),
+        Payable.filter(
+            tenant_id=tenant_id,
+            remaining_amount__gt=0,
+            due_date__lt=today,
+            deleted_at__isnull=True,
+        ).count(),
     )
 
     return {
@@ -72,6 +81,30 @@ async def get_wip_valuation(
     current_user: Any = Depends(get_current_user)
 ):
     return await service.get_wip_valuation(current_user.tenant_id)
+
+@router.get("/margin-by-product", summary="Gross margin by product")
+async def get_margin_by_product(
+    days: int = Query(30, description="统计天数"),
+    current_user: Any = Depends(get_current_user),
+):
+    return await service.get_margin_by_product(current_user.tenant_id, days)
+
+
+@router.get("/margin-by-customer", summary="Gross margin by customer")
+async def get_margin_by_customer(
+    days: int = Query(30, description="统计天数"),
+    current_user: Any = Depends(get_current_user),
+):
+    return await service.get_margin_by_customer(current_user.tenant_id, days)
+
+
+@router.get("/margin-by-order", summary="Gross margin by sales order / delivery")
+async def get_margin_by_order(
+    days: int = Query(30, description="统计天数"),
+    current_user: Any = Depends(get_current_user),
+):
+    return await service.get_margin_by_order(current_user.tenant_id, days)
+
 
 @router.get("/cost-variance/{product_id}", summary="Standard vs actual cost variance by product")
 async def get_cost_variance(

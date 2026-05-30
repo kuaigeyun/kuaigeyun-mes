@@ -468,7 +468,7 @@ async def get_warehouse_report(
 
 @router.get("/performance", summary="Performance report")
 async def get_performance_report(
-    report_type: str = Query("efficiency_ranking", description="报表类型"),
+    report_type: str = Query("employee-efficiency-ranking", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     current_user: User = Depends(get_current_user),

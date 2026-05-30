@@ -5,7 +5,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckOutlined, EyeOutlined, StopOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -18,6 +18,8 @@ import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { payableService } from '../../../services/finance/payable';
+import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
+import { paymentService } from '../../../services/finance/payment';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 
@@ -32,6 +34,8 @@ interface PaymentVoucher {
   payment_date: string;
   payment_method: string;
   bank_account?: string;
+  bank_account_id?: number;
+  settlement_type?: string;
   status: string;
   notes?: string;
   created_at: string;
@@ -69,6 +73,10 @@ const PaymentsPage: React.FC = () => {
   const [pullFormVisible, setPullFormVisible] = useState(false);
   const [pullSelectedPayable, setPullSelectedPayable] = useState<PullPayableCandidate | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<PaymentVoucher | null>(null);
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const pullFromPayableAction = getKuaicaiwuDocumentAction('payment.pull_from_payable');
@@ -87,16 +95,46 @@ const PaymentsPage: React.FC = () => {
       }
     };
     load();
+    bankAccountService.list({ limit: 200, is_active: true }).then(setBankAccounts).catch(() => setBankAccounts([]));
   }, []);
 
+  const bankAccountOptions = bankAccounts.map((a) => ({
+    label: `${a.account_name} (${a.account_number})`,
+    value: a.id,
+    account_number: a.account_number,
+  }));
+
+  const resolveBankLabel = (id?: number) => {
+    if (!id) return '—';
+    const acc = bankAccounts.find((a) => a.id === id);
+    return acc ? `${acc.account_name} (${acc.account_number})` : `#${id}`;
+  };
+
+  const openDetail = async (record: PaymentVoucher) => {
+    setDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const detail = await paymentService.getPayment(record.id);
+      setDetailRecord(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载详情失败');
+      setDetailOpen(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleCreate = async (values: any) => {
+    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     const data = {
       supplier_id: values.supplier_id,
       supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
       total_amount: values.total_amount,
       payment_date: values.payment_date?.format ? values.payment_date.format('YYYY-MM-DD') : values.payment_date || dayjs().format('YYYY-MM-DD'),
       payment_method: values.payment_method,
-      bank_account: values.bank_account,
+      bank_account_id: values.bank_account_id,
+      bank_account: bank?.account_number || values.bank_account,
+      settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
     };
     await apiRequest('/apps/kuaicaiwu/payments', { method: 'POST', data });
@@ -176,7 +214,9 @@ const PaymentsPage: React.FC = () => {
             ? values.payment_date.format('YYYY-MM-DD')
             : (values.payment_date || dayjs().format('YYYY-MM-DD')),
           payment_method: values.payment_method || '银行转账',
-          bank_account: values.bank_account,
+          bank_account_id: values.bank_account_id,
+          bank_account: bankAccountOptions.find((o) => o.value === values.bank_account_id)?.account_number || values.bank_account,
+          settlement_type: values.settlement_type || 'normal',
           notes: String(values.notes ?? '').trim() || `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
         },
       });
@@ -325,7 +365,7 @@ const PaymentsPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('付款单详情功能开发中')}>
+            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
               详情
             </Button>,
             record.status === 'Draft' ? (
@@ -517,7 +557,24 @@ const PaymentsPage: React.FC = () => {
           options={PAYMENT_METHOD_OPTIONS}
           rules={[{ required: true, message: '请选择付款方式' }]}
         />
-        <ProFormText name="bank_account" label="出款账号" placeholder="如：工商银行 622588****" />
+        <ProFormSelect
+          name="settlement_type"
+          label="结算类型"
+          initialValue="normal"
+          options={[
+            { label: '普通付款', value: 'normal' },
+            { label: '预付款', value: 'prepayment' },
+          ]}
+        />
+        <ProFormSelect
+          name="bank_account_id"
+          label="出账银行账户"
+          options={bankAccountOptions}
+          placeholder="选择后确认付款将自动记银行流水"
+          showSearch
+          allowClear
+        />
+        <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
         <ProFormTextArea name="notes" label="备注" />
       </ModalForm>
 
@@ -545,9 +602,58 @@ const PaymentsPage: React.FC = () => {
           rules={[{ required: true, message: '请选择付款方式' }]}
           placeholder="请选择付款方式"
         />
-        <ProFormText name="bank_account" label="出款账号" placeholder="如：工商银行 622588****" />
+        <ProFormSelect
+          name="settlement_type"
+          label="结算类型"
+          initialValue="normal"
+          options={[
+            { label: '普通付款', value: 'normal' },
+            { label: '预付款', value: 'prepayment' },
+          ]}
+        />
+        <ProFormSelect
+          name="bank_account_id"
+          label="出账银行账户"
+          options={bankAccountOptions}
+          placeholder="选择后确认付款将自动记银行流水"
+          showSearch
+          allowClear
+        />
+        <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
         <ProFormTextArea name="notes" label="备注" />
       </ModalForm>
+
+      <Drawer
+        title={detailRecord ? `付款单 · ${detailRecord.payment_code}` : '付款单详情'}
+        open={detailOpen}
+        width={520}
+        onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
+        destroyOnHidden
+      >
+        <Spin spinning={detailLoading}>
+          {detailRecord ? (
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="单号">{detailRecord.payment_code}</Descriptions.Item>
+              <Descriptions.Item label="供应商">{detailRecord.supplier_name}</Descriptions.Item>
+              <Descriptions.Item label="状态">{detailRecord.status}</Descriptions.Item>
+              <Descriptions.Item label="付款日期">{detailRecord.payment_date}</Descriptions.Item>
+              <Descriptions.Item label="付款方式">{detailRecord.payment_method}</Descriptions.Item>
+              <Descriptions.Item label="结算类型">
+                {detailRecord.settlement_type === 'prepayment' ? '预付款' : '普通付款'}
+              </Descriptions.Item>
+              <Descriptions.Item label="付款金额">¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="已核销">¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="未核销">¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="银行账户">{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
+              <Descriptions.Item label="账号备注">{detailRecord.bank_account || '—'}</Descriptions.Item>
+              <Descriptions.Item label="备注">{detailRecord.notes || '—'}</Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {detailRecord.created_at ? dayjs(detailRecord.created_at).format('YYYY-MM-DD HH:mm') : '—'}
+              </Descriptions.Item>
+            </Descriptions>
+          ) : null}
+        </Spin>
+      </Drawer>
     </ListPageTemplate>
   );
 };

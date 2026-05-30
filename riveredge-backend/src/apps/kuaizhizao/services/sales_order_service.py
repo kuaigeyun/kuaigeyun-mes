@@ -499,6 +499,9 @@ class SalesOrderService:
             "shipping_address": order.shipping_address,
             "shipping_method": order.shipping_method,
             "payment_terms": order.payment_terms,
+            "contract_id": getattr(order, "contract_id", None),
+            "contract_code": getattr(order, "contract_code", None),
+            "is_release_order": bool(getattr(order, "is_release_order", False)),
             "currency_code": getattr(order, "currency_code", None) or "CNY",
             "notes": order.notes,
             "attachments": getattr(order, "attachments", None),
@@ -733,42 +736,15 @@ class SalesOrderService:
         customer_name: Optional[str],
         order_total_amount: Decimal,
     ) -> None:
-        """
-        P1-S-012: 信用额度阻断（后端硬拦截）。
-        在订单提交/审核前校验：客户未收应收余额 + 当前订单金额 <= 客户信用额度。
-        """
-        if not customer_id:
-            return
+        from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
 
-        customer = await Customer.get_or_none(
-            tenant_id=tenant_id,
-            id=customer_id,
-            deleted_at__isnull=True,
-        )
-        if not customer:
-            return
-
-        credit_limit = getattr(customer, "credit_limit", None)
-        if credit_limit is None:
-            return
-        credit_limit = Decimal(str(credit_limit))
-        if credit_limit <= Decimal("0"):
-            return
-
-        outstanding_rows = await Receivable.filter(
+        await CreditLimitService().validate_customer_exposure(
             tenant_id=tenant_id,
             customer_id=customer_id,
-            deleted_at__isnull=True,
-            remaining_amount__gt=0,
-        ).values_list("remaining_amount", flat=True)
-        current_outstanding = sum((Decimal(str(v or 0)) for v in outstanding_rows), Decimal("0"))
-        projected_exposure = current_outstanding + Decimal(str(order_total_amount or 0))
-
-        if projected_exposure > credit_limit:
-            display_name = customer_name or getattr(customer, "name", None) or str(customer_id)
-            raise BusinessLogicError(
-                f"客户 {display_name} 信用额度超限：当前应收{current_outstanding} + 本单{order_total_amount} > 额度{credit_limit}"
-            )
+            customer_name=customer_name,
+            additional_amount=order_total_amount,
+            scene="销售订单审核",
+        )
 
     @staticmethod
     def _resolve_material_unit_cost(defaults: Any) -> Decimal:
@@ -977,6 +953,40 @@ class SalesOrderService:
         import uuid
         return f"SO-{today}-{uuid.uuid4().hex[:6].upper()}"
 
+    async def _validate_sales_order_contract(
+        self,
+        tenant_id: int,
+        sales_order_data: SalesOrderCreate,
+    ) -> None:
+        """校验销售订单与合同的关联要求及合同有效性。"""
+        from apps.kuaizhizao.models.sales_contract import SalesContract
+        from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
+
+        cfg = await self.business_config_service.get_business_config(tenant_id)
+        require_contract = bool(
+            cfg.get("parameters", {}).get("sales", {}).get("require_contract_before_order", False)
+        )
+        contract_id = getattr(sales_order_data, "contract_id", None)
+        if require_contract and not contract_id:
+            raise BusinessLogicError("当前租户配置要求销售订单必须关联销售合同，请从合同下推订单")
+        if not contract_id:
+            return
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError(f"销售合同不存在: {contract_id}")
+        st = (contract.status or "").strip()
+        if st not in ("已生效", "执行中"):
+            raise BusinessLogicError("关联的销售合同须已生效")
+        if not _is_approved(contract.review_status):
+            raise BusinessLogicError("关联的销售合同未审核通过")
+        today = date.today()
+        if contract.valid_to and contract.valid_to < today:
+            raise BusinessLogicError("关联的销售合同已过期")
+        if not sales_order_data.contract_code:
+            sales_order_data.contract_code = contract.contract_code
+
     async def create_sales_order(
         self,
         tenant_id: int,
@@ -987,6 +997,8 @@ class SalesOrderService:
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_order")
         if not is_enabled:
             raise BusinessLogicError("销售管理模块未启用，无法创建销售订单")
+
+        await self._validate_sales_order_contract(tenant_id, sales_order_data)
 
         if not sales_order_data.order_code:
             sales_order_data.order_code = await self._generate_order_code(
@@ -2784,6 +2796,11 @@ class SalesOrderService:
             if demand:
                 from apps.kuaizhizao.services.demand_service import DemandService
                 await DemandService().delete_demand(tenant_id, demand.id)
+            from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+            await SalesContractService().rollback_release_for_sales_order(
+                tenant_id, sales_order_id, operator_id=None
+            )
             await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
             ).delete()

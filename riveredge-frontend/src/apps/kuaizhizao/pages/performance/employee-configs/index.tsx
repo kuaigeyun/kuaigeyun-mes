@@ -7,7 +7,7 @@ import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-compone
 import { App, Popconfirm, Button, Tag, Space, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { ProFormSelect, ProFormDigit, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
+import { ProFormSelect, ProFormDigit, ProFormRadio, ProFormSwitch, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -19,6 +19,11 @@ const CALC_MODE_OPTIONS = [
   { label: '计时', value: 'time' },
   { label: '计件', value: 'piece' },
   { label: '混合', value: 'mixed' },
+];
+
+const PIECE_RATE_MODE_OPTIONS = [
+  { label: '按工序单价', value: 'operation' },
+  { label: '默认单价', value: 'default' },
 ];
 
 const EmployeeConfigsPage: React.FC = () => {
@@ -46,9 +51,12 @@ const EmployeeConfigsPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         employee_id: c.employee_id,
         calc_mode: c.calc_mode || 'time',
+        piece_rate_mode: c.piece_rate_mode || 'operation',
         hourly_rate: c.hourly_rate,
         default_piece_rate: c.default_piece_rate,
         base_salary: c.base_salary,
+        effective_from: c.effective_from ? dayjs(c.effective_from) : undefined,
+        effective_to: c.effective_to ? dayjs(c.effective_to) : undefined,
         is_active: c.is_active !== false,
       });
     }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
@@ -221,9 +229,12 @@ const EmployeeConfigsPage: React.FC = () => {
             employee_id: values.employee_id,
             employee_name: employees.find((e) => e.id === values.employee_id)?.full_name,
             calc_mode: values.calc_mode || 'time',
+            piece_rate_mode: values.piece_rate_mode,
             hourly_rate: values.hourly_rate,
             default_piece_rate: values.default_piece_rate,
             base_salary: values.base_salary,
+            effective_from: values.effective_from?.format?.('YYYY-MM-DD') ?? values.effective_from,
+            effective_to: values.effective_to?.format?.('YYYY-MM-DD') ?? values.effective_to,
             is_active: values.is_active !== false,
           };
           if (editId) {
@@ -247,9 +258,12 @@ const EmployeeConfigsPage: React.FC = () => {
           disabled={!!editId}
         />
         <ProFormRadio.Group name="calc_mode" label="计算模式" options={CALC_MODE_OPTIONS} colProps={{ span: 12 }} />
+        <ProFormSelect name="piece_rate_mode" label="计件单价来源" options={PIECE_RATE_MODE_OPTIONS} colProps={{ span: 12 }} />
         <ProFormDigit name="hourly_rate" label="工时单价（元/小时）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormDigit name="default_piece_rate" label="默认计件单价（元/件）" min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
         <ProFormDigit name="base_salary" label="月保障工资（元）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_from" label="生效日期" colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_to" label="失效日期" colProps={{ span: 12 }} />
         <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>

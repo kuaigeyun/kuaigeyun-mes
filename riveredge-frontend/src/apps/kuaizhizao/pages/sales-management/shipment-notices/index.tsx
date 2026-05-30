@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -30,7 +30,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
@@ -680,7 +680,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const renderCreateForm = () => (
     <>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText
             name="notice_code"
             label="通知单号"
@@ -688,7 +688,7 @@ const ShipmentNoticesPage: React.FC = () => {
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProForm.Item name="sales_order_id" label="销售订单" rules={[{ required: true, message: '请选择销售订单' }]}>
             <Select
               placeholder="请选择销售订单"
@@ -702,11 +702,7 @@ const ShipmentNoticesPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
-      </Row>
-      <ProFormText name="sales_order_code" hidden />
-      <ProFormText name="customer_name" hidden />
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
             <Select
               placeholder="请选择客户"
@@ -725,15 +721,17 @@ const ShipmentNoticesPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
-        <Col span={12}>
+      </Row>
+      <ProFormText name="sales_order_code" hidden />
+      <ProFormText name="customer_name" hidden />
+      <Row gutter={16}>
+        <Col span={8}>
           <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
         </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="customer_phone" label="电话" placeholder="电话" />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
             label="出库仓库"
@@ -744,23 +742,46 @@ const ShipmentNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
         </Col>
-        <Col span={12} />
       </Row>
       <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
-      <div className="uni-table-detail">
-        <UniTableDetailHeader
-          title="通知明细"
-          required
-          onImport={() => setImportVisible(true)}
-          importText="导入明细"
-        />
-        <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
-          <AntForm.List name="items">
-            {(fields, { add, remove }) => {
-              const cols = [
+      <UniTableDetail
+        name="items"
+        title="通知明细"
+        required
+        requiredMessage="请至少添加一条通知明细"
+        headerExtra={(
+          <Space size={8}>
+            <Button
+              type="default"
+              icon={<ImportOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              导入明细
+            </Button>
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                items.push({ ...defaultNoticeItem });
+                formRef.current?.setFieldsValue({ items });
+              }}
+            >
+              添加明细
+            </Button>
+            <Button
+              type="default"
+              icon={<AppstoreAddOutlined />}
+              onClick={() => setMaterialPickerOpen(true)}
+            >
+              {t('app.kuaizhizao.common.materialBatchSelect')}
+            </Button>
+          </Space>
+        )}
+        columns={[
                 {
                   title: '物料',
                   dataIndex: 'material_id',
@@ -774,26 +795,28 @@ const ShipmentNoticesPage: React.FC = () => {
                           ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
                           : undefined;
                         return (
-                          <UniMaterialSelect
-                            name={[index, 'material_id']}
-                            label=""
-                            placeholder="请选择物料"
-                            required
-                            size="small"
-                            listFieldKey={index}
-                            listFieldName="items"
-                            fillMapping={{
-                              material_code: 'mainCode',
-                              material_name: 'name',
-                              material_spec: 'specification',
-                              material_unit: 'baseUnit',
-                              unit_price: 'defaults.defaultSalePrice' as any,
-                            }}
-                            fallbackOption={fallback}
-                            formItemProps={{ style: { margin: 0 } }}
-                            showQuickCreate
-                            showAdvancedSearch
-                          />
+                          <div className="uni-detail-material-cell">
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder="请选择物料"
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                                material_spec: 'specification',
+                                material_unit: 'baseUnit',
+                                unit_price: 'defaults.defaultSalePrice' as any,
+                              }}
+                              fallbackOption={fallback}
+                              formItemProps={{ style: { margin: 0 } }}
+                              showQuickCreate
+                              showAdvancedSearch
+                            />
+                          </div>
                         );
                       }}
                     </AntForm.Item>
@@ -841,45 +864,16 @@ const ShipmentNoticesPage: React.FC = () => {
                     </AntForm.Item>
                   ),
                 },
-                {
-                  title: '操作',
-                  width: 60,
-                  render: (_: any, __: any, index: number) => (
-                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
-                  ),
-                },
-              ];
-              return (
-                <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <Table
-                    size="small"
-                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                    rowKey="key"
-                    pagination={false}
-                    columns={cols}
-                    footer={() => (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultNoticeItem)}>
-                          添加明细
-                        </Button>
-                        <Button
-                          type="default"
-                          icon={<ShoppingOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
-                          onClick={() => setMaterialPickerOpen(true)}
-                        >
-                          {t('app.kuaizhizao.common.materialBatchSelect')}
-                        </Button>
-                      </div>
-                    )}
-                  />
-                </div>
-              );
-            }}
-          </AntForm.List>
-        </ProForm.Item>
-        <ShipmentNoticeFormSummary />
-      </div>
+              ]}
+        disabledAdd
+        minRows={1}
+        initialValue={{ ...defaultNoticeItem }}
+        tableProps={{
+          size: 'small',
+          style: { width: '100%', margin: 0 },
+        }}
+      />
+      <ShipmentNoticeFormSummary />
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );
@@ -887,13 +881,10 @@ const ShipmentNoticesPage: React.FC = () => {
   const renderEditForm = () => (
     <>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="sales_order_code" label="销售订单号" disabled />
         </Col>
-        <Col span={12} />
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
             <Select
               placeholder="请选择客户"
@@ -911,15 +902,15 @@ const ShipmentNoticesPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
         </Col>
       </Row>
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText name="customer_phone" label="电话" placeholder="电话" />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
             label="出库仓库"
@@ -927,15 +918,12 @@ const ShipmentNoticesPage: React.FC = () => {
             onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
+        <Col span={8}>
+          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
-      <Row gutter={16}>
-        <Col span={12}>
-          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
-        </Col>
-        <Col span={12} />
-      </Row>
       <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
       <ProFormItem label="通知明细">
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -1053,7 +1041,7 @@ const ShipmentNoticesPage: React.FC = () => {
       <Modal
         title={pullFromSalesOrderAction.label}
         open={pullFromSalesOrderVisible}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => {
           if (pullSalesOrderSubmitting) return;
           setPullFromSalesOrderVisible(false);
