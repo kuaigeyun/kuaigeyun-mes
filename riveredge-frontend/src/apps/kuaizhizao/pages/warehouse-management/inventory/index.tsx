@@ -1,9 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Card, Col, Row, Segmented, Select, Space, Statistic, Tag, Typography } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { App, Card, Col, Row, Segmented, Select, Space, Statistic, Tag } from 'antd';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
 
 interface InventoryItem {
@@ -33,7 +36,6 @@ interface GroupItem {
 
 const InventoryPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const navigate = useNavigate();
   const actionRef = useRef<any>(null);
   const lastQueryRef = useRef<Record<string, any>>({});
 
@@ -75,19 +77,20 @@ const InventoryPage: React.FC = () => {
 
   const columns: ProColumns<InventoryItem>[] = [
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      width: 140,
+      title: '物料',
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          <a onClick={() => navigate(`/apps/kuaizhizao/warehouse-management/batch-inventory-query?material_id=${r.material_id}`)}>
-            {r.material_code ?? '-'}
-          </a>
-        </Typography.Text>
+        <MaterialStackedCell
+          material_name={r.material_name}
+          material_code={r.material_code}
+        />
       ),
     },
-    { title: '物料名称', dataIndex: 'material_name', width: 180, fixed: 'left' },
+    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
     {
       title: '库存数量',
       dataIndex: 'quantity',

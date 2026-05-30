@@ -28,6 +28,7 @@ import {
   LIST_LIFECYCLE_STAGE_FIELD,
   arePinnedSearchParamsActive,
   commitListPageSearchParams,
+  isRemotePinnedSearchRedundantWithBuiltinLifecycle,
 } from '../../utils/listLifecycleStage';
 import {
   DndContext,
@@ -522,6 +523,21 @@ const createBuiltinLifecycleStageSearches = (
 const isBuiltinSavedSearch = (search: SavedSearch): boolean =>
   search.uuid.startsWith(BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX);
 
+const filterRemotePinnedSearches = (
+  remoteItems: SavedSearch[],
+  builtinSearches: SavedSearch[],
+): SavedSearch[] => {
+  const builtinStageValues = builtinSearches
+    .map((s) => s.search_params?.[LIST_LIFECYCLE_STAGE_FIELD])
+    .filter((v): v is string => v != null && String(v).trim() !== '');
+  if (builtinStageValues.length === 0) {
+    return remoteItems;
+  }
+  return remoteItems.filter(
+    (item) => !isRemotePinnedSearchRedundantWithBuiltinLifecycle(item.search_params, builtinStageValues),
+  );
+};
+
 /**
  * 查询搜索弹窗组件
  */
@@ -604,7 +620,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   );
 
   const savedSearches = useMemo(() => {
-    const remoteItems = (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item));
+    const remoteItems = filterRemotePinnedSearches(
+      (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item)),
+      builtinLifecycleStageSearches,
+    );
     if (builtinLifecycleStageSearches.length === 0) {
       return remoteItems;
     }
@@ -2631,7 +2650,10 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   );
 
   const pinnedSearches = useMemo(() => {
-    const remoteItems = (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item));
+    const remoteItems = filterRemotePinnedSearches(
+      (savedSearchesData?.items || []).filter((item) => !isBuiltinSavedSearch(item)),
+      builtinLifecycleStageSearches,
+    );
     const mergedItems = [...builtinLifecycleStageSearches, ...remoteItems];
     const allPinned = mergedItems.filter((item) => item.is_pinned);
 

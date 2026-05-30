@@ -29,6 +29,10 @@ import { EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
   ListPageTemplate,
   DetailDrawerTemplate,
   DetailDrawerSection, DetailDrawerInlineFullChain,
@@ -263,17 +267,20 @@ const PurchaseReturnsPage: React.FC = () => {
 
   const columns: ProColumns<PurchaseReturn>[] = [
     {
-      title: '退货单编号',
+      title: '供应商 / 退货单号',
+      key: 'return_code',
       dataIndex: 'return_code',
-      width: 148,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.return_code ?? '') }} ellipsis>
-          {r.return_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.supplier_name ?? '')}
+          secondary={String(r.return_code ?? '')}
+        />
       ),
     },
+    { title: '退货单编号', dataIndex: 'return_code', hideInTable: true },
+    { title: '供应商', dataIndex: 'supplier_name', hideInTable: true },
     {
       title: '采购入库单编号',
       dataIndex: 'purchase_receipt_code',
@@ -296,7 +303,6 @@ const PurchaseReturnsPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '供应商', dataIndex: 'supplier_name', width: 150, ellipsis: true },
     { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     {
       title: '审核状态',

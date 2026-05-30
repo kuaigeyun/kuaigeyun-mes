@@ -40,6 +40,10 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -53,6 +57,7 @@ import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
@@ -496,7 +501,7 @@ const ProcessInspectionPage: React.FC = () => {
       { title: '检验员', dataIndex: 'inspector_name' },
       { title: '检验时间', dataIndex: 'inspection_time', valueType: 'dateTime' },
       { title: '审核人', dataIndex: 'reviewer_name', render: (t) => t || '-' },
-      { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime', render: (t) => t || '-' },
+      { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime', render: (t) => formatDateTimeBySiteSetting(t) },
       { title: '检验备注', dataIndex: 'notes', span: 2, render: (t) => t || '-' },
     ],
     []
@@ -616,21 +621,16 @@ const ProcessInspectionPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      width: 120,
+      title: '物料',
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          {r.material_code ?? '-'}
-        </Typography.Text>
+        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    {
-      title: '物料名称',
-      dataIndex: 'material_name',
-      width: 150,
-      ellipsis: true,
-    },
+    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
     {
       title: '检验数量',
       dataIndex: 'inspection_quantity',

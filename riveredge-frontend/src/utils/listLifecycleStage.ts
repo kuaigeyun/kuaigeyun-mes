@@ -114,6 +114,59 @@ function stableSearchParamsKey(params: Record<string, unknown>): string {
 }
 
 /**
+ * 常见 API status → lifecycle_stage 展示名。
+ * 仅用于：内置生命周期钉住 Tab 与 legacy「仅 status」保存条件去重，非全业务 status 映射。
+ */
+export const COMMON_STATUS_API_TO_LIFECYCLE_STAGE: Record<string, string> = {
+  draft: '草稿',
+  released: '已下达',
+  in_progress: '执行中',
+  completed: '已完成',
+  cancelled: '已取消',
+  split: '已拆分',
+  草稿: '草稿',
+  已下达: '已下达',
+  执行中: '执行中',
+  已完成: '已完成',
+  已取消: '已取消',
+  已拆分: '已拆分',
+};
+
+/** 将钉住条件归一为 lifecycle_stage 展示名（单字段 legacy status 视为等价阶段）。 */
+export function equivalentLifecycleStageFromPinnedParams(
+  params?: Record<string, unknown> | null,
+): string | undefined {
+  const normalized = normalizeListPageSearchParamsForApply(params);
+  if (!normalized) {
+    return undefined;
+  }
+  const stageFromField = normalized[LIST_LIFECYCLE_STAGE_FIELD];
+  if (stageFromField != null && String(stageFromField).trim() !== '') {
+    return String(stageFromField).trim();
+  }
+  const keys = Object.keys(normalized);
+  if (keys.length !== 1 || normalized.status == null || normalized.status === '') {
+    return undefined;
+  }
+  return COMMON_STATUS_API_TO_LIFECYCLE_STAGE[String(normalized.status)];
+}
+
+/** 远程钉住条件是否已被同阶段内置 lifecycle_stage Tab 覆盖（避免多源重复展示）。 */
+export function isRemotePinnedSearchRedundantWithBuiltinLifecycle(
+  remoteSearchParams: Record<string, unknown> | undefined,
+  builtinStageValues: readonly string[],
+): boolean {
+  if (builtinStageValues.length === 0) {
+    return false;
+  }
+  const stage = equivalentLifecycleStageFromPinnedParams(remoteSearchParams);
+  if (!stage) {
+    return false;
+  }
+  return builtinStageValues.includes(stage);
+}
+
+/**
  * 钉住 Tab 是否应对应当前列表筛选（与 searchParamsRef 完全一致，生命周期键已归一）。
  */
 export function arePinnedSearchParamsActive(

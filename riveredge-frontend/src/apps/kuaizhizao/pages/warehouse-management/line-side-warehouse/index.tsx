@@ -9,6 +9,10 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { App, Select, Typography } from 'antd';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getLineSideInventoryLifecycle } from '../../../utils/lineSideInventoryLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -61,25 +65,24 @@ const LineSideWarehousePage: React.FC = () => {
       render: (_, record) => record.warehouse_name || '-',
     },
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          {r.material_code ?? '-'}
-        </Typography.Text>
+      title: '物料',
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, record) => (
+        <MaterialStackedCell
+          material_name={record.material_name}
+          material_code={record.material_code}
+          material_spec={record.material_spec}
+        />
       ),
     },
-    {
-      title: '物料名称',
-      dataIndex: 'material_name',
-      width: 150,
-    },
+    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
     {
       title: '规格型号',
       dataIndex: 'material_spec',
-      width: 120,
-      render: (_, record) => record.material_spec || '-',
+      hideInTable: true,
     },
     {
       title: '批号',

@@ -41,8 +41,7 @@ SALES_ORDER_EXEC_SUB_STAGES = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# 工单生命周期节点（草稿→已下达→执行中→已完成，已取消为异常分支）
+# 工单生命周期节点（草稿→已下达→执行中→已完成；已取消/已拆分为终态分支）
 # ---------------------------------------------------------------------------
 WORK_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
@@ -50,6 +49,7 @@ WORK_ORDER_MAIN_STAGES = [
     {"key": "in_progress", "label": "执行中"},
     {"key": "completed", "label": "已完成"},
     {"key": "cancelled", "label": "已取消"},
+    {"key": "split", "label": "已拆分"},
 ]
 
 
@@ -490,6 +490,18 @@ def get_work_order_lifecycle(
         {"key": "fg_qc", "label": "成品检验", "status": fg_qc_status},
         {"key": "fg_receipt", "label": "入库申请", "status": fg_receipt_status},
     ]
+
+    # 已拆分：原工单已拆成子工单，非用户取消
+    if status in ("split", "已拆分"):
+        return {
+            "current_stage_key": "split",
+            "current_stage_name": "已拆分",
+            "status": "normal",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "split"),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+            "milestones": milestones,
+        }
 
     # 已取消：异常分支
     if status in ("cancelled", "已取消"):

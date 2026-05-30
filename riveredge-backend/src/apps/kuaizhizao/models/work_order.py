@@ -32,7 +32,7 @@ class WorkOrder(BaseModel):
         workshop_name: 车间名称
         work_center_id: 工作中心ID
         work_center_name: 工作中心名称
-        status: 工单状态（draft/released/in_progress/completed/cancelled）
+        status: 工单状态（draft/released/in_progress/completed/cancelled/split）
         priority: 优先级（low/normal/high/urgent）
         planned_start_date: 计划开始时间
         planned_end_date: 计划结束时间
@@ -70,6 +70,7 @@ class WorkOrder(BaseModel):
             ("planned_end_date",),
             ("created_at",),
             ("process_route_id",),
+            ("parent_work_order_id",),
         ]
         unique_together = [("tenant_id", "code")]
 
@@ -148,6 +149,18 @@ class WorkOrder(BaseModel):
     completed_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已完成数量")
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+
+    # 拆分工单：指向被拆分的原工单
+    parent_work_order_id = fields.IntField(null=True, description="原工单 ID（拆分工单）")
+
+    # 齐套率（BOM+库存持久化；库存/工单变更时后台刷新）
+    readiness_rate = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="齐套率 (%)"
+    )
+    readiness_rate_updated_at = fields.DatetimeField(null=True, description="齐套率最后计算时间")
+    readiness_component_ids = fields.JSONField(
+        null=True, description="齐套 BOM 组件物料 ID 列表（库存变动定向刷新）"
+    )
 
     # 配置件属性（Configure 产品时用于 BOM 匹配）
     variant_attributes = fields.JSONField(null=True, description="属性（配置件专用）")

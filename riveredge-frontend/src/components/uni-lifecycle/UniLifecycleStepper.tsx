@@ -48,7 +48,7 @@ export interface UniLifecycleStepperProps {
   nodeSize?: number;
   /** 是否在节点下方再显示文案（默认 true） */
   showLabels?: boolean;
-  /** 圆环内进度文字字号（默认 10） */
+  /** 子阶段节点内进度文字字号（保留 API，圆环内不再展示百分比） */
   innerFontSize?: number;
   /** 当前阶段的下一步操作建议，可选 */
   nextStepSuggestions?: string[];
@@ -139,8 +139,6 @@ function NodeCircle({
   size,
   step,
   showLabelBelow,
-  innerFontSize,
-  percent,
   wrapWithTooltip = true,
 }: {
   status: SubStage['status'];
@@ -148,13 +146,15 @@ function NodeCircle({
   size: number;
   step: SubStage;
   showLabelBelow: boolean;
-  innerFontSize: number;
+  /** @deprecated 圆环内不再展示百分比 */
+  innerFontSize?: number;
+  /** @deprecated 圆环内不再展示百分比 */
   percent?: number;
   /** 为 false 时由外层统一包 Tooltip（例如标签绝对定位到列外时） */
   wrapWithTooltip?: boolean;
 }) {
-  const showPercent = percent != null && percent >= 0 && (status === 'active' || status === 'done');
-  const iconSize = showPercent ? size * 0.3 : size * 0.42;
+  const iconSize = size * 0.42;
+  const useDoneCheck = status === 'done';
 
   let bg = 'var(--ant-color-fill-quaternary)';
   let border = '1px solid var(--ant-color-border-secondary)';
@@ -203,7 +203,7 @@ function NodeCircle({
         border,
         flexShrink: 0,
         boxSizing: 'border-box',
-        gap: showPercent ? 2 : 0,
+        gap: 0,
         boxShadow: ringShadow,
       }}
     >
@@ -216,27 +216,18 @@ function NodeCircle({
           color: iconColor,
         }}
       >
-        {renderStageIcon(step, iconSize)}
+        {useDoneCheck ? (
+          <CheckCircle size={Math.max(14, Math.round(iconSize))} strokeWidth={2.5} aria-hidden />
+        ) : (
+          renderStageIcon(step, iconSize)
+        )}
       </span>
-      {showPercent && (
-        <span
-          style={{
-            fontSize: innerFontSize,
-            lineHeight: 1.1,
-            color: iconColor,
-            fontWeight: 600,
-          }}
-        >
-          {Math.round(percent)}%
-        </span>
-      )}
     </span>
   );
 
   if (!showLabelBelow) {
     if (!wrapWithTooltip) return node;
-    const tooltipTitle = percent != null ? `${step.label} ${Math.round(percent)}%` : step.label;
-    return <Tooltip title={tooltipTitle}>{node}</Tooltip>;
+    return <Tooltip title={step.label}>{node}</Tooltip>;
   }
 
   const content = (
@@ -263,9 +254,8 @@ function NodeCircle({
       </span>
     </span>
   );
-  const tooltipTitle = percent != null ? `${step.label} ${Math.round(percent)}%` : step.label;
   if (!wrapWithTooltip) return content;
-  return <Tooltip title={tooltipTitle}>{content}</Tooltip>;
+  return <Tooltip title={step.label}>{content}</Tooltip>;
 }
 
 function stepLabelInlineStyle(
@@ -397,15 +387,13 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
           }}
         >
           {steps.map((step, idx) => {
-            const tooltipTitle =
-              step.percent != null ? `${step.label} ${Math.round(step.percent)}%` : step.label;
             const stepIsException = Boolean(isException && step.status === 'active');
             return (
               <React.Fragment key={step.key}>
                 {idx > 0 && (
                   <ConnectorTrack completed={steps[idx - 1]?.status === 'done'} widthPx={connectorPx} />
                 )}
-                <Tooltip title={tooltipTitle}>
+                <Tooltip title={step.label}>
                   <div
                     {...bindStepClick(step, idx)}
                     style={{
@@ -425,8 +413,6 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                       step={step}
                       showLabelBelow={false}
                       wrapWithTooltip={false}
-                      innerFontSize={innerFontSize}
-                      percent={step.percent}
                     />
                   </div>
                 </Tooltip>

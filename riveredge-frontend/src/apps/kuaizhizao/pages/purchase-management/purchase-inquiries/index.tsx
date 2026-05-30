@@ -9,6 +9,10 @@ import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNu
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -436,8 +440,21 @@ const PurchaseInquiriesPage: React.FC = () => {
   }, []);
 
   const columns: ProColumns<PurchaseInquiry>[] = [
-    { title: '询价单号', dataIndex: 'inquiry_code', width: 160, copyable: true },
-    { title: '名称', dataIndex: 'inquiry_name', ellipsis: true },
+    {
+      title: '名称 / 询价单号',
+      key: 'inquiry_code',
+      dataIndex: 'inquiry_code',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={String(r.inquiry_name ?? '')}
+          secondary={String(r.inquiry_code ?? '')}
+        />
+      ),
+    },
+    { title: '询价单号', dataIndex: 'inquiry_code', hideInTable: true, copyable: true },
+    { title: '名称', dataIndex: 'inquiry_name', hideInTable: true, ellipsis: true },
     { title: '来源单号', dataIndex: 'source_code', width: 140 },
     { title: '采购员', dataIndex: 'buyer_name', width: 100 },
     {

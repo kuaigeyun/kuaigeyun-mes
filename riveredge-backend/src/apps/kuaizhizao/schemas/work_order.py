@@ -193,6 +193,10 @@ class WorkOrderResponse(WorkOrderBase):
         None,
         description="制造模式（fabrication/assembly）：定义在物料主数据；工单 product_id 指向本单制造的产品物料，由后端从该物料 source_config 解析",
     )
+    split_remaining_quantity: Optional[Decimal] = Field(
+        None,
+        description="拆分剩余可分配数量（已拆分主工单：原数量减去子工单数量之和）",
+    )
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -205,6 +209,14 @@ class WorkOrderOperationMinimalForGantt(BaseModel):
     assigned_equipment_name: Optional[str] = None
     assigned_mold_name: Optional[str] = None
     assigned_tool_name: Optional[str] = None
+
+
+class WorkOrderOperationStepSummary(BaseModel):
+    """工序步骤摘要（运营看板 / 列表工序列）"""
+    name: str = Field(..., description="工序名称")
+    sequence: int = Field(default=0, description="工序序号")
+    status: str = Field(..., description="done | active | pending")
+    progress: int = Field(default=0, description="进行中工序进度 0-100")
 
 
 class WorkOrderListResponse(BaseModel):
@@ -221,6 +233,10 @@ class WorkOrderListResponse(BaseModel):
     name: Optional[str] = Field(None, description="工单名称（可选）")
     product_name: str = Field(..., description="产品名称")
     quantity: Decimal = Field(..., description="计划生产数量")
+    split_remaining_quantity: Optional[Decimal] = Field(
+        None,
+        description="拆分剩余可分配数量（已拆分主工单：原数量减去子工单数量之和）",
+    )
     production_mode: str = Field(..., description="生产模式")
     sales_order_code: Optional[str] = Field(None, description="销售订单编码")
     sales_order_name: Optional[str] = Field(None, description="销售订单名称（冗余展示）")
@@ -242,8 +258,26 @@ class WorkOrderListResponse(BaseModel):
         None,
         description="制造模式（fabrication/assembly）：定义在物料主数据；工单以 product_id 关联所制造的产品物料，从该物料 source_config 解析",
     )
+    row_kind: str = Field(
+        default="work_order",
+        description="列表行类型：work_order（原工单）| split（拆分工单）| rework（返工单）| outsource（工序委外单）",
+    )
+    parent_work_order_id: Optional[int] = Field(None, description="原工单 ID（子行）")
+    children: Optional[List["WorkOrderListResponse"]] = Field(
+        None, description="挂在原工单下的拆分工单/返工单/委外单"
+    )
+    rework_type: Optional[str] = Field(None, description="返工类型（row_kind=rework）")
+    rework_operation_names: Optional[str] = Field(
+        None, description="返工涉及工序名摘要（row_kind=rework，逗号分隔；空表示整单返工）"
+    )
+    operation_name: Optional[str] = Field(None, description="委外工序名（row_kind=outsource）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商（row_kind=outsource）")
     created_at: datetime = Field(..., description="创建时间")
     operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
+    operation_steps: Optional[List[WorkOrderOperationStepSummary]] = Field(
+        None,
+        description="工序步骤摘要（include_operation_steps=true 时返回，与运营看板口径一致）",
+    )
 
 
 class MaterialShortageItem(BaseModel):
@@ -471,6 +505,9 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
         alias="maxReportableQuantity",
         description="本道工序允许的最大累计完成数量（含超报，相对当前工单计划数量计算）",
     )
+    is_outsourced: bool = Field(False, description="是否已创建工序委外单（未取消）")
+    outsource_supplier_name: Optional[str] = Field(None, description="委外供应商名称")
+    outsource_order_code: Optional[str] = Field(None, description="委外单编码")
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
@@ -517,3 +554,4 @@ class WorkOrderMergeResponse(BaseModel):
 
 # 更新前向引用（Pydantic v2 需要）
 WorkOrderCreate.model_rebuild()
+WorkOrderListResponse.model_rebuild()

@@ -218,6 +218,11 @@ export const outsourceOrderApi = {
     return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/outsource`, { method: 'POST', data });
   },
 
+  // 获取工单工序可委外数量
+  getOutsourceOptions: async (workOrderId: string) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/outsource-options`, { method: 'GET' });
+  },
+
   // 关联采购入库单
   linkPurchaseReceipt: async (outsourceOrderId: string, purchaseReceiptId: number) => {
     return apiRequest(`/apps/kuaizhizao/outsource-orders/${outsourceOrderId}/link-purchase-receipt`, {

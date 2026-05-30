@@ -12,6 +12,10 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Popconfirm } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, ShoppingOutlined, SwapOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 
@@ -118,17 +122,19 @@ const MaterialShortageExceptionPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '物料名称',
+      title: '物料',
+      key: 'material_name',
       dataIndex: 'material_name',
-      width: 150,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, record) => (
+        <MaterialStackedCell
+          material_name={record.material_name}
+          material_code={record.material_code}
+        />
+      ),
     },
+    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
     {
       title: '需求数量',
       dataIndex: 'required_quantity',

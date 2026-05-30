@@ -1047,6 +1047,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   allowCustomScrollX?: boolean
   /**
+   * 可选：由页面持有，与钉住条件 / 指标卡筛选共用 searchParamsRef（唯一筛选数据源）
+   */
+  searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>
+  /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
@@ -1179,6 +1183,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   allowCustomScrollX = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
+  searchParamsRef: externalSearchParamsRef,
   tanstackQuery,
   columnPersistenceId,
   columnsState: userColumnsState,
@@ -1227,7 +1232,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /** 当前分页大小：用于判断当前页是否未装满（未装满则不注入 scroll.y） */
   const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
-  const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch()
+  const { searchParamsRef: hookSearchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } =
+    useProTableSearch()
+  const searchParamsRef = (externalSearchParamsRef ||
+    hookSearchParamsRef) as React.MutableRefObject<Record<string, any> | undefined>
   // 模糊搜索关键词状态
   const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('')
   /** 递增以使 QuerySearchButton 重算钉住条件激活态（searchParamsRef 变更不触发渲染） */

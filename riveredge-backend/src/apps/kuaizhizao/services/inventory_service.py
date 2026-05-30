@@ -257,6 +257,9 @@ class InventoryService:
                         work_order_id=work_order_id,
                         work_order_code=work_order_code,
                     )
+            from apps.kuaizhizao.services.work_order_readiness_service import notify_inventory_changed
+
+            notify_inventory_changed(tenant_id, material_id)
             return True
         except Exception as e:
             logger.error(f"InventoryService.increase_stock 失败: {e}")
@@ -473,6 +476,9 @@ class InventoryService:
                     f"InventoryService.decrease_stock(line_side): tenant={tenant_id} "
                     f"warehouse={warehouse_id} material={material_id} qty={quantity}"
                 )
+            from apps.kuaizhizao.services.work_order_readiness_service import notify_inventory_changed
+
+            notify_inventory_changed(tenant_id, material_id)
             return True
         except Exception as e:
             logger.error(f"InventoryService.decrease_stock 失败: {e}")
@@ -600,6 +606,9 @@ class InventoryService:
                     f"InventoryService.adjust_inventory(line_side): tenant={tenant_id} "
                     f"warehouse={warehouse_id} material={material_id} qty={quantity}"
                 )
+            from apps.kuaizhizao.services.work_order_readiness_service import notify_inventory_changed
+
+            notify_inventory_changed(tenant_id, material_id)
             return True
         except Exception as e:
             logger.error(f"InventoryService.adjust_inventory 失败: {e}")

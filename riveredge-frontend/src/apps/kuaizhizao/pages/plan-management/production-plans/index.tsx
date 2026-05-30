@@ -26,6 +26,10 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import {
   ListPageTemplate,
@@ -219,16 +223,27 @@ const ProductionPlansPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<ProductionPlan>[] = [
     {
+      title: '计划名称 / 编号',
+      key: 'plan_code',
+      dataIndex: 'plan_code',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.plan_name ?? '')}
+          secondary={String(record.plan_code ?? '')}
+        />
+      ),
+    },
+    {
       title: '计划编号',
       dataIndex: 'plan_code',
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
+      hideInTable: true,
     },
     {
       title: '计划名称',
       dataIndex: 'plan_name',
-      width: 200,
+      hideInTable: true,
       ellipsis: true,
     },
     {

@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormDatePicker } from '@ant-design/pro-compo
 import { App, Button, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } from 'antd';
 import { EyeOutlined, DiffOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { 
   listComputationHistory, 
@@ -197,16 +198,12 @@ const ComputationHistoryPage: React.FC = () => {
    */
   const compareColumns = [
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      key: 'material_code',
-      width: 120,
-    },
-    {
-      title: '物料名称',
-      dataIndex: 'material_name',
-      key: 'material_name',
-      width: 200,
+      title: '物料',
+      key: 'material',
+      width: 220,
+      render: (_: unknown, record: { material_name?: string; material_code?: string }) => (
+        <MaterialStackedCell material_name={record.material_name} material_code={record.material_code} />
+      ),
     },
     {
       title: '需求数量',

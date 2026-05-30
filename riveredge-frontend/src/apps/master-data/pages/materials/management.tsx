@@ -108,6 +108,11 @@ import {
 } from '../../utils/fabricationRawMaterial'
 import type { FabricationMaterialRef } from '../../utils/fabricationRawMaterial'
 import { QRCodeGenerator } from '../../../../components/qrcode'
+import {
+  MaterialStackedCell,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../components/uni-table/stackedPrimaryColumn'
 
 /** SKU 子行列表单元格：不重复展示主物料字段 */
 function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
@@ -131,6 +136,82 @@ function renderSkuVariantAttributes(record: Material): React.ReactNode {
         </Tag>
       ))}
     </Space>
+  )
+}
+
+function getMaterialListMainCode(record: Material): string {
+  if (isVariantSkuMaterial(record)) {
+    return String((record as any).code ?? '')
+  }
+  return String(
+    (record as any).mainCode ?? (record as any).main_code ?? (record as any).code ?? '',
+  )
+}
+
+function getMaterialProcessRouteName(record: Material): string {
+  const name =
+    (record as any).processRouteName ?? (record as any).process_route_name ?? ''
+  return String(name).trim() || '-'
+}
+
+function getMaterialSourceTypeLabel(
+  record: Material,
+  sourceTypeOptions: { value: string; label: string }[],
+): string {
+  const st = (record as any).sourceType ?? (record as any).source_type
+  const option = sourceTypeOptions.find(opt => opt.value === st)
+  return option ? option.label : String(st ?? '').trim() || '-'
+}
+
+/** 列表首列：名称 / 编号·规格；品牌、型号以徽章挂在下方（配置件 SKU 子行：属性摘要 / SKU 编号） */
+function MaterialListStackedCell({ record }: { record: Material }) {
+  const { t } = useTranslation()
+
+  if (isVariantSkuMaterial(record)) {
+    const attrs = (record.variantAttributes ?? (record as any).variant_attributes ?? {}) as Record<
+      string,
+      unknown
+    >
+    const entries = Object.entries(attrs).filter(
+      ([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0),
+    )
+    const primary =
+      entries.map(([key, val]) => `${key}: ${scalarAttrDisplay(val)}`).join(' · ') || '—'
+    const code = getMaterialListMainCode(record) || '-'
+    return <UniTableStackedPrimaryCell primary={primary} secondary={code} />
+  }
+
+  const brand = record.brand?.trim()
+  const model = record.model?.trim()
+  const badges =
+    brand || model ? (
+      <Space size={4} wrap style={{ marginTop: 2 }}>
+        {brand ? (
+          <Tooltip title={`${t('app.master-data.materials.brand')}: ${brand}`}>
+            <Tag color="blue" style={{ margin: 0, lineHeight: '18px' }}>
+              {brand}
+            </Tag>
+          </Tooltip>
+        ) : null}
+        {model ? (
+          <Tooltip title={`${t('app.master-data.materials.model')}: ${model}`}>
+            <Tag color="geekblue" style={{ margin: 0, lineHeight: '18px' }}>
+              {model}
+            </Tag>
+          </Tooltip>
+        ) : null}
+      </Space>
+    ) : null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
+      <MaterialStackedCell
+        material_name={record.name}
+        material_code={getMaterialListMainCode(record)}
+        material_spec={record.specification}
+      />
+      {badges}
+    </div>
   )
 }
 
@@ -165,6 +246,7 @@ import {
   resolveMasterMaterialForImport,
 } from '../../utils/materialImport'
 import { downloadFile } from '../../../../utils'
+import { formatDateTimeBySiteSetting } from '../../../../utils/format'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 import { extractProTableSort } from '../../../../utils/tableQueryKey'
@@ -1639,7 +1721,10 @@ const MaterialsManagementPage: React.FC = () => {
         const matType = (r as any).sourceType ?? (r as any).source_type ?? ''
         const isActive = r?.isActive ?? (r as any)?.is_active
         const status = isActive ? t('common.enabled') : t('common.disabled')
-        const createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : ''
+        const createdAt = formatDateTimeBySiteSetting(
+          r.createdAt ?? (r as any).created_at,
+          '',
+        )
         csvRows.push(
           [code, name, spec, unit, matType, status, createdAt]
             .map((c) => {
@@ -1706,7 +1791,7 @@ const MaterialsManagementPage: React.FC = () => {
   const getMaterialGroupName = useCallback((groupId?: number): string => {
     if (!groupId) return '-'
     const group = materialGroups.find(g => g.id === groupId)
-    return group ? formatMaterialGroupLabel(group) : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
+    return group?.name?.trim() ? group.name.trim() : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
   }, [materialGroups, t])
 
   /** 详情抽屉「基本信息」字段顺序（uni-detail + detailDrawerDescriptionItems） */
@@ -1813,33 +1898,29 @@ const MaterialsManagementPage: React.FC = () => {
   const columns = useMemo<ProColumns<Material>[]>(
     () => [
       {
+        title: t('app.master-data.materials.colMaterialPrimary'),
+        key: 'name',
+        dataIndex: 'name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        sorter: true,
+        render: (_, record) => <MaterialListStackedCell record={record} />,
+      },
+      {
         title: t('app.master-data.materials.materialCode'),
         dataIndex: ['mainCode', 'code'],
-        width: 220,
-        fixed: 'left',
-        render: (_, record) => {
-          if (isVariantSkuMaterial(record)) {
-            const val = (record as any).code || '-'
-            if (val === '-') return <Typography.Text>{val}</Typography.Text>
-            return <Typography.Text copyable={{ text: String(val) }}>{val}</Typography.Text>
-          }
-          const val =
-            (record as any).mainCode ?? (record as any).main_code ?? (record as any).code ?? '-'
-          if (val === '-') return <Typography.Text>{val}</Typography.Text>
-          return <Typography.Text copyable={{ text: String(val) }}>{val}</Typography.Text>
-        },
+        hideInTable: true,
       },
       {
         title: t('app.master-data.materials.materialName'),
         dataIndex: 'name',
-        width: 280,
-        sorter: true,
-        render: (_, record) => {
-          if (isVariantSkuMaterial(record)) {
-            return renderSkuVariantAttributes(record)
-          }
-          return record.name || '-'
-        },
+        hideInTable: true,
+      },
+      {
+        title: t('app.master-data.materials.specification'),
+        dataIndex: 'specification',
+        hideInTable: true,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.materials.productImage'),
@@ -1890,20 +1971,31 @@ const MaterialsManagementPage: React.FC = () => {
         render: (_, record) => renderMasterCell(record, getMaterialGroupName(record.groupId)),
       },
       {
-        title: t('app.master-data.materials.processRoute'),
+        title: t('app.master-data.materials.colProcessRouteSource'),
+        key: 'processRouteSource',
         dataIndex: ['processRouteName', 'process_route_name'],
-        width: 140,
+        minWidth: 140,
         hideInSearch: true,
         render: (_, record) =>
           renderMasterCell(
             record,
-            (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
+            <UniTableStackedPrimaryCell
+              primary={getMaterialProcessRouteName(record)}
+              secondary={getMaterialSourceTypeLabel(record, sourceTypeOptions)}
+              secondaryCopyable={false}
+            />,
           ),
+      },
+      {
+        title: t('app.master-data.materials.processRoute'),
+        dataIndex: ['processRouteName', 'process_route_name'],
+        hideInTable: true,
+        hideInSearch: true,
       },
       {
         title: t('app.master-data.materials.sourceType'),
         dataIndex: 'sourceType',
-        width: 120,
+        hideInTable: true,
         valueType: 'select',
         valueEnum: sourceTypeOptions.reduce(
           (acc, option) => {
@@ -1916,19 +2008,6 @@ const MaterialsManagementPage: React.FC = () => {
           showSearch: true,
           allowClear: true,
         },
-        render: (_, record) => {
-          if (isVariantSkuMaterial(record)) return null
-          const st = (record as any).sourceType ?? (record as any).source_type
-          const option = sourceTypeOptions.find(opt => opt.value === st)
-          return option ? option.label : st || '-'
-        },
-      },
-      {
-        title: t('app.master-data.materials.specification'),
-        dataIndex: 'specification',
-        width: 150,
-        ellipsis: true,
-        render: (_, record) => renderMasterCell(record, record.specification || '-'),
       },
       {
         title: t('app.master-data.materials.baseUnit'),
@@ -1983,14 +2062,12 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.brand'),
         dataIndex: 'brand',
-        width: 120,
-        render: (_, record) => renderMasterCell(record, record.brand || '-'),
+        hideInTable: true,
       },
       {
         title: t('app.master-data.materials.model'),
         dataIndex: 'model',
-        width: 120,
-        render: (_, record) => renderMasterCell(record, record.model || '-'),
+        hideInTable: true,
       },
       {
         title: t('app.master-data.materials.enabledStatus'),
@@ -2016,7 +2093,13 @@ const MaterialsManagementPage: React.FC = () => {
         valueType: 'dateTime',
         hideInSearch: true,
         sorter: true,
-        render: (_, record) => renderMasterCell(record, (record as any).createdAt ?? '-'),
+        render: (_, record) =>
+          renderMasterCell(
+            record,
+            formatDateTimeBySiteSetting(
+              (record as any).createdAt ?? (record as any).created_at,
+            ),
+          ),
       },
       {
         title: t('app.master-data.materials.action'),

@@ -186,4 +186,8 @@ export const reworkOrderApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'GET' }),
   createFromWorkOrder: async (workOrderId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/rework`, { method: 'POST', data }),
+  getReportingOptions: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/reporting-options`, { method: 'GET' }),
+  report: async (id: string, data: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/report`, { method: 'POST', data }),
 };

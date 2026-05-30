@@ -23,6 +23,10 @@ import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNu
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -170,17 +174,20 @@ const DeliveryNotesPage: React.FC = () => {
 
   const columns: ProColumns<DeliveryNotice>[] = [
     {
-      title: '通知单号',
+      title: '客户 / 通知单号',
+      key: 'notice_code',
       dataIndex: 'notice_code',
-      width: 140,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.notice_code ?? '') }} ellipsis>
-          {r.notice_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.customer_name ?? '')}
+          secondary={String(r.notice_code ?? '')}
+        />
       ),
     },
+    { title: '通知单号', dataIndex: 'notice_code', hideInTable: true },
+    { title: '客户', dataIndex: 'customer_name', hideInTable: true },
     {
       title: '销售出库单号',
       dataIndex: 'sales_delivery_code',
@@ -192,7 +199,6 @@ const DeliveryNotesPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '承运商', dataIndex: 'carrier', width: 100 },
     { title: '运单号', dataIndex: 'tracking_number', width: 120, ellipsis: true },
     { title: '预计送达', dataIndex: 'planned_delivery_date', valueType: 'date', width: 110 },

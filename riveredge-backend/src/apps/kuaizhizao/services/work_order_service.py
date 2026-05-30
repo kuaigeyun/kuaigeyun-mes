@@ -9,7 +9,7 @@ Date: 2025-01-01
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -1050,7 +1050,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     # 自动生成工序单失败不影响工单创建，记录日志
                     logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
 
-            return WorkOrderResponse.model_validate(work_order)
+            work_order_id_created = work_order.id
+            response = WorkOrderResponse.model_validate(work_order)
+
+        from apps.kuaizhizao.services.work_order_readiness_service import (
+            dispatch_work_order_readiness_refresh,
+        )
+
+        await dispatch_work_order_readiness_refresh(tenant_id, work_order_id_created)
+        return response
 
     async def get_work_order_by_id(
         self,
@@ -1101,7 +1109,45 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
             response.sales_order_code = rc
             response.sales_order_name = rn
+        if (work_order.status or "") == "split" and work_order.parent_work_order_id is None:
+            remaining = await self.compute_split_remaining_quantity(tenant_id, work_order_id)
+            response = response.model_copy(update={"split_remaining_quantity": remaining})
         return response
+
+    async def compute_split_remaining_quantity(
+        self,
+        tenant_id: int,
+        parent_work_order_id: int,
+    ) -> Decimal:
+        """已拆分主工单的剩余可分配数量 = 原数量 - 未删除子工单数量之和。"""
+        parent = await self.get_by_id(tenant_id, parent_work_order_id, raise_if_not_found=True)
+        child_rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            parent_work_order_id=parent_work_order_id,
+            deleted_at__isnull=True,
+        ).only("quantity")
+        allocated = sum(Decimal(str(row.quantity)) for row in child_rows)
+        return max(Decimal("0"), parent.quantity - allocated)
+
+    async def _next_split_child_sequence(
+        self,
+        tenant_id: int,
+        parent_work_order_id: int,
+        parent_code: str,
+    ) -> int:
+        from apps.kuaizhizao.services.work_order_tree_service import _SPLIT_CODE_SUFFIX
+
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            parent_work_order_id=parent_work_order_id,
+            deleted_at__isnull=True,
+        ).only("code")
+        max_idx = 0
+        for row in rows:
+            match = _SPLIT_CODE_SUFFIX.match(row.code or "")
+            if match and match.group(1) == parent_code:
+                max_idx = max(max_idx, int(match.group(2)))
+        return max_idx + 1
 
     async def list_work_orders(
         self,
@@ -1123,6 +1169,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         planned_end_to: Optional[str] = None,
         order_by: Optional[str] = None,
         include_operations: bool = False,
+        include_operation_steps: bool = False,
         include_readiness: bool = False,
         include_scores: bool = False,
     ) -> Tuple[List[WorkOrderListResponse], int]:
@@ -1144,7 +1191,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             planned_start_from/to: 计划开始日期范围
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
-            include_readiness: 为 False 时跳过 BOM 齐套与库存计算（列表页首屏可快一个数量级）
+            include_readiness: 为 True 时强制重算当前页并写库；默认 False 时列表读 work_orders.readiness_rate 持久化字段
 
         Returns:
             Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
@@ -1154,7 +1201,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         query = WorkOrder.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True  # 只查询未删除的工单
+            deleted_at__isnull=True,  # 只查询未删除的工单
+            parent_work_order_id__isnull=True,  # 列表仅展示原工单；拆分工单挂在 children
         )
 
         # 添加筛选条件
@@ -1221,6 +1269,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         order_clause = order_by if order_by else "-created_at"
         work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
+        from apps.kuaizhizao.services.work_order_tree_service import (
+            WorkOrderTreeService,
+            is_split_child_code,
+        )
+
+        orphan_split_ids = [
+            wo.id
+            for wo in work_orders
+            if wo.id is not None
+            and wo.parent_work_order_id is None
+            and is_split_child_code(wo.code)
+        ]
+        if orphan_split_ids:
+            tree_svc = WorkOrderTreeService()
+            if await tree_svc.backfill_split_parent_links(tenant_id, child_ids=orphan_split_ids):
+                work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
+
         # 制造模式：定义在「产品物料」主数据的 source_config；工单通过 product_id（本单制造对象）关联物料后读取，与 get_work_order_by_id 一致
         product_ids = list({wo.product_id for wo in work_orders if wo.product_id})
         manufacturing_mode_by_product: dict[int, str] = {}
@@ -1269,91 +1334,93 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         # 批量预取工序（include_operations 时消除 N+1）
         operations_map: dict[int, list] = {}
-        if include_operations and work_orders:
-            wo_ids = [wo.id for wo in work_orders]
-            if wo_ids:
+        operation_steps_map: dict[int, list] = {}
+        if (include_operations or include_operation_steps) and work_orders:
+            wo_ids = [wo.id for wo in work_orders if wo.id is not None]
+            split_child_ids: list[int] = []
+            if include_operation_steps and wo_ids:
+                split_child_ids = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    parent_work_order_id__in=wo_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            fetch_ids = list({*wo_ids, *split_child_ids})
+            if fetch_ids:
                 all_ops = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
-                    work_order_id__in=wo_ids,
+                    work_order_id__in=fetch_ids,
                     deleted_at__isnull=True
                 ).order_by("work_order_id", "sequence").all()
-                for op in all_ops:
-                    operations_map.setdefault(op.work_order_id, []).append({
-                        "id": op.id,
-                        "operation_name": op.operation_name,
-                        "sequence": op.sequence,
-                        "planned_start_date": op.planned_start_date,
-                        "planned_end_date": op.planned_end_date,
-                        "assigned_equipment_name": op.assigned_equipment_name,
-                        "assigned_mold_name": op.assigned_mold_name,
-                        "assigned_tool_name": op.assigned_tool_name,
-                    })
-
-        # 齐套率：BOM 展开 + 库存汇总；列表页默认关闭。开启时同产品+数量+变型配置复用 BOM 结果，避免 N 次重复展开
-        wo_requirements_map: dict[int, list] = {}
-        all_comp_ids = set()
-        inventory_map: dict = {}
-        if include_readiness:
-            import json
-
-            bom_cache: dict[str, list] = {}
-
-            def _bom_cache_key(wo: WorkOrder) -> str:
-                variant_attrs = getattr(wo, "variant_attributes", None)
-                cfg_selections = getattr(wo, "configurable_selections", None)
-                if cfg_selections and isinstance(cfg_selections, dict):
-                    try:
-                        cfg_selections = {
-                            str(k): int(v) for k, v in cfg_selections.items() if v is not None
-                        }
-                    except (TypeError, ValueError):
-                        cfg_selections = None
-                return json.dumps(
-                    {
-                        "product_id": wo.product_id,
-                        "quantity": float(wo.quantity or 0),
-                        "variant_attributes": variant_attrs,
-                        "configurable_selections": cfg_selections,
-                    },
-                    sort_keys=True,
-                    default=str,
+                from apps.kuaizhizao.services.work_order_operation_steps import (
+                    build_work_order_operation_steps,
                 )
 
-            for wo in work_orders:
-                if wo.status in ['draft', 'released', 'in_progress']:
-                    try:
-                        cache_key = _bom_cache_key(wo)
-                        if cache_key not in bom_cache:
-                            variant_attrs = getattr(wo, "variant_attributes", None)
-                            cfg_selections = getattr(wo, "configurable_selections", None)
-                            if cfg_selections and isinstance(cfg_selections, dict):
-                                try:
-                                    cfg_selections = {
-                                        str(k): int(v)
-                                        for k, v in cfg_selections.items()
-                                        if v is not None
-                                    }
-                                except (TypeError, ValueError):
-                                    cfg_selections = None
-                            # 与 get_work_order_kitting_analysis / 库位与叫料 一致：齐套按「不拆中间自制件子 BOM」展开
-                            bom_cache[cache_key] = await calculate_material_requirements_from_bom(
-                                tenant_id=tenant_id,
-                                material_id=wo.product_id,
-                                required_quantity=float(wo.quantity),
-                                only_approved=True,
-                                variant_attributes=variant_attrs,
-                                configurable_selections=cfg_selections,
-                                for_kitting_analysis=True,
-                            )
-                        requirements = bom_cache[cache_key]
-                        wo_requirements_map[wo.id] = requirements
-                        for r in requirements:
-                            all_comp_ids.add(r.component_id)
-                    except Exception:
-                        continue
+                ops_by_wo: dict[int, list] = {}
+                for op in all_ops:
+                    ops_by_wo.setdefault(op.work_order_id, []).append(op)
 
-            from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
-            inventory_map = await batch_get_material_inventory(tenant_id, list(all_comp_ids))
+                qty_by_wo: dict[int, float] = {wo.id: float(wo.quantity or 0) for wo in work_orders if wo.id}
+                if split_child_ids:
+                    split_rows = await WorkOrder.filter(
+                        tenant_id=tenant_id,
+                        id__in=split_child_ids,
+                        deleted_at__isnull=True,
+                    ).only("id", "quantity")
+                    for row in split_rows:
+                        qty_by_wo[row.id] = float(row.quantity or 0)
+
+                for wo_id, ops in ops_by_wo.items():
+                    if include_operations:
+                        operations_map[wo_id] = [
+                            {
+                                "id": op.id,
+                                "operation_name": op.operation_name,
+                                "sequence": op.sequence,
+                                "planned_start_date": op.planned_start_date,
+                                "planned_end_date": op.planned_end_date,
+                                "assigned_equipment_name": op.assigned_equipment_name,
+                                "assigned_mold_name": op.assigned_mold_name,
+                                "assigned_tool_name": op.assigned_tool_name,
+                            }
+                            for op in ops
+                        ]
+                    if include_operation_steps:
+                        raw_ops = [
+                            {
+                                "operation_name": op.operation_name,
+                                "sequence": op.sequence,
+                                "status": op.status,
+                                "qualified_quantity": op.qualified_quantity,
+                            }
+                            for op in ops
+                        ]
+                        operation_steps_map[wo_id] = build_work_order_operation_steps(
+                            raw_ops,
+                            qty_by_wo.get(wo_id, 0),
+                        )
+
+        # 齐套率：读持久化字段；include_readiness=true 时强制重算当前页；缺失值同步补算当前页后返回
+        from apps.kuaizhizao.services.work_order_readiness_service import (
+            READINESS_ACTIVE_STATUSES,
+            WorkOrderReadinessService,
+        )
+
+        if include_readiness and work_orders:
+            await WorkOrderReadinessService().refresh_work_orders(
+                tenant_id, [wo.id for wo in work_orders if wo.id is not None]
+            )
+            work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
+        elif work_orders:
+            stale_readiness_ids = [
+                wo.id
+                for wo in work_orders
+                if wo.id is not None
+                and wo.readiness_rate is None
+                and (wo.status or "") in READINESS_ACTIVE_STATUSES
+            ]
+            if stale_readiness_ids:
+                await WorkOrderReadinessService().refresh_work_orders(tenant_id, stale_readiness_ids)
+                work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
         # 转换为响应格式
         result = []
@@ -1369,28 +1436,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
 
-                if include_readiness:
-                    requirements = wo_requirements_map.get(wo.id)
-                    if requirements is not None:
-                        total_vars = len(requirements)
-                        shortage_vars = 0
-                        for r in requirements:
-                            available = inventory_map.get(r.component_id, Decimal("0"))
-                            if available < Decimal(str(r.gross_requirement)):
-                                shortage_vars += 1
-
-                        ready_vars = total_vars - shortage_vars
-                        item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
-                    else:
-                        if wo.status == 'completed':
-                            item_dict["readiness_rate"] = 100.0
-                        elif wo.status == 'cancelled':
-                            item_dict["readiness_rate"] = 0.0
-                else:
-                    item_dict["readiness_rate"] = None
-
                 if include_operations:
                     item_dict["operations"] = operations_map.get(wo.id, [])
+
+                if include_operation_steps and wo.id is not None:
+                    item_dict["operation_steps"] = operation_steps_map.get(wo.id, [])
 
                 # product_id → 工单制造的产品物料 → 该物料档案上的制造模式
                 item_dict["manufacturing_mode"] = manufacturing_mode_by_product.get(
@@ -1418,6 +1468,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             except Exception as e:
                 logger.error(f"工单列表响应校验失败: {str(e)}")
                 continue
+
+        result = await WorkOrderTreeService().attach_tree_children(
+            tenant_id,
+            result,
+            operation_steps_by_wo_id=operation_steps_map if include_operation_steps else None,
+        )
 
         # 批量更新 created_by_name 为空的工单（性能优化：使用 bulk_update 减少数据库往返）
         if work_orders_to_update:
@@ -1456,7 +1512,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         query = WorkOrder.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True  # 只查询未删除的工单
+            deleted_at__isnull=True,  # 只查询未删除的工单
+            parent_work_order_id__isnull=True,  # 与 list_work_orders 一致：仅计根工单
         )
 
         # 添加筛选条件（与 list_work_orders 保持一致）
@@ -1580,6 +1637,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 dispatch_work_order_score_recalc,
             )
             await dispatch_work_order_score_recalc(work_order_id, include_kitting=False)
+
+        readiness_recalc_fields = (
+            "quantity",
+            "product_id",
+            "product_code",
+            "product_name",
+            "variant_attributes",
+            "configurable_selections",
+            "status",
+        )
+        if any(f in update_data for f in readiness_recalc_fields):
+            from apps.kuaizhizao.services.work_order_readiness_service import (
+                dispatch_work_order_readiness_refresh,
+            )
+            await dispatch_work_order_readiness_refresh(tenant_id, work_order_id)
 
         return response
 
@@ -1707,17 +1779,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-            def validate_work_order(wo):
-                """验证工单是否可以删除"""
-                # 允许删除草稿、已取消或已下达但未执行的工单
-                if wo.status == 'released':
-                    # 已下达但未开始执行（无实际开始时间且无产出）
-                    if wo.actual_start_date or (wo.completed_quantity and wo.completed_quantity > 0):
-                        raise ValidationError("已开始执行的工单不能删除")
-                elif wo.status not in ['draft', 'cancelled']:
-                    raise ValidationError("只能删除草稿、已取消或未执行的工单")
-
-            validate_work_order(work_order)
+            if work_order.parent_work_order_id is not None:
+                if work_order.status == "released":
+                    if work_order.actual_start_date or (
+                        work_order.completed_quantity and work_order.completed_quantity > 0
+                    ):
+                        raise ValidationError("已开始执行的拆分工单不能删除")
+                elif work_order.status not in ["draft", "cancelled"]:
+                    raise ValidationError("只能删除草稿、已取消或未执行的拆分工单")
+            elif (work_order.status or "") == "split":
+                child_count = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    parent_work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).count()
+                if child_count > 0:
+                    raise ValidationError("已拆分主工单存在子工单，不能删除。请先删除全部拆分工单")
+            elif work_order.status == "released":
+                if work_order.actual_start_date or (
+                    work_order.completed_quantity and work_order.completed_quantity > 0
+                ):
+                    raise ValidationError("已开始执行的工单不能删除")
+            elif work_order.status not in ["draft", "cancelled"]:
+                raise ValidationError("只能删除草稿、已取消或未执行的工单")
 
             # 检查是否有报工记录（包括待审核的）
             reporting_count = await ReportingRecord.filter(
@@ -1852,6 +1936,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
+            if (work_order.status or "") == "split":
+                raise BusinessLogicError("已拆分主工单不可下达，请将剩余数量拆分为子工单后由子工单执行")
+
             if work_order.status != 'draft':
                 raise ValidationError("只能下达草稿状态的工单")
 
@@ -1936,6 +2023,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             updated_by=updated_by,
             status=status
         )
+        from apps.kuaizhizao.services.work_order_readiness_service import (
+            dispatch_work_order_readiness_refresh,
+        )
+
+        await dispatch_work_order_readiness_refresh(tenant_id, work_order_id)
         return WorkOrderResponse.model_validate(work_order)
 
     async def check_delayed_work_orders(
@@ -2118,29 +2210,44 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 获取原工单
             original_work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            is_follow_up_split = (original_work_order.status or "") == "split"
+            remaining_qty: Optional[Decimal] = None
 
-            # 检查工单状态（只能拆分草稿或已下达状态的工单）
-            if original_work_order.status not in ['draft', 'released']:
-                raise BusinessLogicError(f"只能拆分草稿或已下达状态的工单，当前状态：{original_work_order.status}")
+            if is_follow_up_split:
+                remaining_qty = await self.compute_split_remaining_quantity(tenant_id, work_order_id)
+                if remaining_qty <= 0:
+                    raise BusinessLogicError(
+                        "主工单无剩余数量可拆分，请删除拆分工单释放数量后再新建子工单"
+                    )
+            elif original_work_order.status not in ['draft', 'released']:
+                raise BusinessLogicError(
+                    f"只能拆分草稿、已下达或已拆分（有剩余数量）的工单，当前状态：{original_work_order.status}"
+                )
 
-            # 检查是否已报工（只能拆分未报工部分）
-            reporting_records = await ReportingRecord.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                status='approved',
-                deleted_at__isnull=True
-            ).all()
+            # 检查是否已报工（只能拆分未报工部分；已拆分主工单本身不可报工）
+            if not is_follow_up_split:
+                reporting_records = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    status='approved',
+                    deleted_at__isnull=True
+                ).all()
 
-            if reporting_records:
-                # 计算已报工数量
-                total_reported = sum(Decimal(str(r.qualified_quantity)) for r in reporting_records)
-                if total_reported > 0:
-                    raise BusinessLogicError(f"工单已有报工记录（已报工数量：{total_reported}），不能拆分。只能拆分未报工的工单。")
+                if reporting_records:
+                    total_reported = sum(Decimal(str(r.qualified_quantity)) for r in reporting_records)
+                    if total_reported > 0:
+                        raise BusinessLogicError(
+                            f"工单已有报工记录（已报工数量：{total_reported}），不能拆分。只能拆分未报工的工单。"
+                        )
 
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
 
             split_work_orders = []
+            next_split_idx = await self._next_split_child_sequence(
+                tenant_id, work_order_id, original_work_order.code
+            )
+            quantity_budget = remaining_qty if is_follow_up_split else original_work_order.quantity
 
             if split_data.split_type == 'quantity':
                 # 按数量拆分
@@ -2148,26 +2255,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     # 指定每个拆分工单的数量
                     quantities = split_data.split_quantities
                     total_split_quantity = sum(quantities)
-                    
-                    if total_split_quantity > original_work_order.quantity:
-                        raise ValidationError(f"拆分工单数量总和（{total_split_quantity}）不能大于原工单数量（{original_work_order.quantity}）")
-                    
-                    if total_split_quantity < original_work_order.quantity:
-                        raise ValidationError(f"拆分工单数量总和（{total_split_quantity}）必须等于原工单数量（{original_work_order.quantity}）")
-                    
-                    for idx, quantity in enumerate(quantities, 1):
+
+                    if total_split_quantity > quantity_budget:
+                        budget_label = "剩余数量" if is_follow_up_split else "原工单数量"
+                        raise ValidationError(
+                            f"拆分工单数量总和（{total_split_quantity}）不能大于{budget_label}（{quantity_budget}）"
+                        )
+
+                    if not is_follow_up_split and total_split_quantity < original_work_order.quantity:
+                        raise ValidationError(
+                            f"拆分工单数量总和（{total_split_quantity}）必须等于原工单数量（{original_work_order.quantity}）"
+                        )
+
+                    if is_follow_up_split and total_split_quantity <= 0:
+                        raise ValidationError("拆分数量必须大于0")
+
+                    child_status = "released" if is_follow_up_split else original_work_order.status
+
+                    for offset, quantity in enumerate(quantities):
+                        idx = next_split_idx + offset
                         if quantity <= 0:
                             raise ValidationError(f"拆分数量必须大于0，第{idx}个拆分工单数量：{quantity}")
-                        
-                        # 生成拆分工单编码
+
                         split_code = f"{original_work_order.code}-{idx:03d}"
-                        
-                        # 创建拆分工单
+
                         split_work_order = await WorkOrder.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
                             code=split_code,
                             name=f"{original_work_order.name}-拆分{idx}",
+                            parent_work_order_id=work_order_id,
                             product_id=original_work_order.product_id,
                             product_code=original_work_order.product_code,
                             product_name=original_work_order.product_name,
@@ -2180,7 +2297,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             workshop_name=original_work_order.workshop_name,
                             work_center_id=original_work_order.work_center_id,
                             work_center_name=original_work_order.work_center_name,
-                            status=original_work_order.status,
+                            status=child_status,
                             priority=original_work_order.priority,
                             planned_start_date=original_work_order.planned_start_date,
                             planned_end_date=original_work_order.planned_end_date,
@@ -2189,28 +2306,32 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             created_by_name=user_info["name"],
                         )
                         split_work_orders.append(split_work_order)
-                
+
                 elif split_data.split_count:
-                    # 等量拆分
-                    if split_data.split_count <= 1:
+                    if is_follow_up_split:
+                        if split_data.split_count < 1:
+                            raise ValidationError("拆分数量必须大于0")
+                    elif split_data.split_count <= 1:
                         raise ValidationError("拆分数量必须大于1")
-                    
-                    split_quantity = original_work_order.quantity / Decimal(str(split_data.split_count))
-                    
-                    # 验证是否能整除
-                    if split_quantity * split_data.split_count != original_work_order.quantity:
-                        raise ValidationError(f"原工单数量（{original_work_order.quantity}）不能被拆分数（{split_data.split_count}）整除")
-                    
-                    for idx in range(1, split_data.split_count + 1):
-                        # 生成拆分工单编码
+
+                    split_quantity = quantity_budget / Decimal(str(split_data.split_count))
+
+                    if split_quantity * split_data.split_count != quantity_budget:
+                        budget_label = "剩余数量" if is_follow_up_split else "原工单数量"
+                        raise ValidationError(
+                            f"{budget_label}（{quantity_budget}）不能被拆分数（{split_data.split_count}）整除"
+                        )
+
+                    for offset in range(split_data.split_count):
+                        idx = next_split_idx + offset
                         split_code = f"{original_work_order.code}-{idx:03d}"
-                        
-                        # 创建拆分工单
+
                         split_work_order = await WorkOrder.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
                             code=split_code,
                             name=f"{original_work_order.name}-拆分{idx}",
+                            parent_work_order_id=work_order_id,
                             product_id=original_work_order.product_id,
                             product_code=original_work_order.product_code,
                             product_name=original_work_order.product_name,
@@ -2223,7 +2344,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             workshop_name=original_work_order.workshop_name,
                             work_center_id=original_work_order.work_center_id,
                             work_center_name=original_work_order.work_center_name,
-                            status=original_work_order.status,
+                            status='released' if is_follow_up_split else original_work_order.status,
                             priority=original_work_order.priority,
                             planned_start_date=original_work_order.planned_start_date,
                             planned_end_date=original_work_order.planned_end_date,
@@ -2241,8 +2362,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             else:
                 raise ValidationError(f"不支持的拆分类型：{split_data.split_type}")
 
-            # 更新原工单状态为已取消（拆分后原工单不再使用）
-            original_work_order.status = 'cancelled'
+            await self._provision_split_work_order_operations(
+                tenant_id=tenant_id,
+                parent_work_order=original_work_order,
+                split_work_orders=split_work_orders,
+                is_follow_up_split=is_follow_up_split,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+            )
+
+            # 更新原工单状态为已拆分（拆分后原工单仅作追溯容器，子工单继续执行）
+            original_work_order.status = 'split'
             original_work_order.updated_by = created_by
             original_work_order.updated_by_name = user_info["name"]
             await original_work_order.save()
@@ -2285,6 +2415,180 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 split_work_orders=[WorkOrderResponse.model_validate(wo) for wo in split_work_orders],
                 total_count=len(split_work_orders),
             )
+
+    async def _resolve_split_operation_template_ops(
+        self,
+        tenant_id: int,
+        parent_work_order_id: int,
+        *,
+        exclude_work_order_ids: Optional[Iterable[int]] = None,
+    ) -> List[WorkOrderOperation]:
+        """拆分子工单工序模板：优先主工单工序，否则取已有兄弟子工单工序。"""
+        parent_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=parent_work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
+        if parent_ops:
+            return parent_ops
+
+        sibling_query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            parent_work_order_id=parent_work_order_id,
+            deleted_at__isnull=True,
+        )
+        exclude_ids = [int(i) for i in (exclude_work_order_ids or []) if i is not None]
+        if exclude_ids:
+            sibling_query = sibling_query.exclude(id__in=exclude_ids)
+        sibling = await sibling_query.order_by("code").first()
+        if sibling is None:
+            return []
+        return await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=sibling.id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
+
+    async def _copy_work_order_operations(
+        self,
+        tenant_id: int,
+        *,
+        source_ops: List[WorkOrderOperation],
+        target_work_order: WorkOrder,
+        created_by: int,
+        created_by_name: str,
+    ) -> List[WorkOrderOperation]:
+        """将模板工序复制到目标工单（进度清零，供拆分子工单独立报工）。"""
+        if not source_ops or target_work_order.id is None:
+            return []
+
+        created_ops: List[WorkOrderOperation] = []
+        for op in source_ops:
+            new_op = await WorkOrderOperation.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                work_order_id=target_work_order.id,
+                work_order_code=target_work_order.code,
+                operation_id=op.operation_id,
+                operation_code=op.operation_code,
+                operation_name=op.operation_name,
+                sequence=op.sequence,
+                workshop_id=op.workshop_id,
+                workshop_name=op.workshop_name,
+                work_center_id=op.work_center_id,
+                work_center_name=op.work_center_name,
+                standard_time=op.standard_time,
+                setup_time=op.setup_time,
+                reporting_type=op.reporting_type,
+                allow_jump=op.allow_jump,
+                is_node_operation=op.is_node_operation,
+                over_report_mode=op.over_report_mode,
+                over_report_value=op.over_report_value,
+                assigned_worker_id=op.assigned_worker_id,
+                assigned_worker_name=op.assigned_worker_name,
+                assigned_team_id=op.assigned_team_id,
+                assigned_team_name=op.assigned_team_name,
+                assigned_station_id=op.assigned_station_id,
+                assigned_station_name=op.assigned_station_name,
+                assigned_equipment_id=op.assigned_equipment_id,
+                assigned_equipment_name=op.assigned_equipment_name,
+                assigned_mold_id=op.assigned_mold_id,
+                assigned_mold_name=op.assigned_mold_name,
+                assigned_tool_id=op.assigned_tool_id,
+                assigned_tool_name=op.assigned_tool_name,
+                status="pending",
+                completed_quantity=Decimal("0"),
+                qualified_quantity=Decimal("0"),
+                unqualified_quantity=Decimal("0"),
+                created_by=created_by,
+                created_by_name=created_by_name,
+            )
+            created_ops.append(new_op)
+
+        await self.compute_and_apply_operation_planned_times(
+            tenant_id, target_work_order, created_ops, created_by
+        )
+        return created_ops
+
+    async def backfill_split_child_operations(self, tenant_id: int, split_work_order: WorkOrder) -> bool:
+        """为历史拆分工单补复制工序（幂等）。"""
+        if split_work_order.id is None or split_work_order.parent_work_order_id is None:
+            return False
+        exists = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=split_work_order.id,
+            deleted_at__isnull=True,
+        ).exists()
+        if exists:
+            return False
+        template_ops = await self._resolve_split_operation_template_ops(
+            tenant_id,
+            split_work_order.parent_work_order_id,
+            exclude_work_order_ids=[split_work_order.id],
+        )
+        if not template_ops:
+            return False
+        await self._copy_work_order_operations(
+            tenant_id,
+            source_ops=template_ops,
+            target_work_order=split_work_order,
+            created_by=split_work_order.created_by or 0,
+            created_by_name=split_work_order.created_by_name or "系统",
+        )
+        return True
+
+    async def ensure_split_children_have_operations(
+        self,
+        tenant_id: int,
+        split_rows: Iterable[WorkOrder],
+    ) -> None:
+        for row in split_rows:
+            if row.id is None or row.parent_work_order_id is None:
+                continue
+            await self.backfill_split_child_operations(tenant_id, row)
+
+    async def _provision_split_work_order_operations(
+        self,
+        tenant_id: int,
+        *,
+        parent_work_order: WorkOrder,
+        split_work_orders: List[WorkOrder],
+        is_follow_up_split: bool,
+        created_by: int,
+        created_by_name: str,
+    ) -> None:
+        """拆分时为每个子工单复制独立工序，主工单工序在首次拆分后归档（软删）。"""
+        if not split_work_orders or parent_work_order.id is None:
+            return
+
+        template_ops = await self._resolve_split_operation_template_ops(
+            tenant_id,
+            parent_work_order.id,
+            exclude_work_order_ids=[wo.id for wo in split_work_orders if wo.id is not None],
+        )
+        if not template_ops:
+            logger.warning(
+                "工单 %s 拆分未找到可复制的工序模板，子工单需后续补全",
+                parent_work_order.code,
+            )
+            return
+
+        for split_wo in split_work_orders:
+            await self._copy_work_order_operations(
+                tenant_id,
+                source_ops=template_ops,
+                target_work_order=split_wo,
+                created_by=created_by,
+                created_by_name=created_by_name,
+            )
+
+        if not is_follow_up_split:
+            now = now_utc()
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=parent_work_order.id,
+                deleted_at__isnull=True,
+            ).update(deleted_at=now)
 
     async def _resolve_manufacturing_mode(self, tenant_id: int, product_id: Optional[int]) -> str:
         """product_id 为工单制造对象对应物料 id；制造模式定义在该物料 source_config，与 get_work_order_by_id 一致。"""
@@ -2365,6 +2669,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
 
+        if not operations and work_order.parent_work_order_id is not None:
+            await self.backfill_split_child_operations(tenant_id, work_order)
+            operations = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).order_by('sequence').all()
+
         master_op_ids = [op.operation_id for op in operations if op.operation_id is not None]
         defect_by_master_op = await batch_get_operation_defect_types_via_table(master_op_ids)
 
@@ -2381,6 +2693,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         default_snap_by_master = await _batch_default_operators_snapshots_by_master_operation_id(
             tenant_id, op_ids
         )
+
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+
+        outsource_rows = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").all()
+        outsource_by_op_id = {row.work_order_operation_id: row for row in outsource_rows}
 
         prev_qualified = Decimal(str(plan_qty))
         result = []
@@ -2414,6 +2735,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             op_data["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, op)
             op_data["default_operators"] = default_snap_by_master.get(op.operation_id, [])
+
+            outsource_order = outsource_by_op_id.get(op.id)
+            if outsource_order:
+                op_data["is_outsourced"] = True
+                op_data["outsource_supplier_name"] = outsource_order.supplier_name
+                op_data["outsource_order_code"] = outsource_order.code
+            else:
+                op_data["is_outsourced"] = False
 
             prev_qualified = qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
@@ -2810,6 +3139,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     )
 
             # 检查工单状态
+            if (work_order.status or "") == "split":
+                raise BusinessLogicError("已拆分主工单不可开工，请将剩余数量拆分为子工单后由子工单执行")
+
             if work_order.status not in ['released', 'in_progress']:
                 raise BusinessLogicError(f"只能开始已下达或进行中的工单的工序，当前工单状态：{work_order.status}")
 
@@ -3535,9 +3867,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             previous_status = str(getattr(work_order, "status", "") or "")
 
-            # 检查工单状态：不能对已取消的工单指定结束
-            if previous_status == 'cancelled':
-                raise ValidationError("已取消的工单不能指定结束")
+            # 检查工单状态：不能对已取消/已拆分的工单指定结束
+            if previous_status in ('cancelled', 'split'):
+                raise ValidationError("已取消或已拆分的工单不能指定结束")
 
             # 仅允许对已下达/执行中的工单做指定结束；草稿及其他异常状态应先规范到可执行状态。
             allowed_statuses = {"released", "in_progress", "completed"}

@@ -60,6 +60,7 @@ class ReworkOrder(BaseModel):
             ("uuid",),
             ("original_work_order_id",),
             ("original_work_order_uuid",),
+            ("start_work_order_operation_id",),
             ("status",),
             ("product_id",),
             ("work_center_id",),
@@ -75,6 +76,10 @@ class ReworkOrder(BaseModel):
     code = fields.CharField(max_length=50, description="返工单编码（组织内唯一）")
     original_work_order_id = fields.IntField(null=True, description="原工单ID（关联WorkOrder）")
     original_work_order_uuid = fields.CharField(max_length=36, null=True, description="原工单UUID")
+    start_work_order_operation_id = fields.IntField(
+        null=True,
+        description="返工起始工序（原工单工序 ID；整单返工为原工单首道工序）",
+    )
 
     # 产品信息
     product_id = fields.IntField(description="产品ID（关联物料）")

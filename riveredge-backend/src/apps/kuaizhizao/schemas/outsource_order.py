@@ -66,6 +66,20 @@ class OutsourceOrderCreate(OutsourceOrderBase):
     code: Optional[str] = Field(None, description="委外单编码（可选，如果不提供则自动生成）")
 
 
+class OutsourceOptionResponse(BaseModel):
+    """工单工序委外可选信息（含可委外数量）"""
+
+    work_order_operation_id: int = Field(..., description="工单工序ID")
+    operation_id: int = Field(..., description="工序ID")
+    operation_code: str = Field(..., description="工序编码")
+    operation_name: str = Field(..., description="工序名称")
+    sequence: int = Field(..., description="工序序号")
+    max_quantity: Decimal = Field(..., description="累计完成上限（含超报）")
+    completed_quantity: Decimal = Field(..., description="已报工完成数量")
+    already_outsourced_quantity: Decimal = Field(..., description="已创建委外单数量（未取消）")
+    outsourceable_quantity: Decimal = Field(..., description="可委外数量")
+
+
 class OutsourceOrderCreateFromWorkOrder(BaseModel):
     """
     从工单创建委外单请求Schema

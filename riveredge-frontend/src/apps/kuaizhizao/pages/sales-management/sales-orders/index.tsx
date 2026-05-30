@@ -15,6 +15,11 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -884,39 +889,6 @@ const SalesOrdersPage: React.FC = () => {
       throw error;
     }
   };
-
-  /**
-   * 订单编号单元格：编号 + 复制按钮（与项目其他「编号列」保持一致的 Space 布局）。
-   *
-   * ⚠️ 历史问题：之前使用 `inline-flex + width:100% + Tooltip` 包裹 `disabled` Button，
-   * 当 `disabled` 切换时 antd Tooltip 会在外层注入 `compatible-wrapper` span，
-   * 导致 flex item 由 wrapper 接管、Button 自带的 `flex: 0 0 14px` 失效，
-   * 加载完成后文字 ellipsis 可用区微变，整列内容向左轻微位移 1–2px。
-   * 现统一为 Space 布局，加载前后 DOM 结构稳定，不再出现位移。
-   */
-  const renderStableOrderCodeCell = useCallback((rawCode?: string | null) => {
-    const code = rawCode?.trim();
-    if (!code) {
-      return <span>-</span>;
-    }
-    return (
-      <Space size={4}>
-        <span>{code}</span>
-        <Button
-          type="link"
-          size="small"
-          icon={<CopyOutlined style={{ fontSize: 12 }} />}
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(code).then(
-              () => messageApi.success(t('common.copySuccess')),
-              () => messageApi.error(t('common.copyFailed')),
-            );
-          }}
-        />
-      </Space>
-    );
-  }, [messageApi, t]);
 
   const resolveSelectedOrders = useCallback(
     (keys: React.Key[]): SalesOrder[] => {
@@ -2024,16 +1996,30 @@ const SalesOrdersPage: React.FC = () => {
   // 订单视图列（一行一单，可展开明细）
   const orderColumns: ProColumns<SalesOrder>[] = [
     {
-      title: t('app.kuaizhizao.salesOrder.orderCode'),
+      title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
+      key: 'order_code',
       dataIndex: 'order_code',
-      width: 150,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left' as const,
-      ellipsis: true,
       sorter: true,
       hideInSearch: false,
-      render: (_: unknown, record: SalesOrder) => renderStableOrderCodeCell(record.order_code),
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.orderCode') },
+      render: (_: unknown, record: SalesOrder) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.customer_name ?? '')}
+          secondary={String(record.order_code ?? '')}
+        />
+      ),
     },
-    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', ellipsis: true, sorter: true, hideInSearch: false },
+    {
+      title: t('app.kuaizhizao.salesOrder.customerName'),
+      dataIndex: 'customer_name',
+      ellipsis: true,
+      sorter: true,
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.customerName') },
+    },
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
     // 订单日期范围（仅搜索）
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('common.startDate') ?? '开始日期', t('common.endDate') ?? '结束日期'] } },
@@ -2197,20 +2183,58 @@ const SalesOrdersPage: React.FC = () => {
     },
   ];
 
-  // 表格列：销售明细平铺视图（订单 + 明细）
   const detailColumns: ProColumns<SalesOrderItemRow>[] = [
     {
-      title: t('app.kuaizhizao.salesOrder.orderCode'),
+      title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
+      key: 'order_code',
       dataIndex: 'order_code',
-      width: 140,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left' as const,
-      ellipsis: true,
-      render: (_, record) => renderStableOrderCodeCell(record.order_code),
+      hideInSearch: false,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.orderCode') },
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.customer_name ?? '')}
+          secondary={String(record.order_code ?? '')}
+        />
+      ),
     },
-    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 130, ellipsis: true, hideInSearch: false },
-    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 110, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.salesOrder.customerName'),
+      dataIndex: 'customer_name',
+      ellipsis: true,
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.customerName') },
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.material'),
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, record) => (
+        <MaterialStackedCell
+          material_name={record.material_name}
+          material_code={record.material_code}
+          material_spec={record.material_spec}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.materialCode'),
+      dataIndex: 'material_code',
+      hideInTable: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.materialName'),
+      dataIndex: 'material_name',
+      hideInTable: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.materialSpec'),
+      dataIndex: 'material_spec',
+      hideInTable: true,
+    },
     {
       title: t('app.kuaizhizao.salesOrder.unit'),
       dataIndex: 'material_unit',

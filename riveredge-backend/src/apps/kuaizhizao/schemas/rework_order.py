@@ -63,6 +63,7 @@ class ReworkOrderOperationItem(BaseModel):
     operation_code: Optional[str] = Field(None, description="工序编码")
     operation_name: Optional[str] = Field(None, description="工序名称")
     sequence: Optional[int] = Field(None, description="工序顺序")
+    is_start: bool = Field(False, description="是否为创建时指定的返工起始工序")
 
 
 class ReworkOrderCreate(ReworkOrderBase):
@@ -72,7 +73,9 @@ class ReworkOrderCreate(ReworkOrderBase):
     用于创建新返工单的数据验证。
     """
     code: Optional[str] = Field(None, description="返工单编码（可选，如果不提供则自动生成）")
-    work_order_operation_ids: Optional[List[int]] = Field(None, description="返工涉及的工单工序ID列表")
+    start_work_order_operation_id: Optional[int] = Field(
+        None, description="返工起始工序 ID（不选则取原工单首道工序）"
+    )
 
 
 class ReworkOrderUpdate(BaseModel):
@@ -102,7 +105,9 @@ class ReworkOrderUpdate(BaseModel):
     operator_name: Optional[str] = Field(None, max_length=100, description="操作员姓名")
     cost: Optional[Decimal] = Field(None, description="返工成本")
     remarks: Optional[str] = Field(None, description="备注")
-    work_order_operation_ids: Optional[List[int]] = Field(None, description="返工涉及的工单工序ID列表")
+    start_work_order_operation_id: Optional[int] = Field(
+        None, description="返工起始工序 ID（不选则取原工单首道工序）"
+    )
 
 
 class ReworkOrderResponse(ReworkOrderBase):
@@ -114,6 +119,7 @@ class ReworkOrderResponse(ReworkOrderBase):
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="业务ID（UUID）")
     tenant_id: int = Field(..., description="组织ID")
+    start_work_order_operation_id: Optional[int] = Field(None, description="返工起始工序 ID")
     status: str = Field(..., description="返工状态（draft/released/in_progress/completed/cancelled）")
     actual_start_date: Optional[datetime] = Field(None, description="实际开始日期")
     actual_end_date: Optional[datetime] = Field(None, description="实际结束日期")
@@ -125,7 +131,9 @@ class ReworkOrderResponse(ReworkOrderBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
-    rework_operations: Optional[List[ReworkOrderOperationItem]] = Field(None, description="返工涉及的工序列表")
+    rework_operations: Optional[List[ReworkOrderOperationItem]] = Field(
+        None, description="返工起始工序（仅一道，创建时指定）"
+    )
 
 
 class ReworkOrderListResponse(BaseModel):
@@ -167,4 +175,46 @@ class ReworkOrderFromWorkOrderRequest(BaseModel):
     quantity: Optional[Decimal] = Field(None, description="返工数量（如果不提供则使用原工单数量）")
     route_id: Optional[int] = Field(None, description="返工工艺路线ID（如果不提供则使用原工单工艺路线）")
     work_center_id: Optional[int] = Field(None, description="工作中心ID（如果不提供则使用原工单工作中心）")
+    start_work_order_operation_id: Optional[int] = Field(
+        None, description="返工起始工序 ID（不选则取原工单首道工序）"
+    )
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     remarks: Optional[str] = Field(None, description="备注")
+
+
+class ReworkReportingCreate(BaseModel):
+    """返工单报工请求"""
+    work_order_operation_id: int = Field(..., description="原工单工序 ID")
+    worker_id: int = Field(..., description="操作工 ID")
+    worker_name: str = Field(..., description="操作工姓名")
+    reported_quantity: Decimal = Field(..., description="报工数量")
+    qualified_quantity: Decimal = Field(..., description="合格数量")
+    unqualified_quantity: Decimal = Field(..., description="不合格数量")
+    work_hours: Decimal = Field(Decimal("0"), description="工时（小时）")
+    reported_at: datetime = Field(..., description="报工时间")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class ReworkReportingOptionItem(BaseModel):
+    """返工报工可选工序"""
+    work_order_operation_id: int
+    operation_code: Optional[str] = None
+    operation_name: Optional[str] = None
+    sequence: Optional[int] = None
+    is_start_operation: bool = False
+    reported_quantity: Decimal = Decimal("0")
+    selectable: bool = True
+
+
+class ReworkReportingOptionsResponse(BaseModel):
+    """返工报工选项"""
+    rework_order_id: int
+    rework_order_code: str
+    rework_quantity: Decimal
+    start_work_order_operation_id: int
+    start_operation_name: Optional[str] = None
+    has_start_report: bool
+    total_qualified_quantity: Decimal
+    remaining_rework_quantity: Decimal
+    operations: List[ReworkReportingOptionItem]

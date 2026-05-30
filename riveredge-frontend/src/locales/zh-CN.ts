@@ -3056,6 +3056,7 @@ export default {
   'app.kuaizhizao.salesOrder.importItemsTitle': '导入订单明细',
   'app.kuaizhizao.salesOrder.syncFromDataset': '从数据集同步销售订单',
   'app.kuaizhizao.salesOrder.orderCode': '订单编号',
+  'app.kuaizhizao.salesOrder.colOrderPrimary': '客户 / 订单',
   'app.kuaizhizao.salesOrder.orderDate': '订单日期',
   'app.kuaizhizao.salesOrder.deliveryDate': '交货日期',
   'app.kuaizhizao.salesOrder.deliveryProgress': '交货进度',
@@ -3976,6 +3977,9 @@ export default {
   'app.master-data.materials.createMaterial': '新建物料',
   'app.master-data.materials.materialCode': '物料编号',
   'app.master-data.materials.materialName': '物料名称',
+  'app.master-data.materials.colMaterialPrimary': '物料名称 / 编号',
+  'app.master-data.materials.colProcessRouteSource': '工艺路线 / 来源',
+  'app.master-data.materials.specification': '规格',
   'app.master-data.materials.productImage': '附件',
   'app.master-data.materials.image': '附件',
   'app.master-data.materials.openAttachment': '打开附件',
@@ -3983,7 +3987,6 @@ export default {
   'app.master-data.materials.processRoute': '工艺路线',
   'app.master-data.materials.materialType': '物料类型',
   'app.master-data.materials.sourceType': '物料来源类型',
-  'app.master-data.materials.specification': '规格',
   'app.master-data.materials.baseUnit': '基础单位',
   'app.master-data.materials.batchManaged': '批号管理',
   'app.master-data.materials.variantManaged': '属性管理',
@@ -10194,6 +10197,7 @@ export default {
 
   // 销售预测 (Sales Forecast)
   'app.kuaizhizao.salesForecast.forecastCode': '预测编号',
+  'app.kuaizhizao.salesForecast.colForecastPrimary': '预测名称 / 编号',
   'app.kuaizhizao.salesForecast.forecastName': '预测名称',
   'app.kuaizhizao.salesForecast.forecastType': '预测类型',
   'app.kuaizhizao.salesForecast.forecastPeriod': '预测周期',

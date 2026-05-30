@@ -16,6 +16,10 @@ import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumbe
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, MoreOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -208,28 +212,20 @@ const SalesReturnsPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<SalesReturn>[] = [
     {
-      title: '退货单编号',
+      title: '客户 / 退货单号',
+      key: 'return_code',
       dataIndex: 'return_code',
-      width: 140,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, record) => (
-        <Space size={4}>
-          <span>{record.return_code || '-'}</span>
-          {record.return_code ? (
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined style={{ fontSize: 12 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopy(record.return_code);
-              }}
-            />
-          ) : null}
-        </Space>
+        <UniTableStackedPrimaryCell
+          primary={String(record.customer_name ?? '')}
+          secondary={String(record.return_code ?? '')}
+        />
       ),
     },
+    { title: '退货单编号', dataIndex: 'return_code', hideInTable: true },
+    { title: '客户', dataIndex: 'customer_name', hideInTable: true },
     {
       title: '销售出库单编号',
       dataIndex: 'sales_delivery_code',
@@ -240,12 +236,6 @@ const SalesReturnsPage: React.FC = () => {
       title: '销售订单编号',
       dataIndex: 'sales_order_code',
       width: 140,
-      ellipsis: true,
-    },
-    {
-      title: '客户',
-      dataIndex: 'customer_name',
-      width: 150,
       ellipsis: true,
     },
     {

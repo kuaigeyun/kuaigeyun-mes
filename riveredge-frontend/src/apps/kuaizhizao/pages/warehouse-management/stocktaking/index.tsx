@@ -13,6 +13,10 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
@@ -301,22 +305,23 @@ const StocktakingPage: React.FC = () => {
    */
   const columns: ProColumns<Stocktaking>[] = [
     {
-      title: '盘点单号',
+      title: '仓库 / 盘点单号',
+      key: 'code',
       dataIndex: 'code',
-      width: 150,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.warehouse_name ?? '')}
+          secondary={String(r.code ?? '')}
+        />
       ),
     },
+    { title: '盘点单号', dataIndex: 'code', hideInTable: true },
     {
       title: '仓库',
       dataIndex: 'warehouse_name',
-      width: 120,
-      ellipsis: true,
+      hideInTable: true,
     },
     {
       title: '盘点日期',

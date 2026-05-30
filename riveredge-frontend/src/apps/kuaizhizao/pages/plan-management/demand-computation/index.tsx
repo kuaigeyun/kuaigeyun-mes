@@ -56,6 +56,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
+import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import {
   MultiTabListPageTemplate,
@@ -430,8 +431,17 @@ const InventoryParamsForm: React.FC<{
           pagination={false}
           scroll={{ x: 'max-content' }}
           columns={[
-            { title: '物料编号', dataIndex: 'material_code', width: 120 },
-            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+            {
+              title: '物料',
+              key: 'material',
+              width: 220,
+              render: (_: unknown, record: MaterialInfo) => (
+                <MaterialStackedCell
+                  material_name={record.material_name}
+                  material_code={record.material_code}
+                />
+              ),
+            },
             {
               title: 'BOM 版本',
               dataIndex: 'material_id',
@@ -2032,8 +2042,14 @@ const DemandComputationPage: React.FC = () => {
                 },
               }}
               columns={[
-                { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                {
+                  title: '物料',
+                  key: 'material',
+                  width: 220,
+                  render: (_: unknown, r: { material_name?: string; material_code?: string }) => (
+                    <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+                  ),
+                },
                 {
                   title: '单位',
                   dataIndex: 'material_unit',
@@ -2445,30 +2461,17 @@ const DemandComputationPage: React.FC = () => {
                             pagination={false}
                             columns={[
                             {
-                              title: '物料编号',
-                              dataIndex: 'material_code',
-                              width: 140,
-                              render: (code: string) => (
-                                <Space size={4}>
-                                  <span>{code ?? '—'}</span>
-                                  {code ? (
-                                    <Tooltip title="复制">
-                                      <Button
-                                        type="link"
-                                        size="small"
-                                        icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                                        onClick={() =>
-                                          void navigator.clipboard
-                                            .writeText(code)
-                                            .then(() => messageApi.success('已复制'), () => messageApi.error('复制失败'))
-                                        }
-                                      />
-                                    </Tooltip>
-                                  ) : null}
-                                </Space>
+                              title: '物料',
+                              key: 'material',
+                              width: 220,
+                              render: (_: unknown, record: DemandComputationItem) => (
+                                <MaterialStackedCell
+                                  material_name={record.material_name}
+                                  material_code={record.material_code}
+                                  material_spec={record.material_spec}
+                                />
                               ),
                             },
-                            { title: '物料名称', dataIndex: 'material_name', width: 200, ellipsis: true },
                             {
                               title: '单位',
                               dataIndex: 'material_unit',

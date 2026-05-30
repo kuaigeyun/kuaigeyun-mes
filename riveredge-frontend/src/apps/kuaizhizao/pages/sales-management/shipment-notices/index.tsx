@@ -17,6 +17,10 @@ import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, 
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 const LazyUniImport = lazy(() =>
@@ -182,9 +186,22 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const columns: ProColumns<ShipmentNotice>[] = [
-    { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
+    {
+      title: '客户 / 通知单号',
+      key: 'notice_code',
+      dataIndex: 'notice_code',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.customer_name ?? '')}
+          secondary={String(record.notice_code ?? '')}
+        />
+      ),
+    },
+    { title: '通知单号', dataIndex: 'notice_code', hideInTable: true },
+    { title: '客户', dataIndex: 'customer_name', hideInTable: true },
     { title: '销售订单号', dataIndex: 'sales_order_code', width: 140, ellipsis: true },
-    { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '出库仓库', dataIndex: 'warehouse_name', width: 120 },
     { title: '计划发货日期', dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
     { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },

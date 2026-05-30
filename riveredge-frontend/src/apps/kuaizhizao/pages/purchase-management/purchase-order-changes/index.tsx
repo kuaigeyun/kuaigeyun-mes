@@ -9,6 +9,10 @@ import { App, Button, Descriptions, Form, Input, Modal, Space, Tag } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -36,6 +40,7 @@ import {
   isOrderChangeDraft,
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
+import { formatOrderChangeCategory } from '../../../utils/orderChangeCategory';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { OrderChangeSourceOrderPickerModal } from '../../../components/order-change/OrderChangeSourceOrderPickerModal';
@@ -159,11 +164,29 @@ const PurchaseOrderChangesPage: React.FC = () => {
   };
 
   const columns: ProColumns<PurchaseOrderChange>[] = [
-    { title: '变更单号', dataIndex: 'change_code', width: 160, copyable: true },
+    {
+      title: '供应商 / 变更单号',
+      key: 'change_code',
+      dataIndex: 'change_code',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.supplier_name ?? '')}
+          secondary={String(record.change_code ?? '')}
+        />
+      ),
+    },
+    { title: '变更单号', dataIndex: 'change_code', hideInTable: true, copyable: true },
+    { title: '供应商', dataIndex: 'supplier_name', hideInTable: true, ellipsis: true },
     { title: '原采购订单', dataIndex: 'source_order_code', width: 140 },
     { title: '版本', dataIndex: 'change_version', width: 70 },
-    { title: '供应商', dataIndex: 'supplier_name', ellipsis: true },
-    { title: '变更类别', dataIndex: 'change_category', width: 100 },
+    {
+      title: '变更类别',
+      dataIndex: 'change_category',
+      width: 100,
+      render: (_, r) => formatOrderChangeCategory(r.change_category),
+    },
     {
       title: '差额',
       dataIndex: 'delta_amount',
@@ -366,7 +389,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
               <Descriptions.Item label="原单号">{detail.source_order_code}</Descriptions.Item>
               <Descriptions.Item label="版本">V{detail.change_version}</Descriptions.Item>
               <Descriptions.Item label="供应商">{detail.supplier_name}</Descriptions.Item>
-              <Descriptions.Item label="变更类别">{detail.change_category}</Descriptions.Item>
+              <Descriptions.Item label="变更类别">
+                {formatOrderChangeCategory(detail.change_category)}
+              </Descriptions.Item>
               <Descriptions.Item label="变更前金额">{detail.before_total_amount}</Descriptions.Item>
               <Descriptions.Item label="变更后金额">{detail.after_total_amount}</Descriptions.Item>
               <Descriptions.Item label="差额">{detail.delta_amount}</Descriptions.Item>

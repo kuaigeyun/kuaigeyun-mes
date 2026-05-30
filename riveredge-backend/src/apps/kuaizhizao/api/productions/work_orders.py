@@ -51,13 +51,17 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderResponse,
     ReworkOrderListResponse,
     ReworkOrderFromWorkOrderRequest,
+    ReworkReportingCreate,
+    ReworkReportingOptionsResponse,
 )
+from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
 from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
     OutsourceOrderCreateFromWorkOrder,
     OutsourceOrderUpdate,
     OutsourceOrderResponse,
     OutsourceOrderListResponse,
+    OutsourceOptionResponse,
 )
 
 router = APIRouter(
@@ -336,9 +340,13 @@ async def list_work_orders(
     planned_end_to: Optional[str] = Query(None, description="计划结束日期止（YYYY-MM-DD）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at（前缀-表示降序）"),
     include_operations: bool = Query(False, description="是否包含工序（用于甘特图展示设备/模具/工装）"),
+    include_operation_steps: bool = Query(
+        False,
+        description="是否返回工序步骤摘要（列表工序列 / 运营看板同口径）",
+    ),
     include_readiness: bool = Query(
         False,
-        description="是否计算齐套率（BOM+库存）；列表页默认 false，齐套详情请用 kitting-analysis 或打开齐套弹窗",
+        description="是否强制重算当前页齐套率并写库；默认 false，列表读持久化 readiness_rate",
     ),
     include_scores: bool = Query(
         False,
@@ -381,6 +389,7 @@ async def list_work_orders(
             planned_end_to=planned_end_to,
             order_by=safe_order_by,
             include_operations=include_operations,
+            include_operation_steps=include_operation_steps,
             include_readiness=include_readiness,
             include_scores=include_scores,
         )
@@ -980,6 +989,64 @@ async def delete_rework_order(
     return JSONResponse(
         content={"message": "返工单删除成功"},
         status_code=http_status.HTTP_200_OK
+    )
+
+
+@router.get(
+    "/rework-orders/{rework_order_id}/reporting-options",
+    response_model=ReworkReportingOptionsResponse,
+    summary="Get rework order reporting options",
+)
+async def get_rework_order_reporting_options(
+    rework_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkReportingOptionsResponse:
+    """返工报工：可选工序与剩余可报工数量（首道报工固定为创建时指定的起始工序）。"""
+    return await ReworkOrderService().get_rework_reporting_options(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/report",
+    response_model=ReportingRecordResponse,
+    summary="Create reporting record for rework order",
+)
+async def create_rework_order_reporting(
+    rework_order_id: int,
+    reporting_data: ReworkReportingCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingRecordResponse:
+    """返工报工：首次必须在起始工序；之后可选原工单任意工序并录入数量。"""
+    return await ReworkOrderService().create_rework_reporting(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        reporting_data=reporting_data,
+        reported_by=current_user.id,
+    )
+
+
+@router.get(
+    "/work-orders/{work_order_id}/outsource-options",
+    response_model=List[OutsourceOptionResponse],
+    summary="List outsource options for work order operations",
+)
+async def list_work_order_outsource_options(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceOptionResponse]:
+    """
+    获取工单各工序的可委外数量
+
+    - **work_order_id**: 工单ID
+    """
+    return await OutsourceService().list_outsource_options(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
     )
 
 

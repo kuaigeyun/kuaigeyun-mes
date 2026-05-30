@@ -59,6 +59,10 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType';
@@ -461,29 +465,28 @@ const DemandManagementPage: React.FC = () => {
 
   const columns: ProColumns<Demand>[] = [
     {
-      title: '需求编号',
+      title: '需求名称 / 编号',
+      key: 'demand_code',
       dataIndex: 'demand_code',
-      width: 160,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_: unknown, record: Demand) => (
-        <Space size={4}>
-          <span>{record.demand_code ?? '-'}</span>
-          {record.demand_code ? (
-            <Tooltip title={t('field.invitationCode.copy', { defaultValue: '复制' })}>
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCopy(record.demand_code!);
-                }}
-              />
-            </Tooltip>
-          ) : null}
-        </Space>
+        <UniTableStackedPrimaryCell
+          primary={String(record.demand_name ?? '')}
+          secondary={String(record.demand_code ?? '')}
+        />
       ),
+    },
+    {
+      title: '需求编号',
+      dataIndex: 'demand_code',
+      hideInTable: true,
+    },
+    {
+      title: '需求名称',
+      dataIndex: 'demand_name',
+      hideInTable: true,
+      ellipsis: true,
     },
     {
       title: '需求类型',
@@ -492,12 +495,6 @@ const DemandManagementPage: React.FC = () => {
       render: (_: unknown, record: Demand) => (
         <Tag {...getDemandTypeTagProps(record.demand_type)}>{getDemandTypeLabel(record.demand_type)}</Tag>
       ),
-    },
-    {
-      title: '需求名称',
-      dataIndex: 'demand_name',
-      width: 200,
-      ellipsis: true,
     },
     {
       title: '总数量',

@@ -15,6 +15,10 @@ import dayjs from 'dayjs';
 import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi } from '../../../services/production';
@@ -73,23 +77,17 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<ReplenishmentSuggestion>[] = [
     {
-      title: '物料编号',
-      dataIndex: 'material_code',
-      width: 120,
-      ellipsis: true,
+      title: '物料',
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          {r.material_code ?? '-'}
-        </Typography.Text>
+        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    {
-      title: '物料名称',
-      dataIndex: 'material_name',
-      width: 150,
-      ellipsis: true,
-    },
+    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
     {
       title: '仓库',
       dataIndex: 'warehouse_name',

@@ -20,6 +20,10 @@ import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -623,22 +627,27 @@ const PurchaseOrdersPage: React.FC = () => {
   /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
   const columns: ProColumns<PurchaseOrder>[] = [
     {
-      title: '订单编号',
+      title: '供应商 / 订单',
+      key: 'order_code',
       dataIndex: 'order_code',
-      width: 148,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.order_code ?? '') }} ellipsis>
-          {r.order_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.supplier_name ?? '')}
+          secondary={String(r.order_code ?? '')}
+        />
       ),
+    },
+    {
+      title: '订单编号',
+      dataIndex: 'order_code',
+      hideInTable: true,
     },
     {
       title: '供应商',
       dataIndex: 'supplier_name',
-      width: 150,
-      ellipsis: true,
+      hideInTable: true,
     },
     {
       title: '采购员',

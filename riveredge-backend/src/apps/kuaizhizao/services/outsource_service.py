@@ -9,8 +9,9 @@ Date: 2025-01-04
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from decimal import Decimal
+from collections import defaultdict
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
@@ -26,9 +27,14 @@ from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
     OutsourceOrderUpdate,
     OutsourceOrderResponse,
-    OutsourceOrderListResponse
+    OutsourceOrderListResponse,
+    OutsourceOptionResponse,
 )
 from apps.master_data.models.supplier import Supplier
+from apps.kuaizhizao.services.over_report_rules import (
+    max_completed_quantity_for_plan,
+    tuple_from_model,
+)
 from loguru import logger
 
 
@@ -41,6 +47,74 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
 
     def __init__(self):
         super().__init__(OutsourceOrder)
+
+    def _compute_outsourceable_breakdown(
+        self,
+        work_order: WorkOrder,
+        work_order_operation: WorkOrderOperation,
+        already_outsourced: Decimal,
+    ) -> Dict[str, Decimal]:
+        plan_qty = work_order.quantity or Decimal("0")
+        om, ov = tuple_from_model(work_order_operation)
+        max_quantity = max_completed_quantity_for_plan(plan_qty, om, ov)
+        completed_quantity = work_order_operation.completed_quantity or Decimal("0")
+        outsourceable_quantity = max_quantity - completed_quantity - already_outsourced
+        if outsourceable_quantity < 0:
+            outsourceable_quantity = Decimal("0")
+        return {
+            "max_quantity": max_quantity,
+            "completed_quantity": completed_quantity,
+            "already_outsourced_quantity": already_outsourced,
+            "outsourceable_quantity": outsourceable_quantity,
+        }
+
+    async def list_outsource_options(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> List[OutsourceOptionResponse]:
+        work_order = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
+
+        existing_outsource_rows = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").values_list("work_order_operation_id", "outsource_quantity")
+
+        outsourced_by_op: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        for op_id, qty in existing_outsource_rows:
+            outsourced_by_op[int(op_id)] += Decimal(str(qty or 0))
+
+        options: List[OutsourceOptionResponse] = []
+        for operation in operations:
+            breakdown = self._compute_outsourceable_breakdown(
+                work_order,
+                operation,
+                outsourced_by_op.get(operation.id, Decimal("0")),
+            )
+            options.append(
+                OutsourceOptionResponse(
+                    work_order_operation_id=operation.id,
+                    operation_id=operation.operation_id,
+                    operation_code=operation.operation_code,
+                    operation_name=operation.operation_name,
+                    sequence=operation.sequence,
+                    **breakdown,
+                )
+            )
+        return options
 
     async def create_outsource_order(
         self,
@@ -96,13 +170,29 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             if not supplier:
                 raise NotFoundError(f"供应商不存在或已禁用: {outsource_order_data.supplier_id}")
 
-            # 验证委外数量不能超过工序剩余数量
-            completed_quantity = work_order_operation.completed_quantity or Decimal('0')
-            operation_quantity = work_order_operation.quantity or Decimal('0')
-            remaining_quantity = operation_quantity - completed_quantity
-            
-            if outsource_order_data.outsource_quantity > remaining_quantity:
-                raise ValidationError(f"委外数量({outsource_order_data.outsource_quantity})不能超过工序剩余数量({remaining_quantity})")
+            if outsource_order_data.outsource_quantity <= 0:
+                raise ValidationError("委外数量必须大于 0")
+
+            existing_outsource_rows = await OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_operation_id=outsource_order_data.work_order_operation_id,
+                deleted_at__isnull=True,
+            ).exclude(status="cancelled").values_list("outsource_quantity", flat=True)
+            already_outsourced = sum(
+                (Decimal(str(q)) for q in existing_outsource_rows),
+                Decimal("0"),
+            )
+            breakdown = self._compute_outsourceable_breakdown(
+                work_order,
+                work_order_operation,
+                already_outsourced,
+            )
+            outsourceable_quantity = breakdown["outsourceable_quantity"]
+
+            if outsource_order_data.outsource_quantity > outsourceable_quantity:
+                raise ValidationError(
+                    f"委外数量({outsource_order_data.outsource_quantity})不能超过可委外数量({outsourceable_quantity})"
+                )
 
             # 生成委外单编码（如果未提供）
             if not outsource_order_data.code:

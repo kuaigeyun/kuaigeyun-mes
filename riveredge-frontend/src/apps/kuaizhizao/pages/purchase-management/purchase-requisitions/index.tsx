@@ -20,6 +20,10 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -292,30 +296,26 @@ const PurchaseRequisitionsPage: React.FC = () => {
       },
     },
     {
-      title: '申请编号',
+      title: '申请名称 / 编号',
+      key: 'requisition_code',
       dataIndex: 'requisition_code',
-      width: 176,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       hideInSearch: false,
-      render: (_, record) => {
-        const code = record.requisition_code ?? '';
-        return (
-          <Space size={4}>
-            <span>{code}</span>
-            {code ? (
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                onClick={() => handleCopyRequisitionCode(code)}
-                aria-label="复制申请编号"
-              />
-            ) : null}
-          </Space>
-        );
-      },
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.requisition_name ?? '')}
+          secondary={String(record.requisition_code ?? '')}
+        />
+      ),
     },
-    { title: '申请名称', dataIndex: 'requisition_name', width: 180, hideInSearch: false, ellipsis: true },
+    {
+      title: '申请编号',
+      dataIndex: 'requisition_code',
+      hideInTable: true,
+      hideInSearch: false,
+    },
+    { title: '申请名称', dataIndex: 'requisition_name', hideInTable: true, hideInSearch: false, ellipsis: true },
     { title: '来源编码', dataIndex: 'source_code', width: 132, hideInSearch: false, ellipsis: true },
     {
       title: '来源类型',

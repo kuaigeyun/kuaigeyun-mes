@@ -236,6 +236,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if work_order.is_frozen:
                 raise BusinessLogicError(f"工单已冻结，不能报工。冻结原因：{work_order.freeze_reason or '无'}")
 
+            if (work_order.status or "") == "split":
+                raise BusinessLogicError("已拆分主工单不可报工，请将剩余数量拆分为子工单后由子工单执行")
+
             if work_order.status not in ['released', 'in_progress']:
                 raise ValidationError("只能对已下达或进行中的工单进行报工")
 

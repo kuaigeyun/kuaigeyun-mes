@@ -2745,30 +2745,13 @@ async def get_work_orders_active(
     for op in ops:
         ops_by_wo.setdefault(op["work_order_id"], []).append(op)
 
-    def _map_status(s: str) -> str:
-        if s in ("completed", "completed_force", "已完成"):
-            return "done"
-        if s in ("in_progress", "进行中"):
-            return "active"
-        return "pending"
+    from apps.kuaizhizao.services.work_order_operation_steps import build_work_order_operation_steps
 
     items = []
     for w in work_orders:
         plan = float(w.get("quantity") or 0)
         raw_steps = ops_by_wo.get(w["id"], [])
-        steps = []
-        for op in raw_steps:
-            status = _map_status(op.get("status") or "")
-            progress = 0
-            if status == "active" and plan > 0:
-                qty = float(op.get("qualified_quantity") or 0)
-                progress = int(min(100, round(qty / plan * 100)))
-            steps.append({
-                "name": op.get("operation_name") or "",
-                "sequence": op.get("sequence") or 0,
-                "status": status,
-                "progress": progress,
-            })
+        steps = build_work_order_operation_steps(raw_steps, plan)
 
         items.append({
             "work_order_id": w.get("id"),

@@ -36,6 +36,10 @@ import {
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -240,17 +244,20 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const columns: ProColumns<ReceiptNotice>[] = [
     {
-      title: '通知单号',
+      title: '供应商 / 通知单号',
+      key: 'notice_code',
       dataIndex: 'notice_code',
-      width: 148,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.notice_code ?? '') }} ellipsis>
-          {r.notice_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.supplier_name ?? '')}
+          secondary={String(r.notice_code ?? '')}
+        />
       ),
     },
+    { title: '通知单号', dataIndex: 'notice_code', hideInTable: true },
+    { title: '供应商', dataIndex: 'supplier_name', hideInTable: true },
     {
       title: '采购订单号',
       dataIndex: 'purchase_order_code',
@@ -262,7 +269,6 @@ const ReceiptNoticesPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
     { title: '入库仓库', dataIndex: 'warehouse_name', width: 120 },
     { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
     {

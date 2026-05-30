@@ -52,6 +52,7 @@ class ReportingRecord(BaseModel):
         indexes = [
             ("tenant_id",),
             ("work_order_id",),
+            ("rework_order_id",),
             ("operation_id",),
             ("worker_id",),
             ("status",),
@@ -65,6 +66,7 @@ class ReportingRecord(BaseModel):
 
     # 工单信息
     work_order_id = fields.IntField(description="工单ID")
+    rework_order_id = fields.IntField(null=True, description="返工单 ID（返工报工时有值）")
     work_order_code = fields.CharField(max_length=50, description="工单编码")
     work_order_name = fields.CharField(max_length=200, description="工单名称")
 

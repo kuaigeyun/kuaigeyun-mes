@@ -20,7 +20,7 @@ export interface UniLifecycleProps extends LifecycleResult {
   expandSubStages?: boolean;
   /** 为 false 时圆环 hover 不展示 Tooltip（如列表列已有阶段文案） */
   showCircleTooltip?: boolean;
-  /** 是否在圆环内显示百分比数字，默认 true */
+  /** 为 true 时在圆环内显示百分比（默认关闭；列表/详情仅完成态显示打勾） */
   showPercent?: boolean;
 }
 
@@ -109,7 +109,7 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       format={
         showPercent
           ? undefined
-          : Math.min(100, Math.max(0, Math.round(percent))) >= 100 || progressStatus === 'success'
+          : progressStatus === 'success'
             ? undefined
             : () => null
       }

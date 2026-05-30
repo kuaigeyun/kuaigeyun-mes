@@ -58,6 +58,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
@@ -251,13 +252,13 @@ export const OutsourceOrdersTable: React.FC = () => {
         title: '实际开始时间',
         dataIndex: 'actual_start_date',
         valueType: 'dateTime',
-        render: (text) => text || '-',
+        render: (text) => formatDateTimeBySiteSetting(text),
       },
       {
         title: '实际结束时间',
         dataIndex: 'actual_end_date',
         valueType: 'dateTime',
-        render: (text) => text || '-',
+        render: (text) => formatDateTimeBySiteSetting(text),
       },
       {
         title: '采购入库单编号',

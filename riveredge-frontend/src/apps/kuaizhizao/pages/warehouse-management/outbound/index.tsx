@@ -13,6 +13,10 @@ import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, T
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -593,21 +597,33 @@ const OutboundPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const getOutboundStackedPrimary = (record: OutboundOrder): string => {
+    if (record.outbound_type === 'sales_delivery' && record.customer_name) {
+      return String(record.customer_name);
+    }
+    if (record.work_order_code) return String(record.work_order_code);
+    if (record.customer_name) return String(record.customer_name);
+    return '出库单';
+  };
+
   const columns: ProColumns<OutboundOrder>[] = [
+    {
+      title: '主体 / 单号',
+      key: 'delivery_code',
+      dataIndex: ['delivery_code', 'picking_code'],
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={getOutboundStackedPrimary(record)}
+          secondary={String(record.delivery_code || record.picking_code || '')}
+        />
+      ),
+    },
     {
       title: '出库单号',
       dataIndex: ['delivery_code', 'picking_code'],
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, record) => {
-        const code = String(record.delivery_code || record.picking_code || '');
-        return (
-          <Typography.Text copyable={{ text: code }} ellipsis>
-            {code || '-'}
-          </Typography.Text>
-        );
-      },
+      hideInTable: true,
     },
     {
       title: '出库类型',
@@ -622,7 +638,7 @@ const OutboundPage: React.FC = () => {
     {
       title: '客户',
       dataIndex: 'customer_name',
-      width: 120,
+      hideInTable: true,
       ellipsis: true,
     },
     {

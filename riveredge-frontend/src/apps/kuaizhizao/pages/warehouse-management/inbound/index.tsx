@@ -20,6 +20,10 @@ import {
   DownOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect, materialCache } from '../../../../../components/material-unit-select';
@@ -1278,21 +1282,34 @@ const InboundPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const getInboundStackedPrimary = (record: InboundOrder): string => {
+    if (record.receipt_type === 'purchase' && record.supplier_name) {
+      return String(record.supplier_name);
+    }
+    if (record.work_order_code) return String(record.work_order_code);
+    if (record.picking_code) return String(record.picking_code);
+    if (record.warehouse_name) return String(record.warehouse_name);
+    return '入库单';
+  };
+
   const columns: ProColumns<InboundOrder>[] = [
+    {
+      title: '主体 / 单号',
+      key: 'receipt_code',
+      dataIndex: ['receipt_code', 'return_code'],
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={getInboundStackedPrimary(record)}
+          secondary={String(record.receipt_code || record.return_code || '')}
+        />
+      ),
+    },
     {
       title: '单号',
       dataIndex: ['receipt_code', 'return_code'],
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, record) => {
-        const code = String(record.receipt_code || record.return_code || '');
-        return (
-          <Typography.Text copyable={{ text: code }} ellipsis>
-            {code || '-'}
-          </Typography.Text>
-        );
-      },
+      hideInTable: true,
     },
     {
       title: '入库类型',
@@ -1308,7 +1325,7 @@ const InboundPage: React.FC = () => {
     {
       title: '供应商',
       dataIndex: 'supplier_name',
-      width: 120,
+      hideInTable: true,
       ellipsis: true,
     },
     {

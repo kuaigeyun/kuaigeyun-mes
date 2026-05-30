@@ -27,6 +27,10 @@ import { App, Button, Tag, Space, Card, Table, Modal, Row, Col, Descriptions, Ty
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
@@ -342,17 +346,16 @@ const InspectionPlansPage: React.FC = () => {
       },
     },
     {
-      title: '适用物料编号',
-      dataIndex: 'material_code',
-      width: 120,
-      ellipsis: true,
+      title: '适用物料',
+      key: 'material_name',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          {r.material_code || '-'}
-        </Typography.Text>
+        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    { title: '适用物料', dataIndex: 'material_name', width: 150, ellipsis: true, render: (t) => t || '-' },
+    { title: '适用物料编号', dataIndex: 'material_code', hideInTable: true },
+    { title: '适用物料', dataIndex: 'material_name', hideInTable: true },
     { title: '版本', dataIndex: 'version', width: 80 },
     {
       title: '更新时间',

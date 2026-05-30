@@ -8,12 +8,13 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Col, Modal, Row, Space, Tag, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Card, Col, Modal, Row, Space, Tag, message } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, FormOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -23,8 +24,10 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { useGlobalStore } from '../../../../../stores/globalStore';
 
 interface ReworkOrder {
   id?: number;
@@ -53,6 +56,13 @@ interface ReworkOrder {
   remarks?: string;
   created_at?: string;
   updated_at?: string;
+  start_work_order_operation_id?: number;
+  rework_operations?: Array<{
+    work_order_operation_id: number;
+    operation_name?: string;
+    operation_code?: string;
+    is_start?: boolean;
+  }>;
 }
 
 const REWORK_TYPE_FALLBACK = [
@@ -65,6 +75,7 @@ const ReworkOrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(REWORK_TYPE_FALLBACK);
@@ -98,6 +109,13 @@ const ReworkOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [reworkOrderDetail, setReworkOrderDetail] = useState<ReworkOrder | null>(null);
+
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportSubmitLoading, setReportSubmitLoading] = useState(false);
+  const [currentReworkOrderForReport, setCurrentReworkOrderForReport] = useState<ReworkOrder | null>(null);
+  const [reportingOptions, setReportingOptions] = useState<any>(null);
+  const reportFormRef = useRef<any>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   /**
    * 详情列定义
@@ -139,13 +157,14 @@ const ReworkOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '返工工序',
+      title: '返工起始工序',
       dataIndex: 'rework_operations',
       span: 2,
       render: (_: any, record: any) => {
-        const ops = record.rework_operations || [];
-        if (ops.length === 0) return '-';
-        return ops.map((o: any) => `${o.operation_code || ''} ${o.operation_name || ''}`.trim() || `工序#${o.work_order_operation_id}`).join('、');
+        const startOp = (record.rework_operations || []).find((o: any) => o.is_start)
+          || (record.rework_operations || [])[0];
+        if (!startOp) return '-';
+        return `${startOp.operation_code || ''} ${startOp.operation_name || ''}`.trim() || `工序#${startOp.work_order_operation_id}`;
       },
     },
     {
@@ -170,13 +189,13 @@ const ReworkOrdersPage: React.FC = () => {
       title: '实际开始时间',
       dataIndex: 'actual_start_date',
       valueType: 'dateTime',
-      render: (text) => text || '-',
+      render: (text) => formatDateTimeBySiteSetting(text),
     },
     {
       title: '实际结束时间',
       dataIndex: 'actual_end_date',
       valueType: 'dateTime',
-      render: (text) => text || '-',
+      render: (text) => formatDateTimeBySiteSetting(text),
     },
     {
       title: '已完成数量',
@@ -289,9 +308,21 @@ const ReworkOrdersPage: React.FC = () => {
         const lifecycle = getReworkOrderLifecycle(record);
         const canEdit = lifecycle.stageName !== '已完成' && lifecycle.stageName !== '已取消';
         const canDelete = lifecycle.stageName === '草稿';
+        const canReport =
+          lifecycle.stageName === '已下达' || lifecycle.stageName === '执行中';
         return (
           <Space>
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            {canReport ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<FormOutlined />}
+                onClick={() => void handleOpenReport(record)}
+              >
+                报工
+              </Button>
+            ) : null}
             <Button
               type="link"
               size="small"
@@ -356,12 +387,87 @@ const ReworkOrdersPage: React.FC = () => {
           completed_quantity: detail.completed_quantity,
           qualified_quantity: detail.qualified_quantity,
           unqualified_quantity: detail.unqualified_quantity,
-          work_order_operation_ids: (detail.rework_operations || []).map((o: any) => o.work_order_operation_id),
+          start_work_order_operation_id:
+            detail.start_work_order_operation_id
+            ?? (detail.rework_operations || []).find((o: any) => o.is_start)?.work_order_operation_id
+            ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
           remarks: detail.remarks,
         });
       }, 100);
     } catch (error) {
       messageApi.error('获取返工单详情失败');
+    }
+  };
+
+  const handleOpenReport = async (record: ReworkOrder) => {
+    if (!record.id) return;
+    try {
+      const [detail, options] = await Promise.all([
+        reworkOrderApi.get(record.id.toString()),
+        reworkOrderApi.getReportingOptions(record.id.toString()),
+      ]);
+      setCurrentReworkOrderForReport(detail);
+      setReportingOptions(options);
+      setReportModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载返工报工选项失败');
+    }
+  };
+
+  const reportFormInitialValues = useMemo(() => {
+    if (!reportModalVisible || !reportingOptions) return undefined;
+    const defaultOp = reportingOptions.operations?.find((op: any) => op.selectable);
+    const remaining = Number(reportingOptions.remaining_rework_quantity ?? 0);
+    return {
+      work_order_operation_id: defaultOp?.work_order_operation_id,
+      reported_quantity: remaining > 0 ? remaining : undefined,
+      qualified_quantity: remaining > 0 ? remaining : undefined,
+      unqualified_quantity: 0,
+      work_hours: 0,
+      reported_at: dayjs(),
+    };
+  }, [reportModalVisible, reportingOptions]);
+
+  const handleSubmitReport = async (values: any): Promise<void> => {
+    if (!currentReworkOrderForReport?.id) {
+      throw new Error('返工单信息不存在');
+    }
+    setReportSubmitLoading(true);
+    try {
+      const workerId = currentUser?.id;
+      const workerName =
+        currentUser?.full_name || currentUser?.username || values.worker_name || '操作工';
+      if (!workerId) {
+        throw new Error('无法获取当前用户信息');
+      }
+      await reworkOrderApi.report(currentReworkOrderForReport.id.toString(), {
+        work_order_operation_id: values.work_order_operation_id,
+        worker_id: workerId,
+        worker_name: workerName,
+        reported_quantity: Number(values.reported_quantity),
+        qualified_quantity: Number(values.qualified_quantity),
+        unqualified_quantity: Number(values.unqualified_quantity ?? 0),
+        work_hours: Number(values.work_hours ?? 0),
+        reported_at: values.reported_at
+          ? values.reported_at.format('YYYY-MM-DD HH:mm:ss')
+          : dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        remarks: values.remarks || undefined,
+      });
+      messageApi.success('返工报工成功');
+      setReportModalVisible(false);
+      setCurrentReworkOrderForReport(null);
+      setReportingOptions(null);
+      reportFormRef.current?.resetFields();
+      actionRef.current?.reload();
+      if (reworkOrderDetail?.id === currentReworkOrderForReport.id) {
+        const refreshed = await reworkOrderApi.get(currentReworkOrderForReport.id.toString());
+        setReworkOrderDetail(refreshed);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '返工报工失败');
+      throw error;
+    } finally {
+      setReportSubmitLoading(false);
     }
   };
 
@@ -482,7 +588,10 @@ const ReworkOrdersPage: React.FC = () => {
             completed_quantity: detail.completed_quantity,
             qualified_quantity: detail.qualified_quantity,
             unqualified_quantity: detail.unqualified_quantity,
-            work_order_operation_ids: (detail.rework_operations || []).map((o: any) => o.work_order_operation_id),
+            start_work_order_operation_id:
+              detail.start_work_order_operation_id
+              ?? (detail.rework_operations || []).find((o: any) => o.is_start)?.work_order_operation_id
+              ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
             remarks: detail.remarks,
           });
         }, 100);
@@ -515,7 +624,7 @@ const ReworkOrdersPage: React.FC = () => {
           }
           messageApi.success('删除成功');
           invalidateMenuBadgeCounts();
-
+          setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -533,6 +642,8 @@ const ReworkOrdersPage: React.FC = () => {
         columns={columns}
         request={handleRequest}
         rowKey="id"
+        enableRowSelection={true}
+        onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
         createButtonText="新建返工工单"
         onCreate={handleCreate}
@@ -699,10 +810,10 @@ const ReworkOrdersPage: React.FC = () => {
           {({ original_work_order_id }) =>
             original_work_order_id ? (
               <ProFormSelect
-                name="work_order_operation_ids"
-                label="返工工序"
-                placeholder="请选择需要返工的工序"
-                mode="multiple"
+                name="start_work_order_operation_id"
+                label="返工起始工序"
+                placeholder="不选则取原工单首道工序"
+                allowClear
                 fieldProps={{
                   showSearch: true,
                   filterOption: (input: string, option: any) =>
@@ -800,6 +911,25 @@ const ReworkOrdersPage: React.FC = () => {
               <DetailDrawerActions
                 items={[
                   {
+                    key: 'report',
+                    visible:
+                      getReworkOrderLifecycle(reworkOrderDetail).stageName === '已下达'
+                      || getReworkOrderLifecycle(reworkOrderDetail).stageName === '执行中',
+                    render: () => (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<FormOutlined />}
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          void handleOpenReport(reworkOrderDetail);
+                        }}
+                      >
+                        报工
+                      </Button>
+                    ),
+                  },
+                  {
                     key: 'edit',
                     visible: canEdit,
                     render: () => (
@@ -862,6 +992,101 @@ const ReworkOrdersPage: React.FC = () => {
           </DetailDrawerSection>
         )}
       </DetailDrawerTemplate>
+
+      <FormModalTemplate
+        title="返工报工"
+        open={reportModalVisible}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        loading={reportSubmitLoading}
+        initialValues={reportFormInitialValues}
+        onClose={() => {
+          setReportModalVisible(false);
+          setCurrentReworkOrderForReport(null);
+          setReportingOptions(null);
+          reportFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitReport}
+        formRef={reportFormRef}
+      >
+        {currentReworkOrderForReport && reportingOptions ? (
+          <>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div>
+                    <strong>返工单：</strong>
+                    {currentReworkOrderForReport.code}
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div>
+                    <strong>返工数量：</strong>
+                    {reportingOptions.rework_quantity}
+                  </div>
+                </Col>
+                <Col span={12} style={{ marginTop: 8 }}>
+                  <div>
+                    <strong>起始工序：</strong>
+                    {reportingOptions.start_operation_name || '-'}
+                  </div>
+                </Col>
+                <Col span={12} style={{ marginTop: 8 }}>
+                  <div>
+                    <strong>剩余可报合格数：</strong>
+                    {reportingOptions.remaining_rework_quantity}
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+            <ProFormSelect
+              name="work_order_operation_id"
+              label="报工工序"
+              placeholder="请选择报工工序"
+              rules={[{ required: true, message: '请选择报工工序' }]}
+              options={(reportingOptions.operations || [])
+                .filter((op: any) => op.selectable)
+                .map((op: any) => ({
+                  label: `${op.is_start_operation ? '【起始】' : ''}工序${op.sequence || ''} - ${op.operation_name || op.operation_code || op.work_order_operation_id}（已报 ${op.reported_quantity}）`,
+                  value: op.work_order_operation_id,
+                }))}
+              fieldProps={{ showSearch: true }}
+            />
+            <ProFormDigit
+              name="reported_quantity"
+              label="报工数量"
+              rules={[{ required: true, message: '请输入报工数量' }]}
+              min={0.01}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="qualified_quantity"
+              label="合格数量"
+              rules={[{ required: true, message: '请输入合格数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="unqualified_quantity"
+              label="不合格数量"
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="work_hours"
+              label="工时（小时）"
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDatePicker
+              name="reported_at"
+              label="报工时间"
+              rules={[{ required: true, message: '请选择报工时间' }]}
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+            />
+            <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 2 }} />
+          </>
+        ) : null}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

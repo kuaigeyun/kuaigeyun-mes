@@ -1143,6 +1143,52 @@ code {
   vertical-align: middle !important;
 }
 
+/* 工单树形表：展开加号相对堆叠主列（品名+单号）垂直居中 */
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td {
+  vertical-align: middle !important;
+}
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.ant-table-cell-with-append {
+  display: flex;
+  align-items: center;
+}
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.ant-table-cell-with-append .ant-table-row-indent,
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.ant-table-cell-with-append .ant-table-row-expand-icon {
+  float: none;
+  flex-shrink: 0;
+}
+.kuaizhizao-work-orders-table
+  .ant-table-tbody
+  > tr
+  > td.ant-table-cell-with-append
+  .ant-table-row-indent
+  + .ant-table-row-expand-icon {
+  margin-top: 0;
+  vertical-align: middle !important;
+}
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.ant-table-cell-with-append > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+.kuaizhizao-work-orders-table .wo-operation-cards-panel {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td .wo-row-expand-trigger {
+  cursor: pointer;
+}
+.kuaizhizao-work-orders-table .wo-operation-cards-expand-cell {
+  padding-top: 12px !important;
+  padding-bottom: 16px !important;
+  padding-left: var(--wo-op-panel-inset-left, 64px) !important;
+  padding-right: var(--wo-op-panel-inset-right, 16px) !important;
+  background: var(--ant-color-fill-alter) !important;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+.kuaizhizao-work-orders-table .wo-operation-cards-expand-row:hover > .wo-operation-cards-expand-cell {
+  background: var(--ant-color-fill-alter) !important;
+}
+
 /* 表格横向滚动条样式（全站）；纵向 gutter 仅由 UniTable scroll-y-mode 统一控制 */
 .ant-table-wrapper .ant-table-body,
 .ant-table-wrapper .ant-table-content {

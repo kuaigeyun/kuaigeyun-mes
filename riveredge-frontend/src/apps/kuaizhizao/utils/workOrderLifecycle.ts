@@ -7,9 +7,34 @@ import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { WorkOrder } from '../types/production';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import {
+  LIST_LIFECYCLE_STAGE_FIELD,
+  resolveListLifecycleStageFromSearch,
+} from '../../../utils/listLifecycleStage';
+
+export { LIST_LIFECYCLE_STAGE_FIELD };
+
+/** 工单列表生命周期 Tab / 筛选展示名（与 stageName 一致） */
+export const WORK_ORDER_STAGE_LABELS = ['草稿', '已下达', '执行中', '已完成', '已取消', '已拆分'] as const;
+
+const WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS: Record<string, string> = {
+  草稿: 'draft',
+  已下达: 'released',
+  执行中: 'in_progress',
+  已完成: 'completed',
+  已取消: 'cancelled',
+  已拆分: 'split',
+};
 
 /** 工单专用阶段 key 集合（与后端 document_lifecycle_service.WORK_ORDER_MAIN_STAGES 一致） */
-const WORK_ORDER_STAGE_KEYS = new Set(['draft', 'released', 'in_progress', 'completed', 'cancelled']);
+const WORK_ORDER_STAGE_KEYS = new Set([
+  'draft',
+  'released',
+  'in_progress',
+  'completed',
+  'cancelled',
+  'split',
+]);
 
 function isWorkOrderLifecycle(backend: BackendLifecycle): boolean {
   const stages = backend?.main_stages ?? [];
@@ -27,12 +52,14 @@ const STATUS_TO_KEY: Record<string, string> = {
   in_progress: 'in_progress',
   completed: 'completed',
   cancelled: 'cancelled',
+  split: 'split',
   草稿: 'draft',
   已下达: 'released',
   执行中: 'in_progress',
   生产中: 'in_progress',
   已完成: 'completed',
   已取消: 'cancelled',
+  已拆分: 'split',
 };
 
 /** 前端兜底：根据 status 构建 BackendLifecycle */
@@ -45,6 +72,7 @@ function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): Ba
     in_progress: '执行中',
     completed: '已完成',
     cancelled: '已取消',
+    split: '已拆分',
   };
   const stageDefs = [
     { key: 'draft', label: '草稿' },
@@ -52,11 +80,13 @@ function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): Ba
     { key: 'in_progress', label: '执行中' },
     { key: 'completed', label: '已完成' },
     { key: 'cancelled', label: '已取消' },
+    { key: 'split', label: '已拆分' },
   ];
+  const terminalKeys = new Set(['cancelled', 'split']);
   const mainStages = stageDefs.map((s) => {
     let st: 'done' | 'active' | 'pending' = 'pending';
-    if (key === 'cancelled') {
-      st = s.key === 'cancelled' ? 'active' : 'pending';
+    if (terminalKeys.has(key)) {
+      st = s.key === key ? 'active' : s.key === 'completed' || NORMAL_ORDER.indexOf(s.key) >= 0 ? 'done' : 'pending';
     } else {
       const idx = NORMAL_ORDER.indexOf(s.key);
       const curIdx = NORMAL_ORDER.indexOf(key);
@@ -71,11 +101,19 @@ function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): Ba
     in_progress: ['报工', '指定结束', '状态流转'],
     completed: [],
     cancelled: [],
+    split: [],
   };
   return {
     current_stage_key: key,
     current_stage_name: labels[key] ?? '-',
-    status: key === 'cancelled' ? 'exception' : key === 'completed' ? 'success' : key === 'in_progress' ? 'active' : 'normal',
+    status:
+      key === 'cancelled'
+        ? 'exception'
+        : key === 'completed'
+          ? 'success'
+          : key === 'in_progress'
+            ? 'active'
+            : 'normal',
     main_stages: mainStages,
     next_step_suggestions: nextStepSuggestions[key] ?? [],
   };
@@ -97,4 +135,42 @@ export function getWorkOrderLifecycle(
     return parseBackendLifecycle(backend);
   }
   return parseBackendLifecycle(buildFallbackLifecycle(record));
+}
+
+export function buildWorkOrderLifecycleValueEnum(): Record<
+  string,
+  { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }
+> {
+  const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
+    草稿: 'Default',
+    已下达: 'Processing',
+    执行中: 'Processing',
+    已完成: 'Success',
+    已取消: 'Error',
+    已拆分: 'Warning',
+  };
+  return Object.fromEntries(
+    WORK_ORDER_STAGE_LABELS.map((stage) => [stage, { text: stage, status: statusByStage[stage] ?? 'Default' }]),
+  );
+}
+
+/** 列表筛选：lifecycle_stage（中文阶段名）→ API status */
+export function resolveWorkOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+  params?: Record<string, unknown> | null,
+): { status?: string } {
+  const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
+    allowedStages: [...WORK_ORDER_STAGE_LABELS],
+  });
+  if (stage && WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS[stage]) {
+    return { status: WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS[stage] };
+  }
+  return {};
+}
+
+/** 列表 API status：唯一来源 lifecycle_stage（见 listLifecycleStage 约定） */
+export function resolveWorkOrderListStatusFilter(
+  searchFormValues?: Record<string, unknown> | null,
+): string | undefined {
+  return resolveWorkOrderListLifecycleParams(searchFormValues, searchFormValues).status;
 }
