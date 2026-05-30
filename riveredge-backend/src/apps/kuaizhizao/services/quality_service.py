@@ -28,8 +28,10 @@ from apps.kuaizhizao.schemas.quality import (
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.inspection_policy_service import (
+    InspectionStage,
     get_quality_inspection_stage_toggles,
     resolve_inspection_policy,
+    stage_plan_type,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from datetime import timedelta
@@ -109,26 +111,26 @@ def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
 async def _resolve_inspection_template_fields(
     tenant_id: int,
     material_id: Optional[int],
-    standard_type: str,
+    stage: InspectionStage,
     operation_id: Optional[int] = None,
     explicit_plan_id: Optional[int] = None,
     use_quality_characteristics: bool = False,
 ) -> Dict[str, Any]:
-    """按物料质检模式（plan/simple）填充检验项模板。"""
-    from apps.master_data.models.material import Material
-    from apps.master_data.models.process import Operation as MasterOperation
+    """按场景解析 mode/plan_id 并填充检验项模板。"""
     from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
     from apps.kuaizhizao.models.quality_standard import QualityStandard
-    from apps.kuaizhizao.services.inspection_policy_service import normalize_inspection_mode
+    from infra.exceptions.exceptions import ConflictError
 
     if not material_id:
         return {}
 
-    mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
-    if not mat:
-        return {}
-
-    mode = normalize_inspection_mode(getattr(mat, "inspection_mode", None))
+    plan_type = stage_plan_type(stage)
+    mode, resolved_plan_id, _ = await resolve_inspection_policy(
+        tenant_id,
+        stage,
+        material_id=material_id,
+        operation_id=operation_id,
+    )
     if mode == "none":
         return {}
 
@@ -137,13 +139,7 @@ async def _resolve_inspection_template_fields(
             return {"quality_characteristics": items_payload}
         return {"other_checks": items_payload}
 
-    plan_id = explicit_plan_id or getattr(mat, "default_inspection_plan_id", None)
-    if mode == "plan" and operation_id:
-        op = await MasterOperation.get_or_none(
-            tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
-        )
-        if op and getattr(op, "default_inspection_plan_id", None):
-            plan_id = op.default_inspection_plan_id
+    plan_id = explicit_plan_id or resolved_plan_id
 
     if mode == "plan":
         plan = None
@@ -151,11 +147,15 @@ async def _resolve_inspection_template_fields(
             plan = await InspectionPlan.filter(
                 tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True, is_active=True
             ).first()
+            if plan and str(plan.plan_type) != plan_type:
+                raise ConflictError(
+                    f"质检方案 {plan.plan_code} 类型为 {plan.plan_type}，与当前场景 {stage} 所需 {plan_type} 不一致"
+                )
         if not plan:
             plan = await InspectionPlan.filter(
                 tenant_id=tenant_id,
                 material_id=material_id,
-                plan_type=standard_type,
+                plan_type=plan_type,
                 deleted_at__isnull=True,
                 is_active=True,
             ).order_by("-created_at").first()
@@ -191,7 +191,7 @@ async def _resolve_inspection_template_fields(
         std = await QualityStandard.filter(
             tenant_id=tenant_id,
             material_id=material_id,
-            standard_type=standard_type,
+            standard_type=plan_type,
             is_active=True,
             deleted_at__isnull=True,
         ).order_by("-created_at").first()
@@ -199,7 +199,7 @@ async def _resolve_inspection_template_fields(
             std = await QualityStandard.filter(
                 tenant_id=tenant_id,
                 material_id__isnull=True,
-                standard_type=standard_type,
+                standard_type=plan_type,
                 is_active=True,
                 deleted_at__isnull=True,
             ).order_by("-created_at").first()
@@ -384,7 +384,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id,
                 create_data.get("material_id"),
-                "incoming",
+                "iqc",
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
@@ -675,10 +675,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     continue
 
                 mat = mat_by_id.get(item.material_id)
-                eff, _reason = await resolve_inspection_policy(
+                eff, _, _reason = await resolve_inspection_policy(
                     tenant_id,
                     "iqc",
-                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                    material_id=item.material_id,
                 )
                 if eff == "none":
                     continue
@@ -686,7 +686,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 template = await _resolve_inspection_template_fields(
                     tenant_id,
                     item.material_id,
-                    "incoming",
+                    "iqc",
                 )
                 
                 # 创建检验单
@@ -834,10 +834,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 if existing:
                     continue  # 跳过已存在的检验单
 
-                eff_iqc, _ = await resolve_inspection_policy(
+                eff_iqc, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "iqc",
-                    material_inspection_mode=getattr(material, "inspection_mode", None),
+                    material_id=material.id,
                 )
                 if eff_iqc == "none":
                     continue
@@ -980,7 +980,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id,
                 create_data.get("material_id"),
-                "process",
+                "ipqc",
                 operation_id=create_data.get("operation_id"),
                 use_quality_characteristics=True,
             )
@@ -1227,11 +1227,11 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     tenant_id=tenant_id, id=mid, deleted_at__isnull=True
                 )
 
-            eff, _reason = await resolve_inspection_policy(
+            eff, _, _reason = await resolve_inspection_policy(
                 tenant_id,
                 "ipqc",
-                material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
-                operation_inspection_mode=getattr(master_op, "inspection_mode", None) if master_op else None,
+                material_id=mid,
+                operation_id=master_op_id,
             )
             if eff == "none":
                 raise BusinessLogicError(
@@ -1276,7 +1276,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id,
                 wf["material_id"],
-                "process",
+                "ipqc",
                 operation_id=master_op_id,
                 use_quality_characteristics=True,
             )
@@ -1402,11 +1402,11 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                         tenant_id=tenant_id, id=mid, deleted_at__isnull=True
                     )
 
-                eff, _ = await resolve_inspection_policy(
+                eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "ipqc",
-                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
-                    operation_inspection_mode=getattr(master_op, "inspection_mode", None) if master_op else None,
+                    material_id=mid,
+                    operation_id=master_op_id,
                 )
                 if eff == "none":
                     continue
@@ -1545,7 +1545,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id,
                 create_data.get("material_id"),
-                "finished",
+                "fqc",
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
@@ -1920,10 +1920,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     tenant_id=tenant_id, id=mid, deleted_at__isnull=True
                 )
 
-            eff, _ = await resolve_inspection_policy(
+            eff, _, _ = await resolve_inspection_policy(
                 tenant_id,
                 "fqc",
-                material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                material_id=mid,
             )
             if eff == "none":
                 raise BusinessLogicError(
@@ -1958,7 +1958,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id,
                 wf["material_id"],
-                "finished",
+                "fqc",
             )
             
             inspection = await FinishedGoodsInspection.create(
@@ -2068,10 +2068,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                         tenant_id=tenant_id, id=mid, deleted_at__isnull=True
                     )
 
-                eff, _ = await resolve_inspection_policy(
+                eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "fqc",
-                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                    material_id=mid,
                 )
                 if eff == "none":
                     continue

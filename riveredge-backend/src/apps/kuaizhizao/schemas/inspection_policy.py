@@ -31,4 +31,7 @@ class QualityEffectiveConfigResponse(BaseSchema):
     stage_enabled: Dict[str, bool] = Field(..., description="环节总开关 iqc/ipqc/fqc/oqc")
     module_enabled: Dict[str, bool] = Field(..., description="模块能力 incoming/process/finished/defect_handling")
     auto_create: Dict[str, bool] = Field(..., description="各节点自动建单开关")
-    gate: Dict[str, bool] = Field(..., description="门禁 require_iqc_before_receipt_confirm / oqc_before_outbound")
+    gate: Dict[str, bool] = Field(
+        ...,
+        description="门禁 require_iqc_before_receipt_confirm / require_fqc_before_finished_goods_receipt / require_oqc_before_outbound",
+    )

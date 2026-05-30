@@ -111,6 +111,7 @@ const PLAN_TYPE_FALLBACK = [
   { label: '来料检验', value: 'incoming' },
   { label: '过程检验', value: 'process' },
   { label: '成品检验', value: 'finished' },
+  { label: '出货检验', value: 'outbound' },
 ];
 
 const InspectionPlansPage: React.FC = () => {
@@ -284,7 +285,7 @@ const InspectionPlansPage: React.FC = () => {
   };
 
   const planTypeLabel = (planType: string | undefined) => {
-    const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验' };
+    const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验', outbound: '出货检验' };
     return map[planType || ''] || planType || '-';
   };
 

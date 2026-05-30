@@ -98,6 +98,7 @@ import {
 } from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
+import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
 import { isVariantSkuMaterial, isVariantMasterMaterial, scalarAttrDisplay } from '../../components/MaterialVariantCombinationsTable'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
@@ -3262,6 +3263,16 @@ const MaterialsManagementPage: React.FC = () => {
                   (currentMaterial as any).inspectionMode ??
                   (currentMaterial as any).inspection_mode ??
                   'none',
+                inspectionStages: normalizeStagesInput(
+                  (currentMaterial as any).inspectionStages ??
+                    (currentMaterial as any).inspection_stages ??
+                    stagesFromLegacy(
+                      (currentMaterial as any).inspectionMode ??
+                        (currentMaterial as any).inspection_mode,
+                      (currentMaterial as any).defaultInspectionPlanId ??
+                        (currentMaterial as any).default_inspection_plan_id,
+                    ),
+                ),
                 defaultInspectionPlanId:
                   (currentMaterial as any).defaultInspectionPlanId ??
                   (currentMaterial as any).default_inspection_plan_id ??
@@ -3286,6 +3297,7 @@ const MaterialsManagementPage: React.FC = () => {
                 sourceType: undefined,
                 baseUnit: 'PC', // 默认值：件
                 inspectionMode: 'none',
+                inspectionStages: stagesFromLegacy('none'),
                 overReportMode: 'none',
                 overReportValue: 0,
               }

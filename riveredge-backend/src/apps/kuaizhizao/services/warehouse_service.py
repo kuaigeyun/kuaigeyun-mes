@@ -1532,6 +1532,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                             setattr(item, "serial_numbers", json.dumps(serial_nos))
                             await item.save()
 
+            from apps.kuaizhizao.services.inspection_policy_service import assert_fqc_for_finished_goods_receipt
+
+            await assert_fqc_for_finished_goods_receipt(
+                tenant_id,
+                receipt_id,
+                receipt.work_order_id,
+                items,
+            )
+
             # 3. 执行入库确认（更新状态和时间）
             confirmer_name = await self.get_user_name(confirmed_by)
             receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
@@ -3755,47 +3764,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         item.batch_number = batch_no
                         await item.save()
 
-            # 质检合格才入库：若配置了 require_incoming_inspection_for_receipt，需先完成来料检验且合格
-            config = await self.business_config_service.get_business_config(tenant_id)
-            params = config.get("parameters", {})
-            quality_params = params.get("quality", {})
-            if quality_params.get("require_incoming_inspection_for_receipt"):
-                from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        # 质检合格才入库：按行物料 IQC 策略 + 组织门禁
+            items_for_iqc = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id, receipt_id=receipt_id
+            ).all()
+            from apps.kuaizhizao.services.inspection_policy_service import assert_iqc_for_purchase_receipt_lines
 
-                inspections = await IncomingInspection.filter(
-                    tenant_id=tenant_id,
-                    purchase_receipt_id=receipt_id,
-                    deleted_at__isnull=True,
-                ).all()
-                if not inspections:
-                    raise BusinessLogicError(
-                        "已启用「质检合格才入库」，请先创建并完成来料检验，检验合格后再确认入库"
-                    )
-                passed = any(
-                    (i.quality_status == "合格" and i.review_status in ("已审核", "通过", "APPROVED"))
-                    for i in inspections
-                )
-                if not passed:
-                    raise BusinessLogicError(
-                        "已启用「质检合格才入库」，来料检验须审核通过且质量状态为合格后才能确认入库"
-                    )
-                # #region agent log
-                _agent_debug_ndjson(
-                    "warehouse_service.confirm_receipt:after_qc",
-                    "quality_gate",
-                    {"require_iqc": True, "inspection_count": len(inspections), "qc_passed": bool(passed)},
-                    "H3",
-                )
-                # #endregion
-            else:
-                # #region agent log
-                _agent_debug_ndjson(
-                    "warehouse_service.confirm_receipt:after_qc",
-                    "quality_gate",
-                    {"require_iqc": False},
-                    "H3",
-                )
-                # #endregion
+            await assert_iqc_for_purchase_receipt_lines(tenant_id, receipt_id, items_for_iqc)
 
             confirmer_name = await self.get_user_name(confirmed_by)
 

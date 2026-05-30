@@ -248,10 +248,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     continue
 
                 mat = mat_by_id.get(item.material_id)
-                eff, _ = await resolve_inspection_policy(
+                eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "oqc",
-                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                    material_id=item.material_id,
                 )
                 if eff == "none":
                     continue
@@ -260,7 +260,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 template = await _resolve_inspection_template_fields(
                     tenant_id,
                     item.material_id,
-                    "finished",
+                    "oqc",
                 )
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,
@@ -338,10 +338,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     continue
 
                 mat = mat_by_id.get(item.material_id)
-                eff, _ = await resolve_inspection_policy(
+                eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "oqc",
-                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                    material_id=item.material_id,
                 )
                 if eff == "none":
                     continue
@@ -350,7 +350,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 template = await _resolve_inspection_template_fields(
                     tenant_id,
                     item.material_id,
-                    "finished",
+                    "oqc",
                 )
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,

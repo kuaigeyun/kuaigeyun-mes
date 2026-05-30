@@ -1,16 +1,10 @@
 """
-质检环节开关与有效策略解析（组织级 TenantConfig + 主数据字段）
+质检环节开关与有效策略解析（组织级 TenantConfig + 主数据 inspection_stages JSON）
 
-设计要点（与产品规范一致）：
-- IQC：来料检，优先看物料侧配置；组织关闭 IQC 时不应自动建单/强控。
-- IPQC：过程检，优先看工序，其次物料；组织关闭 IPQC 时同理。
-- FQC / OQC：成品检、出货检，当前阶段与物料级默认对齐；工单/订单级覆盖由调用方传入。
-
-配置存储：infra_tenant_configs.config_key = quality_inspection_stages
-config_value 示例：{"iqc_enabled": true, "ipqc_enabled": true, "fqc_enabled": true, "oqc_enabled": true}
-缺省均为 True（不改变现有行为）。
-
-IQC/IPQC/FQC 已在质量管理服务中接入；OQC 在销售出库确认出库、发货通知「通知仓库」等节点校验 OQC 出货检验单放行记录。
+设计要点：
+- IQC/FQC/OQC：物料 inspection_stages[stage] 为唯一主数据源（legacy inspection_mode 仅读 shim）
+- IPQC：仅工序 inspection_stages.ipqc（物料不参与过程检）
+- 检验方案 plan_type 与 stage 映射：iqc→incoming, ipqc→process, fqc→finished, oqc→outbound
 """
 
 from __future__ import annotations
@@ -26,6 +20,24 @@ class QualityEffectiveConfig(TypedDict):
     module_enabled: Dict[str, bool]
     auto_create: Dict[str, bool]
     gate: Dict[str, bool]
+
+
+MATERIAL_INSPECTION_STAGE_KEYS = ("iqc", "fqc", "oqc")
+OPERATION_INSPECTION_STAGE_KEYS = ("ipqc",)
+
+STAGE_TO_PLAN_TYPE: Dict[str, str] = {
+    "iqc": "incoming",
+    "ipqc": "process",
+    "fqc": "finished",
+    "oqc": "outbound",
+}
+
+STAGE_MODULE_KEY: Dict[str, Optional[str]] = {
+    "iqc": "incoming",
+    "ipqc": "process",
+    "fqc": "finished",
+    "oqc": None,
+}
 
 
 def _quality_params_from_business_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,7 +73,10 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
         },
         "gate": {
             "require_iqc_before_receipt_confirm": bool(q.get("require_incoming_inspection_for_receipt", False)),
-            "oqc_before_outbound": bool(stages.get("oqc_enabled", True)),
+            "require_fqc_before_finished_goods_receipt": bool(
+                q.get("require_fqc_before_finished_goods_receipt", False)
+            ),
+            "require_oqc_before_outbound": bool(stages.get("oqc_enabled", True)),
         },
     }
 
@@ -77,37 +92,11 @@ def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None
     if not process and bool(quality_params.get("auto_create_ipqc_on_reporting", True)):
         raise ValidationError("未启用过程检验时，不能开启报工自动创建过程检验单")
     finished = bool(quality_params.get("finished_inspection", True))
-    if not finished and bool(quality_params.get("auto_create_fqc_on_last_reporting", True)):
-        raise ValidationError("未启用成品检验时，不能开启末道报工自动创建成品检验单")
+    fqc_auto = bool(quality_params.get("auto_create_fqc_on_last_reporting", True))
+    fqc_gate = bool(quality_params.get("require_fqc_before_finished_goods_receipt", False))
+    if not finished and (fqc_auto or fqc_gate):
+        raise ValidationError("未启用成品检验时，不能开启末道报工自动创建成品检验单或成品入库门禁")
 
-
-async def assert_master_data_inspection_mode_allowed(
-    tenant_id: int,
-    *,
-    material_mode: Optional[str] = None,
-    operation_mode: Optional[str] = None,
-) -> None:
-    """主数据保存时：质检模式非 none 须至少有一个对应组织环节可用。"""
-    from infra.exceptions.exceptions import ConflictError
-
-    cfg = await get_quality_effective_config(tenant_id)
-    mat = normalize_inspection_mode(material_mode) if material_mode is not None else None
-    op = normalize_inspection_mode(operation_mode) if operation_mode is not None else None
-
-    if mat and mat != "none":
-        iqc_ok = cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"]
-        fqc_ok = cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"]
-        oqc_ok = cfg["stage_enabled"]["oqc"]
-        if not (iqc_ok or fqc_ok or oqc_ok):
-            raise ConflictError(
-                "组织未启用来料/成品/出货检验环节，无法将物料质检模式设为简易或方案质检"
-            )
-
-    if op and op != "none":
-        if not (cfg["stage_enabled"]["ipqc"] and cfg["module_enabled"]["process"]):
-            raise ConflictError(
-                "组织未启用过程检验环节，无法将工序质检模式设为简易或方案质检"
-            )
 
 QUALITY_INSPECTION_STAGES_CONFIG_KEY = "quality_inspection_stages"
 
@@ -138,6 +127,173 @@ def normalize_inspection_mode(raw: Any) -> str:
     if s not in ("none", "simple", "plan"):
         return "none"
     return s
+
+
+def normalize_stage_policy(raw: Any) -> Dict[str, Any]:
+    """规范单场景策略 { mode, plan_id }。"""
+    if not isinstance(raw, dict):
+        return {"mode": "none", "plan_id": None}
+    mode = normalize_inspection_mode(raw.get("mode"))
+    plan_id = raw.get("plan_id")
+    if mode != "plan":
+        return {"mode": mode, "plan_id": None}
+    if plan_id is None:
+        return {"mode": mode, "plan_id": None}
+    try:
+        return {"mode": mode, "plan_id": int(plan_id)}
+    except (TypeError, ValueError):
+        return {"mode": mode, "plan_id": None}
+
+
+def material_stages_from_legacy(
+    inspection_mode: Any,
+    default_inspection_plan_id: Any,
+) -> Dict[str, Dict[str, Any]]:
+    """legacy inspection_mode + default_inspection_plan_id → IQC/FQC/OQC 同值 shim。"""
+    mode = normalize_inspection_mode(inspection_mode)
+    plan_id: Optional[int] = None
+    if mode == "plan" and default_inspection_plan_id is not None:
+        try:
+            plan_id = int(default_inspection_plan_id)
+        except (TypeError, ValueError):
+            plan_id = None
+    policy = {"mode": mode, "plan_id": plan_id}
+    return {k: dict(policy) for k in MATERIAL_INSPECTION_STAGE_KEYS}
+
+
+def operation_stages_from_legacy(
+    inspection_mode: Any,
+    default_inspection_plan_id: Any,
+) -> Dict[str, Dict[str, Any]]:
+    mode = normalize_inspection_mode(inspection_mode)
+    plan_id: Optional[int] = None
+    if mode == "plan" and default_inspection_plan_id is not None:
+        try:
+            plan_id = int(default_inspection_plan_id)
+        except (TypeError, ValueError):
+            plan_id = None
+    return {"ipqc": {"mode": mode, "plan_id": plan_id}}
+
+
+def normalize_material_inspection_stages(raw: Any, *, legacy_mode: Any = None, legacy_plan_id: Any = None) -> Dict[str, Dict[str, Any]]:
+    if isinstance(raw, dict) and raw:
+        return {k: normalize_stage_policy(raw.get(k)) for k in MATERIAL_INSPECTION_STAGE_KEYS}
+    return material_stages_from_legacy(legacy_mode, legacy_plan_id)
+
+
+def normalize_operation_inspection_stages(raw: Any, *, legacy_mode: Any = None, legacy_plan_id: Any = None) -> Dict[str, Dict[str, Any]]:
+    if isinstance(raw, dict) and raw:
+        out = {k: normalize_stage_policy(raw.get(k)) for k in OPERATION_INSPECTION_STAGE_KEYS}
+        return out
+    return operation_stages_from_legacy(legacy_mode, legacy_plan_id)
+
+
+def sync_legacy_fields_from_stages(stages: Dict[str, Dict[str, Any]]) -> Tuple[str, Optional[int]]:
+    """写回 legacy inspection_mode / default_inspection_plan_id（短期兼容报表）。"""
+    priority = ("iqc", "fqc", "oqc")
+    mode = "none"
+    plan_id: Optional[int] = None
+    for key in priority:
+        p = normalize_stage_policy(stages.get(key))
+        if p["mode"] != "none":
+            mode = p["mode"]
+            if p.get("plan_id"):
+                plan_id = p["plan_id"]
+            break
+    if mode == "plan" and plan_id is None:
+        for key in priority:
+            p = normalize_stage_policy(stages.get(key))
+            if p.get("plan_id"):
+                plan_id = p["plan_id"]
+                break
+    return mode, plan_id
+
+
+async def get_material_inspection_stages(tenant_id: int, material_id: int) -> Dict[str, Dict[str, Any]]:
+    from apps.master_data.models.material import Material
+
+    mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+    if not mat:
+        return material_stages_from_legacy("none", None)
+    return normalize_material_inspection_stages(
+        getattr(mat, "inspection_stages", None),
+        legacy_mode=getattr(mat, "inspection_mode", None),
+        legacy_plan_id=getattr(mat, "default_inspection_plan_id", None),
+    )
+
+
+async def get_operation_inspection_stages(tenant_id: int, operation_id: int) -> Dict[str, Dict[str, Any]]:
+    from apps.master_data.models.process import Operation
+
+    op = await Operation.get_or_none(tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True)
+    if not op:
+        return operation_stages_from_legacy("none", None)
+    return normalize_operation_inspection_stages(
+        getattr(op, "inspection_stages", None),
+        legacy_mode=getattr(op, "inspection_mode", None),
+        legacy_plan_id=getattr(op, "default_inspection_plan_id", None),
+    )
+
+
+def stage_plan_type(stage: InspectionStage) -> str:
+    return STAGE_TO_PLAN_TYPE[stage]
+
+
+async def assert_master_data_inspection_stages_allowed(
+    tenant_id: int,
+    *,
+    material_stages: Optional[Dict[str, Any]] = None,
+    operation_stages: Optional[Dict[str, Any]] = None,
+) -> None:
+    """主数据保存：某场景 mode≠none 时组织须启用对应环节。"""
+    from infra.exceptions.exceptions import ConflictError
+
+    cfg = await get_quality_effective_config(tenant_id)
+
+    if material_stages:
+        norm = normalize_material_inspection_stages(material_stages)
+        checks = (
+            ("iqc", "来料检验", cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"]),
+            ("fqc", "成品检验", cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"]),
+            ("oqc", "出货检验", cfg["stage_enabled"]["oqc"]),
+        )
+        for key, label, ok in checks:
+            if normalize_stage_policy(norm.get(key))["mode"] != "none" and not ok:
+                raise ConflictError(f"组织未启用{label}环节，无法将该场景的质检模式设为简易或方案质检")
+
+    if operation_stages:
+        norm = normalize_operation_inspection_stages(operation_stages)
+        if normalize_stage_policy(norm.get("ipqc"))["mode"] != "none":
+            if not (cfg["stage_enabled"]["ipqc"] and cfg["module_enabled"]["process"]):
+                raise ConflictError("组织未启用过程检验环节，无法将工序 IPQC 设为简易或方案质检")
+
+
+async def assert_master_data_inspection_mode_allowed(
+    tenant_id: int,
+    *,
+    material_mode: Optional[str] = None,
+    operation_mode: Optional[str] = None,
+    material_stages: Optional[Dict[str, Any]] = None,
+    operation_stages: Optional[Dict[str, Any]] = None,
+) -> None:
+    """兼容旧调用：优先 inspection_stages，否则 legacy mode 展开为四场景/单场景。"""
+    if material_stages is not None or operation_stages is not None:
+        await assert_master_data_inspection_stages_allowed(
+            tenant_id,
+            material_stages=material_stages,
+            operation_stages=operation_stages,
+        )
+        return
+    if material_mode is not None:
+        await assert_master_data_inspection_stages_allowed(
+            tenant_id,
+            material_stages=material_stages_from_legacy(material_mode, None),
+        )
+    if operation_mode is not None:
+        await assert_master_data_inspection_stages_allowed(
+            tenant_id,
+            operation_stages=operation_stages_from_legacy(operation_mode, None),
+        )
 
 
 async def get_quality_inspection_stage_toggles(tenant_id: int) -> Dict[str, bool]:
@@ -176,41 +332,153 @@ async def resolve_inspection_policy(
     tenant_id: int,
     stage: InspectionStage,
     *,
+    material_id: Optional[int] = None,
+    operation_id: Optional[int] = None,
+    work_order_override: Optional[str] = None,
+    # legacy kwargs — 禁止新业务使用；仅当未传 material_id/operation_id 时生效
     material_inspection_mode: Optional[str] = None,
     operation_inspection_mode: Optional[str] = None,
-    work_order_override: Optional[str] = None,
-) -> Tuple[str, str]:
+) -> Tuple[str, Optional[int], str]:
     """
-    在组织环节开关之后，解析最终生效的 inspection_mode。
-
-    优先级：工单/订单显式覆盖 > 工序（仅 IPQC 参与）> 物料。
+    解析最终生效的 inspection mode 与 plan_id。
 
     Returns:
-        (effective_mode, reason)  reason 便于日志：stage_disabled | work_order_override | operation | material | default_none
+        (effective_mode, plan_id, reason)
     """
-    toggles = await get_quality_inspection_stage_toggles(tenant_id)
-    flag = _STAGE_FLAG[stage]
-    if not toggles.get(flag, True):
-        return "none", "stage_disabled"
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["stage_enabled"].get(stage, True):
+        return "none", None, "stage_disabled"
+    module_key = STAGE_MODULE_KEY.get(stage)
+    if module_key and not cfg["module_enabled"].get(module_key, True):
+        return "none", None, "module_disabled"
 
     wo = normalize_inspection_mode(work_order_override) if work_order_override is not None else None
     if wo and wo != "none":
-        return wo, "work_order_override"
-
-    mat = normalize_inspection_mode(material_inspection_mode)
-    op = normalize_inspection_mode(operation_inspection_mode)
+        return wo, None, "work_order_override"
 
     if stage == "ipqc":
-        if op != "none":
-            return op, "operation"
-        if mat != "none":
-            return mat, "material"
-        return "none", "default_none"
+        if operation_id:
+            op_stages = await get_operation_inspection_stages(tenant_id, operation_id)
+            op_policy = normalize_stage_policy(op_stages.get("ipqc"))
+            if op_policy["mode"] != "none":
+                return op_policy["mode"], op_policy["plan_id"], "operation"
+        elif operation_inspection_mode is not None:
+            leg = normalize_inspection_mode(operation_inspection_mode)
+            if leg != "none":
+                return leg, None, "operation_legacy"
+        return "none", None, "default_none"
 
-    # iqc / fqc / oqc：以物料为主（后续若有工单快照字段，在传入 work_order_override 即可）
-    if mat != "none":
-        return mat, "material"
-    return "none", "default_none"
+    if material_id:
+        mat_stages = await get_material_inspection_stages(tenant_id, material_id)
+        policy = normalize_stage_policy(mat_stages.get(stage))
+        if policy["mode"] != "none":
+            return policy["mode"], policy["plan_id"], "material"
+    elif material_inspection_mode is not None:
+        leg = normalize_inspection_mode(material_inspection_mode)
+        if leg != "none":
+            return leg, None, "material_legacy"
+
+    return "none", None, "default_none"
+
+
+async def assert_iqc_for_purchase_receipt_lines(
+    tenant_id: int,
+    receipt_id: int,
+    lines: List[Any],
+) -> None:
+    """采购入库确认：门禁开启时，仅对 iqc≠none 的行要求合格 IQC。"""
+    from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["gate"]["require_iqc_before_receipt_confirm"]:
+        return
+
+    needs_qc_mids: List[int] = []
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
+        if eff != "none":
+            needs_qc_mids.append(int(mid))
+
+    if not needs_qc_mids:
+        return
+
+    inspections = await IncomingInspection.filter(
+        tenant_id=tenant_id,
+        purchase_receipt_id=receipt_id,
+        deleted_at__isnull=True,
+    ).all()
+    if not inspections:
+        raise BusinessLogicError(
+            "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+        )
+
+    passed_by_material: Dict[int, bool] = {}
+    for i in inspections:
+        if i.quality_status == "合格" and i.review_status in ("已审核", "通过", "APPROVED"):
+            if i.material_id:
+                passed_by_material[int(i.material_id)] = True
+
+    for mid in needs_qc_mids:
+        if not passed_by_material.get(mid):
+            raise BusinessLogicError(
+                "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
+            )
+
+
+async def assert_fqc_for_finished_goods_receipt(
+    tenant_id: int,
+    receipt_id: int,
+    work_order_id: Optional[int],
+    lines: List[Any],
+) -> None:
+    """成品入库确认：门禁开启时，对 fqc≠none 的行要求工单 FQC 合格且已审核。"""
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["gate"]["require_fqc_before_finished_goods_receipt"]:
+        return
+
+    needs_fqc = False
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=int(mid))
+        if eff != "none":
+            needs_fqc = True
+            break
+
+    if not needs_fqc or not work_order_id:
+        return
+
+    qc_ok = await FinishedGoodsInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order_id),
+        quality_status="合格",
+        review_status__in=("已审核", "通过", "APPROVED"),
+        deleted_at__isnull=True,
+    ).exists()
+    if not qc_ok:
+        raise BusinessLogicError(
+            "已启用「成品检验合格才入库」，请先完成成品检验且审核通过后再确认成品入库"
+        )
 
 
 async def assert_oqc_for_outbound_lines(
@@ -225,14 +493,12 @@ async def assert_oqc_for_outbound_lines(
     source_id: Optional[int] = None,
 ) -> None:
     """
-    出库相关动作前的出货检（OQC）校验（销售出库确认、发货通知仓库等共用）。
-
-    当组织开启 OQC 且行物料解析为需质检时，要求存在至少一张已审核、合格且放行的 OQC 出货检验单。
+    出库相关动作前的出货检（OQC）校验。
+    当行物料 oqc 策略≠none 时，要求存在合格且放行的 OQC 检验单。
     """
     from decimal import Decimal
 
     from apps.kuaizhizao.models.oqc_inspection import OQCInspection
-    from apps.master_data.models.material import Material
     from infra.exceptions.exceptions import BusinessLogicError
 
     for item in lines:
@@ -246,12 +512,7 @@ async def assert_oqc_for_outbound_lines(
         mid = getattr(item, "material_id", None)
         if not mid:
             continue
-        mat = await Material.get_or_none(tenant_id=tenant_id, id=int(mid), deleted_at__isnull=True)
-        eff, _reason = await resolve_inspection_policy(
-            tenant_id,
-            "oqc",
-            material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
-        )
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=int(mid))
         if eff == "none":
             continue
 
@@ -304,3 +565,37 @@ async def assert_oqc_before_sales_delivery_confirm(
         source_type="sales_delivery" if sales_delivery_id else None,
         source_id=sales_delivery_id,
     )
+
+
+def prepare_material_inspection_for_write(data: Dict[str, Any]) -> Dict[str, Any]:
+    """写入物料：以 inspection_stages 为主，同步 legacy 字段。"""
+    if data.get("inspection_stages") is not None:
+        stages = normalize_material_inspection_stages(data["inspection_stages"])
+        mode, plan_id = sync_legacy_fields_from_stages(stages)
+        data["inspection_stages"] = {k: stages[k] for k in MATERIAL_INSPECTION_STAGE_KEYS}
+        data["inspection_mode"] = mode
+        data["default_inspection_plan_id"] = plan_id
+    elif data.get("inspection_mode") is not None or data.get("default_inspection_plan_id") is not None:
+        stages = material_stages_from_legacy(
+            data.get("inspection_mode"),
+            data.get("default_inspection_plan_id"),
+        )
+        data["inspection_stages"] = stages
+    return data
+
+
+def prepare_operation_inspection_for_write(data: Dict[str, Any]) -> Dict[str, Any]:
+    """写入工序：以 inspection_stages 为主，同步 legacy 字段。"""
+    if data.get("inspection_stages") is not None:
+        stages = normalize_operation_inspection_stages(data["inspection_stages"])
+        ipqc = normalize_stage_policy(stages.get("ipqc"))
+        data["inspection_stages"] = stages
+        data["inspection_mode"] = ipqc["mode"]
+        data["default_inspection_plan_id"] = ipqc["plan_id"]
+    elif data.get("inspection_mode") is not None or data.get("default_inspection_plan_id") is not None:
+        stages = operation_stages_from_legacy(
+            data.get("inspection_mode"),
+            data.get("default_inspection_plan_id"),
+        )
+        data["inspection_stages"] = stages
+    return data

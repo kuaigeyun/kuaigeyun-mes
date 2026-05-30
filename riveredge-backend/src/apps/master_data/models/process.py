@@ -243,7 +243,11 @@ class Operation(BaseModel):
         null=True,
         description="默认质检方案ID（方案质检时使用，关联 kuaizhizao.InspectionPlan）"
     )
-    
+    inspection_stages = fields.JSONField(
+        null=True,
+        description="过程检验策略 JSON：ipqc 含 mode、plan_id",
+    )
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     

@@ -276,6 +276,8 @@ def _material_to_response_data(material) -> Dict[str, Any]:
     model_validate 不支持 exclude，故用字典校验避免 ReverseRelation 传入。
     """
     pr = getattr(material, "process_route", None)
+    from apps.kuaizhizao.services.inspection_policy_service import normalize_material_inspection_stages
+
     return {
         "id": material.id,
         "uuid": str(material.uuid),
@@ -304,6 +306,11 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "source_config": getattr(material, "source_config", None),
         "inspection_mode": getattr(material, "inspection_mode", None) or "none",
         "default_inspection_plan_id": getattr(material, "default_inspection_plan_id", None),
+        "inspection_stages": normalize_material_inspection_stages(
+            getattr(material, "inspection_stages", None),
+            legacy_mode=getattr(material, "inspection_mode", None),
+            legacy_plan_id=getattr(material, "default_inspection_plan_id", None),
+        ),
         "process_route_id": getattr(material, "process_route_id", None) or (getattr(pr, "id", None) if pr else None),
         "process_route_name": getattr(pr, "name", None) if pr else None,
         "created_at": material.created_at,
@@ -871,11 +878,17 @@ class MaterialService:
             if resolved_pr_id:
                 material_data["process_route_id"] = resolved_pr_id
 
-        material_mode = material_data.get("inspection_mode") or getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None)
-        if material_mode and str(material_mode).strip().lower() != "none":
-            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            assert_master_data_inspection_stages_allowed,
+            prepare_material_inspection_for_write,
+        )
 
-            await assert_master_data_inspection_mode_allowed(tenant_id, material_mode=material_mode)
+        if material_data.get("inspection_stages") is not None or material_data.get("inspection_mode") is not None:
+            prepare_material_inspection_for_write(material_data)
+            await assert_master_data_inspection_stages_allowed(
+                tenant_id,
+                material_stages=material_data.get("inspection_stages"),
+            )
         
         # 创建物料（属性 SKU 并发导入时 code 可能冲突，自动重试下一序号或返回已存在组合）
         material = None
@@ -2126,11 +2139,35 @@ class MaterialService:
         else:
             update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
 
-        if "inspection_mode" in update_data or getattr(data, "inspection_mode", None) is not None or getattr(data, "inspectionMode", None) is not None:
-            from apps.kuaizhizao.services.inspection_policy_service import assert_master_data_inspection_mode_allowed
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            assert_master_data_inspection_stages_allowed,
+            prepare_material_inspection_for_write,
+        )
 
-            new_mode = update_data.get("inspection_mode", getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None))
-            await assert_master_data_inspection_mode_allowed(tenant_id, material_mode=new_mode)
+        stages_in_request = (
+            "inspection_stages" in update_data
+            or getattr(data, "inspection_stages", None) is not None
+            or getattr(data, "inspectionStages", None) is not None
+        )
+        legacy_in_request = (
+            "inspection_mode" in update_data
+            or getattr(data, "inspection_mode", None) is not None
+            or getattr(data, "inspectionMode", None) is not None
+        )
+        if stages_in_request or legacy_in_request:
+            patch = dict(update_data)
+            if stages_in_request and "inspection_stages" not in patch:
+                patch["inspection_stages"] = getattr(data, "inspection_stages", None) or getattr(
+                    data, "inspectionStages", None
+                )
+            prepare_material_inspection_for_write(patch)
+            await assert_master_data_inspection_stages_allowed(
+                tenant_id,
+                material_stages=patch.get("inspection_stages"),
+            )
+            for k in ("inspection_stages", "inspection_mode", "default_inspection_plan_id"):
+                if k in patch:
+                    update_data[k] = patch[k]
         
         # 处理属性：确保JSON键顺序一致（用于数据库唯一性索引）
         if "variant_attributes" in update_data and update_data["variant_attributes"]:

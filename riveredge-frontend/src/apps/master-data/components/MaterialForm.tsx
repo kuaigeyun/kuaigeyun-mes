@@ -21,7 +21,7 @@ import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
-import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton } from '@ant-design/pro-components';
+import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import {
   formatMaterialGroupLabel,
   type Material,
@@ -57,8 +57,14 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../service
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
-import { inspectionPlanApi } from '../../kuaizhizao/services/production';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
+import {
+  InspectionStagesEditor,
+  legacyFromStages,
+  materialStagesToApiPayload,
+  normalizeStagesInput,
+  stagesFromLegacy,
+} from './InspectionStagesEditor';
 
 const { Panel } = Collapse;
 
@@ -978,9 +984,25 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 物料来源控制
         source_type: sourceType,
         source_config: filteredSourceConfig,
-        // 质检选项
-        inspection_mode: values.inspectionMode || 'none',
-        default_inspection_plan_id: values.inspectionMode === 'plan' ? (values.defaultInspectionPlanId || null) : null,
+        // 质检选项（分场景 IQC/FQC/OQC + legacy 同步）
+        inspection_stages: materialStagesToApiPayload(
+          normalizeStagesInput(
+            values.inspectionStages ||
+              stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
+          ),
+        ),
+        ...(() => {
+          const leg = legacyFromStages(
+            normalizeStagesInput(
+              values.inspectionStages ||
+                stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
+            ),
+          );
+          return {
+            inspection_mode: leg.inspectionMode,
+            default_inspection_plan_id: leg.defaultInspectionPlanId ?? null,
+          };
+        })(),
         over_report_mode: values.overReportMode || 'none',
         over_report_value: values.overReportValue ?? 0,
       };
@@ -1292,104 +1314,20 @@ interface BasicInfoTabProps {
   onVariantManagedChange?: (checked: boolean) => void;
 }
 
-const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
-  formRef,
-  material,
-  isEdit,
-  suspendedModalReturnPath,
-}) => {
+const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [planOptions, setPlanOptions] = useState<Array<{ label: string; value: number }>>([]);
-  const [loadingPlans, setLoadingPlans] = useState(false);
-
-  useEffect(() => {
-    const loadPlans = async () => {
-      setLoadingPlans(true);
-      try {
-        let plans: any[] = [];
-        if (material?.id) {
-          try {
-            plans = await inspectionPlanApi.getByMaterial(String(material.id)) || [];
-          } catch {
-            plans = await inspectionPlanApi.list({ limit: 200, is_active: true }) || [];
-          }
-        } else {
-          plans = await inspectionPlanApi.list({ limit: 200, is_active: true }) || [];
-        }
-        setPlanOptions(
-          (Array.isArray(plans) ? plans : []).map((p: any) => ({
-            label: `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() || String(p.id),
-            value: p.id,
-          }))
-        );
-      } catch (e) {
-        console.warn('加载质检方案失败:', e);
-        setPlanOptions([]);
-      } finally {
-        setLoadingPlans(false);
-      }
-    };
-    loadPlans();
-  }, [material?.id]);
-
-  const handleGotoNewPlan = () => {
-    const materialId = material?.id;
-    const path = materialId
-      ? `/apps/kuaizhizao/quality-management/inspection-plans?materialId=${materialId}`
-      : '/apps/kuaizhizao/quality-management/inspection-plans';
-    if (suspendedModalReturnPath) {
-      const formData = formRef.current?.getFieldsValue?.(true) ?? {};
-      saveSuspendedModal(suspendedModalReturnPath, formData as Record<string, any>);
-    }
-    navigate(path);
-  };
 
   return (
     <div style={{ padding: '0 0 16px 0' }}>
       <QualityMasterDataHint scope="material" />
-      <ProFormSelect
-        name="inspectionMode"
-        label={t('app.master-data.materialForm.inspectionMode')}
-        options={[
-          { label: t('app.master-data.materialForm.inspectionModeNone'), value: 'none' },
-          { label: t('app.master-data.materialForm.inspectionModeSimple'), value: 'simple' },
-          { label: t('app.master-data.materialForm.inspectionModePlan'), value: 'plan' },
-        ]}
-        fieldProps={{ style: { width: 280 } }}
-      />
-      <ProFormDependency name={['inspectionMode']}>
-        {({ inspectionMode }) =>
-          inspectionMode === 'simple' ? (
-            <Alert
-              type="info"
-              showIcon
-              message={t('app.master-data.materialForm.inspectionModeSimpleHint')}
-              style={{ marginBottom: 16 }}
-            />
-          ) : inspectionMode === 'plan' ? (
-            <ProFormSelect
-              name="defaultInspectionPlanId"
-              label={
-                <Space size="small">
-                  <span>{t('app.master-data.materialForm.defaultInspectionPlan')}</span>
-                  <Button type="link" size="small" onClick={handleGotoNewPlan}>
-                    {t('app.master-data.materialForm.gotoInspectionPlans')}
-                  </Button>
-                </Space>
-              }
-              options={planOptions}
-              fieldProps={{
-                loading: loadingPlans,
-                allowClear: true,
-                showSearch: true,
-                optionFilterProp: 'label',
-                style: { width: 360 },
-              }}
-            />
-          ) : null
-        }
-      </ProFormDependency>
+      <ProFormItem
+        name="inspectionStages"
+        label={t('app.master-data.materialForm.inspectionStagesTitle')}
+      >
+        <InspectionStagesEditor scope="material" />
+      </ProFormItem>
+      <ProFormItem name="inspectionMode" hidden />
+      <ProFormItem name="defaultInspectionPlanId" hidden />
       <ProFormSelect
         name="overReportMode"
         label={t('field.operation.overReportMode')}

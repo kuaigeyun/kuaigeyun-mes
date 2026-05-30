@@ -73,10 +73,10 @@ export function isQualityParamDisabled(paramKey: string, values: Record<string, 
   ) {
     return !(incoming && iqcStage);
   }
-  if (paramKey === 'quality.auto_create_ipqc_on_reporting') {
-    return !(process && ipqcStage);
-  }
-  if (paramKey === 'quality.auto_create_fqc_on_last_reporting') {
+  if (
+    paramKey === 'quality.require_fqc_before_finished_goods_receipt'
+    || paramKey === 'quality.auto_create_fqc_on_last_reporting'
+  ) {
     return !(finished && fqcStage);
   }
   if (

@@ -205,7 +205,11 @@ class Material(BaseModel):
         null=True,
         description="默认质检方案ID（方案质检时使用，关联 kuaizhizao.InspectionPlan）"
     )
-    
+    inspection_stages = fields.JSONField(
+        null=True,
+        description="分场景质检策略：iqc/fqc/oqc 各含 mode(none|simple|plan)、plan_id（过程检 IPQC 仅工序）",
+    )
+
     # 扩展信息
     description = fields.TextField(null=True, description="描述")
     brand = fields.CharField(max_length=100, null=True, description="品牌")

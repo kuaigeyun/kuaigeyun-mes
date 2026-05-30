@@ -24,7 +24,7 @@ class InspectionPlan(BaseModel):
         tenant_id: 组织ID
         plan_code: 方案编码
         plan_name: 方案名称
-        plan_type: 类型（incoming/process/finished）
+        plan_type: 类型（incoming/process/finished/outbound）
         material_id: 适用物料ID（可选）
         material_code, material_name: 物料冗余
         operation_id: 适用工序ID（过程检验时）
@@ -50,7 +50,7 @@ class InspectionPlan(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     plan_code = fields.CharField(max_length=50, description="方案编码")
     plan_name = fields.CharField(max_length=200, description="方案名称")
-    plan_type = fields.CharField(max_length=50, description="类型（incoming/process/finished）")
+    plan_type = fields.CharField(max_length=50, description="类型（incoming/process/finished/outbound）")
 
     material_id = fields.IntField(null=True, description="适用物料ID（可选）")
     material_code = fields.CharField(max_length=50, null=True, description="物料编码（冗余）")

@@ -10,6 +10,25 @@ from datetime import datetime, date
 from decimal import Decimal
 
 
+class InspectionStagePolicySchema(BaseModel):
+    """单场景质检策略。"""
+
+    mode: str = Field("none", description="none|simple|plan")
+    plan_id: Optional[int] = Field(None, alias="planId", description="方案质检时的检验方案 ID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialInspectionStagesSchema(BaseModel):
+    """物料分场景质检策略。"""
+
+    iqc: Optional[InspectionStagePolicySchema] = Field(None, description="来料 IQC")
+    fqc: Optional[InspectionStagePolicySchema] = Field(None, description="成品 FQC")
+    oqc: Optional[InspectionStagePolicySchema] = Field(None, description="出货 OQC")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MaterialGroupBase(BaseModel):
     """物料分组基础 Schema"""
     
@@ -150,8 +169,11 @@ class MaterialBase(BaseModel):
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
-    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
-    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（方案质检时使用）")
+    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（legacy，由 inspection_stages 同步）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy）")
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="分场景质检策略 JSON"
+    )
 
     # 超报（相对工单计划数量）
     over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="超报模式：none/fixed/percent")
@@ -221,8 +243,11 @@ class MaterialUpdate(BaseModel):
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
 
     # 质检选项
-    inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式（none/simple/plan）")
-    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
+    inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式（legacy）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy）")
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="分场景质检策略"
+    )
     over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
 
@@ -544,9 +569,12 @@ class MaterialResponse(MaterialBase):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
     
     # 质检选项
-    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", description="质检模式（none/simple/plan）")
-    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
+    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", description="质检模式（legacy）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy）")
     default_inspection_plan_name: Optional[str] = Field(None, alias="defaultInspectionPlanName", description="默认质检方案名称（冗余）")
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="分场景质检策略"
+    )
     
     # 编码别名列表（可选，需要时加载）
     code_aliases: Optional[List[MaterialCodeAliasResponse]] = Field(None, description="编码别名列表")
