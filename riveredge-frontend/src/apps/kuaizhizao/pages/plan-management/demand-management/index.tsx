@@ -43,7 +43,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createDemandComputation } from '../../../services/demand-computation';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import {
@@ -825,7 +825,7 @@ const DemandManagementPage: React.FC = () => {
         onFinish={handleCreatePlanSubmit}
         isEdit={false}
         formRef={createPlanFormRef as React.RefObject<ProFormInstance>}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         loading={createPlanLoading}
         grid={false}
         initialValues={{ business_mode: 'MTS', priority: 5, items: [] }}
@@ -889,26 +889,48 @@ const DemandManagementPage: React.FC = () => {
           </Col>
         </Row>
 
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <UniTableDetailHeader title="计划明细" required />
-          <ProForm.Item
-            name="items"
-            noStyle
-            rules={[{ type: 'array', min: 1, message: '请至少添加一行明细' }]}
-          >
-            <AntForm.List name="items">
-              {(fields, { add, remove }) => {
-                const planDetailColumns = [
+        <UniTableDetail
+          name="items"
+          title="计划明细"
+          required
+          requiredMessage="请至少添加一行明细"
+          headerExtra={(
+            <Space size={8}>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const items = [...(createPlanFormRef.current?.getFieldValue('items') ?? [])];
+                  items.push({
+                    material_id: undefined,
+                    material_code: '',
+                    material_name: '',
+                    material_unit: '',
+                    required_quantity: 0,
+                    delivery_date: dayjs(),
+                  });
+                  createPlanFormRef.current?.setFieldsValue({ items });
+                }}
+              >
+                添加明细
+              </Button>
+              <Button
+                type="default"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMaterialPickerOpen(true)}
+              >
+                {t('app.kuaizhizao.common.materialBatchSelect')}
+              </Button>
+            </Space>
+          )}
+          columns={[
                   {
                     title: '物料',
                     dataIndex: 'material_id',
                     width: 280,
                     render: (_: unknown, __: unknown, index: number) => (
                       <>
-                        <div
-                          className="sales-order-material-cell"
-                          style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}
-                        >
+                        <div className="uni-detail-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
                           <div style={{ flex: 1, minWidth: 200 }}>
                             <UniMaterialSelect
                               name={[index, 'material_id']}
@@ -971,104 +993,21 @@ const DemandManagementPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: '操作',
-                    width: 72,
-                    fixed: 'right' as const,
-                    onHeaderCell: () => ({ className: 'sales-order-fixed-op-header' }),
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                        删除
-                      </Button>
-                    ),
-                  },
-                ];
-                const totalWidth = planDetailColumns.reduce((s, c) => s + (typeof c.width === 'number' ? c.width : 0), 0);
-                return (
-                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                    <style>{`
-                      .sales-order-detail-table .ant-table-thead > tr > th {
-                        background-color: var(--ant-color-fill-alter) !important;
-                        font-weight: 600;
-                      }
-                      .sales-order-detail-table .ant-table-thead > tr > th.sales-order-fixed-op-header {
-                        background: var(--ant-color-fill-alter) !important;
-                      }
-                      .sales-order-detail-table .ant-table-cell-fix-right {
-                        background: var(--ant-color-bg-container) !important;
-                      }
-                      .sales-order-detail-table .ant-table {
-                        border-top: 1px solid var(--ant-color-border);
-                      }
-                      .sales-order-detail-table .ant-table-tbody > tr > td {
-                        border-bottom: 1px solid var(--ant-color-border);
-                        overflow: visible !important;
-                      }
-                      .sales-order-detail-table .sales-order-material-cell .ant-form-item,
-                      .sales-order-detail-table .sales-order-material-cell .ant-form-item-control,
-                      .sales-order-detail-table .sales-order-material-cell .ant-form-item-control-input,
-                      .sales-order-detail-table .sales-order-material-cell .ant-select {
-                        width: 100% !important;
-                        min-width: 0;
-                      }
-                      .sales-order-detail-table .ant-form-item-explain,
-                      .sales-order-detail-table .ant-form-item-explain-error {
-                        display: none !important;
-                      }
-                      .sales-order-detail-table .ant-input-number-input::selection,
-                      .sales-order-detail-table .ant-input::selection {
-                        background-color: var(--ant-color-primary);
-                        color: #fff;
-                        border-radius: 0;
-                      }
-                    `}</style>
-                    <div style={{ width: '100%', overflowX: 'auto' }}>
-                      <Table
-                        className="sales-order-detail-table"
-                        size="small"
-                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                        rowKey="key"
-                        pagination={false}
-                        columns={planDetailColumns}
-                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                        style={{ width: '100%', margin: 0 }}
-                        footer={() => (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                            <Button
-                              type="dashed"
-                              icon={<PlusOutlined />}
-                              style={{ flex: 1, minWidth: 120 }}
-                              onClick={() =>
-                                add({
-                                  material_id: undefined,
-                                  material_code: '',
-                                  material_name: '',
-                                  material_unit: '',
-                                  required_quantity: 0,
-                                  delivery_date: dayjs(),
-                                })
-                              }
-                            >
-                              添加明细
-                            </Button>
-                            <Button
-                              type="default"
-                              icon={<AppstoreAddOutlined />}
-                              style={{ flex: 1, minWidth: 120 }}
-                              onClick={() => setMaterialPickerOpen(true)}
-                            >
-                              {t('app.kuaizhizao.common.materialBatchSelect')}
-                            </Button>
-                          </div>
-                        )}
-                      />
-                    </div>
-                  </div>
-                );
-              }}
-            </AntForm.List>
-          </ProForm.Item>
-        </div>
+                ]}
+          disabledAdd
+          initialValue={{
+            material_id: undefined,
+            material_code: '',
+            material_name: '',
+            material_unit: '',
+            required_quantity: 0,
+            delivery_date: dayjs(),
+          }}
+          tableProps={{
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+          }}
+        />
 
         <Row gutter={16}>
           <Col span={24}>
