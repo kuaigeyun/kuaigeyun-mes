@@ -9,6 +9,12 @@ from loguru import logger
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
+from apps.haoligo.constants.mold_trial_workflow_phase import (
+    WORKFLOW_PHASE_CLOSED,
+    WORKFLOW_PHASE_TRIAL,
+    WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION,
+)
+from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET
 from apps.haoligo.constants.mold_trial_failure_handling import (
     TRIAL_FAILURE_HANDLING_DISPATCHED,
     TRIAL_FAILURE_HANDLING_FORM_VALUES,
@@ -210,12 +216,22 @@ def validate_failure_handling_payload(
     failure_handling: Optional[str],
     pending_notify_user_ids: Optional[List[int]],
     repair_warehouse_id: Optional[int],
+    allow_pending: bool = True,
+    unqualified_label: str = "试模",
 ) -> tuple[Optional[str], List[int], Optional[int]]:
     if trial_result != "不合格":
         return None, [], None
     mode = normalize_failure_handling(failure_handling)
     if not mode:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="试模不合格时请选择处理方式")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{unqualified_label}不合格时请选择处理方式",
+        )
+    if not allow_pending and mode == TRIAL_FAILURE_HANDLING_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{unqualified_label}不合格仅支持「立即送修」",
+        )
     notify_ids = normalize_report_user_ids(pending_notify_user_ids)
     repair_id = repair_warehouse_id
     if mode == TRIAL_FAILURE_HANDLING_PENDING:
@@ -515,6 +531,28 @@ async def persist_mold_trial_pending_notify_memory(
     await mold.save(update_fields=["trial_pending_notify_user_ids", "updated_at"])
 
 
+def _effective_unqualified_result(row: HaoligoMoldTrialSheet) -> str:
+    """试产阶段不合格以试产结果为准，试模阶段以试模结果为准。"""
+    phase = (getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip()
+    prod = (getattr(row, "production_trial_result", None) or "").strip()
+    if phase in (WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION, WORKFLOW_PHASE_CLOSED) and prod:
+        return prod
+    return (row.trial_result or "").strip()
+
+
+async def set_mold_ledger_status_ready(tenant_id: int, mold_code: Optional[str]) -> None:
+    mc = (mold_code or "").strip()
+    if not mc:
+        return
+    mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mc).first()
+    if not mold:
+        return
+    if "待用" not in MOLD_LEDGER_STATUS_SET:
+        return
+    mold.status = "待用"
+    await mold.save(update_fields=["status", "updated_at"])
+
+
 async def dispatch_trial_pending_sheet(
     tenant_id: int,
     row: HaoligoMoldTrialSheet,
@@ -522,8 +560,8 @@ async def dispatch_trial_pending_sheet(
     target_warehouse_id: int,
 ) -> None:
     """待处理 → 已发出：记录原仓库，模具转入指定供应商外部仓。"""
-    if (row.trial_result or "").strip() != "不合格":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅试模不合格单据可发出")
+    if _effective_unqualified_result(row) != "不合格":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅试产不合格且待处理的单据可发出")
     if (row.failure_handling or "").strip() != TRIAL_FAILURE_HANDLING_PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅处理方式为「待处理」时可发出")
     if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
@@ -623,7 +661,29 @@ async def create_replacement_trial_sheet_after_recall(
         result_attachment_file_uuids=[],
         inspection_attachment_file_uuids=[],
         trial_result="合格",
+        workflow_phase=WORKFLOW_PHASE_TRIAL,
+        production_trial_result=None,
+        production_trial_user_id=None,
+        production_trial_user_name=None,
         sheet_status=SHEET_STATUS_PENDING,
+    )
+
+
+async def apply_production_trial_failure_after_save(
+    tenant_id: int,
+    row: HaoligoMoldTrialSheet,
+    *,
+    send_notify: bool,
+    allow_repeat_notify: bool = False,
+) -> None:
+    if (row.production_trial_result or "").strip() != "不合格":
+        return
+    await apply_trial_failure_after_save(
+        tenant_id,
+        row,
+        send_notify=send_notify,
+        allow_repeat_notify=allow_repeat_notify,
+        result_field="production",
     )
 
 
@@ -633,8 +693,13 @@ async def apply_trial_failure_after_save(
     *,
     send_notify: bool,
     allow_repeat_notify: bool = False,
+    result_field: str = "trial",
 ) -> None:
-    if (row.trial_result or "").strip() != "不合格":
+    if result_field == "production":
+        unqualified = (row.production_trial_result or "").strip() != "不合格"
+    else:
+        unqualified = (row.trial_result or "").strip() != "不合格"
+    if unqualified:
         return
     mode = (row.failure_handling or "").strip()
     if mode == TRIAL_FAILURE_HANDLING_REPAIR and row.repair_warehouse_id:

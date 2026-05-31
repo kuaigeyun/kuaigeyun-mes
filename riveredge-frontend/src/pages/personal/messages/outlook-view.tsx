@@ -279,7 +279,7 @@ const OutlookMessagesView: React.FC = () => {
     const groups: { label: string; items: UserMessage[] }[] = [];
     const map = new Map<string, UserMessage[]>();
     for (const m of messages) {
-      const label = groupLabel(m.sent_at, m.created_at, t) || '—';
+      const label = groupLabel(m.sent_at, m.created_at, t) || t('common.dash');
       if (!map.has(label)) map.set(label, []);
       map.get(label)!.push(m);
     }

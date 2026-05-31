@@ -13,7 +13,6 @@ import {
   type AlertLevel,
   type MoldMaintenanceAlertRow,
   buildMoldMaintenanceAlertRows,
-  dominantDimensionLabel,
   loadMoldMaintenanceAlertDataset,
   passesSeverityFilter,
   severityRank,
@@ -74,13 +73,6 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       },
     },
     {
-      title: '主导维度',
-      dataIndex: 'dominant_dimension',
-      width: 96,
-      hideInSearch: true,
-      render: (_, r) => dominantDimensionLabel(r.dominant_dimension),
-    },
-    {
       title: '预警说明',
       dataIndex: 'alert_reasons',
       width: 320,
@@ -96,25 +88,11 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       render: (_, r) => (r.last_upkeep_at ? dayjs(r.last_upkeep_at).format('YYYY-MM-DD HH:mm') : '—'),
     },
     {
-      title: '距上次保养(天)',
-      dataIndex: 'days_since_upkeep',
-      width: 120,
-      hideInSearch: true,
-      render: (_, r) => (r.days_since_upkeep != null ? r.days_since_upkeep : '—'),
-    },
-    {
       title: '产量周期达成%',
       dataIndex: 'yield_usage_pct',
       width: 130,
       hideInSearch: true,
       render: (_, r) => (r.yield_usage_pct != null ? `${r.yield_usage_pct}%` : '—'),
-    },
-    {
-      title: '天数周期达成%',
-      dataIndex: 'days_usage_pct',
-      width: 130,
-      hideInSearch: true,
-      render: (_, r) => (r.days_usage_pct != null ? `${r.days_usage_pct}%` : '—'),
     },
     {
       title: '维保周期(产量)',
@@ -129,13 +107,6 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       width: 120,
       hideInSearch: true,
       render: (_, r) => r.used_yield ?? '—',
-    },
-    {
-      title: '维保周期(天)',
-      dataIndex: 'maintenance_cycle_by_days',
-      width: 120,
-      hideInSearch: true,
-      render: (_, r) => r.maintenance_cycle_by_days ?? '—',
     },
   ];
 

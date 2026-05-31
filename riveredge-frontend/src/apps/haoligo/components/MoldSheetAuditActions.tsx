@@ -3,9 +3,16 @@
  * 不走 UniWorkflowActions、站点 audit-required 或平台审批实例。
  */
 import React from 'react';
-import { App, Button, Popconfirm, Space } from 'antd';
+import { App, Button, Dropdown, Modal, Popconfirm, Space } from 'antd';
+import type { MenuProps } from 'antd';
 import type { MessageInstance } from 'antd/es/message/interface';
-import { CheckOutlined, CloseOutlined, RollbackOutlined } from '@ant-design/icons';
+import {
+  AuditOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  DownOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
 import { useGlobalStore } from '../../../stores/globalStore';
 import { canAuditMoldSheet, normalizeMoldSheetAuditStatus } from '../utils/moldSheetStatus';
 import { MOLD_SHEET_AUDIT_ACTION_ATTR } from '../constants/moldSheetAudit';
@@ -51,25 +58,43 @@ export function buildMoldSheetAuditActionElements({
   };
 
   if (st === '待审核' && !revokeOnly) {
+    const menuItems: MenuProps['items'] = [
+      {
+        key: 'approve',
+        icon: <CheckOutlined />,
+        label: '审核通过',
+        onClick: () => {
+          Modal.confirm({
+            title: '确认审核通过？',
+            okText: '确认',
+            cancelText: '取消',
+            onOk: () => run(handlers.onApprove, '已通过审核'),
+          });
+        },
+      },
+      {
+        key: 'reject',
+        danger: true,
+        icon: <CloseOutlined />,
+        label: '审核驳回',
+        onClick: () => {
+          Modal.confirm({
+            title: '确认审核驳回？',
+            okText: '确认',
+            cancelText: '取消',
+            okButtonProps: { danger: true },
+            onOk: () => run(handlers.onReject, '已驳回'),
+          });
+        },
+      },
+    ];
     return [
-      <Popconfirm
-        key="approve"
-        title="确认审核通过？"
-        onConfirm={() => void run(handlers.onApprove, '已通过审核')}
-      >
-        <Button type="link" size="small" icon={<CheckOutlined />} {...auditBtnProps}>
-          审核通过
+      <Dropdown key="audit" menu={{ items: menuItems }} trigger={['click']}>
+        <Button type="link" size="small" icon={<AuditOutlined />} {...auditBtnProps}>
+          审核
+          <DownOutlined style={{ fontSize: 10, marginLeft: 2 }} />
         </Button>
-      </Popconfirm>,
-      <Popconfirm
-        key="reject"
-        title="确认审核驳回？"
-        onConfirm={() => void run(handlers.onReject, '已驳回')}
-      >
-        <Button type="link" size="small" danger icon={<CloseOutlined />} {...auditBtnProps}>
-          审核驳回
-        </Button>
-      </Popconfirm>,
+      </Dropdown>,
     ];
   }
 

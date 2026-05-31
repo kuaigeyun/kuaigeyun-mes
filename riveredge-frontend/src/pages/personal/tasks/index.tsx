@@ -410,21 +410,21 @@ const UserTasksPage: React.FC = () => {
             title: t('pages.personal.tasks.pendingTasks'),
             value: stats?.pending ?? 0,
             valueStyle: { color: themeToken.colorError },
-            description: taskType === 'pending' ? <Badge status="error" text="Active" /> : null,
+            description: taskType === 'pending' ? <Badge status="error" text={t('common.active')} /> : null,
             onClick: () => setTaskType('pending'),
           },
           {
             title: t('pages.personal.tasks.approvedTasks'),
             value: stats?.approved ?? 0,
             valueStyle: { color: themeToken.colorSuccess },
-            description: taskType === 'processed' ? <Badge status="success" text="Active" /> : null,
+            description: taskType === 'processed' ? <Badge status="success" text={t('common.active')} /> : null,
             onClick: () => setTaskType('processed'),
           },
           {
             title: t('pages.personal.tasks.mySubmitted'),
             value: stats?.submitted ?? 0,
             valueStyle: { color: themeToken.colorWarning },
-            description: taskType === 'submitted' ? <Badge status="warning" text="Active" /> : null,
+            description: taskType === 'submitted' ? <Badge status="warning" text={t('common.active')} /> : null,
             onClick: () => setTaskType('submitted'),
           },
         ]}
@@ -497,7 +497,9 @@ const UserTasksPage: React.FC = () => {
               const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `my-tasks-${new Date().toISOString().slice(0, 10)}.json`;
+              a.download = t('pages.personal.tasks.exportFileName', {
+                date: new Date().toISOString().slice(0, 10),
+              });
               a.click();
               window.URL.revokeObjectURL(url);
               messageApi.success(t('common.exportSuccess', { count: items.length }));
@@ -612,4 +614,3 @@ const UserTasksPage: React.FC = () => {
 };
 
 export default UserTasksPage;
-

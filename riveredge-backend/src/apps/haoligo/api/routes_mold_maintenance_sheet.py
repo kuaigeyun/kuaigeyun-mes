@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, List, Literal, Optional, Set
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
@@ -28,8 +28,13 @@ from apps.haoligo.constants.mold_sheet_audit import (
     SHEET_STATUS_PENDING,
     SHEET_STATUS_REJECTED,
 )
+from apps.haoligo.api._mold_inhouse_maintenance_access import (
+    assert_inhouse_sheet_access_for_service_type,
+    require_inhouse_maintenance_sheet_list_access,
+)
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.constants.mold_inhouse_maintenance_permissions import INHOUSE_SERVICE_TYPES
 from apps.haoligo.constants.mold_sheet_rule_codes import (
     HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO,
     HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO,
@@ -37,7 +42,7 @@ from apps.haoligo.constants.mold_sheet_rule_codes import (
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
-from core.api.deps.access import require_module_access
+from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.department import Department
 from infra.exceptions.exceptions import ValidationError
@@ -46,7 +51,6 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/maintenance-sheets",
     tags=["App · HaoliGO · 维保单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-maintenance"))],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]
@@ -323,7 +327,7 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
 @router.get("", summary="维保单分页列表")
 async def list_maintenance_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    _: Annotated[AuthContext, Depends(require_inhouse_maintenance_sheet_list_access())],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -332,11 +336,15 @@ async def list_maintenance_sheets(
         False,
         description="为 true 时仅返回尚未关联未删除维保完修单的维保单（用于完修单选源）",
     ),
+    service_type: Optional[str] = Query(None, description="维修 / 保养"),
 ):
     qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id)
     st = (sheet_status or "").strip()
     if st and st in SHEET_AUDIT_STATUS_SET:
         qs = qs.filter(sheet_status=st)
+    svc = (service_type or "").strip()
+    if svc in ("维修", "保养"):
+        qs = qs.filter(service_type=svc)
     if open_for_complete:
         qs = qs.filter(sheet_status=SHEET_STATUS_APPROVED)
         linked_ids = (
@@ -369,9 +377,18 @@ async def list_maintenance_sheets(
 @router.post("", response_model=MoldMaintenanceSheetOut, summary="创建维保单")
 async def create_maintenance_sheet(
     body: MoldMaintenanceSheetCreate,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
+    if body.service_type not in INHOUSE_SERVICE_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维修/保养类型无效")
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=body.service_type,
+    )
     stored = [_line_to_store(x) for x in body.line_items]
     await assert_maintenance_line_molds_are_standby(tenant_id, stored)
     app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
@@ -395,7 +412,7 @@ async def create_maintenance_sheet(
             department_name=dept_name,
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
-            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            header_attachment_file_uuids=[],
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
@@ -405,12 +422,19 @@ async def create_maintenance_sheet(
 @router.get("/{row_id}", response_model=MoldMaintenanceSheetOut, summary="维保单详情")
 async def get_maintenance_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     return _serialize(row)
 
 
@@ -418,12 +442,19 @@ async def get_maintenance_sheet(
 async def update_maintenance_sheet(
     row_id: int,
     body: MoldMaintenanceSheetUpdate,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     assert_sheet_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
     data.pop("sheet_status", None)
@@ -442,8 +473,8 @@ async def update_maintenance_sheet(
         data["department_name"] = s
     if "source_order_no" in data and data["source_order_no"] is not None:
         data["source_order_no"] = _strip_opt(str(data["source_order_no"]))
-    if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
-        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "header_attachment_file_uuids" in data:
+        data["header_attachment_file_uuids"] = []
     if "line_items" in data and data["line_items"] is not None:
         lines = [MoldMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:
@@ -462,12 +493,20 @@ async def update_maintenance_sheet(
 @router.post("/{row_id}/approve", response_model=MoldMaintenanceSheetOut, summary="审核通过维保单")
 async def approve_maintenance_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     assert_pending_for_audit(row)
     row.sheet_status = SHEET_STATUS_APPROVED
     row.audited_at = timezone.now()
@@ -485,12 +524,20 @@ async def approve_maintenance_sheet(
 @router.post("/{row_id}/reject", response_model=MoldMaintenanceSheetOut, summary="审核驳回维保单")
 async def reject_maintenance_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     assert_pending_for_audit(row)
     row.sheet_status = SHEET_STATUS_REJECTED
     row.audited_at = timezone.now()
@@ -506,12 +553,20 @@ async def reject_maintenance_sheet(
 )
 async def revoke_maintenance_sheet_approval(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     assert_approved_for_revoke(row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.sheet_status = SHEET_STATUS_PENDING
@@ -526,12 +581,19 @@ async def revoke_maintenance_sheet_approval(
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除维保单")
 async def delete_maintenance_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_sheet_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     assert_sheet_mutation_allowed(row)
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()

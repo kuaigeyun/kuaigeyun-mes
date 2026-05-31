@@ -607,7 +607,7 @@ export default function App() {
       const next = themeSig(prefs as Record<string, unknown>);
       if (next === lastSig) return;
       lastSig = next;
-      void useThemeStore.getState().syncFromPreferences(prefs);
+      useThemeStore.getState().syncFromPreferences(prefs);
     });
     return unsub;
   }, []);

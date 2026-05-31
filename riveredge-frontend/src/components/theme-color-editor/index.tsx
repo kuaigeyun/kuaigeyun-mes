@@ -134,20 +134,25 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
           const currentConfig = useThemeStore.getState().config;
           useThemeStore.getState().applyTheme(
             useThemeStore.getState().theme,
-            { ...currentConfig, colorPrimary: colorPrimaryValue }
+            { ...currentConfig, colorPrimary: colorPrimaryValue },
+            { persist: true },
           );
 
           message.success('主题颜色已更新');
         } catch (error: any) {
           localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
           const currentConfig = useThemeStore.getState().config;
-          useThemeStore.getState().applyTheme(useThemeStore.getState().theme, { ...currentConfig, colorPrimary: colorPrimaryValue });
+          useThemeStore.getState().applyTheme(
+            useThemeStore.getState().theme,
+            { ...currentConfig, colorPrimary: colorPrimaryValue },
+            { persist: true },
+          );
           message.warning('主题颜色已保存为预览（登录后将同步到服务器）');
         }
       } else {
         // 未登录：保存到 localStorage 并应用主题到 store（预览）
         localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
-        useThemeStore.getState().applyTheme('light', { colorPrimary: colorPrimaryValue });
+        useThemeStore.getState().applyTheme('light', { colorPrimary: colorPrimaryValue }, { persist: false });
       }
       
       setSelectedColor(colorPrimaryValue);

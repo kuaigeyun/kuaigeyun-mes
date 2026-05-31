@@ -1068,11 +1068,11 @@ export interface MoldRow {
   unit: string;
   mold_capacity: string;
   processing_time_min?: number | null;
-  service_life_years?: number | null;
+  /** 模具寿命（累计产量上限） */
+  service_life_years?: string | number | null;
   usable_times?: number | null;
   usable_yield?: string | null;
   maintenance_cycle_by_yield?: string | null;
-  maintenance_cycle_by_days?: number | null;
   allow_repeated_borrow: boolean;
   purchase_vendor_name?: string | null;
   status: string;
@@ -1092,6 +1092,7 @@ export interface MoldRow {
   used_yield?: string;
   /** 试模不合格待处理：记忆的消息提醒人员 */
   trial_pending_notify_user_ids?: number[];
+  upkeep_param_set_id?: number | null;
 }
 
 export type MoldCreatePayload = {
@@ -1099,11 +1100,10 @@ export type MoldCreatePayload = {
   name: string;
   unit: string;
   mold_capacity: string | number;
-  service_life_years?: number | null;
+  service_life_years?: string | number | null;
   usable_times?: number | null;
   usable_yield?: string | number | null;
   maintenance_cycle_by_yield?: string | number | null;
-  maintenance_cycle_by_days?: number | null;
   allow_repeated_borrow: boolean;
   purchase_vendor_name?: string | null;
   status: string;
@@ -1113,14 +1113,175 @@ export type MoldCreatePayload = {
   mold_warehouse_id?: number | null;
   erp_material_code?: string | null;
   remark?: string | null;
+  upkeep_param_set_id?: number | null;
 };
 
 export type MoldUpdatePayload = Partial<Omit<MoldCreatePayload, 'mold_code'>>;
+
+/** 模具保养项 */
+export interface MoldUpkeepParamRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+  requirement?: string | null;
+  value_type: string;
+  default_value?: string | null;
+}
+
+export type MoldUpkeepParamCreatePayload = {
+  code: string;
+  name: string;
+  requirement?: string | null;
+  value_type?: string;
+  default_value?: string | null;
+};
+
+export type MoldUpkeepParamUpdatePayload = {
+  name?: string;
+  requirement?: string | null;
+  value_type?: string;
+  default_value?: string | null;
+};
+
+export function listMoldUpkeepParams(): Promise<MoldUpkeepParamRow[]> {
+  return apiRequest(`${PREFIX}/molds/upkeep-params`);
+}
+
+export function createMoldUpkeepParam(body: MoldUpkeepParamCreatePayload): Promise<MoldUpkeepParamRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-params`, { method: 'POST', data: body });
+}
+
+export function updateMoldUpkeepParam(rowId: number, body: MoldUpkeepParamUpdatePayload): Promise<MoldUpkeepParamRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-params/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteMoldUpkeepParam(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/molds/upkeep-params/${rowId}`, { method: 'DELETE' });
+}
+
+/** 模具保养方案 */
+export interface MoldUpkeepParamSetRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export type MoldUpkeepParamSetCreatePayload = { code: string; name: string };
+export type MoldUpkeepParamSetUpdatePayload = { name?: string };
+
+export interface MoldUpkeepParamSetItemRow {
+  id: number;
+  param_id: number;
+  set_id: number;
+  sort_order: number;
+  is_required: boolean;
+}
+
+export type MoldUpkeepSetItemCreatePayload = {
+  param_id: number;
+  sort_order?: number;
+  is_required?: boolean;
+};
+
+export type MoldUpkeepSetItemUpdatePayload = {
+  sort_order?: number;
+  is_required?: boolean;
+};
+
+export type MoldUpkeepParamSetCreateWithItemsPayload = {
+  code: string;
+  name: string;
+  items: MoldUpkeepSetItemCreatePayload[];
+};
+
+export function listMoldUpkeepParamSets(): Promise<MoldUpkeepParamSetRow[]> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets`);
+}
+
+export function createMoldUpkeepParamSet(body: MoldUpkeepParamSetCreatePayload): Promise<MoldUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets`, { method: 'POST', data: body });
+}
+
+export function createMoldUpkeepParamSetWithItems(
+  body: MoldUpkeepParamSetCreateWithItemsPayload,
+): Promise<MoldUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/with-items`, { method: 'POST', data: body });
+}
+
+export function updateMoldUpkeepParamSet(
+  rowId: number,
+  body: MoldUpkeepParamSetUpdatePayload,
+): Promise<MoldUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteMoldUpkeepParamSet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${rowId}`, { method: 'DELETE' });
+}
+
+export function listMoldUpkeepParamSetItems(setId: number): Promise<MoldUpkeepParamSetItemRow[]> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${setId}/items`);
+}
+
+export function addMoldUpkeepParamSetItem(
+  setId: number,
+  body: MoldUpkeepSetItemCreatePayload,
+): Promise<MoldUpkeepParamSetItemRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${setId}/items`, { method: 'POST', data: body });
+}
+
+export function updateMoldUpkeepParamSetItem(
+  itemId: number,
+  body: MoldUpkeepSetItemUpdatePayload,
+): Promise<MoldUpkeepParamSetItemRow> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-set-items/${itemId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteMoldUpkeepParamSetItem(itemId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-set-items/${itemId}`, { method: 'DELETE' });
+}
+
+/** 保养方案展开行（完修单按方案填记录） */
+export interface MoldUpkeepSchemeLineRow {
+  param_id: number;
+  param_code: string;
+  param_name: string;
+  requirement?: string | null;
+  value_type?: string;
+  option_values?: string[];
+  is_required: boolean;
+  sort_order: number;
+  record_value?: string | null;
+}
+
+export function fetchMoldUpkeepSchemeByMoldCode(moldCode: string): Promise<MoldUpkeepSchemeLineRow[]> {
+  return apiRequest(`${PREFIX}/molds/upkeep-scheme-by-code`, { params: { mold_code: moldCode } });
+}
+
+export interface MoldUpkeepSchemeContext {
+  mold_code: string;
+  ledger_upkeep_param_set_id?: number | null;
+  lines: MoldUpkeepSchemeLineRow[];
+}
+
+export function fetchMoldUpkeepSchemeContext(moldCode: string): Promise<MoldUpkeepSchemeContext> {
+  return apiRequest(`${PREFIX}/molds/upkeep-scheme-context`, { params: { mold_code: moldCode } });
+}
+
+export function fetchMoldUpkeepSchemeLinesBySet(setId: number): Promise<MoldUpkeepSchemeLineRow[]> {
+  return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${setId}/scheme-lines`);
+}
 
 export function listMolds(params?: {
   skip?: number;
   limit?: number;
   status?: string;
+  mold_code?: string;
+  name?: string;
+  /** sync | manual */
+  ledger_source?: string;
   /** 模糊：代号/名称/单位/厂商与物料编码/备注（后端 icontains OR） */
   keyword?: string;
 }): Promise<PageResult<MoldRow>> {
@@ -1177,11 +1338,9 @@ export interface MoldBatchLifecyclePayload {
   mold_ids?: number[];
   filter_status?: string;
   filter_keyword?: string;
-  service_life_years?: number;
+  service_life_years?: string | number;
   usable_times?: number;
-  usable_yield?: string | number;
   maintenance_cycle_by_yield?: string | number;
-  maintenance_cycle_by_days?: number;
   status?: string;
   /** 显式传 null 表示批量清空所在仓库 */
   mold_warehouse_id?: number | null;
@@ -1244,6 +1403,11 @@ export interface MoldTrialSheetRow {
   result_attachment_file_uuids: string[];
   inspection_attachment_file_uuids: string[];
   trial_result: string;
+  /** 试模 / 试模合格待试产 / 已结案 */
+  workflow_phase?: string | null;
+  production_trial_result?: string | null;
+  production_trial_user_id?: number | null;
+  production_trial_user_name?: string | null;
   sheet_status: string;
   audited_at?: string | null;
   audited_by_user_id?: number | null;
@@ -1263,6 +1427,8 @@ export type MoldTrialSheetCreatePayload = {
   failure_handling?: '待处理' | '立即送修' | null;
   pending_notify_user_ids?: number[];
   repair_warehouse_id?: number | null;
+  production_trial_result?: '合格' | '不合格' | null;
+  production_trial_user_id?: number;
 };
 
 export type MoldTrialSheetUpdatePayload = Partial<MoldTrialSheetCreatePayload>;
@@ -1536,6 +1702,8 @@ export function listMoldMaintenanceSheets(params?: {
   limit?: number;
   keyword?: string;
   sheet_status?: string;
+  /** 维修 / 保养 */
+  service_type?: string;
   /** 仅返回尚未关联未删除维保完修单的维保单（完修单选源） */
   open_for_complete?: boolean;
 }): Promise<PageResult<MoldMaintenanceSheetRow>> {
@@ -1574,6 +1742,16 @@ export function revokeMoldMaintenanceSheetApproval(rowId: number): Promise<MoldM
 }
 
 /** 维保完修单 — 模具行 */
+export interface MoldUpkeepRecordLineRow {
+  param_id: number;
+  param_code: string;
+  param_name: string;
+  requirement?: string | null;
+  is_required: boolean;
+  sort_order: number;
+  record_value?: string | null;
+}
+
 export interface MoldCompleteLineRow {
   mold_code: string;
   mold_name?: string | null;
@@ -1581,6 +1759,8 @@ export interface MoldCompleteLineRow {
   /** 保养完修：该模具是否重置总产量（维修单恒为 false） */
   clear_total_production?: boolean;
   upkeep_content?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_record_lines?: MoldUpkeepRecordLineRow[];
   repair_content?: string | null;
   repair_result?: string | null;
   /** 完修单上传：模具图片（保养后 / 维修后） */
@@ -1619,12 +1799,19 @@ export interface MoldMaintenanceCompleteSheetRow {
   created_at?: string | null;
 }
 
+export type MoldUpkeepRecordLinePayload = {
+  param_id: number;
+  record_value?: string | null;
+};
+
 export type MoldCompleteLinePayload = {
   mold_code: string;
   mold_name?: string | null;
   repair_reason?: string | null;
   clear_total_production?: boolean;
   upkeep_content?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_record_lines?: MoldUpkeepRecordLinePayload[];
   repair_content?: string | null;
   repair_result?: string | null;
   attachment_file_uuids?: string[];

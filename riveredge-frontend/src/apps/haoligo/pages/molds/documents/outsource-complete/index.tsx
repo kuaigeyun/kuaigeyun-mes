@@ -1,8 +1,9 @@
 /**
- * 好力 GO — 模具外协维保完成单（维修专用：基础信息 + 模具行；对齐厂内模具维保完成单交互）
+ * 好力 GO — 外协维修完成单（维修专用：基础信息 + 模具行；列表/详情自带审核）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
@@ -20,7 +21,7 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tag, Tooltip, Upload } from 'antd';
+import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -33,6 +34,7 @@ import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileL
 import { UniUserIdSelect } from '../../../../../../components/uni-user-id-select';
 import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import {
+  approveMoldOutsourceMaintenanceCompleteSheet,
   createMoldOutsourceMaintenanceCompleteSheet,
   deleteMoldOutsourceMaintenanceCompleteSheet,
   getMoldOutsourceMaintenanceCompleteSheet,
@@ -40,6 +42,8 @@ import {
   HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
   listMoldOutsourceMaintenanceCompleteSheets,
   listMoldOutsourceMaintenanceSheets,
+  rejectMoldOutsourceMaintenanceCompleteSheet,
+  revokeApprovalMoldOutsourceMaintenanceCompleteSheet,
   updateMoldOutsourceMaintenanceCompleteSheet,
   type MoldOutsourceMaintenanceCompleteSheetCreatePayload,
   type MoldOutsourceMaintenanceCompleteSheetRow,
@@ -49,10 +53,22 @@ import {
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
 import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { hasPermission } from '../../../../../../utils/permission';
+import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
 import {
   HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
   HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
 } from '../../../../constants/documentPermissionResources';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
+import {
+  canAuditMoldSheet,
+  isMoldSheetApproved,
+  moldSheetAuditStatusTag,
+} from '../../../../utils/moldSheetStatus';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 
 function normUploadUuids(val: unknown): string[] {
@@ -68,9 +84,8 @@ function normUploadUuids(val: unknown): string[] {
   return out;
 }
 
-/** 外协维保单「维修前 / 维修后」附件预览（表头 + 按模具） */
+/** 外协维修单「维修前 / 维修后」附件预览（表头 + 按模具） */
 type BeforeAttachmentPreview = {
-  header: string[];
   byMold: Record<string, string[]>;
 };
 
@@ -79,7 +94,7 @@ function buildSourceOrderNoFromMaintenance(row: MoldOutsourceMaintenanceSheetRow
   return (
     (row.source_order_no && String(row.source_order_no).trim()) ||
     (row.sheet_no && String(row.sheet_no).trim()) ||
-    `外协维保单#${n}`
+    `外协维修单#${n}`
   );
 }
 
@@ -89,10 +104,7 @@ function buildBeforePreviewFromMaintenance(row: MoldOutsourceMaintenanceSheetRow
     const mc = String(it.mold_code ?? '').trim();
     if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
   }
-  return {
-    header: [...(row.header_attachment_file_uuids || [])],
-    byMold,
-  };
+  return { byMold };
 }
 
 const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
@@ -124,21 +136,14 @@ function buildFormValuesFromMaintenanceSource(row: MoldOutsourceMaintenanceSheet
     outsourced_unit_code: row.outsourced_unit_code ?? undefined,
     applicant_user_id: row.applicant_user_id ?? undefined,
     department_uuid: (row.department_uuid || '').trim() || undefined,
-    header_attachments: [],
     line_items: buildLineItemsFromMaintenanceSource(row),
   };
-}
-
-function outsourceCompleteStatusTag(status: string | undefined) {
-  const s = (status || '待审核').trim();
-  const color = s === '已通过' ? 'success' : s === '已驳回' ? 'error' : 'processing';
-  return <Tag color={color}>{s}</Tag>;
 }
 
 function formatOutsourceRowLabel(r: MoldOutsourceMaintenanceSheetRow): string {
   return [
     r.sheet_no && String(r.sheet_no).trim(),
-    (r.source_order_no && String(r.source_order_no).trim()) || `外协维保单#${r.id}`,
+    (r.source_order_no && String(r.source_order_no).trim()) || `外协维修单#${r.id}`,
     r.primary_mold_code ? `· ${r.primary_mold_code}` : null,
   ]
     .filter(Boolean)
@@ -187,7 +192,7 @@ function SourceOutsourceSheetPickerTrigger({
       <Input
         readOnly
         value={text}
-        placeholder="请选择来源外协维保单"
+        placeholder="请选择来源外协维修单"
         style={{ flex: 1, minWidth: 0, width: 0, cursor: disabled ? 'default' : 'pointer' }}
         onClick={() => {
           if (!disabled) onOpen();
@@ -216,9 +221,24 @@ const defaultMoldLine = () => ({
   item_attachments: [] as UploadFile[],
 });
 
+const sheetStatusEnum: Record<string, { text: string }> = {
+  待审核: { text: '待审核' },
+  已通过: { text: '已通过' },
+  已驳回: { text: '已驳回' },
+};
+
 const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const queryClient = useQueryClient();
+  const completeResource = HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE;
+  const canUpdateComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'update'));
+  const canDeleteComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'delete'));
   const actionRef = useRef<ActionType>(null);
+  const reloadTableAndMoldLedger = useCallback(() => {
+    invalidateHaoligoMoldLedgerTableCache(queryClient);
+    actionRef.current?.reload();
+  }, [queryClient]);
   const formRef = useRef<ProFormInstance>(null);
   const {
     applicantPresetUsers,
@@ -238,6 +258,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const [isDetailView, setIsDetailView] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [auditSheetStatus, setAuditSheetStatus] = useState<string>('待审核');
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [outsourceRows, setOutsourceRows] = useState<MoldOutsourceMaintenanceSheetRow[]>([]);
@@ -289,7 +310,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       source_order_no: '',
       outsourced_unit_name: undefined,
       outsourced_unit_code: undefined,
-      header_attachments: [],
       line_items: [defaultMoldLine()],
     });
     resetApplicantToCurrentUser();
@@ -353,7 +373,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         source_order_no: '',
         outsourced_unit_name: undefined,
         outsourced_unit_code: undefined,
-        header_attachments: [],
         line_items: [defaultMoldLine()],
       });
       setBeforeAttachmentPreview(null);
@@ -380,7 +399,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
             ? row
             : await getMoldOutsourceMaintenanceSheet(row.id);
         if (String(fullRow.service_type ?? '').trim() !== '维修') {
-          messageApi.warning('仅维修类型外协维保单可创建维保完成单');
+          messageApi.warning('仅维修类型外协维修单可创建外协维修完成单');
           setModalVisible(false);
           return;
         }
@@ -396,7 +415,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         setFormInitialValues(buildFormValuesFromMaintenanceSource(fullRow));
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
-        messageApi.error((e as Error).message || '无法创建维保完成单');
+        messageApi.error((e as Error).message || '无法创建外协维修完成单');
         setModalVisible(false);
         setFormOptionsReady(false);
       }
@@ -425,7 +444,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         const row = await getMoldOutsourceMaintenanceSheet(id);
         await startCreateWithSourceSheet(row);
       } catch (e) {
-        messageApi.error((e as Error).message || '无法根据外协维保单打开维保完成单');
+        messageApi.error((e as Error).message || '无法根据外协维修单打开外协维修完成单');
       }
     })();
   }, [messageApi, searchParams, setSearchParams, startCreateWithSourceSheet]);
@@ -456,9 +475,9 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       }
       setOutsourceRows(rows);
       setEditId(d.id);
+      setAuditSheetStatus(d.sheet_status || '待审核');
       const preset = presetFromApplicantRow(d);
       await preloadTenantFormOptions(preset ? [preset] : undefined);
-      const header_attachments = await uuidsToSecureUploadFileList(d.header_attachment_file_uuids);
       const line_items = await Promise.all(
         (d.line_items || []).map(async (it) => ({
           mold_code: it.mold_code,
@@ -479,7 +498,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         department_uuid: resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid),
         outsourced_unit_name: d.outsourced_unit_name,
         outsourced_unit_code: d.outsourced_unit_code ?? undefined,
-        header_attachments,
         line_items,
       });
       if (d.source_outsource_maintenance_sheet_id != null) {
@@ -488,16 +506,13 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           const mc = String(it.mold_code ?? '').trim();
           if (mc) byMold[mc] = [...(it.source_attachment_file_uuids ?? [])];
         }
-        setBeforeAttachmentPreview({
-          header: [...(d.source_header_attachment_file_uuids ?? [])],
-          byMold,
-        });
+        setBeforeAttachmentPreview({ byMold });
       } else {
         setBeforeAttachmentPreview(null);
       }
       startTransition(() => setFormOptionsReady(true));
     } catch (e) {
-      messageApi.error((e as Error).message || '加载模具外协维保完成单失败');
+      messageApi.error((e as Error).message || '加载外协维修完成单失败');
       setIsDetailView(false);
       setModalVisible(false);
       setFormOptionsReady(false);
@@ -510,13 +525,13 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const handleDeleteOne = (record: MoldOutsourceMaintenanceCompleteSheetRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除模具外协维保完成单「${record.source_order_no}」吗？`,
+      content: `确定删除外协维修完成单「${record.source_order_no}」吗？`,
       okType: 'danger',
       onOk: async () => {
         try {
           await deleteMoldOutsourceMaintenanceCompleteSheet(record.id);
           messageApi.success('已删除');
-          actionRef.current?.reload();
+          reloadTableAndMoldLedger();
         } catch (e) {
           messageApi.error((e as Error).message || '删除失败');
         }
@@ -577,7 +592,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       applicant_user_id,
       department_uuid,
       line_items,
-      header_attachment_file_uuids: normUploadUuids(values.header_attachments),
+      header_attachment_file_uuids: [],
     };
   };
 
@@ -614,7 +629,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     const patch: MoldOutsourceMaintenanceCompleteSheetUpdatePayload = {
       source_outsource_maintenance_sheet_id,
       source_order_no: String(values.source_order_no ?? '').trim(),
-      header_attachment_file_uuids: normUploadUuids(values.header_attachments),
+      header_attachment_file_uuids: [],
       line_items,
     };
     const aidRaw = values.applicant_user_id;
@@ -638,7 +653,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     if (!isEdit) {
       const sid = values.source_outsource_maintenance_sheet_id;
       if (sid === undefined || sid === null || sid === '') {
-        messageApi.error('请选择来源外协维保单');
+        messageApi.error('请选择来源外协维修单');
         return Promise.reject(new Error('validation'));
       }
       const appAid = values.applicant_user_id;
@@ -657,7 +672,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         return Promise.reject(new Error('validation'));
       }
       if (!Number.isFinite(payload.source_outsource_maintenance_sheet_id)) {
-        messageApi.error('请选择来源外协维保单');
+        messageApi.error('请选择来源外协维修单');
         return Promise.reject(new Error('validation'));
       }
       for (let i = 0; i < payload.line_items.length; i++) {
@@ -678,9 +693,9 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       setFormLoading(true);
       try {
         await createMoldOutsourceMaintenanceCompleteSheet(payload);
-        messageApi.success('已提交，请至「外协维保审核」确认');
+        messageApi.success('已提交，待审核');
         setModalVisible(false);
-        actionRef.current?.reload();
+        reloadTableAndMoldLedger();
       } catch (e) {
         if ((e as Error).message !== 'validation') {
           messageApi.error((e as Error).message || '保存失败');
@@ -695,7 +710,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     if (outsourceRows.length > 0) {
       const sid = values.source_outsource_maintenance_sheet_id;
       if (sid === undefined || sid === null || sid === '') {
-        messageApi.error('请选择来源外协维保单');
+        messageApi.error('请选择来源外协维修单');
         return Promise.reject(new Error('validation'));
       }
     }
@@ -741,7 +756,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         messageApi.success('已保存');
       }
       setModalVisible(false);
-      actionRef.current?.reload();
+      reloadTableAndMoldLedger();
     } catch (e) {
       if ((e as Error).message !== 'validation') {
         messageApi.error((e as Error).message || '保存失败');
@@ -763,7 +778,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       source_order_no: '',
       outsourced_unit_name: undefined,
       outsourced_unit_code: undefined,
-      header_attachments: [],
       line_items: [defaultMoldLine()],
     });
     resetApplicantToCurrentUser();
@@ -779,7 +793,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       fieldProps: { placeholder: '单号/来源单号/申请人/申请部门/外协单位' },
     },
     {
-      title: '维保完成单单号',
+      title: '维修完成单单号',
       dataIndex: 'sheet_no',
       width: 150,
       ellipsis: true,
@@ -794,8 +808,10 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       title: '审核状态',
       dataIndex: 'sheet_status',
       width: 100,
-      hideInSearch: true,
-      render: (_, r) => outsourceCompleteStatusTag(r.sheet_status),
+      valueType: 'select',
+      valueEnum: sheetStatusEnum,
+      fieldProps: { allowClear: true },
+      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
     },
     {
       title: '维修摘要',
@@ -839,10 +855,16 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 280,
       fixed: 'right',
+      uniActionRenderOptions: MOLD_SHEET_TABLE_ACTION_OPTIONS,
       render: (_, record) => {
-        const approved = (record.sheet_status || '').trim() === '已通过';
+        const approved = isMoldSheetApproved(record.sheet_status);
+        const auditHandlers = {
+          onApprove: () => approveMoldOutsourceMaintenanceCompleteSheet(record.id),
+          onReject: () => rejectMoldOutsourceMaintenanceCompleteSheet(record.id),
+          onRevoke: () => revokeApprovalMoldOutsourceMaintenanceCompleteSheet(record.id),
+        };
         const actions: React.ReactNode[] = [
           <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
@@ -852,7 +874,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
             type="link"
             size="small"
             icon={<EditOutlined />}
-            disabled={approved}
+            disabled={approved || !canUpdateComplete}
             onClick={() => void handleEdit(record)}
           >
             编辑
@@ -862,14 +884,21 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
             type="link"
             size="small"
             danger
-            disabled={approved}
+            disabled={approved || !canDeleteComplete}
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteOne(record)}
           >
             删除
           </Button>,
+          ...buildMoldSheetAuditActionElements({
+            canAudit: canAuditMoldSheet(currentUser, completeResource),
+            sheetStatus: record.sheet_status,
+            handlers: auditHandlers,
+            messageApi,
+            reload: reloadTableAndMoldLedger,
+          }),
         ];
-        return renderRowActionsOverflow(actions, `out-complete-${record.id}`);
+        return renderRowActionsOverflow(actions, `out-complete-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
       },
     },
   ];
@@ -878,7 +907,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
-          headerTitle="模具外协维保完成单"
+          headerTitle="外协维修完成单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-complete"
           completeCreateSourceResource={HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE}
           actionRef={actionRef}
@@ -896,6 +925,10 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
               const res = await listMoldOutsourceMaintenanceCompleteSheets({
                 skip,
                 limit: pageSize,
+                sheet_status:
+                  typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
+                    ? searchFormValues.sheet_status
+                    : undefined,
                 keyword:
                   typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
                     ? searchFormValues.keyword.trim()
@@ -912,7 +945,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isDetailView ? '模具外协维保完成单详情' : isEdit ? '编辑模具外协维保完成单' : '模具外协维保完成单'}
+        title={isDetailView ? '外协维修完成单详情' : isEdit ? '编辑外协维修完成单' : '外协维修完成单'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -924,7 +957,30 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         destroyOnHidden
         footer={
-          isDetailView ? (
+          isDetailView && editId != null ? (
+            <MoldSheetDetailAuditFooter
+              resource={completeResource}
+              sheetStatus={auditSheetStatus}
+              onClose={() => {
+                setModalVisible(false);
+                setEditId(null);
+                setIsDetailView(false);
+                setFormOptionsReady(false);
+                setBeforeAttachmentPreview(null);
+              }}
+              onReload={() => {
+                reloadTableAndMoldLedger();
+                void getMoldOutsourceMaintenanceCompleteSheet(editId).then((d) =>
+                  setAuditSheetStatus(d.sheet_status),
+                );
+              }}
+              handlers={{
+                onApprove: () => approveMoldOutsourceMaintenanceCompleteSheet(editId),
+                onReject: () => rejectMoldOutsourceMaintenanceCompleteSheet(editId),
+                onRevoke: () => revokeApprovalMoldOutsourceMaintenanceCompleteSheet(editId),
+              }}
+            />
+          ) : isDetailView ? (
             <Button onClick={() => setModalVisible(false)}>关闭</Button>
           ) : (
             <div
@@ -987,8 +1043,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                   {!isEdit || outsourceRows.length > 0 ? (
                     <ProForm.Item
                       name="source_outsource_maintenance_sheet_id"
-                      label="来源外协维保单"
-                      rules={[{ required: true, message: '请选择来源外协维保单' }]}
+                      label="来源外协维修单"
+                      rules={[{ required: true, message: '请选择来源外协维修单' }]}
                     >
                       <SourceOutsourceSheetPickerTrigger
                         outsourceRows={outsourceRows}
@@ -1012,7 +1068,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                     name="outsourced_unit_name"
                     label="外协单位"
                     placeholder="选择来源单后自动带出"
-                    rules={[{ required: true, message: '请通过来源外协维保单带出外协单位' }]}
+                    rules={[{ required: true, message: '请通过来源外协维修单带出外协单位' }]}
                     fieldProps={{ readOnly: true }}
                   />
                   <ProFormText name="outsourced_unit_code" hidden />
@@ -1045,35 +1101,6 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                       optionFilterProp: 'label',
                     }}
                   />
-                </Col>
-              </Row>
-
-              <Row gutter={16} style={{ marginBottom: 8 }}>
-                <Col span={24}>
-                  <div
-                    style={{
-                      padding: 12,
-                      background: '#fafafa',
-                      border: '1px solid #f0f0f0',
-                      borderRadius: 8,
-                    }}
-                  >
-                    {beforeAttachmentPreview != null ? (
-                      <>
-                        <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
-                          附件照片（维修前）
-                        </div>
-                        <ReadonlyAttachmentStrip uuids={beforeAttachmentPreview.header} />
-                        <Divider dashed style={{ margin: '14px 0' }} />
-                      </>
-                    ) : null}
-                    <ProFormUploadButton
-                      name="header_attachments"
-                      label="附件照片（维修后）"
-                      max={10}
-                      fieldProps={uploadFieldProps}
-                    />
-                  </div>
                 </Col>
               </Row>
 
@@ -1243,7 +1270,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="选择来源外协维保单"
+        title="选择来源外协维修单"
         open={sourcePickerOpen}
         onCancel={() => setSourcePickerOpen(false)}
         width={900}
@@ -1257,7 +1284,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           dataSource={outsourceRowsRepair}
           pagination={false}
           scroll={{ y: 380, x: 900 }}
-          locale={{ emptyText: '暂无待确认完修的外协维保单' }}
+          locale={{ emptyText: '暂无待确认维修完成的外协维修单' }}
           onRow={(record) => ({
             onClick: () => {
               void applySelectedOutsourceSheetRow(record);

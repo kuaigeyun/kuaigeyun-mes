@@ -26,7 +26,12 @@ class HaoligoMold(HaoligoTenantModel):
         description="单模产能",
     )
     processing_time_min = fields.IntField(null=True, description="加工时间（分钟）：领用单与对应还入单创建时间之差的累计，由系统根据单据自动重算")
-    service_life_years = fields.IntField(null=True, description="模具寿命（年）")
+    service_life_years = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        description="模具寿命（累计产量上限）",
+    )
     usable_times = fields.IntField(null=True, description="额定可用次数（还入单不再扣减）")
     usable_yield = fields.DecimalField(
         max_digits=18,
@@ -44,7 +49,13 @@ class HaoligoMold(HaoligoTenantModel):
     maintenance_cycle_by_yield = fields.DecimalField(
         max_digits=18, decimal_places=4, null=True, description="维修周期（依产量）"
     )
-    maintenance_cycle_by_days = fields.IntField(null=True, description="维修周期（依天数）")
+    upkeep_param_set = fields.ForeignKeyField(
+        "models.HaoligoMoldUpkeepParamSet",
+        related_name="molds",
+        null=True,
+        on_delete=fields.SET_NULL,
+        description="绑定的保养方案",
+    )
     allow_repeated_borrow = fields.BooleanField(default=True, description="允许重复领用")
     purchase_vendor_name = fields.CharField(max_length=200, null=True, description="购买厂商")
     status = fields.CharField(

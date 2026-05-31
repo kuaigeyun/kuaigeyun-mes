@@ -11,13 +11,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
+from apps.haoligo.api._mold_rated_yield import derive_usable_yield, resolve_usable_yield
 from apps.haoligo.api._mold_maintenance_mold_status import (
     inhouse_complete_line_clears_total_for_mold,
 )
 from apps.haoligo.api._qs import tenant_alive
-from apps.haoligo.constants.mold_ledger_source import MOLD_LEDGER_SOURCE_MANUAL, MOLD_LEDGER_SOURCE_SYNC
+from apps.haoligo.constants.mold_ledger_source import (
+    MOLD_LEDGER_SOURCE_MANUAL,
+    MOLD_LEDGER_SOURCE_SET,
+    MOLD_LEDGER_SOURCE_SYNC,
+    ledger_source_filter_q,
+)
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET, MOLD_LEDGER_STATUS_VALUES
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_upkeep import HaoligoMoldUpkeepParamSet
 from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_ledger_dataset_binding import HaoligoMoldLedgerDatasetBinding
@@ -114,11 +122,10 @@ class MoldOut(BaseModel):
     unit: str = ""
     mold_capacity: Decimal = Decimal("0")
     processing_time_min: Optional[int] = None
-    service_life_years: Optional[int] = None
+    service_life_years: Optional[Decimal] = None
     usable_times: Optional[int] = None
     usable_yield: Optional[Decimal] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
-    maintenance_cycle_by_days: Optional[int] = None
     allow_repeated_borrow: bool = True
     purchase_vendor_name: Optional[str] = None
     status: str
@@ -134,6 +141,7 @@ class MoldOut(BaseModel):
     used_times: int = 0
     used_yield: Decimal = Decimal("0")
     trial_pending_notify_user_ids: list[int] = []
+    upkeep_param_set_id: Optional[int] = None
 
 
 class MoldCreate(BaseModel):
@@ -141,11 +149,10 @@ class MoldCreate(BaseModel):
     name: str = Field(max_length=200)
     unit: str = Field(default="", max_length=32)
     mold_capacity: Decimal = Field(default=Decimal("0"))
-    service_life_years: Optional[int] = Field(None, ge=0)
+    service_life_years: Optional[Decimal] = Field(None, ge=0)
     usable_times: Optional[int] = Field(None, ge=0)
     usable_yield: Optional[Decimal] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
-    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
     allow_repeated_borrow: bool = True
     purchase_vendor_name: Optional[str] = Field(None, max_length=200)
     status: str = Field(default="待用", max_length=32)
@@ -155,10 +162,16 @@ class MoldCreate(BaseModel):
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
     mold_warehouse_id: Optional[int] = None
+    upkeep_param_set_id: Optional[int] = None
 
     @field_validator("mold_warehouse_id", mode="before")
     @classmethod
     def coerce_create_mold_warehouse_id(cls, v: object) -> int | None:
+        return _coerce_optional_mold_warehouse_id(v)
+
+    @field_validator("upkeep_param_set_id", mode="before")
+    @classmethod
+    def coerce_create_upkeep_param_set_id(cls, v: object) -> int | None:
         return _coerce_optional_mold_warehouse_id(v)
 
     @field_validator("status")
@@ -174,11 +187,10 @@ class MoldUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     unit: Optional[str] = Field(None, max_length=32)
     mold_capacity: Optional[Decimal] = None
-    service_life_years: Optional[int] = Field(None, ge=0)
+    service_life_years: Optional[Decimal] = Field(None, ge=0)
     usable_times: Optional[int] = Field(None, ge=0)
     usable_yield: Optional[Decimal] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
-    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
     allow_repeated_borrow: Optional[bool] = None
     purchase_vendor_name: Optional[str] = Field(None, max_length=200)
     status: Optional[str] = Field(None, max_length=32)
@@ -188,10 +200,16 @@ class MoldUpdate(BaseModel):
     erp_material_code: Optional[str] = Field(None, max_length=64)
     remark: Optional[str] = None
     mold_warehouse_id: Optional[int] = None
+    upkeep_param_set_id: Optional[int] = None
 
     @field_validator("mold_warehouse_id", mode="before")
     @classmethod
     def coerce_update_mold_warehouse_id(cls, v: object) -> int | None:
+        return _coerce_optional_mold_warehouse_id(v)
+
+    @field_validator("upkeep_param_set_id", mode="before")
+    @classmethod
+    def coerce_update_upkeep_param_set_id(cls, v: object) -> int | None:
         return _coerce_optional_mold_warehouse_id(v)
 
     @field_validator("status")
@@ -203,6 +221,14 @@ class MoldUpdate(BaseModel):
         if s not in MOLD_LEDGER_STATUS_SET:
             raise ValueError(f"模具状态无效，须为：{_ALLOWED_MOLD_STATUS_STR}")
         return s
+
+
+async def _validate_upkeep_param_set_id(tenant_id: int, upkeep_param_set_id: int | None) -> None:
+    if upkeep_param_set_id is None:
+        return
+    exists = await tenant_alive(HaoligoMoldUpkeepParamSet, tenant_id).filter(id=upkeep_param_set_id).exists()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="保养方案不存在")
 
 
 async def _mold_warehouse_columns_patch(tenant_id: int, mold_warehouse_id: int | None) -> dict[str, Any]:
@@ -226,9 +252,7 @@ _MOLD_BATCH_PATCH_FIELDS = frozenset(
     {
         "service_life_years",
         "usable_times",
-        "usable_yield",
         "maintenance_cycle_by_yield",
-        "maintenance_cycle_by_days",
         "status",
     }
 )
@@ -241,11 +265,9 @@ class MoldBatchLifecycleBody(BaseModel):
     mold_ids: Optional[List[int]] = None
     filter_status: Optional[str] = None
     filter_keyword: Optional[str] = None
-    service_life_years: Optional[int] = Field(None, ge=0)
+    service_life_years: Optional[Decimal] = Field(None, ge=0)
     usable_times: Optional[int] = Field(None, ge=0)
-    usable_yield: Optional[Decimal] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
-    maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
     status: Optional[str] = Field(None, max_length=32)
     mold_warehouse_id: Optional[int] = None
 
@@ -283,11 +305,28 @@ class MoldBatchLifecycleOut(BaseModel):
     updated: int
 
 
-def _molds_filtered_queryset(tenant_id: int, status_filter: Optional[str], keyword: Optional[str]):
+def _molds_filtered_queryset(
+    tenant_id: int,
+    status_filter: Optional[str],
+    keyword: Optional[str],
+    *,
+    mold_code: Optional[str] = None,
+    name: Optional[str] = None,
+    ledger_source: Optional[str] = None,
+):
     """与列表接口一致的筛选条件（用于「当前筛选全部」批量更新）。"""
     qs = tenant_alive(HaoligoMold, tenant_id)
     if status_filter:
         qs = qs.filter(status=status_filter)
+    mc = (mold_code or "").strip()
+    if mc:
+        qs = qs.filter(mold_code__icontains=mc)
+    nm = (name or "").strip()
+    if nm:
+        qs = qs.filter(name__icontains=nm)
+    src = (ledger_source or "").strip()
+    if src:
+        qs = qs.filter(ledger_source_filter_q(src))
     kw = (keyword or "").strip()
     if kw:
         q_text = (
@@ -494,7 +533,6 @@ async def sync_mold_ledger_from_dataset(
                 usable_times=None,
                 usable_yield=None,
                 maintenance_cycle_by_yield=None,
-                maintenance_cycle_by_days=None,
                 allow_repeated_borrow=True,
                 purchase_vendor_name=None,
                 status="待用",
@@ -515,7 +553,7 @@ async def sync_mold_ledger_from_dataset(
 @router.post(
     "/batch-lifecycle",
     response_model=MoldBatchLifecycleOut,
-    summary="批量更新模具寿命/额定次数与产量/维修周期或状态",
+    summary="批量更新模具寿命（累计产量上限）/额定次数/维修周期依产量或状态",
 )
 async def batch_update_mold_lifecycle(
     body: MoldBatchLifecycleBody,
@@ -552,6 +590,19 @@ async def batch_update_mold_lifecycle(
         )
     if n == 0:
         return MoldBatchLifecycleOut(updated=0)
+
+    if "usable_times" in patch:
+        times_val = patch.pop("usable_times")
+        updated = 0
+        async for row in qs:
+            for k, v in patch.items():
+                setattr(row, k, v)
+            row.usable_times = times_val
+            row.usable_yield = derive_usable_yield(row.mold_capacity, times_val)
+            await row.save()
+            updated += 1
+        return MoldBatchLifecycleOut(updated=updated)
+
     await qs.update(**patch)
     return MoldBatchLifecycleOut(updated=n)
 
@@ -568,6 +619,9 @@ async def list_molds(
         None,
         description="模糊匹配：模具代号、名称、单位、购买/外协厂商与代号、ERP 物料编码、备注；纯数字时额外精确匹配单模产能与总制造数量",
     ),
+    mold_code: Optional[str] = Query(None, description="模具代号模糊匹配"),
+    name: Optional[str] = Query(None, description="模具名称模糊匹配"),
+    ledger_source: Optional[str] = Query(None, description="来源：sync / manual"),
 ):
     stf = (status_filter or "").strip() or None
     if stf is not None and stf not in MOLD_LEDGER_STATUS_SET:
@@ -575,7 +629,20 @@ async def list_molds(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"status 无效，须为：{_ALLOWED_MOLD_STATUS_STR}",
         )
-    qs = _molds_filtered_queryset(tenant_id, stf, keyword)
+    src = (ledger_source or "").strip() or None
+    if src is not None and src not in MOLD_LEDGER_SOURCE_SET:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ledger_source 无效，须为：sync、manual",
+        )
+    qs = _molds_filtered_queryset(
+        tenant_id,
+        stf,
+        keyword,
+        mold_code=mold_code,
+        name=name,
+        ledger_source=src,
+    )
     total = await qs.count()
     rows = await qs.order_by("-updated_at", "-created_at", "mold_code").offset(skip).limit(limit)
     return {
@@ -835,7 +902,7 @@ async def list_mold_operation_records(
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
-                title="外协维保（申请）",
+                title="外协维修（申请）",
                 detail="；".join(parts),
             )
         )
@@ -855,7 +922,7 @@ async def list_mold_operation_records(
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
-                title="外协维保完修",
+                title="外协维修完成",
                 detail="；".join(parts),
             )
         )
@@ -884,6 +951,7 @@ async def create_mold(
             detail=f"模具代号「{mold_code}」已存在，请使用其他代号",
         )
 
+    rated_yield = resolve_usable_yield(body.mold_capacity, body.usable_times, body.usable_yield)
     row = await HaoligoMold.create(
         tenant_id=tenant_id,
         mold_code=mold_code,
@@ -892,9 +960,8 @@ async def create_mold(
         mold_capacity=body.mold_capacity,
         service_life_years=body.service_life_years,
         usable_times=body.usable_times,
-        usable_yield=body.usable_yield,
+        usable_yield=rated_yield,
         maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
-        maintenance_cycle_by_days=body.maintenance_cycle_by_days,
         allow_repeated_borrow=body.allow_repeated_borrow,
         purchase_vendor_name=((body.purchase_vendor_name or "").strip() or None),
         status=body.status,
@@ -907,8 +974,12 @@ async def create_mold(
         used_times=0,
         used_yield=Decimal("0"),
     )
+    if body.upkeep_param_set_id is not None:
+        await _validate_upkeep_param_set_id(tenant_id, body.upkeep_param_set_id)
+        row.upkeep_param_set_id = body.upkeep_param_set_id
     if body.mold_warehouse_id is not None:
         await _apply_mold_warehouse_to_row(row, tenant_id=tenant_id, mold_warehouse_id=body.mold_warehouse_id)
+    if body.mold_warehouse_id is not None or body.upkeep_param_set_id is not None:
         await row.save()
     return MoldOut.model_validate(row)
 
@@ -944,6 +1015,14 @@ async def update_mold(
             tenant_id=tenant_id,
             mold_warehouse_id=data.pop("mold_warehouse_id"),
         )
+    if "upkeep_param_set_id" in data:
+        ups_id = data.pop("upkeep_param_set_id")
+        await _validate_upkeep_param_set_id(tenant_id, ups_id)
+        row.upkeep_param_set_id = ups_id
+    if "usable_yield" not in data and ("mold_capacity" in data or "usable_times" in data):
+        cap = data.get("mold_capacity", row.mold_capacity)
+        times = data["usable_times"] if "usable_times" in data else row.usable_times
+        data["usable_yield"] = derive_usable_yield(cap, times)
     for k, v in data.items():
         if isinstance(v, str):
             v = v.strip()

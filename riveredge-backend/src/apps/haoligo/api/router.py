@@ -17,6 +17,7 @@ from apps.haoligo.api.routes_equipment_upkeep_complete_sheet import (
 from apps.haoligo.api.routes_equipment_upkeep_sheet import router as equipment_upkeep_sheet_router
 from apps.haoligo.api.routes_mobile import router as mobile_router
 from apps.haoligo.api.routes_mold import router as mold_router
+from apps.haoligo.api.routes_mold_upkeep import router as mold_upkeep_router
 from apps.haoligo.api.routes_mold_warehouse import router as mold_warehouse_router
 from apps.haoligo.api.routes_mold_borrow_sheet import router as mold_borrow_sheet_router
 from apps.haoligo.api.routes_mold_return_sheet import router as mold_return_sheet_router
@@ -69,8 +70,9 @@ router.include_router(mold_outsource_maintenance_complete_sheet_router)
 router.include_router(mold_maintenance_sheet_router)
 router.include_router(mold_maintenance_complete_sheet_router)
 router.include_router(mold_reports_router)
-# 须在 mold_router 之前：后者含 /molds/{row_id}，否则会误把 /molds/warehouses 当成模具 id
+# 须在 mold_router 之前：后者含 /molds/{row_id}，否则会误把 /molds/warehouses 等当成模具 id
 router.include_router(mold_warehouse_router)
+router.include_router(mold_upkeep_router)
 router.include_router(mold_router)
 router.include_router(mobile_router)
 router.include_router(patrol_router)

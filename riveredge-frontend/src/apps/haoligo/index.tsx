@@ -35,15 +35,22 @@ const EquipmentDocumentsUpkeepCompletePage = lazy(() => import('./pages/equipmen
 const EquipmentDocumentsOutputRecordPage = lazy(() => import('./pages/equipment/documents/output-record'));
 const EquipmentDocumentsStatusAdjustmentPage = lazy(() => import('./pages/equipment/documents/status-adjustment'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
+const MoldUpkeepParamsPage = lazy(() => import('./pages/molds/upkeep-params'));
+const MoldUpkeepParamSetsPage = lazy(() => import('./pages/molds/upkeep-param-sets'));
 const MoldWarehousePage = lazy(() => import('./pages/molds/warehouse'));
 const MoldBorrowOutPage = lazy(() => import('./pages/molds/documents/borrow-out'));
 const MoldReturnInPage = lazy(() => import('./pages/molds/documents/return-in'));
 const MoldTrialSheetsPage = lazy(() => import('./pages/molds/documents/trial'));
-const MoldMaintenancePage = lazy(() => import('./pages/molds/documents/maintenance'));
-const MoldMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/maintenance-complete'));
+const MoldUpkeepSheetPage = lazy(() => import('./pages/molds/documents/upkeep'));
+const MoldUpkeepCompleteSheetPage = lazy(() => import('./pages/molds/documents/upkeep-complete'));
+const MoldRepairSheetPage = lazy(() => import('./pages/molds/documents/repair'));
+const MoldRepairCompleteSheetPage = lazy(() => import('./pages/molds/documents/repair-complete'));
+const MoldMaintenanceLegacyRedirect = lazy(() => import('./pages/molds/documents/maintenance'));
+const MoldMaintenanceCompleteLegacyRedirect = lazy(
+  () => import('./pages/molds/documents/maintenance-complete'),
+);
 const MoldOutsourceMaintenancePage = lazy(() => import('./pages/molds/documents/outsource-maintenance'));
 const MoldOutsourceMaintenanceCompletePage = lazy(() => import('./pages/molds/documents/outsource-complete'));
-const MoldOutsourcePendingReviewPage = lazy(() => import('./pages/molds/workbench/pending'));
 const MoldReportTrialRecordPage = lazy(() => import('./pages/molds/reports/trial-record'));
 const MoldReportMaintenanceAlertPage = lazy(() => import('./pages/molds/reports/maintenance-alert'));
 const MoldReportMaintenanceLogPage = lazy(() => import('./pages/molds/reports/maintenance-log'));
@@ -113,17 +120,34 @@ const HaoligoApp: React.FC = () => (
           element={withHaoligoPermission('haoligo:molds-ledger:read', withPageSuspense(MoldLedgerPage))}
         />
         <Route
+          path="upkeep-params"
+          element={withHaoligoPermission('haoligo:molds-upkeep-params:read', withPageSuspense(MoldUpkeepParamsPage))}
+        />
+        <Route
+          path="upkeep-param-sets"
+          element={withHaoligoPermission(
+            'haoligo:molds-upkeep-param-sets:read',
+            withPageSuspense(MoldUpkeepParamSetsPage),
+          )}
+        />
+        <Route
           path="warehouse"
           element={withHaoligoPermission('haoligo:molds-warehouse:read', withPageSuspense(MoldWarehousePage))}
         />
         <Route path="documents/trial" element={withPageSuspense(MoldTrialSheetsPage)} />
         <Route path="documents/borrow-out" element={withPageSuspense(MoldBorrowOutPage)} />
         <Route path="documents/return-in" element={withPageSuspense(MoldReturnInPage)} />
-        <Route path="documents/maintenance" element={withPageSuspense(MoldMaintenancePage)} />
-        <Route path="documents/maintenance-complete" element={withPageSuspense(MoldMaintenanceCompletePage)} />
+        <Route path="documents/upkeep" element={withPageSuspense(MoldUpkeepSheetPage)} />
+        <Route path="documents/upkeep-complete" element={withPageSuspense(MoldUpkeepCompleteSheetPage)} />
+        <Route path="documents/repair" element={withPageSuspense(MoldRepairSheetPage)} />
+        <Route path="documents/repair-complete" element={withPageSuspense(MoldRepairCompleteSheetPage)} />
+        <Route path="documents/maintenance" element={withPageSuspense(MoldMaintenanceLegacyRedirect)} />
+        <Route
+          path="documents/maintenance-complete"
+          element={withPageSuspense(MoldMaintenanceCompleteLegacyRedirect)}
+        />
         <Route path="documents/outsource-maintenance" element={withPageSuspense(MoldOutsourceMaintenancePage)} />
         <Route path="documents/outsource-complete" element={withPageSuspense(MoldOutsourceMaintenanceCompletePage)} />
-        <Route path="workbench/pending" element={withPageSuspense(MoldOutsourcePendingReviewPage)} />
         <Route path="reports/trial-record" element={withPageSuspense(MoldReportTrialRecordPage)} />
         <Route path="reports/maintenance-alert" element={withPageSuspense(MoldReportMaintenanceAlertPage)} />
         <Route path="reports/maintenance-log" element={withPageSuspense(MoldReportMaintenanceLogPage)} />

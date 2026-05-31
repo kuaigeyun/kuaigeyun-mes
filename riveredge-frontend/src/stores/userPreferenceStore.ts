@@ -150,7 +150,7 @@ interface UserPreferenceState {
   loading: boolean;
   initialized: boolean;
 
-  fetchPreferences: () => Promise<void>;
+  fetchPreferences: (options?: { force?: boolean }) => Promise<void>;
   updatePreferences: (newPrefs: Record<string, any>) => Promise<void>;
   getPreference: <T>(key: string, defaultValue?: T) => T;
   syncTablePreference: (tableId: string, state: Record<string, any>) => Promise<void>;
@@ -167,9 +167,10 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       loading: false,
       initialized: false,
 
-      fetchPreferences: async () => {
+      fetchPreferences: async (options?: { force?: boolean }) => {
         const { initialized, loading } = get();
-        if (initialized || loading) return;
+        if (loading) return;
+        if (!options?.force && initialized) return;
 
         purgeLegacyTableColumnPreferences();
         // 先按当前账户 key 恢复本地缓存，再拉接口，避免换账号后首帧读到旧数据

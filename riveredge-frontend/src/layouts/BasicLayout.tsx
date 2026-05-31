@@ -1162,7 +1162,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menuName = translateAppMenuItemName(menuName, menu.path, t, menu.children);
     } else if (menuName) {
       // 系统菜单使用通用菜单翻译函数
-      menuName = translateMenuName(menuName, t);
+      menuName = translateMenuName(menuName, t, menu.path);
     }
 
     const menuItem: MenuDataItem = {
@@ -2141,7 +2141,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   const isAppMenu = childPath.startsWith('/apps/');
                   const label = isAppMenu
                     ? translateAppMenuItemName(child.name as string, child.path, t)
-                    : translateMenuName(child.name as string, t);
+                    : translateMenuName(child.name as string, t, childPath);
                   return {
                     key: childPath,
                     label: label,
@@ -2170,7 +2170,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           ? (item.name as string)  // APP 根节点直接用已翻译的 name，与菜单显示保持一致
           : isAppMenu
             ? translateAppMenuItemName(item.name as string, item.path, t)
-            : translateMenuName(item.name as string, t);
+            : translateMenuName(item.name as string, t, actualPath);
 
         breadcrumbItems.push({
           title: breadcrumbTitle,

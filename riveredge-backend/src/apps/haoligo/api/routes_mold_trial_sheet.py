@@ -23,7 +23,13 @@ from apps.haoligo.constants.mold_trial_failure_handling import (
     TRIAL_FAILURE_HANDLING_DISPATCHED,
     TRIAL_FAILURE_HANDLING_RECALLED,
 )
+from apps.haoligo.constants.mold_trial_workflow_phase import (
+    WORKFLOW_PHASE_CLOSED,
+    WORKFLOW_PHASE_TRIAL,
+    WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION,
+)
 from apps.haoligo.services.trial_sheet_side_effects import (
+    apply_production_trial_failure_after_save,
     create_replacement_trial_sheet_after_recall,
     dispatch_trial_pending_sheet,
     recall_trial_failure_sheet,
@@ -31,6 +37,7 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     list_supplier_notify_preview,
     list_trial_repair_notify_preview,
     resolve_supplier_by_name,
+    set_mold_ledger_status_ready,
     validate_failure_handling_payload,
 )
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_TRIAL_SHEET_NO
@@ -95,6 +102,10 @@ class MoldTrialSheetOut(BaseModel):
     result_attachment_file_uuids: List[str] = Field(default_factory=list)
     inspection_attachment_file_uuids: List[str] = Field(default_factory=list)
     trial_result: str
+    workflow_phase: str
+    production_trial_result: Optional[str] = None
+    production_trial_user_id: Optional[int] = None
+    production_trial_user_name: Optional[str] = None
     sheet_status: str
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
@@ -113,6 +124,8 @@ class MoldTrialSheetCreate(BaseModel):
     failure_handling: Optional[str] = None
     pending_notify_user_ids: Optional[List[int]] = None
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
+    production_trial_result: Optional[TrialResultLiteral] = None
+    production_trial_user_id: Optional[int] = Field(None, ge=1)
 
     @field_validator("purchase_order_no", mode="before")
     @classmethod
@@ -121,6 +134,17 @@ class MoldTrialSheetCreate(BaseModel):
             return None
         s = str(v).strip()
         return s or None
+
+    @model_validator(mode="after")
+    def production_only_when_trial_passed(self) -> "MoldTrialSheetCreate":
+        has_prod = (
+            self.production_trial_result is not None
+            or self.production_trial_user_id is not None
+            or bool(self.inspection_attachment_file_uuids)
+        )
+        if has_prod and self.trial_result != "合格":
+            raise ValueError("试产信息仅在试模结果为「合格」时可填写")
+        return self
 
     @model_validator(mode="after")
     def require_po_or_mold(self) -> "MoldTrialSheetCreate":
@@ -143,6 +167,8 @@ class MoldTrialSheetUpdate(BaseModel):
     failure_handling: Optional[str] = None
     pending_notify_user_ids: Optional[List[int]] = None
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
+    production_trial_result: Optional[TrialResultLiteral] = None
+    production_trial_user_id: Optional[int] = Field(None, ge=1)
 
 
 class MoldTrialSupplierNotifyUserOut(BaseModel):
@@ -277,6 +303,10 @@ async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         result_attachment_file_uuids=list(row.result_attachment_file_uuids or []),
         inspection_attachment_file_uuids=list(row.inspection_attachment_file_uuids or []),
         trial_result=row.trial_result,
+        workflow_phase=(getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip(),
+        production_trial_result=getattr(row, "production_trial_result", None),
+        production_trial_user_id=getattr(row, "production_trial_user_id", None),
+        production_trial_user_name=getattr(row, "production_trial_user_name", None),
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
@@ -410,12 +440,42 @@ async def create_trial_sheet(
     )
     trial_uid = body.trial_user_id if body.trial_user_id is not None else user.id
     trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(trial_uid))
-    fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
-        trial_result=body.trial_result,
-        failure_handling=body.failure_handling,
-        pending_notify_user_ids=body.pending_notify_user_ids,
-        repair_warehouse_id=body.repair_warehouse_id,
-    )
+    fh_mode: Optional[str] = None
+    notify_ids: List[int] = []
+    repair_wh_id: Optional[int] = None
+    workflow_phase = WORKFLOW_PHASE_TRIAL
+    inspection_uuids: List[str] = []
+    prod_result: Optional[str] = None
+    prod_uid: Optional[int] = None
+    prod_uname: Optional[str] = None
+
+    if body.trial_result == "不合格":
+        fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+            trial_result=body.trial_result,
+            failure_handling=body.failure_handling,
+            pending_notify_user_ids=body.pending_notify_user_ids,
+            repair_warehouse_id=body.repair_warehouse_id,
+            allow_pending=False,
+            unqualified_label="试模",
+        )
+    else:
+        pr = (body.production_trial_result or "").strip()
+        if pr in ("合格", "不合格"):
+            workflow_phase = WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION
+            inspection_uuids = _norm_uuid_list(body.inspection_attachment_file_uuids)
+            prod_result = pr
+            puid = body.production_trial_user_id if body.production_trial_user_id is not None else user.id
+            prod_uid, prod_uname = await _resolve_applicant_only(tenant_id, int(puid))
+            if pr == "不合格":
+                fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+                    trial_result=pr,
+                    failure_handling=body.failure_handling,
+                    pending_notify_user_ids=body.pending_notify_user_ids,
+                    repair_warehouse_id=body.repair_warehouse_id,
+                    allow_pending=True,
+                    unqualified_label="试产",
+                )
+
     if notify_ids:
         await validate_report_notify_users(tenant_id, notify_ids)
     supplier_name, supplier_code = await _resolve_trial_supplier_fields(tenant_id, body.supplier_name)
@@ -440,8 +500,12 @@ async def create_trial_sheet(
         pending_notify_user_ids=notify_ids,
         repair_warehouse_id=repair_wh_id,
         result_attachment_file_uuids=_norm_uuid_list(body.result_attachment_file_uuids),
-        inspection_attachment_file_uuids=_norm_uuid_list(body.inspection_attachment_file_uuids),
+        inspection_attachment_file_uuids=inspection_uuids,
         trial_result=body.trial_result,
+        workflow_phase=workflow_phase,
+        production_trial_result=prod_result,
+        production_trial_user_id=prod_uid,
+        production_trial_user_name=prod_uname,
         sheet_status=SHEET_STATUS_PENDING,
     )
     return await _serialize(row)
@@ -524,7 +588,8 @@ async def update_trial_sheet(
     data.pop("sheet_status", None)
     body_set = set(data.keys())
     data.pop("trial_times", None)
-    effective_result = str(data.get("trial_result", row.trial_result) or "").strip()
+    data.pop("workflow_phase", None)
+    phase = (getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip()
     row_fh = (row.failure_handling or "").strip()
     skip_fh_validation = row_fh in (
         TRIAL_FAILURE_HANDLING_DISPATCHED,
@@ -532,29 +597,74 @@ async def update_trial_sheet(
     ) and "failure_handling" not in body_set
     if skip_fh_validation and "failure_handling" in data:
         data.pop("failure_handling", None)
-    if not skip_fh_validation and (
-        effective_result == "不合格"
-        or any(
-            k in body_set
-            for k in ("failure_handling", "pending_notify_user_ids", "repair_warehouse_id", "trial_result")
-        )
-    ):
-        fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
-            trial_result=effective_result,
-            failure_handling=data.get("failure_handling", row.failure_handling),
-            pending_notify_user_ids=data.get("pending_notify_user_ids", row.pending_notify_user_ids),
-            repair_warehouse_id=data.get("repair_warehouse_id", row.repair_warehouse_id),
-        )
-        if notify_ids:
-            await validate_report_notify_users(tenant_id, notify_ids)
-        data["failure_handling"] = fh_mode
-        data["pending_notify_user_ids"] = notify_ids
-        data["repair_warehouse_id"] = repair_wh_id
-    elif effective_result == "合格":
-        data["failure_handling"] = None
-        data["pending_notify_user_ids"] = []
-        data["repair_warehouse_id"] = None
-        data["dispatch_origin_warehouse_id"] = None
+
+    if phase == WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION:
+        for k in ("trial_result", "trial_user_id", "result_attachment_file_uuids"):
+            data.pop(k, None)
+        effective_prod = str(
+            data.get("production_trial_result", getattr(row, "production_trial_result", None)) or ""
+        ).strip()
+        if not skip_fh_validation and (
+            effective_prod == "不合格"
+            or any(
+                k in body_set
+                for k in (
+                    "failure_handling",
+                    "pending_notify_user_ids",
+                    "repair_warehouse_id",
+                    "production_trial_result",
+                )
+            )
+        ):
+            fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+                trial_result=effective_prod or "合格",
+                failure_handling=data.get("failure_handling", row.failure_handling),
+                pending_notify_user_ids=data.get("pending_notify_user_ids", row.pending_notify_user_ids),
+                repair_warehouse_id=data.get("repair_warehouse_id", row.repair_warehouse_id),
+                allow_pending=True,
+                unqualified_label="试产",
+            )
+            if notify_ids:
+                await validate_report_notify_users(tenant_id, notify_ids)
+            data["failure_handling"] = fh_mode
+            data["pending_notify_user_ids"] = notify_ids
+            data["repair_warehouse_id"] = repair_wh_id
+        elif effective_prod == "合格":
+            data["failure_handling"] = None
+            data["pending_notify_user_ids"] = []
+            data["repair_warehouse_id"] = None
+            data["dispatch_origin_warehouse_id"] = None
+    else:
+        effective_result = str(data.get("trial_result", row.trial_result) or "").strip()
+        if not skip_fh_validation and (
+            effective_result == "不合格"
+            or any(
+                k in body_set
+                for k in ("failure_handling", "pending_notify_user_ids", "repair_warehouse_id", "trial_result")
+            )
+        ):
+            fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+                trial_result=effective_result,
+                failure_handling=data.get("failure_handling", row.failure_handling),
+                pending_notify_user_ids=data.get("pending_notify_user_ids", row.pending_notify_user_ids),
+                repair_warehouse_id=data.get("repair_warehouse_id", row.repair_warehouse_id),
+                allow_pending=False,
+                unqualified_label="试模",
+            )
+            if notify_ids:
+                await validate_report_notify_users(tenant_id, notify_ids)
+            data["failure_handling"] = fh_mode
+            data["pending_notify_user_ids"] = notify_ids
+            data["repair_warehouse_id"] = repair_wh_id
+        elif effective_result == "合格":
+            data["failure_handling"] = None
+            data["pending_notify_user_ids"] = []
+            data["repair_warehouse_id"] = None
+            data["dispatch_origin_warehouse_id"] = None
+        data.pop("production_trial_result", None)
+        data.pop("production_trial_user_id", None)
+        if phase == WORKFLOW_PHASE_TRIAL:
+            data.pop("inspection_attachment_file_uuids", None)
     if "purchase_order_no" in data:
         if data["purchase_order_no"] is None:
             pass
@@ -593,6 +703,10 @@ async def update_trial_sheet(
         trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(data["trial_user_id"]))
         data["trial_user_id"] = trial_uid
         data["trial_user_name"] = trial_uname
+    if "production_trial_user_id" in data and data["production_trial_user_id"] is not None:
+        prod_uid, prod_uname = await _resolve_applicant_only(tenant_id, int(data["production_trial_user_id"]))
+        data["production_trial_user_id"] = prod_uid
+        data["production_trial_user_name"] = prod_uname
     apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
@@ -611,13 +725,69 @@ async def approve_trial_sheet(
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     assert_pending_for_audit(row)
-    row.sheet_status = SHEET_STATUS_APPROVED
-    row.audited_at = timezone.now()
-    row.audited_by_user_id = user.id
-    await row.save()
-    if (row.trial_result or "").strip() == "不合格":
-        await apply_trial_failure_after_save(tenant_id, row, send_notify=True)
-    return await _serialize(row)
+    phase = (getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip()
+    now = timezone.now()
+
+    if phase == WORKFLOW_PHASE_TRIAL:
+        tr = (row.trial_result or "").strip()
+        if tr not in ("合格", "不合格"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先填写试模结果")
+        if tr == "不合格":
+            mode = (row.failure_handling or "").strip()
+            if mode != "立即送修":
+                fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+                    trial_result=tr,
+                    failure_handling=row.failure_handling or "立即送修",
+                    pending_notify_user_ids=row.pending_notify_user_ids,
+                    repair_warehouse_id=row.repair_warehouse_id,
+                    allow_pending=False,
+                    unqualified_label="试模",
+                )
+                row.failure_handling = fh_mode
+                row.pending_notify_user_ids = notify_ids
+                row.repair_warehouse_id = repair_wh_id
+            row.sheet_status = SHEET_STATUS_APPROVED
+            row.workflow_phase = WORKFLOW_PHASE_CLOSED
+            row.audited_at = now
+            row.audited_by_user_id = user.id
+            await row.save()
+            await apply_trial_failure_after_save(tenant_id, row, send_notify=True)
+            return await _serialize(row)
+        row.workflow_phase = WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION
+        row.sheet_status = SHEET_STATUS_PENDING
+        row.audited_at = None
+        row.audited_by_user_id = None
+        await row.save()
+        return await _serialize(row)
+
+    if phase == WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION:
+        pr = (getattr(row, "production_trial_result", None) or "").strip()
+        if pr not in ("合格", "不合格"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先填写试产结果")
+        if pr == "不合格":
+            fh_mode, notify_ids, repair_wh_id = validate_failure_handling_payload(
+                trial_result=pr,
+                failure_handling=row.failure_handling,
+                pending_notify_user_ids=row.pending_notify_user_ids,
+                repair_warehouse_id=row.repair_warehouse_id,
+                allow_pending=True,
+                unqualified_label="试产",
+            )
+            row.failure_handling = fh_mode
+            row.pending_notify_user_ids = notify_ids
+            row.repair_warehouse_id = repair_wh_id
+        row.sheet_status = SHEET_STATUS_APPROVED
+        row.workflow_phase = WORKFLOW_PHASE_CLOSED
+        row.audited_at = now
+        row.audited_by_user_id = user.id
+        await row.save()
+        if pr == "不合格":
+            await apply_production_trial_failure_after_save(tenant_id, row, send_notify=True)
+        else:
+            await set_mold_ledger_status_ready(tenant_id, row.mold_code)
+        return await _serialize(row)
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前流程阶段不可审核")
 
 
 @router.post("/{row_id}/reject", response_model=MoldTrialSheetOut, summary="审核驳回试模单")

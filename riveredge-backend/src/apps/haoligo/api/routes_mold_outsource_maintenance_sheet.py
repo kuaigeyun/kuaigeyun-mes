@@ -407,7 +407,7 @@ async def create_outsource_maintenance_sheet(
             outsourced_unit_name=body.outsourced_unit_name.strip(),
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
-            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            header_attachment_file_uuids=[],
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
@@ -474,8 +474,8 @@ async def update_outsource_maintenance_sheet(
     for k in ("outsourced_unit_code", "source_order_no"):
         if k in data and data[k] is not None:
             data[k] = _strip_opt(str(data[k]))
-    if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
-        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "header_attachment_file_uuids" in data:
+        data["header_attachment_file_uuids"] = []
     if "line_items" in data and data["line_items"] is not None:
         lines = [OutsourceMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:

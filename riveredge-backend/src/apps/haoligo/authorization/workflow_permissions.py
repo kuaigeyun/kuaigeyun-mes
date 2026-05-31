@@ -7,8 +7,10 @@ from __future__ import annotations
 
 # 资源前缀（app:module，与 manifest permissions / require_module_access 一致）
 RESOURCE_MOLD_TRIAL = "haoligo:molds-documents-trial"
-RESOURCE_MOLD_MAINTENANCE = "haoligo:molds-documents-maintenance"
-RESOURCE_MOLD_MAINTENANCE_COMPLETE = "haoligo:molds-documents-maintenance-complete"
+RESOURCE_MOLD_UPKEEP = "haoligo:molds-documents-upkeep"
+RESOURCE_MOLD_UPKEEP_COMPLETE = "haoligo:molds-documents-upkeep-complete"
+RESOURCE_MOLD_REPAIR = "haoligo:molds-documents-repair"
+RESOURCE_MOLD_REPAIR_COMPLETE = "haoligo:molds-documents-repair-complete"
 RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
 RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo:molds-documents-outsource-complete"
 
@@ -32,4 +34,14 @@ def permission_codes_for_complete_create(*, source_resource: str, target_resourc
 OUTSOURCE_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
     source_resource=RESOURCE_OUTSOURCE_MAINTENANCE,
     target_resource=RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+)
+
+UPKEEP_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
+    source_resource=RESOURCE_MOLD_UPKEEP,
+    target_resource=RESOURCE_MOLD_UPKEEP_COMPLETE,
+)
+
+REPAIR_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
+    source_resource=RESOURCE_MOLD_REPAIR,
+    target_resource=RESOURCE_MOLD_REPAIR_COMPLETE,
 )

@@ -87,7 +87,7 @@ const UserProfilePage: React.FC = () => {
       if (tenantId) {
         await loadProfile();
       } else {
-        console.error('❌ 个人资料页面：tenant_id 为空，无法加载个人资料');
+        console.error({ tenantId });
         messageApi.error(t('pages.personal.profile.tenantRequired'));
       }
     };
@@ -148,7 +148,7 @@ const UserProfilePage: React.FC = () => {
             }
           }
         } catch (error) {
-          console.error('加载头像 URL 失败:', error);
+          console.error(error);
           // 如果加载失败，不清空头像，保留当前显示（如果有）
           // 只有在确实没有头像时才清空
           if (!avatarUrl) {
@@ -220,7 +220,7 @@ const UserProfilePage: React.FC = () => {
         try {
           await updateUserProfile({ avatar: response.uuid });
         } catch (error: any) {
-          console.error('保存头像到后端失败:', error);
+          console.error(error);
           messageApi.warning(t('pages.personal.profile.avatarSaveFailed'));
         }
         
@@ -232,7 +232,7 @@ const UserProfilePage: React.FC = () => {
         // 上传失败，释放本地预览 URL
         URL.revokeObjectURL(localPreviewUrl);
         setAvatarUrl(undefined);
-        throw new Error('上传失败');
+        throw new Error(t('pages.personal.profile.uploadFailed'));
       }
     } catch (error: any) {
       onError?.(error);
@@ -281,7 +281,7 @@ const UserProfilePage: React.FC = () => {
       });
       const response = await uploadFile(file, { category: 'avatar' });
       if (!response.uuid) {
-        throw new Error('upload failed');
+        throw new Error(t('pages.personal.profile.uploadFailed'));
       }
 
       formRef.current?.setFieldsValue({ avatar: response.uuid });
@@ -412,7 +412,7 @@ const UserProfilePage: React.FC = () => {
 
       messageApi.success(t('pages.personal.profile.avatarCleared'));
     } catch (error: any) {
-      console.error('❌ 清除头像失败:', error);
+      console.error(error);
       messageApi.error(error.message || t('pages.personal.profile.avatarClearFailed'));
     } finally {
       setLoading(false);
@@ -448,7 +448,7 @@ const UserProfilePage: React.FC = () => {
       // 清空表单
       passwordFormRef.current?.resetFields();
     } catch (error: any) {
-      console.error('❌ 修改密码失败:', error);
+      console.error(error);
       messageApi.error(error.message || t('pages.personal.profile.passwordChangeFailed'));
     } finally {
       setPasswordLoading(false);

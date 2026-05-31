@@ -361,7 +361,7 @@ const UserPreferencesPage: React.FC = () => {
                             acc[lang.code] = lang.native_name || lang.name;
                             return acc;
                           }, {} as Record<string, string>)
-                        : { 'zh-CN': '简体中文', 'en-US': 'English' }
+                        : { 'zh-CN': t('common.languages.zhCN'), 'en-US': t('common.languages.enUS') }
                     }
                     placeholder={t('pages.personal.preferences.pleaseSelectLanguage')}
                   />
@@ -430,4 +430,3 @@ const UserPreferencesPage: React.FC = () => {
 };
 
 export default UserPreferencesPage;
-

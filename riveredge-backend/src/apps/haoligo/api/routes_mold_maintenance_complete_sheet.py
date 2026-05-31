@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, Any, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tortoise import timezone
 from tortoise.expressions import Q
@@ -20,6 +20,11 @@ from apps.haoligo.api.routes_mold_maintenance_sheet import (
     _validate_leaf_department,
 )
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
+from apps.haoligo.api._mold_inhouse_maintenance_access import (
+    assert_inhouse_complete_access_for_service_type,
+    assert_inhouse_complete_create_access,
+    require_inhouse_maintenance_complete_list_access,
+)
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_maintenance_complete import (
@@ -28,7 +33,8 @@ from apps.haoligo.constants.mold_maintenance_complete import (
 )
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_MAINTENANCE_COMPLETE_SHEET_NO
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
-from core.api.deps.access import require_module_access
+from apps.haoligo.services.mold_upkeep_scheme import build_upkeep_line_storage
+from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -36,7 +42,6 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/maintenance-complete-sheets",
     tags=["App · HaoliGO · 维保完修单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-maintenance-complete"))],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]
@@ -77,6 +82,29 @@ def _clip_completion_text(v: Optional[str], *, label: str) -> Optional[str]:
     return s
 
 
+class MoldUpkeepRecordLineIn(BaseModel):
+    param_id: int
+    record_value: Optional[str] = Field(None, description="保养记录（按方案项填写）")
+
+    @field_validator("record_value", mode="before")
+    @classmethod
+    def strip_record(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
+
+
+class MoldUpkeepRecordLineOut(BaseModel):
+    param_id: int
+    param_code: str
+    param_name: str
+    requirement: Optional[str] = None
+    is_required: bool = True
+    sort_order: int = 0
+    record_value: Optional[str] = None
+
+
 class MoldCompleteLineIn(BaseModel):
     mold_code: str = Field(max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
@@ -85,7 +113,15 @@ class MoldCompleteLineIn(BaseModel):
         None,
         description="保养完修：是否重置该模具总产量；维修单恒为 false；未传时由接口按业务默认处理。",
     )
-    upkeep_content: Optional[str] = Field(None, description="保养完修：该模具保养内容")
+    upkeep_content: Optional[str] = Field(None, description="保养完修：该模具保养内容（无绑定方案时必填；有方案时由记录行汇总）")
+    upkeep_param_set_id: Optional[int] = Field(
+        None,
+        description="保养完修：本次使用的保养方案（未绑台账时可由用户选择）",
+    )
+    upkeep_record_lines: Optional[List[MoldUpkeepRecordLineIn]] = Field(
+        None,
+        description="保养完修：按保养方案填写的记录行",
+    )
     repair_content: Optional[str] = Field(None, description="维修完修：该模具维修内容")
     repair_result: Optional[str] = Field(None, max_length=32, description="维修完修：该模具维修结果")
     attachment_file_uuids: Optional[List[str]] = Field(
@@ -127,6 +163,8 @@ class MoldCompleteLineOut(BaseModel):
     repair_reason: Optional[str] = None
     clear_total_production: bool = False
     upkeep_content: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = None
+    upkeep_record_lines: List[MoldUpkeepRecordLineOut] = Field(default_factory=list)
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
     attachment_file_uuids: List[str] = Field(default_factory=list, description="模具图片·维护保养后")
@@ -136,7 +174,12 @@ class MoldCompleteLineOut(BaseModel):
     )
 
 
-def _line_dict_for_sheet(line: MoldCompleteLineIn, *, svc: str) -> dict[str, Any]:
+async def _line_dict_for_sheet(
+    tenant_id: int,
+    line: MoldCompleteLineIn,
+    *,
+    svc: str,
+) -> dict[str, Any]:
     st = (svc or "维修").strip()
     mc = line.mold_code.strip()
     row: dict[str, Any] = {
@@ -146,13 +189,18 @@ def _line_dict_for_sheet(line: MoldCompleteLineIn, *, svc: str) -> dict[str, Any
     }
     if st == "保养":
         row["clear_total_production"] = True if line.clear_total_production is None else bool(line.clear_total_production)
-        uc = _clip_completion_text(line.upkeep_content, label=f"模具「{mc}」保养内容")
-        if not uc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"请填写模具「{mc}」的保养内容",
-            )
-        row["upkeep_content"] = uc
+        record_in = [x.model_dump() for x in (line.upkeep_record_lines or [])]
+        set_id = line.upkeep_param_set_id
+        upkeep_extra = await build_upkeep_line_storage(
+            tenant_id,
+            mc,
+            upkeep_param_set_id=set_id,
+            upkeep_content=line.upkeep_content,
+            upkeep_record_lines=record_in,
+        )
+        row["upkeep_content"] = upkeep_extra["upkeep_content"]
+        row["upkeep_record_lines"] = upkeep_extra.get("upkeep_record_lines") or []
+        row["upkeep_param_set_id"] = upkeep_extra.get("upkeep_param_set_id")
         row["repair_content"] = None
         row["repair_result"] = None
     elif st == "维修":
@@ -175,12 +223,39 @@ def _line_dict_for_sheet(line: MoldCompleteLineIn, *, svc: str) -> dict[str, Any
                 detail=f"模具「{mc}」维修结果无效，须为：{'、'.join(MOLD_MAINTENANCE_COMPLETE_REPAIR_RESULTS)}",
             )
         row["upkeep_content"] = None
+        row["upkeep_record_lines"] = []
         row["repair_content"] = rc
         row["repair_result"] = rr
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维保单类型无效")
     row["attachment_file_uuids"] = _norm_uuid_list(line.attachment_file_uuids)
     return row
+
+
+def _upkeep_record_lines_from_store(raw: Any) -> List[MoldUpkeepRecordLineOut]:
+    if not isinstance(raw, list):
+        return []
+    out: List[MoldUpkeepRecordLineOut] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            pid = int(item.get("param_id"))
+        except (TypeError, ValueError):
+            continue
+        out.append(
+            MoldUpkeepRecordLineOut(
+                param_id=pid,
+                param_code=str(item.get("param_code") or "").strip(),
+                param_name=str(item.get("param_name") or "").strip(),
+                requirement=_strip_opt(str(item.get("requirement")) if item.get("requirement") is not None else None),
+                is_required=bool(item.get("is_required", True)),
+                sort_order=int(item.get("sort_order") or 0),
+                record_value=_strip_opt(str(item.get("record_value")) if item.get("record_value") is not None else None),
+            )
+        )
+    out.sort(key=lambda x: (x.sort_order, x.param_id))
+    return out
 
 
 def _line_from_store(
@@ -203,6 +278,8 @@ def _line_from_store(
         repair_reason=_strip_opt(str(raw.get("repair_reason") or "")),
         clear_total_production=clear_b,
         upkeep_content=_strip_opt(str(raw.get("upkeep_content") or "")),
+        upkeep_param_set_id=raw.get("upkeep_param_set_id"),
+        upkeep_record_lines=_upkeep_record_lines_from_store(raw.get("upkeep_record_lines")),
         repair_content=_strip_opt(str(raw.get("repair_content") or "")),
         repair_result=_strip_opt(str(raw.get("repair_result") or "")),
         attachment_file_uuids=_norm_uuid_list(raw.get("attachment_file_uuids")),
@@ -344,7 +421,7 @@ async def _serialize(row: HaoligoMoldMaintenanceCompleteSheet) -> MoldMaintenanc
 @router.get("", summary="维保完修单分页列表")
 async def list_maintenance_complete_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    _: Annotated[AuthContext, Depends(require_inhouse_maintenance_complete_list_access())],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -382,8 +459,9 @@ async def list_maintenance_complete_sheets(
 @router.post("", response_model=MoldMaintenanceCompleteSheetOut, summary="创建维保完修单")
 async def create_maintenance_complete_sheet(
     body: MoldMaintenanceCompleteSheetCreate,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     src = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=body.source_maintenance_sheet_id).first()
     if not src:
@@ -399,6 +477,12 @@ async def create_maintenance_complete_sheet(
     svc = str(src.service_type or "维修").strip()
     if svc not in ("维修", "保养"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维保单类型无效")
+    await assert_inhouse_complete_create_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=svc,
+    )
     src_lines = [x for x in raw_lines if isinstance(x, dict)]
     src_codes = [str(x.get("mold_code") or "").strip() for x in src_lines]
     src_codes = [c for c in src_codes if c]
@@ -432,7 +516,7 @@ async def create_maintenance_complete_sheet(
             ln = MoldCompleteLineIn.model_validate(merged)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-        stored.append(_line_dict_for_sheet(ln, svc=svc))
+        stored.append(await _line_dict_for_sheet(tenant_id, ln, svc=svc))
     if not stored:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维保单无有效模具明细")
     sheet_clear_flag = svc == "保养" and any(bool(x.get("clear_total_production")) for x in stored)
@@ -462,7 +546,7 @@ async def create_maintenance_complete_sheet(
             department_name=department_name,
             service_type=svc,
             clear_total_production=sheet_clear_flag,
-            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            header_attachment_file_uuids=[],
             line_items=stored,
         )
         for mc in unique_mold_codes_from_stored_line_items(stored):
@@ -474,12 +558,19 @@ async def create_maintenance_complete_sheet(
 @router.get("/{row_id}", response_model=MoldMaintenanceCompleteSheetOut, summary="维保完修单详情")
 async def get_maintenance_complete_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_complete_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     return await _serialize(row)
 
 
@@ -487,26 +578,37 @@ async def get_maintenance_complete_sheet(
 async def update_maintenance_complete_sheet(
     row_id: int,
     body: MoldMaintenanceCompleteSheetUpdate,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_complete_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     data = body.model_dump(exclude_unset=True)
+    if "service_type" in data and str(data.get("service_type") or "").strip() != str(row.service_type or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不可变更维修/保养类型")
     if "source_order_no" in data and data["source_order_no"] is not None:
         s = str(data["source_order_no"]).strip()
         if not s:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="来源单号不能为空")
         data["source_order_no"] = s
-    if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
-        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "header_attachment_file_uuids" in data:
+        data["header_attachment_file_uuids"] = []
     if "line_items" in data and data["line_items"] is not None:
         lines = [MoldCompleteLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少保留一条模具信息")
         eff_type = str(data.get("service_type") or row.service_type or "维修").strip()
-        stored_lines = [_line_dict_for_sheet(x, svc=eff_type) for x in lines]
+        stored_lines: list[dict[str, Any]] = []
+        for x in lines:
+            stored_lines.append(await _line_dict_for_sheet(tenant_id, x, svc=eff_type))
         data["line_items"] = stored_lines
         data["clear_total_production"] = eff_type == "保养" and any(
             bool(x.get("clear_total_production")) for x in stored_lines
@@ -552,12 +654,19 @@ async def update_maintenance_complete_sheet(
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除维保完修单")
 async def delete_maintenance_complete_sheet(
     row_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_inhouse_complete_access_for_service_type(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        service_type=row.service_type,
+    )
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()

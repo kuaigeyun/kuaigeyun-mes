@@ -107,7 +107,7 @@ const CardView: React.FC = () => {
           loadMessages(); // 刷新列表和统计
         } catch (error: any) {
           // 标记失败不影响查看详情
-          console.error('标记已读失败:', error);
+          console.error(error);
         }
       }
     } catch (error: any) {
@@ -514,4 +514,3 @@ const CardView: React.FC = () => {
 };
 
 export default CardView;
-

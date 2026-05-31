@@ -2,7 +2,8 @@
  * 好力 GO — 还入单（列表 + 两栏 Modal；制令单号半宽 +「带出」；选模具自动匹配领用单；领出部门选项仅末级名称）
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { useDebounceFn } from 'ahooks';
 import {
   ActionType,
   ProColumns,
@@ -27,7 +28,6 @@ import {
   getMoldReturnBorrowLookup,
   getMoldReturnSheet,
   listMoldReturnSheets,
-  listMolds,
   updateMoldReturnSheet,
   type MoldReturnBorrowLookupResult,
   type MoldReturnSheetCreatePayload,
@@ -35,6 +35,7 @@ import {
   type MoldRow,
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 
 function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
@@ -92,11 +93,11 @@ const MoldReturnInPage: React.FC = () => {
     }
   }, []);
 
-  const loadMoldsForPicker = useCallback(async () => {
+  const loadMoldsForPicker = useCallback(async (keyword?: string) => {
     setMoldLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0, status: '在用' });
-      setMoldRows(res.items);
+      const rows = await fetchMoldsForPicker({ status: '在用', keyword });
+      setMoldRows(rows);
     } catch {
       setMoldRows([]);
     } finally {
@@ -104,15 +105,12 @@ const MoldReturnInPage: React.FC = () => {
     }
   }, []);
 
-  const filteredMolds = useMemo(() => {
-    const q = moldKw.trim().toLowerCase();
-    if (!q) return moldRows;
-    return moldRows.filter(
-      (r) =>
-        r.mold_code.toLowerCase().includes(q) ||
-        (r.name && r.name.toLowerCase().includes(q)),
-    );
-  }, [moldRows, moldKw]);
+  const { run: debouncedLoadMoldsForPicker } = useDebounceFn(
+    (keyword: string) => {
+      void loadMoldsForPicker(keyword);
+    },
+    { wait: 300 },
+  );
 
   const handleCreate = async () => {
     setIsDetailView(false);
@@ -513,8 +511,9 @@ const MoldReturnInPage: React.FC = () => {
                         size="small"
                         style={{ padding: '0 8px' }}
                         onClick={() => {
+                          setMoldKw('');
                           setMoldPickerOpen(true);
-                          void loadMoldsForPicker();
+                          void loadMoldsForPicker('');
                         }}
                       >
                         选择
@@ -591,14 +590,23 @@ const MoldReturnInPage: React.FC = () => {
         destroyOnHidden
       >
         <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-          <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
+          <Input
+            placeholder="搜索模具代号/名称（支持台账全库模糊查询）"
+            value={moldKw}
+            onChange={(e) => {
+              const v = e.target.value;
+              setMoldKw(v);
+              debouncedLoadMoldsForPicker(v);
+            }}
+            allowClear
+          />
           <Table<MoldRow>
             size="small"
             rowKey="id"
             loading={moldLoading}
             pagination={false}
             scroll={{ y: 360 }}
-            dataSource={filteredMolds}
+            dataSource={moldRows}
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true },

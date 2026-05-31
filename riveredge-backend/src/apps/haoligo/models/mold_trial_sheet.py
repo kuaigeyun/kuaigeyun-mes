@@ -39,9 +39,28 @@ class HaoligoMoldTrialSheet(HaoligoTenantModel):
         null=True,
         description="待处理发出前模具所在仓库 ID（收回时还原）",
     )
+    workflow_phase = fields.CharField(
+        max_length=32,
+        default="试模",
+        description="流程阶段：试模/试模合格待试产/已结案",
+    )
     result_attachment_file_uuids = fields.JSONField(null=True, description="试模结果附件（文件 UUID 列表）")
-    inspection_attachment_file_uuids = fields.JSONField(null=True, description="试模检验附件（文件 UUID 列表）")
+    inspection_attachment_file_uuids = fields.JSONField(
+        null=True,
+        description="试产检验附件（文件 UUID 列表，试产阶段填写）",
+    )
     trial_result = fields.CharField(max_length=16, description="试模结果：合格/不合格")
+    production_trial_result = fields.CharField(
+        max_length=16,
+        null=True,
+        description="试产结果：合格/不合格",
+    )
+    production_trial_user_id = fields.IntField(null=True, description="试产人员用户 ID（core_users）")
+    production_trial_user_name = fields.CharField(
+        max_length=100,
+        null=True,
+        description="试产人员显示名（冗余）",
+    )
     sheet_status = fields.CharField(
         max_length=32,
         default="待审核",

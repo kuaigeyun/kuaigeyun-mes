@@ -82,7 +82,7 @@ const DatasetListPage: React.FC = () => {
         setDataConnectionGroups(groups);
         setDataConnectionsFlat(items);
       } catch (error: any) {
-        console.error('加载数据连接列表失败:', error);
+        console.error(error);
         messageApi.error(
           error?.message || t('pages.system.datasets.loadDataConnectionsFailed'),
         );
@@ -228,7 +228,7 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnLastError'),
         dataIndex: 'last_error',
-        render: (_, record) => (record.last_error ? <Tag color="error">{record.last_error}</Tag> : '-'),
+        render: (_, record) => (record.last_error ? <Tag color="error">{record.last_error}</Tag> : t('common.dash')),
       },
       {
         title: t('pages.system.datasets.columnCreatedAt'),
@@ -466,15 +466,15 @@ const DatasetListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.datasets.columnOutputType', '输出类型'),
+      title: t('pages.system.datasets.columnOutputType'),
       dataIndex: 'output_type',
       width: 120,
       hideInSearch: true,
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          list: { color: 'default', text: t('pages.system.datasets.outputTypeList', '列表') },
-          metric: { color: 'blue', text: t('pages.system.datasets.outputTypeMetric', '单值指标') },
-          multi_metric: { color: 'green', text: t('pages.system.datasets.outputTypeMultiMetric', '多指标') },
+          list: { color: 'default', text: t('pages.system.datasets.outputTypeList') },
+          metric: { color: 'blue', text: t('pages.system.datasets.outputTypeMetric') },
+          multi_metric: { color: 'green', text: t('pages.system.datasets.outputTypeMultiMetric') },
         };
         const ot = (record as any).output_type || 'list';
         const info = typeMap[ot] || { color: 'default', text: ot };
@@ -628,7 +628,7 @@ const DatasetListPage: React.FC = () => {
                 total: result.total,
               };
             } catch (error: any) {
-              console.error('获取数据集列表失败:', error);
+              console.error(error);
               messageApi.error(error?.message || t('pages.system.datasets.loadListFailed'));
               return {
                 data: [],
@@ -714,8 +714,24 @@ const DatasetListPage: React.FC = () => {
             messageApi.success(t('pages.system.datasets.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
-          importHeaders={['*数据集名称', '*数据集代码', '*数据连接UUID', '*查询类型', '描述', '启用状态', '*查询配置(JSON)']}
-          importExampleRow={['示例数据集', 'example_ds', 'uuid-of-data-source', 'sql', '选填', '是', '{"sql":"SELECT 1","parameters":{}}']}
+          importHeaders={[
+            `*${t('pages.system.datasets.importHeaderName')}`,
+            `*${t('pages.system.datasets.importHeaderCode')}`,
+            `*${t('pages.system.datasets.importHeaderDataSourceUuid')}`,
+            `*${t('pages.system.datasets.importHeaderQueryType')}`,
+            t('pages.system.datasets.importHeaderDescription'),
+            t('pages.system.datasets.importHeaderEnabled'),
+            `*${t('pages.system.datasets.importHeaderQueryConfigJson')}`,
+          ]}
+          importExampleRow={[
+            t('pages.system.datasets.importExampleName'),
+            'example_ds',
+            'uuid-of-data-source',
+            'sql',
+            t('pages.system.datasets.importExampleDescription'),
+            t('pages.system.datasets.importExampleEnabled'),
+            t('pages.system.datasets.importExampleQueryConfigJson'),
+          ]}
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: Dataset[] = [];
@@ -744,7 +760,9 @@ const DatasetListPage: React.FC = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `datasets-${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = t('pages.system.datasets.exportFileName', {
+              date: new Date().toISOString().slice(0, 10),
+            });
             a.click();
             URL.revokeObjectURL(url);
             messageApi.success(t('pages.system.datasets.exportSuccess'));
@@ -794,19 +812,19 @@ const DatasetListPage: React.FC = () => {
         )}
         <ProFormSelect
           name="output_type"
-          label={t('pages.system.datasets.labelOutputType', '输出类型')}
+          label={t('pages.system.datasets.labelOutputType')}
           initialValue="list"
           options={[
-            { label: t('pages.system.datasets.outputTypeList', '列表'), value: 'list' },
-            { label: t('pages.system.datasets.outputTypeMetric', '单值指标'), value: 'metric' },
-            { label: t('pages.system.datasets.outputTypeMultiMetric', '多指标'), value: 'multi_metric' },
+            { label: t('pages.system.datasets.outputTypeList'), value: 'list' },
+            { label: t('pages.system.datasets.outputTypeMetric'), value: 'metric' },
+            { label: t('pages.system.datasets.outputTypeMultiMetric'), value: 'multi_metric' },
           ]}
           colProps={{ span: 12 }}
         />
         <ProFormTextArea
           name="display_config"
-          label={t('pages.system.datasets.labelDisplayConfig', '指标展示配置(JSON)')}
-          placeholder='{"columns":[{"key":"count","label":"数量","formatter":"number","color":"#1890ff"}]}'
+          label={t('pages.system.datasets.labelDisplayConfig')}
+          placeholder={t('pages.system.datasets.displayConfigPlaceholder')}
           colProps={{ span: 24 }}
           fieldProps={{ rows: 4 }}
         />
@@ -930,4 +948,3 @@ const DatasetListPage: React.FC = () => {
 };
 
 export default DatasetListPage;
-

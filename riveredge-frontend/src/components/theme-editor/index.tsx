@@ -19,6 +19,77 @@ import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
 
+function colorFieldToHex(raw: unknown, fallback: string): string {
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof (raw as { toHexString?: () => string }).toHexString === 'function') {
+    return (raw as { toHexString: () => string }).toHexString();
+  }
+  return fallback;
+}
+
+function normalizeBgColorField(raw: unknown, fallback = ''): string {
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof (raw as { toHexString?: () => string }).toHexString === 'function') {
+    try {
+      return (raw as { toHexString: () => string }).toHexString();
+    } catch {
+      return fallback;
+    }
+  }
+  if (raw && typeof (raw as { toRgbString?: () => string }).toRgbString === 'function') {
+    try {
+      return (raw as { toRgbString: () => string }).toRgbString();
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+/** 与保存逻辑一致：供实时 applyTheme 与持久化共用 */
+function buildThemeConfigFromForm(
+  values: Record<string, unknown>,
+  fallbackColorMode: 'light' | 'dark' | 'auto',
+): {
+  themeMode: 'light' | 'dark' | 'auto';
+  themeConfigForPreference: {
+    colorPrimary: string;
+    borderRadius: number;
+    fontSize: number;
+    compact: boolean;
+    themeStyle: ThemeStyle;
+    siderBgColor: string;
+    headerBgColor: string;
+    tabsBgColor: string;
+  };
+} {
+  const themeMode = (values.colorMode as 'light' | 'dark' | 'auto') || fallbackColorMode || 'light';
+  const savingThemeStyle = (values.themeStyle as ThemeStyle) || 'vivid';
+  const savingPlain = savingThemeStyle === 'plain';
+  const colorPrimaryValue = colorFieldToHex(values.colorPrimary, '#1890ff');
+  const siderBgColorValue = colorFieldToHex(values.siderBgColor, '');
+  const headerBgColorValue = normalizeBgColorField(values.headerBgColor, '');
+  const tabsBgColorValue = normalizeBgColorField(values.tabsBgColor, '');
+  const isLight =
+    themeMode === 'light' || (themeMode !== 'dark' && themeMode !== 'auto' && fallbackColorMode === 'light');
+
+  return {
+    themeMode,
+    themeConfigForPreference: {
+      colorPrimary: colorPrimaryValue,
+      borderRadius: Number(values.borderRadius) || 6,
+      fontSize: Number(values.fontSize) || 14,
+      compact: false,
+      themeStyle: savingThemeStyle,
+      siderBgColor: savingPlain || !isLight ? '' : siderBgColorValue || '',
+      headerBgColor: savingPlain ? '' : headerBgColorValue || '',
+      tabsBgColor: savingPlain ? '' : tabsBgColorValue || '',
+    },
+  };
+}
+
 /**
  * 带提示按钮的标题组件属性
  */
@@ -314,19 +385,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     try {
       setLoading(true);
 
-      // 并行加载站点主题配置和用户偏好设置
-      const [siteSetting] = await Promise.all([
-        getSiteSetting().catch(() => null),
-        useUserPreferenceStore.getState().fetchPreferences(),
-      ]);
-
-      const legacyThemeColor = siteSetting?.settings?.theme_color;
+      await useUserPreferenceStore.getState().fetchPreferences({ force: true });
       const prefs = useUserPreferenceStore.getState().preferences || {};
-      /** 与 initFromApi / 偏好订阅相同：站点+用户合并后写入 themeStore，再以 store.config 填表，避免与界面脱节 */
-      await useThemeStore.getState().syncFromPreferences(prefs);
+      /** 云端 theme_config 优先；未配置则用默认。同步到 themeStore 后填表，与全局界面一致 */
+      useThemeStore.getState().syncFromPreferences(prefs);
       const applied = useThemeStore.getState().config;
 
-      const userThemeMode = (prefs.theme as 'light' | 'dark' | 'auto') || 'light';
+      const userThemeMode = useThemeStore.getState().theme;
       setColorMode(userThemeMode);
 
       const parseDim = (v: unknown, fallback: number): number => {
@@ -334,8 +399,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         return Number.isFinite(n) ? n : fallback;
       };
 
-      // 主色：以当前已应用 config 为准，其次站点 legacy，再 token
-      let colorPrimaryValue = applied.colorPrimary || legacyThemeColor || token.colorPrimary || '#1890ff';
+      let colorPrimaryValue = applied.colorPrimary || token.colorPrimary || '#1890ff';
       if (!colorPrimaryValue) {
         colorPrimaryValue = token.colorPrimary || '#1890ff';
       }
@@ -459,14 +523,15 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
     if (changedValues.themeStyle) {
       setThemeStyleValue(changedValues.themeStyle);
-      useThemeStore.getState().applyTheme(allValues.colorMode || colorMode, {
-        themeStyle: changedValues.themeStyle,
-      });
     }
 
-    // 布局模式固定为 'mix'，不需要处理
+    const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
+      allValues,
+      (allValues.colorMode as 'light' | 'dark' | 'auto') || colorMode,
+    );
+    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
 
-    applyPreviewTheme(allValues, allValues.colorMode);
+    applyPreviewTheme(allValues, themeMode);
   };
 
   /**
@@ -479,7 +544,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       applyPreviewTheme(form.getFieldsValue(), mode);
 
       // applyTheme 会更新 themeStore 并持久化到 userPreferenceStore
-      useThemeStore.getState().applyTheme(mode, {});
+      useThemeStore.getState().applyTheme(mode, useThemeStore.getState().config, { persist: true });
 
       message.success(t('components.themeEditor.message.colorModeSwitched'));
     } catch (error: any) {
@@ -502,88 +567,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 因为 Switch 组件的值可能在 validateFields 时丢失
       const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
 
+      const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(values, colorMode);
 
-      // 构建站点主题配置对象（使用 Ant Design 原生配置格式）
-      // 确保 colorPrimary 是字符串格式
-      let colorPrimaryValue = values.colorPrimary || '#1890ff';
-      if (typeof colorPrimaryValue !== 'string') {
-        if (colorPrimaryValue && typeof colorPrimaryValue.toHexString === 'function') {
-          colorPrimaryValue = colorPrimaryValue.toHexString();
-        } else {
-          colorPrimaryValue = '#1890ff';
-        }
-      }
-
-      // 确保 siderBgColor 是字符串格式（如果存在）
-      let siderBgColorValue = values.siderBgColor || '';
-      if (siderBgColorValue && typeof siderBgColorValue !== 'string') {
-        if (siderBgColorValue && typeof siderBgColorValue.toHexString === 'function') {
-          siderBgColorValue = siderBgColorValue.toHexString();
-        } else {
-          siderBgColorValue = '';
-        }
-      }
-
-      // 确保 headerBgColor 是字符串格式（支持 rgba 格式的透明度）
-      let headerBgColorValue = normalizeBackgroundColor(values.headerBgColor, '') || '';
-
-      // 确保 tabsBgColor 是字符串格式（支持 rgba 格式的透明度）
-      let tabsBgColorValue = normalizeBackgroundColor(values.tabsBgColor, '') || '';
-
-      const savingThemeStyle = (values.themeStyle as ThemeStyle) || themeStyleValue || 'vivid';
-      const savingPlain = savingThemeStyle === 'plain';
-
-      // 使用用户最终选择的颜色值
-      const themeConfig: any = {
-        colorPrimary: colorPrimaryValue,
-        borderRadius: values.borderRadius || 6,
-        fontSize: values.fontSize || 14,
-        compact: false,
-        layoutMode: 'mix', // 固定使用 MIX 布局模式
-        theme: values.colorMode, // 保存当前颜色模式，用于 App.tsx 同步加载
-        themeStyle: savingThemeStyle,
+      const themeConfig: Record<string, unknown> = {
+        ...themeConfigForPreference,
+        layoutMode: 'mix',
+        theme: themeMode,
       };
-
-
-      // 保存左侧菜单栏背景色（仅多彩 + 浅色模式）
-      if (!savingPlain && (values.colorMode === 'light' || (!values.colorMode && colorMode === 'light'))) {
-        if (siderBgColorValue) {
-          themeConfig.siderBgColor = siderBgColorValue;
-        } else {
-          themeConfig.siderBgColor = '';
-        }
-      } else {
-        themeConfig.siderBgColor = '';
-      }
-
-      if (!savingPlain) {
-        if (headerBgColorValue) {
-          themeConfig.headerBgColor = headerBgColorValue;
-        } else {
-          themeConfig.headerBgColor = '';
-        }
-        if (tabsBgColorValue) {
-          themeConfig.tabsBgColor = tabsBgColorValue;
-        } else {
-          themeConfig.tabsBgColor = '';
-        }
-      } else {
-        themeConfig.headerBgColor = '';
-        themeConfig.tabsBgColor = '';
-      }
-
-      const themeConfigForPreference = {
-        colorPrimary: colorPrimaryValue,
-        borderRadius: values.borderRadius ?? 6,
-        fontSize: values.fontSize ?? 14,
-        compact: false,
-        themeStyle: savingThemeStyle,
-        siderBgColor: savingPlain ? '' : siderBgColorValue || '',
-        headerBgColor: savingPlain ? '' : headerBgColorValue || '',
-        tabsBgColor: savingPlain ? '' : tabsBgColorValue || '',
-      };
-
-      const themeMode = (values.colorMode as 'light' | 'dark' | 'auto') || 'light';
       const hasToken = !!getToken();
       if (hasToken) {
         // 用户已登录：通过 updatePreferences 持久化，app 内订阅会同步 themeStore
@@ -610,16 +600,15 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             current.theme_config = themeConfigForPreference;
             current.tabs_persistence = tabsPersistenceValue;
             useUserPreferenceStore.setState({ preferences: current });
-            useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
+            useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
             message.warning(t('components.themeEditor.message.appliedButNotSaved'));
           } else {
             throw prefError;
           }
         }
-      } else {
-        // 用户未登录：仅应用主题到 store（供当前会话使用）
-        useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
       }
+
+      useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
 
       // 保存站点主题配置
       const settings: Record<string, any> = {
@@ -708,7 +697,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       }
 
       // 5. 应用主题到 store
-      useThemeStore.getState().applyTheme('light', defaultThemeConfig);
+      useThemeStore.getState().applyTheme('light', defaultThemeConfig, { persist: false });
 
       // 6. 应用本地预览
       applyPreviewTheme(defaultThemeConfig, 'light');

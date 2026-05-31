@@ -43,25 +43,41 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 
 /** 与后端 header_map 一致的默认列（CSV 模板同步） */
-const INV_HEADERS = ['物料编码', '仓库编码', '期初数量', '期初金额', '批次号', '库位编码'];
-const INV_EXAMPLE = ['MAT001', 'WH001', '100', '1000.00', 'BATCH001', 'LOC001'];
-const WIP_HEADERS = ['工单号', '产品编码', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编码'];
-const WIP_EXAMPLE = ['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001'];
-const AR_HEADERS = [
-  '类型',
-  '客户编码',
-  '供应商编码',
-  '单据类型',
-  '单据号',
-  '单据日期',
-  '应收金额',
-  '应付金额',
-  '已收金额',
-  '已付金额',
-  '到期日期',
-  '发票号',
+const INV_HEADER_KEYS = [
+  'app.kuaizhizao.initialData.csvHeaders.material_code',
+  'app.kuaizhizao.initialData.csvHeaders.warehouse_code',
+  'app.kuaizhizao.initialData.csvHeaders.quantity',
+  'app.kuaizhizao.initialData.csvHeaders.amount',
+  'app.kuaizhizao.initialData.csvHeaders.batch_number',
+  'app.kuaizhizao.initialData.csvHeaders.location_code',
 ];
-const AR_EXAMPLE = ['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001'];
+const INV_EXAMPLE = ['MAT001', 'WH001', '100', '1000.00', 'BATCH001', 'LOC001'];
+
+const WIP_HEADER_KEYS = [
+  'app.kuaizhizao.initialData.csvHeaders.work_order_code',
+  'app.kuaizhizao.initialData.csvHeaders.product_code',
+  'app.kuaizhizao.initialData.csvHeaders.current_operation',
+  'app.kuaizhizao.initialData.csvHeaders.wip_quantity',
+  'app.kuaizhizao.initialData.csvHeaders.input_quantity',
+  'app.kuaizhizao.initialData.csvHeaders.estimated_completion_time',
+  'app.kuaizhizao.initialData.csvHeaders.workshop_code',
+];
+const WIP_EXAMPLE = ['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001'];
+
+const AR_HEADER_KEYS = [
+  'app.kuaizhizao.initialData.csvHeaders.type',
+  'app.kuaizhizao.initialData.csvHeaders.customer_code',
+  'app.kuaizhizao.initialData.csvHeaders.supplier_code',
+  'app.kuaizhizao.initialData.csvHeaders.source_type',
+  'app.kuaizhizao.initialData.csvHeaders.source_code',
+  'app.kuaizhizao.initialData.csvHeaders.business_date',
+  'app.kuaizhizao.initialData.csvHeaders.receivable_amount',
+  'app.kuaizhizao.initialData.csvHeaders.payable_amount',
+  'app.kuaizhizao.initialData.csvHeaders.received_amount',
+  'app.kuaizhizao.initialData.csvHeaders.paid_amount',
+  'app.kuaizhizao.initialData.csvHeaders.due_date',
+  'app.kuaizhizao.initialData.csvHeaders.invoice_number',
+];
 
 function downloadCsvTemplate(headers: string[], filename: string) {
   const line = headers.map((h) => `"${String(h).replace(/"/g, '""')}"`).join(',');
@@ -77,7 +93,7 @@ function downloadCsvTemplate(headers: string[], filename: string) {
 type ImportErr = { row: number; error: string };
 
 const InitialDataImportPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { Text, Paragraph, Title } = Typography;
@@ -96,6 +112,39 @@ const InitialDataImportPage: React.FC = () => {
   const [errorDrawerOpen, setErrorDrawerOpen] = useState(false);
   const [lastErrors, setLastErrors] = useState<ImportErr[]>([]);
   const [lastImportLabel, setLastImportLabel] = useState('');
+
+  const invHeaders = useMemo(
+    () => INV_HEADER_KEYS.map((k) => t(k)).filter(Boolean),
+    [i18n.language, t],
+  );
+
+  const wipHeaders = useMemo(
+    () => WIP_HEADER_KEYS.map((k) => t(k)).filter(Boolean),
+    [i18n.language, t],
+  );
+
+  const arHeaders = useMemo(
+    () => AR_HEADER_KEYS.map((k) => t(k)).filter(Boolean),
+    [i18n.language, t],
+  );
+
+  const arExample = useMemo(
+    () => [
+      t('app.kuaizhizao.initialData.csvExample.ar.type'),
+      'CUS001',
+      '',
+      t('app.kuaizhizao.initialData.csvExample.ar.source_type'),
+      'SO001',
+      '2026-01-10',
+      '10000.00',
+      '',
+      '0',
+      '',
+      '2026-02-10',
+      'INV001',
+    ],
+    [i18n.language, t],
+  );
 
   const snapshotIso = useCallback(
     () => (snapshotTime ? snapshotTime.format('YYYY-MM-DD HH:mm:ss') : undefined),
@@ -366,13 +415,16 @@ const InitialDataImportPage: React.FC = () => {
   };
 
   const downloadErrorsCsv = () => {
-    const headers = ['row', 'error'];
-    const lines = [headers.join(','), ...lastErrors.map((e) => `${e.row},"${String(e.error).replace(/"/g, '""')}"`)];
+    const headers = [t('app.kuaizhizao.initialData.colRow'), t('app.kuaizhizao.initialData.colError')];
+    const lines = [
+      headers.join(','),
+      ...lastErrors.map((e) => `${e.row},"${String(e.error).replace(/"/g, '""')}"`),
+    ];
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `initial-import-errors-${dayjs().format('YYYYMMDD-HHmm')}.csv`;
+    a.download = t('app.kuaizhizao.initialData.errorCsvFileName', { ts: dayjs().format('YYYYMMDD-HHmm') });
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -493,7 +545,15 @@ const InitialDataImportPage: React.FC = () => {
                   <Button type="primary" icon={<ImportOutlined />} onClick={() => setImportVisible(true)}>
                     {t('app.kuaizhizao.initialData.openSheet')}
                   </Button>
-                  <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(INV_HEADERS, 'initial-inventory-template.csv')}>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={() =>
+                      downloadCsvTemplate(
+                        invHeaders,
+                        t('app.kuaizhizao.initialData.inventoryTemplateFileName'),
+                      )
+                    }
+                  >
                     {t('app.kuaizhizao.initialData.downloadTemplate')}
                   </Button>
                 </Space>
@@ -514,7 +574,12 @@ const InitialDataImportPage: React.FC = () => {
             <Button type="primary" icon={<ImportOutlined />} onClick={() => setWipImportVisible(true)}>
               {t('app.kuaizhizao.initialData.openSheet')}
             </Button>
-            <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(WIP_HEADERS, 'initial-wip-template.csv')}>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() =>
+                downloadCsvTemplate(wipHeaders, t('app.kuaizhizao.initialData.wipTemplateFileName'))
+              }
+            >
               {t('app.kuaizhizao.initialData.downloadTemplate')}
             </Button>
             <Button danger type="default" onClick={confirmSkipWip}>
@@ -538,7 +603,12 @@ const InitialDataImportPage: React.FC = () => {
             <Button type="primary" icon={<ImportOutlined />} onClick={() => setReceivablesPayablesImportVisible(true)}>
               {t('app.kuaizhizao.initialData.openSheet')}
             </Button>
-            <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(AR_HEADERS, 'initial-arap-template.csv')}>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() =>
+                downloadCsvTemplate(arHeaders, t('app.kuaizhizao.initialData.arapTemplateFileName'))
+              }
+            >
               {t('app.kuaizhizao.initialData.downloadTemplate')}
             </Button>
             <Button danger type="default" onClick={confirmSkipAr}>
@@ -599,7 +669,7 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setImportVisible(false)}
               onConfirm={handleImportInventory}
               title={t('app.kuaizhizao.initialData.importInvTitle')}
-              headers={INV_HEADERS}
+              headers={invHeaders}
               exampleRow={INV_EXAMPLE}
             />
           )}
@@ -609,7 +679,7 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setWipImportVisible(false)}
               onConfirm={handleImportWIP}
               title={t('app.kuaizhizao.initialData.importWipTitle')}
-              headers={WIP_HEADERS}
+              headers={wipHeaders}
               exampleRow={WIP_EXAMPLE}
             />
           )}
@@ -619,8 +689,8 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setReceivablesPayablesImportVisible(false)}
               onConfirm={handleImportReceivablesPayables}
               title={t('app.kuaizhizao.initialData.importArTitle')}
-              headers={AR_HEADERS}
-              exampleRow={AR_EXAMPLE}
+              headers={arHeaders}
+              exampleRow={arExample}
             />
           )}
         </Suspense>

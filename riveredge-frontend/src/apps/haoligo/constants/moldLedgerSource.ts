@@ -18,12 +18,14 @@ export const MOLD_LEDGER_SOURCE_TAG_COLORS: Record<MoldLedgerSource, string> = {
 
 export function getMoldLedgerSourceLabel(source: string | null | undefined): string {
   const key = (source || '').trim().toLowerCase();
+  if (!key) return MOLD_LEDGER_SOURCE_LABELS.manual;
   if (key === 'sync' || key === 'manual') return MOLD_LEDGER_SOURCE_LABELS[key];
   return '—';
 }
 
 export function getMoldLedgerSourceTagColor(source: string | null | undefined): string | undefined {
   const key = (source || '').trim().toLowerCase();
+  if (!key) return MOLD_LEDGER_SOURCE_TAG_COLORS.manual;
   if (key === 'sync' || key === 'manual') return MOLD_LEDGER_SOURCE_TAG_COLORS[key];
   return undefined;
 }

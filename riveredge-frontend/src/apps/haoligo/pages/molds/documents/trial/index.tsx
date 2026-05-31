@@ -37,6 +37,7 @@ import {
   Upload,
 } from 'antd';
 import {
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
@@ -47,6 +48,10 @@ import {
   ShoppingOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../../components/uni-table/stackedPrimaryColumn';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
@@ -111,22 +116,22 @@ const trialResultEnum: Record<string, { text: string }> = {
 
 type PoPickerTrialFilter = 'all' | 'pending' | 'trialed';
 
-/** 分页拉取当前租户已有试模单的采购订单号（用于采购单选择器标记） */
-async function fetchAllTrialPurchaseOrderNosForPoPicker(): Promise<string[]> {
+/** 分页统计各采购订单号在本系统的试模单条数（采购单选择器展示试模次数） */
+async function fetchTrialCountByPurchaseOrderNoForPoPicker(): Promise<Map<string, number>> {
   const limit = 200;
   let skip = 0;
-  const set = new Set<string>();
+  const map = new Map<string, number>();
   for (;;) {
     const res = await listMoldTrialSheets({ skip, limit });
     const total = typeof res.total === 'number' ? res.total : 0;
     for (const row of res.items) {
       const n = String(row.purchase_order_no ?? '').trim();
-      if (n) set.add(n);
+      if (n) map.set(n, (map.get(n) ?? 0) + 1);
     }
     skip += res.items.length;
     if (res.items.length === 0 || res.items.length < limit || skip >= total) break;
   }
-  return [...set];
+  return map;
 }
 
 /** 台账 → 试模单：供应商（优先购买厂商，其次外协厂商） */
@@ -156,6 +161,24 @@ function parseMoldWarehouseIdForForm(value: unknown): number | null {
 function getDefaultTrialUserId(): number | undefined {
   const id = useGlobalStore.getState().currentUser?.id;
   return id != null && Number.isFinite(id) ? id : undefined;
+}
+
+function buildProductionTrialUserPresets(row?: {
+  production_trial_user_id?: number | null;
+  production_trial_user_name?: string | null;
+}): UniUserIdSelectPreset[] {
+  const merged = new Map<number, UniUserIdSelectPreset>();
+  const cu = useGlobalStore.getState().currentUser;
+  if (cu?.id != null) {
+    merged.set(cu.id, { id: cu.id, label: formatUserDisplayLabel(cu) });
+  }
+  if (row?.production_trial_user_id != null) {
+    merged.set(row.production_trial_user_id, {
+      id: row.production_trial_user_id,
+      label: (row.production_trial_user_name || '').trim() || `用户#${row.production_trial_user_id}`,
+    });
+  }
+  return [...merged.values()];
 }
 
 function buildTrialUserPresets(row?: {
@@ -188,6 +211,55 @@ const TRIAL_FAILURE_REPAIR = '立即送修';
 const TRIAL_FAILURE_DISPATCHED = '已发出';
 const TRIAL_FAILURE_RECALLED = '已收回';
 
+const WORKFLOW_PHASE_TRIAL = '试模';
+const WORKFLOW_PHASE_PENDING_PRODUCTION = '试模合格待试产';
+const WORKFLOW_PHASE_CLOSED = '已结案';
+
+function sheetWorkflowPhase(record: Pick<MoldTrialSheetRow, 'workflow_phase'>): string {
+  return (record.workflow_phase || WORKFLOW_PHASE_TRIAL).trim();
+}
+
+function isProductionTrialPhase(phase: string): boolean {
+  return phase === WORKFLOW_PHASE_PENDING_PRODUCTION;
+}
+
+function lockedTrialMoldSummaryCols(
+  trialUserId: number | undefined,
+  trialUserName: string | undefined,
+  trialUserPresets: { id: number; label: string }[],
+): React.ReactNode {
+  const label =
+    (trialUserName || '').trim() ||
+    (trialUserId != null
+      ? trialUserPresets.find((p) => p.id === trialUserId)?.label
+      : undefined) ||
+    '—';
+  return (
+    <>
+      <Col span={12}>
+        <ProForm.Item label="试模结果">
+          <Tag color="success">合格</Tag>
+        </ProForm.Item>
+      </Col>
+      <Col span={12}>
+        <ProForm.Item label="试模人员">
+          <Typography.Text>{label}</Typography.Text>
+        </ProForm.Item>
+      </Col>
+    </>
+  );
+}
+
+/** 试产区：待试产阶段，或已结案且存在试产结果（详情只读） */
+function showProductionTrialSection(phase: string, productionResult?: string | null): boolean {
+  if (isProductionTrialPhase(phase)) return true;
+  return phase === WORKFLOW_PHASE_CLOSED && Boolean((productionResult || '').trim());
+}
+
+function isProductionTrialUnqualified(record: MoldTrialSheetRow): boolean {
+  return (record.production_trial_result || '').trim() === '不合格';
+}
+
 function renderFailureHandlingCell(value: string | null | undefined): React.ReactNode {
   const s = (value || '').trim();
   if (!s) return '—';
@@ -208,7 +280,7 @@ function isTrialSheetHandlingClosed(record: MoldTrialSheetRow): boolean {
 
 function canDispatchTrialSheet(record: MoldTrialSheetRow): boolean {
   return (
-    record.trial_result === '不合格' &&
+    isProductionTrialUnqualified(record) &&
     (record.failure_handling || '').trim() === TRIAL_FAILURE_PENDING &&
     isMoldSheetApproved(record.sheet_status)
   );
@@ -216,8 +288,11 @@ function canDispatchTrialSheet(record: MoldTrialSheetRow): boolean {
 
 function canRecallTrialSheet(record: MoldTrialSheetRow): boolean {
   const fh = (record.failure_handling || '').trim();
+  const unqualified =
+    isProductionTrialUnqualified(record) ||
+    (record.trial_result === '不合格' && !record.production_trial_result);
   return (
-    record.trial_result === '不合格' &&
+    unqualified &&
     (fh === TRIAL_FAILURE_DISPATCHED || fh === TRIAL_FAILURE_REPAIR) &&
     isMoldSheetApproved(record.sheet_status)
   );
@@ -228,6 +303,59 @@ function recallFromWarehouseLabel(record: MoldTrialSheetRow | null): string {
   return (record.failure_handling || '').trim() === TRIAL_FAILURE_REPAIR
     ? '送修仓库（当前所在，供应商侧）'
     : '发出仓库（当前所在，供应商侧）';
+}
+
+const TRIAL_SHEET_DOC_COPY_ICON_STYLE: React.CSSProperties = { color: '#d48806', fontSize: 11 };
+
+/** 列表堆叠：试模单单号 / 采购订单号 / 供应商 */
+function TrialSheetDocStackedCell({ row }: { row: MoldTrialSheetRow }) {
+  const { token } = theme.useToken();
+  const sheetNo = (row.sheet_no || '').trim() || '—';
+  const po = (row.purchase_order_no || '').trim() || '—';
+  const supplier = (row.supplier_name || '').trim() || '—';
+  const subLineStyle: React.CSSProperties = {
+    fontSize: token.fontSizeSM,
+    lineHeight: 1.2,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'block',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
+      <Space size={2} align="center" style={{ maxWidth: '100%', minWidth: 0 }}>
+        <Typography.Text
+          strong
+          ellipsis
+          title={sheetNo}
+          style={{ fontSize: token.fontSize, margin: 0, maxWidth: '100%' }}
+        >
+          {sheetNo}
+        </Typography.Text>
+        {sheetNo !== '—' ? (
+          <Typography.Text
+            copyable={{
+              text: sheetNo,
+              icon: [
+                <CopyOutlined key="copy" style={TRIAL_SHEET_DOC_COPY_ICON_STYLE} />,
+                <CopyOutlined key="copied" style={{ ...TRIAL_SHEET_DOC_COPY_ICON_STYLE, color: '#52c41a' }} />,
+              ],
+              tooltips: ['复制', '已复制'],
+            }}
+            style={{ margin: 0 }}
+          />
+        ) : null}
+      </Space>
+      <Typography.Text type="secondary" style={{ ...subLineStyle, marginTop: 1 }} title={po}>
+        {po}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ ...subLineStyle, marginTop: 1 }} title={supplier}>
+        {supplier}
+      </Typography.Text>
+    </div>
+  );
 }
 
 function parsePendingNotifyUserIds(raw: unknown): number[] {
@@ -298,10 +426,84 @@ function warehouseLabelById(rows: MoldWarehouseRow[], id: number | null | undefi
   return w ? formatMoldWarehouseLabel(w) : `仓库#${id}`;
 }
 
+const TRIAL_IMMEDIATE_REPAIR_WAREHOUSE_EXTRA =
+  '保存后将把模具台账「所在仓库」转移至所选外部仓库';
+
+/** 试模/试产「立即送修」：送修仓库、站内信预览、外部仓快捷新建（与试模不合格一致） */
+const TrialImmediateRepairWarehouseFields: React.FC<{
+  supplierNameStr: string;
+  repairOptions: { value: number; label: string }[];
+  notifyUserId: number | null | undefined;
+  unqualifiedLabel: string;
+  notifyPersonLabel?: string;
+  onQuickCreateWarehouse: (supplierName: string) => void;
+}> = ({
+  supplierNameStr,
+  repairOptions,
+  notifyUserId,
+  unqualifiedLabel,
+  notifyPersonLabel = '试模人员',
+  onQuickCreateWarehouse,
+}) => (
+  <>
+    <Col span={24} style={{ marginBottom: 24 }}>
+      <Alert
+        type="warning"
+        showIcon
+        message="返厂维修阶段"
+        description={`${unqualifiedLabel}须立即送修：审核通过后将向${notifyPersonLabel}及供应商（模具生产商）发送站内信，并同步将模具台账所在仓库转移至送修仓。`}
+      />
+    </Col>
+    <Col span={12}>
+      <ProFormSelect
+        name="repair_warehouse_id"
+        label="送修仓库"
+        showSearch
+        allowClear={false}
+        rules={[{ required: true, message: '请选择送修仓库' }]}
+        options={repairOptions}
+        placeholder={
+          repairOptions.length > 0 ? '已带出供应商外部模具仓库，可改选' : '该供应商暂无外部模具仓库'
+        }
+        extra={TRIAL_IMMEDIATE_REPAIR_WAREHOUSE_EXTRA}
+        fieldProps={{ optionFilterProp: 'label' }}
+      />
+    </Col>
+    <Col span={24}>
+      <TrialRepairNotifyHint
+        supplierName={supplierNameStr}
+        trialUserId={notifyUserId}
+        notifyPersonLabel={notifyPersonLabel}
+      />
+    </Col>
+    {repairOptions.length === 0 && supplierNameStr.trim() ? (
+      <Col span={24}>
+        <Alert
+          type="warning"
+          showIcon
+          message={`供应商「${supplierNameStr.trim()}」尚未维护外部模具仓库`}
+          description="可快速新建该供应商的外部模具仓库，创建后将自动填入送修仓库。"
+          action={
+            <Button
+              size="small"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => onQuickCreateWarehouse(supplierNameStr)}
+            >
+              新建模具仓库
+            </Button>
+          }
+        />
+      </Col>
+    ) : null}
+  </>
+);
+
 const TrialRepairNotifyHint: React.FC<{
   supplierName?: string;
   trialUserId?: number | null;
-}> = ({ supplierName, trialUserId }) => {
+  notifyPersonLabel?: string;
+}> = ({ supplierName, trialUserId, notifyPersonLabel = '试模人员' }) => {
   const [items, setItems] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
@@ -330,7 +532,7 @@ const TrialRepairNotifyHint: React.FC<{
   if (items.length === 0) {
     return (
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        保存后将向试模人员及供应商绑定用户发送站内信（请填写供应商或试模人员以预览）
+        保存后将向{notifyPersonLabel}及供应商绑定用户发送站内信（请填写供应商或{notifyPersonLabel}以预览）
       </Typography.Text>
     );
   }
@@ -508,6 +710,8 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [recallTargetOptions, setRecallTargetOptions] = useState<{ value: number; label: string }[]>([]);
   const [recallModalLoading, setRecallModalLoading] = useState(false);
   const [trialUserPresets, setTrialUserPresets] = useState<UniUserIdSelectPreset[]>([]);
+  const [productionTrialUserPresets, setProductionTrialUserPresets] = useState<UniUserIdSelectPreset[]>([]);
+  const [formWorkflowPhase, setFormWorkflowPhase] = useState(WORKFLOW_PHASE_TRIAL);
   const [pendingNotifyLabelRef] = useState(() => new Map<number, string>());
   const [pendingNotifyPresetOptions, setPendingNotifyPresetOptions] = useState<
     Array<{ value: number; label: string }>
@@ -521,12 +725,13 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
   const [poPickerOpen, setPoPickerOpen] = useState(false);
   const [poPickerLoading, setPoPickerLoading] = useState(false);
-  /** 已有试模单的采购订单号（与弹窗内 ERP 行比对） */
-  const [existingTrialPoNos, setExistingTrialPoNos] = useState<string[]>([]);
+  /** 采购订单号 → 本系统试模单条数（与弹窗内 ERP 行比对） */
+  const [trialCountByPoNo, setTrialCountByPoNo] = useState<Map<string, number>>(() => new Map());
   const [poPickerRows, setPoPickerRows] = useState<Record<string, unknown>[]>([]);
   const [poPickerSelectedKeys, setPoPickerSelectedKeys] = useState<React.Key[]>([]);
   const [poPickerSelectedRow, setPoPickerSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [poPickerTrialFilter, setPoPickerTrialFilter] = useState<PoPickerTrialFilter>('all');
+  const [poPickerKw, setPoPickerKw] = useState('');
 
   const [moldPickerOpen, setMoldPickerOpen] = useState(false);
   const [moldPickerLoading, setMoldPickerLoading] = useState(false);
@@ -615,6 +820,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     }
     setPoPickerSelectedKeys([]);
     setPoPickerSelectedRow(null);
+    setPoPickerKw('');
     setPoPickerOpen(true);
   }, [canCreateFromPo, messageApi]);
 
@@ -624,13 +830,14 @@ const MoldTrialSheetsPage: React.FC = () => {
     (async () => {
       setPoPickerLoading(true);
       setPoPickerRows([]);
-      setExistingTrialPoNos([]);
+      setTrialCountByPoNo(new Map());
       setPoPickerTrialFilter('all');
+      setPoPickerKw('');
       try {
         const uuid = String(datasetBinding.dataset_uuid || '').trim();
-        const [res, trialNos] = await Promise.all([
+        const [res, trialCounts] = await Promise.all([
           executeDatasetQuery(uuid, { parameters: {}, limit: 2000, offset: 0 }),
-          fetchAllTrialPurchaseOrderNosForPoPicker(),
+          fetchTrialCountByPurchaseOrderNoForPoPicker(),
         ]);
         if (cancelled) return;
         if (!res.success) {
@@ -638,7 +845,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           return;
         }
         setPoPickerRows((res.data ?? []) as Record<string, unknown>[]);
-        setExistingTrialPoNos(trialNos);
+        setTrialCountByPoNo(trialCounts);
       } catch (e) {
         if (!cancelled) messageApi.error((e as Error).message || '加载失败');
       } finally {
@@ -675,20 +882,19 @@ const MoldTrialSheetsPage: React.FC = () => {
     setIsEdit(false);
     setEditId(null);
     setSkipPurchaseOrder(false);
+    setFormWorkflowPhase(WORKFLOW_PHASE_TRIAL);
     setTrialUserPresets(buildTrialUserPresets());
+    setProductionTrialUserPresets(buildProductionTrialUserPresets());
     setFormInitialValues({
       purchase_order_no,
       supplier_name: pick(supK),
       mold_code: pick(codeK),
       mold_name: pick(nameK),
       trial_user_id: getDefaultTrialUserId(),
-      trial_result: '合格',
       failure_handling: undefined,
       pending_notify_user_ids: [],
       repair_warehouse_id: undefined,
-      sync_mold_status: true,
       result_attachments: [],
-      inspection_attachments: [],
     });
     setModalVisible(true);
     setPoPickerSelectedKeys([]);
@@ -873,8 +1079,12 @@ const MoldTrialSheetsPage: React.FC = () => {
   const applyDefaultRepairWarehouseForSupplier = useCallback(
     (supplierName: string) => {
       if (isEdit || isDetailView) return;
-      if (formRef.current?.getFieldValue('trial_result') !== '不合格') return;
-      if (formRef.current?.getFieldValue('failure_handling') !== TRIAL_FAILURE_REPAIR) return;
+      const trialFail = formRef.current?.getFieldValue('trial_result') === '不合格';
+      const prodFail = formRef.current?.getFieldValue('production_trial_result') === '不合格';
+      const repairMode =
+        formRef.current?.getFieldValue('failure_handling') === TRIAL_FAILURE_REPAIR;
+      const needsRepairWarehouse = trialFail || (prodFail && repairMode);
+      if (!needsRepairWarehouse) return;
       const whId = pickDefaultRepairWarehouseId(warehouseRows, supplierName);
       formRef.current?.setFieldsValue({
         repair_warehouse_id: whId ?? undefined,
@@ -964,7 +1174,9 @@ const MoldTrialSheetsPage: React.FC = () => {
       setIsEdit(false);
       setEditId(null);
       setSkipPurchaseOrder(true);
+      setFormWorkflowPhase(WORKFLOW_PHASE_TRIAL);
       setTrialUserPresets(buildTrialUserPresets());
+      setProductionTrialUserPresets(buildProductionTrialUserPresets());
       setFormInitialValues({
         purchase_order_no: undefined,
         supplier_name: ledgerSupplierName(row),
@@ -972,13 +1184,10 @@ const MoldTrialSheetsPage: React.FC = () => {
         mold_name: row.name,
         mold_warehouse_id: row.mold_warehouse_id ?? undefined,
         trial_user_id: getDefaultTrialUserId(),
-        trial_result: '合格',
         failure_handling: undefined,
         pending_notify_user_ids: [],
         repair_warehouse_id: undefined,
-        sync_mold_status: true,
         result_attachments: [],
-        inspection_attachments: [],
       });
       setMoldPickerOpen(false);
       setModalVisible(true);
@@ -996,6 +1205,15 @@ const MoldTrialSheetsPage: React.FC = () => {
         (r.name && r.name.toLowerCase().includes(q)),
     );
   }, [moldRows, moldKw]);
+
+  const showProductionSection = useMemo(
+    () =>
+      showProductionTrialSection(
+        formWorkflowPhase,
+        formInitialValues?.production_trial_result as string | undefined,
+      ),
+    [formWorkflowPhase, formInitialValues?.production_trial_result],
+  );
 
   const createToolbarActions = useMemo(
     () => [
@@ -1030,15 +1248,34 @@ const MoldTrialSheetsPage: React.FC = () => {
     const b = datasetBinding;
     const poCol = b?.purchase_order_column?.trim();
     if (!poCol) return poPickerRows;
-    const trialPoSet = new Set(existingTrialPoNos.map((s) => s.trim()).filter(Boolean));
-    if (poPickerTrialFilter === 'all') return poPickerRows;
-    return poPickerRows.filter((row) => {
-      const no = String(row[poCol] ?? '').trim();
-      const hasTrial = Boolean(no && trialPoSet.has(no));
-      if (poPickerTrialFilter === 'pending') return !hasTrial;
-      return hasTrial;
-    });
-  }, [poPickerRows, datasetBinding, existingTrialPoNos, poPickerTrialFilter]);
+    const supCol = (b?.supplier_column || '').trim();
+    const codeCol = (b?.mold_code_column || '').trim();
+    const nameCol = (b?.mold_name_column || '').trim();
+
+    let rows = poPickerRows;
+    if (poPickerTrialFilter !== 'all') {
+      rows = rows.filter((row) => {
+        const no = String(row[poCol] ?? '').trim();
+        const hasTrial = Boolean(no && (trialCountByPoNo.get(no) ?? 0) > 0);
+        if (poPickerTrialFilter === 'pending') return !hasTrial;
+        return hasTrial;
+      });
+    }
+
+    const q = poPickerKw.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((row) => {
+        const haystack = [
+          String(row[poCol] ?? ''),
+          supCol ? String(row[supCol] ?? '') : '',
+          codeCol ? String(row[codeCol] ?? '') : '',
+          nameCol ? String(row[nameCol] ?? '') : '',
+        ];
+        return haystack.some((part) => part.toLowerCase().includes(q));
+      });
+    }
+    return rows;
+  }, [poPickerRows, datasetBinding, trialCountByPoNo, poPickerTrialFilter, poPickerKw]);
 
   const getPoPickerRowKey = useCallback(
     (row: Record<string, unknown>) => {
@@ -1063,7 +1300,6 @@ const MoldTrialSheetsPage: React.FC = () => {
     const sc = (b.supplier_column || '').trim();
     const mc = (b.mold_code_column || '').trim();
     const mn = (b.mold_name_column || '').trim();
-    const trialPoSet = new Set(existingTrialPoNos.map((s) => s.trim()).filter(Boolean));
     return [
       {
         title: '采购订单号',
@@ -1073,13 +1309,13 @@ const MoldTrialSheetsPage: React.FC = () => {
         width: 240,
         render: (_: unknown, row: Record<string, unknown>) => {
           const no = String(row[po] ?? '').trim();
-          const hasTrial = no && trialPoSet.has(no);
+          const trialCount = no ? trialCountByPoNo.get(no) ?? 0 : 0;
           return (
             <Space size={6} wrap>
               <span>{no || '—'}</span>
-              {hasTrial ? (
+              {trialCount > 0 ? (
                 <Tag color="processing" style={{ marginInlineEnd: 0 }}>
-                  已建试模单
+                  试模{trialCount}次
                 </Tag>
               ) : null}
             </Space>
@@ -1090,7 +1326,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       { title: '模具代号', dataIndex: mc, key: 'code', ellipsis: true, width: 120 },
       { title: '模具名称', dataIndex: mn, key: 'name', ellipsis: true },
     ];
-  }, [datasetBinding, existingTrialPoNos]);
+  }, [datasetBinding, trialCountByPoNo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1135,17 +1371,23 @@ const MoldTrialSheetsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!modalVisible || isEdit || isDetailView || warehouseRows.length === 0) return;
-    if (formRef.current?.getFieldValue('trial_result') !== '不合格') return;
-    if (formRef.current?.getFieldValue('failure_handling') !== TRIAL_FAILURE_REPAIR) return;
+    if (!modalVisible || isDetailView || warehouseRows.length === 0) return;
     const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
     if (!sn) return;
     if (parseMoldWarehouseIdForForm(formRef.current?.getFieldValue('repair_warehouse_id')) != null) return;
-    applyDefaultRepairWarehouseForSupplier(sn);
+
+    const trialFail = formRef.current?.getFieldValue('trial_result') === '不合格';
+    const prodFail = formRef.current?.getFieldValue('production_trial_result') === '不合格';
+    if (trialFail) {
+      applyDefaultRepairWarehouseForSupplier(sn);
+      return;
+    }
+    if (prodFail && formRef.current?.getFieldValue('failure_handling') === TRIAL_FAILURE_REPAIR) {
+      applyDefaultRepairWarehouseForSupplier(sn);
+    }
   }, [
     applyDefaultRepairWarehouseForSupplier,
     isDetailView,
-    isEdit,
     modalVisible,
     warehouseRows,
   ]);
@@ -1166,7 +1408,9 @@ const MoldTrialSheetsPage: React.FC = () => {
       setEditId(detail.id);
       setAuditSheetStatus(detail.sheet_status);
       setSkipPurchaseOrder(!String(detail.purchase_order_no ?? '').trim());
+      setFormWorkflowPhase(sheetWorkflowPhase(detail));
       setTrialUserPresets(buildTrialUserPresets(detail));
+      setProductionTrialUserPresets(buildProductionTrialUserPresets(detail));
       const notifyOptions = (detail.pending_notify_users || [])
         .map((u) => ({
           value: u.id,
@@ -1182,14 +1426,16 @@ const MoldTrialSheetsPage: React.FC = () => {
         mold_name: detail.mold_name ?? undefined,
         mold_warehouse_id: ledgerMold?.mold_warehouse_id ?? undefined,
         trial_user_id: detail.trial_user_id ?? getDefaultTrialUserId(),
+        trial_user_name: detail.trial_user_name ?? undefined,
         trial_times: detail.trial_times ?? undefined,
         result_attachments: await uuidsToSecureUploadFileList(detail.result_attachment_file_uuids),
         inspection_attachments: await uuidsToSecureUploadFileList(detail.inspection_attachment_file_uuids),
         trial_result: detail.trial_result,
+        production_trial_user_id: detail.production_trial_user_id ?? getDefaultTrialUserId(),
+        production_trial_result: detail.production_trial_result ?? undefined,
         failure_handling: detail.failure_handling ?? undefined,
         pending_notify_user_ids: detail.pending_notify_user_ids ?? [],
         repair_warehouse_id: detail.repair_warehouse_id ?? undefined,
-        sync_mold_status: true,
       });
       setModalVisible(true);
     } catch (e) {
@@ -1242,7 +1488,48 @@ const MoldTrialSheetsPage: React.FC = () => {
     });
   };
 
-  const buildPayload = (values: Record<string, unknown>): MoldTrialSheetCreatePayload => {
+  const buildPayload = (
+    values: Record<string, unknown>,
+    phase: string,
+  ): MoldTrialSheetCreatePayload => {
+    const parseUserId = (key: string) => {
+      const v = values[key];
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
+    };
+
+    if (isProductionTrialPhase(phase)) {
+      const prodResult = values.production_trial_result === '不合格' ? '不合格' : '合格';
+      const base: MoldTrialSheetCreatePayload = {
+        production_trial_result: prodResult,
+        production_trial_user_id: parseUserId('production_trial_user_id'),
+        inspection_attachment_file_uuids: normUploadUuids(values.inspection_attachments),
+      };
+      if (prodResult !== '不合格') {
+        return {
+          ...base,
+          failure_handling: null,
+          pending_notify_user_ids: [],
+          repair_warehouse_id: null,
+        };
+      }
+      const mode = String(values.failure_handling ?? '').trim();
+      if (mode === TRIAL_FAILURE_REPAIR) {
+        return {
+          ...base,
+          failure_handling: TRIAL_FAILURE_REPAIR,
+          pending_notify_user_ids: [],
+          repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+        };
+      }
+      return {
+        ...base,
+        failure_handling: TRIAL_FAILURE_PENDING,
+        pending_notify_user_ids: parsePendingNotifyUserIds(values.pending_notify_user_ids),
+        repair_warehouse_id: null,
+      };
+    }
+
     const trialResult = values.trial_result === '不合格' ? '不合格' : '合格';
     const base: MoldTrialSheetCreatePayload = {
       purchase_order_no: (() => {
@@ -1253,30 +1540,54 @@ const MoldTrialSheetsPage: React.FC = () => {
       mold_code: String(values.mold_code ?? '').trim() || null,
       mold_name: String(values.mold_name ?? '').trim() || null,
       result_attachment_file_uuids: normUploadUuids(values.result_attachments),
-      inspection_attachment_file_uuids: normUploadUuids(values.inspection_attachments),
       trial_result: trialResult,
-      trial_user_id: (() => {
-        const v = values.trial_user_id;
-        const n = typeof v === 'number' ? v : Number(v);
-        return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
-      })(),
+      trial_user_id: parseUserId('trial_user_id'),
     };
-    if (trialResult !== '不合格') {
+    if (trialResult === '不合格') {
       return {
         ...base,
+        failure_handling: TRIAL_FAILURE_REPAIR,
+        pending_notify_user_ids: [],
+        repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+      };
+    }
+    const prodResult = values.production_trial_result;
+    if (prodResult === '合格' || prodResult === '不合格') {
+      const prodPayload: MoldTrialSheetCreatePayload = {
+        ...base,
+        production_trial_result: prodResult,
+        production_trial_user_id: parseUserId('production_trial_user_id'),
+        inspection_attachment_file_uuids: normUploadUuids(values.inspection_attachments),
+      };
+      if (prodResult === '不合格') {
+        const mode = String(values.failure_handling ?? '').trim();
+        if (mode === TRIAL_FAILURE_REPAIR) {
+          return {
+            ...prodPayload,
+            failure_handling: TRIAL_FAILURE_REPAIR,
+            pending_notify_user_ids: [],
+            repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+          };
+        }
+        return {
+          ...prodPayload,
+          failure_handling: TRIAL_FAILURE_PENDING,
+          pending_notify_user_ids: parsePendingNotifyUserIds(values.pending_notify_user_ids),
+          repair_warehouse_id: null,
+        };
+      }
+      return {
+        ...prodPayload,
         failure_handling: null,
         pending_notify_user_ids: [],
         repair_warehouse_id: null,
       };
     }
-    const mode = String(values.failure_handling ?? '').trim();
     return {
       ...base,
-      failure_handling: mode === TRIAL_FAILURE_REPAIR ? TRIAL_FAILURE_REPAIR : TRIAL_FAILURE_PENDING,
-      pending_notify_user_ids:
-        mode === TRIAL_FAILURE_PENDING ? parsePendingNotifyUserIds(values.pending_notify_user_ids) : [],
-      repair_warehouse_id:
-        mode === TRIAL_FAILURE_REPAIR ? parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined : null,
+      failure_handling: null,
+      pending_notify_user_ids: [],
+      repair_warehouse_id: null,
     };
   };
 
@@ -1291,37 +1602,85 @@ const MoldTrialSheetsPage: React.FC = () => {
       messageApi.warning('请选择或填写模具代号');
       throw new Error('validation');
     }
-    const trialUserRaw = values.trial_user_id;
-    const trialUserId =
-      typeof trialUserRaw === 'number' ? trialUserRaw : Number(trialUserRaw);
-    if (!Number.isFinite(trialUserId) || trialUserId <= 0) {
-      messageApi.warning('请选择试模人员');
-      throw new Error('validation');
-    }
-    if (values.trial_result === '不合格') {
-      const mode = String(values.failure_handling ?? '').trim();
-      if (!mode) {
-        messageApi.warning('试模不合格时请选择处理方式');
+    if (!isProductionTrialPhase(formWorkflowPhase)) {
+      const trialUserRaw = values.trial_user_id;
+      const trialUserId =
+        typeof trialUserRaw === 'number' ? trialUserRaw : Number(trialUserRaw);
+      if (!Number.isFinite(trialUserId) || trialUserId <= 0) {
+        messageApi.warning('请选择试模人员');
         throw new Error('validation');
       }
-      if (mode === TRIAL_FAILURE_PENDING) {
-        const notifyIds = parsePendingNotifyUserIds(values.pending_notify_user_ids);
-        if (notifyIds.length === 0) {
-          messageApi.warning('待处理时请至少指定一名消息提醒接收人');
+      if (values.trial_result !== '合格' && values.trial_result !== '不合格') {
+        messageApi.warning('请选择试模结果');
+        throw new Error('validation');
+      }
+      if (values.trial_result === '不合格') {
+        const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
+        if (whId == null) {
+          messageApi.warning('试模不合格须立即送修，请选择送修仓库');
           throw new Error('validation');
         }
       }
-      if (mode === TRIAL_FAILURE_REPAIR) {
-        const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
-        if (whId == null) {
-          messageApi.warning('立即送修请选择送修仓库');
+      if (values.trial_result === '合格' && values.production_trial_result) {
+        const prodUserRaw = values.production_trial_user_id;
+        const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
+        if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
+          messageApi.warning('填写试产结果时请选择试产人员');
           throw new Error('validation');
+        }
+        if (values.production_trial_result === '不合格') {
+          const mode = String(values.failure_handling ?? '').trim() || TRIAL_FAILURE_REPAIR;
+          if (!mode) {
+            messageApi.warning('试产不合格时请选择处理方式');
+            throw new Error('validation');
+          }
+          if (mode === TRIAL_FAILURE_PENDING) {
+            const notifyIds = parsePendingNotifyUserIds(values.pending_notify_user_ids);
+            if (notifyIds.length === 0) {
+              messageApi.warning('待处理时请至少指定一名消息提醒接收人');
+              throw new Error('validation');
+            }
+          } else if (mode === TRIAL_FAILURE_REPAIR) {
+            const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
+            if (whId == null) {
+              messageApi.warning('试产不合格须立即送修，请选择送修仓库');
+              throw new Error('validation');
+            }
+          }
+        }
+      }
+    }
+    if (isProductionTrialPhase(formWorkflowPhase)) {
+      const prodUserRaw = values.production_trial_user_id;
+      const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
+      if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
+        messageApi.warning('请选择试产人员');
+        throw new Error('validation');
+      }
+      if (!values.production_trial_result) {
+        messageApi.warning('请选择试产结果');
+        throw new Error('validation');
+      }
+      if (values.production_trial_result === '不合格') {
+        const mode = String(values.failure_handling ?? '').trim() || TRIAL_FAILURE_REPAIR;
+        if (mode === TRIAL_FAILURE_PENDING) {
+          const notifyIds = parsePendingNotifyUserIds(values.pending_notify_user_ids);
+          if (notifyIds.length === 0) {
+            messageApi.warning('待处理时请至少指定一名消息提醒接收人');
+            throw new Error('validation');
+          }
+        } else if (mode === TRIAL_FAILURE_REPAIR) {
+          const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
+          if (whId == null) {
+            messageApi.warning('试产不合格须立即送修，请选择送修仓库');
+            throw new Error('validation');
+          }
         }
       }
     }
     setFormLoading(true);
     try {
-      const payload = buildPayload(values);
+      const payload = buildPayload(values, formWorkflowPhase);
       if (isEdit && editId != null) {
         await updateMoldTrialSheet(editId, payload);
         messageApi.success('已保存');
@@ -1330,26 +1689,18 @@ const MoldTrialSheetsPage: React.FC = () => {
         messageApi.success('已创建');
       }
 
-      if (payload.mold_code) {
+      if (!isProductionTrialPhase(formWorkflowPhase) && payload.mold_code) {
         try {
           const target = await findMoldByCode(payload.mold_code);
           if (target) {
-            const ledgerPatch: { mold_warehouse_id?: number | null; status?: string } = {
-              mold_warehouse_id: parseMoldWarehouseIdForForm(values.mold_warehouse_id),
-            };
-            if (payload.trial_result === '合格' && values.sync_mold_status) {
-              ledgerPatch.status = '待用';
+            const whId = parseMoldWarehouseIdForForm(values.mold_warehouse_id);
+            if (whId != null) {
+              await updateMold(target.id, { mold_warehouse_id: whId });
+              messageApi.success('所在仓库已同步至台账');
             }
-            await updateMold(target.id, ledgerPatch);
-            const hints: string[] = [];
-            if (ledgerPatch.status) hints.push('模具状态已更新为「待用」');
-            if ('mold_warehouse_id' in ledgerPatch) hints.push('所在仓库已同步至台账');
-            if (hints.length) messageApi.success(hints.join('；'));
-          } else {
-            messageApi.warning('未找到对应模具代号，无法同步台账');
           }
         } catch {
-          messageApi.warning('同步模具台账失败');
+          messageApi.warning('同步模具台账仓库失败');
         }
       }
 
@@ -1622,43 +1973,45 @@ const MoldTrialSheetsPage: React.FC = () => {
       title: '试模单单号',
       dataIndex: 'sheet_no',
       key: 'sheet_no',
-      width: 150,
-      ellipsis: true,
-      copyable: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       hideInSearch: true,
+      render: (_, r) => <TrialSheetDocStackedCell row={r} />,
     },
     {
       title: '采购订单号',
       dataIndex: 'purchase_order_no',
       key: 'purchase_order_no',
-      width: 160,
-      ellipsis: true,
-      copyable: true,
+      hideInTable: true,
       hideInSearch: true,
-      render: (_, r) => r.purchase_order_no?.trim() || '—',
     },
     {
       title: '供应商',
       dataIndex: 'supplier_name',
       key: 'supplier_name',
-      width: 160,
-      ellipsis: true,
+      hideInTable: true,
       hideInSearch: true,
     },
     {
-      title: '模具代号',
+      title: '模具',
       dataIndex: 'mold_code',
       key: 'mold_code',
-      width: 120,
-      ellipsis: true,
+      minWidth: 168,
+      width: 168,
+      resizable: false,
+      ellipsis: false,
       hideInSearch: true,
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={String(r.mold_name ?? '').trim() || '—'}
+          secondary={String(r.mold_code ?? '').trim() || '—'}
+        />
+      ),
     },
     {
       title: '模具名称',
       dataIndex: 'mold_name',
       key: 'mold_name',
-      width: 160,
-      ellipsis: true,
+      hideInTable: true,
       hideInSearch: true,
     },
     {
@@ -1683,8 +2036,25 @@ const MoldTrialSheetsPage: React.FC = () => {
       key: 'failure_handling',
       width: 96,
       hideInSearch: true,
-      render: (_, r) =>
-        r.trial_result === '不合格' ? renderFailureHandlingCell(r.failure_handling) : '—',
+      render: (_, r) => {
+        const show =
+          isProductionTrialUnqualified(r) ||
+          (r.trial_result === '不合格' && sheetWorkflowPhase(r) === WORKFLOW_PHASE_CLOSED && !r.production_trial_result);
+        return show ? renderFailureHandlingCell(r.failure_handling) : '—';
+      },
+    },
+    {
+      title: '流程阶段',
+      dataIndex: 'workflow_phase',
+      key: 'workflow_phase',
+      width: 128,
+      hideInSearch: true,
+      render: (_, r) => {
+        const p = sheetWorkflowPhase(r);
+        const color =
+          p === WORKFLOW_PHASE_PENDING_PRODUCTION ? 'processing' : p === WORKFLOW_PHASE_CLOSED ? 'default' : 'blue';
+        return <Tag color={color}>{p}</Tag>;
+      },
     },
     {
       title: '试模结果',
@@ -1697,6 +2067,18 @@ const MoldTrialSheetsPage: React.FC = () => {
       render: (_, r) => (
         <Tag color={r.trial_result === '合格' ? 'success' : 'error'}>{r.trial_result}</Tag>
       ),
+    },
+    {
+      title: '试产结果',
+      dataIndex: 'production_trial_result',
+      key: 'production_trial_result',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => {
+        const pr = (r.production_trial_result || '').trim();
+        if (!pr) return '—';
+        return <Tag color={pr === '合格' ? 'success' : 'error'}>{pr}</Tag>;
+      },
     },
     {
       title: '审核状态',
@@ -1713,7 +2095,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       title: '操作',
       key: 'option',
       valueType: 'option',
-      width: 360,
+      width: 280,
       fixed: 'right',
       uniActionRenderOptions: { ...MOLD_SHEET_TABLE_ACTION_OPTIONS, directMax: 8 },
       render: (_, record) => {
@@ -1860,6 +2242,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           setEditId(null);
           setIsDetailView(false);
           setSkipPurchaseOrder(false);
+          setFormWorkflowPhase(WORKFLOW_PHASE_TRIAL);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -1943,213 +2326,447 @@ const MoldTrialSheetsPage: React.FC = () => {
           <Col span={12}>
             <ProFormText name="mold_name" label="模具名称" placeholder="请输入模具名称" />
           </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="mold_warehouse_id"
-              label="所在仓库"
-              placeholder="请选择模具仓库"
-              allowClear
-              showSearch
-              options={warehouseOptions}
-              fieldProps={{ optionFilterProp: 'label' }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormUploadButton
-              name="result_attachments"
-              label="试模结果附件"
-              max={10}
-              fieldProps={uploadFieldProps}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormUploadButton
-              name="inspection_attachments"
-              label="试模检验附件"
-              max={10}
-              fieldProps={uploadFieldProps}
-            />
-          </Col>
-          <Col span={6}>
-            <UniUserIdSelect
-              name="trial_user_id"
-              label="试模人员"
-              placeholder="请选择试模人员"
-              required
-              readonly={isDetailView}
-              disabled={isDetailView}
-              presetUsers={trialUserPresets}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormRadio.Group
-              name="trial_result"
-              label="试模结果"
-              rules={[{ required: true, message: '请选择试模结果' }]}
-              options={[
-                { label: '合格', value: '合格' },
-                { label: '不合格', value: '不合格' },
-              ]}
-              fieldProps={{
-                onChange: (e) => {
-                  const v = e.target.value;
-                  if (v === '合格') {
-                    formRef.current?.setFieldsValue({
-                      failure_handling: undefined,
-                      pending_notify_user_ids: [],
-                      repair_warehouse_id: undefined,
-                    });
-                    return;
-                  }
-                  if (v === '不合格') {
-                    const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
-                    if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
-                    if (formRef.current?.getFieldValue('failure_handling') === TRIAL_FAILURE_REPAIR) {
-                      const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
-                      applyDefaultRepairWarehouseForSupplier(sn);
-                    }
-                  }
-                },
-              }}
-            />
-          </Col>
-          <ProFormDependency name={['trial_result']}>
-            {({ trial_result }) => {
-              if (trial_result !== '合格' || isDetailView) return null;
-              return (
-                <Col span={6}>
-                  <ProFormRadio.Group
-                    name="sync_mold_status"
-                    label="模具状态"
-                    tooltip="保存成功后，按模具代号匹配台账"
-                    options={[
-                      { label: '待用', value: true },
-                      { label: '不变', value: false },
-                    ]}
-                  />
-                </Col>
-              );
-            }}
-          </ProFormDependency>
-          <ProFormDependency name={['trial_result', 'supplier_name', 'failure_handling', 'trial_user_id']}>
-            {({ trial_result, supplier_name, failure_handling, trial_user_id }) => {
-              if (trial_result !== '不合格') return null;
-              const supplierNameStr =
-                typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '');
-              const repairOptions = filterRepairWarehousesForSupplier(warehouseRows, supplierNameStr);
-              return (
-                <>
-                  <Col span={12}>
-                    <ProFormRadio.Group
-                      name="failure_handling"
-                      label="处理方式"
-                      rules={[{ required: true, message: '请选择处理方式' }]}
-                      options={[
-                        { label: TRIAL_FAILURE_PENDING, value: TRIAL_FAILURE_PENDING },
-                        { label: TRIAL_FAILURE_REPAIR, value: TRIAL_FAILURE_REPAIR },
-                      ]}
-                      fieldProps={{
-                        onChange: (e) => {
-                          const mode = e.target.value;
-                          if (mode === TRIAL_FAILURE_PENDING) {
-                            const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
-                            if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
-                            formRef.current?.setFieldsValue({ repair_warehouse_id: undefined });
-                            return;
-                          }
-                          if (mode === TRIAL_FAILURE_REPAIR) {
-                            const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
-                            applyDefaultRepairWarehouseForSupplier(sn);
-                          }
-                        },
-                      }}
-                    />
-                  </Col>
-                  {failure_handling === TRIAL_FAILURE_PENDING ? (
+          {!showProductionSection ? (
+            <Col span={12}>
+              <ProFormSelect
+                name="mold_warehouse_id"
+                label="所在仓库"
+                placeholder="请选择模具仓库"
+                allowClear
+                showSearch
+                options={warehouseOptions}
+                fieldProps={{ optionFilterProp: 'label' }}
+                disabled={showProductionSection || isDetailView}
+              />
+            </Col>
+          ) : null}
+          {showProductionSection && isProductionTrialPhase(formWorkflowPhase) ? (
+            <>
+              <Col span={24} style={{ marginBottom: 24 }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`流程阶段：${formWorkflowPhase}`}
+                  description="试模已合格，请由试产人员上传试产检验附件、填写试产结果；试产合格后审核通过将把模具台账状态更新为「待用」。"
+                />
+              </Col>
+              {lockedTrialMoldSummaryCols(
+                formInitialValues?.trial_user_id as number | undefined,
+                formInitialValues?.trial_user_name as string | undefined,
+                trialUserPresets,
+              )}
+            </>
+          ) : null}
+          {!showProductionSection ? (
+            <>
+              <Col span={24}>
+                <ProFormUploadButton
+                  name="result_attachments"
+                  label="试模结果附件"
+                  max={10}
+                  fieldProps={{ ...uploadFieldProps, disabled: isDetailView }}
+                />
+              </Col>
+              <Col span={12}>
+                <UniUserIdSelect
+                  name="trial_user_id"
+                  label="试模人员"
+                  placeholder="请选择试模人员"
+                  required
+                  readonly={isDetailView}
+                  disabled={isDetailView}
+                  presetUsers={trialUserPresets}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormRadio.Group
+                  name="trial_result"
+                  label="试模结果"
+                  rules={[{ required: true, message: '请选择试模结果' }]}
+                  disabled={isDetailView}
+                  options={[
+                    { label: '合格', value: '合格' },
+                    { label: '不合格', value: '不合格' },
+                  ]}
+                  fieldProps={{
+                    onChange: (e) => {
+                      const v = e.target.value;
+                      if (v === '合格') {
+                        const trialUid = formRef.current?.getFieldValue('trial_user_id');
+                        formRef.current?.setFieldsValue({
+                          failure_handling: undefined,
+                          pending_notify_user_ids: [],
+                          repair_warehouse_id: undefined,
+                          production_trial_result: undefined,
+                          production_trial_user_id:
+                            formRef.current?.getFieldValue('production_trial_user_id') ?? trialUid,
+                        });
+                        return;
+                      }
+                      if (v === '不合格') {
+                        formRef.current?.setFieldsValue({
+                          failure_handling: TRIAL_FAILURE_REPAIR,
+                          production_trial_result: undefined,
+                          production_trial_user_id: undefined,
+                          inspection_attachments: [],
+                        });
+                        const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
+                        applyDefaultRepairWarehouseForSupplier(sn);
+                      }
+                    },
+                  }}
+                />
+              </Col>
+              <ProFormDependency name={['trial_result']}>
+                {({ trial_result }) => {
+                  if (trial_result !== '合格') return null;
+                  return (
+                    <Col span={24} style={{ marginBottom: 24 }}>
+                      <Alert
+                        type="info"
+                        showIcon
+                        message="试产阶段"
+                        description="试模合格后填写试产检验附件与试产结果；可先保存试模信息，试产内容也可后续补填。试产合格并审核通过后模具台账将更新为「待用」。"
+                      />
+                    </Col>
+                  );
+                }}
+              </ProFormDependency>
+              <ProFormDependency name={['trial_result', 'supplier_name', 'production_trial_user_id']}>
+                {({ trial_result, supplier_name, production_trial_user_id }) => {
+                  if (trial_result !== '合格') return null;
+                  const supplierNameStr =
+                    typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '');
+                  return (
                     <>
+                      <Col span={24}>
+                        <ProFormUploadButton
+                          name="inspection_attachments"
+                          label="试产检验附件"
+                          max={10}
+                          fieldProps={{ ...uploadFieldProps, disabled: isDetailView }}
+                        />
+                      </Col>
                       <Col span={12}>
-                        <ProFormSelect
-                          name="pending_notify_user_ids"
-                          label="消息提醒人员"
-                          mode="multiple"
-                          showSearch
-                          debounceTime={300}
-                          rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
-                          request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
-                          options={pendingNotifyPresetOptions}
+                        <UniUserIdSelect
+                          name="production_trial_user_id"
+                          label="试产人员"
+                          placeholder="请选择试产人员"
+                          readonly={isDetailView}
+                          disabled={isDetailView}
+                          presetUsers={productionTrialUserPresets}
+                        />
+                      </Col>
+                      <Col span={12}>
+                        <ProFormRadio.Group
+                          name="production_trial_result"
+                          label="试产结果"
+                          disabled={isDetailView}
+                          options={[
+                            { label: '合格', value: '合格' },
+                            { label: '不合格', value: '不合格' },
+                          ]}
                           fieldProps={{
-                            style: { width: '100%' },
-                            placeholder: '搜索并选择接收站内信的人员',
-                            filterOption: false,
+                            onChange: (e) => {
+                              const v = e.target.value;
+                              if (v === '合格') {
+                                formRef.current?.setFieldsValue({
+                                  failure_handling: undefined,
+                                  pending_notify_user_ids: [],
+                                  repair_warehouse_id: undefined,
+                                });
+                                return;
+                              }
+                              if (v === '不合格') {
+                                formRef.current?.setFieldsValue({
+                                  failure_handling: TRIAL_FAILURE_REPAIR,
+                                  pending_notify_user_ids: [],
+                                });
+                                const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
+                                applyDefaultRepairWarehouseForSupplier(sn);
+                                const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
+                                if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
+                              }
+                            },
                           }}
                         />
                       </Col>
-                      <Col span={24}>
-                        <TrialSupplierCcHint
-                          supplierName={
-                            typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '')
-                          }
-                        />
-                      </Col>
+                      <ProFormDependency
+                        name={[
+                          'production_trial_result',
+                          'supplier_name',
+                          'failure_handling',
+                          'production_trial_user_id',
+                        ]}
+                      >
+                        {({
+                          production_trial_result,
+                          supplier_name,
+                          failure_handling,
+                          production_trial_user_id,
+                        }) => {
+                          if (production_trial_result !== '不合格') return null;
+                          const supplierNameStr =
+                            typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '');
+                          const repairOptions = filterRepairWarehousesForSupplier(
+                            warehouseRows,
+                            supplierNameStr,
+                          );
+                          const notifyUserId =
+                            typeof production_trial_user_id === 'number'
+                              ? production_trial_user_id
+                              : production_trial_user_id != null
+                                ? Number(production_trial_user_id)
+                                : null;
+                          return (
+                            <>
+                              <Col span={12}>
+                                <ProFormRadio.Group
+                                  name="failure_handling"
+                                  label="处理方式"
+                                  rules={[{ required: true, message: '请选择处理方式' }]}
+                                  options={[
+                                    { label: TRIAL_FAILURE_PENDING, value: TRIAL_FAILURE_PENDING },
+                                    { label: TRIAL_FAILURE_REPAIR, value: TRIAL_FAILURE_REPAIR },
+                                  ]}
+                                  fieldProps={{
+                                    onChange: (e) => {
+                                      const mode = e.target.value;
+                                      if (mode === TRIAL_FAILURE_PENDING) {
+                                        const mc = String(
+                                          formRef.current?.getFieldValue('mold_code') ?? '',
+                                        ).trim();
+                                        if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
+                                        formRef.current?.setFieldsValue({ repair_warehouse_id: undefined });
+                                        return;
+                                      }
+                                      if (mode === TRIAL_FAILURE_REPAIR) {
+                                        const sn = String(
+                                          formRef.current?.getFieldValue('supplier_name') ?? '',
+                                        ).trim();
+                                        applyDefaultRepairWarehouseForSupplier(sn);
+                                      }
+                                    },
+                                  }}
+                                />
+                              </Col>
+                              {failure_handling === TRIAL_FAILURE_PENDING ? (
+                                <>
+                                  <Col span={12}>
+                                    <ProFormSelect
+                                      name="pending_notify_user_ids"
+                                      label="消息提醒人员"
+                                      mode="multiple"
+                                      showSearch
+                                      debounceTime={300}
+                                      rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
+                                      request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
+                                      options={pendingNotifyPresetOptions}
+                                      fieldProps={{
+                                        style: { width: '100%' },
+                                        placeholder: '搜索并选择接收站内信的人员',
+                                        filterOption: false,
+                                      }}
+                                    />
+                                  </Col>
+                                  <Col span={24}>
+                                    <TrialSupplierCcHint supplierName={supplierNameStr} />
+                                  </Col>
+                                </>
+                              ) : null}
+                              {failure_handling === TRIAL_FAILURE_REPAIR ? (
+                                <TrialImmediateRepairWarehouseFields
+                                  supplierNameStr={supplierNameStr}
+                                  repairOptions={repairOptions}
+                                  notifyUserId={notifyUserId}
+                                  unqualifiedLabel="试产不合格"
+                                  notifyPersonLabel="试产人员"
+                                  onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
+                                />
+                              ) : null}
+                            </>
+                          );
+                        }}
+                      </ProFormDependency>
                     </>
-                  ) : null}
-                  {failure_handling === TRIAL_FAILURE_REPAIR ? (
+                  );
+                }}
+              </ProFormDependency>
+              <ProFormDependency name={['trial_result', 'supplier_name', 'trial_user_id']}>
+                {({ trial_result, supplier_name, trial_user_id }) => {
+                  if (trial_result !== '不合格') return null;
+                  const supplierNameStr =
+                    typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '');
+                  const repairOptions = filterRepairWarehousesForSupplier(warehouseRows, supplierNameStr);
+                  const notifyUserId =
+                    typeof trial_user_id === 'number'
+                      ? trial_user_id
+                      : trial_user_id != null
+                        ? Number(trial_user_id)
+                        : null;
+                  return (
+                    <TrialImmediateRepairWarehouseFields
+                      supplierNameStr={supplierNameStr}
+                      repairOptions={repairOptions}
+                      notifyUserId={notifyUserId}
+                      unqualifiedLabel="试模不合格"
+                      notifyPersonLabel="试模人员"
+                      onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
+                    />
+                  );
+                }}
+              </ProFormDependency>
+            </>
+          ) : null}
+          {showProductionSection ? (
+            <>
+              <Col span={24}>
+                <ProFormUploadButton
+                  name="inspection_attachments"
+                  label="试产检验附件"
+                  max={10}
+                  fieldProps={{ ...uploadFieldProps, disabled: isDetailView }}
+                />
+              </Col>
+              <Col span={12}>
+                <UniUserIdSelect
+                  name="production_trial_user_id"
+                  label="试产人员"
+                  placeholder="请选择试产人员"
+                  required
+                  readonly={isDetailView}
+                  disabled={isDetailView}
+                  presetUsers={productionTrialUserPresets}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormRadio.Group
+                  name="production_trial_result"
+                  label="试产结果"
+                  rules={[{ required: true, message: '请选择试产结果' }]}
+                  disabled={isDetailView}
+                  options={[
+                    { label: '合格', value: '合格' },
+                    { label: '不合格', value: '不合格' },
+                  ]}
+                  fieldProps={{
+                    onChange: (e) => {
+                      const v = e.target.value;
+                      if (v === '合格') {
+                        formRef.current?.setFieldsValue({
+                          failure_handling: undefined,
+                          pending_notify_user_ids: [],
+                          repair_warehouse_id: undefined,
+                        });
+                        return;
+                      }
+                      if (v === '不合格') {
+                        formRef.current?.setFieldsValue({
+                          failure_handling: TRIAL_FAILURE_REPAIR,
+                          pending_notify_user_ids: [],
+                        });
+                        const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
+                        applyDefaultRepairWarehouseForSupplier(sn);
+                        const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
+                        if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
+                      }
+                    },
+                  }}
+                />
+              </Col>
+              <ProFormDependency
+                name={['production_trial_result', 'supplier_name', 'failure_handling', 'production_trial_user_id']}
+              >
+                {({ production_trial_result, supplier_name, failure_handling, production_trial_user_id }) => {
+                  if (production_trial_result !== '不合格') return null;
+                  const supplierNameStr =
+                    typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '');
+                  const repairOptions = filterRepairWarehousesForSupplier(warehouseRows, supplierNameStr);
+                  return (
                     <>
                       <Col span={12}>
-                        <ProFormSelect
-                          name="repair_warehouse_id"
-                          label="送修仓库"
-                          showSearch
-                          allowClear={false}
-                          rules={[{ required: true, message: '请选择送修仓库' }]}
-                          options={repairOptions}
-                          placeholder={
-                            repairOptions.length > 0
-                              ? '已带出供应商外部模具仓库，可改选'
-                              : '该供应商暂无外部模具仓库'
-                          }
-                          extra="保存后将把模具台账「所在仓库」转移至所选外部仓库"
-                          fieldProps={{ optionFilterProp: 'label' }}
+                        <ProFormRadio.Group
+                          name="failure_handling"
+                          label="处理方式"
+                          rules={[{ required: true, message: '请选择处理方式' }]}
+                          options={[
+                            { label: TRIAL_FAILURE_PENDING, value: TRIAL_FAILURE_PENDING },
+                            { label: TRIAL_FAILURE_REPAIR, value: TRIAL_FAILURE_REPAIR },
+                          ]}
+                          fieldProps={{
+                            onChange: (e) => {
+                              const mode = e.target.value;
+                              if (mode === TRIAL_FAILURE_PENDING) {
+                                const mc = String(formRef.current?.getFieldValue('mold_code') ?? '').trim();
+                                if (mc) void applyPendingNotifyMemoryForMoldCode(mc);
+                                formRef.current?.setFieldsValue({ repair_warehouse_id: undefined });
+                                return;
+                              }
+                              if (mode === TRIAL_FAILURE_REPAIR) {
+                                const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
+                                applyDefaultRepairWarehouseForSupplier(sn);
+                              }
+                            },
+                          }}
                         />
                       </Col>
-                      <Col span={24}>
-                        <TrialRepairNotifyHint
-                          supplierName={supplierNameStr}
-                          trialUserId={
-                            typeof trial_user_id === 'number'
-                              ? trial_user_id
-                              : trial_user_id != null
-                                ? Number(trial_user_id)
+                      {failure_handling === TRIAL_FAILURE_PENDING ? (
+                        <>
+                          <Col span={12}>
+                            <ProFormSelect
+                              name="pending_notify_user_ids"
+                              label="消息提醒人员"
+                              mode="multiple"
+                              showSearch
+                              debounceTime={300}
+                              rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
+                              request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
+                              options={pendingNotifyPresetOptions}
+                              fieldProps={{
+                                style: { width: '100%' },
+                                placeholder: '搜索并选择接收站内信的人员',
+                                filterOption: false,
+                              }}
+                            />
+                          </Col>
+                          <Col span={24}>
+                            <TrialSupplierCcHint
+                              supplierName={
+                                typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '')
+                              }
+                            />
+                          </Col>
+                        </>
+                      ) : null}
+                      {failure_handling === TRIAL_FAILURE_REPAIR ? (
+                        <TrialImmediateRepairWarehouseFields
+                          supplierNameStr={supplierNameStr}
+                          repairOptions={repairOptions}
+                          notifyUserId={
+                            typeof production_trial_user_id === 'number'
+                              ? production_trial_user_id
+                              : production_trial_user_id != null
+                                ? Number(production_trial_user_id)
                                 : null
                           }
+                          unqualifiedLabel="试产不合格"
+                          notifyPersonLabel="试产人员"
+                          onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
                         />
-                      </Col>
-                      {repairOptions.length === 0 && supplierNameStr.trim() ? (
-                        <Col span={24}>
-                          <Alert
-                            type="warning"
-                            showIcon
-                            message={`供应商「${supplierNameStr.trim()}」尚未维护外部模具仓库`}
-                            description="可快速新建该供应商的外部模具仓库，创建后将自动填入送修仓库。"
-                            action={
-                              <Button
-                                size="small"
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() => openRepairWarehouseQuickCreate(supplierNameStr)}
-                              >
-                                新建模具仓库
-                              </Button>
-                            }
-                          />
-                        </Col>
                       ) : null}
                     </>
-                  ) : null}
-                </>
-              );
-            }}
-          </ProFormDependency>
+                  );
+                }}
+              </ProFormDependency>
+            </>
+          ) : null}
+          {showProductionSection && !isProductionTrialPhase(formWorkflowPhase)
+            ? lockedTrialMoldSummaryCols(
+                formInitialValues?.trial_user_id as number | undefined,
+                formInitialValues?.trial_user_name as string | undefined,
+                trialUserPresets,
+              )
+            : null}
         </Row>
       </FormModalTemplate>
 
@@ -2433,6 +3050,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           setPoPickerOpen(false);
           setPoPickerSelectedKeys([]);
           setPoPickerSelectedRow(null);
+          setPoPickerKw('');
         }}
         width={960}
         destroyOnClose
@@ -2443,6 +3061,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               setPoPickerOpen(false);
               setPoPickerSelectedKeys([]);
               setPoPickerSelectedRow(null);
+              setPoPickerKw('');
             }}
           >
             取消
@@ -2453,22 +3072,30 @@ const MoldTrialSheetsPage: React.FC = () => {
         ]}
       >
         <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)' }}>
-          点选一行后点「使用该采购单」，会打开新建试模单并预填订单号与模具信息。已在本系统建过试模单的采购单号旁会显示「已建试模单」。
+          点选一行后点「使用该采购单」，会打开新建试模单并预填订单号与模具信息。本系统已有试模单的采购订单号旁显示试模次数（按试模单条数统计）。
         </p>
-        <div style={{ marginBottom: 12 }}>
-          <Radio.Group
-            optionType="button"
-            buttonStyle="solid"
-            value={poPickerTrialFilter}
-            onChange={(e) => setPoPickerTrialFilter(e.target.value as PoPickerTrialFilter)}
-            options={[
-              { label: '全部', value: 'all' },
-              { label: '待试模', value: 'pending' },
-              { label: '已试模', value: 'trialed' },
-            ]}
-          />
-        </div>
-        <Table
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+          <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              value={poPickerTrialFilter}
+              onChange={(e) => setPoPickerTrialFilter(e.target.value as PoPickerTrialFilter)}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '待试模', value: 'pending' },
+                { label: '已试模', value: 'trialed' },
+              ]}
+            />
+            <Input
+              placeholder="筛选采购订单号/供应商/模具代号/名称"
+              value={poPickerKw}
+              onChange={(e) => setPoPickerKw(e.target.value)}
+              allowClear
+              style={{ width: 300, maxWidth: '100%' }}
+            />
+          </Space>
+          <Table
           size="small"
           loading={poPickerLoading}
           rowKey={getPoPickerRowKey}
@@ -2476,6 +3103,9 @@ const MoldTrialSheetsPage: React.FC = () => {
           columns={poPickerColumns}
           pagination={{ pageSize: 10, showSizeChanger: true }}
           scroll={{ x: 720 }}
+          locale={{
+            emptyText: poPickerKw.trim() ? '无匹配采购单，请调整筛选条件' : '暂无采购单数据',
+          }}
           rowSelection={{
             type: 'radio',
             selectedRowKeys: poPickerSelectedKeys,
@@ -2485,6 +3115,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             },
           }}
         />
+        </Space>
       </Modal>
 
       <Modal
@@ -2508,6 +3139,10 @@ const MoldTrialSheetsPage: React.FC = () => {
             scroll={{ y: 360 }}
             dataSource={filteredPendingMolds}
             locale={{ emptyText: '暂无待启用模具' }}
+            onRow={(record) => ({
+              onClick: () => handleUsePendingMold(record),
+              style: { cursor: 'pointer' },
+            })}
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true, width: 140 },
@@ -2530,11 +3165,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                 title: '操作',
                 key: 'op',
                 width: 88,
-                render: (_, r) => (
-                  <Button type="link" size="small" onClick={() => handleUsePendingMold(r)}>
-                    选用
-                  </Button>
-                ),
+                render: () => <Typography.Link>选用</Typography.Link>,
               },
             ]}
           />

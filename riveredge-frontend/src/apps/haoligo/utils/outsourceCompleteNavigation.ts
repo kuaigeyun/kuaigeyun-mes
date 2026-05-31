@@ -1,4 +1,4 @@
-/** 外协维保单 → 外协维保完成单（带出来源）深链 */
+/** 外协维修单 → 外协维修完成单（带出来源）深链 */
 
 export const OUTSOURCE_MAINTENANCE_COMPLETE_PATH = '/apps/haoligo/molds/documents/outsource-complete';
 

@@ -394,12 +394,9 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
                         if old_line_uuids != normalized_line_uuids:
                             it["attachment_file_uuids"] = normalized_line_uuids
                             src_lines_patched = True
-            old_header_uuids = list(src_row.header_attachment_file_uuids or [])
-            if old_header_uuids != src_header or src_lines_patched:
-                src_row.header_attachment_file_uuids = src_header
-                if src_lines_patched:
-                    src_row.line_items = src_raw
-                await src_row.save(update_fields=["header_attachment_file_uuids", "line_items", "updated_at"])
+            if src_lines_patched:
+                src_row.line_items = src_raw
+                await src_row.save(update_fields=["line_items", "updated_at"])
 
     tid_int = int(tid) if tid is not None else 0
     codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]
@@ -591,7 +588,7 @@ async def create_outsource_maintenance_complete_sheet(
             outsourced_unit_name=unit_name,
             service_type="维修",
             clear_total_production=False,
-            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            header_attachment_file_uuids=[],
             line_items=stored,
             sheet_status="待审核",
         )
@@ -745,8 +742,8 @@ async def update_outsource_maintenance_complete_sheet(
     if "outsourced_unit_code" in data:
         v = data["outsourced_unit_code"]
         data["outsourced_unit_code"] = None if v is None else _strip_opt(str(v))
-    if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
-        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "header_attachment_file_uuids" in data:
+        data["header_attachment_file_uuids"] = []
     if "line_items" in data and data["line_items"] is not None:
         lines = [OutsourceCompleteLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:

@@ -1,8 +1,9 @@
 /**
- * 好力 GO — 外协维保单（申请人 + 末级申请部门 + 外协单位 + 模具明细；单据类型固定为维修）
+ * 好力 GO — 外协维修单（申请人 + 末级申请部门 + 外协单位 + 模具明细；单据类型固定为维修）
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDebounceFn } from 'ahooks';
 import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
@@ -55,7 +56,6 @@ import {
   deleteMoldOutsourceMaintenanceSheet,
   getMoldOutsourceMaintenanceSheet,
   listMoldOutsourceMaintenanceSheets,
-  listMolds,
   rejectMoldOutsourceMaintenanceSheet,
   revokeMoldOutsourceMaintenanceSheetApproval,
   updateMoldOutsourceMaintenanceSheet,
@@ -69,6 +69,7 @@ import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDeta
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 
 const sheetStatusEnum: Record<string, { text: string }> = {
@@ -93,7 +94,6 @@ function normUploadUuids(val: unknown): string[] {
 }
 
 type DetailAttachmentPreview = {
-  header: string[];
   byMold: Record<string, string[]>;
 };
 
@@ -230,11 +230,11 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     [departmentTreeRef, loadActiveSuppliers, preloadApplicantAndDepartments],
   );
 
-  const loadMoldsForPicker = useCallback(async () => {
+  const loadMoldsForPicker = useCallback(async (keyword?: string) => {
     setMoldLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0, status: '待用' });
-      setMoldRows(res.items);
+      const rows = await fetchMoldsForPicker({ status: '待用', keyword });
+      setMoldRows(rows);
     } catch {
       setMoldRows([]);
     } finally {
@@ -242,15 +242,12 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     }
   }, []);
 
-  const filteredMolds = useMemo(() => {
-    const q = moldKw.trim().toLowerCase();
-    if (!q) return moldRows;
-    return moldRows.filter(
-      (r) =>
-        r.mold_code.toLowerCase().includes(q) ||
-        (r.name && r.name.toLowerCase().includes(q)),
-    );
-  }, [moldRows, moldKw]);
+  const { run: debouncedLoadMoldsForPicker } = useDebounceFn(
+    (keyword: string) => {
+      void loadMoldsForPicker(keyword);
+    },
+    { wait: 300 },
+  );
 
   const uploadFieldProps = useMemo(
     (): Partial<UploadProps> =>
@@ -295,7 +292,6 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           outsourced_unit_code: undefined,
           ...applicantDefaults,
           source_order_no: undefined,
-          header_attachments: [],
           line_items: [defaultLineItem()],
         });
         startTransition(() => setFormOptionsReady(true));
@@ -333,14 +329,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           const mc = String(it.mold_code ?? '').trim();
           if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
         }
-        setDetailAttachmentPreview(
-          detailOnly
-            ? { header: [...(d.header_attachment_file_uuids || [])], byMold }
-            : null,
-        );
-        const header_attachments = detailOnly
-          ? []
-          : await uuidsToSecureUploadFileList(d.header_attachment_file_uuids);
+        setDetailAttachmentPreview(detailOnly ? { byMold } : null);
         const line_items = detailOnly
           ? (d.line_items || []).map((it) => ({
               mold_code: it.mold_code,
@@ -368,12 +357,11 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
-          header_attachments,
           line_items,
         });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
-        messageApi.error((e as Error).message || '加载外协维保单失败');
+        messageApi.error((e as Error).message || '加载外协维修单失败');
         setIsDetailView(false);
         setDetailAttachmentPreview(null);
         setModalVisible(false);
@@ -389,7 +377,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   const handleDeleteOne = (record: MoldOutsourceMaintenanceSheetRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除外协维保单（${record.outsourced_unit_name} / ${record.primary_mold_code ?? '-'}）吗？`,
+      content: `确定删除外协维修单（${record.outsourced_unit_name} / ${record.primary_mold_code ?? '-'}）吗？`,
       okType: 'danger',
       onOk: async () => {
         try {
@@ -449,7 +437,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       department_uuid: typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '',
       service_type: '维修',
       source_order_no: String(values.source_order_no ?? '').trim() || null,
-      header_attachment_file_uuids: normUploadUuids(values.header_attachments),
+      header_attachment_file_uuids: [],
       line_items,
     };
   };
@@ -526,7 +514,6 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       outsourced_unit_code: undefined,
       ...getCreateApplicantDefaults(),
       source_order_no: undefined,
-      header_attachments: [],
       line_items: [defaultLineItem()],
     });
     messageApi.success('已重置');
@@ -557,7 +544,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       fieldProps: { placeholder: '单号/外协单位/部门/申请人/来源单号' },
     },
     {
-      title: '外协维保单单号',
+      title: '外协维修单单号',
       dataIndex: 'sheet_no',
       width: 158,
       ellipsis: true,
@@ -683,7 +670,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldOutsourceMaintenanceSheetRow>
-          headerTitle="模具外协维保单"
+          headerTitle="模具外协维修单"
           columnPersistenceId="apps.haoligo.pages.molds.documents.outsource-maintenance"
           actionRef={actionRef}
           rowKey="id"
@@ -720,7 +707,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={isDetailView ? '外协维保单详情' : isEdit ? '编辑外协维保单' : '外协维保单'}
+        title={isDetailView ? '外协维修单详情' : isEdit ? '编辑外协维修单' : '外协维修单'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -867,20 +854,6 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               <Col span={12}>
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
-              <Col span={12}>
-                {isDetailView ? (
-                  <Form.Item label="附件照片（维修前）">
-                    <MoldAttachmentImagePreview uuids={detailAttachmentPreview?.header} />
-                  </Form.Item>
-                ) : (
-                  <ProFormUploadButton
-                    name="header_attachments"
-                    label="附件照片（维修前）"
-                    max={10}
-                    fieldProps={uploadFieldProps}
-                  />
-                )}
-              </Col>
             </Row>
 
             <Divider titlePlacement="left">模具明细</Divider>
@@ -949,8 +922,9 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                               disabled={isDetailView}
                               onClick={() => {
                                 setMoldPickRow(index);
+                                setMoldKw('');
                                 setMoldPickerOpen(true);
-                                void loadMoldsForPicker();
+                                void loadMoldsForPicker('');
                               }}
                             >
                               选择
@@ -1048,14 +1022,23 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             message="仅列出状态为「待用」的模具"
             description="若模具为「在用」等领用状态，请先办理还入单，待状态变为「待用」后再加入维保明细。"
           />
-          <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
+          <Input
+            placeholder="搜索模具代号/名称（支持台账全库模糊查询）"
+            value={moldKw}
+            onChange={(e) => {
+              const v = e.target.value;
+              setMoldKw(v);
+              debouncedLoadMoldsForPicker(v);
+            }}
+            allowClear
+          />
           <Table<MoldRow>
             size="small"
             rowKey="id"
             loading={moldLoading}
             pagination={false}
             scroll={{ y: 360 }}
-            dataSource={filteredMolds}
+            dataSource={moldRows}
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true },

@@ -66,6 +66,7 @@ import {
   getMold,
   getMoldLedgerDatasetBinding,
   listMoldOperationRecords,
+  listMoldUpkeepParamSets,
   listMoldWarehouses,
   listMolds,
   putMoldLedgerDatasetBinding,
@@ -77,6 +78,7 @@ import {
   type MoldLedgerDatasetBindingPayload,
   type MoldOperationRecordRow,
   type MoldRow,
+  type MoldUpkeepParamSetRow,
   type MoldWarehouseRow,
   type MoldUpdatePayload,
 } from '../../../services/haoligo';
@@ -95,6 +97,13 @@ import {
   getMoldLedgerSourceLabel,
   getMoldLedgerSourceTagColor,
 } from '../../../constants/moldLedgerSource';
+import {
+  computeMoldRatedUsableYield,
+  moldRatedUsableYieldToPayloadValue,
+  resolveUsableYieldPayload,
+  shouldAutoFillRatedUsableYield,
+} from '../../../utils/moldRatedYield';
+import { parseMoldLedgerListSearchFilters } from '../../../utils/moldLedgerListSearch';
 
 const statusValueEnum = MOLD_LEDGER_STATUSES.reduce<Record<string, { text: string }>>((acc, s) => {
   acc[s] = { text: s };
@@ -133,11 +142,6 @@ function numOrUndef(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function decStrOrUndef(v: unknown): string | undefined {
-  if (v === null || v === undefined || v === '') return undefined;
-  return String(v);
-}
-
 function omitMoldLedgerKeys(obj: MoldCreatePayload): Record<string, unknown> {
   const { mold_code: _code, total_manufacture_qty: _qty, ...rest } = obj;
   void _code;
@@ -159,9 +163,28 @@ function parseMoldDecimal(v: string | null | undefined): number {
   return Number.isFinite(n) ? n : Number.NaN;
 }
 
-function formatMoldMetricNumber(n: number, fractionDigits = 4): string {
+function formatMoldMetricNumber(n: number, fractionDigits = 0): string {
   if (!Number.isFinite(n)) return '—';
   return n.toLocaleString(undefined, { maximumFractionDigits: fractionDigits });
+}
+
+function formatMoldLedgerInteger(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return String(Math.round(n));
+}
+
+function moldIntStrOrUndef(v: unknown): string | undefined {
+  if (v === null || v === undefined || v === '') return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return String(Math.round(n));
+}
+
+function moldIntOrUndef(v: unknown): number | undefined {
+  const n = numOrUndef(v);
+  return n === undefined ? undefined : Math.round(n);
 }
 
 /** 剩余占比环形图颜色：与工作台模具寿命预警阈值一致（消耗 ≥95% 红、≥85% 黄、其余绿） */
@@ -177,36 +200,31 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
   if (loading) {
     return (
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={12}>
-          <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
-            <div style={{ minHeight: 132, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin />
-            </div>
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
-            <div style={{ minHeight: 132, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin />
-            </div>
-          </Card>
-        </Col>
+        {[0, 1].map((i) => (
+          <Col xs={24} md={12} key={i}>
+            <Card size="small" variant="borderless" style={{ background: token.colorFillQuaternary }}>
+              <div style={{ minHeight: 132, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spin />
+              </div>
+            </Card>
+          </Col>
+        ))}
       </Row>
     );
   }
-
-  const ratedTimes = row.usable_times;
-  const usedTimes = row.used_times ?? 0;
-  const pctTimesRemaining =
-    ratedTimes != null && ratedTimes > 0
-      ? Math.round((Math.max(0, ratedTimes - usedTimes) / ratedTimes) * 1000) / 10
-      : undefined;
 
   const ratedYield = parseMoldDecimal(row.usable_yield);
   const usedYield = parseMoldDecimal(row.used_yield ?? '');
   const pctYieldRemaining =
     !Number.isNaN(ratedYield) && ratedYield > 0 && !Number.isNaN(usedYield)
       ? Math.round((Math.max(0, ratedYield - usedYield) / ratedYield) * 1000) / 10
+      : undefined;
+
+  const lifeCap = parseMoldDecimal(row.service_life_years != null ? String(row.service_life_years) : '');
+  const totalQty = parseMoldDecimal(row.total_manufacture_qty ?? '');
+  const pctLifeRemaining =
+    !Number.isNaN(lifeCap) && lifeCap > 0 && !Number.isNaN(totalQty)
+      ? Math.round((Math.max(0, lifeCap - totalQty) / lifeCap) * 1000) / 10
       : undefined;
 
   const ringPlaceholder = (
@@ -290,24 +308,24 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
     <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
       <Col xs={24} md={12}>
         {cardBodyMetric(
-          '额定可用次数 / 已使用次数',
-          '环形图：剩余次数占比 =（额定可用次数 − 已使用次数）÷ 额定可用次数；还入单不再扣减额定值',
-          '额定可用次数',
-          '已使用次数',
-          ratedTimes != null ? formatMoldMetricNumber(ratedTimes, 0) : '—',
-          formatMoldMetricNumber(usedTimes, 0),
-          pctTimesRemaining,
-        )}
-      </Col>
-      <Col xs={24} md={12}>
-        {cardBodyMetric(
           '额定可用产量 / 已使用产量',
-          '环形图：剩余产量占比 =（额定可用产量 − 已使用产量）÷ 额定可用产量',
+          '环形图：剩余产量占比 =（额定可用产量 − 已使用产量）÷ 额定可用产量；保养以产量为依据',
           '额定可用产量',
           '已使用产量',
           !Number.isNaN(ratedYield) ? formatMoldMetricNumber(ratedYield) : '—',
           !Number.isNaN(usedYield) ? formatMoldMetricNumber(usedYield) : '—',
           pctYieldRemaining,
+        )}
+      </Col>
+      <Col xs={24} md={12}>
+        {cardBodyMetric(
+          '模具寿命 / 累计产量',
+          '模具寿命为累计产量上限；环形图为剩余寿命占比 =（上限 − 累计产量）÷ 上限',
+          '累计产量上限',
+          '累计产量',
+          !Number.isNaN(lifeCap) ? formatMoldMetricNumber(lifeCap) : '—',
+          !Number.isNaN(totalQty) ? formatMoldMetricNumber(totalQty, 0) : '—',
+          pctLifeRemaining,
         )}
       </Col>
     </Row>
@@ -343,16 +361,12 @@ function renderMoldWarehouseCell(row: Pick<MoldRow, 'mold_warehouse_name'>): str
 /** 批量修改弹窗：仅把已填写的项加入 PATCH（留空表示不改动该字段）。 */
 function buildMoldLifecycleBatchPatch(values: Record<string, unknown>): MoldBatchLifecyclePayload | null {
   const patch: MoldBatchLifecyclePayload = {};
-  const y = numOrUndef(values.service_life_years);
-  if (y !== undefined) patch.service_life_years = y;
+  const lifeCap = moldIntStrOrUndef(values.service_life_years);
+  if (lifeCap !== undefined) patch.service_life_years = lifeCap;
   const t = numOrUndef(values.usable_times);
   if (t !== undefined) patch.usable_times = t;
-  const uy = decStrOrUndef(values.usable_yield);
-  if (uy !== undefined) patch.usable_yield = uy;
-  const my = decStrOrUndef(values.maintenance_cycle_by_yield);
+  const my = moldIntStrOrUndef(values.maintenance_cycle_by_yield);
   if (my !== undefined) patch.maintenance_cycle_by_yield = my;
-  const md = numOrUndef(values.maintenance_cycle_by_days);
-  if (md !== undefined) patch.maintenance_cycle_by_days = md;
   const statusRaw = values.status;
   if (statusRaw != null && statusRaw !== '') {
     const status = String(statusRaw).trim();
@@ -377,6 +391,8 @@ const MoldLedgerPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   useHaoligoMoldLedgerTableLiveRefresh(actionRef);
   const formRef = useRef<ProFormInstance>(null);
+  /** 上次由产能×次数写入的额定可用产量；与当前值相等时才随产能/次数自动更新 */
+  const lastAutoRatedYieldRef = useRef<number | undefined>(undefined);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -385,6 +401,7 @@ const MoldLedgerPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string; label: string }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ value: number; label: string }[]>([]);
+  const [upkeepSetOptions, setUpkeepSetOptions] = useState<{ value: number; label: string }[]>([]);
   const [datasetBinding, setDatasetBinding] = useState<MoldLedgerDatasetBindingPayload | null>(null);
   const [bindingModalOpen, setBindingModalOpen] = useState(false);
   const [bindingCfgForm] = Form.useForm<MoldLedgerDatasetBindingPayload>();
@@ -598,6 +615,24 @@ const MoldLedgerPage: React.FC = () => {
     void loadWarehouses();
   }, [loadWarehouses]);
 
+  const loadUpkeepSets = useCallback(async () => {
+    try {
+      const rows = await listMoldUpkeepParamSets();
+      setUpkeepSetOptions(
+        rows.map((s: MoldUpkeepParamSetRow) => ({
+          value: s.id,
+          label: `${s.code} · ${s.name}`,
+        })),
+      );
+    } catch {
+      setUpkeepSetOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUpkeepSets();
+  }, [loadUpkeepSets]);
+
   const handleOpenBatchModal = useCallback(() => {
     batchForm.resetFields();
     setBatchScope('selected');
@@ -697,14 +732,33 @@ const MoldLedgerPage: React.FC = () => {
     await run();
   };
 
+  const syncRatedUsableYieldInForm = useCallback((allValues: Record<string, unknown>) => {
+    const derived = computeMoldRatedUsableYield(allValues.mold_capacity, allValues.usable_times);
+    if (derived === undefined) return;
+    if (!shouldAutoFillRatedUsableYield(allValues.usable_yield, lastAutoRatedYieldRef.current)) return;
+    formRef.current?.setFieldsValue({ usable_yield: derived });
+    lastAutoRatedYieldRef.current = derived;
+  }, []);
+
+  const handleMoldFormValuesChange = useCallback(
+    (changed: Record<string, unknown>, allValues: Record<string, unknown>) => {
+      if ('usable_yield' in changed) return;
+      if ('mold_capacity' in changed || 'usable_times' in changed) {
+        syncRatedUsableYieldInForm(allValues);
+      }
+    },
+    [syncRatedUsableYieldInForm],
+  );
+
   const handleCreate = () => {
+    lastAutoRatedYieldRef.current = undefined;
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({
       status: '待启用',
       allow_repeated_borrow: true,
       mold_capacity: undefined,
-      unit: undefined,
+      unit: '副',
     });
     setModalVisible(true);
   };
@@ -714,26 +768,31 @@ const MoldLedgerPage: React.FC = () => {
   const handleEdit = async (record: MoldRow) => {
     try {
       const detail = await getMold(record.id);
+      const storedYield = detail.usable_yield != null ? Number(detail.usable_yield) : undefined;
+      const autoYield = computeMoldRatedUsableYield(detail.mold_capacity, detail.usable_times);
+      lastAutoRatedYieldRef.current =
+        autoYield !== undefined && storedYield !== undefined && storedYield === autoYield
+          ? autoYield
+          : undefined;
       setIsEdit(true);
       setEditId(detail.id);
       setFormInitialValues({
         mold_code: detail.mold_code,
         name: detail.name,
         unit: detail.unit || '',
-        mold_capacity: detail.mold_capacity != null ? Number(detail.mold_capacity) : undefined,
-        service_life_years: detail.service_life_years ?? undefined,
+        mold_capacity: moldIntOrUndef(detail.mold_capacity),
+        service_life_years: moldIntOrUndef(detail.service_life_years),
         usable_times: detail.usable_times ?? undefined,
-        usable_yield: detail.usable_yield != null ? Number(detail.usable_yield) : undefined,
-        maintenance_cycle_by_yield:
-          detail.maintenance_cycle_by_yield != null ? Number(detail.maintenance_cycle_by_yield) : undefined,
-        maintenance_cycle_by_days: detail.maintenance_cycle_by_days ?? undefined,
+        usable_yield: storedYield != null ? Math.round(storedYield) : undefined,
+        maintenance_cycle_by_yield: moldIntOrUndef(detail.maintenance_cycle_by_yield),
         allow_repeated_borrow: detail.allow_repeated_borrow ?? true,
         purchase_vendor_name: detail.purchase_vendor_name ?? undefined,
         mold_warehouse_id: detail.mold_warehouse_id ?? undefined,
+        upkeep_param_set_id: detail.upkeep_param_set_id ?? undefined,
         status: detail.status,
         remark: detail.remark ?? undefined,
         used_times: detail.used_times ?? 0,
-        used_yield: detail.used_yield != null ? Number(detail.used_yield) : 0,
+        used_yield: moldIntOrUndef(detail.used_yield) ?? 0,
       });
       setModalVisible(true);
     } catch (e) {
@@ -801,7 +860,29 @@ const MoldLedgerPage: React.FC = () => {
     { title: '模具名称', dataIndex: 'name' },
     { title: '来源', dataIndex: 'ledger_source', render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source) },
     { title: '单位', dataIndex: 'unit', render: (_, r) => r.unit || '—' },
-    { title: '单模产能', dataIndex: 'mold_capacity' },
+    { title: '单模产能', dataIndex: 'mold_capacity', render: (_, r) => formatMoldLedgerInteger(r.mold_capacity) },
+    { title: '额定可用次数', dataIndex: 'usable_times', render: (_, r) => r.usable_times ?? '—' },
+    {
+      title: '额定可用产量',
+      dataIndex: 'usable_yield',
+      render: (_, r) => {
+        const derived = moldRatedUsableYieldToPayloadValue(r.mold_capacity, r.usable_times);
+        return formatMoldLedgerInteger(derived ?? r.usable_yield);
+      },
+    },
+    {
+      title: '维修周期(依产量)',
+      dataIndex: 'maintenance_cycle_by_yield',
+      render: (_, r) => formatMoldLedgerInteger(r.maintenance_cycle_by_yield),
+    },
+    {
+      title: '模具寿命（累计产量上限）',
+      dataIndex: 'service_life_years',
+      render: (_, r) => formatMoldLedgerInteger(r.service_life_years),
+    },
+    { title: '累计产量', dataIndex: 'total_manufacture_qty', render: (_, r) => formatMoldLedgerInteger(r.total_manufacture_qty) },
+    { title: '已使用次数', dataIndex: 'used_times', render: (_, r) => r.used_times ?? 0 },
+    { title: '已使用产量', dataIndex: 'used_yield', render: (_, r) => formatMoldLedgerInteger(r.used_yield) },
     {
       title: '允许重复领用',
       dataIndex: 'allow_repeated_borrow',
@@ -817,17 +898,6 @@ const MoldLedgerPage: React.FC = () => {
         </span>
       ),
     },
-    { title: '模具寿命', dataIndex: 'service_life_years', render: (_, r) => r.service_life_years ?? '—' },
-    { title: '额定可用次数', dataIndex: 'usable_times', render: (_, r) => r.usable_times ?? '—' },
-    { title: '已使用次数', dataIndex: 'used_times', render: (_, r) => r.used_times ?? 0 },
-    { title: '额定可用产量', dataIndex: 'usable_yield', render: (_, r) => r.usable_yield ?? '—' },
-    { title: '已使用产量', dataIndex: 'used_yield', render: (_, r) => r.used_yield ?? '—' },
-    {
-      title: '维修周期(依产量)',
-      dataIndex: 'maintenance_cycle_by_yield',
-      render: (_, r) => r.maintenance_cycle_by_yield ?? '—',
-    },
-    { title: '维修周期(依天数)', dataIndex: 'maintenance_cycle_by_days', render: (_, r) => r.maintenance_cycle_by_days ?? '—' },
     {
       title: '状态',
       dataIndex: 'status',
@@ -837,6 +907,15 @@ const MoldLedgerPage: React.FC = () => {
       title: '所在仓库',
       dataIndex: 'mold_warehouse_name',
       render: (_, r) => renderMoldWarehouseCell(r),
+    },
+    {
+      title: '保养方案',
+      dataIndex: 'upkeep_param_set_id',
+      render: (_, r) => {
+        if (r.upkeep_param_set_id == null) return '—';
+        const s = upkeepSetOptions.find((o) => o.value === r.upkeep_param_set_id);
+        return s ? s.label : r.upkeep_param_set_id;
+      },
     },
     { title: '备注', dataIndex: 'remark', span: 2, render: (_, r) => r.remark || '—' },
   ];
@@ -853,15 +932,18 @@ const MoldLedgerPage: React.FC = () => {
     mold_code: String(values.mold_code ?? '').trim(),
     name: String(values.name ?? '').trim(),
     unit: String(values.unit ?? '').trim(),
-    mold_capacity: values.mold_capacity != null && values.mold_capacity !== '' ? Number(values.mold_capacity) : 0,
-    service_life_years: numOrUndef(values.service_life_years),
+    mold_capacity:
+      values.mold_capacity != null && values.mold_capacity !== ''
+        ? Math.round(Number(values.mold_capacity))
+        : 0,
+    service_life_years: moldIntStrOrUndef(values.service_life_years),
     usable_times: numOrUndef(values.usable_times),
-    usable_yield: decStrOrUndef(values.usable_yield),
-    maintenance_cycle_by_yield: decStrOrUndef(values.maintenance_cycle_by_yield),
-    maintenance_cycle_by_days: numOrUndef(values.maintenance_cycle_by_days),
+    usable_yield: resolveUsableYieldPayload(values.mold_capacity, values.usable_times, values.usable_yield),
+    maintenance_cycle_by_yield: moldIntStrOrUndef(values.maintenance_cycle_by_yield),
     allow_repeated_borrow: Boolean(values.allow_repeated_borrow),
     purchase_vendor_name: String(values.purchase_vendor_name ?? '').trim() || null,
     mold_warehouse_id: parseMoldWarehouseIdForForm(values.mold_warehouse_id),
+    upkeep_param_set_id: parseMoldWarehouseIdForForm(values.upkeep_param_set_id),
     status,
     total_manufacture_qty: 0,
     remark: String(values.remark ?? '').trim() || null,
@@ -890,25 +972,45 @@ const MoldLedgerPage: React.FC = () => {
   };
 
   const columns: ProColumns<MoldRow>[] = [
-    { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true, fixed: 'left' },
-    { title: '模具名称', dataIndex: 'name', width: 180, ellipsis: true },
+    {
+      title: '模具代号',
+      dataIndex: 'mold_code',
+      width: 120,
+      ellipsis: true,
+      fixed: 'left',
+      fieldProps: { placeholder: '请输入模具代号' },
+    },
+    {
+      title: '模具名称',
+      dataIndex: 'name',
+      width: 180,
+      ellipsis: true,
+      fieldProps: { placeholder: '请输入模具名称' },
+    },
     {
       title: '来源',
       dataIndex: 'ledger_source',
       width: 96,
-      hideInSearch: true,
       valueType: 'select',
       valueEnum: sourceValueEnum,
+      fieldProps: { allowClear: true, placeholder: '请选择来源' },
       render: (_, r) => renderMoldLedgerSourceCell(r.ledger_source),
     },
     { title: '单位', dataIndex: 'unit', width: 72, hideInSearch: true, render: (_, r) => r.unit || '—' },
-    { title: '单模产能', dataIndex: 'mold_capacity', width: 100, hideInSearch: true },
+    {
+      title: '单模产能',
+      dataIndex: 'mold_capacity',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => formatMoldLedgerInteger(r.mold_capacity),
+    },
     {
       title: '状态',
       dataIndex: 'status',
       width: 88,
       valueType: 'select',
       valueEnum: statusValueEnum,
+      fieldProps: { allowClear: true, placeholder: '请选择状态' },
       render: (_, r) => renderMoldLedgerStatusCell(r.status),
     },
     {
@@ -933,22 +1035,39 @@ const MoldLedgerPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => (r.usable_times != null ? r.usable_times : '—'),
     },
-    { title: '已使用次数', dataIndex: 'used_times', width: 96, hideInSearch: true, render: (_, r) => r.used_times ?? 0 },
     {
       title: '额定可用产量',
       dataIndex: 'usable_yield',
       width: 112,
       hideInSearch: true,
       ellipsis: true,
-      render: (_, r) => r.usable_yield ?? '—',
+      render: (_, r) =>
+        formatMoldLedgerInteger(
+          moldRatedUsableYieldToPayloadValue(r.mold_capacity, r.usable_times) ?? r.usable_yield,
+        ),
     },
+    {
+      title: '模具寿命',
+      dataIndex: 'service_life_years',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => formatMoldLedgerInteger(r.service_life_years),
+    },
+    {
+      title: '累计产量',
+      dataIndex: 'total_manufacture_qty',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => formatMoldLedgerInteger(r.total_manufacture_qty),
+    },
+    { title: '已使用次数', dataIndex: 'used_times', width: 96, hideInSearch: true, render: (_, r) => r.used_times ?? 0 },
     {
       title: '已使用产量',
       dataIndex: 'used_yield',
       width: 108,
       hideInSearch: true,
       ellipsis: true,
-      render: (_, r) => r.used_yield ?? '—',
+      render: (_, r) => formatMoldLedgerInteger(r.used_yield),
     },
     {
       title: '加工(分)',
@@ -1020,11 +1139,9 @@ const MoldLedgerPage: React.FC = () => {
             '*单模产能',
             '状态',
             '允许重复领用',
-            '模具寿命',
+            '模具寿命（累计产量上限）',
             '额定可用次数',
-            '额定可用产量',
             '维修周期(依产量)',
-            '维修周期(依天数)',
             '购买厂商',
             '备注',
           ]}
@@ -1053,11 +1170,9 @@ const MoldLedgerPage: React.FC = () => {
             }
             const statusIdx = getIdx('状态', 'status');
             const borrowIdx = getIdx('允许重复领用', '重复领用');
-            const yearsIdx = getIdx('模具寿命', '可用年限', '年限');
+            const lifeCapIdx = getIdx('模具寿命', '累计产量上限', '寿命');
             const timesIdx = getIdx('额定可用次数', '可用次数', '次数');
-            const yieldIdx = getIdx('额定可用产量', '可用产量', '产量');
             const maintYIdx = getIdx('维修周期(依产量)', '依产量', 'maintenance_cycle_by_yield');
-            const maintDIdx = getIdx('维修周期(依天数)', '依天数', 'maintenance_cycle_by_days');
             const vendorIdx = getIdx('购买厂商', '厂商');
             const remarkIdx = getIdx('备注', 'remark');
 
@@ -1070,7 +1185,9 @@ const MoldLedgerPage: React.FC = () => {
               const unit = String(row[unitIdx] ?? '').trim();
               const capRaw = row[capIdx];
               const mold_capacity =
-                capRaw !== null && capRaw !== undefined && capRaw !== '' ? Number(capRaw) : Number.NaN;
+                capRaw !== null && capRaw !== undefined && capRaw !== ''
+                  ? Math.round(Number(capRaw))
+                  : Number.NaN;
               if (!mold_code || !name || !unit || !Number.isFinite(mold_capacity)) continue;
               const allowCell = borrowIdx >= 0 ? parseBoolCell(row[borrowIdx]) : undefined;
               const rawSt = statusIdx >= 0 ? String(row[statusIdx] ?? '').trim() : '';
@@ -1086,11 +1203,10 @@ const MoldLedgerPage: React.FC = () => {
                 name,
                 unit,
                 mold_capacity,
-                service_life_years: yearsIdx >= 0 ? numOrUndef(row[yearsIdx]) : undefined,
+                service_life_years: lifeCapIdx >= 0 ? moldIntStrOrUndef(row[lifeCapIdx]) : undefined,
                 usable_times: timesIdx >= 0 ? numOrUndef(row[timesIdx]) : undefined,
-                usable_yield: yieldIdx >= 0 ? decStrOrUndef(row[yieldIdx]) : undefined,
-                maintenance_cycle_by_yield: maintYIdx >= 0 ? decStrOrUndef(row[maintYIdx]) : undefined,
-                maintenance_cycle_by_days: maintDIdx >= 0 ? numOrUndef(row[maintDIdx]) : undefined,
+                usable_yield: moldRatedUsableYieldToPayloadValue(mold_capacity, timesIdx >= 0 ? row[timesIdx] : undefined),
+                maintenance_cycle_by_yield: maintYIdx >= 0 ? moldIntStrOrUndef(row[maintYIdx]) : undefined,
                 allow_repeated_borrow: allowCell ?? true,
                 purchase_vendor_name:
                   vendorIdx >= 0 ? String(row[vendorIdx] ?? '').trim() || null : null,
@@ -1131,21 +1247,21 @@ const MoldLedgerPage: React.FC = () => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
-            const rawKw = searchFormValues?.keyword;
-            const keyword =
-              typeof rawKw === 'string' && rawKw.trim() ? rawKw.trim() : undefined;
+            const filters = parseMoldLedgerListSearchFilters(searchFormValues, params);
             try {
               const res = await listMolds({
                 skip,
                 limit: pageSize,
-                status: typeof searchFormValues?.status === 'string' ? searchFormValues.status : undefined,
-                keyword,
+                status: filters.status,
+                mold_code: filters.mold_code,
+                name: filters.name,
+                ledger_source: filters.ledger_source,
+                keyword: filters.keyword,
               });
               listSnapshotRef.current = {
                 total: res.total,
-                keyword,
-                status:
-                  typeof searchFormValues?.status === 'string' ? searchFormValues.status : undefined,
+                keyword: filters.keyword,
+                status: filters.status,
               };
               setListMatchTotal(res.total);
               return {
@@ -1167,7 +1283,7 @@ const MoldLedgerPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={handleCloseMoldDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         plainBody={
           moldDetail ? (
             <>
@@ -1224,7 +1340,9 @@ const MoldLedgerPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setEditId(null);
+          lastAutoRatedYieldRef.current = undefined;
         }}
+        onValuesChange={handleMoldFormValuesChange}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
@@ -1260,17 +1378,8 @@ const MoldLedgerPage: React.FC = () => {
               label="单模产能"
               placeholder="请输入单模产能"
               min={0}
-              fieldProps={{ precision: 4, style: { width: '100%' } }}
-              rules={[{ required: true, message: '请输入单模产能' }]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit
-              name="service_life_years"
-              label="模具寿命"
-              placeholder="请输入模具寿命"
-              min={0}
               fieldProps={{ precision: 0, style: { width: '100%' } }}
+              rules={[{ required: true, message: '请输入单模产能' }]}
             />
           </Col>
           <Col span={12}>
@@ -1286,9 +1395,28 @@ const MoldLedgerPage: React.FC = () => {
             <ProFormDigit
               name="usable_yield"
               label="额定可用产量"
-              placeholder="请输入额定可用产量"
+              placeholder="可手工修改；默认=单模产能×额定可用次数"
               min={0}
-              fieldProps={{ precision: 4, style: { width: '100%' } }}
+              fieldProps={{ precision: 0, style: { width: '100%' } }}
+              extra="= 单模产能 × 额定可用次数（可改；改产能/次数且产量仍为自动值时会重算）"
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="maintenance_cycle_by_yield"
+              label="维修周期(依产量)"
+              placeholder="请输入维修周期(依产量)"
+              min={0}
+              fieldProps={{ precision: 0, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="service_life_years"
+              label="模具寿命（累计产量上限）"
+              placeholder="请输入累计产量上限"
+              min={0}
+              fieldProps={{ precision: 0, style: { width: '100%' } }}
             />
           </Col>
           {isEdit ? (
@@ -1306,38 +1434,11 @@ const MoldLedgerPage: React.FC = () => {
                   name="used_yield"
                   label="已使用产量"
                   disabled
-                  fieldProps={{ precision: 4, style: { width: '100%' } }}
+                  fieldProps={{ precision: 0, style: { width: '100%' } }}
                 />
               </Col>
             </>
           ) : null}
-          <Col span={12}>
-            <ProFormDigit
-              name="maintenance_cycle_by_yield"
-              label="维修周期(依产量)"
-              placeholder="请输入维修周期(依产量)"
-              min={0}
-              fieldProps={{ precision: 4, style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit
-              name="maintenance_cycle_by_days"
-              label="维修周期(依天数)"
-              placeholder="请输入维修周期(依天数)"
-              min={0}
-              fieldProps={{ precision: 0, style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="status"
-              label="状态"
-              placeholder="请选择状态"
-              rules={[{ required: true, message: '请选择状态' }]}
-              options={MOLD_LEDGER_STATUSES.map((s) => ({ label: s, value: s }))}
-            />
-          </Col>
           <Col span={12}>
             <ProFormSelect
               name="mold_warehouse_id"
@@ -1349,6 +1450,17 @@ const MoldLedgerPage: React.FC = () => {
               fieldProps={{
                 optionFilterProp: 'label',
               }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="upkeep_param_set_id"
+              label="保养方案"
+              placeholder="请选择保养方案"
+              allowClear
+              showSearch
+              options={upkeepSetOptions}
+              fieldProps={{ optionFilterProp: 'label' }}
             />
           </Col>
           <Col span={12}>
@@ -1371,14 +1483,23 @@ const MoldLedgerPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
           </Col>
-          <Col span={24}>
+          <Col span={12}>
+            <ProFormSelect
+              name="status"
+              label="状态"
+              placeholder="请选择状态"
+              rules={[{ required: true, message: '请选择状态' }]}
+              options={MOLD_LEDGER_STATUSES.map((s) => ({ label: s, value: s }))}
+            />
+          </Col>
+          <Col span={12}>
             <ProFormSwitch name="allow_repeated_borrow" label="允许重复领用" />
           </Col>
         </Row>
       </FormModalTemplate>
 
       <Modal
-        title="批量修改（状态 / 所在仓库 / 模具寿命 / 额定可用次数 / 额定可用产量 / 维修周期）"
+        title="批量修改（状态 / 所在仓库 / 模具寿命 / 额定可用次数 / 维修周期依产量）"
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
@@ -1443,27 +1564,17 @@ const MoldLedgerPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="service_life_years" label="模具寿命">
-                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
               <Form.Item name="usable_times" label="额定可用次数">
-                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="usable_yield" label="额定可用产量">
-                <InputNumber min={0} precision={4} style={{ width: '100%' }} placeholder="留空不修改" />
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改；将重算额定可用产量" />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="maintenance_cycle_by_yield" label="维修周期(依产量)">
-                <InputNumber min={0} precision={4} style={{ width: '100%' }} placeholder="留空不修改" />
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="maintenance_cycle_by_days" label="维修周期(依天数)">
+              <Form.Item name="service_life_years" label="模具寿命（累计产量上限）">
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="留空不修改" />
               </Form.Item>
             </Col>

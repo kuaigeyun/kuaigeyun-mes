@@ -1,5 +1,5 @@
 /**
- * 好力 GO — 外协维保记录（统计报表：以外协维保完修单为事实口径，含审核状态筛选）
+ * 好力 GO — 外协维修记录（统计报表：以外协维修完成单为事实口径，含审核状态筛选）
  */
 
 import React, { useRef } from 'react';
@@ -47,7 +47,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
       fieldProps: { placeholder: '完修单号/来源单号/外协单位/申请人' },
     },
     {
-      title: '外协维保完修单号',
+      title: '外协维修完成单号',
       dataIndex: 'sheet_no',
       width: 168,
       ellipsis: true,
@@ -104,7 +104,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MoldOutsourceMaintenanceCompleteSheetRow>
-        headerTitle="外协维保记录"
+        headerTitle="外协维修记录"
         columnPersistenceId="apps.haoligo.pages.molds.reports.outsource-maintenance-log"
         actionRef={actionRef}
         rowKey="id"
@@ -135,7 +135,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
               total: res.total,
             };
           } catch (e) {
-            messageApi.error((e as Error).message || '加载外协维保记录失败');
+            messageApi.error((e as Error).message || '加载外协维修记录失败');
             return { data: [], success: false, total: 0 };
           }
         }}

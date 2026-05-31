@@ -409,14 +409,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />
             <ProFormText name="app_key" label="App Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="app_secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText name="aes_key" label="加密 aes_key" colProps={{ span: 12 }} />
-            <ProFormText name="token" label="签名 token" colProps={{ span: 12 }} />
+            <ProFormText name="aes_key" label={t('pages.system.applicationConnections.formAesKeyLabel')} colProps={{ span: 12 }} />
+            <ProFormText name="token" label={t('pages.system.applicationConnections.formTokenLabel')} colProps={{ span: 12 }} />
           </>
         );
       case 'wecom':
         return (
           <>
-            <ProFormText name="corp_id" label="企业 ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="corp_id" label={t('pages.system.applicationConnections.formCorpIdLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="corp_secret" label="Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />
             <ProFormText name="token" label="Token" colProps={{ span: 12 }} />
@@ -508,8 +508,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
         return (
           <>
             {common}
-            <ProFormText name="username" label="用户名" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText.Password name="password" label="密码" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="username" label={t('pages.system.applicationConnections.formUsernameLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="password" label={t('pages.system.applicationConnections.formPasswordLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
           </>
         );
       case 'kingdee_kis':
@@ -517,7 +517,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         return (
           <>
             {common}
-            <ProFormText name="instance_id" label="实例 ID / APP ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="instance_id" label={t('pages.system.applicationConnections.formInstanceIdLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="app_secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
           </>
         );
@@ -631,7 +631,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       default:
-        return <Alert message={`暂未为 ${type} 类型提供可视化表单`} type="info" />;
+        return <Alert message={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />;
     }
   };
 
@@ -650,10 +650,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const columns: ProColumns<ApplicationConnection>[] = [
-    { title: '应用连接名称', dataIndex: 'name', width: 180, fixed: 'left' },
-    { title: '应用连接代码', dataIndex: 'code', width: 140 },
+    { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name', width: 180, fixed: 'left' },
+    { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code', width: 140 },
     {
-      title: '连接器类型',
+      title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
       width: 120,
       render: (_, record) => {
@@ -661,9 +661,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
         return <Tag color={info.color}>{info.text}</Tag>;
       },
     },
-    { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
     {
-      title: '连接状态',
+      title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
       width: 100,
       render: (_, record) => {
@@ -672,15 +672,17 @@ const ApplicationConnectionsListPage: React.FC = () => {
       },
     },
     {
-      title: '启用状态',
+      title: t('pages.system.applicationConnections.columnActive'),
       dataIndex: 'is_active',
       width: 80,
       render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '禁用'}</Tag>
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
+        </Tag>
       ),
     },
     {
-      title: '最后连接时间',
+      title: t('pages.system.applicationConnections.columnLastConnected'),
       dataIndex: 'last_connected_at',
       width: 180,
       valueType: 'dateTime',
@@ -688,7 +690,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.applicationConnections.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -696,17 +698,17 @@ const ApplicationConnectionsListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.applicationConnections.columnActions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) =>
         renderRowActionsOverflow(
           [
             <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-              查看
+              {t('pages.system.applicationConnections.view')}
             </Button>,
             <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              编辑
+              {t('pages.system.applicationConnections.edit')}
             </Button>,
             <Button
               key="test"
@@ -715,17 +717,17 @@ const ApplicationConnectionsListPage: React.FC = () => {
               icon={<ThunderboltOutlined />}
               onClick={() => handleTestConnection(record)}
             >
-              测试连接
+              {t('pages.system.applicationConnections.testConnection')}
             </Button>,
             <Popconfirm
               key="delete"
-              title="确定要删除这个应用连接器吗？"
+              title={t('pages.system.applicationConnections.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
-              okText="确定"
-              cancelText="取消"
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                删除
+                {t('pages.system.applicationConnections.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -735,19 +737,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
   ];
 
   const detailColumns = [
-    { title: '应用连接名称', dataIndex: 'name' },
-    { title: '应用连接代码', dataIndex: 'code' },
+    { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name' },
+    { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code' },
     {
-      title: '连接器类型',
+      title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
       render: (v: string) => {
         const info = getTypeInfo(v);
         return <Tag color={info.color}>{info.text}</Tag>;
       },
     },
-    { title: '描述', dataIndex: 'description' },
+    { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description' },
     {
-      title: '连接配置',
+      title: t('pages.system.applicationConnections.columnConfig'),
       dataIndex: 'config',
       render: (value: any) => {
         const masked = value ? { ...value } : {};
@@ -762,15 +764,28 @@ const ApplicationConnectionsListPage: React.FC = () => {
       },
     },
     {
-      title: '连接状态',
+      title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
-      render: (v: boolean) => <Badge status={v ? 'success' : 'default'} text={v ? '已连接' : '未连接'} />,
+      render: (v: boolean) => (
+        <Badge
+          status={v ? 'success' : 'default'}
+          text={v ? t('pages.system.applicationConnections.statusConnected') : t('pages.system.applicationConnections.statusDisconnected')}
+        />
+      ),
     },
-    { title: '启用状态', dataIndex: 'is_active', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? '启用' : '禁用'}</Tag> },
-    { title: '最后连接时间', dataIndex: 'last_connected_at', valueType: 'dateTime' },
-    { title: '最后错误', dataIndex: 'last_error', render: (v: string) => v ? <Tag color="error">{v}</Tag> : '-' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    {
+      title: t('pages.system.applicationConnections.columnActive'),
+      dataIndex: 'is_active',
+      render: (v: boolean) => (
+        <Tag color={v ? 'success' : 'default'}>
+          {v ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
+        </Tag>
+      ),
+    },
+    { title: t('pages.system.applicationConnections.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
+    { title: t('pages.system.applicationConnections.columnLastError'), dataIndex: 'last_error', render: (v: string) => v ? <Tag color="error">{v}</Tag> : t('common.dash') },
+    { title: t('pages.system.applicationConnections.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.applicationConnections.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -810,21 +825,21 @@ const ApplicationConnectionsListPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton
           onCreate={handleCreate}
-          createButtonText="新建应用连接"
+          createButtonText={t('pages.system.applicationConnections.createButton')}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.applicationConnections.batchDeleteButton')}
           deleteConfirmTitle={t('pages.system.applicationConnections.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.applicationConnections.batchDeleteDescription', { count: c })}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-test" onClick={handleBatchTest}>批量测试连接</Button>,
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>批量启用</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>批量禁用</Button>,
+                  <Button key="batch-test" onClick={handleBatchTest}>{t('pages.system.applicationConnections.batchTestButton')}</Button>,
+                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.applicationConnections.batchEnableButton')}</Button>,
+                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.applicationConnections.batchDisableButton')}</Button>,
                 ]
               : []
           }
@@ -876,8 +891,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
             messageApi.success(t('pages.system.applicationConnections.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
-          importHeaders={['*名称', '*代码', '*类型', '描述', '启用状态', '连接配置(JSON)']}
-          importExampleRow={['示例连接', 'example_conn', 'feishu', '选填', '是', '{}']}
+          importHeaders={[
+            `*${t('pages.system.applicationConnections.importHeaderName')}`,
+            `*${t('pages.system.applicationConnections.importHeaderCode')}`,
+            `*${t('pages.system.applicationConnections.importHeaderType')}`,
+            t('pages.system.applicationConnections.importHeaderDescription'),
+            t('pages.system.applicationConnections.importHeaderActive'),
+            t('pages.system.applicationConnections.importHeaderConfigJson'),
+          ]}
+          importExampleRow={[
+            t('pages.system.applicationConnections.importExampleName'),
+            'example_conn',
+            'feishu',
+            t('pages.system.applicationConnections.importExampleDescription'),
+            t('pages.system.applicationConnections.importExampleActive'),
+            '{}',
+          ]}
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: ApplicationConnection[] = [];
@@ -897,7 +926,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `application-connections-${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = t('pages.system.applicationConnections.exportFileName', {
+              date: new Date().toISOString().slice(0, 10),
+            });
             a.click();
             URL.revokeObjectURL(url);
             messageApi.success(t('common.exportSuccess', { count: items.length }));
@@ -906,7 +937,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑应用连接器' : '新建应用连接器'}
+        title={isEdit ? t('pages.system.applicationConnections.editModalTitle') : t('pages.system.applicationConnections.createModalTitle')}
         open={modalVisible}
         onClose={() => { setModalVisible(false); setFormInitialValues(undefined); }}
         onFinish={handleSubmit}
@@ -927,26 +958,32 @@ const ApplicationConnectionsListPage: React.FC = () => {
                   loading={testingConnection}
                   onClick={handleTestConnectionInForm}
                 >
-                  测试连接
+                  {t('pages.system.applicationConnections.testConnection')}
                 </Button>
               );
             }}
           </ProFormDependency>
         }
       >
-        <ProFormText name="type" label="连接器类型" disabled colProps={{ span: 12 }} />
+        <ProFormText name="type" label={t('pages.system.applicationConnections.columnType')} disabled colProps={{ span: 12 }} />
         <ProFormText
           name="code"
-          label="应用连接代码"
+          label={t('pages.system.applicationConnections.columnCode')}
           rules={[
             { required: true },
-            { pattern: /^[a-z0-9_]+$/, message: '只能包含小写字母、数字和下划线' },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.applicationConnections.codePattern') },
           ]}
-          placeholder="例：prod_connection"
+          placeholder={t('pages.system.applicationConnections.codePlaceholder')}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
-        <ProFormText name="name" label="应用连接名称" rules={[{ required: true }]} placeholder="例：生产环境连接" colProps={{ span: 12 }} />
+        <ProFormText
+          name="name"
+          label={t('pages.system.applicationConnections.columnName')}
+          rules={[{ required: true }]}
+          placeholder={t('pages.system.applicationConnections.namePlaceholder')}
+          colProps={{ span: 12 }}
+        />
         <ProFormDependency name={['type']}>
           {({ type }) => {
             if (!type) return null;
@@ -970,7 +1007,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       />
 
       <UniDetail
-        title="应用连接器详情"
+        title={t('pages.system.applicationConnections.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -984,13 +1021,18 @@ const ApplicationConnectionsListPage: React.FC = () => {
           detailData && (
             <Space>
               <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
-                编辑
+                {t('pages.system.applicationConnections.edit')}
               </Button>
               <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
-                测试连接
+                {t('pages.system.applicationConnections.testConnection')}
               </Button>
-              <Popconfirm title="确定要删除吗？" onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }} okText="确定" cancelText="取消">
-                <Button danger icon={<DeleteOutlined />}>删除</Button>
+              <Popconfirm
+                title={t('pages.system.applicationConnections.deleteConfirmTitle')}
+                onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+              >
+                <Button danger icon={<DeleteOutlined />}>{t('pages.system.applicationConnections.delete')}</Button>
               </Popconfirm>
             </Space>
           )

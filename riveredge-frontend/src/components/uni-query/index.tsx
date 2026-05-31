@@ -446,7 +446,28 @@ const getColumnFieldName = (column: ProColumns<any>): string | null => {
   return null;
 };
 
-const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
+const LIFECYCLE_STAGE_BUILTIN_MIN_SCORE = 40;
+
+function scoreLifecycleStageColumn(column: ProColumns<any>, field: string): number {
+  const title = String(column.title ?? '');
+  let score = 0;
+  if (field === LIST_LIFECYCLE_STAGE_FIELD) score += 200;
+  if (field === LEGACY_LIST_LIFECYCLE_FIELD) score += 150;
+  if (field === 'ledger_source') score += 120;
+  if (/^operation_type$/i.test(field)) score += 120;
+  if (/生命周期/.test(title)) score += 100;
+  if (/lifecycle|stage|state/i.test(field)) score += 60;
+  if (/^status$/i.test(field)) score += 40;
+  if (/operation[\s_-]*type|action[\s_-]*type/i.test(field)) score += 80;
+  if (/阶段/.test(title)) score += 70;
+  if (/状态/.test(title)) score += 50;
+  if (/来源/.test(title)) score += 50;
+  if (/操作类型|动作类型/.test(title)) score += 90;
+  if (/operation\s*type|action\s*type/i.test(title)) score += 60;
+  return score;
+}
+
+const getLifecycleStageCandidates = (columns: ProColumns<any>[]) => {
   const searchableColumns = columns.filter((column) => {
     if (column.hideInSearch) return false;
     if (column.valueType === 'option') return false;
@@ -454,7 +475,7 @@ const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
     return true;
   });
 
-  let best: { field: string; valueEnum: Record<string, any>; score: number } | null = null;
+  const candidates: { field: string; valueEnum: Record<string, any>; score: number }[] = [];
   for (const column of searchableColumns) {
     const field = getColumnFieldName(column);
     if (!field) continue;
@@ -463,26 +484,13 @@ const getLifecycleStageCandidate = (columns: ProColumns<any>[]) => {
     const values = Object.keys(valueEnum).filter((key) => key !== '');
     if (values.length === 0) continue;
 
-    const title = String(column.title ?? '');
-    let score = 0;
-    if (field === LIST_LIFECYCLE_STAGE_FIELD) score += 200;
-    if (field === LEGACY_LIST_LIFECYCLE_FIELD) score += 150;
-    if (/^operation_type$/i.test(field)) score += 120;
-    if (/生命周期/.test(title)) score += 100;
-    if (/lifecycle|stage|state/i.test(field)) score += 60;
-    if (/^status$/i.test(field)) score += 40;
-    if (/operation[\s_-]*type|action[\s_-]*type/i.test(field)) score += 80;
-    if (/阶段/.test(title)) score += 70;
-    if (/状态/.test(title)) score += 50;
-    if (/操作类型|动作类型/.test(title)) score += 90;
-    if (/operation\s*type|action\s*type/i.test(title)) score += 60;
-
-    if (score > 0 && (!best || score > best.score)) {
-      best = { field, valueEnum, score };
+    const score = scoreLifecycleStageColumn(column, field);
+    if (score >= LIFECYCLE_STAGE_BUILTIN_MIN_SCORE) {
+      candidates.push({ field, valueEnum, score });
     }
   }
 
-  return best;
+  return candidates.sort((a, b) => b.score - a.score);
 };
 
 const createBuiltinLifecycleStageSearches = (
@@ -491,32 +499,36 @@ const createBuiltinLifecycleStageSearches = (
   userId: number | undefined,
   stageNameTemplate: (stage: string) => string,
 ): SavedSearch[] => {
-  const lifecycle = getLifecycleStageCandidate(columns);
-  if (!lifecycle) return [];
+  const lifecycles = getLifecycleStageCandidates(columns);
+  if (lifecycles.length === 0) return [];
 
   const now = new Date().toISOString();
-  const stageValues = Object.keys(lifecycle.valueEnum).filter((key) => key !== '');
+  let idSeq = 0;
 
-  return stageValues.map((stageValue, index) => {
-    const enumItem = lifecycle.valueEnum[stageValue];
-    const stageLabel =
-      typeof enumItem === 'object' && enumItem !== null && 'text' in enumItem
-        ? String((enumItem as any).text)
-        : String(enumItem ?? stageValue);
-    return {
-      id: -(index + 1),
-      uuid: `${BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX}${pagePath}:${encodeURIComponent(stageValue)}`,
-      user_id: userId ?? 0,
-      page_path: pagePath,
-      name: stageNameTemplate(stageLabel),
-      is_shared: true,
-      is_pinned: true,
-      search_params: {
-        [LIST_LIFECYCLE_STAGE_FIELD]: stageValue,
-      },
-      created_at: now,
-      updated_at: now,
-    };
+  return lifecycles.flatMap((lifecycle) => {
+    const stageValues = Object.keys(lifecycle.valueEnum).filter((key) => key !== '');
+    return stageValues.map((stageValue) => {
+      const enumItem = lifecycle.valueEnum[stageValue];
+      const stageLabel =
+        typeof enumItem === 'object' && enumItem !== null && 'text' in enumItem
+          ? String((enumItem as any).text)
+          : String(enumItem ?? stageValue);
+      idSeq += 1;
+      return {
+        id: -idSeq,
+        uuid: `${BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX}${pagePath}:${lifecycle.field}:${encodeURIComponent(stageValue)}`,
+        user_id: userId ?? 0,
+        page_path: pagePath,
+        name: stageNameTemplate(stageLabel),
+        is_shared: true,
+        is_pinned: true,
+        search_params: {
+          [lifecycle.field]: stageValue,
+        },
+        created_at: now,
+        updated_at: now,
+      };
+    });
   });
 };
 
@@ -530,12 +542,24 @@ const filterRemotePinnedSearches = (
   const builtinStageValues = builtinSearches
     .map((s) => s.search_params?.[LIST_LIFECYCLE_STAGE_FIELD])
     .filter((v): v is string => v != null && String(v).trim() !== '');
-  if (builtinStageValues.length === 0) {
-    return remoteItems;
-  }
-  return remoteItems.filter(
-    (item) => !isRemotePinnedSearchRedundantWithBuiltinLifecycle(item.search_params, builtinStageValues),
-  );
+  const builtinLedgerSources = builtinSearches
+    .map((s) => s.search_params?.ledger_source)
+    .filter((v): v is string => v != null && String(v).trim() !== '');
+
+  return remoteItems.filter((item) => {
+    const params = item.search_params;
+    if (
+      builtinStageValues.length > 0 &&
+      isRemotePinnedSearchRedundantWithBuiltinLifecycle(params, builtinStageValues)
+    ) {
+      return false;
+    }
+    const remoteSrc = params?.ledger_source != null ? String(params.ledger_source).trim() : '';
+    if (remoteSrc && builtinLedgerSources.includes(remoteSrc)) {
+      return false;
+    }
+    return true;
+  });
 };
 
 /**

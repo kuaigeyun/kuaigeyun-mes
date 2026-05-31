@@ -22,6 +22,11 @@ from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentStatusAdjustment,
 )
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_upkeep import (
+    HaoligoMoldUpkeepParam,
+    HaoligoMoldUpkeepParamSet,
+    HaoligoMoldUpkeepParamSetItem,
+)
 from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
@@ -60,6 +65,9 @@ __all__ = [
     "HaoligoEquipmentStatusAdjustment",
     "HaoligoEquipmentOutputDatasetBinding",
     "HaoligoMold",
+    "HaoligoMoldUpkeepParam",
+    "HaoligoMoldUpkeepParamSet",
+    "HaoligoMoldUpkeepParamSetItem",
     "HaoligoMoldWarehouse",
     "HaoligoMoldBorrowSheet",
     "HaoligoMoldBorrowDatasetBinding",

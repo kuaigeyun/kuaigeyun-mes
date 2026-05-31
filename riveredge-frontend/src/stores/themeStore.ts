@@ -3,7 +3,7 @@
  *
  * 从 userPreferenceStore 读取主题，合并站点默认，计算 resolved 供 ConfigProvider 使用。
  * 主题数据源：userPreferenceStore.preferences（theme / theme_config）
- * 解析顺序：DEFAULT <- 站点 theme_config <- 用户 preferences（数据库，经 fetchPreferences）
+ * 解析顺序：用户 preferences.theme_config（云端）优先；从未配置过则用 DEFAULT_CONFIG
  * 首帧：localStorage 缓存（rehydrateFromStorage）仅作占位，登录后以 API 为准覆盖
  */
 
@@ -79,6 +79,28 @@ function normalizeThemeConfig(c: ThemeConfig): ThemeConfig {
   };
 }
 
+/** 用户是否已在云端保存过主题配置（theme_config 非空） */
+export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined): boolean {
+  if (!cfg || typeof cfg !== 'object') return false;
+  return Object.keys(cfg).some((k) => {
+    const v = cfg[k as keyof ThemeConfig];
+    return v !== undefined && v !== null && v !== '';
+  });
+}
+
+/** 从云端用户偏好解析主题：有 theme_config 用云端；否则用默认（不叠站点/缓存） */
+export function resolveThemeFromPreferences(
+  preferences: Record<string, unknown> | null | undefined,
+): { theme: ThemeMode; config: ThemeConfig } {
+  const prefs = preferences && typeof preferences === 'object' ? preferences : {};
+  const userTheme = (prefs.theme as ThemeMode) || 'light';
+  const userConfig = (prefs.theme_config || {}) as Partial<ThemeConfig>;
+  if (hasCloudThemeConfig(userConfig)) {
+    return { theme: userTheme, config: mergeConfig({}, userConfig) };
+  }
+  return { theme: 'light', config: normalizeThemeConfig({ ...DEFAULT_CONFIG }) };
+}
+
 function mergeConfig(base: ThemeConfig, override: Partial<ThemeConfig> | null): ThemeConfig {
   let merged: ThemeConfig;
   if (!override || typeof override !== 'object') {
@@ -133,9 +155,9 @@ interface ThemeState {
   initialized: boolean;
   loading: boolean;
   initFromApi: () => Promise<void>;
-  applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
-  /** 与 initFromApi 一致：站点 theme_config + 用户 theme_config 合并后整体写入（偏好订阅/主题编辑器打开时用） */
-  syncFromPreferences: (preferences: Record<string, any>) => Promise<void>;
+  applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>, options?: { persist?: boolean }) => void;
+  /** 偏好变更时按云端 theme_config 应用；未配置过则用默认主题 */
+  syncFromPreferences: (preferences: Record<string, any>) => void;
   subscribeToSystemTheme: () => () => void;
   clearForLogout: () => void;
 }
@@ -147,11 +169,9 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     document.documentElement.setAttribute('data-theme-style', resolved.themeStyle);
   };
 
-  /** 用站点+用户合并结果整体覆盖 config（与 initFromApi 成功分支一致，不叠旧 store） */
-  const setThemeFromSiteAndUser = (themeMode: ThemeMode, site: Partial<ThemeConfig>, user: Partial<ThemeConfig>) => {
-    const merged = mergeConfig(site as ThemeConfig, user);
-    const resolved = computeResolved(themeMode, merged);
-    set({ theme: themeMode, config: merged, resolved });
+  const applyResolvedTheme = (themeMode: ThemeMode, config: ThemeConfig) => {
+    const resolved = computeResolved(themeMode, config);
+    set({ theme: themeMode, config, resolved });
     applyDocumentThemeAttrs(resolved);
   };
 
@@ -165,30 +185,10 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     applyDocumentThemeAttrs(resolved);
   };
 
-  const syncFromPreferences = async (preferences: Record<string, any>) => {
+  const syncFromPreferences = (preferences: Record<string, any>) => {
     if (!preferences || typeof preferences !== 'object') return;
-    const userTheme = (preferences.theme as ThemeMode) || 'light';
-    const userConfig = (preferences.theme_config || {}) as Partial<ThemeConfig>;
-
-    if (!getToken()) {
-      const merged = mergeConfig({}, userConfig);
-      const resolved = computeResolved(userTheme, merged);
-      set({ theme: userTheme, config: merged, resolved });
-      applyDocumentThemeAttrs(resolved);
-      return;
-    }
-
-    try {
-      const siteSetting = await getSiteSetting().catch(() => null);
-      const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
-      setThemeFromSiteAndUser(userTheme, siteConfig, userConfig);
-    } catch (e) {
-      console.warn('syncFromPreferences: site theme merge failed, fallback user-only', e);
-      const merged = mergeConfig({}, userConfig);
-      const resolved = computeResolved(userTheme, merged);
-      set({ theme: userTheme, config: merged, resolved });
-      applyDocumentThemeAttrs(resolved);
-    }
+    const { theme, config } = resolveThemeFromPreferences(preferences);
+    applyResolvedTheme(theme, config);
   };
 
   // 初始值：优先从 userPreferenceStore 缓存读取，否则用默认
@@ -220,10 +220,13 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       if (!getToken()) {
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
-          const merged = mergeConfig({}, cachedTheme.theme_config as Partial<ThemeConfig>);
-          doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
+          const { theme, config } = resolveThemeFromPreferences({
+            theme: cachedTheme.theme,
+            theme_config: cachedTheme.theme_config,
+          });
+          applyResolvedTheme(theme, config);
         } else {
-          doApplyTheme('light', { ...DEFAULT_CONFIG });
+          applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
         }
         set({ initialized: true });
         return;
@@ -246,31 +249,31 @@ export const useThemeStore = create<ThemeState>((set, get) => {
           }
         }
 
-        const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
         const prefs = useUserPreferenceStore.getState().preferences || {};
-        const userTheme = (prefs?.theme as ThemeMode) || 'light';
-        const userConfig = (prefs?.theme_config || {}) as Partial<ThemeConfig>;
-
-        setThemeFromSiteAndUser(userTheme, siteConfig, userConfig);
+        const { theme, config } = resolveThemeFromPreferences(prefs);
+        applyResolvedTheme(theme, config);
 
         set({ initialized: true, loading: false });
       } catch (e) {
         console.warn('Theme init failed:', e);
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
-          const merged = mergeConfig({}, cachedTheme.theme_config as Partial<ThemeConfig>);
-          doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
+          const { theme, config } = resolveThemeFromPreferences({
+            theme: cachedTheme.theme,
+            theme_config: cachedTheme.theme_config,
+          });
+          applyResolvedTheme(theme, config);
         } else {
-          doApplyTheme('light', { ...DEFAULT_CONFIG });
+          applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
         }
         set({ initialized: true, loading: false });
       }
     },
 
-    applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
+    applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>, options?: { persist?: boolean }) => {
       doApplyTheme(themeMode, configOverride);
 
-      if (getToken()) {
+      if (options?.persist && getToken()) {
         const persisted = get().config;
         useUserPreferenceStore
           .getState()
