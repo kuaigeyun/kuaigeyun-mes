@@ -24,6 +24,8 @@ const EquipmentManufacturersPage = lazy(() => import('./pages/equipment/manufact
 const EquipmentLedgerPage = lazy(() => import('./pages/equipment/ledger'));
 const EquipmentInspectionParamsPage = lazy(() => import('./pages/equipment/inspection-params'));
 const EquipmentInspectionParamSetsPage = lazy(() => import('./pages/equipment/inspection-param-sets'));
+const EquipmentUpkeepParamsPage = lazy(() => import('./pages/equipment/upkeep-params'));
+const EquipmentUpkeepParamSetsPage = lazy(() => import('./pages/equipment/upkeep-param-sets'));
 const EquipmentPatrolRoutesPage = lazy(() => import('./pages/equipment/patrol-routes'));
 const EquipmentStatusDashboardPage = lazy(() => import('./pages/equipment/dashboard/status'));
 const EquipmentCapacityReportPage = lazy(() => import('./pages/equipment/reports/capacity'));
@@ -77,6 +79,17 @@ const HaoligoApp: React.FC = () => (
       <Route path="equipment/ledger" element={withPageSuspense(EquipmentLedgerPage)} />
       <Route path="equipment/inspection-params" element={withPageSuspense(EquipmentInspectionParamsPage)} />
       <Route path="equipment/inspection-param-sets" element={withPageSuspense(EquipmentInspectionParamSetsPage)} />
+      <Route
+        path="equipment/upkeep-params"
+        element={withHaoligoPermission('haoligo:equipment-upkeep-params:read', withPageSuspense(EquipmentUpkeepParamsPage))}
+      />
+      <Route
+        path="equipment/upkeep-param-sets"
+        element={withHaoligoPermission(
+          'haoligo:equipment-upkeep-param-sets:read',
+          withPageSuspense(EquipmentUpkeepParamSetsPage),
+        )}
+      />
       <Route path="equipment/documents/spot-check" element={withPageSuspense(EquipmentDocumentsSpotCheckPage)} />
       <Route path="equipment/documents/route-patrol" element={withPageSuspense(EquipmentDocumentsRoutePatrolPage)} />
       <Route path="equipment/documents/upkeep-sheet" element={withPageSuspense(EquipmentDocumentsUpkeepSheetPage)} />

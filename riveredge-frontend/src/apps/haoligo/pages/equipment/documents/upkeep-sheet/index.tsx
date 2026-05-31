@@ -31,6 +31,8 @@ import {
   deleteEquipmentUpkeepSheet,
   getEquipment,
   getEquipmentUpkeepSheet,
+  fetchEquipmentUpkeepSchemeContext,
+  listEquipmentUpkeepParamSets,
   listEquipmentUpkeepSheets,
   listEquipments,
   listWorkshops,
@@ -62,6 +64,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     departmentTreeRef,
   } = useApplicantUserIdField(formRef);
   const workshopMapRef = useRef<Map<number, { code: string; name: string }>>(new Map());
+  const [upkeepSetOptions, setUpkeepSetOptions] = useState<{ value: number; label: string }[]>([]);
   /** 下拉缓存 TTL：部门树来自 hook；车间独立加载 */
   const combinedFormOptionsValidUntilRef = useRef(0);
   const [equipmentWorkshopLabel, setEquipmentWorkshopLabel] = useState('');
@@ -81,6 +84,15 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     for (const o of leafDeptOptions) m.set(o.value, o.label);
     return m;
   }, [leafDeptOptions]);
+
+  const loadUpkeepSetOptions = useCallback(async () => {
+    try {
+      const rows = await listEquipmentUpkeepParamSets();
+      setUpkeepSetOptions(rows.map((s) => ({ value: s.id, label: `${s.code} ${s.name}` })));
+    } catch {
+      setUpkeepSetOptions([]);
+    }
+  }, []);
 
   const loadWorkshopMap = useCallback(async () => {
     try {
@@ -102,10 +114,14 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         departmentTreeRef.current.length > 0 &&
         workshopMapRef.current.size > 0;
       if (warm) return;
-      await Promise.all([preloadApplicantAndDepartments(applicantPresets), loadWorkshopMap()]);
+      await Promise.all([
+        preloadApplicantAndDepartments(applicantPresets),
+        loadWorkshopMap(),
+        loadUpkeepSetOptions(),
+      ]);
       combinedFormOptionsValidUntilRef.current = hasExtras ? 0 : Date.now() + ttlMs;
     },
-    [departmentTreeRef, loadWorkshopMap, preloadApplicantAndDepartments],
+    [departmentTreeRef, loadUpkeepSetOptions, loadWorkshopMap, preloadApplicantAndDepartments],
   );
 
   const formatWorkshopLabel = useCallback((workshopId: number) => {
@@ -206,6 +222,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
           equipment_id: d.equipment_id,
+          upkeep_param_set_id: d.upkeep_param_set_id ?? undefined,
           description: d.description,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
         });
@@ -285,6 +302,10 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           department_uuid: deptUuid,
           equipment_id: equipmentId,
           description: desc || undefined,
+          upkeep_param_set_id:
+            serviceType === '保养' && values.upkeep_param_set_id != null
+              ? Number(values.upkeep_param_set_id)
+              : undefined,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
@@ -295,6 +316,10 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           department_uuid: deptUuid,
           equipment_id: equipmentId,
           description: desc || null,
+          upkeep_param_set_id:
+            serviceType === '保养' && values.upkeep_param_set_id != null
+              ? Number(values.upkeep_param_set_id)
+              : undefined,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
@@ -533,6 +558,18 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                       style: { width: '100%' },
                       onChange: (val: number | null) => {
                         void syncEquipmentWorkshop(val);
+                        if (val != null && Number.isFinite(Number(val))) {
+                          void fetchEquipmentUpkeepSchemeContext(Number(val))
+                            .then((ctx) => {
+                              if (ctx.ledger_upkeep_param_set_id != null) {
+                                formRef.current?.setFieldValue(
+                                  'upkeep_param_set_id',
+                                  ctx.ledger_upkeep_param_set_id,
+                                );
+                              }
+                            })
+                            .catch(() => undefined);
+                        }
                       },
                     }}
                     request={async ({ keyWords }) => {
@@ -567,6 +604,24 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                       },
                     }}
                   />
+                </Col>
+                <Col span={12}>
+                  <ProFormDependency name={['service_type', 'equipment_id']}>
+                    {({ service_type, equipment_id }) =>
+                      service_type === '保养' ? (
+                        <ProFormSelect
+                          name="upkeep_param_set_id"
+                          label="保养方案"
+                          placeholder={equipment_id ? '请选择保养方案' : '请先选择设备'}
+                          options={upkeepSetOptions}
+                          disabled={isDetailView || !equipment_id}
+                          showSearch
+                          rules={[{ required: !isDetailView, message: '请选择保养方案' }]}
+                          fieldProps={{ optionFilterProp: 'label' }}
+                        />
+                      ) : null
+                    }
+                  </ProFormDependency>
                 </Col>
                 <Col span={12}>
                   <ProFormDependency name={['service_type']}>

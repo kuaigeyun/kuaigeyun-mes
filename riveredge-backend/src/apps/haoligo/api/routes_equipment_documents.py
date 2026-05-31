@@ -322,16 +322,28 @@ def _normalize_measured_value(value_type: str, raw: Optional[str]) -> Optional[s
     return s
 
 
+async def _equipment_bound_inspection_set_ids(tenant_id: int, eq: HaoligoEquipment) -> List[int]:
+    from apps.haoligo.services.equipment_inspection_param_sets import list_equipment_inspection_param_set_ids
+
+    return await list_equipment_inspection_param_set_ids(tenant_id, eq.id)
+
+
 async def _resolve_equipment_inspection_set_id(tenant_id: int, eq: HaoligoEquipment) -> int:
-    if eq.inspection_param_set_id:
-        return int(eq.inspection_param_set_id)
+    bound = await _equipment_bound_inspection_set_ids(tenant_id, eq)
+    if len(bound) == 1:
+        return bound[0]
+    if len(bound) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该设备绑定了多个点检方案，请选择要使用的点检方案",
+        )
     await eq.fetch_related("category")
     cat = eq.category
     if cat and cat.default_inspection_param_set_id:
         return int(cat.default_inspection_param_set_id)
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="设备未配置点检参数集，且所属类别未设置默认点检参数集，无法创建点检单",
+        detail="设备未配置点检方案，且所属类别未设置默认点检方案，无法创建点检单",
     )
 
 
@@ -340,7 +352,13 @@ async def _resolve_spot_check_set_id(
     eq: HaoligoEquipment,
     override_set_id: Optional[int],
 ) -> int:
+    bound = await _equipment_bound_inspection_set_ids(tenant_id, eq)
     if override_set_id is not None:
+        if bound and override_set_id not in bound:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="所选点检方案未绑定该设备",
+            )
         ps = await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(id=override_set_id).first()
         if not ps:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="点检方案不存在")
@@ -348,7 +366,19 @@ async def _resolve_spot_check_set_id(
         if n == 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="所选点检方案下没有点检项，无法生成点检行")
         return int(override_set_id)
-    return await _resolve_equipment_inspection_set_id(tenant_id, eq)
+    if len(bound) == 1:
+        set_id = bound[0]
+    elif len(bound) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该设备绑定了多个点检方案，请选择要使用的点检方案",
+        )
+    else:
+        return await _resolve_equipment_inspection_set_id(tenant_id, eq)
+    n = await tenant_alive(HaoligoInspectionParamSetItem, tenant_id).filter(set_id=set_id).count()
+    if n == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="所选点检方案下没有点检项，无法生成点检行")
+    return set_id
 
 
 async def _load_inspection_set_items(tenant_id: int, set_id: int):
@@ -1340,7 +1370,7 @@ class OutputRecordOut(BaseModel):
     equipment_id: int
     equipment_asset_code: str = ""
     equipment_name: str = ""
-    work_order_no: str
+    work_order_no: Optional[str] = None
     customer_name: Optional[str] = None
     product_name: Optional[str] = None
     finished_product_code: Optional[str] = None
@@ -1358,7 +1388,7 @@ class OutputRecordOut(BaseModel):
 
 class OutputRecordCreate(BaseModel):
     equipment_id: int = Field(..., ge=1)
-    work_order_no: str = Field(..., max_length=128)
+    work_order_no: Optional[str] = Field(None, max_length=128)
     recorded_at: Optional[datetime] = None
     customer_name: Optional[str] = Field(None, max_length=200)
     product_name: Optional[str] = Field(None, max_length=200)
@@ -1374,11 +1404,11 @@ class OutputRecordCreate(BaseModel):
 
     @field_validator("work_order_no")
     @classmethod
-    def strip_wo(cls, v: str) -> str:
+    def strip_wo(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
         s = v.strip()
-        if not s:
-            raise ValueError("制令单号不能为空")
-        return s
+        return s or None
 
 
 class OutputRecordUpdate(BaseModel):
@@ -1408,7 +1438,7 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
         equipment_id=row.equipment_id,
         equipment_asset_code=eq.asset_code if eq else "",
         equipment_name=eq.name if eq else "",
-        work_order_no=row.work_order_no,
+        work_order_no=row.work_order_no or None,
         customer_name=row.customer_name,
         product_name=row.product_name,
         finished_product_code=row.finished_product_code or row.customer_name,
@@ -1493,7 +1523,7 @@ async def create_output_record(
             sheet_no=sheet_no,
             recorded_at=rec_at,
             equipment=eq,
-            work_order_no=body.work_order_no.strip(),
+            work_order_no=body.work_order_no,
             customer_name=(body.customer_name or "").strip() or None,
             product_name=(body.product_name or "").strip() or None,
             finished_product_code=(body.finished_product_code or "").strip() or None,
@@ -1537,11 +1567,13 @@ async def update_output_record(
     prev_eq_id = row.equipment_id
     prev_qty = Decimal(str(row.completed_qty or 0))
     data = body.model_dump(exclude_unset=True)
-    if "work_order_no" in data and data["work_order_no"] is not None:
-        s = str(data["work_order_no"]).strip()
-        if not s:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="制令单号不能为空")
-        data["work_order_no"] = s
+    if "work_order_no" in data:
+        raw = data["work_order_no"]
+        if raw is None:
+            data["work_order_no"] = None
+        else:
+            s = str(raw).strip()
+            data["work_order_no"] = s or None
     for k in (
         "customer_name",
         "product_name",

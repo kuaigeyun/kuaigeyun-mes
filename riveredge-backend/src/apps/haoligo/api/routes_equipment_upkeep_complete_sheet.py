@@ -24,6 +24,7 @@ from apps.haoligo.constants.equipment_maintenance import (
 )
 from apps.haoligo.constants.equipment_sheet_rule_codes import HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
+from apps.haoligo.services.equipment_upkeep_scheme import build_equipment_upkeep_completion_storage
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -89,6 +90,79 @@ def _clip_text(v: Optional[str], *, label: str, required: bool) -> Optional[str]
     return s
 
 
+class EquipmentUpkeepRecordLineIn(BaseModel):
+    param_id: int
+    record_value: Optional[str] = Field(None, description="保养记录")
+
+    @field_validator("record_value", mode="before")
+    @classmethod
+    def strip_record(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
+
+
+class EquipmentUpkeepRecordLineOut(BaseModel):
+    param_id: int
+    param_code: str
+    param_name: str
+    requirement: Optional[str] = None
+    value_type: str = "text"
+    option_values: List[str] = Field(default_factory=list)
+    is_required: bool = True
+    sort_order: int = 0
+    record_value: Optional[str] = None
+
+
+def _upkeep_record_lines_from_store(raw: Any) -> List[EquipmentUpkeepRecordLineOut]:
+    if not isinstance(raw, list):
+        return []
+    out: List[EquipmentUpkeepRecordLineOut] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            pid = int(item.get("param_id"))
+        except (TypeError, ValueError):
+            continue
+        opts = item.get("option_values")
+        opt_list = [str(x).strip() for x in opts if str(x).strip()] if isinstance(opts, list) else []
+        out.append(
+            EquipmentUpkeepRecordLineOut(
+                param_id=pid,
+                param_code=str(item.get("param_code") or "").strip(),
+                param_name=str(item.get("param_name") or "").strip(),
+                requirement=_strip_opt(str(item.get("requirement")) if item.get("requirement") is not None else None),
+                value_type=str(item.get("value_type") or "text"),
+                option_values=opt_list,
+                is_required=bool(item.get("is_required", True)),
+                sort_order=int(item.get("sort_order") or 0),
+                record_value=_strip_opt(str(item.get("record_value")) if item.get("record_value") is not None else None),
+            )
+        )
+    out.sort(key=lambda x: (x.sort_order, x.param_id))
+    return out
+
+
+async def _apply_upkeep_complete_storage(
+    tenant_id: int,
+    equipment_id: int,
+    *,
+    upkeep_param_set_id: Optional[int],
+    completion_content: Optional[str],
+    upkeep_record_lines: Optional[List[EquipmentUpkeepRecordLineIn]],
+) -> dict[str, Any]:
+    record_in = [x.model_dump() for x in (upkeep_record_lines or [])]
+    return await build_equipment_upkeep_completion_storage(
+        tenant_id,
+        equipment_id,
+        upkeep_param_set_id=upkeep_param_set_id,
+        completion_content=completion_content,
+        upkeep_record_lines=record_in,
+    )
+
+
 def _apply_complete_fields(
     *,
     service_type: str,
@@ -98,7 +172,7 @@ def _apply_complete_fields(
 ) -> tuple[Optional[str], Optional[str], Optional[str]]:
     st = normalize_equipment_service_type(service_type)
     if st == "保养":
-        cc = _clip_text(completion_content, label="保养完成说明", required=True)
+        cc = _clip_text(completion_content, label="保养完成说明", required=False)
         return cc, None, None
     rc = _clip_text(repair_content, label="维修内容", required=True)
     rr = _strip_opt(repair_result)
@@ -139,9 +213,14 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     source_description: Optional[str] = Field(None, description="来源维保单维修原因/保养要求（只读对比）")
     source_service_type: Optional[str] = Field(None, description="来源维保单类型")
     completion_content: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = None
+    upkeep_record_lines: List[EquipmentUpkeepRecordLineOut] = Field(default_factory=list)
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
     clear_total_production: bool = False
+    source_upkeep_param_set_id: Optional[int] = Field(None, description="来源维保单保养方案 id")
+    source_upkeep_param_set_code: Optional[str] = None
+    source_upkeep_param_set_name: Optional[str] = None
     reporter_user_id: int
     created_at: datetime
 
@@ -156,7 +235,12 @@ class EquipmentUpkeepCompleteSheetCreate(BaseModel):
     applicant_user_id: Optional[int] = Field(None, ge=1, description="缺省从来源维保单带出")
     department_uuid: Optional[str] = Field(None, max_length=36, description="缺省从来源维保单带出")
     header_attachment_file_uuids: Optional[List[str]] = Field(None, description="维保后附件")
-    completion_content: Optional[str] = Field(None, description="保养完成说明")
+    completion_content: Optional[str] = Field(None, description="保养完成说明（无方案时必填）")
+    upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案（默认取来源维保单）")
+    upkeep_record_lines: Optional[List[EquipmentUpkeepRecordLineIn]] = Field(
+        None,
+        description="按保养项填写的记录",
+    )
     repair_content: Optional[str] = Field(None, description="维修内容")
     repair_result: Optional[str] = Field(None, max_length=32, description="维修结果")
     clear_total_production: Optional[bool] = Field(None, description="保养完修是否清空累计产量")
@@ -167,6 +251,8 @@ class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
     department_uuid: Optional[str] = Field(None, max_length=36)
     header_attachment_file_uuids: Optional[List[str]] = None
     completion_content: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = Field(None, ge=1)
+    upkeep_record_lines: Optional[List[EquipmentUpkeepRecordLineIn]] = None
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
     clear_total_production: Optional[bool] = None
@@ -176,6 +262,9 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
     src_header: List[str] = []
     src_desc: Optional[str] = None
     src_svc: Optional[str] = None
+    src_ups_id: Optional[int] = None
+    src_ups_code: Optional[str] = None
+    src_ups_name: Optional[str] = None
     eq_id: Optional[int] = None
     eq_ac: Optional[str] = None
     eq_nm: Optional[str] = None
@@ -191,6 +280,9 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
             src_header = _norm_uuid_list(src_row.header_attachment_file_uuids)
             src_desc = src_row.description
             src_svc = (src_row.service_type or "保养").strip()
+            src_ups_id = src_row.upkeep_param_set_id
+            src_ups_code = src_row.upkeep_param_set_code
+            src_ups_name = src_row.upkeep_param_set_name
             await src_row.fetch_related("equipment")
             if src_row.equipment:
                 eq_id = src_row.equipment_id
@@ -215,9 +307,14 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
         source_description=src_desc,
         source_service_type=src_svc,
         completion_content=row.completion_content,
+        upkeep_param_set_id=row.upkeep_param_set_id,
+        upkeep_record_lines=_upkeep_record_lines_from_store(row.upkeep_record_lines),
         repair_content=row.repair_content,
         repair_result=row.repair_result,
         clear_total_production=bool(getattr(row, "clear_total_production", False)),
+        source_upkeep_param_set_id=src_ups_id,
+        source_upkeep_param_set_code=src_ups_code,
+        source_upkeep_param_set_name=src_ups_name,
         reporter_user_id=row.reporter_user_id,
         created_at=row.created_at,
     )
@@ -278,15 +375,34 @@ async def create_upkeep_complete_sheet(
     ).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该维保单已存在维保完成单，不可重复确认")
     svc = (src.service_type or "保养").strip()
-    try:
-        completion_content, repair_content, repair_result = _apply_complete_fields(
-            service_type=svc,
+    equipment_id = src.equipment_id
+    completion_content: Optional[str] = None
+    repair_content: Optional[str] = None
+    repair_result: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = None
+    upkeep_record_lines_store: list[dict[str, Any]] = []
+    if svc == "保养":
+        eff_set = body.upkeep_param_set_id if body.upkeep_param_set_id is not None else src.upkeep_param_set_id
+        storage = await _apply_upkeep_complete_storage(
+            tenant_id,
+            equipment_id,
+            upkeep_param_set_id=eff_set,
             completion_content=body.completion_content,
-            repair_content=body.repair_content,
-            repair_result=body.repair_result,
+            upkeep_record_lines=body.upkeep_record_lines,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        completion_content = storage["completion_content"]
+        upkeep_param_set_id = storage.get("upkeep_param_set_id")
+        upkeep_record_lines_store = storage.get("upkeep_record_lines") or []
+    else:
+        try:
+            completion_content, repair_content, repair_result = _apply_complete_fields(
+                service_type=svc,
+                completion_content=body.completion_content,
+                repair_content=body.repair_content,
+                repair_result=body.repair_result,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     clear_flag = bool(body.clear_total_production) if svc == "保养" else False
     src_no = (str(src.sheet_no or "").strip() or f"维保单#{src.id}")
     applicant_id = body.applicant_user_id if body.applicant_user_id is not None else src.applicant_user_id
@@ -298,7 +414,6 @@ async def create_upkeep_complete_sheet(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择申请部门")
     applicant_user_id_resolved, applicant_name = await _resolve_applicant_only(tenant_id, int(applicant_id))
     department_uuid_resolved, department_name = await _validate_leaf_department(tenant_id, dept_uu)
-    equipment_id = src.equipment_id
     async with in_transaction():
         try:
             sheet_no = await generate_equipment_sheet_no(tenant_id, HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO)
@@ -316,6 +431,8 @@ async def create_upkeep_complete_sheet(
             department_name=department_name,
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             completion_content=completion_content,
+            upkeep_param_set_id=upkeep_param_set_id,
+            upkeep_record_lines=upkeep_record_lines_store or None,
             repair_content=repair_content,
             repair_result=repair_result,
             clear_total_production=clear_flag,
@@ -357,22 +474,61 @@ async def update_upkeep_complete_sheet(
     data = body.model_dump(exclude_unset=True)
     if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
         data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
-    if any(k in data for k in ("completion_content", "repair_content", "repair_result")):
+    upkeep_lines_in = data.pop("upkeep_record_lines", None)
+    upkeep_set_in = data.pop("upkeep_param_set_id", None) if "upkeep_param_set_id" in data else None
+    if any(
+        k in data or upkeep_lines_in is not None or upkeep_set_in is not None
+        for k in ("completion_content", "repair_content", "repair_result")
+    ):
         cc = data.get("completion_content", row.completion_content)
         rc = data.get("repair_content", row.repair_content)
         rr = data.get("repair_result", row.repair_result)
-        try:
-            completion_content, repair_content, repair_result = _apply_complete_fields(
-                service_type=svc,
+        if svc == "保养":
+            eff_set = upkeep_set_in if upkeep_set_in is not None else row.upkeep_param_set_id
+            if row.source_upkeep_sheet_id:
+                src = await tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).filter(
+                    id=row.source_upkeep_sheet_id
+                ).first()
+                if eff_set is None and src:
+                    eff_set = src.upkeep_param_set_id
+            eq_id = None
+            if row.source_upkeep_sheet_id:
+                src_eq = await tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).filter(
+                    id=row.source_upkeep_sheet_id
+                ).first()
+                eq_id = src_eq.equipment_id if src_eq else None
+            if eq_id is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无法解析设备")
+            lines_payload = upkeep_lines_in
+            if lines_payload is None and upkeep_lines_in is None:
+                lines_payload = None
+            storage = await _apply_upkeep_complete_storage(
+                tenant_id,
+                eq_id,
+                upkeep_param_set_id=eff_set,
                 completion_content=cc,
-                repair_content=rc,
-                repair_result=rr,
+                upkeep_record_lines=lines_payload,
             )
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-        data["completion_content"] = completion_content
-        data["repair_content"] = repair_content
-        data["repair_result"] = repair_result
+            data["completion_content"] = storage["completion_content"]
+            data["upkeep_param_set_id"] = storage.get("upkeep_param_set_id")
+            data["upkeep_record_lines"] = storage.get("upkeep_record_lines") or []
+            data["repair_content"] = None
+            data["repair_result"] = None
+        else:
+            try:
+                completion_content, repair_content, repair_result = _apply_complete_fields(
+                    service_type=svc,
+                    completion_content=cc,
+                    repair_content=rc,
+                    repair_result=rr,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+            data["completion_content"] = completion_content
+            data["repair_content"] = repair_content
+            data["repair_result"] = repair_result
+            data["upkeep_param_set_id"] = None
+            data["upkeep_record_lines"] = []
     if "applicant_user_id" in data:
         aid = data.pop("applicant_user_id")
         if aid is None:

@@ -15,6 +15,7 @@ import { App, Button, Modal, Space } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -44,6 +45,7 @@ const CategoriesPage: React.FC = () => {
   const formRef = useRef<ProFormInstance>(null);
 
   const [allCategories, setAllCategories] = useState<CategoryRow[]>([]);
+  const [level1Filter, setLevel1Filter] = useState<string>('__all__');
   const [paramSets, setParamSets] = useState<InspectionParamSetRow[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -63,6 +65,31 @@ const CategoriesPage: React.FC = () => {
     }
   }, [messageApi, t]);
 
+  const level1SegmentOptions = React.useMemo(() => {
+    const opts: { label: string; value: string }[] = [
+      { label: t('app.haoligo.equipment.ledger.categoryFilterAll'), value: '__all__' },
+    ];
+    const seen = new Set<string>();
+    let hasUncategorized = false;
+    for (const c of allCategories) {
+      const l1 = (c.level1_category ?? '').trim();
+      if (!l1) {
+        hasUncategorized = true;
+        continue;
+      }
+      if (seen.has(l1)) continue;
+      seen.add(l1);
+      opts.push({ label: l1, value: l1 });
+    }
+    if (hasUncategorized) {
+      opts.push({
+        label: t('app.haoligo.equipment.ledger.categoryFilterUncategorized'),
+        value: '__none__',
+      });
+    }
+    return opts;
+  }, [allCategories, t]);
+
   const level1Options = React.useMemo(() => {
     const set = new Set(allCategories.map((c) => c.level1_category).filter(Boolean));
     return [...set].sort().map((v) => ({ label: v, value: v }));
@@ -71,6 +98,10 @@ const CategoriesPage: React.FC = () => {
   useEffect(() => {
     void Promise.resolve().then(() => loadParamSets());
   }, [loadParamSets]);
+
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [level1Filter]);
 
   const paramSetOptions = React.useMemo(
     () => paramSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
@@ -191,6 +222,7 @@ const CategoriesPage: React.FC = () => {
       dataIndex: 'level1_category',
       width: 140,
       ellipsis: true,
+      hideInSearch: true,
       render: (_, r) => r.level1_category?.trim() || '—',
     },
     {
@@ -236,6 +268,18 @@ const CategoriesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
+          beforeSearchButtons={
+            level1SegmentOptions.length > 1 ? (
+              <ThemedSegmented
+                key="equipment-categories-level1-filter"
+                surfaceBackground
+                size="middle"
+                value={level1Filter}
+                onChange={(v) => setLevel1Filter(String(v))}
+                options={level1SegmentOptions}
+              />
+            ) : null
+          }
           showCreateButton
           createButtonText={t('common.create')}
           onCreate={handleCreate}
@@ -244,10 +288,10 @@ const CategoriesPage: React.FC = () => {
             const pageSize = params.pageSize ?? 20;
             try {
               const [all, sets] = await Promise.all([listCategories(), listInspectionParamSets()]);
+              setAllCategories(all);
               const map = new Map<number, string>();
               sets.forEach((s) => map.set(s.id, `${s.code} · ${s.name}`));
               const codeQ = String(searchFormValues?.code ?? '').trim().toLowerCase();
-              const level1Q = String(searchFormValues?.level1_category ?? '').trim().toLowerCase();
               const level2Q = String(searchFormValues?.level2_category ?? '').trim().toLowerCase();
               let rows: CategoryTableRow[] = all.map((c) => ({
                 ...c,
@@ -257,8 +301,12 @@ const CategoriesPage: React.FC = () => {
                     : '—',
               }));
               if (codeQ) rows = rows.filter((r) => r.code.toLowerCase().includes(codeQ));
-              if (level1Q) rows = rows.filter((r) => r.level1_category.toLowerCase().includes(level1Q));
               if (level2Q) rows = rows.filter((r) => r.level2_category.toLowerCase().includes(level2Q));
+              if (level1Filter === '__none__') {
+                rows = rows.filter((r) => !(r.level1_category ?? '').trim());
+              } else if (level1Filter !== '__all__') {
+                rows = rows.filter((r) => (r.level1_category ?? '').trim() === level1Filter);
+              }
               const start = (current - 1) * pageSize;
               const slice = rows.slice(start, start + pageSize);
               return {

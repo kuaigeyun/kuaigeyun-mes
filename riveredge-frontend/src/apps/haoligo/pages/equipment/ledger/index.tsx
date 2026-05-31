@@ -42,6 +42,7 @@ import {
   listCategories,
   listEquipments,
   listEquipmentOperationalStatusHistory,
+  listEquipmentUpkeepParamSets,
   listInspectionParamSets,
   listManufacturers,
   listWorkshops,
@@ -51,6 +52,7 @@ import {
   type EquipmentOperationalStatusLogRow,
   type EquipmentRow,
   type EquipmentUpdatePayload,
+  type EquipmentUpkeepParamSetRow,
   type InspectionParamSetRow,
   type ManufacturerRow,
   type WorkshopRow,
@@ -95,6 +97,7 @@ const EquipmentLedgerPage: React.FC = () => {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [manufacturers, setManufacturers] = useState<ManufacturerRow[]>([]);
   const [paramSets, setParamSets] = useState<InspectionParamSetRow[]>([]);
+  const [upkeepSets, setUpkeepSets] = useState<EquipmentUpkeepParamSetRow[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -111,16 +114,18 @@ const EquipmentLedgerPage: React.FC = () => {
 
   const loadLookups = useCallback(async () => {
     try {
-      const [ws, cat, mfr, sets] = await Promise.all([
+      const [ws, cat, mfr, sets, upkeep] = await Promise.all([
         listWorkshops(),
         listCategories(),
         listManufacturers(),
         listInspectionParamSets(),
+        listEquipmentUpkeepParamSets(),
       ]);
       setWorkshops(ws);
       setCategories(cat);
       setManufacturers(mfr);
       setParamSets(sets);
+      setUpkeepSets(upkeep);
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.loadLookupFailed'));
     }
@@ -174,6 +179,10 @@ const EquipmentLedgerPage: React.FC = () => {
   const paramSetOptions = useMemo(
     () => paramSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
     [paramSets],
+  );
+  const upkeepSetOptions = useMemo(
+    () => upkeepSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
+    [upkeepSets],
   );
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -239,7 +248,12 @@ const EquipmentLedgerPage: React.FC = () => {
         category_id: detail.category_id,
         workshop_id: detail.workshop_id,
         manufacturer_id: detail.manufacturer_id ?? undefined,
-        inspection_param_set_id: detail.inspection_param_set_id ?? undefined,
+        inspection_param_set_ids: detail.inspection_param_set_ids?.length
+          ? detail.inspection_param_set_ids
+          : detail.inspection_param_set_id != null
+            ? [detail.inspection_param_set_id]
+            : [],
+        upkeep_param_set_id: detail.upkeep_param_set_id ?? undefined,
         criticality: detail.criticality ?? undefined,
         operational_status: detail.operational_status ?? undefined,
         manufacture_date: detail.manufacture_date ? dayjs(detail.manufacture_date) : undefined,
@@ -321,9 +335,14 @@ const EquipmentLedgerPage: React.FC = () => {
     workshop_id: Number(values.workshop_id),
     manufacturer_id:
       values.manufacturer_id != null && values.manufacturer_id !== '' ? Number(values.manufacturer_id) : null,
-    inspection_param_set_id:
-      values.inspection_param_set_id != null && values.inspection_param_set_id !== ''
-        ? Number(values.inspection_param_set_id)
+    inspection_param_set_ids: Array.isArray(values.inspection_param_set_ids)
+      ? (values.inspection_param_set_ids as unknown[])
+          .map((x) => Number(x))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      : [],
+    upkeep_param_set_id:
+      values.upkeep_param_set_id != null && values.upkeep_param_set_id !== ''
+        ? Number(values.upkeep_param_set_id)
         : null,
     criticality: criticalityPayload(values),
     operational_status: operationalStatusPayload(values),
@@ -340,9 +359,14 @@ const EquipmentLedgerPage: React.FC = () => {
     workshop_id: Number(values.workshop_id),
     manufacturer_id:
       values.manufacturer_id != null && values.manufacturer_id !== '' ? Number(values.manufacturer_id) : null,
-    inspection_param_set_id:
-      values.inspection_param_set_id != null && values.inspection_param_set_id !== ''
-        ? Number(values.inspection_param_set_id)
+    inspection_param_set_ids: Array.isArray(values.inspection_param_set_ids)
+      ? (values.inspection_param_set_ids as unknown[])
+          .map((x) => Number(x))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      : [],
+    upkeep_param_set_id:
+      values.upkeep_param_set_id != null && values.upkeep_param_set_id !== ''
+        ? Number(values.upkeep_param_set_id)
         : null,
     criticality: criticalityPayload(values),
     operational_status: operationalStatusPayload(values),
@@ -352,6 +376,16 @@ const EquipmentLedgerPage: React.FC = () => {
     remark: String(values.remark ?? '').trim() || null,
     image_file_uuids: normUploadUuids(values.equipment_images),
   });
+
+  const formatPlanNames = (ids: number[] | undefined | null) => {
+    if (!ids?.length) return dash;
+    return ids
+      .map((id) => {
+        const s = setMap.get(id);
+        return s ? s.name : String(id);
+      })
+      .join('、');
+  };
 
   const openStatusHistory = async () => {
     if (editId == null) return;
@@ -419,12 +453,15 @@ const EquipmentLedgerPage: React.FC = () => {
       },
       {
         title: t('app.haoligo.equipment.ledger.colPlan'),
-        dataIndex: 'inspection_param_set_id',
-        render: (_, r) => {
-          if (r.inspection_param_set_id == null) return dash;
-          const s = setMap.get(r.inspection_param_set_id);
-          return s ? s.name : r.inspection_param_set_id;
-        },
+        dataIndex: 'inspection_param_set_ids',
+        render: (_, r) =>
+          formatPlanNames(
+            r.inspection_param_set_ids?.length
+              ? r.inspection_param_set_ids
+              : r.inspection_param_set_id != null
+                ? [r.inspection_param_set_id]
+                : [],
+          ),
       },
       {
         title: t('app.haoligo.equipment.ledger.colCriticality'),
@@ -516,15 +553,18 @@ const EquipmentLedgerPage: React.FC = () => {
       },
       {
         title: t('app.haoligo.equipment.ledger.colPlan'),
-        dataIndex: 'inspection_param_set_id',
+        dataIndex: 'inspection_param_set_ids',
         width: 160,
         hideInSearch: true,
         ellipsis: true,
-        render: (_, r) => {
-          if (r.inspection_param_set_id == null) return dash;
-          const s = setMap.get(r.inspection_param_set_id);
-          return s ? s.name : r.inspection_param_set_id;
-        },
+        render: (_, r) =>
+          formatPlanNames(
+            r.inspection_param_set_ids?.length
+              ? r.inspection_param_set_ids
+              : r.inspection_param_set_id != null
+                ? [r.inspection_param_set_id]
+                : [],
+          ),
       },
       {
         title: t('app.haoligo.equipment.ledger.colCriticality'),
@@ -680,11 +720,25 @@ const EquipmentLedgerPage: React.FC = () => {
               const workshop_id = codeMap.ws.get(wsCode);
               if (category_id == null || workshop_id == null) continue;
               const mfrCode = mfrIdx >= 0 ? String(row[mfrIdx] ?? '').trim().toUpperCase() : '';
-              const setCode = setIdx >= 0 ? String(row[setIdx] ?? '').trim().toUpperCase() : '';
+              const setCodeRaw = setIdx >= 0 ? String(row[setIdx] ?? '').trim() : '';
+              const setCodes = setCodeRaw
+                ? setCodeRaw
+                    .split(/[,，;；]/)
+                    .map((c) => c.trim().toUpperCase())
+                    .filter(Boolean)
+                : [];
               const manufacturer_id = mfrCode ? codeMap.mfr.get(mfrCode) ?? null : null;
-              const inspection_param_set_id = setCode ? codeMap.ps.get(setCode) ?? null : null;
+              const inspection_param_set_ids: number[] = [];
+              for (const sc of setCodes) {
+                const sid = codeMap.ps.get(sc);
+                if (sid == null) {
+                  inspection_param_set_ids.length = 0;
+                  break;
+                }
+                if (!inspection_param_set_ids.includes(sid)) inspection_param_set_ids.push(sid);
+              }
               if (mfrCode && manufacturer_id == null) continue;
-              if (setCode && inspection_param_set_id == null) continue;
+              if (setCodes.length && inspection_param_set_ids.length !== setCodes.length) continue;
               const dateRaw = dateIdx >= 0 ? String(row[dateIdx] ?? '').trim() : '';
               const manufacture_date = dateRaw ? dateRaw.slice(0, 10) : null;
               const critRaw = critIdx >= 0 ? String(row[critIdx] ?? '').trim().toUpperCase() : '';
@@ -699,7 +753,7 @@ const EquipmentLedgerPage: React.FC = () => {
                 category_id,
                 workshop_id,
                 manufacturer_id,
-                inspection_param_set_id,
+                inspection_param_set_ids,
                 criticality,
                 manufacture_date,
                 remark: remarkIdx >= 0 ? String(row[remarkIdx] ?? '').trim() || null : null,
@@ -834,16 +888,31 @@ const EquipmentLedgerPage: React.FC = () => {
           </Col>
           <Col span={12}>
             <ProFormSelect
-              name="inspection_param_set_id"
+              name="inspection_param_set_ids"
               label={
                 <span>
                   {t('app.haoligo.equipment.ledger.formPlan')}{' '}
+                  <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+                    {t('app.haoligo.equipment.ledger.formPlanMultiple')}
+                  </Typography.Text>{' '}
                   <Link to="/apps/haoligo/equipment/inspection-param-sets" style={{ fontSize: 12, fontWeight: 400 }}>
                     {t('app.haoligo.equipment.ledger.linkInspectionPlans')}
                   </Link>
                 </span>
               }
               options={paramSetOptions}
+              allowClear
+              showSearch
+              mode="multiple"
+              fieldProps={{ optionFilterProp: 'label' }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="upkeep_param_set_id"
+              label="保养方案"
+              placeholder="请选择保养方案"
+              options={upkeepSetOptions}
               allowClear
               showSearch
               fieldProps={{ optionFilterProp: 'label' }}

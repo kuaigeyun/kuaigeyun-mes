@@ -10,6 +10,7 @@ import {
   ProFormInstance,
   ProFormSelect,
   ProFormSwitch,
+  ProFormText,
   ProFormTextArea,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
@@ -17,7 +18,8 @@ import type { UploadProps } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tabs, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -32,14 +34,17 @@ import {
   getEquipmentUpkeepCompleteSheet,
   HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
   listEquipmentUpkeepCompleteSheets,
+  listEquipmentUpkeepParamSets,
   listEquipmentUpkeepSheets,
   updateEquipmentUpkeepCompleteSheet,
   type EquipmentUpkeepCompleteSheetRow,
   type EquipmentUpkeepSheetRow,
 } from '../../../../services/haoligo';
 import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachmentStrip';
+import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { EquipmentUpkeepRecordFields } from '../../../../components/EquipmentUpkeepRecordFields';
 
 function formatUpkeepRowLabel(r: EquipmentUpkeepSheetRow): string {
   const no = (r.sheet_no && String(r.sheet_no).trim()) || `维保单#${r.id}`;
@@ -121,8 +126,12 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printRowId, setPrintRowId] = useState<number | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [sourceRows, setSourceRows] = useState<EquipmentUpkeepSheetRow[]>([]);
+  const [upkeepSetOptions, setUpkeepSetOptions] = useState<{ value: number; label: string }[]>([]);
+  const [sourceUpkeepParamSetId, setSourceUpkeepParamSetId] = useState<number | null>(null);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [sourcePickerTab, setSourcePickerTab] = useState<'维修' | '保养'>('维修');
   const [formServiceType, setFormServiceType] = useState<'维修' | '保养'>('保养');
@@ -149,10 +158,15 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
 
   const loadSourcesForPicker = useCallback(async () => {
     try {
-      const res = await listEquipmentUpkeepSheets({ skip: 0, limit: 200, open_for_complete: true });
+      const [res, sets] = await Promise.all([
+        listEquipmentUpkeepSheets({ skip: 0, limit: 200, open_for_complete: true }),
+        listEquipmentUpkeepParamSets(),
+      ]);
       setSourceRows(res.items || []);
+      setUpkeepSetOptions(sets.map((s) => ({ value: s.id, label: `${s.code} ${s.name}` })));
     } catch {
       setSourceRows([]);
+      setUpkeepSetOptions([]);
     }
   }, []);
 
@@ -192,11 +206,15 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         header: [...(row.header_attachment_file_uuids || [])],
         description: row.description || '',
       });
+      setSourceUpkeepParamSetId(row.upkeep_param_set_id ?? null);
       formRef.current?.setFieldsValue({
         source_upkeep_sheet_id: n,
+        equipment_id: row.equipment_id,
         service_type: st,
         applicant_user_id: row.applicant_user_id ?? undefined,
         department_uuid: (row.department_uuid || '').trim() || undefined,
+        upkeep_param_set_id: row.upkeep_param_set_id ?? undefined,
+        upkeep_record_lines: [],
         completion_content: '',
         repair_content: '',
         repair_result: undefined,
@@ -209,10 +227,14 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
 
   const clearSelectedSource = useCallback(() => {
     setBeforePreview(null);
+    setSourceUpkeepParamSetId(null);
     setFormServiceType('保养');
     formRef.current?.setFieldsValue({
       source_upkeep_sheet_id: undefined,
+      equipment_id: undefined,
       service_type: undefined,
+      upkeep_param_set_id: undefined,
+      upkeep_record_lines: [],
       header_attachments: [],
       completion_content: '',
       repair_content: '',
@@ -288,11 +310,18 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               ? `ID ${d.equipment_id}`
               : '';
         setEquipmentDisplay(eqLabel);
+        setSourceUpkeepParamSetId(d.source_upkeep_param_set_id ?? d.upkeep_param_set_id ?? null);
         setFormInitialValues({
           service_type: st,
           source_upkeep_sheet_id: d.source_upkeep_sheet_id ?? undefined,
+          equipment_id: d.equipment_id ?? undefined,
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
+          upkeep_param_set_id: d.upkeep_param_set_id ?? undefined,
+          upkeep_record_lines: (d.upkeep_record_lines ?? []).map((ln) => ({
+            param_id: ln.param_id,
+            record_value: ln.record_value ?? '',
+          })),
           completion_content: d.completion_content ?? '',
           repair_content: d.repair_content ?? '',
           repair_result: d.repair_result ?? undefined,
@@ -352,9 +381,24 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
     const completion = String(values.completion_content ?? '').trim();
     const repairContent = String(values.repair_content ?? '').trim();
     const repairResult = String(values.repair_result ?? '').trim();
+    const upkeepSetId =
+      values.upkeep_param_set_id != null && values.upkeep_param_set_id !== ''
+        ? Number(values.upkeep_param_set_id)
+        : undefined;
+    const rawLines = values.upkeep_record_lines;
+    const upkeepRecordLines = Array.isArray(rawLines)
+      ? rawLines
+          .filter((ln): ln is { param_id: number; record_value?: string } => ln && typeof ln === 'object')
+          .map((ln) => ({
+            param_id: Number(ln.param_id),
+            record_value:
+              ln.record_value != null && String(ln.record_value).trim() ? String(ln.record_value).trim() : null,
+          }))
+      : undefined;
+    const hasRecordValues = upkeepRecordLines?.some((ln) => ln.record_value);
     if (st === '保养') {
-      if (!completion) {
-        messageApi.error(t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'));
+      if (!hasRecordValues && !completion && upkeepSetId == null) {
+        messageApi.error('请选择保养方案并填写保养项记录，或填写保养完成说明');
         return Promise.reject(new Error('validation'));
       }
     } else {
@@ -376,7 +420,9 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         await updateEquipmentUpkeepCompleteSheet(editId, {
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
-          completion_content: st === '保养' ? completion : null,
+          completion_content: st === '保养' ? completion || null : null,
+          upkeep_param_set_id: st === '保养' ? upkeepSetId : undefined,
+          upkeep_record_lines: st === '保养' ? upkeepRecordLines : undefined,
           repair_content: st === '维修' ? repairContent : null,
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
@@ -393,7 +439,9 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           source_upkeep_sheet_id: sid,
           applicant_user_id: applicantId,
           department_uuid: deptUuid,
-          completion_content: st === '保养' ? completion : null,
+          completion_content: st === '保养' ? completion || null : null,
+          upkeep_param_set_id: st === '保养' ? upkeepSetId : undefined,
+          upkeep_record_lines: st === '保养' ? upkeepRecordLines : undefined,
           repair_content: st === '维修' ? repairContent : null,
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
@@ -531,6 +579,17 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              setPrintRowId(record.id);
+              setPrintOpen(true);
+            }}
+          >
+            {t('app.haoligo.print.printButton')}
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
@@ -759,17 +818,14 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                   >
                     {formServiceType === '保养' ? (
                       <>
-                        <ProFormTextArea
-                          name="completion_content"
-                          label={t('app.haoligo.equipment.upkeepComplete.upkeepContent')}
-                          rules={[
-                            {
-                              required: !isDetailView,
-                              message: t('app.haoligo.equipment.upkeepComplete.upkeepContentRequired'),
-                            },
-                          ]}
-                          fieldProps={{ rows: 4, maxLength: 4000, showCount: true }}
-                        />
+                        <ProFormText name="equipment_id" hidden />
+                        <Row gutter={16}>
+                          <EquipmentUpkeepRecordFields
+                            readOnly={isDetailView}
+                            upkeepSetOptions={upkeepSetOptions}
+                            sourceUpkeepParamSetId={sourceUpkeepParamSetId}
+                          />
+                        </Row>
                         {!isDetailView ? (
                           <ProFormSwitch
                             name="clear_total_production"
@@ -900,6 +956,17 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           <Button onClick={() => setSourcePickerOpen(false)}>{t('app.haoligo.equipment.documents.btnClose')}</Button>
         </div>
       </Modal>
+
+      <HaoligoDocumentPrintModal
+        open={printOpen}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintRowId(null);
+        }}
+        documentType="equipment_upkeep_complete"
+        documentId={printRowId}
+        title={t('app.haoligo.print.equipmentUpkeepCompleteTitle')}
+      />
     </>
   );
 };

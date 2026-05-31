@@ -16,12 +16,17 @@ from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.routes_equipment_documents import _normalize_measured_value
+from apps.haoligo.services.equipment_inspection_param_sets import (
+    list_equipment_inspection_param_set_ids,
+    sync_equipment_inspection_param_sets,
+)
 from apps.haoligo.services.equipment_operational_status import normalize_operational_status
 from apps.haoligo.services.inspection_numeric_range import normalize_numeric_range_bounds
 from apps.master_data.models.factory import Workshop as MasterWorkshop
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
     HaoligoEquipmentCategory,
+    HaoligoEquipmentInspectionParamSet,
     HaoligoInspectionParam,
     HaoligoInspectionParamSet,
     HaoligoInspectionParamSetItem,
@@ -31,6 +36,7 @@ from apps.haoligo.models.equipment import (
     HaoligoWorkshop,
 )
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
+from apps.haoligo.models.equipment_upkeep_param import HaoligoEquipmentUpkeepParamSet
 from apps.haoligo.services.equipment_operational_status_since import operational_status_since_by_equipment
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -98,6 +104,7 @@ class InspectionParamOut(BaseModel):
     uuid: str
     code: str
     name: str
+    level1_category: Optional[str] = None
     requirement: Optional[str] = None
     unit: Optional[str] = None
     value_type: str = "numeric"
@@ -109,6 +116,7 @@ class InspectionParamOut(BaseModel):
 class InspectionParamCreate(BaseModel):
     code: str = Field(max_length=64)
     name: str = Field(max_length=200)
+    level1_category: Optional[str] = Field(None, description="设备类别一级分类名称")
     requirement: Optional[str] = Field(None, description="点检要求")
     unit: Optional[str] = Field(None, max_length=32)
     value_type: str = Field(default="numeric", max_length=32)
@@ -119,7 +127,17 @@ class InspectionParamCreate(BaseModel):
 
 class InspectionParamUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
+    level1_category: Optional[str] = Field(None, description="设备类别一级分类；传 null 或空字符串清除")
     requirement: Optional[str] = Field(None, description="点检要求；传空字符串表示清除")
+
+
+class InspectionParamBatchLevel1Body(BaseModel):
+    ids: List[int] = Field(min_length=1, description="点检项 id 列表")
+    level1_category: Optional[str] = Field(None, description="一级分类；null 或空字符串表示清除为未分类")
+
+
+class InspectionParamBatchLevel1Out(BaseModel):
+    updated: int
     unit: Optional[str] = Field(None, max_length=32)
     value_type: Optional[str] = Field(None, max_length=32)
     default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
@@ -147,6 +165,28 @@ def _normalize_inspection_value_type(raw: Optional[str]) -> str:
     return "numeric"
 
 
+async def _equipment_level1_category_names(tenant_id: int) -> set[str]:
+    rows = await tenant_alive(HaoligoEquipmentCategory, tenant_id).all()
+    return {(r.level1_category or "").strip() for r in rows if (r.level1_category or "").strip()}
+
+
+async def _resolve_inspection_param_level1_category(
+    tenant_id: int, raw: Optional[str]
+) -> Optional[str]:
+    if raw is None:
+        return None
+    v = str(raw).strip()
+    if not v:
+        return None
+    allowed = await _equipment_level1_category_names(tenant_id)
+    if v not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"一级分类「{v}」不存在，请先在设备类别中维护该一级分类",
+        )
+    return v
+
+
 def _auto_inspection_param_code(set_code: str, seq: int) -> str:
     code = f"{set_code}-{seq:03d}"
     if len(code) > 64:
@@ -159,6 +199,7 @@ async def _upsert_inspection_param_for_import(
     *,
     code: str,
     name: str,
+    level1_category: Optional[str],
     requirement: Optional[str],
     unit: Optional[str],
     value_type: str,
@@ -176,6 +217,7 @@ async def _upsert_inspection_param_for_import(
     row = await tenant_alive(HaoligoInspectionParam, tenant_id).filter(code=code).first()
     if row:
         row.name = name.strip()
+        row.level1_category = level1_category
         row.requirement = (requirement or "").strip() or None
         row.unit = None if unit is None else (str(unit).strip() or None)
         row.value_type = vt
@@ -188,6 +230,7 @@ async def _upsert_inspection_param_for_import(
         tenant_id=tenant_id,
         code=code,
         name=name.strip(),
+        level1_category=level1_category,
         requirement=(requirement or "").strip() or None,
         unit=None if unit is None else (str(unit).strip() or None),
         value_type=vt,
@@ -226,6 +269,7 @@ class InspectionParamSetImportRow(BaseModel):
     set_name: str = Field(max_length=200, description="方案名称")
     param_code: Optional[str] = Field(None, max_length=64, description="点检编号；空则按 方案编码-001 自动生成")
     param_name: str = Field(max_length=200, description="点检项名称")
+    level1_category: Optional[str] = Field(None, max_length=200, description="设备类别一级分类名称")
     requirement: Optional[str] = Field(None, description="点检要求")
     value_type: str = Field(default="numeric", max_length=32)
     default_value: Optional[str] = None
@@ -321,6 +365,8 @@ class EquipmentOut(BaseModel):
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
     inspection_param_set_id: Optional[int] = None
+    inspection_param_set_ids: List[int] = Field(default_factory=list, description="绑定的点检方案 id 列表")
+    upkeep_param_set_id: Optional[int] = None
     criticality: Optional[str] = None
     operational_status: Optional[str] = None
     operational_status_since: Optional[datetime] = Field(
@@ -334,6 +380,12 @@ class EquipmentOut(BaseModel):
     used_yield: Decimal = Decimal("0")
 
 
+async def _equipment_out(tenant_id: int, row: HaoligoEquipment) -> EquipmentOut:
+    ids = await list_equipment_inspection_param_set_ids(tenant_id, row.id)
+    out = EquipmentOut.model_validate(row)
+    return out.model_copy(update={"inspection_param_set_ids": ids})
+
+
 class EquipmentCreate(BaseModel):
     asset_code: str = Field(max_length=64)
     name: str = Field(max_length=200)
@@ -341,7 +393,8 @@ class EquipmentCreate(BaseModel):
     workshop_id: int
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
-    inspection_param_set_id: Optional[int] = None
+    inspection_param_set_ids: List[int] = Field(default_factory=list, description="绑定的点检方案")
+    upkeep_param_set_id: Optional[int] = None
     criticality: Optional[str] = Field(None, max_length=8, description="A/B/C")
     operational_status: Optional[str] = Field(
         None,
@@ -360,7 +413,8 @@ class EquipmentUpdate(BaseModel):
     workshop_id: Optional[int] = None
     manufacturer_id: Optional[int] = None
     manufacture_date: Optional[date] = None
-    inspection_param_set_id: Optional[int] = None
+    inspection_param_set_ids: Optional[List[int]] = Field(None, description="绑定的点检方案；传 [] 清空")
+    upkeep_param_set_id: Optional[int] = None
     criticality: Optional[str] = Field(None, max_length=8)
     operational_status: Optional[str] = Field(
         None,
@@ -371,6 +425,14 @@ class EquipmentUpdate(BaseModel):
     image_file_uuids: Optional[List[str]] = None
     maintenance_cycle_by_yield: Optional[Decimal] = None
     maintenance_cycle_by_days: Optional[int] = Field(None, ge=0)
+
+
+async def _validate_equipment_upkeep_param_set_id(tenant_id: int, upkeep_param_set_id: int | None) -> None:
+    if upkeep_param_set_id is None:
+        return
+    exists = await tenant_alive(HaoligoEquipmentUpkeepParamSet, tenant_id).filter(id=upkeep_param_set_id).exists()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="保养方案不存在")
 
 
 class EquipmentOperationalStatusLogOut(BaseModel):
@@ -595,10 +657,12 @@ async def create_inspection_param(
         numeric_min, numeric_max = normalize_numeric_range_bounds(vt, body.numeric_min, body.numeric_max)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    level1_category = await _resolve_inspection_param_level1_category(tenant_id, body.level1_category)
     row = await HaoligoInspectionParam.create(
         tenant_id=tenant_id,
         code=body.code.strip(),
         name=body.name.strip(),
+        level1_category=level1_category,
         requirement=(body.requirement or "").strip() or None,
         unit=body.unit,
         value_type=vt,
@@ -622,6 +686,10 @@ async def update_inspection_param(
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch:
         row.name = str(patch["name"] or "").strip()
+    if "level1_category" in patch:
+        row.level1_category = await _resolve_inspection_param_level1_category(
+            tenant_id, patch["level1_category"]
+        )
     if "requirement" in patch:
         req = patch["requirement"]
         row.requirement = None if req is None else (str(req).strip() or None)
@@ -672,6 +740,29 @@ async def delete_inspection_param(
         )
     row.deleted_at = timezone.now()
     await row.save()
+
+
+@router.post(
+    "/inspection-params/batch-level1-category",
+    response_model=InspectionParamBatchLevel1Out,
+    summary="批量修改点检项一级分类",
+)
+async def batch_update_inspection_param_level1(
+    body: InspectionParamBatchLevel1Body,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    unique_ids = list(dict.fromkeys(body.ids))
+    level1_category = await _resolve_inspection_param_level1_category(tenant_id, body.level1_category)
+    qs = tenant_alive(HaoligoInspectionParam, tenant_id).filter(id__in=unique_ids)
+    found = await qs.count()
+    if found != len(unique_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="部分点检项不存在或已删除",
+        )
+    updated = await qs.update(level1_category=level1_category)
+    return InspectionParamBatchLevel1Out(updated=updated)
 
 
 # --- inspection param sets ---
@@ -814,11 +905,25 @@ async def import_inspection_param_sets(
                         detail=f"点检编号过长：{param_code}",
                     )
 
+                level1_category: Optional[str] = None
+                raw_level1 = (line.level1_category or "").strip()
+                if raw_level1:
+                    try:
+                        level1_category = await _resolve_inspection_param_level1_category(
+                            tenant_id, raw_level1
+                        )
+                    except HTTPException as exc:
+                        raise HTTPException(
+                            status_code=exc.status_code,
+                            detail=f"方案「{set_code}」点检项「{line.param_name.strip()}」：{exc.detail}",
+                        ) from exc
+
                 try:
                     param, created = await _upsert_inspection_param_for_import(
                         tenant_id,
                         code=param_code,
                         name=line.param_name.strip(),
+                        level1_category=level1_category,
                         requirement=line.requirement,
                         unit=line.unit,
                         value_type=line.value_type,
@@ -893,6 +998,11 @@ async def delete_inspection_param_set(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="该点检方案已被设备台账引用，无法删除",
+        )
+    if await tenant_alive(HaoligoEquipmentInspectionParamSet, tenant_id).filter(set_id=row_id).exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该点检方案已被设备绑定，无法删除",
         )
     if await tenant_alive(HaoligoEquipmentCategory, tenant_id).filter(default_inspection_param_set_id=row_id).exists():
         raise HTTPException(
@@ -1136,7 +1246,7 @@ async def list_equipments(
     status_since_map = await operational_status_since_by_equipment(tenant_id, rows)
     items: List[EquipmentOut] = []
     for r in rows:
-        out = EquipmentOut.model_validate(r)
+        out = await _equipment_out(tenant_id, r)
         since = status_since_map.get(r.id)
         if since is not None:
             out = out.model_copy(update={"operational_status_since": since})
@@ -1165,10 +1275,7 @@ async def create_equipment(
         id=body.manufacturer_id
     ).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="制造商不存在")
-    if body.inspection_param_set_id is not None and not await tenant_alive(HaoligoInspectionParamSet, tenant_id).filter(
-        id=body.inspection_param_set_id
-    ).exists():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="点检参数集不存在")
+    await _validate_equipment_upkeep_param_set_id(tenant_id, body.upkeep_param_set_id)
     row = await HaoligoEquipment.create(
         tenant_id=tenant_id,
         asset_code=body.asset_code.strip(),
@@ -1177,7 +1284,8 @@ async def create_equipment(
         workshop_id=body.workshop_id,
         manufacturer_id=body.manufacturer_id,
         manufacture_date=body.manufacture_date,
-        inspection_param_set_id=body.inspection_param_set_id,
+        inspection_param_set_id=None,
+        upkeep_param_set_id=body.upkeep_param_set_id,
         criticality=_normalize_equipment_criticality(body.criticality),
         operational_status=await normalize_operational_status(tenant_id, body.operational_status),
         remark=body.remark,
@@ -1186,7 +1294,8 @@ async def create_equipment(
         maintenance_cycle_by_days=body.maintenance_cycle_by_days,
         used_yield=Decimal("0"),
     )
-    return EquipmentOut.model_validate(row)
+    await sync_equipment_inspection_param_sets(tenant_id, row.id, body.inspection_param_set_ids)
+    return await _equipment_out(tenant_id, row)
 
 
 @router.get("/equipments/{row_id}", response_model=EquipmentOut, summary="设备详情")
@@ -1198,7 +1307,7 @@ async def get_equipment(
     row = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    return EquipmentOut.model_validate(row)
+    return await _equipment_out(tenant_id, row)
 
 
 @router.get(
@@ -1244,10 +1353,11 @@ async def update_equipment(
         id=data["manufacturer_id"]
     ).exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="制造商不存在")
-    if data.get("inspection_param_set_id") is not None and not await tenant_alive(
-        HaoligoInspectionParamSet, tenant_id
-    ).filter(id=data["inspection_param_set_id"]).exists():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="点检参数集不存在")
+    set_ids_payload = data.pop("inspection_param_set_ids", None)
+    if "upkeep_param_set_id" in data:
+        ups_id = data.pop("upkeep_param_set_id")
+        await _validate_equipment_upkeep_param_set_id(tenant_id, ups_id)
+        row.upkeep_param_set_id = ups_id
     if "criticality" in data:
         data["criticality"] = _normalize_equipment_criticality(data.get("criticality"))
     old_operational_status: Optional[str] = None
@@ -1261,6 +1371,8 @@ async def update_equipment(
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    if set_ids_payload is not None:
+        await sync_equipment_inspection_param_sets(tenant_id, row.id, set_ids_payload)
     if "operational_status" in data and old_operational_status != new_operational_status:
         await HaoligoEquipmentOperationalStatusLog.create(
             tenant_id=tenant_id,
@@ -1269,7 +1381,7 @@ async def update_equipment(
             new_status=new_operational_status or "",
             changed_by_user_id=user.id,
         )
-    return EquipmentOut.model_validate(row)
+    return await _equipment_out(tenant_id, row)
 
 
 @router.delete("/equipments/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备")

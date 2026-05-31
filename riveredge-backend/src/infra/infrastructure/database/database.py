@@ -357,6 +357,7 @@ TORTOISE_ORM = {
                 "apps.haoligo.models.equipment",
                 "apps.haoligo.models.equipment_operations",
                 "apps.haoligo.models.equipment_upkeep",
+                "apps.haoligo.models.equipment_upkeep_param",
                 "apps.haoligo.models.equipment_status_log",
                 "apps.haoligo.models.mold",
                 "apps.haoligo.models.mold_upkeep",

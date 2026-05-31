@@ -22,7 +22,8 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -260,6 +261,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [auditSheetStatus, setAuditSheetStatus] = useState<string>('待审核');
   const [formLoading, setFormLoading] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printRowId, setPrintRowId] = useState<number | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [outsourceRows, setOutsourceRows] = useState<MoldOutsourceMaintenanceSheetRow[]>([]);
   const [beforeAttachmentPreview, setBeforeAttachmentPreview] = useState<BeforeAttachmentPreview | null>(null);
@@ -870,6 +873,18 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
             详情
           </Button>,
           <Button
+            key="print"
+            type="link"
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              setPrintRowId(record.id);
+              setPrintOpen(true);
+            }}
+          >
+            打印报告
+          </Button>,
+          <Button
             key="edit"
             type="link"
             size="small"
@@ -1294,6 +1309,17 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           })}
         />
       </Modal>
+
+      <HaoligoDocumentPrintModal
+        open={printOpen}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintRowId(null);
+        }}
+        documentType="mold_outsource_maintenance_complete"
+        documentId={printRowId}
+        title="模具外协维修完成报告"
+      />
     </>
   );
 };

@@ -20,7 +20,8 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -230,6 +231,8 @@ export function MoldMaintenanceCompleteSheetPage({
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printRowId, setPrintRowId] = useState<number | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [maintRows, setMaintRows] = useState<MoldMaintenanceSheetRow[]>([]);
   const [beforeAttachmentPreview, setBeforeAttachmentPreview] = useState<BeforeAttachmentPreview | null>(null);
@@ -907,6 +910,17 @@ export function MoldMaintenanceCompleteSheetPage({
           <Button
             type="link"
             size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              setPrintRowId(record.id);
+              setPrintOpen(true);
+            }}
+          >
+            打印报告
+          </Button>
+          <Button
+            type="link"
+            size="small"
             icon={<EditOutlined />}
             disabled={!canUpdateComplete}
             onClick={() => void handleEdit(record)}
@@ -1320,6 +1334,17 @@ export function MoldMaintenanceCompleteSheetPage({
           })}
         />
       </Modal>
+
+      <HaoligoDocumentPrintModal
+        open={printOpen}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintRowId(null);
+        }}
+        documentType="mold_maintenance_complete"
+        documentId={printRowId}
+        title={serviceType === '保养' ? '模具保养完成报告' : '模具维修完成报告'}
+      />
     </>
   );
 }

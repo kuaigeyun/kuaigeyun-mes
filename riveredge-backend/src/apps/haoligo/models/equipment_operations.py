@@ -184,7 +184,7 @@ class HaoligoEquipmentOutputRecord(HaoligoTenantModel):
         on_delete=fields.RESTRICT,
         description="设备",
     )
-    work_order_no = fields.CharField(max_length=128, description="制令单号")
+    work_order_no = fields.CharField(max_length=128, null=True, description="制令单号（可选）")
     customer_name = fields.CharField(max_length=200, null=True, description="客户（历史字段，新单请用成品代号/名称）")
     product_name = fields.CharField(max_length=200, null=True, description="品号/名称（历史字段）")
     finished_product_code = fields.CharField(max_length=128, null=True, description="成品代号")

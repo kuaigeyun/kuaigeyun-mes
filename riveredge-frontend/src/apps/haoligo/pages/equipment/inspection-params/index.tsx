@@ -5,7 +5,7 @@
  * 业务约定：编码全局唯一；取值类型决定现场录入形态（数值 / 文本 / 是否 / 多选）。
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -17,10 +17,11 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Tag } from 'antd';
+import { App, Button, Form, Modal, Select, Space, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -31,8 +32,10 @@ import {
 } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
+  batchUpdateInspectionParamLevel1,
   createInspectionParam,
   deleteInspectionParam,
+  listCategories,
   listInspectionParams,
   updateInspectionParam,
   type InspectionParamCreatePayload,
@@ -47,6 +50,9 @@ import {
 } from '../../../utils/inspectionParamValueType';
 import { formatNumericRangeLabel } from '../../../utils/inspectionNumericRange';
 
+/** 批量修改分类：选择此项表示清除一级分类 */
+const LEVEL1_BATCH_CLEAR = '__clear_level1_category__';
+
 const InspectionParamsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -60,6 +66,100 @@ const InspectionParamsPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<InspectionParamRow | null>(null);
+  const [equipmentCategories, setEquipmentCategories] = useState<Awaited<ReturnType<typeof listCategories>>>([]);
+  const [level1Filter, setLevel1Filter] = useState<string>('__all__');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchCategoryOpen, setBatchCategoryOpen] = useState(false);
+  const [batchCategoryLoading, setBatchCategoryLoading] = useState(false);
+  const [batchCategoryForm] = Form.useForm<{ level1_category?: string }>();
+
+  const loadEquipmentCategories = useCallback(async () => {
+    try {
+      setEquipmentCategories(await listCategories());
+    } catch {
+      setEquipmentCategories([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEquipmentCategories();
+  }, [loadEquipmentCategories]);
+
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [level1Filter]);
+
+  const level1SegmentOptions = useMemo(() => {
+    const opts: { label: string; value: string }[] = [
+      { label: t('app.haoligo.equipment.ledger.categoryFilterAll'), value: '__all__' },
+    ];
+    const seen = new Set<string>();
+    let hasUncategorized = false;
+    for (const c of equipmentCategories) {
+      const l1 = (c.level1_category ?? '').trim();
+      if (!l1) {
+        hasUncategorized = true;
+        continue;
+      }
+      if (seen.has(l1)) continue;
+      seen.add(l1);
+      opts.push({ label: l1, value: l1 });
+    }
+    if (hasUncategorized) {
+      opts.push({
+        label: t('app.haoligo.equipment.ledger.categoryFilterUncategorized'),
+        value: '__none__',
+      });
+    }
+    return opts;
+  }, [equipmentCategories, t]);
+
+  const level1Options = useMemo(() => {
+    const set = new Set(equipmentCategories.map((c) => c.level1_category).filter(Boolean));
+    return [...set].sort().map((v) => ({ label: v, value: v }));
+  }, [equipmentCategories]);
+
+  const batchLevel1Options = useMemo(
+    () => [
+      {
+        label: t('app.haoligo.equipment.inspectionParams.batchCategoryClear'),
+        value: LEVEL1_BATCH_CLEAR,
+      },
+      ...level1Options,
+    ],
+    [level1Options, t],
+  );
+
+  const handleOpenBatchCategory = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('app.haoligo.equipment.inspectionParams.batchCategorySelectRows'));
+      return;
+    }
+    batchCategoryForm.resetFields();
+    setBatchCategoryOpen(true);
+  };
+
+  const handleBatchCategorySubmit = async () => {
+    const values = await batchCategoryForm.validateFields();
+    const raw = values.level1_category;
+    const level1_category =
+      raw === LEVEL1_BATCH_CLEAR || raw == null || raw === '' ? null : String(raw).trim();
+    setBatchCategoryLoading(true);
+    try {
+      const ids = selectedRowKeys.map((k) => Number(k)).filter((id) => Number.isFinite(id));
+      const result = await batchUpdateInspectionParamLevel1({ ids, level1_category });
+      messageApi.success(
+        t('app.haoligo.equipment.inspectionParams.batchCategorySuccess', { count: result.updated }),
+      );
+      setBatchCategoryOpen(false);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (e) {
+      messageApi.error((e as Error).message || t('app.haoligo.equipment.saveFailed'));
+    } finally {
+      setBatchCategoryLoading(false);
+    }
+  };
 
   const valueTypes = useMemo(
     () => [
@@ -111,6 +211,7 @@ const InspectionParamsPage: React.FC = () => {
     setFormInitialValues({
       code: record.code,
       name: record.name,
+      level1_category: record.level1_category ?? undefined,
       requirement: record.requirement ?? '',
       unit: record.unit ?? '',
       value_type: normalizeInspectionValueType(record.value_type),
@@ -167,9 +268,11 @@ const InspectionParamsPage: React.FC = () => {
     if (lo != null && hi != null && lo > hi) {
       throw new Error(t('app.haoligo.equipment.inspectionParams.formNumericRangeInvalid'));
     }
+    const level1 = String(values.level1_category ?? '').trim();
     return {
       code: String(values.code ?? '').trim(),
       name: String(values.name ?? '').trim(),
+      level1_category: level1 || null,
       requirement: String(values.requirement ?? '').trim() || null,
       unit: String(values.unit ?? '').trim() || null,
       value_type,
@@ -186,6 +289,7 @@ const InspectionParamsPage: React.FC = () => {
         const payload = buildPayload(values);
         await updateInspectionParam(editId, {
           name: payload.name,
+          level1_category: payload.level1_category,
           requirement: payload.requirement,
           unit: payload.unit,
           value_type: payload.value_type,
@@ -212,6 +316,11 @@ const InspectionParamsPage: React.FC = () => {
     () => [
       { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code' },
       { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name' },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colCategory'),
+        dataIndex: 'level1_category',
+        render: (_, r) => r.level1_category || t('app.haoligo.equipment.inspectionParams.categoryUncategorized'),
+      },
       {
         title: t('app.haoligo.equipment.inspectionParams.colRequirement'),
         dataIndex: 'requirement',
@@ -257,6 +366,14 @@ const InspectionParamsPage: React.FC = () => {
     () => [
       { title: t('app.haoligo.equipment.inspectionParams.colCode'), dataIndex: 'code', width: 120, ellipsis: true, fixed: 'left' },
       { title: t('app.haoligo.equipment.inspectionParams.colName'), dataIndex: 'name', width: 160, ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colCategory'),
+        dataIndex: 'level1_category',
+        width: 120,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => r.level1_category || t('app.haoligo.equipment.inspectionParams.categoryUncategorized'),
+      },
       {
         title: t('app.haoligo.equipment.inspectionParams.colRequirement'),
         dataIndex: 'requirement',
@@ -326,7 +443,31 @@ const InspectionParamsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          toolBarActionsAfterCreate={[
+            <Button
+              key="batch-level1-category"
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleOpenBatchCategory}
+            >
+              {t('app.haoligo.equipment.inspectionParams.batchCategoryBtn')}
+            </Button>,
+          ]}
           showAdvancedSearch
+          beforeSearchButtons={
+            level1SegmentOptions.length > 1 ? (
+              <ThemedSegmented
+                key="inspection-params-level1-filter"
+                surfaceBackground
+                size="middle"
+                value={level1Filter}
+                onChange={(v) => setLevel1Filter(String(v))}
+                options={level1SegmentOptions}
+              />
+            ) : null
+          }
           showCreateButton
           createButtonText={t('app.haoligo.equipment.ledger.createBtn')}
           onCreate={handleCreate}
@@ -334,6 +475,7 @@ const InspectionParamsPage: React.FC = () => {
           importHeaders={[
             t('app.haoligo.equipment.inspectionParams.importColCode'),
             t('app.haoligo.equipment.inspectionParams.importColName'),
+            t('app.haoligo.equipment.inspectionParams.importColCategory'),
             t('app.haoligo.equipment.inspectionParams.importColRequirement'),
             t('app.haoligo.equipment.inspectionParams.importColUnit'),
             t('app.haoligo.equipment.inspectionParams.importColValueType'),
@@ -344,6 +486,8 @@ const InspectionParamsPage: React.FC = () => {
               messageApi.warning(t('app.haoligo.equipment.importEmpty'));
               return;
             }
+            const importCats = await listCategories();
+            const level1Names = new Set(importCats.map((c) => c.level1_category).filter(Boolean));
             const headers = (data[0] || []).map((h: unknown) => String(h ?? '').trim());
             const getIdx = (...keys: string[]) => {
               for (const k of keys) {
@@ -356,6 +500,7 @@ const InspectionParamsPage: React.FC = () => {
             };
             const codeIdx = getIdx('点检编号', '参数编码', '编码', 'code');
             const nameIdx = getIdx('点检项名称', '参数名称', '名称', 'name');
+            const catIdx = getIdx('一级分类', '设备类别一级', 'level1', 'category');
             const reqIdx = getIdx('点检要求', 'requirement');
             const unitIdx = getIdx('单位', 'unit');
             const vtIdx = getIdx('取值类型', '类型', 'value_type');
@@ -377,6 +522,9 @@ const InspectionParamsPage: React.FC = () => {
               else if (rawVt.includes('是否') || rawVt === 'bool' || rawVt === 'boolean') value_type = 'boolean';
               else if (rawVt.includes('多选') || rawVt === 'multiselect' || rawVt === 'multi') value_type = 'multiselect';
               else if (rawVt.includes('数值') || rawVt === 'numeric' || rawVt === 'number') value_type = 'numeric';
+              const level1Raw = catIdx >= 0 ? String(row[catIdx] ?? '').trim() : '';
+              const level1_category = level1Raw || null;
+              if (level1_category && !level1Names.has(level1_category)) continue;
               const defaultRaw = dvIdx >= 0 ? String(row[dvIdx] ?? '').trim() : '';
               let default_value: string | null = defaultRaw || null;
               if (default_value && value_type === 'boolean') {
@@ -387,6 +535,7 @@ const InspectionParamsPage: React.FC = () => {
               items.push({
                 code,
                 name,
+                level1_category,
                 requirement: reqIdx >= 0 ? String(row[reqIdx] ?? '').trim() || null : null,
                 unit: unitIdx >= 0 ? String(row[unitIdx] ?? '').trim() || null : null,
                 value_type,
@@ -428,6 +577,10 @@ const InspectionParamsPage: React.FC = () => {
               if (codeQ) rows = rows.filter((r) => r.code.toLowerCase().includes(codeQ));
               if (nameQ) rows = rows.filter((r) => r.name.toLowerCase().includes(nameQ));
               if (vtQ) rows = rows.filter((r) => normalizeInspectionValueType(r.value_type) === vtQ);
+              if (level1Filter === '__none__') rows = rows.filter((r) => !r.level1_category);
+              else if (level1Filter !== '__all__') {
+                rows = rows.filter((r) => r.level1_category === level1Filter);
+              }
               const start = (current - 1) * pageSize;
               return {
                 data: rows.slice(start, start + pageSize),
@@ -439,7 +592,7 @@ const InspectionParamsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1180 }}
+          scroll={{ x: 1300 }}
         />
       </ListPageTemplate>
 
@@ -482,6 +635,19 @@ const InspectionParamsPage: React.FC = () => {
           placeholder={t('app.haoligo.equipment.inspectionParams.formNamePh')}
           colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
           rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formNameReq') }]}
+        />
+        <ProFormSelect
+          name="level1_category"
+          label={t('app.haoligo.equipment.inspectionParams.formCategory')}
+          placeholder={t('app.haoligo.equipment.inspectionParams.formCategoryPh')}
+          options={level1Options}
+          allowClear
+          colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
+          fieldProps={{
+            optionFilterProp: 'label',
+            style: { width: '100%' },
+            listHeight: 256,
+          }}
         />
         <ProFormTextArea
           name="requirement"
@@ -615,6 +781,35 @@ const InspectionParamsPage: React.FC = () => {
         dataSource={detailRecord}
         columns={detailColumns}
       />
+
+      <Modal
+        title={t('app.haoligo.equipment.inspectionParams.batchCategoryTitle')}
+        open={batchCategoryOpen}
+        onCancel={() => setBatchCategoryOpen(false)}
+        onOk={() => void handleBatchCategorySubmit()}
+        confirmLoading={batchCategoryLoading}
+        destroyOnClose
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <p style={{ marginBottom: 16 }}>
+          {t('app.haoligo.equipment.inspectionParams.batchCategoryHint', { count: selectedRowKeys.length })}
+        </p>
+        <Form form={batchCategoryForm} layout="vertical">
+          <Form.Item
+            name="level1_category"
+            label={t('app.haoligo.equipment.inspectionParams.formCategory')}
+            rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.batchCategoryPick') }]}
+          >
+            <Select
+              placeholder={t('app.haoligo.equipment.inspectionParams.formCategoryPh')}
+              options={batchLevel1Options}
+              allowClear={false}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 };

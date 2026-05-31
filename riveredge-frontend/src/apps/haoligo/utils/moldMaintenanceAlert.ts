@@ -88,12 +88,19 @@ function reasonForYield(level: AlertLevel): string {
 /**
  * 评估单模具保养预警；无保养记录或未配置依产量周期时返回 null。
  */
+function hasPositiveUsedYield(usedYield: string | number | null | undefined): boolean {
+  const n = parseDec(usedYield);
+  return n != null && n > 0;
+}
+
 export function evaluateMoldMaintenanceAlert(
   row: MoldRow,
   lastUpkeepByMold: Map<string, string>,
 ): MoldMaintenanceAlertRow | null {
   const mcode = normalizeMoldCode(String(row.mold_code || ''));
   if (!mcode) return null;
+
+  if (!hasPositiveUsedYield(row.used_yield)) return null;
 
   const lastUpkeep = lookupLastUpkeep(lastUpkeepByMold, mcode);
   if (!lastUpkeep) return null;
@@ -177,11 +184,16 @@ export function countMaintenanceAlertWarnCritical(rows: MoldMaintenanceAlertRow[
   return rows.filter((r) => r.alert_level === 'warning' || r.alert_level === 'critical').length;
 }
 
+/** 工作台：仅展示有累计产量且达预警的模具（无产量或保养清零后不展示） */
+export function isWorkbenchVisibleMoldMaintenanceRow(row: MoldMaintenanceAlertRow): boolean {
+  return row.alert_level === 'warning' || row.alert_level === 'critical';
+}
+
 export function topMaintenanceAlertRows(
   rows: MoldMaintenanceAlertRow[],
   limit = WORKSPACE_MAINTENANCE_ALERT_TOP_N,
 ): MoldMaintenanceAlertRow[] {
-  return [...rows].sort(sortMaintenanceAlertRows).slice(0, limit);
+  return [...rows].filter(isWorkbenchVisibleMoldMaintenanceRow).sort(sortMaintenanceAlertRows).slice(0, limit);
 }
 
 export async function loadMoldMaintenanceAlertDataset(): Promise<{

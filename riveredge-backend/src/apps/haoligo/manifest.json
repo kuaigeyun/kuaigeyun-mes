@@ -232,11 +232,25 @@
                 "sort_order": 15
               },
               {
+                "title": "app.haoligo.menu.equipment.upkeep-params",
+                "path": "/apps/haoligo/equipment/upkeep-params",
+                "icon": "ListChecks",
+                "permission": "haoligo:equipment-upkeep-params:read",
+                "sort_order": 16
+              },
+              {
+                "title": "app.haoligo.menu.equipment.upkeep-param-sets",
+                "path": "/apps/haoligo/equipment/upkeep-param-sets",
+                "icon": "ClipboardList",
+                "permission": "haoligo:equipment-upkeep-param-sets:read",
+                "sort_order": 17
+              },
+              {
                 "title": "app.haoligo.menu.equipment.patrol-routes",
                 "path": "/apps/haoligo/equipment/patrol-routes",
                 "icon": "Waypoints",
                 "permission": "haoligo:equipment-patrol-routes:read",
-                "sort_order": 16
+                "sort_order": 18
               }
             ]
           },
@@ -463,6 +477,18 @@
     "haoligo:equipment-inspection-params:delete",
     "haoligo:equipment-inspection-params:import",
     "haoligo:equipment-inspection-params:export",
+    "haoligo:equipment-upkeep-params:read",
+    "haoligo:equipment-upkeep-params:create",
+    "haoligo:equipment-upkeep-params:update",
+    "haoligo:equipment-upkeep-params:delete",
+    "haoligo:equipment-upkeep-params:import",
+    "haoligo:equipment-upkeep-params:export",
+    "haoligo:equipment-upkeep-param-sets:read",
+    "haoligo:equipment-upkeep-param-sets:create",
+    "haoligo:equipment-upkeep-param-sets:update",
+    "haoligo:equipment-upkeep-param-sets:delete",
+    "haoligo:equipment-upkeep-param-sets:import",
+    "haoligo:equipment-upkeep-param-sets:export",
     "haoligo:equipment-ledger:read",
     "haoligo:equipment-ledger:create",
     "haoligo:equipment-ledger:update",

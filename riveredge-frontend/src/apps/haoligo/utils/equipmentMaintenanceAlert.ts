@@ -6,6 +6,11 @@ import { fetchMaintenanceUpkeepLastByEquipment, listEquipments, type EquipmentRo
 
 export type AlertLevel = 'critical' | 'warning' | 'ok';
 export type MaintenanceAlertDimension = 'yield' | 'days';
+/** 工作台/计划表：手工保养状态 vs 完修后周期计划 */
+export type EquipmentMaintenanceReminderKind = 'manual_maintenance' | 'cycle_plan';
+
+/** 运行状态 value：视为「手工保养」（含数据字典扩展项） */
+const MANUAL_MAINTENANCE_STATUS_VALUES = new Set(['upkeep', 'maintenance', '保养']);
 
 export interface EquipmentMaintenanceAlertRow extends EquipmentRow {
   alert_level: AlertLevel;
@@ -16,6 +21,7 @@ export interface EquipmentMaintenanceAlertRow extends EquipmentRow {
   days_since_upkeep?: number;
   yield_usage_pct?: number;
   days_usage_pct?: number;
+  reminder_kind?: EquipmentMaintenanceReminderKind;
 }
 
 export const severityRank: Record<AlertLevel, number> = {
@@ -54,6 +60,24 @@ function parsePositiveInt(v: number | string | null | undefined): number | undef
   const n = parseDec(v);
   if (n == null || n <= 0) return undefined;
   return Math.trunc(n);
+}
+
+/** 累计产量 > 0（无使用记录或保养后已清零则不参与周期计划展示） */
+export function hasPositiveUsedYield(usedYield: string | number | null | undefined): boolean {
+  const n = parseDec(usedYield);
+  return n != null && n > 0;
+}
+
+/** 台账运行状态为「保养」（数据字典 value 或 label 含保养） */
+export function isManualMaintenanceOperationalStatus(
+  status: string | null | undefined,
+  labelByValue?: Record<string, string>,
+): boolean {
+  const key = String(status ?? '').trim().toLowerCase();
+  if (!key) return false;
+  if (MANUAL_MAINTENANCE_STATUS_VALUES.has(key)) return true;
+  const label = (labelByValue?.[key] ?? '').trim();
+  return label.includes('保养');
 }
 
 function normalizeAssetCode(code: string): string {
@@ -97,12 +121,30 @@ function reasonForDimension(dim: MaintenanceAlertDimension, _ratio: number, leve
   return '距上次保养已接近「依天数」维保周期（≥90%）';
 }
 
+export function buildManualMaintenanceReminderRow(
+  row: EquipmentRow,
+  labelByValue?: Record<string, string>,
+): EquipmentMaintenanceAlertRow | null {
+  if (!isManualMaintenanceOperationalStatus(row.operational_status, labelByValue)) return null;
+  return {
+    ...row,
+    reminder_kind: 'manual_maintenance',
+    alert_level: 'warning',
+    alert_reasons: ['设备运行状态为保养，请安排保养作业'],
+    dominant_dimension: null,
+    dominant_ratio: 0,
+    last_upkeep_at: '',
+  };
+}
+
 export function evaluateEquipmentMaintenanceAlert(
   row: EquipmentRow,
   lastUpkeepByEquipment: Map<string, string>,
 ): EquipmentMaintenanceAlertRow | null {
   const acode = normalizeAssetCode(String(row.asset_code || ''));
   if (!acode) return null;
+
+  if (!hasPositiveUsedYield(row.used_yield)) return null;
 
   const lastUpkeep = lookupLastUpkeep(lastUpkeepByEquipment, acode);
   if (!lastUpkeep) return null;
@@ -155,6 +197,7 @@ export function evaluateEquipmentMaintenanceAlert(
 
   return {
     ...row,
+    reminder_kind: 'cycle_plan',
     alert_level: alertLevel,
     alert_reasons: reasons,
     dominant_dimension: dominant.dim,
@@ -166,19 +209,55 @@ export function evaluateEquipmentMaintenanceAlert(
   };
 }
 
+/** 合并手工保养提醒与完修后周期计划（同一设备去重，手工优先保留） */
+export function buildEquipmentWorkbenchMaintenanceRows(
+  equipments: EquipmentRow[],
+  lastUpkeepByEquipment: Map<string, string>,
+  labelByValue?: Record<string, string>,
+): EquipmentMaintenanceAlertRow[] {
+  const byId = new Map<number, EquipmentMaintenanceAlertRow>();
+  for (const e of equipments) {
+    const manual = buildManualMaintenanceReminderRow(e, labelByValue);
+    if (manual) byId.set(e.id, manual);
+    const cycle = evaluateEquipmentMaintenanceAlert(e, lastUpkeepByEquipment);
+    if (!cycle) continue;
+    const prev = byId.get(e.id);
+    if (!prev) {
+      byId.set(e.id, cycle);
+      continue;
+    }
+    const levels: AlertLevel[] = [prev.alert_level, cycle.alert_level];
+    const mergedLevel: AlertLevel = levels.includes('critical')
+      ? 'critical'
+      : levels.includes('warning')
+        ? 'warning'
+        : 'ok';
+    byId.set(e.id, {
+      ...prev,
+      ...cycle,
+      reminder_kind: prev.reminder_kind === 'manual_maintenance' ? 'manual_maintenance' : 'cycle_plan',
+      alert_level: mergedLevel,
+      alert_reasons: [...prev.alert_reasons, ...cycle.alert_reasons],
+      last_upkeep_at: cycle.last_upkeep_at || prev.last_upkeep_at,
+    });
+  }
+  return Array.from(byId.values());
+}
+
 export function buildEquipmentMaintenanceAlertRows(
   equipments: EquipmentRow[],
   lastUpkeepByEquipment: Map<string, string>,
+  labelByValue?: Record<string, string>,
 ): EquipmentMaintenanceAlertRow[] {
-  const rows: EquipmentMaintenanceAlertRow[] = [];
-  for (const e of equipments) {
-    const evaluated = evaluateEquipmentMaintenanceAlert(e, lastUpkeepByEquipment);
-    if (evaluated) rows.push(evaluated);
-  }
-  return rows;
+  return buildEquipmentWorkbenchMaintenanceRows(equipments, lastUpkeepByEquipment, labelByValue);
 }
 
 export function passesSeverityFilter(row: EquipmentMaintenanceAlertRow, min: string | undefined): boolean {
+  if (row.reminder_kind === 'manual_maintenance') {
+    if (!min || min === 'all') return true;
+    if (min === 'critical') return false;
+    return true;
+  }
   if (!min || min === 'all') return true;
   const r = severityRank[row.alert_level];
   if (min === 'critical') return row.alert_level === 'critical';
@@ -192,6 +271,22 @@ export function sortMaintenanceAlertRows(a: EquipmentMaintenanceAlertRow, b: Equ
   const ratioD = b.dominant_ratio - a.dominant_ratio;
   if (ratioD !== 0) return ratioD;
   return String(a.asset_code).localeCompare(String(b.asset_code));
+}
+
+export function sortEquipmentWorkbenchMaintenanceRows(
+  a: EquipmentMaintenanceAlertRow,
+  b: EquipmentMaintenanceAlertRow,
+): number {
+  const aManual = a.reminder_kind === 'manual_maintenance' ? 0 : 1;
+  const bManual = b.reminder_kind === 'manual_maintenance' ? 0 : 1;
+  if (aManual !== bManual) return aManual - bManual;
+  return sortMaintenanceAlertRows(a, b);
+}
+
+/** 工作台展示：手工保养 或 周期预警及以上 */
+export function isWorkbenchVisibleEquipmentMaintenanceRow(row: EquipmentMaintenanceAlertRow): boolean {
+  if (row.reminder_kind === 'manual_maintenance') return true;
+  return row.alert_level === 'warning' || row.alert_level === 'critical';
 }
 
 export function maintenanceProgressPercent(row: EquipmentMaintenanceAlertRow): number {
@@ -226,18 +321,28 @@ export async function loadEquipmentMaintenanceAlertDataset(): Promise<{
   return { equipments, lastUpkeepByEquipment };
 }
 
-export async function loadEquipmentMaintenanceAlertRows(): Promise<EquipmentMaintenanceAlertRow[]> {
+export async function loadEquipmentMaintenanceAlertRows(
+  labelByValue?: Record<string, string>,
+): Promise<EquipmentMaintenanceAlertRow[]> {
   const { equipments, lastUpkeepByEquipment } = await loadEquipmentMaintenanceAlertDataset();
-  return buildEquipmentMaintenanceAlertRows(equipments, lastUpkeepByEquipment);
+  return buildEquipmentMaintenanceAlertRows(equipments, lastUpkeepByEquipment, labelByValue);
 }
 
 export function countMaintenanceAlertWarnCritical(rows: EquipmentMaintenanceAlertRow[]): number {
   return rows.filter((r) => r.alert_level === 'warning' || r.alert_level === 'critical').length;
 }
 
+/** 工作台 KPI：含手工保养 + 周期预警及以上 */
+export function countEquipmentWorkbenchMaintenanceReminders(rows: EquipmentMaintenanceAlertRow[]): number {
+  return rows.filter(isWorkbenchVisibleEquipmentMaintenanceRow).length;
+}
+
 export function topMaintenanceAlertRows(
   rows: EquipmentMaintenanceAlertRow[],
   limit = WORKSPACE_EQUIPMENT_MAINTENANCE_TOP_N,
 ): EquipmentMaintenanceAlertRow[] {
-  return [...rows].sort(sortMaintenanceAlertRows).slice(0, limit);
+  return [...rows]
+    .filter(isWorkbenchVisibleEquipmentMaintenanceRow)
+    .sort(sortEquipmentWorkbenchMaintenanceRows)
+    .slice(0, limit);
 }

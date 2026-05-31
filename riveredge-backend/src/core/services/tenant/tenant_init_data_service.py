@@ -337,10 +337,15 @@ class TenantInitDataService:
             from core.services.print.print_template_service import PrintTemplateService
             from core.services.system.installed_feature_scope import get_installed_application_codes
             installed = await get_installed_application_codes(tenant_id)
-            return await PrintTemplateService.load_preset_sme(
+            count = await PrintTemplateService.load_preset_sme(
                 tenant_id,
                 installed_app_codes=installed,
             )
+            if "haoligo" in installed:
+                from apps.haoligo.services.print_template_presets import load_haoligo_print_template_presets
+
+                count += await load_haoligo_print_template_presets(tenant_id)
+            return count
 
         if key == "warehouse_preset":
             from apps.master_data.services.warehouse_service import WarehouseService

@@ -55,8 +55,13 @@ class HaoligoInspectionParam(HaoligoTenantModel):
         table = "haoligo_inspection_param"
         table_description = "好力GO - 点检参数"
         unique_together = [("tenant_id", "code")]
-        indexes = [("tenant_id",), ("code",)]
+        indexes = [("tenant_id",), ("code",), ("level1_category",)]
 
+    level1_category = fields.CharField(
+        max_length=200,
+        null=True,
+        description="设备类别一级分类（与 haoligo_equipment_category.level1_category 对齐）",
+    )
     code = fields.CharField(max_length=64, description="点检编号")
     name = fields.CharField(max_length=200, description="点检项名称")
     requirement = fields.TextField(null=True, description="点检要求")
@@ -75,6 +80,30 @@ class HaoligoInspectionParam(HaoligoTenantModel):
         null=True,
         description="数值型取值上限（含），空表示不限制",
     )
+
+
+class HaoligoEquipmentInspectionParamSet(HaoligoTenantModel):
+    """设备绑定的点检方案（可多选）。"""
+
+    class Meta:
+        table = "haoligo_equipment_inspection_param_set"
+        table_description = "好力GO - 设备点检方案绑定"
+        unique_together = [("equipment", "set")]
+        indexes = [("tenant_id",), ("equipment_id",), ("set_id",)]
+
+    equipment = fields.ForeignKeyField(
+        "models.HaoligoEquipment",
+        related_name="inspection_param_set_links",
+        on_delete=fields.CASCADE,
+        description="设备",
+    )
+    set = fields.ForeignKeyField(
+        "models.HaoligoInspectionParamSet",
+        related_name="equipment_links",
+        on_delete=fields.CASCADE,
+        description="点检方案",
+    )
+    sort_order = fields.IntField(default=0, description="排序")
 
 
 class HaoligoInspectionParamSetItem(HaoligoTenantModel):
@@ -161,6 +190,13 @@ class HaoligoEquipment(HaoligoTenantModel):
         null=True,
         on_delete=fields.SET_NULL,
         description="点检参数集（为空时可按类别默认解析）",
+    )
+    upkeep_param_set = fields.ForeignKeyField(
+        "models.HaoligoEquipmentUpkeepParamSet",
+        related_name="equipments_default_upkeep",
+        null=True,
+        on_delete=fields.SET_NULL,
+        description="默认保养方案",
     )
     criticality = fields.CharField(
         max_length=8,

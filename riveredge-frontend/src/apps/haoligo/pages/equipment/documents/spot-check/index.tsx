@@ -33,7 +33,8 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -143,6 +144,12 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const [planHint, setPlanHint] = useState<{ code: string; name: string } | null>(null);
   const [editSelectSeed, setEditSelectSeed] = useState<EditSelectSeed | null>(null);
   const [editFormInitialValues, setEditFormInitialValues] = useState<Record<string, unknown> | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printRowId, setPrintRowId] = useState<number | null>(null);
+  const [planPickerOpen, setPlanPickerOpen] = useState(false);
+  const [planPickerOptions, setPlanPickerOptions] = useState<{ id: number; label: string }[]>([]);
+  const [planPickerSelectedId, setPlanPickerSelectedId] = useState<number | null>(null);
+  const [planPickerPendingEquipmentId, setPlanPickerPendingEquipmentId] = useState<number | null>(null);
 
   const title = t('app.haoligo.menu.equipment.documents.spot-check');
   const reload = useCallback(() => actionRef.current?.reload(), []);
@@ -210,6 +217,54 @@ const SpotCheckDocumentsPage: React.FC = () => {
     [editId, messageApi, t],
   );
 
+  const resolveEquipmentPlanIds = useCallback((eq: { inspection_param_set_ids?: number[]; inspection_param_set_id?: number | null }) => {
+    if (eq.inspection_param_set_ids?.length) return eq.inspection_param_set_ids;
+    if (eq.inspection_param_set_id != null) return [eq.inspection_param_set_id];
+    return [];
+  }, []);
+
+  const openPlanPicker = useCallback(
+    async (equipmentId: number, setIds: number[]) => {
+      const allSets = await listInspectionParamSets();
+      const opts = setIds.map((id) => {
+        const s = allSets.find((x) => x.id === id);
+        return { id, label: s ? `${s.code} ${s.name}` : `ID ${id}` };
+      });
+      setPlanPickerOptions(opts);
+      setPlanPickerSelectedId(opts[0]?.id ?? null);
+      setPlanPickerPendingEquipmentId(equipmentId);
+      setPlanPickerOpen(true);
+    },
+    [],
+  );
+
+  const applyEquipmentForSpotCheck = useCallback(
+    async (equipmentId: number, presetSetId?: number | null) => {
+      try {
+        const eq = await getEquipment(equipmentId);
+        const boundIds = resolveEquipmentPlanIds(eq);
+        if (presetSetId != null && Number.isFinite(presetSetId)) {
+          formRef.current?.setFieldsValue({ inspection_param_set_id: presetSetId });
+          await loadInspectionLines({ equipmentId, setId: presetSetId });
+          return;
+        }
+        if (boundIds.length > 1) {
+          setLines([]);
+          setPlanHint(null);
+          formRef.current?.setFieldsValue({ inspection_param_set_id: undefined });
+          await openPlanPicker(equipmentId, boundIds);
+          return;
+        }
+        const setId = boundIds[0] ?? undefined;
+        formRef.current?.setFieldsValue({ inspection_param_set_id: setId });
+        await loadInspectionLines({ equipmentId, setId: setId ?? null });
+      } catch {
+        await loadInspectionLines({ equipmentId, setId: presetSetId ?? null });
+      }
+    },
+    [loadInspectionLines, openPlanPicker, resolveEquipmentPlanIds],
+  );
+
   const openNew = () => {
     setDetailMode(false);
     setEditId(null);
@@ -217,6 +272,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
     setEditFormInitialValues(null);
     setLines([]);
     setPlanHint(null);
+    setPlanPickerOpen(false);
+    setPlanPickerPendingEquipmentId(null);
     loadLinesSeqRef.current += 1;
     setModalOpen(true);
   };
@@ -361,11 +418,23 @@ const SpotCheckDocumentsPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.documents.colActions'),
         valueType: 'option',
-        width: 168,
+        width: 220,
         fixed: 'right',
         render: (_, row) => [
           <Button key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
+          </Button>,
+          <Button
+            key="p"
+            type="link"
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              setPrintRowId(row.id);
+              setPrintOpen(true);
+            }}
+          >
+            {t('app.haoligo.print.printButton')}
           </Button>,
           <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
@@ -742,6 +811,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
       : null;
 
   return (
+    <>
     <ListPageTemplate>
       <UniTable<EquipmentSpotCheckRow>
         columnPersistenceId="apps.haoligo.pages.equipment.documents.spot-check"
@@ -850,17 +920,12 @@ const SpotCheckDocumentsPage: React.FC = () => {
                       if (!val) {
                         setLines([]);
                         setPlanHint(null);
+                        setPlanPickerOpen(false);
+                        setPlanPickerPendingEquipmentId(null);
                         formRef.current?.setFieldsValue({ inspection_param_set_id: undefined });
                         return;
                       }
-                      try {
-                        const eq = await getEquipment(val);
-                        const setId = eq.inspection_param_set_id ?? undefined;
-                        formRef.current?.setFieldsValue({ inspection_param_set_id: setId });
-                        await loadInspectionLines({ equipmentId: val, setId: setId ?? null });
-                      } catch {
-                        await loadInspectionLines({ equipmentId: val });
-                      }
+                      await applyEquipmentForSpotCheck(val);
                     },
                   }}
                   params={{ editId, seedEquipmentId: editSelectSeed?.equipmentId }}
@@ -895,10 +960,21 @@ const SpotCheckDocumentsPage: React.FC = () => {
                       void loadInspectionLines({ setId: val ?? null });
                     },
                   }}
-                  params={{ editId, seedPlanId: editSelectSeed?.inspectionParamSetId }}
+                  params={{ editId, seedPlanId: editSelectSeed?.inspectionParamSetId, equipmentId: formRef.current?.getFieldValue('equipment_id') }}
                   request={async () => {
+                    const eqId = formRef.current?.getFieldValue('equipment_id') as number | undefined;
+                    let boundIds: number[] = [];
+                    if (eqId) {
+                      try {
+                        const eq = await getEquipment(Number(eqId));
+                        boundIds = resolveEquipmentPlanIds(eq);
+                      } catch {
+                        boundIds = [];
+                      }
+                    }
                     const rows = await listInspectionParamSets();
-                    const opts = (rows || []).map((s) => ({ label: `${s.code} ${s.name}`, value: s.id }));
+                    const allOpts = (rows || []).map((s) => ({ label: `${s.code} ${s.name}`, value: s.id }));
+                    const opts = boundIds.length ? allOpts.filter((o) => boundIds.includes(o.value)) : allOpts;
                     return editSelectSeed
                       ? mergeSelectOption(
                           opts,
@@ -1043,7 +1119,52 @@ const SpotCheckDocumentsPage: React.FC = () => {
           height: 72px !important;
         }
       `}</style>
+
+      <Modal
+        title={t('app.haoligo.equipment.documents.spotCheckPlanPickerTitle')}
+        open={planPickerOpen}
+        destroyOnClose
+        onCancel={() => {
+          setPlanPickerOpen(false);
+          setPlanPickerPendingEquipmentId(null);
+        }}
+        onOk={() => {
+          if (planPickerSelectedId == null || planPickerPendingEquipmentId == null) {
+            messageApi.warning(t('app.haoligo.equipment.documents.spotCheckPlanPickerRequired'));
+            return;
+          }
+          const eqId = planPickerPendingEquipmentId;
+          const setId = planPickerSelectedId;
+          setPlanPickerOpen(false);
+          setPlanPickerPendingEquipmentId(null);
+          void applyEquipmentForSpotCheck(eqId, setId);
+        }}
+        okText={t('common.confirm')}
+        cancelText={t('app.haoligo.equipment.documents.btnCancel')}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('app.haoligo.equipment.documents.spotCheckPlanPickerHint')}
+        </Typography.Paragraph>
+        <Radio.Group
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+          value={planPickerSelectedId ?? undefined}
+          onChange={(e) => setPlanPickerSelectedId(e.target.value as number)}
+          options={planPickerOptions.map((o) => ({ label: o.label, value: o.id }))}
+        />
+      </Modal>
     </ListPageTemplate>
+
+      <HaoligoDocumentPrintModal
+        open={printOpen}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintRowId(null);
+        }}
+        documentType="equipment_spot_check"
+        documentId={printRowId}
+        title={t('app.haoligo.print.equipmentSpotCheckTitle')}
+      />
+    </>
   );
 };
 

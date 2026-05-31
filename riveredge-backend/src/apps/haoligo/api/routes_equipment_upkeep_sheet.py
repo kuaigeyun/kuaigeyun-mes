@@ -23,6 +23,8 @@ from apps.haoligo.constants.equipment_sheet_rule_codes import (
 )
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
+from apps.haoligo.models.equipment_upkeep_param import HaoligoEquipmentUpkeepParamSet
+from apps.haoligo.services.equipment_upkeep_scheme import equipment_ledger_upkeep_param_set_id
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -74,6 +76,9 @@ class EquipmentUpkeepSheetOut(BaseModel):
     equipment_asset_code: Optional[str] = None
     equipment_name: Optional[str] = None
     description: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = None
+    upkeep_param_set_code: Optional[str] = None
+    upkeep_param_set_name: Optional[str] = None
     reporter_user_id: int
     created_at: datetime
 
@@ -84,6 +89,7 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     equipment_id: int = Field(ge=1)
     service_type: ServiceTypeLiteral = Field(description="维修/保养")
     description: Optional[str] = Field(default=None, description="维修原因/保养要求（可选）")
+    upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案（保养单必填；未传时用设备台账默认）")
     header_attachment_file_uuids: Optional[List[str]] = None
 
     @field_validator("department_uuid", mode="before")
@@ -111,7 +117,27 @@ class EquipmentUpkeepSheetUpdate(BaseModel):
     equipment_id: Optional[int] = Field(None, ge=1)
     service_type: Optional[ServiceTypeLiteral] = None
     description: Optional[str] = None
+    upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案")
     header_attachment_file_uuids: Optional[List[str]] = None
+
+
+async def _resolve_upkeep_set_snapshot(
+    tenant_id: int,
+    equipment_id: int,
+    service_type: str,
+    upkeep_param_set_id: Optional[int],
+) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    if service_type != "保养":
+        return None, None, None
+    eff = upkeep_param_set_id
+    if eff is None:
+        eff = await equipment_ledger_upkeep_param_set_id(tenant_id, equipment_id)
+    if eff is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择保养方案")
+    parent = await tenant_alive(HaoligoEquipmentUpkeepParamSet, tenant_id).filter(id=int(eff)).first()
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="保养方案不存在")
+    return int(eff), (parent.code or "").strip(), (parent.name or "").strip()
 
 
 async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOut:
@@ -133,6 +159,9 @@ async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOu
         equipment_asset_code=ac,
         equipment_name=nm,
         description=row.description,
+        upkeep_param_set_id=row.upkeep_param_set_id,
+        upkeep_param_set_code=row.upkeep_param_set_code,
+        upkeep_param_set_name=row.upkeep_param_set_name,
         reporter_user_id=row.reporter_user_id,
         created_at=row.created_at,
     )
@@ -205,6 +234,9 @@ async def create_upkeep_sheet(
     eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=body.equipment_id).first()
     if not eq:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="设备不存在")
+    ups_id, ups_code, ups_name = await _resolve_upkeep_set_snapshot(
+        tenant_id, body.equipment_id, svc, body.upkeep_param_set_id
+    )
     rule_code = (
         HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO if svc == "维修" else HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO
     )
@@ -224,6 +256,9 @@ async def create_upkeep_sheet(
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             equipment=eq,
             description=_strip_opt(body.description),
+            upkeep_param_set_id=ups_id,
+            upkeep_param_set_code=ups_code,
+            upkeep_param_set_name=ups_name,
             reporter_user_id=user.id,
         )
         await apply_equipment_status_on_upkeep_sheet_created(
@@ -295,6 +330,14 @@ async def update_upkeep_sheet(
         uu, dname = await _validate_leaf_department(tenant_id, str(du).strip())
         data["department_uuid"] = uu
         data["department_name"] = dname
+    svc_after = (data.get("service_type") or row.service_type or "保养").strip()
+    eid_after = int(data.get("equipment_id") or row.equipment_id)
+    if "upkeep_param_set_id" in data or "service_type" in data or "equipment_id" in data:
+        ups_in = data.pop("upkeep_param_set_id", None) if "upkeep_param_set_id" in data else row.upkeep_param_set_id
+        ups_id, ups_code, ups_name = await _resolve_upkeep_set_snapshot(tenant_id, eid_after, svc_after, ups_in)
+        data["upkeep_param_set_id"] = ups_id
+        data["upkeep_param_set_code"] = ups_code
+        data["upkeep_param_set_name"] = ups_name
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()

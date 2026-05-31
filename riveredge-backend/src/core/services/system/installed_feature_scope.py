@@ -37,6 +37,14 @@ _PRINT_DOC_MASTER_DATA: FrozenSet[str] = frozenset(
     {"performance_skill", "performance_holiday", "performance_summary"}
 )
 _PRINT_DOC_GLOBAL: FrozenSet[str] = frozenset({"label", "receipt"})
+_PRINT_DOC_HAOLIGO: FrozenSet[str] = frozenset(
+    {
+        "equipment_spot_check",
+        "equipment_upkeep_complete",
+        "mold_maintenance_complete",
+        "mold_outsource_maintenance_complete",
+    }
+)
 _PRINT_DOC_KUAIZHIZAO: FrozenSet[str] = frozenset(
     {
         "demand",
@@ -275,6 +283,8 @@ def print_template_visible_for_installed_apps(
         return "master-data" in installed
     if dt in _PRINT_DOC_KUAIZHIZAO:
         return "kuaizhizao" in installed
+    if dt in _PRINT_DOC_HAOLIGO:
+        return "haoligo" in installed
     return True
 
 

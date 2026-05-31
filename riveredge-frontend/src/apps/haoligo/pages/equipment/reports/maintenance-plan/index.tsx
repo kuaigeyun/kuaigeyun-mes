@@ -32,7 +32,8 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const cacheRef = useRef<{ at: number; rows: EquipmentMaintenanceAlertRow[] } | null>(null);
-  const { formatStatus: operationalStatusLabel } = useEquipmentOperationalStatusLabels();
+  const { formatStatus: operationalStatusLabel, labelByValue: equipmentStatusLabels } =
+    useEquipmentOperationalStatusLabels();
 
   const columns: ProColumns<EquipmentMaintenanceAlertRow>[] = [
     {
@@ -60,7 +61,12 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
       fixed: 'left',
       hideInSearch: true,
       sorter: (a, b) => severityRank[a.alert_level] - severityRank[b.alert_level],
-      render: (_, r) => alertTag(r.alert_level),
+      render: (_, r) =>
+        r.reminder_kind === 'manual_maintenance' ? (
+          <Tag color="processing">待保养</Tag>
+        ) : (
+          alertTag(r.alert_level)
+        ),
     },
     { title: '设备编号', dataIndex: 'asset_code', width: 120, ellipsis: true, hideInSearch: true },
     { title: '设备名称', dataIndex: 'name', width: 160, ellipsis: true, hideInSearch: true },
@@ -154,7 +160,11 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
             let rows = cacheRef.current?.rows;
             if (!cacheRef.current || now - cacheRef.current.at > CACHE_TTL_MS) {
               const { equipments, lastUpkeepByEquipment } = await loadEquipmentMaintenanceAlertDataset();
-              rows = buildEquipmentMaintenanceAlertRows(equipments, lastUpkeepByEquipment);
+              rows = buildEquipmentMaintenanceAlertRows(
+                equipments,
+                lastUpkeepByEquipment,
+                equipmentStatusLabels,
+              );
               cacheRef.current = { at: now, rows };
             }
             const kw =

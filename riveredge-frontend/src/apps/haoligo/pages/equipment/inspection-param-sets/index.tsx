@@ -14,12 +14,13 @@ import {
   ProFormSwitch,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Divider, Modal, Popconfirm, Row, Space, Switch, Table, Typography } from 'antd';
+import { App, Button, Col, Divider, Form, Modal, Popconfirm, Row, Space, Switch, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -35,6 +36,7 @@ import {
   deleteInspectionParamSetItem,
   importInspectionParamSets,
   listInspectionParamSetItems,
+  listCategories,
   listInspectionParamSets,
   listInspectionParams,
   updateInspectionParamSet,
@@ -51,6 +53,7 @@ const { Text, Title } = Typography;
 type LineRow = InspectionParamSetItemRow & {
   param_code: string;
   param_name: string;
+  param_level1_category?: string | null;
   param_unit?: string | null;
   value_type?: string;
 };
@@ -62,6 +65,7 @@ type PendingLine = {
   is_required: boolean;
   param_code: string;
   param_name: string;
+  param_level1_category?: string | null;
   param_unit?: string | null;
   value_type?: string;
 };
@@ -104,6 +108,8 @@ const InspectionParamSetsPage: React.FC = () => {
   const [pendingLines, setPendingLines] = useState<PendingLine[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
   const [allParams, setAllParams] = useState<InspectionParamRow[]>([]);
+  const [equipmentCategories, setEquipmentCategories] = useState<Awaited<ReturnType<typeof listCategories>>>([]);
+  const [paramPickerLevel1, setParamPickerLevel1] = useState<string>('__all__');
 
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addItemLoading, setAddItemLoading] = useState(false);
@@ -114,8 +120,9 @@ const InspectionParamSetsPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const loadParams = useCallback(async () => {
-    const params = await listInspectionParams();
+    const [params, cats] = await Promise.all([listInspectionParams(), listCategories()]);
     setAllParams(params);
+    setEquipmentCategories(cats);
     return params;
   }, []);
 
@@ -132,6 +139,7 @@ const InspectionParamSetsPage: React.FC = () => {
               ...it,
               param_code: p?.code ?? `#${it.param_id}`,
               param_name: p?.name ?? '—',
+              param_level1_category: p?.level1_category,
               param_unit: p?.unit,
               value_type: p?.value_type,
             };
@@ -147,6 +155,31 @@ const InspectionParamSetsPage: React.FC = () => {
     },
     [messageApi, t],
   );
+
+  const level1SegmentOptions = useMemo(() => {
+    const opts: { label: string; value: string }[] = [
+      { label: t('app.haoligo.equipment.ledger.categoryFilterAll'), value: '__all__' },
+    ];
+    const seen = new Set<string>();
+    let hasUncategorized = false;
+    for (const c of equipmentCategories) {
+      const l1 = (c.level1_category ?? '').trim();
+      if (!l1) {
+        hasUncategorized = true;
+        continue;
+      }
+      if (seen.has(l1)) continue;
+      seen.add(l1);
+      opts.push({ label: l1, value: l1 });
+    }
+    if (hasUncategorized) {
+      opts.push({
+        label: t('app.haoligo.equipment.ledger.categoryFilterUncategorized'),
+        value: '__none__',
+      });
+    }
+    return opts;
+  }, [equipmentCategories, t]);
 
   const openCreateEditor = async () => {
     setEditorCreateMode(true);
@@ -175,6 +208,7 @@ const InspectionParamSetsPage: React.FC = () => {
             ...it,
             param_code: p?.code ?? `#${it.param_id}`,
             param_name: p?.name ?? '—',
+            param_level1_category: p?.level1_category,
             param_unit: p?.unit,
             value_type: p?.value_type,
           };
@@ -295,14 +329,25 @@ const InspectionParamSetsPage: React.FC = () => {
     const used = editorCreateMode ? usedParamIdsCreate : usedParamIdsEdit;
     return allParams
       .filter((p) => !used.has(p.id))
-      .map((p) => ({ label: `${p.code} · ${p.name}`, value: p.id }));
-  }, [allParams, editorCreateMode, usedParamIdsCreate, usedParamIdsEdit]);
+      .filter((p) => {
+        if (paramPickerLevel1 === '__all__') return true;
+        if (paramPickerLevel1 === '__none__') return !p.level1_category;
+        return p.level1_category === paramPickerLevel1;
+      })
+      .map((p) => {
+        const cat = p.level1_category ? ` · ${p.level1_category}` : '';
+        return { label: `${p.code} · ${p.name}${cat}`, value: p.id };
+      });
+  }, [allParams, editorCreateMode, usedParamIdsCreate, usedParamIdsEdit, paramPickerLevel1]);
 
   const openAddItem = () => {
-    if (!addableParamOptions.length) {
+    const used = editorCreateMode ? usedParamIdsCreate : usedParamIdsEdit;
+    const hasAny = allParams.some((p) => !used.has(p.id));
+    if (!hasAny) {
       messageApi.info(t('app.haoligo.equipment.inspectionParamSets.noParamsToAdd'));
       return;
     }
+    setParamPickerLevel1('__all__');
     setAddItemOpen(true);
     setTimeout(() => {
       addItemFormRef.current?.resetFields();
@@ -338,6 +383,7 @@ const InspectionParamSetsPage: React.FC = () => {
             is_required: isRequired,
             param_code: p.code,
             param_name: p.name,
+            param_level1_category: p.level1_category,
             param_unit: p.unit,
             value_type: p.value_type,
           };
@@ -426,6 +472,13 @@ const InspectionParamSetsPage: React.FC = () => {
     },
     { title: t('app.haoligo.equipment.inspectionParamSets.colParamCode'), dataIndex: 'param_code', width: 120, ellipsis: true },
     { title: t('app.haoligo.equipment.inspectionParamSets.colParamName'), dataIndex: 'param_name', ellipsis: true },
+    {
+      title: t('app.haoligo.equipment.inspectionParams.colCategory'),
+      dataIndex: 'param_level1_category',
+      width: 100,
+      ellipsis: true,
+      render: (v) => v || t('app.haoligo.equipment.inspectionParams.categoryUncategorized'),
+    },
     { title: t('app.haoligo.equipment.inspectionParamSets.colUnit'), dataIndex: 'param_unit', width: 72, render: (u) => u ?? '—' },
     {
       title: t('app.haoligo.equipment.inspectionParamSets.colRequired'),
@@ -448,6 +501,13 @@ const InspectionParamSetsPage: React.FC = () => {
       },
       { title: t('app.haoligo.equipment.inspectionParamSets.colParamCode'), dataIndex: 'param_code', width: 120, ellipsis: true },
       { title: t('app.haoligo.equipment.inspectionParamSets.colParamName'), dataIndex: 'param_name', ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colCategory'),
+        dataIndex: 'param_level1_category',
+        width: 100,
+        ellipsis: true,
+        render: (v) => v || t('app.haoligo.equipment.inspectionParams.categoryUncategorized'),
+      },
       { title: t('app.haoligo.equipment.inspectionParamSets.colUnit'), dataIndex: 'param_unit', width: 72, render: (u) => u ?? '—' },
       {
         title: t('app.haoligo.equipment.inspectionParamSets.colRequired'),
@@ -516,6 +576,13 @@ const InspectionParamSetsPage: React.FC = () => {
       },
       { title: t('app.haoligo.equipment.inspectionParamSets.colParamCode'), dataIndex: 'param_code', width: 120, ellipsis: true },
       { title: t('app.haoligo.equipment.inspectionParamSets.colParamName'), dataIndex: 'param_name', ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.inspectionParams.colCategory'),
+        dataIndex: 'param_level1_category',
+        width: 100,
+        ellipsis: true,
+        render: (v) => v || t('app.haoligo.equipment.inspectionParams.categoryUncategorized'),
+      },
       { title: t('app.haoligo.equipment.inspectionParamSets.colUnit'), dataIndex: 'param_unit', width: 72, render: (u) => u ?? '—' },
       {
         title: t('app.haoligo.equipment.inspectionParamSets.colRequired'),
@@ -604,6 +671,7 @@ const InspectionParamSetsPage: React.FC = () => {
             t('app.haoligo.equipment.inspectionParamSets.importColSetName'),
             t('app.haoligo.equipment.inspectionParamSets.importColParamCode'),
             t('app.haoligo.equipment.inspectionParamSets.importColParamName'),
+            t('app.haoligo.equipment.inspectionParamSets.importColParamCategory'),
             t('app.haoligo.equipment.inspectionParamSets.importColRequirement'),
             t('app.haoligo.equipment.inspectionParamSets.importColValueType'),
             t('app.haoligo.equipment.inspectionParamSets.importColDefaultValue'),
@@ -631,6 +699,7 @@ const InspectionParamSetsPage: React.FC = () => {
             const setNameIdx = getIdx('方案名称', 'set_name', 'name');
             const paramCodeIdx = getIdx('点检编号', 'param_code', 'inspection no');
             const paramNameIdx = getIdx('点检项名称', 'param_name', 'item name');
+            const catIdx = getIdx('一级分类', '设备类别一级', 'level1', 'category');
             const reqIdx = getIdx('点检要求', 'requirement');
             const vtIdx = getIdx('取值类型', 'value_type', 'value type');
             const dvIdx = getIdx('默认值', 'default');
@@ -678,6 +747,7 @@ const InspectionParamSetsPage: React.FC = () => {
                 set_name: setName,
                 param_code: paramCodeRaw || null,
                 param_name: paramName,
+                level1_category: catIdx >= 0 ? cellText(row[catIdx]) || null : null,
                 requirement: reqIdx >= 0 ? cellText(row[reqIdx]) || null : null,
                 value_type,
                 default_value,
@@ -859,6 +929,20 @@ const InspectionParamSetsPage: React.FC = () => {
         loading={addItemLoading}
         grid={false}
       >
+        {level1SegmentOptions.length > 1 ? (
+          <Form.Item label={t('app.haoligo.equipment.inspectionParams.colCategory')} style={{ marginBottom: 16 }}>
+            <div style={{ width: '100%', overflowX: 'auto' }}>
+              <ThemedSegmented
+                surfaceBackground
+                size="middle"
+                value={paramPickerLevel1}
+                onChange={(v) => setParamPickerLevel1(String(v))}
+                options={level1SegmentOptions}
+                style={{ width: 'max-content', minWidth: '100%' }}
+              />
+            </div>
+          </Form.Item>
+        ) : null}
         <ProFormSelect
           name="param_ids"
           label={t('app.haoligo.menu.equipment.inspection-params')}

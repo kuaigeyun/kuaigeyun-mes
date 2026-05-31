@@ -390,7 +390,13 @@ const OutputRecordDocumentsPage: React.FC = () => {
             ? `${r.equipment_asset_code || ''} ${r.equipment_name || ''}`.trim()
             : `ID ${r.equipment_id}`,
       },
-      { title: t('app.haoligo.equipment.documents.colWorkOrderNo'), dataIndex: 'work_order_no', width: 140, ellipsis: true },
+      {
+        title: t('app.haoligo.equipment.documents.colWorkOrderNo'),
+        dataIndex: 'work_order_no',
+        width: 140,
+        ellipsis: true,
+        render: (_, r) => (r.work_order_no?.trim() ? r.work_order_no : '—'),
+      },
       {
         title: t('app.haoligo.equipment.documents.colFinishedProductCode'),
         dataIndex: 'finished_product_code',
@@ -464,9 +470,10 @@ const OutputRecordDocumentsPage: React.FC = () => {
     const v = formRef.current?.getFieldsValue() as Record<string, unknown>;
     setFormLoading(true);
     try {
+      const wo = String(v.work_order_no ?? '').trim();
       const body = {
         equipment_id: Number(v.equipment_id),
-        work_order_no: String(v.work_order_no || '').trim(),
+        work_order_no: wo || undefined,
         recorded_at: v.recorded_at
           ? dayjs.isDayjs(v.recorded_at)
             ? (v.recorded_at as dayjs.Dayjs).toISOString()
@@ -685,7 +692,6 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 label={t('app.haoligo.equipment.documents.colWorkOrderNo')}
                 tooltip={t('app.haoligo.equipment.documents.outputWorkOrderTooltip')}
                 placeholder={t('app.haoligo.equipment.documents.outputWorkOrderPh')}
-                rules={[{ required: true }]}
                 fieldProps={{
                   allowClear: true,
                   style: { width: '100%' },

@@ -30,6 +30,15 @@ class HaoligoEquipmentUpkeepSheet(HaoligoTenantModel):
         description="设备",
     )
     description = fields.TextField(null=True, description="维修原因/保养要求（可选）")
+    upkeep_param_set = fields.ForeignKeyField(
+        "models.HaoligoEquipmentUpkeepParamSet",
+        related_name="upkeep_sheets",
+        null=True,
+        on_delete=fields.SET_NULL,
+        description="保养方案（保养单必填快照来源）",
+    )
+    upkeep_param_set_code = fields.CharField(max_length=64, null=True, description="保养方案编码快照")
+    upkeep_param_set_name = fields.CharField(max_length=200, null=True, description="保养方案名称快照")
     reporter_user_id = fields.IntField(description="填报人用户 ID")
 
 
@@ -59,7 +68,9 @@ class HaoligoEquipmentUpkeepCompleteSheet(HaoligoTenantModel):
         null=True,
         description="维保后附件（文件 UUID 列表）",
     )
-    completion_content = fields.TextField(null=True, description="保养完修内容")
+    completion_content = fields.TextField(null=True, description="保养完修内容（汇总或自由文本）")
+    upkeep_param_set_id = fields.IntField(null=True, description="保养完修使用的方案 id")
+    upkeep_record_lines = fields.JSONField(null=True, description="保养完修按保养项填写的记录行")
     repair_content = fields.TextField(null=True, description="维修完修内容")
     repair_result = fields.CharField(max_length=32, null=True, description="维修完修结果")
     clear_total_production = fields.BooleanField(default=False, description="保养完修是否清空累计产量")

@@ -44,6 +44,8 @@ export interface EquipmentRow {
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
   inspection_param_set_id?: number | null;
+  inspection_param_set_ids?: number[];
+  upkeep_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
   /** 进入当前运行状态的时间（ISO），用于看板停机时长等 */
@@ -114,7 +116,8 @@ export type EquipmentCreatePayload = {
   workshop_id: number;
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
-  inspection_param_set_id?: number | null;
+  inspection_param_set_ids?: number[];
+  upkeep_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
   maintenance_cycle_by_yield?: string | number | null;
@@ -129,7 +132,8 @@ export type EquipmentUpdatePayload = {
   workshop_id?: number;
   manufacturer_id?: number | null;
   manufacture_date?: string | null;
-  inspection_param_set_id?: number | null;
+  inspection_param_set_ids?: number[];
+  upkeep_param_set_id?: number | null;
   criticality?: string | null;
   operational_status?: string | null;
   maintenance_cycle_by_yield?: string | number | null;
@@ -341,6 +345,7 @@ export interface InspectionParamRow {
   uuid: string;
   code: string;
   name: string;
+  level1_category?: string | null;
   requirement?: string | null;
   unit?: string | null;
   value_type: string;
@@ -352,6 +357,7 @@ export interface InspectionParamRow {
 export type InspectionParamCreatePayload = {
   code: string;
   name: string;
+  level1_category?: string | null;
   requirement?: string | null;
   unit?: string | null;
   value_type?: string;
@@ -362,6 +368,7 @@ export type InspectionParamCreatePayload = {
 
 export type InspectionParamUpdatePayload = {
   name?: string;
+  level1_category?: string | null;
   requirement?: string | null;
   unit?: string | null;
   value_type?: string;
@@ -384,6 +391,24 @@ export function updateInspectionParam(rowId: number, body: InspectionParamUpdate
 
 export function deleteInspectionParam(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/inspection-params/${rowId}`, { method: 'DELETE' });
+}
+
+export type InspectionParamBatchLevel1Payload = {
+  ids: number[];
+  level1_category?: string | null;
+};
+
+export type InspectionParamBatchLevel1Result = {
+  updated: number;
+};
+
+export function batchUpdateInspectionParamLevel1(
+  body: InspectionParamBatchLevel1Payload,
+): Promise<InspectionParamBatchLevel1Result> {
+  return apiRequest(`${PREFIX}/equipment/inspection-params/batch-level1-category`, {
+    method: 'POST',
+    data: body,
+  });
 }
 
 /** 点检方案 / 参数集 */
@@ -418,6 +443,7 @@ export type InspectionParamSetImportRowPayload = {
   set_name: string;
   param_code?: string | null;
   param_name: string;
+  level1_category?: string | null;
   requirement?: string | null;
   value_type?: string;
   default_value?: string | null;
@@ -714,6 +740,9 @@ export interface EquipmentUpkeepSheetRow {
   equipment_asset_code?: string | null;
   equipment_name?: string | null;
   description?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_param_set_code?: string | null;
+  upkeep_param_set_name?: string | null;
   reporter_user_id: number;
   created_at: string;
 }
@@ -724,6 +753,7 @@ export type EquipmentUpkeepSheetCreatePayload = {
   department_uuid: string;
   equipment_id: number;
   description?: string | null;
+  upkeep_param_set_id?: number | null;
   header_attachment_file_uuids?: string[] | null;
 };
 
@@ -733,6 +763,7 @@ export type EquipmentUpkeepSheetUpdatePayload = {
   department_uuid?: string;
   equipment_id?: number;
   description?: string;
+  upkeep_param_set_id?: number | null;
   header_attachment_file_uuids?: string[] | null;
 };
 
@@ -786,13 +817,23 @@ export interface EquipmentUpkeepCompleteSheetRow {
   source_description?: string | null;
   source_service_type?: string | null;
   completion_content?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_record_lines?: EquipmentUpkeepSchemeLineRow[];
   repair_content?: string | null;
   repair_result?: string | null;
+  source_upkeep_param_set_id?: number | null;
+  source_upkeep_param_set_code?: string | null;
+  source_upkeep_param_set_name?: string | null;
   /** 保养完修：是否清空累计产量 */
   clear_total_production?: boolean;
   reporter_user_id: number;
   created_at: string;
 }
+
+export type EquipmentUpkeepRecordLinePayload = {
+  param_id: number;
+  record_value?: string | null;
+};
 
 export type EquipmentUpkeepCompleteSheetCreatePayload = {
   source_upkeep_sheet_id: number;
@@ -800,6 +841,8 @@ export type EquipmentUpkeepCompleteSheetCreatePayload = {
   department_uuid?: string | null;
   header_attachment_file_uuids?: string[] | null;
   completion_content?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_record_lines?: EquipmentUpkeepRecordLinePayload[];
   repair_content?: string | null;
   repair_result?: string | null;
   clear_total_production?: boolean;
@@ -810,6 +853,8 @@ export type EquipmentUpkeepCompleteSheetUpdatePayload = {
   department_uuid?: string;
   header_attachment_file_uuids?: string[] | null;
   completion_content?: string | null;
+  upkeep_param_set_id?: number | null;
+  upkeep_record_lines?: EquipmentUpkeepRecordLinePayload[];
   repair_content?: string | null;
   repair_result?: string | null;
   clear_total_production?: boolean;
@@ -855,7 +900,7 @@ export interface EquipmentOutputRecordRow {
   equipment_id: number;
   equipment_asset_code?: string;
   equipment_name?: string;
-  work_order_no: string;
+  work_order_no?: string | null;
   customer_name?: string | null;
   product_name?: string | null;
   finished_product_code?: string | null;
@@ -873,7 +918,7 @@ export interface EquipmentOutputRecordRow {
 
 export type EquipmentOutputRecordCreatePayload = {
   equipment_id: number;
-  work_order_no: string;
+  work_order_no?: string | null;
   recorded_at?: string | null;
   customer_name?: string | null;
   product_name?: string | null;
@@ -890,7 +935,7 @@ export type EquipmentOutputRecordCreatePayload = {
 
 export type EquipmentOutputRecordUpdatePayload = Partial<
   Omit<EquipmentOutputRecordCreatePayload, 'equipment_id' | 'work_order_no'>
-> & { work_order_no?: string };
+> & { work_order_no?: string | null };
 
 export function listEquipmentOutputRecords(params?: {
   skip?: number;
@@ -1048,9 +1093,9 @@ export function deleteEquipmentStatusAdjustment(rowId: number): Promise<void> {
 }
 
 export function previewEquipmentOutputByWorkOrder(body: {
-  work_order_no: string;
+  work_order_no?: string | null;
 }): Promise<{
-  work_order_no: string;
+  work_order_no?: string | null;
   finished_product_code?: string | null;
   finished_product_name?: string | null;
   planned_qty?: string | number | null;
@@ -1272,6 +1317,119 @@ export function fetchMoldUpkeepSchemeContext(moldCode: string): Promise<MoldUpke
 
 export function fetchMoldUpkeepSchemeLinesBySet(setId: number): Promise<MoldUpkeepSchemeLineRow[]> {
   return apiRequest(`${PREFIX}/molds/upkeep-param-sets/${setId}/scheme-lines`);
+}
+
+/** 设备保养项 */
+export interface EquipmentUpkeepParamRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+  requirement?: string | null;
+  value_type: string;
+  default_value?: string | null;
+}
+
+export type EquipmentUpkeepParamCreatePayload = MoldUpkeepParamCreatePayload;
+export type EquipmentUpkeepParamUpdatePayload = MoldUpkeepParamUpdatePayload;
+
+export function listEquipmentUpkeepParams(): Promise<EquipmentUpkeepParamRow[]> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-params`);
+}
+
+export function createEquipmentUpkeepParam(body: EquipmentUpkeepParamCreatePayload): Promise<EquipmentUpkeepParamRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-params`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentUpkeepParam(
+  rowId: number,
+  body: EquipmentUpkeepParamUpdatePayload,
+): Promise<EquipmentUpkeepParamRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-params/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentUpkeepParam(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-params/${rowId}`, { method: 'DELETE' });
+}
+
+/** 设备保养方案 */
+export interface EquipmentUpkeepParamSetRow {
+  id: number;
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export type EquipmentUpkeepParamSetCreatePayload = MoldUpkeepParamSetCreatePayload;
+export type EquipmentUpkeepParamSetUpdatePayload = MoldUpkeepParamSetUpdatePayload;
+export type EquipmentUpkeepParamSetItemRow = MoldUpkeepParamSetItemRow;
+export type EquipmentUpkeepSetItemCreatePayload = MoldUpkeepSetItemCreatePayload;
+export type EquipmentUpkeepSetItemUpdatePayload = MoldUpkeepSetItemUpdatePayload;
+export type EquipmentUpkeepParamSetCreateWithItemsPayload = MoldUpkeepParamSetCreateWithItemsPayload;
+
+export function listEquipmentUpkeepParamSets(): Promise<EquipmentUpkeepParamSetRow[]> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets`);
+}
+
+export function createEquipmentUpkeepParamSet(
+  body: EquipmentUpkeepParamSetCreatePayload,
+): Promise<EquipmentUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets`, { method: 'POST', data: body });
+}
+
+export function createEquipmentUpkeepParamSetWithItems(
+  body: EquipmentUpkeepParamSetCreateWithItemsPayload,
+): Promise<EquipmentUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/with-items`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentUpkeepParamSet(
+  rowId: number,
+  body: EquipmentUpkeepParamSetUpdatePayload,
+): Promise<EquipmentUpkeepParamSetRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentUpkeepParamSet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/${rowId}`, { method: 'DELETE' });
+}
+
+export function listEquipmentUpkeepParamSetItems(setId: number): Promise<EquipmentUpkeepParamSetItemRow[]> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/${setId}/items`);
+}
+
+export function addEquipmentUpkeepParamSetItem(
+  setId: number,
+  body: EquipmentUpkeepSetItemCreatePayload,
+): Promise<EquipmentUpkeepParamSetItemRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/${setId}/items`, { method: 'POST', data: body });
+}
+
+export function updateEquipmentUpkeepParamSetItem(
+  itemId: number,
+  body: EquipmentUpkeepSetItemUpdatePayload,
+): Promise<EquipmentUpkeepParamSetItemRow> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-set-items/${itemId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteEquipmentUpkeepParamSetItem(itemId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-set-items/${itemId}`, { method: 'DELETE' });
+}
+
+export type EquipmentUpkeepSchemeLineRow = MoldUpkeepSchemeLineRow;
+
+export interface EquipmentUpkeepSchemeContext {
+  equipment_id: number;
+  ledger_upkeep_param_set_id?: number | null;
+  lines: EquipmentUpkeepSchemeLineRow[];
+}
+
+export function fetchEquipmentUpkeepSchemeContext(equipmentId: number): Promise<EquipmentUpkeepSchemeContext> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-scheme-context`, { params: { equipment_id: equipmentId } });
+}
+
+export function fetchEquipmentUpkeepSchemeLinesBySet(setId: number): Promise<EquipmentUpkeepSchemeLineRow[]> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-param-sets/${setId}/scheme-lines`);
 }
 
 export function listMolds(params?: {
@@ -2322,4 +2480,9 @@ export function getPatrolReport(
   params?: { months?: number; days?: number },
 ): Promise<PatrolReportPayload> {
   return apiRequest(`${PREFIX}/patrol/reports/${reportKey}`, { params });
+}
+
+/** 为当前租户创建缺失的好力 GO 维保完成单打印模板预设（幂等） */
+export function loadHaoligoPrintTemplatePresets(): Promise<{ created: number }> {
+  return apiRequest(`${PREFIX}/print/load-presets`, { method: 'POST' });
 }

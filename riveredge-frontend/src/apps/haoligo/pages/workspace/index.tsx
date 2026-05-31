@@ -40,12 +40,13 @@ import {
   type MoldMaintenanceAlertRow,
 } from '../../utils/moldMaintenanceAlert';
 import {
-  buildEquipmentMaintenanceAlertRows,
+  buildEquipmentWorkbenchMaintenanceRows,
   buildLastUpkeepByEquipment,
-  countMaintenanceAlertWarnCritical as countEquipmentMaintenanceAlertWarnCritical,
+  countEquipmentWorkbenchMaintenanceReminders,
   topMaintenanceAlertRows as topEquipmentMaintenanceAlertRows,
   type EquipmentMaintenanceAlertRow,
 } from '../../utils/equipmentMaintenanceAlert';
+import { useEquipmentOperationalStatusLabels } from '../../utils/equipmentOperationalStatus';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -98,6 +99,7 @@ const WorkspacePage: React.FC = () => {
   const canReadMaintenanceAlert = hasPermission(currentUser, 'haoligo:molds-reports-maintenance-alert:read');
   const canReadEquipmentMaintenancePlan = hasPermission(currentUser, 'haoligo:equipment-reports-maintenance-plan:read');
   const canReadHazards = hasPermission(currentUser, 'haoligo:patrol-hazards:read');
+  const { labelByValue: equipmentStatusLabels } = useEquipmentOperationalStatusLabels();
 
   const [loading, setLoading] = useState(true);
   const [hazardTrendLoading, setHazardTrendLoading] = useState(false);
@@ -190,8 +192,12 @@ const WorkspacePage: React.FC = () => {
       setEqStatusData(canReadEquipment ? buildEquipmentStatusChart(eqItems) : []);
 
       if (needEquipmentAlerts && lastUpkeepByEquipment) {
-        const alertRows = buildEquipmentMaintenanceAlertRows(eqItems, lastUpkeepByEquipment);
-        setEquipmentMaintenanceAlertTotal(countEquipmentMaintenanceAlertWarnCritical(alertRows));
+        const alertRows = buildEquipmentWorkbenchMaintenanceRows(
+          eqItems,
+          lastUpkeepByEquipment,
+          equipmentStatusLabels,
+        );
+        setEquipmentMaintenanceAlertTotal(countEquipmentWorkbenchMaintenanceReminders(alertRows));
         setEquipmentMaintenanceAlertData(topEquipmentMaintenanceAlertRows(alertRows));
       } else {
         setEquipmentMaintenanceAlertTotal(0);
@@ -221,6 +227,7 @@ const WorkspacePage: React.FC = () => {
     canReadEquipmentMaintenancePlan,
     canReadHazards,
     loadHazardTrend,
+    equipmentStatusLabels,
   ]);
 
   useEffect(() => {
@@ -247,7 +254,7 @@ const WorkspacePage: React.FC = () => {
         key: 'maintenance',
         title: '设备保养计划',
         value: equipmentMaintenanceAlertCount,
-        subtitle: '预警及以上设备',
+        subtitle: '手工保养或周期预警',
         icon: <WarningOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/haoligo/equipment/reports/maintenance-plan'),
@@ -398,6 +405,9 @@ const WorkspacePage: React.FC = () => {
       key: 'alert_level',
       width: 72,
       render: (_: unknown, record: EquipmentMaintenanceAlertRow) => {
+        if (record.reminder_kind === 'manual_maintenance') {
+          return <Tag color="processing">待保养</Tag>;
+        }
         const level: AlertLevel = record.alert_level;
         if (level === 'critical') return <Tag color="error">紧急</Tag>;
         if (level === 'warning') return <Tag color="warning">预警</Tag>;
@@ -423,6 +433,9 @@ const WorkspacePage: React.FC = () => {
       key: 'progress',
       width: 200,
       render: (_: unknown, record: EquipmentMaintenanceAlertRow) => {
+        if (record.reminder_kind === 'manual_maintenance') {
+          return <Text type="secondary">—</Text>;
+        }
         const percent = maintenanceProgressPercent(record);
         const color = maintenanceProgressColor(percent, token);
         const status = percent >= 100 ? 'exception' : percent >= 90 ? 'normal' : 'success';

@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from apps.haoligo.api.routes_equipment import router as equipment_router
+from apps.haoligo.api.routes_equipment_upkeep import router as equipment_upkeep_router
 from apps.haoligo.api.routes_equipment_documents import router as equipment_documents_router
 from apps.haoligo.api.routes_equipment_reports import router as equipment_reports_router
 from apps.haoligo.api.routes_equipment_status_adjustment import router as equipment_status_adjustment_router
@@ -35,6 +36,7 @@ from apps.haoligo.api.routes_mold_outsource_maintenance_complete_sheet import (
 from apps.haoligo.api.routes_mold_reports import router as mold_reports_router
 from apps.haoligo.api.routes_patrol import router as patrol_router
 from apps.haoligo.api.routes_patrol_reports import router as patrol_reports_router
+from apps.haoligo.api.routes_print import router as print_router
 
 router = APIRouter(tags=["App · HaoliGO"])
 
@@ -57,6 +59,7 @@ async def get_haoligo_meta() -> HaoligoMeta:
 
 
 router.include_router(equipment_router)
+router.include_router(equipment_upkeep_router)
 router.include_router(equipment_documents_router)
 router.include_router(equipment_upkeep_sheet_router)
 router.include_router(equipment_upkeep_complete_sheet_router)
@@ -77,3 +80,4 @@ router.include_router(mold_router)
 router.include_router(mobile_router)
 router.include_router(patrol_router)
 router.include_router(patrol_reports_router)
+router.include_router(print_router)
