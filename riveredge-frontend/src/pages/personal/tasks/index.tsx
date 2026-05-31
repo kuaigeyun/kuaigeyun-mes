@@ -258,7 +258,7 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => getStatusTag(record.status),
     },
     {
-      title: taskType === 'submitted' ? t('pages.personal.tasks.currentApproverId') || '当前审批' : t('pages.personal.tasks.submitter') || '提交人',
+      title: taskType === 'submitted' ? t('pages.personal.tasks.currentApproverId') : t('pages.personal.tasks.submitter'),
       dataIndex: taskType === 'submitted' ? 'current_approver_id' : 'submitter_id',
       key: 'relation',
       width: 120,
@@ -299,7 +299,7 @@ const UserTasksPage: React.FC = () => {
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleProcessTask(record, 'approve')}
                 >
-                  {record.data?.is_personal ? t('pages.personal.tasks.complete') || '完成' : t('pages.personal.tasks.approve')}
+                  {record.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
                 </Button>
                 {!record.data?.is_personal && (
                   <Button
@@ -527,7 +527,7 @@ const UserTasksPage: React.FC = () => {
                 },
                 {
                   key: 'processed',
-                  label: t('pages.personal.tasks.processedTab') || '已处理',
+                  label: t('pages.personal.tasks.processedTab'),
                 },
                 {
                   key: 'submitted',

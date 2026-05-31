@@ -266,7 +266,7 @@ const UserPreferencesPage: React.FC = () => {
                 </div>
 
                 {/* 样式微调 */}
-                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.styleCustomization') || '样式微调'}</Typography.Title>
+                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.styleCustomization')}</Typography.Title>
                 <div style={sectionMargin}>
                   <Form.Item name={['theme_config', 'fontSize']} label={t('pages.personal.preferences.fontSize')}>
                     <Slider 
@@ -286,7 +286,7 @@ const UserPreferencesPage: React.FC = () => {
                 </div>
 
                 {/* 颜色方案 */}
-                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.colorScheme') || '颜色方案'}</Typography.Title>
+                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.colorScheme')}</Typography.Title>
                 <div style={{ marginBottom: 20 }}>
                   <Row gutter={[16, 16]}>
                     <Col span={12}>
@@ -333,7 +333,7 @@ const UserPreferencesPage: React.FC = () => {
                 </div>
 
                 {/* 辅助开关 */}
-                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.miscOptions') || '界面辅助'}</Typography.Title>
+                <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.miscOptions')}</Typography.Title>
                 <Row gutter={24}>
                   <Col span={24}>
                     <ProFormSwitch 

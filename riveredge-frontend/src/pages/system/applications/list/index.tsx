@@ -454,7 +454,7 @@ const ApplicationHelpView: React.FC = () => {
             <li style={{ marginBottom: 12 }}><Text strong>应用配置</Text>：点击 <b>[更多操作]</b> -{'>'} <b>[应用配置]</b>，可修改该应用在系统中的显示名称、显示排序等基本参数。</li>
             <li><Text strong>重置数据</Text>：针对特定应用（如快制造 kuaizhizao），在 <b>[更多操作]</b> 中提供了 <b>[重置数据]</b> 功能。</li>
           </ul>
-          <Alert message="高危操作警告：“重置数据”将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。" type="error" showIcon style={{ marginTop: 24 }} />
+          <Alert message={t('pages.system.applications.resetHighRiskWarning', { defaultValue: '高危操作警告：“重置数据”将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。' })} type="error" showIcon style={{ marginTop: 24 }} />
         </>
       )
     },
@@ -1044,6 +1044,7 @@ const ApplicationListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      render: (val: any, record: any) => <span>{typeof val === 'string' && val.startsWith('sys.') ? t(val) : (record?.is_system ? t(`sys.app.${record.code}.name`, { defaultValue: val }) : val)}</span>,
     },
     {
       title: t('pages.system.applications.code'),
@@ -1057,6 +1058,7 @@ const ApplicationListPage: React.FC = () => {
       width: 250,
       ellipsis: true,
       hideInSearch: true,
+      render: (val: any, record: any) => <span>{typeof val === 'string' && val.startsWith('sys.') ? t(val) : (record?.is_system && val ? t(`sys.app.${record.code}.desc`, { defaultValue: val }) : val)}</span>,
     },
     {
       title: t('pages.system.applications.sortOrder'),
@@ -1519,7 +1521,7 @@ const ApplicationListPage: React.FC = () => {
                           flexShrink: 0,
                         }}
                       >
-                        {application.name}
+                        {application.name?.startsWith('sys.') ? t(application.name) : (application.is_system ? t(`sys.app.${application.code}.name`, { defaultValue: application.name }) : application.name)}
                       </span>
                       
                       {(() => {
@@ -1689,7 +1691,7 @@ const ApplicationListPage: React.FC = () => {
                         overflow: 'hidden',
                       }}
                     >
-                      {application.description || t('pages.system.applications.noDescription')}
+                      {application.description?.startsWith('sys.') ? t(application.description) : (application.is_system && application.description ? t(`sys.app.${application.code}.desc`, { defaultValue: application.description }) : (application.description || t('pages.system.applications.noDescription')))}
                     </div>
                   </div>
                 </>
@@ -1746,9 +1748,9 @@ const ApplicationListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns: ProDescriptionsItemProps<Application>[] = [
-    { title: t('pages.system.applications.name'), dataIndex: 'name' },
+    { title: t('pages.system.applications.name'), dataIndex: 'name', render: (val: any, record: any) => <span>{val?.startsWith('sys.') ? t(val) : (record?.is_system ? t(`sys.app.${record.code}.name`, { defaultValue: val }) : val)}</span> },
     { title: t('pages.system.applications.code'), dataIndex: 'code' },
-    { title: t('pages.system.applications.description'), dataIndex: 'description' },
+    { title: t('pages.system.applications.description'), dataIndex: 'description', render: (val: any, record: any) => <span>{val?.startsWith('sys.') ? t(val) : (record?.is_system && val ? t(`sys.app.${record.code}.desc`, { defaultValue: val }) : val)}</span> },
     { title: t('pages.system.applications.version'), dataIndex: 'version' },
     { title: t('pages.system.applications.changelog'), dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
     { title: t('pages.system.applications.routePath'), dataIndex: 'route_path' },
@@ -1833,8 +1835,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaicrm',
                   code: 'kuaicrm',
-                  name: '快客户',
-                  description: '新一代智能客户关系管理系统，敬请期待',
+                  name: t('pages.system.applications.mock.kuaicrm.name', { defaultValue: '快客户' }),
+                  description: t('pages.system.applications.mock.kuaicrm.desc', { defaultValue: '新一代智能客户关系管理系统，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1846,8 +1848,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaisrm',
                   code: 'kuaisrm',
-                  name: '快协同',
-                  description: '新一代供应链与供应商协同平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuaisrm.name', { defaultValue: '快协同' }),
+                  description: t('pages.system.applications.mock.kuaisrm.desc', { defaultValue: '新一代供应链与供应商协同平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1859,8 +1861,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaimachinery',
                   code: 'kuaimachinery',
-                  name: '机械加工增值包',
-                  description: '基于快制造的机械加工行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaimachinery.name', { defaultValue: '机械加工增值包' }),
+                  description: t('pages.system.applications.mock.kuaimachinery.desc', { defaultValue: '基于快制造的机械加工行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1872,8 +1874,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaimolding',
                   code: 'kuaimolding',
-                  name: '注塑增值包',
-                  description: '基于快制造的注塑行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaimolding.name', { defaultValue: '注塑增值包' }),
+                  description: t('pages.system.applications.mock.kuaimolding.desc', { defaultValue: '基于快制造的注塑行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1885,8 +1887,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaielectronics',
                   code: 'kuaielectronics',
-                  name: '电子增值包',
-                  description: '基于快制造的电子行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaielectronics.name', { defaultValue: '电子增值包' }),
+                  description: t('pages.system.applications.mock.kuaielectronics.desc', { defaultValue: '基于快制造的电子行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1898,8 +1900,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaiautoparts',
                   code: 'kuaiautoparts',
-                  name: '汽配增值包',
-                  description: '基于快制造的汽配行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaiautoparts.name', { defaultValue: '汽配增值包' }),
+                  description: t('pages.system.applications.mock.kuaiautoparts.desc', { defaultValue: '基于快制造的汽配行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1911,8 +1913,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaimedical',
                   code: 'kuaimedical',
-                  name: '医疗器械增值包',
-                  description: '基于快制造的医疗器械行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaimedical.name', { defaultValue: '医疗器械增值包' }),
+                  description: t('pages.system.applications.mock.kuaimedical.desc', { defaultValue: '基于快制造的医疗器械行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1924,8 +1926,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaifood',
                   code: 'kuaifood',
-                  name: '食品饮料增值包',
-                  description: '基于快制造的食品饮料行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaifood.name', { defaultValue: '食品饮料增值包' }),
+                  description: t('pages.system.applications.mock.kuaifood.desc', { defaultValue: '基于快制造的食品饮料行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1937,8 +1939,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaipackaging',
                   code: 'kuaipackaging',
-                  name: '包装印刷增值包',
-                  description: '基于快制造的包装印刷行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaipackaging.name', { defaultValue: '包装印刷增值包' }),
+                  description: t('pages.system.applications.mock.kuaipackaging.desc', { defaultValue: '基于快制造的包装印刷行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1950,8 +1952,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaihardware',
                   code: 'kuaihardware',
-                  name: '五金冲压增值包',
-                  description: '基于快制造的五金冲压行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaihardware.name', { defaultValue: '五金冲压增值包' }),
+                  description: t('pages.system.applications.mock.kuaihardware.desc', { defaultValue: '基于快制造的五金冲压行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1963,8 +1965,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaidiecasting',
                   code: 'kuaidiecasting',
-                  name: '压铸增值包',
-                  description: '基于快制造的压铸行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaidiecasting.name', { defaultValue: '压铸增值包' }),
+                  description: t('pages.system.applications.mock.kuaidiecasting.desc', { defaultValue: '基于快制造的压铸行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1976,8 +1978,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaiwiring',
                   code: 'kuaiwiring',
-                  name: '线束增值包',
-                  description: '基于快制造的线束行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaiwiring.name', { defaultValue: '线束增值包' }),
+                  description: t('pages.system.applications.mock.kuaiwiring.desc', { defaultValue: '基于快制造的线束行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -1989,8 +1991,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaimotor',
                   code: 'kuaimotor',
-                  name: '电机增值包',
-                  description: '基于快制造的电机行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaimotor.name', { defaultValue: '电机增值包' }),
+                  description: t('pages.system.applications.mock.kuaimotor.desc', { defaultValue: '基于快制造的电机行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2002,8 +2004,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaibattery',
                   code: 'kuaibattery',
-                  name: '电池增值包',
-                  description: '基于快制造的电池行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaibattery.name', { defaultValue: '电池增值包' }),
+                  description: t('pages.system.applications.mock.kuaibattery.desc', { defaultValue: '基于快制造的电池行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2015,8 +2017,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuainewequipment',
                   code: 'kuainewequipment',
-                  name: '新能源设备增值包',
-                  description: '基于快制造的新能源设备行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuainewequipment.name', { defaultValue: '新能源设备增值包' }),
+                  description: t('pages.system.applications.mock.kuainewequipment.desc', { defaultValue: '基于快制造的新能源设备行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2028,8 +2030,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaisheetmetal',
                   code: 'kuaisheetmetal',
-                  name: '钣金增值包',
-                  description: '基于快制造的钣金行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaisheetmetal.name', { defaultValue: '钣金增值包' }),
+                  description: t('pages.system.applications.mock.kuaisheetmetal.desc', { defaultValue: '基于快制造的钣金行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2041,8 +2043,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaimold',
                   code: 'kuaimold',
-                  name: '模具增值包',
-                  description: '基于快制造的模具行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaimold.name', { defaultValue: '模具增值包' }),
+                  description: t('pages.system.applications.mock.kuaimold.desc', { defaultValue: '基于快制造的模具行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2054,8 +2056,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaisemiconductor',
                   code: 'kuaisemiconductor',
-                  name: '半导体增值包',
-                  description: '基于快制造的半导体行业专属能力包，欢迎客户联合共创',
+                  name: t('pages.system.applications.mock.kuaisemiconductor.name', { defaultValue: '半导体增值包' }),
+                  description: t('pages.system.applications.mock.kuaisemiconductor.desc', { defaultValue: '基于快制造的半导体行业专属能力包，欢迎客户联合共创' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2067,8 +2069,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaitms',
                   code: 'kuaitms',
-                  name: '快物流',
-                  description: '物流与运力协同管理平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuailogistics.name', { defaultValue: '快物流' }),
+                  description: t('pages.system.applications.mock.kuailogistics.desc', { defaultValue: '物流与运力协同管理平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2080,8 +2082,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaiasms',
                   code: 'kuaiasms',
-                  name: '快售后',
-                  description: '售后服务与闭环追踪管理平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuaiaftersales.name', { defaultValue: '快售后' }),
+                  description: t('pages.system.applications.mock.kuaiaftersales.desc', { defaultValue: '售后服务与闭环追踪管理平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2093,8 +2095,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuailtms',
                   code: 'kuailtms',
-                  name: '快实验',
-                  description: '实验流程与结果追溯管理平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuaiexperiment.name', { defaultValue: '快实验' }),
+                  description: t('pages.system.applications.mock.kuaiexperiment.desc', { defaultValue: '实验流程与结果追溯管理平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2106,8 +2108,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaiip',
                   code: 'kuaiip',
-                  name: '快知产',
-                  description: '知识产权全周期管理平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuaiip.name', { defaultValue: '快知产' }),
+                  description: t('pages.system.applications.mock.kuaiip.desc', { defaultValue: '知识产权全周期管理平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2119,8 +2121,8 @@ const ApplicationListPage: React.FC = () => {
                 {
                   uuid: 'placeholder-kuaiems',
                   code: 'kuaiems',
-                  name: '快能源',
-                  description: '能源数据监控与能效分析平台，敬请期待',
+                  name: t('pages.system.applications.mock.kuaienergy.name', { defaultValue: '快能源' }),
+                  description: t('pages.system.applications.mock.kuaienergy.desc', { defaultValue: '能源数据监控与能效分析平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
@@ -2512,8 +2514,8 @@ const ApplicationListPage: React.FC = () => {
         initialValues={
           editingApp
             ? {
-                name: editingApp.name,
-                description: editingApp.description ?? '',
+                name: editingApp.name?.startsWith('sys.') ? t(editingApp.name) : (editingApp.is_system ? t(`sys.app.${editingApp.code}.name`, { defaultValue: editingApp.name }) : editingApp.name),
+                description: editingApp.description?.startsWith('sys.') ? t(editingApp.description) : (editingApp.is_system && editingApp.description ? t(`sys.app.${editingApp.code}.desc`, { defaultValue: editingApp.description }) : (editingApp.description ?? '')),
                 sort_order: editingApp.sort_order ?? 0,
               }
             : undefined

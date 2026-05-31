@@ -140,21 +140,21 @@ function permissionLeafDisplayLabel(
   const tr = t(actionKey, { defaultValue: '' });
   if (tr && tr !== actionKey) return tr;
   const actionFallback: Record<string, string> = {
-    create: '新建',
-    read: '查看',
-    update: '编辑',
-    delete: '删除',
-    import: '导入',
-    export: '导出',
-    submit: '提交',
-    approve: '审批通过',
-    reject: '审批驳回',
-    revoke: '撤销',
-    audit: '审核',
-    assign: '派工/分配',
-    execute: '执行',
-    complete: '完修',
-    print: '打印',
+    create: t('permission.action.create', { defaultValue: '新建' }),
+    read: t('permission.action.read', { defaultValue: '查看' }),
+    update: t('permission.action.update', { defaultValue: '编辑' }),
+    delete: t('permission.action.delete', { defaultValue: '删除' }),
+    import: t('permission.action.import', { defaultValue: '导入' }),
+    export: t('permission.action.export', { defaultValue: '导出' }),
+    submit: t('permission.action.submit', { defaultValue: '提交' }),
+    approve: t('permission.action.approve', { defaultValue: '审批通过' }),
+    reject: t('permission.action.reject', { defaultValue: '审批驳回' }),
+    revoke: t('permission.action.revoke', { defaultValue: '撤销' }),
+    audit: t('permission.action.audit', { defaultValue: '审核' }),
+    assign: t('permission.action.assign', { defaultValue: '派工/分配' }),
+    execute: t('permission.action.execute', { defaultValue: '执行' }),
+    complete: t('permission.action.complete', { defaultValue: '完修' }),
+    print: t('permission.action.print', { defaultValue: '打印' }),
   };
   return actionFallback[String(actionSeg).toLowerCase()] || actionSeg;
 }
@@ -966,16 +966,16 @@ const RolesPermissionsPage: React.FC = () => {
   }, [dataPolicies]);
 
   const DATA_SCOPE_OPTIONS: Array<{ value: DataPermissionPolicy['scope_type']; label: string }> = [
-    { value: 'scope_all', label: '全部' },
-    { value: 'scope_department', label: '本部门' },
-    { value: 'scope_self', label: '本人' },
-    { value: 'scope_custom', label: '自定义' },
+    { value: 'scope_all', label: t('permission.scope.all', { defaultValue: '全部' }) },
+    { value: 'scope_department', label: t('permission.scope.department', { defaultValue: '本部门' }) },
+    { value: 'scope_self', label: t('permission.scope.self', { defaultValue: '本人' }) },
+    { value: 'scope_custom', label: t('permission.scope.custom', { defaultValue: '自定义' }) },
   ];
 
   const FIELD_MASK_OPTIONS: Array<{ value: FieldPermissionPolicy['mask_level']; label: string }> = [
-    { value: 'full', label: '明文' },
-    { value: 'masked', label: '脱敏' },
-    { value: 'hidden', label: '隐藏' },
+    { value: 'full', label: t('permission.field.full', { defaultValue: '明文' }) },
+    { value: 'masked', label: t('permission.field.masked', { defaultValue: '脱敏' }) },
+    { value: 'hidden', label: t('permission.field.hidden', { defaultValue: '隐藏' }) },
   ];
 
   const fieldResourceLabelByKey = useMemo(() => {
@@ -1351,7 +1351,7 @@ const RolesPermissionsPage: React.FC = () => {
         const refreshed = await replaceRoleFunctionGrants(selectedRole.uuid, grantedCodes);
         setFunctionGrants(refreshed);
         setGrantedCodes(refreshed.granted_codes || []);
-        messageApi.success(`功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项`);
+        messageApi.success(t('pages.system.roles.functionGrantSuccess', { count: refreshed.granted_codes?.length ?? 0, defaultValue: `功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项` }));
       } else if (permissionLayer === 'data') {
         const payload = dataPolicies
           .filter(
@@ -1367,7 +1367,7 @@ const RolesPermissionsPage: React.FC = () => {
           selectedRole.uuid,
           payload
         );
-        messageApi.success(`数据权限保存成功：${payload.length} 条`);
+        messageApi.success(t('pages.system.roles.dataGrantSuccess', { count: payload.length, defaultValue: `数据权限保存成功：${payload.length} 条` }));
       } else {
         const dedupMap = new Map<string, Pick<FieldPermissionPolicy, 'resource' | 'field_name' | 'mask_level'>>();
         fieldPolicies.forEach((x) => {
@@ -1387,7 +1387,7 @@ const RolesPermissionsPage: React.FC = () => {
           selectedRole.uuid,
           payload
         );
-        messageApi.success(`字段权限保存成功：${payload.length} 条（已自动去重）`);
+        messageApi.success(t('pages.system.roles.fieldGrantSuccess', { count: payload.length, defaultValue: `字段权限保存成功：${payload.length} 条（已自动去重）` }));
       }
 
       // 重新加载角色列表（更新权限数）
@@ -1596,7 +1596,7 @@ const RolesPermissionsPage: React.FC = () => {
               </Button>
               )}
               {trialRunMode && (
-              <Tooltip title="清理旧角色">
+              <Tooltip title={t('pages.system.roles.cleanOldRoles', { defaultValue: '清理旧角色' })}>
                 <Button
                   icon={<ClearOutlined />}
                   style={{ width: 32, minWidth: 32, padding: 0, flexShrink: 0 }}
@@ -1606,7 +1606,13 @@ const RolesPermissionsPage: React.FC = () => {
                       setCleanupLegacyLoading(true);
                       const res = await cleanupLegacyRoles();
                       messageApi.success(
-                        `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
+                        t('pages.system.roles.cleanOldRolesResult', {
+                          message: res.message,
+                          renamed: res.renamed,
+                          merged: res.merged,
+                          deleted: res.soft_deleted,
+                          defaultValue: `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
+                        })
                       );
                       await loadRoles();
                     } catch (e: any) {
@@ -1744,9 +1750,9 @@ const RolesPermissionsPage: React.FC = () => {
                 activeKey={permissionLayer}
                 onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
                 items={[
-                  { key: 'function', label: '功能权限' },
-                  { key: 'data', label: '数据权限' },
-                  { key: 'field', label: '字段权限' },
+                  { key: 'function', label: t('pages.system.roles.functionPermission', { defaultValue: '功能权限' }) },
+                  { key: 'data', label: t('pages.system.roles.dataPermission', { defaultValue: '数据权限' }) },
+                  { key: 'field', label: t('pages.system.roles.fieldPermission', { defaultValue: '字段权限' }) },
                 ]}
                 style={{ marginBottom: 8 }}
                 tabBarStyle={{ marginBottom: 0 }}

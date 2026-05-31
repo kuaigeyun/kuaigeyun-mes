@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Badge, Tag, Button, Space, message, Drawer, Typography, Descriptions, Divider, Empty } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileTextOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { DragEndEvent } from '@dnd-kit/core';
@@ -39,6 +40,7 @@ interface KanbanViewProps {
  * 看板视图组件
  */
 const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
       });
       setTasks(response.items);
     } catch (error: any) {
-      handleError(error, '加载任务失败');
+      handleError(error, t('pages.personal.tasks.getListFailed'));
     } finally {
       setLoading(false);
     }
@@ -73,10 +75,10 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
    */
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
-      pending: { color: 'processing', text: '待处理' },
-      approved: { color: 'success', text: '已通过' },
-      rejected: { color: 'error', text: '已拒绝' },
-      cancelled: { color: 'default', text: '已取消' },
+      pending: { color: 'processing', text: t('pages.personal.tasks.statusPending') },
+      approved: { color: 'success', text: t('pages.personal.tasks.statusApproved') },
+      rejected: { color: 'error', text: t('pages.personal.tasks.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.personal.tasks.statusCancelled') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
@@ -91,7 +93,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
       return [
         {
           id: 'pending',
-          title: '待处理',
+          title: t('pages.personal.tasks.statusPending'),
           color: '#1890ff',
           items: tasks.filter((t) => t.status === 'pending'),
         },
@@ -101,31 +103,31 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
       return [
         {
           id: 'pending',
-          title: '待审批',
+          title: t('pages.personal.tasks.pendingApproval'),
           color: '#1890ff',
           items: tasks.filter((t) => t.status === 'pending'),
         },
         {
           id: 'approved',
-          title: '已通过',
+          title: t('pages.personal.tasks.statusApproved'),
           color: '#52c41a',
           items: tasks.filter((t) => t.status === 'approved'),
         },
         {
           id: 'rejected',
-          title: '已拒绝',
+          title: t('pages.personal.tasks.statusRejected'),
           color: '#ff4d4f',
           items: tasks.filter((t) => t.status === 'rejected'),
         },
         {
           id: 'cancelled',
-          title: '已取消',
+          title: t('pages.personal.tasks.statusCancelled'),
           color: '#999',
           items: tasks.filter((t) => t.status === 'cancelled'),
         },
       ];
     }
-  }, [tasks, taskType]);
+  }, [tasks, taskType, t]);
 
   /**
    * 处理拖拽结束
@@ -161,11 +163,11 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
             action: targetColumnId === 'approved' ? 'approve' : 'reject',
           };
           await processUserTask(task.uuid, action);
-          messageApi.success(targetColumnId === 'approved' ? '审批通过' : '审批拒绝');
+          messageApi.success(targetColumnId === 'approved' ? t('pages.personal.tasks.approveSuccess') : t('pages.personal.tasks.rejectSuccess'));
           loadTasks();
           onRefresh?.();
         } catch (error: any) {
-          handleError(error, '处理失败');
+          handleError(error, t('pages.personal.tasks.processFailed'));
         }
       }
     }
@@ -233,13 +235,13 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
         action,
       };
       await processUserTask(task.uuid, data);
-      messageApi.success(action === 'approve' ? '审批通过' : '审批拒绝');
+      messageApi.success(action === 'approve' ? t('pages.personal.tasks.approveSuccess') : t('pages.personal.tasks.rejectSuccess'));
       setDetailDrawerVisible(false);
       setSelectedTask(null);
       loadTasks();
       onRefresh?.();
     } catch (error: any) {
-      handleError(error, '处理失败');
+      handleError(error, t('pages.personal.tasks.processFailed'));
     }
   };
 
@@ -260,7 +262,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
 
       {/* 任务详情抽屉 */}
       <Drawer
-        title="任务详情"
+        title={t('pages.personal.tasks.detailTitle')}
         placement="right"
         size={600}
         open={detailDrawerVisible}
@@ -276,15 +278,17 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
                 icon={<CheckCircleOutlined />}
                 onClick={() => handleProcessTask(selectedTask, 'approve')}
               >
-                审批通过
+                {selectedTask.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
               </Button>
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleProcessTask(selectedTask, 'reject')}
-              >
-                审批拒绝
-              </Button>
+              {!selectedTask.data?.is_personal && (
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => handleProcessTask(selectedTask, 'reject')}
+                >
+                  {t('pages.personal.tasks.reject')}
+                </Button>
+              )}
             </Space>
           ) : null
         }
@@ -292,25 +296,25 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
         {selectedTask && (
           <div>
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="任务标题">
+              <Descriptions.Item label={t('pages.personal.tasks.taskTitleLabel')}>
                 <Text strong>{selectedTask.title}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="任务内容">
-                {selectedTask.content || '(无内容)'}
+              <Descriptions.Item label={t('pages.personal.tasks.taskContentLabel')}>
+                {selectedTask.content || t('pages.personal.tasks.noContent')}
               </Descriptions.Item>
-              <Descriptions.Item label="状态">
+              <Descriptions.Item label={t('pages.personal.tasks.status')}>
                 {getStatusTag(selectedTask.status)}
               </Descriptions.Item>
-              <Descriptions.Item label="提交时间">
+              <Descriptions.Item label={t('pages.personal.tasks.submittedAt')}>
                 {new Date(selectedTask.submitted_at).toLocaleString()}
               </Descriptions.Item>
               {selectedTask.completed_at && (
-                <Descriptions.Item label="完成时间">
+                <Descriptions.Item label={t('pages.personal.tasks.completedAt')}>
                   {new Date(selectedTask.completed_at).toLocaleString()}
                 </Descriptions.Item>
               )}
               {selectedTask.current_node && (
-                <Descriptions.Item label="当前节点">
+                <Descriptions.Item label={t('pages.personal.tasks.currentNode')}>
                   {selectedTask.current_node}
                 </Descriptions.Item>
               )}
@@ -318,7 +322,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
 
             {selectedTask.data && Object.keys(selectedTask.data).length > 0 && (
               <>
-                <Divider>表单数据</Divider>
+                <Divider>{t('pages.personal.tasks.formData')}</Divider>
                 <pre
                   style={{
                     padding: '12px',

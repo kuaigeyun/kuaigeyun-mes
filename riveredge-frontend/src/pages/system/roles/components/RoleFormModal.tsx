@@ -84,7 +84,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       setFormLoading(true);
       const payload = { ...values };
       if (payload.role_type === 'external' && !payload.external_partner_type) {
-        messageApi.warning('外部角色必须选择绑定类型（客户或供应商）');
+        messageApi.warning(t('pages.system.roles.externalRoleTypeRequired', { defaultValue: '外部角色必须选择绑定类型（客户或供应商）' }));
         return;
       }
       if (payload.role_type !== 'external') {

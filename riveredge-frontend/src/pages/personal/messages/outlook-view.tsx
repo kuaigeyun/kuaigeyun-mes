@@ -105,27 +105,27 @@ function filterSegmentLabel(
   );
 }
 
-function formatListTime(sentAt?: string, createdAt?: string): string {
+function formatListTime(sentAt: string | undefined, createdAt: string | undefined, t: (key: string) => string): string {
   const ts = sentAt || createdAt;
   if (!ts) return '';
   const d = dayjs(ts);
   const now = dayjs();
   if (d.isSame(now, 'day')) return d.format('HH:mm');
-  if (d.isSame(now.subtract(1, 'day'), 'day')) return d.format('昨天 HH:mm');
+  if (d.isSame(now.subtract(1, 'day'), 'day')) return `${t('pages.personal.messages.yesterday')} ${d.format('HH:mm')}`;
   if (d.isSame(now, 'year')) return d.format('MM-DD HH:mm');
   return d.format('YYYY-MM-DD');
 }
 
-function groupLabel(sentAt?: string, createdAt?: string): string {
+function groupLabel(sentAt: string | undefined, createdAt: string | undefined, t: (key: string) => string): string {
   const ts = sentAt || createdAt;
   if (!ts) return '';
   const d = dayjs(ts);
   const now = dayjs();
-  if (d.isSame(now, 'day')) return '今天';
-  if (d.isSame(now.subtract(1, 'day'), 'day')) return '昨天';
-  if (d.isSame(now, 'week')) return '本周';
-  if (d.isSame(now, 'month')) return '本月';
-  return d.format('YYYY年M月');
+  if (d.isSame(now, 'day')) return t('pages.personal.messages.today');
+  if (d.isSame(now.subtract(1, 'day'), 'day')) return t('pages.personal.messages.yesterday');
+  if (d.isSame(now, 'week')) return t('pages.personal.messages.thisWeek');
+  if (d.isSame(now, 'month')) return t('pages.personal.messages.thisMonth');
+  return d.format(t('pages.personal.messages.yearMonthFormat'));
 }
 
 const OutlookMessagesView: React.FC = () => {
@@ -279,7 +279,7 @@ const OutlookMessagesView: React.FC = () => {
     const groups: { label: string; items: UserMessage[] }[] = [];
     const map = new Map<string, UserMessage[]>();
     for (const m of messages) {
-      const label = groupLabel(m.sent_at, m.created_at) || '—';
+      const label = groupLabel(m.sent_at, m.created_at, t) || '—';
       if (!map.has(label)) map.set(label, []);
       map.get(label)!.push(m);
     }
@@ -505,7 +505,7 @@ const OutlookMessagesView: React.FC = () => {
                                 {item.subject || t('common.noSubject')}
                               </Text>
                               <Text type="secondary" style={{ fontSize: 11, flexShrink: 0, whiteSpace: 'nowrap' }}>
-                                {formatListTime(item.sent_at, item.created_at)}
+                                {formatListTime(item.sent_at, item.created_at, t)}
                               </Text>
                             </div>
                             <Paragraph

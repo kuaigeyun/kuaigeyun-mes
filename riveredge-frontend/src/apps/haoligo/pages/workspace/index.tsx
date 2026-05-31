@@ -486,6 +486,7 @@ const WorkspacePage: React.FC = () => {
 
   return (
     <ModuleCenterLayout
+      showSidebar={false}
       loading={loading}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />}
