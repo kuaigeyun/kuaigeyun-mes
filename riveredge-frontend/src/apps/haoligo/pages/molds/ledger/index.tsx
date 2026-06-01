@@ -308,10 +308,10 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
     <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
       <Col xs={24} md={12}>
         {cardBodyMetric(
-          '额定可用产量 / 已使用产量',
-          '环形图：剩余产量占比 =（额定可用产量 − 已使用产量）÷ 额定可用产量；保养以产量为依据',
+          '额定可用产量 / 保养后制造数量',
+          '环形图：剩余产量占比 =（额定可用产量 − 保养后制造数量）÷ 额定可用产量；保养以产量为依据',
           '额定可用产量',
-          '已使用产量',
+          '保养后制造数量',
           !Number.isNaN(ratedYield) ? formatMoldMetricNumber(ratedYield) : '—',
           !Number.isNaN(usedYield) ? formatMoldMetricNumber(usedYield) : '—',
           pctYieldRemaining,
@@ -319,10 +319,10 @@ function MoldLifecycleMetricCards({ row, loading }: { row: MoldRow; loading: boo
       </Col>
       <Col xs={24} md={12}>
         {cardBodyMetric(
-          '模具寿命 / 累计产量',
-          '模具寿命为累计产量上限；环形图为剩余寿命占比 =（上限 − 累计产量）÷ 上限',
+          '模具寿命 / 总制造数量',
+          '模具寿命为累计产量上限；环形图为剩余寿命占比 =（上限 − 总制造数量）÷ 上限',
           '累计产量上限',
-          '累计产量',
+          '总制造数量',
           !Number.isNaN(lifeCap) ? formatMoldMetricNumber(lifeCap) : '—',
           !Number.isNaN(totalQty) ? formatMoldMetricNumber(totalQty, 0) : '—',
           pctLifeRemaining,
@@ -880,9 +880,9 @@ const MoldLedgerPage: React.FC = () => {
       dataIndex: 'service_life_years',
       render: (_, r) => formatMoldLedgerInteger(r.service_life_years),
     },
-    { title: '累计产量', dataIndex: 'total_manufacture_qty', render: (_, r) => formatMoldLedgerInteger(r.total_manufacture_qty) },
+    { title: '总制造数量', dataIndex: 'total_manufacture_qty', render: (_, r) => formatMoldLedgerInteger(r.total_manufacture_qty) },
     { title: '已使用次数', dataIndex: 'used_times', render: (_, r) => r.used_times ?? 0 },
-    { title: '已使用产量', dataIndex: 'used_yield', render: (_, r) => formatMoldLedgerInteger(r.used_yield) },
+    { title: '保养后制造数量', dataIndex: 'used_yield', render: (_, r) => formatMoldLedgerInteger(r.used_yield) },
     {
       title: '允许重复领用',
       dataIndex: 'allow_repeated_borrow',
@@ -1054,7 +1054,7 @@ const MoldLedgerPage: React.FC = () => {
       render: (_, r) => formatMoldLedgerInteger(r.service_life_years),
     },
     {
-      title: '累计产量',
+      title: '总制造数量',
       dataIndex: 'total_manufacture_qty',
       width: 100,
       hideInSearch: true,
@@ -1062,7 +1062,7 @@ const MoldLedgerPage: React.FC = () => {
     },
     { title: '已使用次数', dataIndex: 'used_times', width: 96, hideInSearch: true, render: (_, r) => r.used_times ?? 0 },
     {
-      title: '已使用产量',
+      title: '保养后制造数量',
       dataIndex: 'used_yield',
       width: 108,
       hideInSearch: true,
@@ -1432,7 +1432,7 @@ const MoldLedgerPage: React.FC = () => {
               <Col span={12}>
                 <ProFormDigit
                   name="used_yield"
-                  label="已使用产量"
+                  label="保养后制造数量"
                   disabled
                   fieldProps={{ precision: 0, style: { width: '100%' } }}
                 />

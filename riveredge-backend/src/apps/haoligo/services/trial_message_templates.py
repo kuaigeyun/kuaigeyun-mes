@@ -32,7 +32,7 @@ TRIAL_FAILURE_PENDING_TEMPLATE_CONTENT = (
     "供应商：{supplier_name}\n"
     "试模人员：{trial_user_name}\n"
     "第 {trial_times} 次试模\n\n"
-    "说明：已向消息提醒人员发送本通知；供应商绑定用户（采购员/数据范围）将同步收到抄送。\n\n"
+    "说明：已向消息提醒人员发送本通知；外协厂商将在模具转出至外部仓后收到通知。\n\n"
     "请登录系统 → {detail_path} 查看试模单明细。"
 )
 
@@ -54,7 +54,7 @@ HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
         "name": "试模不合格待处理提醒",
         "code": HAOLIGO_MOLD_TRIAL_FAILURE_PENDING,
         "type": "internal",
-        "description": "试模不合格且选择「待处理」时，向消息提醒人员及供应商绑定用户发送站内信",
+        "description": "试模不合格且选择「待处理」时，向消息提醒人员发送站内信（外协厂商在发出转仓后收到通知）",
         "subject": "【试模不合格·待处理】{sheet_no}",
         "content": TRIAL_FAILURE_PENDING_TEMPLATE_CONTENT,
         "variables": {

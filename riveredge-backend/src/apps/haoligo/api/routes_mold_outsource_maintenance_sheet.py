@@ -46,6 +46,11 @@ from apps.haoligo.api._data_scope import (
     assert_outsource_partner_code_writable,
     assert_outsource_row_visible,
 )
+from apps.haoligo.services.outsource_maintenance_sheet_side_effects import (
+    send_outsource_maintenance_approved_messages,
+    send_outsource_maintenance_pending_messages,
+    send_outsource_maintenance_rejected_messages,
+)
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_maintenance_approved,
     format_mold_warehouse_label,
@@ -411,6 +416,7 @@ async def create_outsource_maintenance_sheet(
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
+    await send_outsource_maintenance_pending_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
 
@@ -484,10 +490,13 @@ async def update_outsource_maintenance_sheet(
         prev_codes = set(unique_mold_codes_from_stored_line_items(row.line_items or []))
         await assert_maintenance_line_molds_are_standby(tenant_id, stored, allow_mold_codes=prev_codes)
         data["line_items"] = stored
+    resubmit_from_rejected = effective_sheet_status(row) == SHEET_STATUS_REJECTED
     apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    if resubmit_from_rejected:
+        await send_outsource_maintenance_pending_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
 
@@ -515,6 +524,7 @@ async def approve_outsource_maintenance_sheet(
         service_type=row.service_type,
         stored_line_items=row.line_items or [],
     )
+    await send_outsource_maintenance_approved_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
 
@@ -535,6 +545,7 @@ async def reject_outsource_maintenance_sheet(
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
     await row.save()
+    await send_outsource_maintenance_rejected_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
 

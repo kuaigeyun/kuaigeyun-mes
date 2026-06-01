@@ -489,13 +489,11 @@ async def send_trial_failure_pending_messages(
     row: HaoligoMoldTrialSheet,
 ) -> None:
     designated = normalize_report_user_ids(row.pending_notify_user_ids)
-    supplier_ids = await list_supplier_bound_user_ids(tenant_id, row.supplier_name)
-    recipients = _merge_user_ids(designated, supplier_ids)
     await _send_trial_failure_messages(
         tenant_id,
         row,
         template_code=HAOLIGO_MOLD_TRIAL_FAILURE_PENDING,
-        recipient_ids=recipients,
+        recipient_ids=designated,
     )
 
 
@@ -588,6 +586,16 @@ async def dispatch_trial_pending_sheet(
     )
     row.failure_handling = TRIAL_FAILURE_HANDLING_DISPATCHED
     await row.save()
+    repair_name = await _resolve_repair_warehouse_name(tenant_id, row.repair_warehouse_id)
+    if not await _trial_message_already_sent(tenant_id, row.id, HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR):
+        recipients = await list_trial_repair_notify_recipient_ids(tenant_id, row)
+        await _send_trial_failure_messages(
+            tenant_id,
+            row,
+            template_code=HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
+            recipient_ids=recipients,
+            repair_warehouse_name=repair_name,
+        )
 
 
 async def recall_trial_failure_sheet(
@@ -728,3 +736,53 @@ async def apply_trial_failure_after_save(
             ):
                 return
             await send_trial_failure_pending_messages(tenant_id, row)
+
+
+async def revert_trial_failure_side_effects_on_revoke(
+    tenant_id: int,
+    row: HaoligoMoldTrialSheet,
+) -> None:
+    """撤销审核：回滚不合格试模/试产的转仓与流程终态，恢复为待主管再审前的业务态。"""
+    if _effective_unqualified_result(row) != "不合格":
+        phase = (getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip()
+        if phase == WORKFLOW_PHASE_CLOSED:
+            pr = (getattr(row, "production_trial_result", None) or "").strip()
+            if pr == "合格":
+                row.workflow_phase = WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION
+        return
+
+    mode = (row.failure_handling or "").strip()
+    if mode == TRIAL_FAILURE_HANDLING_RECALLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="处理方式为「已收回」的试模单不可撤销审核",
+        )
+
+    if mode in (TRIAL_FAILURE_HANDLING_REPAIR, TRIAL_FAILURE_HANDLING_DISPATCHED):
+        mc = (row.mold_code or "").strip()
+        if not mc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="撤销审核失败：缺少模具代号")
+        mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mc).first()
+        if not mold:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"未找到模具代号「{mc}」")
+        wh_id = await _resolve_recall_target_warehouse_id(tenant_id, row, None)
+        await _apply_mold_warehouse_by_id(mold, tenant_id=tenant_id, warehouse_id=wh_id)
+        await mold.save(
+            update_fields=["mold_warehouse_id", "mold_warehouse_code", "mold_warehouse_name", "updated_at"]
+        )
+        row.dispatch_origin_warehouse_id = None
+
+    if mode == TRIAL_FAILURE_HANDLING_DISPATCHED:
+        row.failure_handling = TRIAL_FAILURE_HANDLING_PENDING
+        row.repair_warehouse_id = None
+    elif mode == TRIAL_FAILURE_HANDLING_REPAIR:
+        row.failure_handling = TRIAL_FAILURE_HANDLING_REPAIR
+
+    tr = (row.trial_result or "").strip()
+    pr = (getattr(row, "production_trial_result", None) or "").strip()
+    if tr == "不合格":
+        row.workflow_phase = WORKFLOW_PHASE_TRIAL
+    elif pr == "不合格":
+        row.workflow_phase = WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION
+    else:
+        row.workflow_phase = WORKFLOW_PHASE_TRIAL

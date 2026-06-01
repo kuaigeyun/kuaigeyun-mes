@@ -37,6 +37,7 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     list_supplier_notify_preview,
     list_trial_repair_notify_preview,
     resolve_supplier_by_name,
+    revert_trial_failure_side_effects_on_revoke,
     set_mold_ledger_status_ready,
     validate_failure_handling_payload,
 )
@@ -890,6 +891,7 @@ async def revoke_trial_sheet_approval(
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     assert_approved_for_revoke(row)
+    await revert_trial_failure_side_effects_on_revoke(tenant_id, row)
     row.sheet_status = SHEET_STATUS_PENDING
     row.audited_at = None
     row.audited_by_user_id = None

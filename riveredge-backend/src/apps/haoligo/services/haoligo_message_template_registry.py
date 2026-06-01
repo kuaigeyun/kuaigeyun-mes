@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Set
 from loguru import logger
 
 from apps.haoligo.services.equipment_message_templates import HAOLIGO_EQUIPMENT_MESSAGE_TEMPLATE_PRESETS
+from apps.haoligo.services.outsource_maintenance_message_templates import (
+    HAOLIGO_OUTSOURCE_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
+)
 from apps.haoligo.services.patrol_message_templates import HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS
 from apps.haoligo.services.trial_message_templates import HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS
 from core.models.message_template import MessageTemplate
@@ -17,6 +20,7 @@ HAOLIGO_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
     *HAOLIGO_EQUIPMENT_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_OUTSOURCE_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
 ]
 
 

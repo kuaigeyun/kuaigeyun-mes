@@ -173,16 +173,23 @@ async def _apply_mold_ledger_after_return_delta(
         return
     cur_t = int(mold.used_times or 0)
     cur_y = mold.used_yield if mold.used_yield is not None else Decimal("0")
+    cur_total = mold.total_manufacture_qty if mold.total_manufacture_qty is not None else Decimal("0")
     if not isinstance(cur_y, Decimal):
         cur_y = Decimal(str(cur_y))
+    if not isinstance(cur_total, Decimal):
+        cur_total = Decimal(str(cur_total))
     mold.used_times = max(0, cur_t + int(times_delta))
     ny = cur_y + yield_delta
     if ny < 0:
         ny = Decimal("0")
     mold.used_yield = ny
+    nt = cur_total + yield_delta
+    if nt < 0:
+        nt = Decimal("0")
+    mold.total_manufacture_qty = nt
     if mold.status != "报废":
         mold.status = "待用"
-    await mold.save(update_fields=["used_times", "used_yield", "status"])
+    await mold.save(update_fields=["used_times", "used_yield", "total_manufacture_qty", "status"])
     # 还入增加/调整产量后模具在库，应为「待用」。sync 仅按「是否存在领用单」推在用，会覆盖上述结果。
     # 仅在撤销还入（times_delta < 0）时再 sync，以便在仍有领用单时恢复「在用」。
     if times_delta < 0:
