@@ -248,11 +248,7 @@ const EquipmentLedgerPage: React.FC = () => {
         category_id: detail.category_id,
         workshop_id: detail.workshop_id,
         manufacturer_id: detail.manufacturer_id ?? undefined,
-        inspection_param_set_ids: detail.inspection_param_set_ids?.length
-          ? detail.inspection_param_set_ids
-          : detail.inspection_param_set_id != null
-            ? [detail.inspection_param_set_id]
-            : [],
+        inspection_param_set_ids: detail.inspection_param_set_ids ?? [],
         upkeep_param_set_id: detail.upkeep_param_set_id ?? undefined,
         criticality: detail.criticality ?? undefined,
         operational_status: detail.operational_status ?? undefined,
@@ -456,11 +452,7 @@ const EquipmentLedgerPage: React.FC = () => {
         dataIndex: 'inspection_param_set_ids',
         render: (_, r) =>
           formatPlanNames(
-            r.inspection_param_set_ids?.length
-              ? r.inspection_param_set_ids
-              : r.inspection_param_set_id != null
-                ? [r.inspection_param_set_id]
-                : [],
+            r.inspection_param_set_ids ?? [],
           ),
       },
       {
@@ -559,11 +551,7 @@ const EquipmentLedgerPage: React.FC = () => {
         ellipsis: true,
         render: (_, r) =>
           formatPlanNames(
-            r.inspection_param_set_ids?.length
-              ? r.inspection_param_set_ids
-              : r.inspection_param_set_id != null
-                ? [r.inspection_param_set_id]
-                : [],
+            r.inspection_param_set_ids ?? [],
           ),
       },
       {

@@ -240,6 +240,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.drawing",  # 工程图纸
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型
+                "apps.kuaizhizao.models.work_order_group",  # 工单组模型
                 "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
                 "apps.kuaizhizao.models.reporting_record",  # 报工记录模型
                 "apps.kuaizhizao.models.rework_order",  # 返工单模型

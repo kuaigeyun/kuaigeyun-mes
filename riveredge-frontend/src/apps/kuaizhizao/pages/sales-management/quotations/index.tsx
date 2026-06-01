@@ -633,6 +633,7 @@ const QuotationsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [pendingCreateCustomerId, setPendingCreateCustomerId] = useState<number | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const formRef = useRef<any>(null);
@@ -748,6 +749,23 @@ const QuotationsPage: React.FC = () => {
     },
     [userList],
   );
+
+  const applyCustomerById = useCallback(
+    (customerId: number) => {
+      const customer = customerList.find((x: any) => Number(x.id ?? x.customer_id) === Number(customerId));
+      if (!customer) return false;
+      applyCustomerToQuotationForm(customer as Record<string, any>);
+      return true;
+    },
+    [customerList, applyCustomerToQuotationForm],
+  );
+
+  useEffect(() => {
+    if (!modalVisible || pendingCreateCustomerId == null) return;
+    if (applyCustomerById(pendingCreateCustomerId)) {
+      setPendingCreateCustomerId(null);
+    }
+  }, [modalVisible, pendingCreateCustomerId, customerList, applyCustomerById]);
 
   const openCustomerFormForCreate = useCallback(() => {
     setCustomerEditUuid(null);
@@ -1024,6 +1042,14 @@ const QuotationsPage: React.FC = () => {
       }
     })();
   }, [location.state, location.pathname, location.search, navigate, messageApi]);
+
+  useEffect(() => {
+    const raw = (location.state as { openCreateWithCustomerId?: unknown } | null)?.openCreateWithCustomerId;
+    const customerId = typeof raw === 'number' ? raw : raw != null ? Number(raw) : NaN;
+    if (!Number.isFinite(customerId) || customerId <= 0) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    void handleCreate({ customerId });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   const openFollowUpFromQuotation = (record: Quotation) => {
     const cid = record.customer_id;
@@ -1832,9 +1858,11 @@ const QuotationsPage: React.FC = () => {
     notes: '',
   };
 
-  const handleCreate = async () => {
+  async function handleCreate(options?: { customerId?: number }) {
+    const prefillCustomerId = options?.customerId;
     formRef.current?.resetFields();
     setEditingId(null);
+    setPendingCreateCustomerId(prefillCustomerId ?? null);
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -1846,6 +1874,14 @@ const QuotationsPage: React.FC = () => {
         currency_code: defaultQuotationCurrency,
         price_type: 'tax_exclusive',
       });
+      if (prefillCustomerId != null) {
+        const applied = applyCustomerById(prefillCustomerId);
+        if (!applied) {
+          messageApi.info('客户信息加载中，稍后自动回填');
+        } else {
+          setPendingCreateCustomerId(null);
+        }
+      }
     }, 100);
     try {
       const config = await getCodeRulePageConfig('kuaizhizao-quotation');
@@ -1884,7 +1920,7 @@ const QuotationsPage: React.FC = () => {
         setPreviewCode(null);
       }
     }
-  };
+  }
 
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
     const validItems = (values.items || []).filter(

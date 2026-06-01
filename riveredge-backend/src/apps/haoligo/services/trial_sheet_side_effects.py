@@ -16,11 +16,14 @@ from apps.haoligo.constants.mold_trial_workflow_phase import (
 )
 from apps.haoligo.constants.mold_status import MOLD_LEDGER_STATUS_SET
 from apps.haoligo.constants.mold_trial_failure_handling import (
+    TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE,
     TRIAL_FAILURE_HANDLING_DISPATCHED,
     TRIAL_FAILURE_HANDLING_FORM_VALUES,
+    TRIAL_FAILURE_HANDLING_IN_PROGRESS,
     TRIAL_FAILURE_HANDLING_PENDING,
     TRIAL_FAILURE_HANDLING_RECALLED,
     TRIAL_FAILURE_HANDLING_REPAIR,
+    TRIAL_FAILURE_HANDLING_VENDOR_ADJUSTABLE,
 )
 from apps.haoligo.api._mold_sheet_audit import effective_sheet_status
 from apps.haoligo.constants.mold_warehouse import (
@@ -54,10 +57,14 @@ def normalize_failure_handling(raw: Optional[str]) -> Optional[str]:
     s = (raw or "").strip()
     if not s:
         return None
-    if s in (TRIAL_FAILURE_HANDLING_DISPATCHED, TRIAL_FAILURE_HANDLING_RECALLED):
+    if s in (
+        TRIAL_FAILURE_HANDLING_DISPATCHED,
+        TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE,
+        TRIAL_FAILURE_HANDLING_RECALLED,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="「已发出」「已收回」由列表发出/收回操作维护，不可手工修改",
+            detail="「已发出」「调整完成」「已收回」由列表操作维护，不可手工修改",
         )
     if s not in TRIAL_FAILURE_HANDLING_FORM_VALUES:
         raise HTTPException(
@@ -538,6 +545,108 @@ def _effective_unqualified_result(row: HaoligoMoldTrialSheet) -> str:
     return (row.trial_result or "").strip()
 
 
+def is_trial_failure_flow_in_progress(failure_handling: Optional[str]) -> bool:
+    """不合格处理方式处于发出/送修/调整完成等进行中（未确认收回）。"""
+    return (failure_handling or "").strip() in TRIAL_FAILURE_HANDLING_IN_PROGRESS
+
+
+def is_mold_trial_process_incomplete(row: HaoligoMoldTrialSheet) -> bool:
+    """试模/试产流程未结案，或不合格后尚未确认收回。"""
+    if is_trial_failure_flow_in_progress(row.failure_handling):
+        return True
+    phase = (getattr(row, "workflow_phase", None) or WORKFLOW_PHASE_TRIAL).strip()
+    return phase != WORKFLOW_PHASE_CLOSED
+
+
+async def find_incomplete_mold_trial_sheet(
+    tenant_id: int,
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+) -> HaoligoMoldTrialSheet | None:
+    mc = (mold_code or "").strip()
+    if mc:
+        qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(mold_code=mc)
+    else:
+        po = (purchase_order_no or "").strip()
+        if not po:
+            return None
+        qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(purchase_order_no=po)
+    rows = await qs.order_by("-id")
+    for row in rows:
+        if is_mold_trial_process_incomplete(row):
+            return row
+    return None
+
+
+async def assert_mold_trial_process_can_start_new_sheet(
+    tenant_id: int,
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+) -> None:
+    blocking = await find_incomplete_mold_trial_sheet(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=purchase_order_no,
+    )
+    if not blocking:
+        return
+    sheet_label = (blocking.sheet_no or "").strip() or f"#{blocking.id}"
+    mc = (mold_code or "").strip() or (blocking.mold_code or "").strip()
+    if mc:
+        detail = (
+            f"模具代号「{mc}」仍有未完结的试模流程（试模单 {sheet_label}），"
+            "请先完成试模/试产及发出收回等环节后再新建"
+        )
+    else:
+        po = (purchase_order_no or "").strip() or (blocking.purchase_order_no or "").strip()
+        detail = (
+            f"采购订单「{po}」仍有未完结的试模流程（试模单 {sheet_label}），"
+            "请先完成当前试模流程后再新建"
+        )
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
+async def list_incomplete_trial_mold_blocks(tenant_id: int) -> List[dict]:
+    """按模具代号汇总未完结试模单（每个代号取最近一条阻塞单）。"""
+    rows = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).order_by("-id")
+    seen: set[str] = set()
+    items: List[dict] = []
+    for row in rows:
+        if not is_mold_trial_process_incomplete(row):
+            continue
+        mc = (row.mold_code or "").strip()
+        if not mc or mc in seen:
+            continue
+        seen.add(mc)
+        items.append(
+            {
+                "mold_code": mc,
+                "blocking_sheet_no": (row.sheet_no or "").strip() or None,
+                "blocking_sheet_id": int(row.id),
+            }
+        )
+    return items
+
+
+async def mold_trial_create_availability(
+    tenant_id: int,
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+) -> tuple[bool, Optional[str]]:
+    blocking = await find_incomplete_mold_trial_sheet(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=purchase_order_no,
+    )
+    if not blocking:
+        return True, None
+    label = (blocking.sheet_no or "").strip() or None
+    return False, label
+
+
 async def set_mold_ledger_status_ready(tenant_id: int, mold_code: Optional[str]) -> None:
     mc = (mold_code or "").strip()
     if not mc:
@@ -598,18 +707,37 @@ async def dispatch_trial_pending_sheet(
         )
 
 
+async def mark_trial_adjustment_complete(
+    tenant_id: int,
+    row: HaoligoMoldTrialSheet,
+) -> None:
+    """确认维修/调整已完成（立即送修或已发出；模具仍在外部仓，待本公司到厂后确认收回）。"""
+    if _effective_unqualified_result(row) != "不合格":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅不合格试模/试产单可确认调整完成")
+    if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅审核通过的单据可确认调整完成")
+    mode = (row.failure_handling or "").strip()
+    if mode not in TRIAL_FAILURE_HANDLING_VENDOR_ADJUSTABLE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅「已发出」或「立即送修」状态可确认调整完成",
+        )
+    row.failure_handling = TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE
+    await row.save(update_fields=["failure_handling", "updated_at"])
+
+
 async def recall_trial_failure_sheet(
     tenant_id: int,
     row: HaoligoMoldTrialSheet,
     *,
     target_warehouse_id: Optional[int] = None,
 ) -> None:
-    """已发出 / 立即送修 → 已收回：模具转回指定仓库（默认转外前仓库），本单结束。"""
+    """调整完成 → 已收回：模具到厂后转回厂内仓，本单结束。"""
     mode = (row.failure_handling or "").strip()
-    if mode not in (TRIAL_FAILURE_HANDLING_DISPATCHED, TRIAL_FAILURE_HANDLING_REPAIR):
+    if mode != TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="仅处理方式为「已发出」或「立即送修」时可收回",
+            detail="请待外协厂商确认调整完成后再确认收回",
         )
     if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅审核通过的单据可收回")
@@ -626,7 +754,8 @@ async def recall_trial_failure_sheet(
     )
     row.failure_handling = TRIAL_FAILURE_HANDLING_RECALLED
     row.repair_warehouse_id = None
-    await row.save()
+    row.workflow_phase = WORKFLOW_PHASE_CLOSED
+    await row.save(update_fields=["failure_handling", "repair_warehouse_id", "workflow_phase", "updated_at"])
 
 
 async def create_replacement_trial_sheet_after_recall(
@@ -651,6 +780,11 @@ async def create_replacement_trial_sheet_after_recall(
     )
     trial_uid = source_row.trial_user_id if source_row.trial_user_id else operator_user_id
     trial_uid, trial_uname = await resolve_applicant(tenant_id, int(trial_uid))
+    await assert_mold_trial_process_can_start_new_sheet(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=source_row.purchase_order_no,
+    )
     return await HaoligoMoldTrialSheet.create(
         tenant_id=tenant_id,
         sheet_no=sheet_no,
@@ -758,19 +892,30 @@ async def revert_trial_failure_side_effects_on_revoke(
             detail="处理方式为「已收回」的试模单不可撤销审核",
         )
 
-    if mode in (TRIAL_FAILURE_HANDLING_REPAIR, TRIAL_FAILURE_HANDLING_DISPATCHED):
+    if mode in (
+        TRIAL_FAILURE_HANDLING_REPAIR,
+        TRIAL_FAILURE_HANDLING_DISPATCHED,
+        TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE,
+    ):
         mc = (row.mold_code or "").strip()
         if not mc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="撤销审核失败：缺少模具代号")
         mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mc).first()
         if not mold:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"未找到模具代号「{mc}」")
-        wh_id = await _resolve_recall_target_warehouse_id(tenant_id, row, None)
-        await _apply_mold_warehouse_by_id(mold, tenant_id=tenant_id, warehouse_id=wh_id)
-        await mold.save(
-            update_fields=["mold_warehouse_id", "mold_warehouse_code", "mold_warehouse_name", "updated_at"]
-        )
-        row.dispatch_origin_warehouse_id = None
+        if mode == TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE:
+            row.failure_handling = (
+                TRIAL_FAILURE_HANDLING_DISPATCHED
+                if row.dispatch_origin_warehouse_id
+                else TRIAL_FAILURE_HANDLING_REPAIR
+            )
+        else:
+            wh_id = await _resolve_recall_target_warehouse_id(tenant_id, row, None)
+            await _apply_mold_warehouse_by_id(mold, tenant_id=tenant_id, warehouse_id=wh_id)
+            await mold.save(
+                update_fields=["mold_warehouse_id", "mold_warehouse_code", "mold_warehouse_name", "updated_at"]
+            )
+            row.dispatch_origin_warehouse_id = None
 
     if mode == TRIAL_FAILURE_HANDLING_DISPATCHED:
         row.failure_handling = TRIAL_FAILURE_HANDLING_PENDING

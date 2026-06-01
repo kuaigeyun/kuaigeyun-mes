@@ -11,6 +11,7 @@ from tortoise.transactions import in_transaction
 
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api._source_sheet_delete_guard import assert_no_active_child_sheet_by_fk
 from apps.haoligo.api.equipment_maintenance_equipment_status import (
     apply_equipment_status_on_upkeep_sheet_created,
     refresh_equipment_status_after_maintenance_change,
@@ -365,14 +366,14 @@ async def delete_upkeep_sheet(
     row = await tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    if await tenant_alive(HaoligoEquipmentUpkeepCompleteSheet, tenant_id).filter(
-        source_upkeep_sheet_id=row_id,
-        deleted_at__isnull=True,
-    ).exists():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="已存在关联的维保完成单，请先删除完成单后再删除维保单",
-        )
+    await assert_no_active_child_sheet_by_fk(
+        tenant_id,
+        child_model=HaoligoEquipmentUpkeepCompleteSheet,
+        source_fk_field="source_upkeep_sheet_id",
+        source_id=row_id,
+        source_doc_label="设备维保单",
+        child_doc_label="维保完成单",
+    )
     equipment_id = row.equipment_id
     row.deleted_at = timezone.now()
     await row.save()

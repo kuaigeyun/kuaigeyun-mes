@@ -1203,6 +1203,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id=tenant_id,
             deleted_at__isnull=True,  # 只查询未删除的工单
             parent_work_order_id__isnull=True,  # 列表仅展示原工单；拆分工单挂在 children
+        ).filter(
+            Q(group_role__isnull=True) | Q(group_role="root"),
         )
 
         # 添加筛选条件
@@ -1422,6 +1424,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 await WorkOrderReadinessService().refresh_work_orders(tenant_id, stale_readiness_ids)
                 work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
+        group_ids = list({wo.work_order_group_id for wo in work_orders if wo.work_order_group_id})
+        group_code_map: dict[int, str] = {}
+        if group_ids:
+            from apps.kuaizhizao.models.work_order_group import WorkOrderGroup
+
+            groups = await WorkOrderGroup.filter(tenant_id=tenant_id, id__in=group_ids).only(
+                "id", "group_code"
+            )
+            group_code_map = {g.id: g.group_code for g in groups}
+
         # 转换为响应格式
         result = []
         result_dicts: list[dict] = []
@@ -1452,6 +1464,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if snap:
                         item_dict["sales_order_code"] = snap[0]
                         item_dict["sales_order_name"] = snap[1]
+
+                if wo.work_order_group_id:
+                    item_dict["group_code"] = group_code_map.get(wo.work_order_group_id)
 
                 result_dicts.append(item_dict)
             except Exception as e:

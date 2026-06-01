@@ -187,6 +187,14 @@ async def permission_governance_daily_tick() -> dict:
     }
 
 
+@task(schedule=[{"cron": "30 2 * * *"}])
+async def customer_pool_recycle_daily_tick() -> dict:
+    """每天凌晨执行客户池自动回收。"""
+    from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
+
+    return await CustomerPoolService.execute_recycle_job()
+
+
 # 数据备份/恢复仍通过 register_event_handler 注册
 from core.tasks.data_backup_handlers import register_data_backup_handlers  # noqa: E402
 

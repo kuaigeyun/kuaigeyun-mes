@@ -54,6 +54,7 @@ export function buildMoldSheetAuditActionElements({
       reload?.();
     } catch (e) {
       messageApi.error((e as Error).message || '操作失败');
+      throw e;
     }
   };
 

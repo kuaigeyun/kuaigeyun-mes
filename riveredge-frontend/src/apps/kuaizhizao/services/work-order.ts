@@ -78,6 +78,39 @@ export interface WorkOrderExecutionConfig {
   default_production_worker_mode?: string;
 }
 
+export interface WorkOrderGroupMember {
+  id: number;
+  code: string;
+  product_id: number;
+  product_code: string;
+  product_name: string;
+  quantity: number;
+  status: string;
+  group_role?: string;
+  bom_parent_work_order_id?: number | null;
+  supply_mode?: 'stocked' | 'direct' | string;
+  readiness_rate?: number | null;
+  kind: 'work_order' | 'outsource_work_order' | string;
+}
+
+export interface WorkOrderGroup {
+  id: number;
+  uuid: string;
+  group_code: string;
+  group_name?: string;
+  root_demand_item_id: number;
+  root_material_id: number;
+  root_material_code: string;
+  root_material_name: string;
+  demand_computation_id: number;
+  status: string;
+  has_direct_supply: boolean;
+  member_count: number;
+  min_readiness_rate?: number | null;
+  members: WorkOrderGroupMember[];
+  created_at: string;
+}
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
@@ -176,6 +209,13 @@ export const workOrderApi = {
 
   batchRefreshScores: async (data?: { work_order_ids?: number[]; scenarios?: string[] }) =>
     apiRequest('/apps/kuaizhizao/work-orders/scores/batch-refresh', { method: 'POST', data: data || {} }),
+  listGroupsByComputation: async (computationId: number) =>
+    apiRequest<WorkOrderGroup[]>('/apps/kuaizhizao/work-order-groups', {
+      method: 'GET',
+      params: { computation_id: computationId },
+    }),
+  getGroupDetail: async (groupId: number) =>
+    apiRequest<WorkOrderGroup>(`/apps/kuaizhizao/work-order-groups/${groupId}`, { method: 'GET' }),
 };
 
 export const reworkOrderApi = {

@@ -4,13 +4,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Set, Tuple
 
 from tortoise.models import Q
 from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
+from apps.kuaizhizao.models.customer_pool_rule import CustomerPoolRule
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.customer_follow_up import (
@@ -108,7 +109,7 @@ class CustomerFollowUpService:
         if not customer:
             raise NotFoundError(f"客户不存在: {customer_id}")
         if current_user and current_user.is_regular_user():
-            if customer.salesman_id != current_user.id:
+            if customer.salesman_id != current_user.id or customer.pool_status != "owned":
                 raise ValidationError("无权操作该客户")
         return customer
 
@@ -121,6 +122,7 @@ class CustomerFollowUpService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             salesman_id=current_user.id,
+            pool_status="owned",
         ).values_list("id", flat=True)
         return set(rows)
 
@@ -174,6 +176,18 @@ class CustomerFollowUpService:
             if i.created_by:
                 setattr(i, "_creator_name", id_to_name.get(i.created_by))
 
+    @staticmethod
+    async def _touch_customer_follow_up_time(tenant_id: int, customer: Customer, occurred_at: datetime) -> None:
+        customer.last_follow_up_at = occurred_at
+        rule = await CustomerPoolRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            recycle_enabled=True,
+        ).first()
+        if rule and customer.pool_status == "owned":
+            customer.recycle_at = occurred_at + timedelta(days=rule.recycle_after_days)
+        await customer.save(update_fields=["last_follow_up_at", "recycle_at", "updated_at"])
+
     @classmethod
     async def create(
         cls,
@@ -224,6 +238,7 @@ class CustomerFollowUpService:
                 created_by=current_user.id,
                 updated_by=current_user.id,
             )
+            await cls._touch_customer_follow_up_time(tenant_id, customer, data.occurred_at)
 
         await cls._attach_creator_names([row])
         resp = CustomerFollowUpResponse.model_validate(row)
@@ -320,6 +335,7 @@ class CustomerFollowUpService:
                     dump["stage_code_after"] = stage_after
 
             await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(**dump)
+            await cls._touch_customer_follow_up_time(tenant_id, customer, occurred_at)
 
         row = await CustomerFollowUp.get(id=follow_id, tenant_id=tenant_id)
         await cls._attach_creator_names([row])

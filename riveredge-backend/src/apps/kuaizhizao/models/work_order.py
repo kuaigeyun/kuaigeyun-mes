@@ -71,6 +71,9 @@ class WorkOrder(BaseModel):
             ("created_at",),
             ("process_route_id",),
             ("parent_work_order_id",),
+            ("work_order_group_id",),
+            ("bom_parent_work_order_id",),
+            ("demand_item_id",),
         ]
         unique_together = [("tenant_id", "code")]
 
@@ -152,6 +155,17 @@ class WorkOrder(BaseModel):
 
     # 拆分工单：指向被拆分的原工单
     parent_work_order_id = fields.IntField(null=True, description="原工单 ID（拆分工单）")
+
+    # 工单组（BOM 层级，与拆分工单 parent 无关）
+    work_order_group_id = fields.IntField(null=True, description="所属工单组 ID")
+    bom_parent_work_order_id = fields.IntField(null=True, description="BOM 上级生产工单 ID")
+    group_role = fields.CharField(max_length=30, null=True, description="组内角色 root/component/outsource_component")
+    demand_item_id = fields.IntField(null=True, description="触发该工单的需求行 ID")
+    supply_mode = fields.CharField(
+        max_length=20,
+        default="stocked",
+        description="供应模式 stocked=入库领料 direct=直接供给上级",
+    )
 
     # 齐套率（BOM+库存持久化；库存/工单变更时后台刷新）
     readiness_rate = fields.DecimalField(

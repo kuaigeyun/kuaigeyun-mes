@@ -17,6 +17,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_module_access
+from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
@@ -46,6 +47,20 @@ router = APIRouter(
     tags=["App · Kuaige Zhizao · Sales Order Management"],
     dependencies=[Depends(require_module_access("kuaizhizao", "sales-order"))],
 )
+
+
+async def _mask_sales_order_payload(
+    *,
+    tenant_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    return await PermissionPolicyService.apply_field_masks_to_dict(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        resource="kuaizhizao:sales-order",
+        payload=payload,
+    )
 
 
 def _http_exception_with_trace(
@@ -132,6 +147,7 @@ SALES_ORDER_SORTABLE_FIELDS = frozenset({
 
 @router.get("/statistics", summary="Sales order statistics (KPI cards)")
 async def get_sales_order_statistics(
+    list_scope: Optional[str] = Query(None, description="列表范围：all/mine/department"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -145,6 +161,12 @@ async def get_sales_order_statistics(
     today = datetime.now(tz).date()
     # 基础过滤：租户隔离 + 未删除
     base = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    base = await sales_order_service._apply_sales_order_list_scope(
+        base,
+        tenant_id=tenant_id,
+        current_user=current_user,
+        list_scope=list_scope,
+    )
     count = await base.count()
     logger.info(f"get_sales_order_statistics: tenant_id={tenant_id}, total_count={count}")
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认")
@@ -374,6 +396,7 @@ async def list_sales_orders(
     keyword: Optional[str] = Query(None, description="关键词搜索（订单编码、客户名称）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含订单明细"),
+    list_scope: Optional[str] = Query(None, description="列表范围：all/mine/department"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -404,8 +427,22 @@ async def list_sales_orders(
             keyword=keyword,
             order_by=safe_order_by,
             include_items=include_items,
+            list_scope=list_scope,
+            current_user=current_user,
         )
-        return result
+        masked_data: List[SalesOrderResponse] = []
+        for row in result.data:
+            masked_payload = await _mask_sales_order_payload(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                payload=row.model_dump(),
+            )
+            masked_data.append(SalesOrderResponse(**masked_payload))
+        return SalesOrderListResponse(
+            data=masked_data,
+            total=result.total,
+            success=result.success,
+        )
     except Exception as e:
         logger.exception(f"获取销售订单列表失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, f"获取销售订单列表失败: {str(e)}", "/sales-orders", tenant_id)
@@ -485,9 +522,15 @@ async def get_sales_order(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             include_items=include_items,
-            include_duration=include_duration
+            include_duration=include_duration,
+            current_user=current_user,
         )
-        return result
+        masked_payload = await _mask_sales_order_payload(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            payload=result.model_dump(),
+        )
+        return SalesOrderResponse(**masked_payload)
     except NotFoundError as e:
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except Exception as e:
@@ -558,9 +601,15 @@ async def update_sales_order(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             sales_order_data=sales_order_data,
-            updated_by=current_user.id
+            updated_by=current_user.id,
+            current_user=current_user,
         )
-        return result
+        masked_payload = await _mask_sales_order_payload(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            payload=result.model_dump(),
+        )
+        return SalesOrderResponse(**masked_payload)
     except NotFoundError as e:
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except ValidationError as e:
@@ -1038,7 +1087,8 @@ async def delete_sales_order(
     try:
         await sales_order_service.delete_sales_order(
             tenant_id=tenant_id,
-            sales_order_id=sales_order_id
+            sales_order_id=sales_order_id,
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)

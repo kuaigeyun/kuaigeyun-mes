@@ -1871,6 +1871,9 @@ const DemandComputationPage: React.FC = () => {
               <div>
                 <p style={{ marginBottom: 12 }}>将生成以下单据：</p>
                 <ul style={{ marginBottom: 12, paddingLeft: 20 }}>
+                  {(pushPreviewData as any).work_order_group_count > 0 && (
+                    <li>工单组 {(pushPreviewData as any).work_order_group_count} 个</li>
+                  )}
                   {pushPreviewData.work_order_count > 0 && (
                     <li>生产工单 {pushPreviewData.work_order_count} 个</li>
                   )}

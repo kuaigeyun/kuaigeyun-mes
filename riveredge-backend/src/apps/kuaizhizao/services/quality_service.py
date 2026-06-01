@@ -433,6 +433,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             query = query.filter(material_id=filters['material_id'])
         if filters.get('purchase_receipt_id'):
             query = query.filter(purchase_receipt_id=filters['purchase_receipt_id'])
+        if filters.get("scoped_purchase_receipt_ids") is not None:
+            query = query.filter(purchase_receipt_id__in=filters["scoped_purchase_receipt_ids"])
 
         # 获取总数
         total = await query.count()
@@ -1028,6 +1030,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             query = query.filter(work_order_id=filters['work_order_id'])
         if filters.get('operation_id'):
             query = query.filter(operation_id=filters['operation_id'])
+        if filters.get("scoped_work_order_ids") is not None:
+            query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
         return [ProcessInspectionListResponse.model_validate(inspection) for inspection in inspections]
@@ -1591,6 +1595,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             query = query.filter(work_order_id=filters['work_order_id'])
         if filters.get('source_type'):
             query = query.filter(source_type=filters['source_type'])
+        if filters.get("scoped_work_order_ids") is not None:
+            query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
         return [FinishedGoodsInspectionListResponse.model_validate(inspection) for inspection in inspections]

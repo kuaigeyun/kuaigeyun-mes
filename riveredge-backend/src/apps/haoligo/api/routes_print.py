@@ -13,11 +13,16 @@ from apps.haoligo.services.print_service import (
     HaoligoDocumentPrintService,
     SUPPORTED_DOCUMENT_TYPES,
 )
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/print", tags=["App · HaoliGO · 打印"])
+router = APIRouter(
+    prefix="/print",
+    tags=["App · HaoliGO · 打印"],
+    dependencies=[Depends(require_module_access("haoligo", "workspace"))],
+)
 
 def _print_user_label(user: User) -> str:
     return (getattr(user, "full_name", None) or getattr(user, "username", None) or "").strip()

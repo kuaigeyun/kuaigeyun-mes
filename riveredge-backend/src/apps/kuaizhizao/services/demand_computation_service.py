@@ -1661,6 +1661,58 @@ class DemandComputationService:
                     "supply_calculation": supply_for_detail,
                 },
             )
+
+        # 6. 需求行 BOM 生产树（供工单组下推）
+        from apps.kuaizhizao.utils.work_order_group_bom_tree import (
+            build_production_tree_for_demand_item,
+        )
+
+        demand_item_bom_trees: List[Dict[str, Any]] = []
+        for demand_item in demand_items:
+            material_id = demand_item.material_id
+            required_quantity = float(demand_item.required_quantity or 0)
+            if required_quantity <= 0:
+                continue
+            delivery_date = getattr(demand_item, "delivery_date", None)
+            if planning_cutoff and delivery_date is not None:
+                dd = delivery_date.date() if hasattr(delivery_date, "date") else delivery_date
+                if isinstance(dd, date) and dd > planning_cutoff:
+                    continue
+            material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
+            if not material:
+                continue
+            source_type = await get_material_source_type(tenant_id, material_id)
+            top_version = bom_version
+            top_use_default = use_default_bom
+            if material_bom_versions:
+                v = material_bom_versions.get(material_id) or material_bom_versions.get(str(material_id))
+                if v:
+                    top_version = v
+                    top_use_default = False
+            tree = await build_production_tree_for_demand_item(
+                tenant_id=tenant_id,
+                demand_item_id=demand_item.id,
+                material_id=material_id,
+                required_quantity=required_quantity,
+                material_code=material.main_code or material.code,
+                material_name=material.name,
+                source_type=source_type,
+                unit=material.base_unit,
+                bom_version=top_version,
+                use_default_bom=top_use_default,
+                material_bom_versions=material_bom_versions,
+                variant_attributes=getattr(demand_item, "variant_attributes", None),
+                configurable_selections=_safe_configurable_selections(
+                    getattr(demand_item, "configurable_selections", None)
+                ),
+                bom_max_level=bom_max_level,
+            )
+            demand_item_bom_trees.append(tree)
+
+        await DemandComputation.filter(tenant_id=tenant_id, id=computation.id).update(
+            demand_item_bom_trees=demand_item_bom_trees,
+        )
+        computation.demand_item_bom_trees = demand_item_bom_trees
     
     async def update_computation(
         self,
@@ -1919,10 +1971,21 @@ class DemandComputationService:
         # 【第二阶段：创建工单和采购单】验证全部通过后，开始创建
         work_orders = []  # 生产工单（WorkOrder，在工单管理页展示）
         outsource_work_orders = []  # 委外工单（OutsourceWorkOrder，在委外管理页展示）
+        work_order_groups = []
         purchase_orders = []
         
         # 按供应商分组采购件（物料来源控制增强）
         purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+        
+        use_group_by_demand_item = False
+        group_pushed_keys: set = set()
+        if needs_work_order:
+            from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+            group_svc = WorkOrderGroupService()
+            use_group_by_demand_item = await group_svc.should_group_by_demand_item(tenant_id)
+            if use_group_by_demand_item:
+                group_pushed_keys = await group_svc.collect_pushed_keys(tenant_id, computation_id)
         
         # 按物料聚合生产类明细（同一物料多行合并为一行，避免重复生成工单）
         def _build_aggregated_item(group: List[DemandComputationItem]):
@@ -1946,6 +2009,27 @@ class DemandComputationService:
             })()
 
         created_wo_material_ids: set = set(already_pushed_wo_material_ids)  # 已创建/已下推工单的物料ID，避免重复
+
+        if use_group_by_demand_item and generate_mode in ("all", "work_order_only", "outsource_only"):
+            from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+            group_svc = WorkOrderGroupService()
+            group_result = await group_svc.generate_groups_from_computation(
+                tenant_id=tenant_id,
+                computation=computation,
+                items=items,
+                created_by=created_by,
+                generate_mode=generate_mode,
+                allow_draft=allow_draft,
+                failed_validation_material_ids=failed_validation_material_ids,
+                already_pushed_keys=group_pushed_keys,
+            )
+            work_orders = group_result["work_orders"]
+            outsource_work_orders = group_result["outsource_work_orders"]
+            work_order_groups = group_result.get("work_order_groups") or []
+            for mid in group_pushed_keys:
+                if mid[1]:
+                    created_wo_material_ids.add(mid[1])
 
         for item in items:
             source_type = item.material_source_type
@@ -1975,6 +2059,13 @@ class DemandComputationService:
                 # #endregion
                 continue
             if generate_mode == "outsource_only" and source_type != SOURCE_TYPE_OUTSOURCE:
+                continue
+
+            if use_group_by_demand_item and source_type in (
+                SOURCE_TYPE_MAKE,
+                SOURCE_TYPE_OUTSOURCE,
+                SOURCE_TYPE_CONFIGURE,
+            ):
                 continue
 
             # 根据物料来源类型生成相应的单据
@@ -2217,6 +2308,8 @@ class DemandComputationService:
             "work_order_count": len(work_orders),  # 生产工单数量（工单管理页）
             "outsource_work_order_count": len(outsource_work_orders),  # 委外工单数量（委外管理页）
             "purchase_order_count": len(purchase_orders),
+            "work_order_groups": work_order_groups,
+            "work_order_group_count": len(work_order_groups),
         }
 
     async def _apply_push_confirm_to_generated_orders(

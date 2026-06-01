@@ -72,6 +72,7 @@ const CustomersPage: React.FC = () => {
   const customerDetailReqRef = useRef(0);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
+  const [salesmanOptions, setSalesmanOptions] = useState<Array<{ label: string; value: string | number }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +93,33 @@ const CustomersPage: React.FC = () => {
       cancelled = true;
     };
   }, [DICT_CODES]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const options = await getUserOptions();
+        if (!cancelled) {
+          setSalesmanOptions(options);
+        }
+      } catch {
+        if (!cancelled) {
+          setSalesmanOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const salesmanValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        salesmanOptions.map((option) => [String(option.value), { text: option.label }]),
+      ),
+    [salesmanOptions],
+  );
 
   const dictLabel = (dictCode: string, value?: string) => {
     if (value == null || value === '') return '—';
@@ -460,7 +488,7 @@ const CustomersPage: React.FC = () => {
         t('field.customer.phone'),
         t('field.customer.email'),
         t('field.customer.address'),
-        t('field.customer.salesman'),
+        '销售经理',
         t('field.customer.visibility'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
@@ -570,14 +598,28 @@ const CustomersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: t('field.customer.salesman'),
+      title: '销售经理',
       dataIndex: 'salesmanName',
       width: 120,
-      valueType: 'select',
-      request: getUserOptions,
+      hideInSearch: true,
       sorter: true,
+    },
+    {
+      title: '销售经理',
+      dataIndex: 'salesmanId',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: salesmanValueEnum,
       fieldProps: {
-        name: 'salesmanId',
+        options: salesmanOptions,
+        showSearch: true,
+        optionFilterProp: 'label',
+        filterOption: (input: string, option?: { label?: React.ReactNode }) =>
+          String(option?.label ?? '')
+            .toLowerCase()
+            .includes(input.toLowerCase()),
+        allowClear: true,
+        placeholder: '请选择销售经理',
       },
     },
     {
@@ -678,7 +720,7 @@ const CustomersPage: React.FC = () => {
     },
     { title: t('field.customer.phone'), dataIndex: 'phone' },
     { title: t('field.customer.email'), dataIndex: 'email' },
-    { title: t('field.customer.salesman'), dataIndex: 'salesmanName' },
+    { title: '销售经理', dataIndex: 'salesmanName' },
     { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
     {
       title: t('field.customer.visibility'),

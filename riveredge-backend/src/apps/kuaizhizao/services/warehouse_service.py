@@ -2364,6 +2364,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             query = query.filter(status=filters['status'])
         if filters.get('sales_order_id'):
             query = query.filter(sales_order_id=filters['sales_order_id'])
+        if filters.get("scoped_sales_order_ids") is not None:
+            query = query.filter(
+                Q(sales_order_id__isnull=True)
+                | Q(sales_order_id__in=filters["scoped_sales_order_ids"])
+            )
 
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
         return [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
@@ -3863,6 +3868,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             query = query.filter(status=filters['status'])
         if filters.get('purchase_order_id'):
             query = query.filter(purchase_order_id=filters['purchase_order_id'])
+        if filters.get("scoped_purchase_order_ids") is not None:
+            query = query.filter(purchase_order_id__in=filters["scoped_purchase_order_ids"])
 
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
         out: List[PurchaseReceiptResponse] = []
@@ -5867,6 +5874,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             query = query.filter(reason_type=filters["reason_type"])
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
+        if filters.get("scoped_ids") is not None:
+            query = query.filter(id__in=filters["scoped_ids"])
 
         inbounds = await query.offset(skip).limit(limit).order_by("-created_at")
         return [OtherInboundListResponse.model_validate(r) for r in inbounds]
@@ -6261,6 +6270,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             query = query.filter(reason_type=filters["reason_type"])
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
+        if filters.get("scoped_ids") is not None:
+            query = query.filter(id__in=filters["scoped_ids"])
 
         outbounds = await query.offset(skip).limit(limit).order_by("-created_at")
         return [OtherOutboundListResponse.model_validate(r) for r in outbounds]
@@ -6469,6 +6480,8 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             query = query.filter(status=filters["status"])
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
+        if filters.get("scoped_ids") is not None:
+            query = query.filter(id__in=filters["scoped_ids"])
 
         borrows = await query.offset(skip).limit(limit).order_by("-created_at")
         return [MaterialBorrowListResponse.model_validate(r) for r in borrows]
@@ -6651,6 +6664,8 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             query = query.filter(borrow_id=filters["borrow_id"])
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
+        if filters.get("scoped_ids") is not None:
+            query = query.filter(id__in=filters["scoped_ids"])
 
         returns = await query.offset(skip).limit(limit).order_by("-created_at")
         return [MaterialReturnListResponse.model_validate(r) for r in returns]

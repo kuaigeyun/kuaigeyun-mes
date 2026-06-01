@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 from tortoise.exceptions import IntegrityError
 
 from tortoise.expressions import Q
+from tortoise import timezone
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.supply_chain_schemas import (
@@ -57,6 +58,14 @@ class SupplyChainService:
             create_data["is_active"] = True
         if create_data.get("is_public") is None:
             create_data["is_public"] = False
+        if create_data.get("salesman_id"):
+            create_data["pool_status"] = "owned"
+            create_data["assigned_at"] = timezone.now()
+        else:
+            create_data["pool_status"] = create_data.get("pool_status") or "pool"
+            if create_data["pool_status"] == "pool":
+                create_data["assigned_at"] = None
+                create_data["recycle_at"] = None
         # 自动回填业务员姓名
         if create_data.get("salesman_id"):
             salesman = await User.filter(id=create_data["salesman_id"]).first()
@@ -164,7 +173,7 @@ class SupplyChainService:
 
         # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公共客户
         if current_user and current_user.is_regular_user():
-            query = query.filter(Q(salesman_id=current_user.id) | Q(is_public=True))
+            query = query.filter(Q(salesman_id=current_user.id) | Q(pool_status="pool"))
 
         total = await query.count()
         allowed_sort = {"code", "name", "category", "created_at", "is_active", "salesman_name", "short_name"}
@@ -219,6 +228,23 @@ class SupplyChainService:
         
         # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        now = timezone.now()
+
+        if "salesman_id" in update_data:
+            if update_data["salesman_id"]:
+                update_data["pool_status"] = "owned"
+                update_data["assigned_at"] = now
+            else:
+                update_data["pool_status"] = "pool"
+                update_data["assigned_at"] = None
+                update_data["recycle_at"] = None
+
+        if update_data.get("pool_status") == "pool":
+            update_data["salesman_id"] = None
+            update_data["salesman_name"] = None
+            update_data["assigned_at"] = None
+            update_data["recycle_at"] = None
+
         for key, value in update_data.items():
             setattr(customer, key, value)
         

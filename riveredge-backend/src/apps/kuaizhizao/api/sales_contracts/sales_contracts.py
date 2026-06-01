@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from loguru import logger
 
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import require_module_access
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -28,7 +29,11 @@ from apps.kuaizhizao.services.contract_milestone_billing_service import Contract
 
 service = SalesContractService()
 billing_service = ContractMilestoneBillingService()
-router = APIRouter(prefix="/sales-contracts", tags=["App · Kuaige Zhizao · Sales Contracts"])
+router = APIRouter(
+    prefix="/sales-contracts",
+    tags=["App · Kuaige Zhizao · Sales Contracts"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "sales-contract"))],
+)
 
 
 @router.post("", response_model=SalesContractResponse, summary="Create sales contract")

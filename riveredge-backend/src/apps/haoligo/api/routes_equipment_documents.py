@@ -337,13 +337,9 @@ async def _resolve_equipment_inspection_set_id(tenant_id: int, eq: HaoligoEquipm
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="该设备绑定了多个点检方案，请选择要使用的点检方案",
         )
-    await eq.fetch_related("category")
-    cat = eq.category
-    if cat and cat.default_inspection_param_set_id:
-        return int(cat.default_inspection_param_set_id)
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="设备未配置点检方案，且所属类别未设置默认点检方案，无法创建点检单",
+        detail="请选择点检方案",
     )
 
 
@@ -512,7 +508,7 @@ class SpotCheckOut(BaseModel):
 
 class SpotCheckCreate(BaseModel):
     equipment_id: int = Field(..., ge=1)
-    inspection_param_set_id: Optional[int] = Field(None, description="指定点检方案；不传则按设备/类别默认解析")
+    inspection_param_set_id: Optional[int] = Field(None, description="点检方案；未传时仅当设备仅绑定一个方案时自动解析")
     recorded_at: Optional[datetime] = None
     abnormal_description: Optional[str] = None
     applied_operational_status: Optional[str] = Field(None, description="调整后设备运行状态（数据字典 value）")
@@ -644,7 +640,7 @@ async def preview_spot_check_lines(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
     equipment_id: int = Query(..., ge=1, description="设备 id"),
-    inspection_param_set_id: Optional[int] = Query(None, ge=1, description="点检方案 id；不传则按设备/类别默认"),
+    inspection_param_set_id: Optional[int] = Query(None, ge=1, description="点检方案 id；不传则仅当设备仅绑定一个方案时自动解析"),
 ):
     eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=equipment_id).first()
     if not eq:

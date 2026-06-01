@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTP
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
@@ -37,7 +38,11 @@ demand_service = DemandService()
 document_relation_service = DocumentRelationNewService()
 
 # 创建路由
-router = APIRouter(prefix="/demands", tags=["App · Kuaige Zhizao · Demand Management"])
+router = APIRouter(
+    prefix="/demands",
+    tags=["App · Kuaige Zhizao · Demand Management"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "demand"))],
+)
 
 
 def _http_exception_with_trace(

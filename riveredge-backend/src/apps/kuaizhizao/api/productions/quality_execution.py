@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -75,6 +76,168 @@ def _http_exception_with_trace(
 def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
     message = detail.get("message") if isinstance(detail, dict) else str(detail)
     return _http_exception_with_trace(status_code, message)
+
+
+async def _scoped_work_order_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    scoped_query = await DataScopeService.apply(
+        WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:work-order",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_purchase_receipt_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    scoped_po_query = await DataScopeService.apply(
+        PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+    scoped_po_ids = [int(x) for x in await scoped_po_query.values_list("id", flat=True)]
+    if not scoped_po_ids:
+        return []
+
+    receipt_ids = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        purchase_order_id__in=scoped_po_ids,
+    ).values_list("id", flat=True)
+    return [int(x) for x in receipt_ids]
+
+
+async def _assert_work_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    work_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    if not work_order_id:
+        return
+    work_order = await WorkOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=work_order_id,
+        deleted_at__isnull=True,
+    )
+    if not work_order:
+        return
+    await DataScopeService.assert_row_visible(
+        work_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:work-order",
+    )
+
+
+async def _assert_purchase_receipt_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    purchase_receipt_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    if not purchase_receipt_id:
+        return
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_receipt_id,
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return
+    purchase_order_id = getattr(receipt, "purchase_order_id", None)
+    if not purchase_order_id:
+        return
+    purchase_order = await PurchaseOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_order_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_order:
+        return
+    await DataScopeService.assert_row_visible(
+        purchase_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+
+
+async def _assert_incoming_inspection_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    inspection_id: int,
+) -> None:
+    from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+    inspection = await IncomingInspection.get_or_none(
+        tenant_id=tenant_id,
+        id=inspection_id,
+        deleted_at__isnull=True,
+    )
+    if not inspection:
+        return
+    await _assert_purchase_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_receipt_id=getattr(inspection, "purchase_receipt_id", None),
+    )
+
+
+async def _assert_process_inspection_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    inspection_id: int,
+) -> None:
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    inspection = await ProcessInspection.get_or_none(
+        tenant_id=tenant_id,
+        id=inspection_id,
+        deleted_at__isnull=True,
+    )
+    if not inspection:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(inspection, "work_order_id", None),
+    )
+
+
+async def _assert_finished_goods_inspection_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    inspection_id: int,
+) -> None:
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+    inspection = await FinishedGoodsInspection.get_or_none(
+        tenant_id=tenant_id,
+        id=inspection_id,
+        deleted_at__isnull=True,
+    )
+    if not inspection:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(inspection, "work_order_id", None),
+    )
 
 
 # ============ 来料检验管理 API ============
@@ -187,6 +350,11 @@ async def get_incoming_inspection(
 
     - **inspection_id**: 检验单ID
     """
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     service = IncomingInspectionService()
     return await service.get_incoming_inspection_by_id(
         tenant_id=tenant_id,
@@ -207,6 +375,11 @@ async def conduct_incoming_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     service = IncomingInspectionService()
     return await service.conduct_inspection(
         tenant_id=tenant_id,
@@ -229,6 +402,11 @@ async def approve_incoming_inspection(
     - **inspection_id**: 检验单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     service = IncomingInspectionService()
     return await service.approve_inspection(
         tenant_id=tenant_id,
@@ -251,6 +429,11 @@ async def create_inspection_from_purchase_receipt(
 
     - **purchase_receipt_id**: 采购入库单ID
     """
+    await _assert_purchase_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_receipt_id=purchase_receipt_id,
+    )
     return await IncomingInspectionService().create_inspection_from_purchase_receipt(
         tenant_id=tenant_id,
         purchase_receipt_id=purchase_receipt_id,
@@ -293,12 +476,17 @@ async def export_incoming_inspections(
     支持多种筛选条件。
     """
     try:
+        scoped_purchase_receipt_ids = await _scoped_purchase_receipt_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         file_path = await IncomingInspectionService().export_to_excel(
             tenant_id=tenant_id,
             status=status,
             quality_status=quality_status,
             supplier_id=supplier_id,
             material_id=material_id,
+            scoped_purchase_receipt_ids=scoped_purchase_receipt_ids,
         )
         return FileResponse(
             path=file_path,
@@ -329,6 +517,11 @@ async def create_defect_from_incoming_inspection(
     - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
     """
     try:
+        await _assert_incoming_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
         return await defect_record_service.create_defect_from_incoming_inspection(
             tenant_id=tenant_id,
             inspection_id=inspection_id,
@@ -449,6 +642,11 @@ async def get_process_inspection(
 
     - **inspection_id**: 检验单ID
     """
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     return await ProcessInspectionService().get_process_inspection_by_id(
         tenant_id=tenant_id,
         inspection_id=inspection_id
@@ -468,6 +666,11 @@ async def approve_process_inspection(
     - **inspection_id**: 检验单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     return await ProcessInspectionService().approve_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
@@ -489,6 +692,11 @@ async def conduct_process_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     return await ProcessInspectionService().conduct_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
@@ -510,6 +718,11 @@ async def create_process_inspection_from_work_order(
     - **work_order_id**: 工单ID
     - **operation_id**: 工序ID
     """
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=work_order_id,
+    )
     return await ProcessInspectionService().create_inspection_from_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
@@ -545,12 +758,17 @@ async def export_process_inspections(
 ):
     """导出过程检验单到Excel文件"""
     try:
+        scoped_work_order_ids = await _scoped_work_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         file_path = await ProcessInspectionService().export_to_excel(
             tenant_id=tenant_id,
             status=status,
             quality_status=quality_status,
             work_order_id=work_order_id,
             operation_id=operation_id,
+            scoped_work_order_ids=scoped_work_order_ids,
         )
         return FileResponse(
             path=file_path,
@@ -581,6 +799,11 @@ async def create_defect_from_process_inspection(
     - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
     """
     try:
+        await _assert_process_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
         return await defect_record_service.create_defect_from_process_inspection(
             tenant_id=tenant_id,
             inspection_id=inspection_id,
@@ -703,6 +926,11 @@ async def get_finished_goods_inspection(
 
     - **inspection_id**: 检验单ID
     """
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     service = FinishedGoodsInspectionService()
     return await service.get_finished_goods_inspection_by_id(
         tenant_id=tenant_id,
@@ -723,6 +951,11 @@ async def approve_finished_goods_inspection(
     - **inspection_id**: 检验单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     return await FinishedGoodsInspectionService().approve_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
@@ -744,6 +977,11 @@ async def conduct_finished_goods_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     service = FinishedGoodsInspectionService()
     return await service.conduct_inspection(
         tenant_id=tenant_id,
@@ -766,6 +1004,11 @@ async def issue_certificate(
     - **inspection_id**: 检验单ID
     - **certificate_number**: 证书编号
     """
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
     return await FinishedGoodsInspectionService().issue_certificate(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
@@ -785,6 +1028,11 @@ async def create_finished_goods_inspection_from_work_order(
 
     - **work_order_id**: 工单ID
     """
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=work_order_id,
+    )
     return await FinishedGoodsInspectionService().create_inspection_from_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
@@ -818,11 +1066,16 @@ async def export_finished_goods_inspections(
 ):
     """导出成品检验单到Excel文件"""
     try:
+        scoped_work_order_ids = await _scoped_work_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         file_path = await FinishedGoodsInspectionService().export_to_excel(
             tenant_id=tenant_id,
             status=status,
             quality_status=quality_status,
             work_order_id=work_order_id,
+            scoped_work_order_ids=scoped_work_order_ids,
         )
         return FileResponse(
             path=file_path,
@@ -853,6 +1106,11 @@ async def create_defect_from_finished_goods_inspection(
     - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
     """
     try:
+        await _assert_finished_goods_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
         return await defect_record_service.create_defect_from_finished_goods_inspection(
             tenant_id=tenant_id,
             inspection_id=inspection_id,

@@ -329,6 +329,7 @@ async def get_sales_report(
         skip=skip,
         limit=limit,
         customer_keyword=customer_keyword,
+        current_user=current_user,
     )
     
 @router.get("/plans", summary="Planning report")
@@ -356,6 +357,7 @@ async def get_plan_report(
         report_type=report_type,
         date_start=date_start_dt,
         date_end=date_end_dt,
+        current_user=current_user,
     )
 
 @router.get("/purchases", summary="Purchase report")
@@ -383,6 +385,7 @@ async def get_purchase_report(
         report_type=report_type,
         date_start=date_start_dt,
         date_end=date_end_dt,
+        current_user=current_user,
     )
 
 @router.get("/quality", summary="Quality report")

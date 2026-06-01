@@ -47,6 +47,7 @@ from apps.kuaizhizao.constants import (
     REVIEW_STATUS_ALIASES,
     normalize_status,
 )
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -62,6 +63,23 @@ class SalesOrderService:
 
     def __init__(self):
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    async def _apply_sales_order_list_scope(
+        query,
+        tenant_id: int,
+        current_user: Optional["User"],
+        list_scope: Optional[str] = None,
+    ):
+        """统一按角色数据策略过滤销售订单列表。"""
+        if not current_user:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:sales-order",
+        )
 
     @staticmethod
     def _validate_sales_item_non_negative(
@@ -1171,6 +1189,7 @@ class SalesOrderService:
         sales_order_id: int,
         include_items: bool = False,
         include_duration: bool = False,
+        current_user: Optional["User"] = None,
     ) -> SalesOrderResponse:
         """获取销售订单详情"""
         order = await SalesOrder.get_or_none(
@@ -1178,6 +1197,13 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                order,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:sales-order",
+            )
         # 不同步时自动修复
         if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
@@ -1360,11 +1386,19 @@ class SalesOrderService:
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
+        list_scope: Optional[str] = None,
+        current_user: Optional["User"] = None,
     ) -> SalesOrderListResponse:
         """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
         from tortoise.expressions import Q
 
         query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await self._apply_sales_order_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            list_scope=list_scope,
+        )
         lifecycle_filter = (lifecycle_stage or "").strip()
         if status and not lifecycle_filter:
             query = query.filter(status=status)
@@ -1556,6 +1590,7 @@ class SalesOrderService:
         sales_order_id: int,
         sales_order_data: SalesOrderUpdate,
         updated_by: int,
+        current_user: Optional["User"] = None,
     ) -> SalesOrderResponse:
         """更新销售订单。支持草稿与已审核订单（含反审核后编辑）；已审核订单保存后同步关联需求。"""
         order = await SalesOrder.get_or_none(
@@ -1563,6 +1598,13 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                order,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:sales-order",
+            )
         from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
         if is_source_order_locked_for_direct_edit(order.status, order.review_status):
             raise BusinessLogicError(
@@ -2776,6 +2818,7 @@ class SalesOrderService:
         self,
         tenant_id: int,
         sales_order_id: int,
+        current_user: Optional["User"] = None,
     ) -> None:
         """删除销售订单"""
         order = await SalesOrder.get_or_none(
@@ -2783,6 +2826,13 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                order,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:sales-order",
+            )
         deletable = (
             self._is_draft(order.status)
             or self._is_pending_review_status(order.status)

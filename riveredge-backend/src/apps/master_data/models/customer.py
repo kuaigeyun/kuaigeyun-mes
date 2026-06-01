@@ -68,6 +68,10 @@ class Customer(BaseModel):
     # 归属业务员
     salesman_id = fields.IntField(null=True, description="归属业务员ID（关联 User.id）")
     salesman_name = fields.CharField(max_length=100, null=True, description="归属业务员姓名")
+    pool_status = fields.CharField(max_length=20, default="pool", description="客户池状态：pool=公海，owned=已领取")
+    assigned_at = fields.DatetimeField(null=True, description="最近领取/分配时间")
+    last_follow_up_at = fields.DatetimeField(null=True, description="最近跟进时间")
+    recycle_at = fields.DatetimeField(null=True, description="计划回收时间")
 
     # 扩展业务信息（字典项存 value）
     contact_title = fields.CharField(max_length=100, null=True, description="联系人职位")

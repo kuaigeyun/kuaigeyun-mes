@@ -176,6 +176,7 @@ const MoldWarehousePage: React.FC = () => {
       if (isEdit && editId != null) {
         const wt = String(values.warehouse_type ?? '').trim() as '内部' | '外部';
         await updateMoldWarehouse(editId, {
+          warehouse_code: String(values.warehouse_code ?? '').trim(),
           warehouse_name: String(values.warehouse_name ?? '').trim(),
           warehouse_type: wt,
           workshop_id: parseOptionalWorkshopId(values.workshop_id),
@@ -363,7 +364,6 @@ const MoldWarehousePage: React.FC = () => {
           name="warehouse_code"
           label={t('app.haoligo.molds.warehouse.formCode')}
           placeholder={t('app.haoligo.molds.warehouse.formCodePh')}
-          disabled={isEdit}
           rules={[{ required: true, message: t('app.haoligo.molds.warehouse.formCodeReq') }]}
         />
         <ProFormText

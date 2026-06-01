@@ -165,6 +165,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
   '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
   '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
+  '/apps/kuaizhizao/sales-management/customer-pool': 'customer_pool',
   '/apps/kuaizhizao/sales-management/quotations': 'quotation',
   '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
   '/apps/kuaizhizao/sales-management/sample-trials': 'sample_trial',

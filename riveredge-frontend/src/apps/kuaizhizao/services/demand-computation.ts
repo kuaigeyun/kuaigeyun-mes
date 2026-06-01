@@ -302,6 +302,13 @@ export interface GenerateOrdersResponse {
   /** 委外工单数量（委外管理页） */
   outsource_work_order_count?: number;
   purchase_order_count: number;
+  work_order_groups?: Array<{
+    id: number;
+    group_code: string;
+    root_material_name?: string;
+    member_count: number;
+  }>;
+  work_order_group_count?: number;
 }
 
 /**

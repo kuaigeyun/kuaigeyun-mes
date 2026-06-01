@@ -19,6 +19,7 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceResolveResponse,
 )
 from apps.master_data.services.partner_price_book_service import PartnerPriceBookService
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -42,8 +43,10 @@ def _http_exception(status_code: int, message: str, route: str = "/supply-chain"
 
 def _register_price_book_routes(partner_type: str, resource: str) -> None:
     base = f"/{resource}"
+    module_name = f"supply-chain:{'customer-price-book' if partner_type == 'customer' else 'supplier-price-book'}"
+    module_dep = Depends(require_module_access("master-data", module_name))
 
-    @router.post(base, response_model=PartnerPriceBookResponse)
+    @router.post(base, response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def create_price_book(
         data: PartnerPriceBookCreate,
         current_user: Annotated[User, Depends(get_current_user)],
@@ -55,7 +58,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
-    @router.get(base, response_model=PartnerPriceBookListResponse)
+    @router.get(base, response_model=PartnerPriceBookListResponse, dependencies=[module_dep])
     async def list_price_books(
         current_user: Annotated[User, Depends(get_current_user)],
         tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -90,7 +93,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except json.JSONDecodeError:
             return None
 
-    @router.get(f"{base}/resolve", response_model=PartnerPriceResolveResponse)
+    @router.get(f"{base}/resolve", response_model=PartnerPriceResolveResponse, dependencies=[module_dep])
     async def resolve_price(
         current_user: Annotated[User, Depends(get_current_user)],
         tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -116,7 +119,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
-    @router.post(f"{base}/resolve", response_model=PartnerPriceResolveResponse)
+    @router.post(f"{base}/resolve", response_model=PartnerPriceResolveResponse, dependencies=[module_dep])
     async def resolve_price_post(
         data: PartnerPriceResolveRequest,
         current_user: Annotated[User, Depends(get_current_user)],
@@ -128,7 +131,11 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
-    @router.post(f"{base}/resolve-batch", response_model=PartnerPriceResolveBatchResponse)
+    @router.post(
+        f"{base}/resolve-batch",
+        response_model=PartnerPriceResolveBatchResponse,
+        dependencies=[module_dep],
+    )
     async def resolve_prices_batch(
         data: PartnerPriceResolveBatchRequest,
         current_user: Annotated[User, Depends(get_current_user)],
@@ -138,7 +145,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         items = await PartnerPriceBookService.resolve_batch(tenant_id, _partner_type, data)
         return PartnerPriceResolveBatchResponse(items=items)
 
-    @router.get(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse)
+    @router.get(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def get_price_book(
         book_uuid: str,
         current_user: Annotated[User, Depends(get_current_user)],
@@ -150,7 +157,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except NotFoundError as e:
             raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
-    @router.put(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse)
+    @router.put(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def update_price_book(
         book_uuid: str,
         data: PartnerPriceBookUpdate,
@@ -165,7 +172,7 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
-    @router.delete(f"{base}/{{book_uuid}}")
+    @router.delete(f"{base}/{{book_uuid}}", dependencies=[module_dep])
     async def delete_price_book(
         book_uuid: str,
         current_user: Annotated[User, Depends(get_current_user)],

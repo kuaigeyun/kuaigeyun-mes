@@ -6,6 +6,7 @@
 
 # 生产执行模块
 from .work_order import WorkOrder
+from .work_order_group import WorkOrderGroup
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
 from .rework_order_operation import ReworkOrderOperation
@@ -112,6 +113,8 @@ from .receipt_notice import ReceiptNotice
 from .receipt_notice_item import ReceiptNoticeItem
 from .customer_follow_up import CustomerFollowUp
 from .sales_opportunity import SalesOpportunity
+from .customer_pool_log import CustomerPoolLog
+from .customer_pool_rule import CustomerPoolRule
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem
@@ -151,6 +154,7 @@ from .work_order_score import WorkOrderScore
 __all__ = [
     # 生产执行模块
     'WorkOrder',
+    'WorkOrderGroup',
     'ReportingRecord',
     'ReworkOrder',
     'ReworkOrderOperation',
@@ -254,6 +258,8 @@ __all__ = [
     'ReceiptNoticeItem',
     'CustomerFollowUp',
     'SalesOpportunity',
+    'CustomerPoolLog',
+    'CustomerPoolRule',
 
     # 统一需求管理模块（新设计）
     'Demand',

@@ -20,6 +20,7 @@ from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderIt
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_group import WorkOrderGroup
 from apps.kuaizhizao.services.demand_computation_service import (
     DemandComputationService,
     SOURCE_TYPE_BUY,
@@ -37,6 +38,7 @@ def _empty_documents() -> Dict[str, List[Dict[str, Any]]]:
     return {
         "work_orders": [],
         "outsource_work_orders": [],
+        "work_order_groups": [],
         "purchase_orders": [],
         "purchase_requisitions": [],
     }
@@ -597,9 +599,30 @@ class CoordinationBoardService:
                     }
                 )
 
+        work_order_groups: List[Dict[str, Any]] = []
+        groups = await WorkOrderGroup.filter(
+            tenant_id=tenant_id,
+            demand_computation_id=computation_id,
+            deleted_at__isnull=True,
+        ).all()
+        for g in groups:
+            work_order_groups.append(
+                {
+                    "id": g.id,
+                    "code": g.group_code,
+                    "status": g.status,
+                    "extra": {
+                        "root_material_name": g.root_material_name,
+                        "member_count": g.member_count,
+                        "has_direct_supply": bool(g.has_direct_supply),
+                    },
+                }
+            )
+
         return {
             "work_orders": work_orders,
             "outsource_work_orders": outsource_work_orders,
+            "work_order_groups": work_order_groups,
             "purchase_orders": purchase_orders,
             "purchase_requisitions": purchase_requisitions,
         }

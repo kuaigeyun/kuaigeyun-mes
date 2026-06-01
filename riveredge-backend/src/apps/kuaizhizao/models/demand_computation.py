@@ -48,6 +48,9 @@ class DemandComputation(BaseModel):
     
     # 计算结果汇总（JSON格式，存储汇总结果）
     computation_summary = fields.JSONField(null=True, description="计算结果汇总（JSON格式）")
+
+    # 需求行 BOM 生产树（MRP 写入，下推时按组成组）
+    demand_item_bom_trees = fields.JSONField(null=True, description="需求行 BOM 生产树")
     
     # 错误信息
     error_message = fields.TextField(null=True, description="错误信息")

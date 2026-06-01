@@ -11,7 +11,7 @@ class DataScopeResourceProfile:
     """描述某 RBAC 资源在 ORM 行上的范围字段映射。"""
 
     applicant_user_id_field: str = "applicant_user_id"
-    department_uuid_field: str = "department_uuid"
+    department_uuid_field: Optional[str] = "department_uuid"
     created_by_user_id_field: Optional[str] = None
     partner_code_field: Optional[str] = None
     partner_dimension: Optional[str] = None

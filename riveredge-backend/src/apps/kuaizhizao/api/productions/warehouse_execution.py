@@ -16,6 +16,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_module_access
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -186,6 +187,413 @@ def _http_exception_with_trace(
     )
 
 
+async def _scoped_sales_order_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    scoped_query = await DataScopeService.apply(
+        SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:sales-order",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_purchase_order_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    scoped_query = await DataScopeService.apply(
+        PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_other_inbound_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+    scoped_query = await DataScopeService.apply(
+        OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-inbound",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_other_outbound_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
+    scoped_query = await DataScopeService.apply(
+        OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-outbound",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_material_borrow_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+
+    scoped_query = await DataScopeService.apply(
+        MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-borrow",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_material_return_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.material_return import MaterialReturn
+
+    scoped_query = await DataScopeService.apply(
+        MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-return",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _assert_sales_delivery_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    delivery_id: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    delivery = await SalesDelivery.get_or_none(
+        tenant_id=tenant_id,
+        id=delivery_id,
+        deleted_at__isnull=True,
+    )
+    if not delivery:
+        return
+    sales_order_id = getattr(delivery, "sales_order_id", None)
+    if not sales_order_id:
+        return
+    sales_order = await SalesOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=sales_order_id,
+        deleted_at__isnull=True,
+    )
+    if not sales_order:
+        return
+    await DataScopeService.assert_row_visible(
+        sales_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:sales-order",
+    )
+
+
+async def _assert_purchase_receipt_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    receipt_id: int,
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=receipt_id,
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return
+    purchase_order_id = getattr(receipt, "purchase_order_id", None)
+    if not purchase_order_id:
+        return
+    purchase_order = await PurchaseOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_order_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_order:
+        return
+    await DataScopeService.assert_row_visible(
+        purchase_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+
+
+async def _assert_work_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    work_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    if not work_order_id:
+        return
+    work_order = await WorkOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=work_order_id,
+        deleted_at__isnull=True,
+    )
+    if not work_order:
+        return
+    await DataScopeService.assert_row_visible(
+        work_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:work-order",
+    )
+
+
+async def _assert_sales_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    sales_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    if not sales_order_id:
+        return
+    sales_order = await SalesOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=sales_order_id,
+        deleted_at__isnull=True,
+    )
+    if not sales_order:
+        return
+    await DataScopeService.assert_row_visible(
+        sales_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:sales-order",
+    )
+
+
+async def _assert_purchase_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    purchase_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    if not purchase_order_id:
+        return
+    purchase_order = await PurchaseOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_order_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_order:
+        return
+    await DataScopeService.assert_row_visible(
+        purchase_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+
+
+async def _assert_production_picking_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    picking_id: int,
+) -> None:
+    from apps.kuaizhizao.models.production_picking import ProductionPicking
+
+    picking = await ProductionPicking.get_or_none(
+        tenant_id=tenant_id,
+        id=picking_id,
+        deleted_at__isnull=True,
+    )
+    if not picking:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(picking, "work_order_id", None),
+    )
+
+
+async def _assert_production_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.production_return import ProductionReturn
+
+    production_return = await ProductionReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not production_return:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(production_return, "work_order_id", None),
+    )
+
+
+async def _assert_sales_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_return import SalesReturn
+
+    sales_return = await SalesReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not sales_return:
+        return
+    sales_order_id = getattr(sales_return, "sales_order_id", None)
+    if not sales_order_id:
+        return
+    await _assert_sales_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        sales_order_id=sales_order_id,
+    )
+
+
+async def _assert_purchase_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+
+    purchase_return = await PurchaseReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_return:
+        return
+    purchase_order_id = getattr(purchase_return, "purchase_order_id", None)
+    if not purchase_order_id:
+        return
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=purchase_order_id,
+    )
+
+
+async def _assert_other_inbound_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    inbound_id: int,
+) -> None:
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+    inbound = await OtherInbound.get_or_none(
+        tenant_id=tenant_id,
+        id=inbound_id,
+        deleted_at__isnull=True,
+    )
+    if not inbound:
+        return
+    await DataScopeService.assert_row_visible(
+        inbound,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-inbound",
+    )
+
+
+async def _assert_other_outbound_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    outbound_id: int,
+) -> None:
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
+    outbound = await OtherOutbound.get_or_none(
+        tenant_id=tenant_id,
+        id=outbound_id,
+        deleted_at__isnull=True,
+    )
+    if not outbound:
+        return
+    await DataScopeService.assert_row_visible(
+        outbound,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-outbound",
+    )
+
+
+async def _assert_material_borrow_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    borrow_id: int,
+) -> None:
+    from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+
+    borrow = await MaterialBorrow.get_or_none(
+        tenant_id=tenant_id,
+        id=borrow_id,
+        deleted_at__isnull=True,
+    )
+    if not borrow:
+        return
+    await DataScopeService.assert_row_visible(
+        borrow,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-borrow",
+    )
+
+
+async def _assert_material_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.material_return import MaterialReturn
+
+    material_return = await MaterialReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not material_return:
+        return
+    await DataScopeService.assert_row_visible(
+        material_return,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-return",
+    )
+
+
 # ============ 仓储看板 ============
 
 
@@ -318,6 +726,11 @@ async def get_production_picking(
 
     - **picking_id**: 领料单ID
     """
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
     return await ProductionPickingService().get_production_picking_by_id(
         tenant_id=tenant_id,
         picking_id=picking_id
@@ -331,6 +744,11 @@ async def update_production_picking(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionPickingResponse:
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
     return await ProductionPickingService().update_production_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
@@ -350,6 +768,11 @@ async def confirm_production_picking(
 
     - **picking_id**: 领料单ID
     """
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
     return await ProductionPickingService().confirm_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
@@ -363,6 +786,11 @@ async def delete_production_picking(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
     await ProductionPickingService().delete_production_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
@@ -426,6 +854,11 @@ async def get_production_return(
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionReturnWithItemsResponse:
     """获取生产退料单详情（含明细）"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await ProductionReturnService().get_production_return_by_id(
         tenant_id=tenant_id,
         return_id=return_id
@@ -440,6 +873,11 @@ async def update_production_return(
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionReturnResponse:
     """更新生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await ProductionReturnService().update_production_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -455,6 +893,11 @@ async def delete_production_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     await ProductionReturnService().delete_production_return(
         tenant_id=tenant_id,
         return_id=return_id
@@ -470,6 +913,11 @@ async def confirm_production_return(
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionReturnResponse:
     """确认生产退料"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await ProductionReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -488,6 +936,11 @@ async def withdraw_production_return(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionReturnResponse:
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await ProductionReturnService().withdraw_return_confirmation(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -506,6 +959,11 @@ async def print_production_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
@@ -534,6 +992,10 @@ async def list_other_inbounds(
 ):
     """获取其他入库单列表"""
     logger.info(f"FINAL-DEBUG: 执行 list_other_inbounds, tenant_id={tenant_id}")
+    scoped_ids = await _scoped_other_inbound_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
     result = await OtherInboundService().list_other_inbounds(
         tenant_id=tenant_id,
         skip=skip,
@@ -541,6 +1003,7 @@ async def list_other_inbounds(
         status=status,
         reason_type=reason_type,
         warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
     )
     logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(result)} 条数据")
     return result
@@ -574,6 +1037,11 @@ async def repair_deleted_other_inbound_inventory(
     对已软删除且仍为「已入库」的单据，按明细冲减即时库存（与撤回确认一致）。
     用于未先撤回即删除导致账实不一致的修复；成功后单据状态变为「已取消」，不可重复执行。
     """
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     return await OtherInboundService().repair_deleted_other_inbound_inventory(
         tenant_id=tenant_id,
         inbound_id=inbound_id,
@@ -589,6 +1057,11 @@ async def withdraw_other_inbound(
 ) -> OtherInboundResponse:
     """撤回确认"""
     logger.info(f"🎯 捅到 withdraw 接口了！inbound_id={inbound_id}")
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     return await OtherInboundService().withdraw_confirmation(
         tenant_id=tenant_id,
         inbound_id=inbound_id,
@@ -603,6 +1076,11 @@ async def get_other_inbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取其他入库单详情（含明细）"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     return await OtherInboundService().get_other_inbound_by_id(
         tenant_id=tenant_id,
         inbound_id=inbound_id
@@ -617,6 +1095,11 @@ async def update_other_inbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """更新其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     return await OtherInboundService().update_other_inbound(
         tenant_id=tenant_id,
         inbound_id=inbound_id,
@@ -632,6 +1115,11 @@ async def delete_other_inbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     await OtherInboundService().delete_other_inbound(
         tenant_id=tenant_id,
         inbound_id=inbound_id
@@ -646,6 +1134,11 @@ async def confirm_other_inbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """确认其他入库"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     return await OtherInboundService().confirm_inbound(
         tenant_id=tenant_id,
         inbound_id=inbound_id,
@@ -665,6 +1158,11 @@ async def print_other_inbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
@@ -706,6 +1204,10 @@ async def list_other_outbounds(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取其他出库单列表"""
+    scoped_ids = await _scoped_other_outbound_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
     return await OtherOutboundService().list_other_outbounds(
         tenant_id=tenant_id,
         skip=skip,
@@ -713,6 +1215,7 @@ async def list_other_outbounds(
         status=status,
         reason_type=reason_type,
         warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
     )
 
 
@@ -723,6 +1226,11 @@ async def get_other_outbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取其他出库单详情（含明细）"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
     return await OtherOutboundService().get_other_outbound_by_id(
         tenant_id=tenant_id,
         outbound_id=outbound_id
@@ -737,6 +1245,11 @@ async def update_other_outbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """更新其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
     return await OtherOutboundService().update_other_outbound(
         tenant_id=tenant_id,
         outbound_id=outbound_id,
@@ -752,6 +1265,11 @@ async def delete_other_outbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
     await OtherOutboundService().delete_other_outbound(
         tenant_id=tenant_id,
         outbound_id=outbound_id
@@ -765,6 +1283,11 @@ async def confirm_other_outbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """确认其他出库"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
     return await OtherOutboundService().confirm_outbound(
         tenant_id=tenant_id,
         outbound_id=outbound_id,
@@ -783,6 +1306,11 @@ async def print_other_outbound(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
@@ -823,12 +1351,17 @@ async def list_material_borrows(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取借料单列表"""
+    scoped_ids = await _scoped_material_borrow_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
     return await MaterialBorrowService().list_material_borrows(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         status=status,
         warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
     )
 
 
@@ -839,6 +1372,11 @@ async def get_material_borrow(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取借料单详情（含明细）"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
     return await MaterialBorrowService().get_material_borrow_by_id(
         tenant_id=tenant_id,
         borrow_id=borrow_id
@@ -853,6 +1391,11 @@ async def update_material_borrow(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """更新借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
     return await MaterialBorrowService().update_material_borrow(
         tenant_id=tenant_id,
         borrow_id=borrow_id,
@@ -868,6 +1411,11 @@ async def delete_material_borrow(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
     await MaterialBorrowService().delete_material_borrow(
         tenant_id=tenant_id,
         borrow_id=borrow_id
@@ -881,6 +1429,11 @@ async def confirm_material_borrow(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """确认借出"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
     return await MaterialBorrowService().confirm_borrow(
         tenant_id=tenant_id,
         borrow_id=borrow_id,
@@ -899,6 +1452,11 @@ async def print_material_borrow(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
@@ -940,6 +1498,10 @@ async def list_material_returns(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取还料单列表"""
+    scoped_ids = await _scoped_material_return_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
     return await MaterialReturnService().list_material_returns(
         tenant_id=tenant_id,
         skip=skip,
@@ -947,6 +1509,7 @@ async def list_material_returns(
         status=status,
         borrow_id=borrow_id,
         warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
     )
 
 
@@ -957,6 +1520,11 @@ async def get_material_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取还料单详情（含明细）"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await MaterialReturnService().get_material_return_by_id(
         tenant_id=tenant_id,
         return_id=return_id
@@ -971,6 +1539,11 @@ async def update_material_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """更新还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await MaterialReturnService().update_material_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -986,6 +1559,11 @@ async def delete_material_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     await MaterialReturnService().delete_material_return(
         tenant_id=tenant_id,
         return_id=return_id
@@ -999,6 +1577,11 @@ async def confirm_material_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """确认归还"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await MaterialReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -1017,6 +1600,11 @@ async def print_material_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
@@ -1388,6 +1976,11 @@ async def create_packing_binding_from_delivery(
     - **delivery_id**: 销售出库单ID
     - **binding_data**: 装箱绑定创建数据
     """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     return await packing_binding_service.create_packing_binding_from_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
@@ -1403,6 +1996,11 @@ async def get_packing_bindings_by_delivery(
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[PackingBindingListResponse]:
     """获取销售出库单的装箱绑定记录列表"""
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     return await packing_binding_service.get_packing_bindings_by_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id
@@ -2209,6 +2807,11 @@ async def get_sales_delivery(
 
     - **delivery_id**: 出库单ID
     """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     return await SalesDeliveryService().get_sales_delivery_by_id(
         tenant_id=tenant_id,
         delivery_id=delivery_id
@@ -2222,6 +2825,11 @@ async def update_sales_delivery(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesDeliveryResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     return await SalesDeliveryService().update_sales_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
@@ -2243,6 +2851,11 @@ async def confirm_sales_delivery(
     - **delivery_id**: 出库单ID
     - **body.item_batches**: 可选；提交时须覆盖所有出库数量大于 0 的明细行，用于写入批号后再过账
     """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     batches = body.item_batches if body else None
     return await SalesDeliveryService().confirm_delivery(
         tenant_id=tenant_id,
@@ -2258,6 +2871,11 @@ async def withdraw_sales_delivery(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesDeliveryResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     return await SalesDeliveryService().withdraw_delivery_confirmation(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
@@ -2271,6 +2889,11 @@ async def delete_sales_delivery(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
     await SalesDeliveryService().delete_sales_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
@@ -2424,10 +3047,15 @@ async def export_sales_deliveries(
     
     try:
         service = SalesDeliveryService()
+        scoped_sales_order_ids = await _scoped_sales_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         file_path = await service.export_to_excel(
             tenant_id=tenant_id,
             status=status,
             sales_order_id=sales_order_id,
+            scoped_sales_order_ids=scoped_sales_order_ids,
         )
         return FileResponse(
             path=file_path,
@@ -2471,6 +3099,11 @@ async def print_sales_delivery(
     from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
     
     try:
+        await _assert_sales_delivery_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            delivery_id=delivery_id,
+        )
         # 获取销售出库单详情
         service = SalesDeliveryService()
         delivery = await service.get_sales_delivery_by_id(tenant_id, delivery_id)
@@ -2585,6 +3218,11 @@ async def pull_sales_return_from_sales_order(
         raise ValidationError("必须提供销售订单ID")
     if not warehouse_id:
         raise ValidationError("必须提供退货仓库ID")
+    await _assert_sales_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        sales_order_id=int(sales_order_id),
+    )
 
     return await SalesReturnService().pull_from_sales_order(
         tenant_id=tenant_id,
@@ -2642,6 +3280,11 @@ async def get_sales_return(
 
     - **return_id**: 退货单ID
     """
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await SalesReturnService().get_sales_return_by_id(
         tenant_id=tenant_id,
         return_id=return_id
@@ -2656,6 +3299,11 @@ async def update_sales_return(
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesReturnResponse:
     """更新销售退货单（仅待退货/草稿）。"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await SalesReturnService().update_sales_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -2676,6 +3324,11 @@ async def confirm_sales_return(
 
     - **return_id**: 退货单ID
     """
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await SalesReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -2691,6 +3344,11 @@ async def withdraw_sales_return(
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesReturnResponse:
     """撤回销售退货确认（已退货 -> 待退货）"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await SalesReturnService().withdraw_confirmation(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -2705,6 +3363,11 @@ async def delete_sales_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除销售退货单（软删除，仅待退货状态可删）"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     await SalesReturnService().delete_sales_return(
         tenant_id=tenant_id,
         return_id=return_id
@@ -2796,6 +3459,11 @@ async def get_purchase_receipt(
 
     - **receipt_id**: 入库单ID
     """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     return await PurchaseReceiptService().get_purchase_receipt_by_id(
         tenant_id=tenant_id,
         receipt_id=receipt_id
@@ -2812,6 +3480,11 @@ async def update_purchase_receipt(
     """
     更新采购入库单（草稿/待入库阶段可调整实际入库数量等明细）。
     """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     return await PurchaseReceiptService().update_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
@@ -2832,6 +3505,11 @@ async def confirm_purchase_receipt(
 
     - **receipt_id**: 入库单ID
     """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     return await PurchaseReceiptService().confirm_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
@@ -2850,6 +3528,11 @@ async def withdraw_purchase_receipt(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> PurchaseReceiptWithItemsResponse:
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     return await PurchaseReceiptService().withdraw_receipt_confirmation(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
@@ -2868,6 +3551,11 @@ async def delete_purchase_receipt(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """软删除采购入库单（仅草稿/待入库可删；已入库不可删）"""
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     await PurchaseReceiptService().delete_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
@@ -2885,6 +3573,11 @@ async def delete_purchase_receipt_post(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
     await PurchaseReceiptService().delete_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
@@ -2968,10 +3661,15 @@ async def export_purchase_receipts(
     
     try:
         service = PurchaseReceiptService()
+        scoped_purchase_order_ids = await _scoped_purchase_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         file_path = await service.export_to_excel(
             tenant_id=tenant_id,
             status=status,
             purchase_order_id=purchase_order_id,
+            scoped_purchase_order_ids=scoped_purchase_order_ids,
         )
         return FileResponse(
             path=file_path,
@@ -3023,6 +3721,11 @@ async def pull_purchase_return_from_purchase_order(
         raise ValidationError("必须提供采购订单ID")
     if not warehouse_id:
         raise ValidationError("必须提供退货仓库ID")
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=int(purchase_order_id),
+    )
 
     return await PurchaseReturnService().pull_from_purchase_order(
         tenant_id=tenant_id,
@@ -3089,6 +3792,11 @@ async def get_purchase_return(
 
     - **return_id**: 退货单ID
     """
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await PurchaseReturnService().get_purchase_return_by_id(
         tenant_id=tenant_id,
         return_id=return_id
@@ -3102,6 +3810,11 @@ async def update_purchase_return(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> PurchaseReturnResponse:
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await PurchaseReturnService().update_purchase_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -3121,6 +3834,11 @@ async def confirm_purchase_return(
 
     - **return_id**: 退货单ID
     """
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await PurchaseReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -3134,6 +3852,11 @@ async def withdraw_purchase_return(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> PurchaseReturnResponse:
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     return await PurchaseReturnService().withdraw_confirmation(
         tenant_id=tenant_id,
         return_id=return_id,
@@ -3148,6 +3871,11 @@ async def delete_purchase_return(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """删除采购退货单（软删除，仅待退货状态可删）"""
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
     await PurchaseReturnService().delete_purchase_return(
         tenant_id=tenant_id,
         return_id=return_id

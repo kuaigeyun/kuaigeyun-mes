@@ -32,9 +32,19 @@
             "permission": "kuaizhizao:sales-management-dashboard:read"
           },
           {
+            "title": "app.kuaizhizao.menu.sales-management.customer-pool",
+            "path": "/apps/kuaizhizao/sales-management/customer-pool",
+            "sort_order": 1,
+            "meta": {
+              "node": "customer_pool",
+              "module": "sales"
+            },
+            "permission": "kuaizhizao:customer-pool:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.sales-management.quotations",
             "path": "/apps/kuaizhizao/sales-management/quotations",
-            "sort_order": 1,
+            "sort_order": 2,
             "meta": {
               "node": "quotation",
               "module": "sales"
@@ -44,7 +54,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.customer-follow-ups",
             "path": "/apps/kuaizhizao/sales-management/customer-follow-ups",
-            "sort_order": 2,
+            "sort_order": 3,
             "meta": {
               "node": "customer_follow_up",
               "module": "sales"
@@ -54,7 +64,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-contracts",
             "path": "/apps/kuaizhizao/sales-management/sales-contracts",
-            "sort_order": 3,
+            "sort_order": 4,
             "meta": {
               "node": "sales_contract",
               "module": "sales"
@@ -64,7 +74,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
             "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-            "sort_order": 4,
+            "sort_order": 5,
             "meta": {
               "node": "sales_forecast",
               "module": "sales"
@@ -74,7 +84,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-orders",
             "path": "/apps/kuaizhizao/sales-management/sales-orders",
-            "sort_order": 5,
+            "sort_order": 6,
             "meta": {
               "node": "sales_order",
               "module": "sales"
@@ -84,7 +94,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-order-changes",
             "path": "/apps/kuaizhizao/sales-management/sales-order-changes",
-            "sort_order": 6,
+            "sort_order": 7,
             "meta": {
               "node": "sales_order_change",
               "module": "sales"
@@ -94,7 +104,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.shipment-notices",
             "path": "/apps/kuaizhizao/sales-management/shipment-notices",
-            "sort_order": 7,
+            "sort_order": 8,
             "meta": {
               "module": "sales",
               "node": "shipment_notice"
@@ -104,7 +114,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-returns",
             "path": "/apps/kuaizhizao/sales-management/sales-returns",
-            "sort_order": 8,
+            "sort_order": 9,
             "meta": {
               "module": "sales",
               "node": "sales_return"
@@ -114,7 +124,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.reports",
             "icon": "fileText",
-            "sort_order": 9,
+            "sort_order": 10,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
@@ -1391,6 +1401,12 @@
     "kuaizhizao:customer-follow-up:revoke",
     "kuaizhizao:customer-follow-up:submit",
     "kuaizhizao:customer-follow-up:update",
+    "kuaizhizao:customer-pool:assign",
+    "kuaizhizao:customer-pool:claim",
+    "kuaizhizao:customer-pool:read",
+    "kuaizhizao:customer-pool:recycle",
+    "kuaizhizao:customer-pool:release",
+    "kuaizhizao:customer-pool:update",
     "kuaizhizao:delivery-notice:approve",
     "kuaizhizao:delivery-notice:audit",
     "kuaizhizao:delivery-notice:create",

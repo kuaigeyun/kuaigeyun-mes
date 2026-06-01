@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -23,6 +24,71 @@ class ReportService:
 
     处理各类报表分析相关的业务逻辑。
     """
+
+    async def _scoped_sales_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+
+        query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:sales-order",
+        )
+
+    async def _scoped_quotation_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.quotation import Quotation
+
+        query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:quotation",
+        )
+
+    async def _scoped_purchase_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+        query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:purchase-order",
+        )
+
+    async def _scoped_work_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:work-order",
+        )
+
+    async def _scoped_sales_contract_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.sales_contract import SalesContract
+
+        query = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:sales-contract",
+        )
 
     async def get_inventory_report(
         self,
@@ -315,6 +381,7 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
         customer_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """获取销售报表数据"""
         from tortoise.functions import Sum, Count
@@ -327,6 +394,7 @@ class ReportService:
                 skip=skip,
                 limit=limit,
                 customer_keyword=customer_keyword,
+                current_user=current_user,
             )
         elif report_type in ["order-execution-tracking", "execution"]:
             return await self._get_sales_order_execution(
@@ -337,10 +405,17 @@ class ReportService:
                 skip=skip,
                 limit=limit,
                 customer_keyword=customer_keyword,
+                current_user=current_user,
             )
         elif report_type in ["customer-sales-summary", "customer_summary"]:
             return await self._get_customer_sales_performance(
-                tenant_id, date_start, date_end, customer_keyword=customer_keyword, skip=skip, limit=limit
+                tenant_id,
+                date_start,
+                date_end,
+                customer_keyword=customer_keyword,
+                skip=skip,
+                limit=limit,
+                current_user=current_user,
             )
         elif report_type in ["customer-sales-reconciliation", "customer_reconciliation"]:
             return await self._get_customer_sales_reconciliation(
@@ -351,6 +426,7 @@ class ReportService:
                 skip=skip,
                 limit=limit,
                 customer_keyword=customer_keyword,
+                current_user=current_user,
             )
         elif report_type in ["product-sales-ranking", "product_ranking"]:
             return await self._get_product_sales_ranking(
@@ -369,6 +445,7 @@ class ReportService:
                 customer_keyword=customer_keyword,
                 skip=skip,
                 limit=limit,
+                current_user=current_user,
             )
         elif report_type in ["contract-execution", "sales-contract-execution", "contract_execution"]:
             return await self._get_sales_contract_execution(
@@ -379,10 +456,11 @@ class ReportService:
                 skip=skip,
                 limit=limit,
                 customer_keyword=customer_keyword,
+                current_user=current_user,
             )
         elif report_type in ["sales-trend-analysis", "trend", "sales_trend_analysis"]:
             from apps.kuaizhizao.models.sales_order import SalesOrder
-            so_q = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            so_q = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
             if date_start:
                 so_q = so_q.filter(order_date__gte=date_start.date())
             if date_end:
@@ -425,7 +503,8 @@ class ReportService:
             }
         elif report_type in ["salesperson-performance", "salesperson"]:
             from apps.kuaizhizao.models.sales_order import SalesOrder
-            so_pf = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="COMPLETED")
+            so_pf = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
+            so_pf = so_pf.filter(status="COMPLETED")
             if date_start:
                 so_pf = so_pf.filter(order_date__gte=date_start.date())
             if date_end:
@@ -460,9 +539,9 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
         customer_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """销售订单综合查询统计"""
-        from apps.kuaizhizao.models.sales_order import SalesOrder
         from tortoise.functions import Count, Sum
 
         logger.info(
@@ -475,7 +554,7 @@ class ReportService:
             limit,
         )
 
-        query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
         if date_start:
             query = query.filter(order_date__gte=date_start.date())
         if date_end:
@@ -530,9 +609,9 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
         customer_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """销售订单执行跟踪统计"""
-        from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from tortoise.functions import Sum
 
@@ -543,20 +622,22 @@ class ReportService:
             query = query.filter(delivery_date__lte=date_end.date())
 
         order_id_filter: Optional[list] = None
+        scoped_order_query = await self._scoped_sales_order_query(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         if customer_keyword and str(customer_keyword).strip():
             kw = str(customer_keyword).strip()
             order_id_filter = list(
-                await SalesOrder.filter(
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
+                await scoped_order_query.filter(
                     customer_name__icontains=kw,
                 ).values_list("id", flat=True)
             )
         if customer_id is not None:
             by_cust = list(
-                await SalesOrder.filter(
-                    tenant_id=tenant_id, deleted_at__isnull=True, customer_id=customer_id
-                ).values_list("id", flat=True)
+                await scoped_order_query.filter(customer_id=customer_id).values_list(
+                    "id", flat=True
+                )
             )
             if order_id_filter is None:
                 order_id_filter = by_cust
@@ -596,7 +677,9 @@ class ReportService:
         order_ids = list(set(it["sales_order_id"] for it in items))
         orders_map = {}
         if order_ids:
-            orders = await SalesOrder.filter(id__in=order_ids).values("id", "order_code", "customer_name")
+            orders = await scoped_order_query.filter(id__in=order_ids).values(
+                "id", "order_code", "customer_name"
+            )
             orders_map = {o["id"]: o for o in orders}
         for it in items:
             order = orders_map.get(it["sales_order_id"], {})
@@ -626,17 +709,17 @@ class ReportService:
         customer_keyword: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """客户销售业绩汇总（订单维度真实汇总；回款金额不在本模块计算）。"""
         from collections import defaultdict
-        from apps.kuaizhizao.models.sales_order import SalesOrder
         from tortoise.functions import Count, Sum
 
         COMPLETED_STATUSES = frozenset(
             {"COMPLETED", "已完成", "完成", "CLOSED", "closed", "DONE", "done"}
         )
 
-        query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
         if date_start:
             query = query.filter(order_date__gte=date_start.date())
         if date_end:
@@ -735,11 +818,12 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
         customer_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """客户销售对账单数据"""
-        from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_return import SalesReturn
-        query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["CONFIRMED", "COMPLETED"])
+        query = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
+        query = query.filter(status__in=["CONFIRMED", "COMPLETED"])
         if date_start: query = query.filter(order_date__gte=date_start.date())
         if date_end: query = query.filter(order_date__lte=date_end.date())
         if customer_id: query = query.filter(customer_id=customer_id)
@@ -906,9 +990,9 @@ class ReportService:
         *,
         skip: int = 0,
         limit: int = 100,
+        current_user: Optional[Any] = None,
     ):
-        from apps.kuaizhizao.models.quotation import Quotation
-        query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await self._scoped_quotation_query(tenant_id=tenant_id, current_user=current_user)
         if date_start:
             query = query.filter(quotation_date__gte=date_start.date())
         if date_end:
@@ -940,13 +1024,15 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
         customer_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """销售合同执行率与框架释放明细报表。"""
-        from apps.kuaizhizao.models.sales_contract import SalesContract
         from apps.kuaizhizao.models.sales_contract_milestone import SalesContractMilestone
-        from apps.kuaizhizao.models.sales_order import SalesOrder
 
-        query = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await self._scoped_sales_contract_query(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
         if date_start:
             query = query.filter(contract_date__gte=date_start.date())
         if date_end:
@@ -965,10 +1051,12 @@ class ReportService:
         release_counts: Dict[int, int] = {}
         payment_rates: Dict[int, float] = {}
         if contract_ids:
-            orders = await SalesOrder.filter(
+            scoped_so_query = await self._scoped_sales_order_query(
                 tenant_id=tenant_id,
+                current_user=current_user,
+            )
+            orders = await scoped_so_query.filter(
                 contract_id__in=contract_ids,
-                deleted_at__isnull=True,
                 is_release_order=True,
             ).values("contract_id")
             for row in orders:
@@ -1465,7 +1553,15 @@ class ReportService:
             },
         }
 
-    async def get_plan_report(self, tenant_id: int, report_type: str = "plan-fulfillment-rate", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
+    async def get_plan_report(
+        self,
+        tenant_id: int,
+        report_type: str = "plan-fulfillment-rate",
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        *,
+        current_user: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """计划报表汇总"""
         from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.demand_item import DemandItem
@@ -1526,11 +1622,29 @@ class ReportService:
             return {"data": items, "success": True}
         elif report_type in ["production-delay-analysis", "delay"]:
             # 生产延期分析
-            items = await WorkOrder.filter(tenant_id=tenant_id, planned_end_date__lt=date.today()).limit(100).values("code", "material_name", "planned_end_date", "status")
+            delay_qs = await self._scoped_work_order_query(
+                tenant_id=tenant_id,
+                current_user=current_user,
+            )
+            items = await delay_qs.filter(planned_end_date__lt=date.today()).limit(100).values(
+                "code",
+                "material_name",
+                "planned_end_date",
+                "status",
+            )
             return {"data": items, "success": True}
         return {"data": [], "success": True}
 
-    async def get_purchase_report(self, tenant_id: int, report_type: str = "purchase-order-query", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None, supplier_id: Optional[int] = None) -> Dict[str, Any]:
+    async def get_purchase_report(
+        self,
+        tenant_id: int,
+        report_type: str = "purchase-order-query",
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        supplier_id: Optional[int] = None,
+        *,
+        current_user: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """采购报表汇总"""
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
@@ -1538,6 +1652,14 @@ class ReportService:
         from apps.kuaizhizao.models.purchase_return import PurchaseReturn
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
         from tortoise.functions import Sum, Count, Avg
+        scoped_po_query = await self._scoped_purchase_order_query(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        scoped_po_ids = await scoped_po_query.values_list("id", flat=True)
+        scoped_po_id_list = list(scoped_po_ids)
+        if not scoped_po_id_list:
+            return {"data": [], "success": True}
 
         if report_type in ["purchase-requisition-tracking", "req_tracking"]:
             # 请购执行跟踪 - 使用明细表
@@ -1555,11 +1677,20 @@ class ReportService:
             return {"data": res, "success": True}
         elif report_type in ["purchase-order-query", "po_query"]:
             # 采购订单综合查询
-            items = await PurchaseOrder.filter(tenant_id=tenant_id).limit(100).values("order_code", "order_date", "supplier_name", "total_amount", "status")
+            items = await scoped_po_query.limit(100).values(
+                "order_code",
+                "order_date",
+                "supplier_name",
+                "total_amount",
+                "status",
+            )
             return {"data": items, "success": True}
         elif report_type in ["purchase-order-progress", "po_progress"]:
             # 采购订单执行进度
-            items = await PurchaseOrderItem.filter(tenant_id=tenant_id).limit(100).values("material_name", "ordered_quantity", "received_quantity", "required_date")
+            items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=scoped_po_id_list,
+            ).limit(100).values("material_name", "ordered_quantity", "received_quantity", "required_date")
             for it in items:
                 it["quantity"] = float(it["ordered_quantity"] or 0)
                 it["delivery_date"] = it["required_date"].strftime("%Y-%m-%d") if it["required_date"] else None
@@ -1570,7 +1701,10 @@ class ReportService:
             return {"data": stats, "success": True}
         elif report_type in ["supplier-price-comparison", "price_comparison"]:
             # 供应商价格对比分析 - 通过订单头获取供应商
-            stats = await PurchaseOrderItem.filter(tenant_id=tenant_id).limit(200).prefetch_related("order")
+            stats = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=scoped_po_id_list,
+            ).limit(200).prefetch_related("order")
             # 在内存中分组
             group_data = {}
             for s in stats:
@@ -1592,7 +1726,10 @@ class ReportService:
             return {"data": stats, "success": True}
         elif report_type in ["purchase-cost-trend", "cost_trend"]:
             # 采购成本趋势分析
-            stats = await PurchaseOrderItem.filter(tenant_id=tenant_id).values("required_date", "total_price")
+            stats = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=scoped_po_id_list,
+            ).values("required_date", "total_price")
             # 在内存中分组
             res_dict = {}
             for s in stats:
@@ -1604,7 +1741,10 @@ class ReportService:
             return {"data": res, "success": True}
         elif report_type in ["supplier-lead-time", "lead_time"]:
             # 供应商到货周期分析
-            items = await PurchaseOrderItem.filter(tenant_id=tenant_id).limit(100).values("material_name", "required_date", "actual_delivery_date")
+            items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=scoped_po_id_list,
+            ).limit(100).values("material_name", "required_date", "actual_delivery_date")
             for it in items:
                 it["delivery_date"] = it["required_date"].strftime("%Y-%m-%d") if it["required_date"] else None
                 it["actual_delivery_date"] = it["actual_delivery_date"].strftime("%Y-%m-%d") if it["actual_delivery_date"] else None

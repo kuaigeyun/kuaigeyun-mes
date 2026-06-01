@@ -51,6 +51,7 @@ const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purch
 
 // 销售管理页面
 const SalesDashboardPage = lazy(() => import('./pages/sales-management/dashboard'));
+const CustomerPoolPage = lazy(() => import('./pages/sales-management/customer-pool'));
 const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
 const QuotationsPage = lazy(() => import('./pages/sales-management/quotations'));
 const SalesContractsPage = lazy(() => import('./pages/sales-management/sales-contracts'));
@@ -271,6 +272,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 销售管理路由 */}
       <Route path="sales-management/dashboard" element={withPageSuspense(SalesDashboardPage)} />
+      <Route path="sales-management/customer-pool" element={withPageSuspense(CustomerPoolPage)} />
       <Route path="sales-management/sales-forecasts" element={withPageSuspense(SalesForecastsPage)} />
       <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
       <Route path="sales-management/sales-contracts" element={withPageSuspense(SalesContractsPage)} />

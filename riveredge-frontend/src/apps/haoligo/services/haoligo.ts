@@ -310,6 +310,7 @@ export type MoldWarehouseCreatePayload = {
 };
 
 export type MoldWarehouseUpdatePayload = {
+  warehouse_code?: string;
   warehouse_name?: string;
   warehouse_type?: '内部' | '外部';
   workshop_id?: number | null;
@@ -1625,8 +1626,19 @@ export function getMoldTrialSheet(rowId: number): Promise<MoldTrialSheetRow> {
 export function getNextMoldTrialTimes(params?: {
   mold_code?: string;
   purchase_order_no?: string;
-}): Promise<{ trial_times: number }> {
+}): Promise<{
+  trial_times: number;
+  can_create: boolean;
+  blocking_sheet_no?: string | null;
+}> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/next-trial-times`, { params });
+}
+
+/** 仍有未完结试模流程的模具（待启用选用列表过滤） */
+export function getMoldTrialIncompleteMolds(): Promise<{
+  items: { mold_code: string; blocking_sheet_no?: string | null; blocking_sheet_id: number }[];
+}> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/incomplete-molds`);
 }
 
 export function createMoldTrialSheet(body: MoldTrialSheetCreatePayload): Promise<MoldTrialSheetRow> {
@@ -1653,11 +1665,19 @@ export function revokeMoldTrialSheetApproval(rowId: number): Promise<MoldTrialSh
   return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/revoke-approval`, { method: 'POST' });
 }
 
+export function getMoldTrialViewerContext(): Promise<{ is_external_partner: boolean }> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/viewer-context`);
+}
+
 export function dispatchMoldTrialSheet(
   rowId: number,
   body: { target_warehouse_id: number },
 ): Promise<MoldTrialSheetRow> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/dispatch`, { method: 'POST', data: body });
+}
+
+export function markMoldTrialSheetAdjustmentComplete(rowId: number): Promise<MoldTrialSheetRow> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/mark-adjustment-complete`, { method: 'POST' });
 }
 
 export function recallMoldTrialSheet(

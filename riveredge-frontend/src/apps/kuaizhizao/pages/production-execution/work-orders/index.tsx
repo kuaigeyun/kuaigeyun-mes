@@ -241,6 +241,12 @@ interface WorkOrder {
   /** 列表行类型 */
   row_kind?: 'work_order' | 'split' | 'rework' | 'outsource'
   parent_work_order_id?: number
+  work_order_group_id?: number
+  group_code?: string
+  group_role?: 'root' | 'component' | 'outsource_component' | string
+  bom_parent_work_order_id?: number
+  demand_item_id?: number
+  supply_mode?: 'stocked' | 'direct' | string
   children?: WorkOrder[]
   rework_type?: string
   rework_operation_names?: string
@@ -4568,6 +4574,14 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'product_code',
       hideInTable: true,
       hideInSearch: false,
+    },
+    {
+      title: '工单组',
+      dataIndex: 'group_code',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: false,
+      render: (_, record) => record.group_code || <Typography.Text type="secondary">—</Typography.Text>,
     },
     {
       title: '数量',

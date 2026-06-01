@@ -50,7 +50,7 @@ class SalesOpportunityService:
         if not customer:
             raise NotFoundError(f"客户不存在: {customer_id}")
         if current_user and current_user.is_regular_user():
-            if customer.salesman_id != current_user.id:
+            if customer.salesman_id != current_user.id or customer.pool_status != "owned":
                 raise ValidationError("无权操作该客户")
         return customer
 
@@ -62,6 +62,7 @@ class SalesOpportunityService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             salesman_id=current_user.id,
+            pool_status="owned",
         ).values_list("id", flat=True)
         return set(rows)
 

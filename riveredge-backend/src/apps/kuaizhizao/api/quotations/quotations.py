@@ -13,6 +13,8 @@ from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
+from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
@@ -28,7 +30,25 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderResponse
 
 quotation_service = QuotationService()
-router = APIRouter(prefix="/quotations", tags=["App · Kuaige Zhizao · Quotation Management"])
+router = APIRouter(
+    prefix="/quotations",
+    tags=["App · Kuaige Zhizao · Quotation Management"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "quotation"))],
+)
+
+
+async def _mask_quotation_payload(
+    *,
+    tenant_id: int,
+    user_id: int,
+    payload: dict,
+) -> dict:
+    return await PermissionPolicyService.apply_field_masks_to_dict(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        resource="kuaizhizao:quotation",
+        payload=payload,
+    )
 
 
 @router.post("", response_model=QuotationResponse, summary="Create quotation")
@@ -77,7 +97,7 @@ async def list_quotations(
 ):
     """获取报价单列表，支持按状态、日期、关键词筛选"""
     try:
-        return await quotation_service.list_quotations(
+        result = await quotation_service.list_quotations(
             tenant_id=tenant_id,
             skip=skip,
             limit=limit,
@@ -90,6 +110,19 @@ async def list_quotations(
             quotation_series_code=quotation_series_code,
             list_scope=list_scope,
             current_user=current_user,
+        )
+        masked_rows: List[QuotationResponse] = []
+        for row in result.data:
+            masked = await _mask_quotation_payload(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                payload=row.model_dump(),
+            )
+            masked_rows.append(QuotationResponse(**masked))
+        return QuotationListResponse(
+            data=masked_rows,
+            total=result.total,
+            success=result.success,
         )
     except Exception as e:
         logger.error("获取报价单列表失败: %s", e)
@@ -108,11 +141,18 @@ async def get_quotation(
 ):
     """获取报价单详情"""
     try:
-        return await quotation_service.get_quotation_by_id(
+        result = await quotation_service.get_quotation_by_id(
             tenant_id=tenant_id,
             quotation_id=quotation_id,
             include_items=include_items,
+            current_user=current_user,
         )
+        masked = await _mask_quotation_payload(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            payload=result.model_dump(),
+        )
+        return QuotationResponse(**masked)
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
@@ -166,12 +206,19 @@ async def update_quotation(
 ):
     """更新报价单，仅草稿状态可更新"""
     try:
-        return await quotation_service.update_quotation(
+        result = await quotation_service.update_quotation(
             tenant_id=tenant_id,
             quotation_id=quotation_id,
             quotation_data=quotation_data,
             updated_by=current_user.id,
+            current_user=current_user,
         )
+        masked = await _mask_quotation_payload(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            payload=result.model_dump(),
+        )
+        return QuotationResponse(**masked)
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
@@ -484,6 +531,7 @@ async def delete_quotation(
         await quotation_service.delete_quotation(
             tenant_id=tenant_id,
             quotation_id=quotation_id,
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

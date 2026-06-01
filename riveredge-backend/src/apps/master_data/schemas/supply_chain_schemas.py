@@ -75,6 +75,10 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
+    pool_status: Optional[str] = Field("pool", max_length=20, description="客户池状态：pool/owned", alias="poolStatus")
+    assigned_at: Optional[datetime] = Field(None, description="最近领取/分配时间", alias="assignedAt")
+    last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
+    recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
@@ -115,6 +119,15 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
             raise ValueError("客户名称不能为空")
         return v.strip()
 
+    @validator("pool_status", pre=True)
+    def validate_pool_status(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "pool"
+        status = str(v).strip().lower()
+        if status not in {"pool", "owned"}:
+            raise ValueError("poolStatus 必须为 pool 或 owned")
+        return status
+
 
 class CustomerCreate(CustomerBase):
     """创建客户 Schema"""
@@ -134,6 +147,10 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
+    pool_status: Optional[str] = Field(None, max_length=20, description="客户池状态：pool/owned", alias="poolStatus")
+    assigned_at: Optional[datetime] = Field(None, description="最近领取/分配时间", alias="assignedAt")
+    last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
+    recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
@@ -173,6 +190,15 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         if v is not None and (not v or not v.strip()):
             raise ValueError("客户名称不能为空")
         return v.strip() if v else None
+
+    @validator("pool_status", pre=True)
+    def validate_pool_status_update(cls, v):
+        if v is None:
+            return None
+        status = str(v).strip().lower()
+        if status not in {"pool", "owned"}:
+            raise ValueError("poolStatus 必须为 pool 或 owned")
+        return status
 
 
 class CustomerResponse(CustomerBase):

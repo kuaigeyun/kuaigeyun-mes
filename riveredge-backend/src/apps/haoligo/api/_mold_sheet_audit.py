@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Type, TypeVar
 
 from fastapi import HTTPException, status
+from tortoise.models import Model
+
+from apps.haoligo.api._qs import tenant_alive
+
+TModel = TypeVar("TModel", bound=Model)
 
 from apps.haoligo.constants.mold_sheet_audit import (
     SHEET_AUDIT_STATUS_SET,
@@ -51,3 +56,15 @@ def apply_rejected_resubmit_fields(data: dict[str, Any], row: Any) -> None:
         data["sheet_status"] = SHEET_STATUS_PENDING
         data["audited_at"] = None
         data["audited_by_user_id"] = None
+
+
+async def load_sheet_row_for_audit(
+    model: Type[TModel],
+    tenant_id: int,
+    row_id: int,
+) -> TModel:
+    """审核操作前加行锁，避免并发双点审核导致状态错乱或未捕获的数据库异常。"""
+    row = await tenant_alive(model, tenant_id).select_for_update().filter(id=row_id).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+    return row

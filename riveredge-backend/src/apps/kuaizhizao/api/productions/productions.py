@@ -264,6 +264,7 @@ from apps.kuaizhizao.schemas.planning import (
 )
 
 from .work_orders import router as work_orders_router
+from .work_order_groups import router as work_order_groups_router
 from .reporting import router as reporting_router
 from .warehouse_execution import router as warehouse_execution_router
 from .quality_execution import router as quality_execution_router
@@ -277,6 +278,7 @@ router = APIRouter(
     dependencies=[Depends(require_module_access("kuaizhizao", "production-execution-reporting"))],
 )
 router.include_router(work_orders_router)
+router.include_router(work_order_groups_router)
 router.include_router(reporting_router)
 router.include_router(warehouse_execution_router)
 router.include_router(quality_execution_router)

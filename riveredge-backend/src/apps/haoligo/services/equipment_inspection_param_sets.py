@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.equipment import (
+    HaoligoEquipment,
     HaoligoEquipmentInspectionParamSet,
     HaoligoInspectionParamSet,
 )
@@ -49,4 +50,6 @@ async def sync_equipment_inspection_param_sets(
             set_id=sid,
             sort_order=idx,
         )
+    # 台账仅以多对多绑定为准，清空遗留单列
+    await tenant_alive(HaoligoEquipment, tenant_id).filter(id=equipment_id).update(inspection_param_set_id=None)
     return ordered

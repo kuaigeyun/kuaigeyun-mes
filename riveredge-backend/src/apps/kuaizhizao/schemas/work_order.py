@@ -197,6 +197,11 @@ class WorkOrderResponse(WorkOrderBase):
         None,
         description="拆分剩余可分配数量（已拆分主工单：原数量减去子工单数量之和）",
     )
+    work_order_group_id: Optional[int] = Field(None, description="所属工单组 ID")
+    group_role: Optional[str] = Field(None, description="组内角色")
+    bom_parent_work_order_id: Optional[int] = Field(None, description="BOM 上级工单 ID")
+    demand_item_id: Optional[int] = Field(None, description="需求行 ID")
+    supply_mode: Optional[str] = Field(None, description="供应模式 stocked/direct")
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -272,6 +277,11 @@ class WorkOrderListResponse(BaseModel):
     )
     operation_name: Optional[str] = Field(None, description="委外工序名（row_kind=outsource）")
     supplier_name: Optional[str] = Field(None, description="委外供应商（row_kind=outsource）")
+    work_order_group_id: Optional[int] = Field(None, description="所属工单组 ID")
+    group_code: Optional[str] = Field(None, description="工单组编码")
+    group_role: Optional[str] = Field(None, description="组内角色 root/component/outsource_component")
+    bom_parent_work_order_id: Optional[int] = Field(None, description="BOM 上级工单 ID")
+    supply_mode: Optional[str] = Field(None, description="供应模式 stocked/direct")
     created_at: datetime = Field(..., description="创建时间")
     operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
     operation_steps: Optional[List[WorkOrderOperationStepSummary]] = Field(

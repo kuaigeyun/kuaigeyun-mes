@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Query, Path, Body
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User as CurrentUser
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
@@ -36,7 +37,10 @@ from loguru import logger
 
 
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
-router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Order Management"])
+router = APIRouter(
+    tags=["App · Kuaige Zhizao · Purchase Order Management"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-order"))],
+)
 
 
 # === 采购订单CRUD接口 ===

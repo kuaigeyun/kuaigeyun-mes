@@ -217,10 +217,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
     [editId, messageApi, t],
   );
 
-  const resolveEquipmentPlanIds = useCallback((eq: { inspection_param_set_ids?: number[]; inspection_param_set_id?: number | null }) => {
-    if (eq.inspection_param_set_ids?.length) return eq.inspection_param_set_ids;
-    if (eq.inspection_param_set_id != null) return [eq.inspection_param_set_id];
-    return [];
+  const resolveEquipmentPlanIds = useCallback((eq: { inspection_param_set_ids?: number[] }) => {
+    return eq.inspection_param_set_ids?.length ? eq.inspection_param_set_ids : [];
   }, []);
 
   const openPlanPicker = useCallback(
@@ -255,9 +253,15 @@ const SpotCheckDocumentsPage: React.FC = () => {
           await openPlanPicker(equipmentId, boundIds);
           return;
         }
-        const setId = boundIds[0] ?? undefined;
+        if (boundIds.length === 0) {
+          setLines([]);
+          setPlanHint(null);
+          formRef.current?.setFieldsValue({ inspection_param_set_id: undefined });
+          return;
+        }
+        const setId = boundIds[0];
         formRef.current?.setFieldsValue({ inspection_param_set_id: setId });
-        await loadInspectionLines({ equipmentId, setId: setId ?? null });
+        await loadInspectionLines({ equipmentId, setId });
       } catch {
         await loadInspectionLines({ equipmentId, setId: presetSetId ?? null });
       }
@@ -951,6 +955,11 @@ const SpotCheckDocumentsPage: React.FC = () => {
                         <QuestionCircleOutlined style={{ color: 'rgba(0,0,0,0.45)', fontSize: 13 }} />
                       </Tooltip>
                     </Space>
+                  }
+                  rules={
+                    editId == null && !detailMode
+                      ? [{ required: true, message: t('app.haoligo.equipment.documents.spotCheckPlanPickerRequired') }]
+                      : undefined
                   }
                   allowClear
                   disabled={detailMode || editId != null}

@@ -47,7 +47,10 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     merge_line_warehouse_fields,
     mold_warehouse_snapshot_by_codes,
 )
-from apps.haoligo.api._mold_sheet_audit import assert_pending_for_audit as assert_pending_for_sheet_audit
+from apps.haoligo.api._mold_sheet_audit import (
+    assert_pending_for_audit as assert_pending_for_sheet_audit,
+    load_sheet_row_for_audit,
+)
 from apps.haoligo.api._mold_sheet_audit import assert_approved_for_revoke as assert_approved_for_sheet_revoke
 from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
 from apps.haoligo.authorization.workflow_permissions import OUTSOURCE_COMPLETE_CREATE_PERMISSIONS
@@ -807,22 +810,28 @@ async def approve_outsource_maintenance_complete_sheet(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
 ):
+    preview = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
+    if not preview:
+        await _not_found()
+    await assert_outsource_row_visible(
+        preview, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
+    )
+    codes: list[str] = []
+    async with in_transaction():
+        row = await load_sheet_row_for_audit(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id, row_id)
+        assert_pending_for_sheet_audit(row)
+        row.sheet_status = OUTSOURCE_MAINTENANCE_COMPLETE_APPROVED_STATUS
+        row.audited_at = timezone.now()
+        row.audited_by_user_id = user.id
+        await row.save()
+        await apply_warehouses_on_outsource_complete_approved(tenant_id, row)
+        await apply_upkeep_clear_from_outsource_complete_sheet_on_approve(tenant_id, row)
+        codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
+        for mc in codes:
+            await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_outsource_row_visible(
-        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
-    )
-    assert_pending_for_sheet_audit(row)
-    row.sheet_status = OUTSOURCE_MAINTENANCE_COMPLETE_APPROVED_STATUS
-    row.audited_at = timezone.now()
-    row.audited_by_user_id = user.id
-    await row.save()
-    await apply_warehouses_on_outsource_complete_approved(tenant_id, row)
-    await apply_upkeep_clear_from_outsource_complete_sheet_on_approve(tenant_id, row)
-    codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
-    for mc in codes:
-        await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
     return await _serialize(row)
 
 

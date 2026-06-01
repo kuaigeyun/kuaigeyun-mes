@@ -31,6 +31,7 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_PENDING_VALUES
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
@@ -816,6 +817,7 @@ class QuotationService:
         tenant_id: int,
         quotation_id: int,
         include_items: bool = True,
+        current_user: Optional[User] = None,
     ) -> QuotationResponse:
         """获取报价单详情"""
         quotation = await Quotation.get_or_none(
@@ -823,6 +825,13 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                quotation,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:quotation",
+            )
 
         items = None
         if include_items:
@@ -849,45 +858,15 @@ class QuotationService:
 
     @staticmethod
     async def _apply_quotation_list_scope(query, tenant_id: int, current_user: Optional[User], list_scope: Optional[str] = None):
-        """按 list_scope 过滤：all / mine / department（匹配 salesman_id 或 created_by）"""
-        from tortoise.expressions import Q
-
+        """统一按角色数据策略过滤报价列表。"""
         if not current_user:
             return query
-
-        uid = current_user.id
-
-        def mine_filter(q):
-            return q.filter(Q(salesman_id=uid) | Q(created_by=uid))
-
-        async def department_filter(q):
-            dept_id = getattr(current_user, "department_id", None)
-            if not dept_id:
-                return mine_filter(q)
-            user_ids = await User.filter(
-                tenant_id=tenant_id,
-                department_id=dept_id,
-                deleted_at__isnull=True,
-            ).values_list("id", flat=True)
-            ids = list(user_ids) if user_ids else [uid]
-            return q.filter(Q(salesman_id__in=ids) | Q(created_by__in=ids))
-
-        scope = (list_scope or "").strip().lower()
-        if not scope:
-            if current_user.is_regular_user():
-                return mine_filter(query)
-            return query
-        if scope == "all":
-            if current_user.is_regular_user():
-                return mine_filter(query)
-            return query
-        if scope == "mine":
-            return mine_filter(query)
-        if scope == "department":
-            return await department_filter(query)
-        if current_user.is_regular_user():
-            return mine_filter(query)
-        return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:quotation",
+        )
 
     async def list_quotations(
         self,
@@ -965,6 +944,7 @@ class QuotationService:
         quotation_id: int,
         quotation_data: QuotationUpdate,
         updated_by: int,
+        current_user: Optional[User] = None,
     ) -> QuotationResponse:
         """更新报价单"""
         quotation = await Quotation.get_or_none(
@@ -972,6 +952,13 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                quotation,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:quotation",
+            )
         if quotation.status != "草稿":
             raise BusinessLogicError(
                 f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
@@ -1227,6 +1214,7 @@ class QuotationService:
         self,
         tenant_id: int,
         quotation_id: int,
+        current_user: Optional[User] = None,
     ) -> None:
         """删除报价单（软删除）。存在有效下游销售订单时禁止删除；下游已删则允许删除。"""
         quotation = await Quotation.get_or_none(
@@ -1234,6 +1222,13 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                quotation,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:quotation",
+            )
         if quotation.sales_order_id is not None:
             so = await SalesOrder.get_or_none(
                 tenant_id=tenant_id,

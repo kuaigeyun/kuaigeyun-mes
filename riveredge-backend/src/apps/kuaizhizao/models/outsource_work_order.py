@@ -72,6 +72,8 @@ class OutsourceWorkOrder(BaseModel):
             ("planned_start_date",),
             ("planned_end_date",),
             ("created_at",),
+            ("work_order_group_id",),
+            ("demand_item_id",),
         ]
         unique_together = [("tenant_id", "code")]
 
@@ -126,6 +128,17 @@ class OutsourceWorkOrder(BaseModel):
     
     # 发料信息
     issued_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已发料数量（原材料）")
+
+    # 工单组
+    work_order_group_id = fields.IntField(null=True, description="所属工单组 ID")
+    bom_parent_work_order_id = fields.IntField(null=True, description="BOM 上级生产工单 ID")
+    group_role = fields.CharField(max_length=30, null=True, description="组内角色 outsource_component")
+    demand_item_id = fields.IntField(null=True, description="触发该委外工单的需求行 ID")
+    supply_mode = fields.CharField(
+        max_length=20,
+        default="stocked",
+        description="供应模式 stocked/direct",
+    )
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")

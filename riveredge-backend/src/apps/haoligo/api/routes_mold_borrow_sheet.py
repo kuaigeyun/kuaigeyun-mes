@@ -20,6 +20,7 @@ from apps.haoligo.api._mold_ledger_sync import (
 )
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api._source_sheet_delete_guard import assert_no_return_sheets_for_borrow_sheet
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
@@ -531,6 +532,7 @@ async def delete_borrow_sheet(
     row = await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    await assert_no_return_sheets_for_borrow_sheet(tenant_id, row)
     mcode = row.mold_code.strip()
     async with in_transaction():
         row.deleted_at = timezone.now()

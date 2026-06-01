@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTT
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
@@ -23,7 +24,10 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 )
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Requisition Management"])
+router = APIRouter(
+    tags=["App · Kuaige Zhizao · Purchase Requisition Management"],
+    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-requisition"))],
+)
 
 
 def _http_exception_with_trace(

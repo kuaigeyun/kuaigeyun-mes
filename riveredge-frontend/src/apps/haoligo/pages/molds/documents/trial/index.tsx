@@ -43,6 +43,7 @@ import {
   EyeOutlined,
   RollbackOutlined,
   SendOutlined,
+  CheckCircleOutlined,
   CodeSandboxOutlined,
   PlusOutlined,
   ShoppingOutlined,
@@ -68,6 +69,7 @@ import {
   createMoldTrialSheet,
   deleteMoldTrialSheet,
   getMoldTrialDatasetBinding,
+  getMoldTrialIncompleteMolds,
   getMoldTrialSheet,
   getNextMoldTrialTimes,
   previewTrialRepairNotifyUsers,
@@ -78,6 +80,8 @@ import {
   putMoldTrialDatasetBinding,
   rejectMoldTrialSheet,
   dispatchMoldTrialSheet,
+  getMoldTrialViewerContext,
+  markMoldTrialSheetAdjustmentComplete,
   recallMoldTrialSheet,
   recallMoldTrialSheetAndRetrial,
   revokeMoldTrialSheetApproval,
@@ -209,6 +213,7 @@ async function findMoldByCode(moldCode: string): Promise<MoldRow | undefined> {
 const TRIAL_FAILURE_PENDING = '待处理';
 const TRIAL_FAILURE_REPAIR = '立即送修';
 const TRIAL_FAILURE_DISPATCHED = '已发出';
+const TRIAL_FAILURE_ADJUSTMENT_DONE = '调整完成';
 const TRIAL_FAILURE_RECALLED = '已收回';
 
 const WORKFLOW_PHASE_TRIAL = '试模';
@@ -266,16 +271,38 @@ function renderFailureHandlingCell(value: string | null | undefined): React.Reac
   const color =
     s === TRIAL_FAILURE_DISPATCHED
       ? 'processing'
-      : s === TRIAL_FAILURE_RECALLED
-        ? 'default'
-        : s === TRIAL_FAILURE_REPAIR
-          ? 'warning'
-          : undefined;
+      : s === TRIAL_FAILURE_ADJUSTMENT_DONE
+        ? 'success'
+        : s === TRIAL_FAILURE_RECALLED
+          ? 'default'
+          : s === TRIAL_FAILURE_REPAIR
+            ? 'warning'
+            : undefined;
   return <Tag color={color}>{s}</Tag>;
 }
 
 function isTrialSheetHandlingClosed(record: MoldTrialSheetRow): boolean {
   return (record.failure_handling || '').trim() === TRIAL_FAILURE_RECALLED;
+}
+
+const TRIAL_FAILURE_IN_PROGRESS = [
+  TRIAL_FAILURE_PENDING,
+  TRIAL_FAILURE_REPAIR,
+  TRIAL_FAILURE_DISPATCHED,
+  TRIAL_FAILURE_ADJUSTMENT_DONE,
+] as const;
+
+function isTrialFailureFlowInProgress(record: MoldTrialSheetRow): boolean {
+  const fh = (record.failure_handling || '').trim();
+  return TRIAL_FAILURE_IN_PROGRESS.includes(fh as (typeof TRIAL_FAILURE_IN_PROGRESS)[number]);
+}
+
+/** 列表展示：送修流程进行中时不显示「已结案」 */
+function displayWorkflowPhaseLabel(record: MoldTrialSheetRow): string {
+  if (isMoldSheetApproved(record.sheet_status) && isTrialFailureFlowInProgress(record)) {
+    return '送修处理中';
+  }
+  return sheetWorkflowPhase(record);
 }
 
 function canDispatchTrialSheet(record: MoldTrialSheetRow): boolean {
@@ -286,7 +313,7 @@ function canDispatchTrialSheet(record: MoldTrialSheetRow): boolean {
   );
 }
 
-function canRecallTrialSheet(record: MoldTrialSheetRow): boolean {
+function canMarkAdjustmentComplete(record: MoldTrialSheetRow): boolean {
   const fh = (record.failure_handling || '').trim();
   const unqualified =
     isProductionTrialUnqualified(record) ||
@@ -298,9 +325,21 @@ function canRecallTrialSheet(record: MoldTrialSheetRow): boolean {
   );
 }
 
+function canConfirmRecallTrialSheet(record: MoldTrialSheetRow): boolean {
+  const fh = (record.failure_handling || '').trim();
+  const unqualified =
+    isProductionTrialUnqualified(record) ||
+    (record.trial_result === '不合格' && !record.production_trial_result);
+  return unqualified && fh === TRIAL_FAILURE_ADJUSTMENT_DONE && isMoldSheetApproved(record.sheet_status);
+}
+
 function recallFromWarehouseLabel(record: MoldTrialSheetRow | null): string {
   if (!record) return '当前所在仓库（供应商侧）';
-  return (record.failure_handling || '').trim() === TRIAL_FAILURE_REPAIR
+  const fh = (record.failure_handling || '').trim();
+  if (fh === TRIAL_FAILURE_ADJUSTMENT_DONE) {
+    return '当前所在仓库（外协侧，待本公司到厂收回）';
+  }
+  return fh === TRIAL_FAILURE_REPAIR
     ? '送修仓库（当前所在，供应商侧）'
     : '发出仓库（当前所在，供应商侧）';
 }
@@ -594,6 +633,8 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
   const moldCodeWatched = Form.useWatch('mold_code', form);
   const purchaseOrderNoWatched = Form.useWatch('purchase_order_no', form);
   const [trialTimes, setTrialTimes] = useState<number | null>(null);
+  const [canCreate, setCanCreate] = useState(true);
+  const [blockingSheetNo, setBlockingSheetNo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [seedMc, seedPo] = (initialKey ?? '').split('|');
@@ -601,6 +642,8 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
   useEffect(() => {
     if (!active) {
       setTrialTimes(null);
+      setCanCreate(true);
+      setBlockingSheetNo(null);
       setLoading(false);
       return;
     }
@@ -610,6 +653,8 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
     ).trim();
     if (!mc && !po) {
       setTrialTimes(null);
+      setCanCreate(true);
+      setBlockingSheetNo(null);
       setLoading(false);
       return;
     }
@@ -620,10 +665,18 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
       purchase_order_no: po || undefined,
     })
       .then((res) => {
-        if (!cancelled) setTrialTimes(res.trial_times);
+        if (!cancelled) {
+          setTrialTimes(res.trial_times);
+          setCanCreate(res.can_create !== false);
+          setBlockingSheetNo(res.blocking_sheet_no?.trim() || null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setTrialTimes(null);
+        if (!cancelled) {
+          setTrialTimes(null);
+          setCanCreate(true);
+          setBlockingSheetNo(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -640,31 +693,47 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
   if (!mc && !po) return null;
 
   return (
-    <Col span={12}>
-      <Form.Item label="试模次数" style={{ marginBottom: 0 }}>
-        {loading ? (
-          <Typography.Text type="secondary">计算中…</Typography.Text>
-        ) : trialTimes != null ? (
-          <Typography.Text>
-            第{' '}
-            <span
-              style={{
-                fontSize: token.fontSizeHeading3,
-                color: token.colorPrimary,
-                fontWeight: token.fontWeightStrong,
-                lineHeight: 1.2,
-              }}
-            >
-              {trialTimes}
-            </span>
-            {' '}
-            次试模
-          </Typography.Text>
-        ) : (
-          <Typography.Text type="secondary">—</Typography.Text>
-        )}
-      </Form.Item>
-    </Col>
+    <>
+      <Col span={12}>
+        <Form.Item label="试模次数" style={{ marginBottom: 0 }}>
+          {loading ? (
+            <Typography.Text type="secondary">计算中…</Typography.Text>
+          ) : trialTimes != null ? (
+            <Typography.Text>
+              第{' '}
+              <span
+                style={{
+                  fontSize: token.fontSizeHeading3,
+                  color: canCreate ? token.colorPrimary : token.colorError,
+                  fontWeight: token.fontWeightStrong,
+                  lineHeight: 1.2,
+                }}
+              >
+                {trialTimes}
+              </span>
+              {' '}
+              次试模
+            </Typography.Text>
+          ) : (
+            <Typography.Text type="secondary">—</Typography.Text>
+          )}
+        </Form.Item>
+      </Col>
+      {!loading && !canCreate ? (
+        <Col span={24}>
+          <Alert
+            type="error"
+            showIcon
+            message="当前不可新建试模单"
+            description={
+              blockingSheetNo
+                ? `该模具/订单仍有未完结的试模流程（试模单 ${blockingSheetNo}），请先完成试模/试产及发出收回等环节。`
+                : '该模具/订单仍有未完结的试模流程，请先完成当前试模流程后再新建。'
+            }
+          />
+        </Col>
+      ) : null}
+    </>
   );
 };
 
@@ -722,6 +791,8 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [bindingModalBusy, setBindingModalBusy] = useState(false);
   const [bindingTestResult, setBindingTestResult] = useState<string | null>(null);
   const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
+  const [isExternalPartner, setIsExternalPartner] = useState(false);
+  const [adjustmentSubmittingId, setAdjustmentSubmittingId] = useState<number | null>(null);
   const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
   const [poPickerOpen, setPoPickerOpen] = useState(false);
   const [poPickerLoading, setPoPickerLoading] = useState(false);
@@ -737,6 +808,8 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [moldPickerLoading, setMoldPickerLoading] = useState(false);
   const [moldKw, setMoldKw] = useState('');
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
+  /** 仍有未完结试模流程的模具代号 → 阻塞试模单单号 */
+  const [trialBlockedByMoldCode, setTrialBlockedByMoldCode] = useState<Map<string, string>>(new Map());
   /** 从待启用模具创建时跳过采购订单号必填 */
   const [skipPurchaseOrder, setSkipPurchaseOrder] = useState(false);
   const canReadMoldLedger = useMemo(
@@ -803,6 +876,12 @@ const MoldTrialSheetsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    void getMoldTrialViewerContext()
+      .then((ctx) => setIsExternalPartner(Boolean(ctx.is_external_partner)))
+      .catch(() => setIsExternalPartner(false));
   }, []);
 
   const canCreateFromPo = useMemo(() => {
@@ -901,10 +980,27 @@ const MoldTrialSheetsPage: React.FC = () => {
     setPoPickerSelectedRow(null);
   }, [datasetBinding, poPickerSelectedRow, messageApi]);
 
+  const loadTrialBlockedMoldCodes = useCallback(async () => {
+    try {
+      const res = await getMoldTrialIncompleteMolds();
+      const m = new Map<string, string>();
+      for (const it of res.items ?? []) {
+        const mc = String(it.mold_code ?? '').trim();
+        if (mc) m.set(mc, String(it.blocking_sheet_no ?? '').trim());
+      }
+      setTrialBlockedByMoldCode(m);
+    } catch {
+      setTrialBlockedByMoldCode(new Map());
+    }
+  }, []);
+
   const loadPendingEnableMolds = useCallback(async () => {
     setMoldPickerLoading(true);
     try {
-      const res = await listMolds({ limit: 200, skip: 0, status: '待启用' });
+      const [res] = await Promise.all([
+        listMolds({ limit: 200, skip: 0, status: '待启用' }),
+        loadTrialBlockedMoldCodes(),
+      ]);
       setMoldRows(res.items ?? []);
     } catch {
       setMoldRows([]);
@@ -912,7 +1008,19 @@ const MoldTrialSheetsPage: React.FC = () => {
     } finally {
       setMoldPickerLoading(false);
     }
-  }, [messageApi]);
+  }, [messageApi, loadTrialBlockedMoldCodes]);
+
+  const trialBlockedMessage = useCallback((moldCode: string, sheetNo?: string) => {
+    const sn = (sheetNo || '').trim();
+    return sn
+      ? `模具「${moldCode}」仍有未完结的试模流程（试模单 ${sn}），不可新建`
+      : `模具「${moldCode}」仍有未完结的试模流程，不可新建`;
+  }, []);
+
+  const isMoldBlockedForNewTrial = useCallback(
+    (moldCode: string) => trialBlockedByMoldCode.has(moldCode.trim()),
+    [trialBlockedByMoldCode],
+  );
 
   const handleOpenMoldPicker = useCallback(() => {
     setMoldKw('');
@@ -1065,7 +1173,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     setRecallSubmitting(true);
     try {
       await recallMoldTrialSheet(recallRecord.id, { target_warehouse_id: recallTargetWhId });
-      messageApi.success('已收回');
+      messageApi.success('已确认收回');
       setRecallModalOpen(false);
       bumpMoldLedgerTableCache();
       actionRef.current?.reload();
@@ -1075,6 +1183,22 @@ const MoldTrialSheetsPage: React.FC = () => {
       setRecallSubmitting(false);
     }
   }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
+
+  const handleMarkAdjustmentComplete = useCallback(
+    async (record: MoldTrialSheetRow) => {
+      setAdjustmentSubmittingId(record.id);
+      try {
+        await markMoldTrialSheetAdjustmentComplete(record.id);
+        messageApi.success('已确认调整完成，待本公司到厂后确认收回');
+        actionRef.current?.reload();
+      } catch (e) {
+        messageApi.error((e as Error).message || '操作失败');
+      } finally {
+        setAdjustmentSubmittingId(null);
+      }
+    },
+    [messageApi],
+  );
 
   const applyDefaultRepairWarehouseForSupplier = useCallback(
     (supplierName: string) => {
@@ -1169,7 +1293,23 @@ const MoldTrialSheetsPage: React.FC = () => {
   );
 
   const handleUsePendingMold = useCallback(
-    (row: MoldRow) => {
+    async (row: MoldRow) => {
+      const mc = row.mold_code.trim();
+      const blockedSn = trialBlockedByMoldCode.get(mc);
+      if (blockedSn !== undefined) {
+        messageApi.error(trialBlockedMessage(mc, blockedSn));
+        return;
+      }
+      try {
+        const preview = await getNextMoldTrialTimes({ mold_code: mc });
+        if (!preview.can_create) {
+          messageApi.error(trialBlockedMessage(mc, preview.blocking_sheet_no ?? undefined));
+          return;
+        }
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法校验试模流程状态');
+        return;
+      }
       setIsDetailView(false);
       setIsEdit(false);
       setEditId(null);
@@ -1193,7 +1333,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       setModalVisible(true);
       messageApi.success(`已选择模具 ${row.mold_code}`);
     },
-    [messageApi],
+    [messageApi, trialBlockedByMoldCode, trialBlockedMessage],
   );
 
   const filteredPendingMolds = useMemo(() => {
@@ -1625,7 +1765,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         const prodUserRaw = values.production_trial_user_id;
         const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
         if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
-          messageApi.warning('填写试产结果时请选择试产人员');
+          messageApi.warning('填写试产结果时请选择试产检验');
           throw new Error('validation');
         }
         if (values.production_trial_result === '不合格') {
@@ -1654,7 +1794,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       const prodUserRaw = values.production_trial_user_id;
       const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
       if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
-        messageApi.warning('请选择试产人员');
+        messageApi.warning('请选择试产检验');
         throw new Error('validation');
       }
       if (!values.production_trial_result) {
@@ -1676,6 +1816,25 @@ const MoldTrialSheetsPage: React.FC = () => {
             throw new Error('validation');
           }
         }
+      }
+    }
+    if (!isEdit && (mc || po)) {
+      try {
+        const preview = await getNextMoldTrialTimes({
+          mold_code: mc || undefined,
+          purchase_order_no: po || undefined,
+        });
+        if (!preview.can_create) {
+          const sn = preview.blocking_sheet_no?.trim();
+          messageApi.error(
+            sn
+              ? `该模具/订单仍有未完结的试模流程（试模单 ${sn}），不可新建`
+              : '该模具/订单仍有未完结的试模流程，不可新建',
+          );
+          throw new Error('validation');
+        }
+      } catch (e) {
+        if ((e as Error).message === 'validation') throw e;
       }
     }
     setFormLoading(true);
@@ -2039,7 +2198,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       render: (_, r) => {
         const show =
           isProductionTrialUnqualified(r) ||
-          (r.trial_result === '不合格' && sheetWorkflowPhase(r) === WORKFLOW_PHASE_CLOSED && !r.production_trial_result);
+          (r.trial_result === '不合格' && Boolean((r.failure_handling || '').trim()));
         return show ? renderFailureHandlingCell(r.failure_handling) : '—';
       },
     },
@@ -2050,9 +2209,15 @@ const MoldTrialSheetsPage: React.FC = () => {
       width: 128,
       hideInSearch: true,
       render: (_, r) => {
-        const p = sheetWorkflowPhase(r);
+        const p = displayWorkflowPhaseLabel(r);
         const color =
-          p === WORKFLOW_PHASE_PENDING_PRODUCTION ? 'processing' : p === WORKFLOW_PHASE_CLOSED ? 'default' : 'blue';
+          p === '送修处理中'
+            ? 'warning'
+            : p === WORKFLOW_PHASE_PENDING_PRODUCTION
+              ? 'processing'
+              : p === WORKFLOW_PHASE_CLOSED
+                ? 'default'
+                : 'blue';
         return <Tag color={color}>{p}</Tag>;
       },
     },
@@ -2140,7 +2305,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             revokeOnly: isTrialSheetHandlingClosed(record),
           }),
         ];
-        if (canUpdateTrial && canDispatchTrialSheet(record)) {
+        if (canUpdateTrial && !isExternalPartner && canDispatchTrialSheet(record)) {
           actions.push(
             <Button
               key="dispatch"
@@ -2153,7 +2318,30 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>,
           );
         }
-        if (canUpdateTrial && canRecallTrialSheet(record)) {
+        if (canUpdateTrial && canMarkAdjustmentComplete(record)) {
+          actions.push(
+            <Button
+              key="adjustment-done"
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              loading={adjustmentSubmittingId === record.id}
+              onClick={() => {
+                Modal.confirm({
+                  title: '确认调整完成？',
+                  content:
+                    '表示维修/调整已完成（立即送修或已发出后），模具仍在外部仓；本公司到厂后由本公司人员确认收回。',
+                  okText: '确认',
+                  cancelText: '取消',
+                  onOk: () => handleMarkAdjustmentComplete(record),
+                });
+              }}
+            >
+              调整完成
+            </Button>,
+          );
+        }
+        if (canUpdateTrial && !isExternalPartner && canConfirmRecallTrialSheet(record)) {
           actions.push(
             <Button
               key="recall"
@@ -2162,7 +2350,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               icon={<RollbackOutlined />}
               onClick={() => void openRecallModal(record)}
             >
-              收回
+              确认收回
             </Button>,
           );
         }
@@ -2347,7 +2535,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                   type="info"
                   showIcon
                   message={`流程阶段：${formWorkflowPhase}`}
-                  description="试模已合格，请由试产人员上传试产检验附件、填写试产结果；试产合格后审核通过将把模具台账状态更新为「待用」。"
+                  description="试模已合格，请完成试产检验（上传试产检验附件、填写试产结果）；试产合格后审核通过将把模具台账状态更新为「待用」。"
                 />
               </Col>
               {lockedTrialMoldSummaryCols(
@@ -2450,8 +2638,8 @@ const MoldTrialSheetsPage: React.FC = () => {
                       <Col span={12}>
                         <UniUserIdSelect
                           name="production_trial_user_id"
-                          label="试产人员"
-                          placeholder="请选择试产人员"
+                          label="试产检验"
+                          placeholder="请选择试产检验"
                           readonly={isDetailView}
                           disabled={isDetailView}
                           presetUsers={productionTrialUserPresets}
@@ -2580,7 +2768,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                   repairOptions={repairOptions}
                                   notifyUserId={notifyUserId}
                                   unqualifiedLabel="试产不合格"
-                                  notifyPersonLabel="试产人员"
+                                  notifyPersonLabel="试产检验"
                                   onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
                                 />
                               ) : null}
@@ -2631,8 +2819,8 @@ const MoldTrialSheetsPage: React.FC = () => {
               <Col span={12}>
                 <UniUserIdSelect
                   name="production_trial_user_id"
-                  label="试产人员"
-                  placeholder="请选择试产人员"
+                  label="试产检验"
+                  placeholder="请选择试产检验"
                   required
                   readonly={isDetailView}
                   disabled={isDetailView}
@@ -2750,7 +2938,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                 : null
                           }
                           unqualifiedLabel="试产不合格"
-                          notifyPersonLabel="试产人员"
+                          notifyPersonLabel="试产检验"
                           onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
                         />
                       ) : null}
@@ -2852,7 +3040,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="试模单收回"
+        title="试模单确认收回"
         open={recallModalOpen}
         onCancel={() => setRecallModalOpen(false)}
         width={MODAL_CONFIG.SMALL_WIDTH}
@@ -2904,7 +3092,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               </Form.Item>
             </Form>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              收回后本单处理方式变为「已收回」并结束；「收回并重新试模」会另生成下一次试模单（如第 2 次试模）供后续发出/收回。
+              外协已确认调整完成后，模具到厂时选择厂内目标仓库并确认收回；本单变为「已收回」并结束。「收回并重新试模」会另生成下一次试模单。
             </Typography.Text>
           </Space>
         )}
@@ -3127,7 +3315,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         destroyOnHidden
       >
         <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)' }}>
-          选择状态为「待启用」的模具，将自动带出台账中的购买厂商、所在仓库等信息。
+          选择状态为「待启用」的模具，将自动带出台账中的购买厂商、所在仓库等信息。仍有未完结试模流程（含送修处理中）的模具不可选用。
         </p>
         <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Input placeholder="筛选模具代号/名称" value={moldKw} onChange={(e) => setMoldKw(e.target.value)} allowClear />
@@ -3139,10 +3327,21 @@ const MoldTrialSheetsPage: React.FC = () => {
             scroll={{ y: 360 }}
             dataSource={filteredPendingMolds}
             locale={{ emptyText: '暂无待启用模具' }}
-            onRow={(record) => ({
-              onClick: () => handleUsePendingMold(record),
-              style: { cursor: 'pointer' },
-            })}
+            onRow={(record) => {
+              const blocked = isMoldBlockedForNewTrial(record.mold_code);
+              return {
+                onClick: () => {
+                  if (blocked) {
+                    messageApi.error(
+                      trialBlockedMessage(record.mold_code, trialBlockedByMoldCode.get(record.mold_code.trim())),
+                    );
+                    return;
+                  }
+                  void handleUsePendingMold(record);
+                },
+                style: { cursor: blocked ? 'not-allowed' : 'pointer', opacity: blocked ? 0.55 : 1 },
+              };
+            }}
             columns={[
               { title: '模具代号', dataIndex: 'mold_code', width: 120 },
               { title: '模具名称', dataIndex: 'name', ellipsis: true, width: 140 },
@@ -3160,12 +3359,34 @@ const MoldTrialSheetsPage: React.FC = () => {
                 ellipsis: true,
                 render: (_, r) => ledgerWarehouseName(r) || '—',
               },
-              { title: '状态', dataIndex: 'status', width: 88 },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                width: 96,
+                render: (_, r) => {
+                  if (isMoldBlockedForNewTrial(r.mold_code)) {
+                    return <Tag color="warning">送修中</Tag>;
+                  }
+                  const st = (r.status || '').trim();
+                  return st ? <Tag>{st}</Tag> : '—';
+                },
+              },
               {
                 title: '操作',
                 key: 'op',
-                width: 88,
-                render: () => <Typography.Link>选用</Typography.Link>,
+                width: 120,
+                render: (_, r) => {
+                  const blocked = isMoldBlockedForNewTrial(r.mold_code);
+                  const sn = trialBlockedByMoldCode.get(r.mold_code.trim());
+                  if (blocked) {
+                    return (
+                      <Tooltip title={trialBlockedMessage(r.mold_code, sn)}>
+                        <Typography.Text type="secondary">不可选用</Typography.Text>
+                      </Tooltip>
+                    );
+                  }
+                  return <Typography.Link>选用</Typography.Link>;
+                },
               },
             ]}
           />

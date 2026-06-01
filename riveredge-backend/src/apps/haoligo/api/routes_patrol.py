@@ -23,11 +23,16 @@ from apps.haoligo.services.spot_check_side_effects import (
     normalize_report_user_ids,
     validate_report_notify_users,
 )
+from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/patrol/hazard-reports", tags=["App · HaoliGO · 巡查"])
+router = APIRouter(
+    prefix="/patrol/hazard-reports",
+    tags=["App · HaoliGO · 巡查"],
+    dependencies=[Depends(require_module_access("haoligo", "patrol-hazards"))],
+)
 
 
 class HazardOut(BaseModel):

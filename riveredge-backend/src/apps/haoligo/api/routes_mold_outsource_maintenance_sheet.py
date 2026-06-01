@@ -21,6 +21,7 @@ from apps.haoligo.api._mold_sheet_audit import (
     assert_pending_for_audit,
     assert_sheet_mutation_allowed,
     effective_sheet_status,
+    load_sheet_row_for_audit,
 )
 from apps.haoligo.constants.mold_sheet_audit import (
     SHEET_AUDIT_STATUS_SET,
@@ -30,6 +31,7 @@ from apps.haoligo.constants.mold_sheet_audit import (
 )
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
+from apps.haoligo.api._source_sheet_delete_guard import assert_no_active_child_sheet_by_fk
 from apps.haoligo.api.routes_mold_maintenance_sheet import (
     _resolve_applicant_only,
     _validate_leaf_department,
@@ -506,24 +508,29 @@ async def approve_outsource_maintenance_sheet(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
 ):
+    preview = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
+    if not preview:
+        await _not_found()
+    await assert_outsource_row_visible(
+        preview, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
+    )
+    async with in_transaction():
+        row = await load_sheet_row_for_audit(HaoligoMoldOutsourceMaintenanceSheet, tenant_id, row_id)
+        assert_pending_for_audit(row)
+        row.sheet_status = SHEET_STATUS_APPROVED
+        row.audited_at = timezone.now()
+        row.audited_by_user_id = user.id
+        await row.save()
+        await apply_warehouses_on_outsource_maintenance_approved(tenant_id, row)
+        await apply_mold_status_on_maintenance_sheet_created(
+            tenant_id,
+            is_outsource=True,
+            service_type=row.service_type,
+            stored_line_items=row.line_items or [],
+        )
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_outsource_row_visible(
-        row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
-    )
-    assert_pending_for_audit(row)
-    row.sheet_status = SHEET_STATUS_APPROVED
-    row.audited_at = timezone.now()
-    row.audited_by_user_id = user.id
-    await row.save()
-    await apply_warehouses_on_outsource_maintenance_approved(tenant_id, row)
-    await apply_mold_status_on_maintenance_sheet_created(
-        tenant_id,
-        is_outsource=True,
-        service_type=row.service_type,
-        stored_line_items=row.line_items or [],
-    )
     await send_outsource_maintenance_approved_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
@@ -589,6 +596,14 @@ async def delete_outsource_maintenance_sheet(
         row, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
     assert_sheet_mutation_allowed(row)
+    await assert_no_active_child_sheet_by_fk(
+        tenant_id,
+        child_model=HaoligoMoldOutsourceMaintenanceCompleteSheet,
+        source_fk_field="source_outsource_maintenance_sheet_id",
+        source_id=row_id,
+        source_doc_label="外协维保单",
+        child_doc_label="外协维保完修单",
+    )
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     row.deleted_at = timezone.now()
     await row.save()

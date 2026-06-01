@@ -16,6 +16,7 @@ from apps.haoligo.constants.mold_warehouse import (
     MOLD_WAREHOUSE_TYPES,
 )
 from apps.haoligo.models.equipment import HaoligoWorkshop
+from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from apps.master_data.models.supplier import Supplier as MasterSupplier
 from core.api.deps.access import require_module_access
@@ -87,10 +88,21 @@ class MoldWarehouseCreate(BaseModel):
 
 
 class MoldWarehouseUpdate(BaseModel):
+    warehouse_code: Optional[str] = Field(None, max_length=64)
     warehouse_name: Optional[str] = Field(None, max_length=200)
     warehouse_type: Optional[WarehouseTypeLiteral] = None
     workshop_id: Optional[int] = Field(None, description="所属车间 ID")
     supplier_uuid: Optional[str] = Field(None, max_length=36)
+
+    @field_validator("warehouse_code", mode="before")
+    @classmethod
+    def strip_code(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            raise ValueError("仓库编号不能为空")
+        return s
 
     @field_validator("warehouse_name", mode="before")
     @classmethod
@@ -276,6 +288,17 @@ async def update_mold_warehouse(
     row = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    if body.warehouse_code is not None:
+        new_code = body.warehouse_code.strip()
+        old_code = (row.warehouse_code or "").strip()
+        if new_code != old_code:
+            dup = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(warehouse_code=new_code).first()
+            if dup and int(dup.id) != int(row.id):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="仓库编号已存在")
+            row.warehouse_code = new_code
+            await tenant_alive(HaoligoMold, tenant_id).filter(mold_warehouse_id=row.id).update(
+                mold_warehouse_code=new_code
+            )
     if body.warehouse_name is not None:
         row.warehouse_name = body.warehouse_name.strip()
     update_data = body.model_dump(exclude_unset=True)
