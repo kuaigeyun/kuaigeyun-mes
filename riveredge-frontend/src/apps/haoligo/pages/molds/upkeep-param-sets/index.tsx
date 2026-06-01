@@ -21,6 +21,7 @@ import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, EyeOu
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  DetailDrawerSection,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   ListPageTemplate,
@@ -545,17 +546,22 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={t('app.haoligo.molds.upkeepParamSets.detailTitle')}
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        record={detailRecord}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRecord(null);
+          setDetailLines([]);
+        }}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailRecord}
         columns={[
           { title: t('app.haoligo.molds.upkeepParamSets.colSetCode'), dataIndex: 'code' },
           { title: t('app.haoligo.molds.upkeepParamSets.colSetName'), dataIndex: 'name' },
         ]}
-        drawerProps={DRAWER_CONFIG}
-        extra={
+      >
+        <DetailDrawerSection title={t('app.haoligo.molds.upkeepParamSets.itemsTitle')}>
           <Table
             size="small"
-            loading={detailLoading}
             rowKey="id"
             dataSource={detailLines}
             pagination={false}
@@ -570,8 +576,8 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
               },
             ]}
           />
-        }
-      />
+        </DetailDrawerSection>
+      </DetailDrawerTemplate>
     </>
   );
 };

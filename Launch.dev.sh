@@ -54,7 +54,11 @@ get_listening_pids() {
 }
 
 backend_http_ready() {
-    curl -sf --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1
+    curl -sf --connect-timeout 1 --max-time 1 "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1
+}
+
+backend_port_ready() {
+    [ -n "$(get_listening_pids_raw "${BACKEND_PORT}")" ]
 }
 
 check_port() {
@@ -95,11 +99,12 @@ kill_pids() {
 
 kill_port() {
     local port=$1
+    local skip_uvicorn_tree_kill=${2:-0}
     local round=0
     local pids
 
     while [ "$round" -lt "$PORT_KILL_MAX_ROUNDS" ]; do
-        if [ "$port" = "${BACKEND_PORT}" ]; then
+        if [ "$port" = "${BACKEND_PORT}" ] && [ "$skip_uvicorn_tree_kill" != "1" ]; then
             kill_uvicorn_reload_tree "${BACKEND_PORT}"
         fi
         powershell_stop_port_listeners "$port"
@@ -195,7 +200,7 @@ cleanup_backend_processes() {
     fi
 
     kill_backend_by_command_line
-    kill_port "${BACKEND_PORT}" || {
+    kill_port "${BACKEND_PORT}" 1 || {
         log_error "8200 仍被占用。若 Cursor 里还有后台 uvicorn 终端，请手动关闭后重试。"
         return 1
     }
@@ -213,23 +218,40 @@ start_backend() {
 
     cd riveredge-backend
     PYTHONPATH="src" nohup uv run --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
-    echo $! > ../.logs/backend.pid
+    local backend_launcher_pid=$!
+    echo "${backend_launcher_pid}" > ../.logs/backend.pid
     cd ..
 
     local retries=0
+    local ready_mode=""
     while [ "$retries" -lt "$BACKEND_START_TIMEOUT" ]; do
-        backend_http_ready && break
+        if backend_http_ready; then
+            ready_mode="health"
+            break
+        fi
+        if backend_port_ready; then
+            ready_mode="port"
+            break
+        fi
+        if ! pid_is_alive "${backend_launcher_pid}"; then
+            log_error "后端进程已退出，请查看 .logs/backend.log"
+            return 1
+        fi
         sleep 1
         retries=$((retries + 1))
     done
-    if ! backend_http_ready; then
+    if [ -z "${ready_mode}" ]; then
         log_error "后端启动超时 (${BACKEND_START_TIMEOUT}s)，请查看 .logs/backend.log"
         return 1
     fi
 
     local listeners
     listeners="$(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' ')"
-    log_success "后端就绪! (监听 PID: ${listeners:-unknown})"
+    if [ "${ready_mode}" = "health" ]; then
+        log_success "后端就绪! (监听 PID: ${listeners:-unknown})"
+    else
+        log_success "后端已监听，健康检查将很快可用! (监听 PID: ${listeners:-unknown})"
+    fi
 }
 
 start_worker() {
