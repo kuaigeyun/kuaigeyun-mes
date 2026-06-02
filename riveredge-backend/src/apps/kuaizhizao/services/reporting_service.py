@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 
+from core.timezone_utils import is_future_datetime
+
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 from loguru import logger
@@ -452,15 +454,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if wh < 0:
                 raise ValidationError("报工工时不能为负数")
 
-            # 报工时间合法性：禁止未来时间（兼容时区 aware/naive）
+            # 报工时间合法性：禁止未来时间（统一 UTC 比较；naive 按业务时区解释）
             if getattr(reporting_data, "reported_at", None):
-                reported_at = reporting_data.reported_at
-                now_ref = (
-                    datetime.now(reported_at.tzinfo)
-                    if getattr(reported_at, "tzinfo", None) is not None
-                    else datetime.now()
-                )
-                if reported_at > now_ref:
+                if is_future_datetime(reporting_data.reported_at):
                     raise ValidationError("报工时间不能晚于当前时间")
 
             # 数量报工：累计完成不可超过工单计划 + 超报上限（存于工单工序行）
@@ -796,15 +792,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if record.status != 'pending':
                 raise ValidationError("只能审核待审核状态的报工记录")
 
-            # 审核前置校验：未来报工时间不允许通过审核（兼容时区 aware/naive）
+            # 审核前置校验：未来报工时间不允许通过审核（统一 UTC 比较）
             if getattr(record, "reported_at", None):
-                reported_at = record.reported_at
-                now_ref = (
-                    datetime.now(reported_at.tzinfo)
-                    if getattr(reported_at, "tzinfo", None) is not None
-                    else datetime.now()
-                )
-                if reported_at > now_ref:
+                if is_future_datetime(record.reported_at):
                     raise ValidationError("报工时间不能晚于当前时间")
 
             # 获取审核人信息
@@ -1785,13 +1775,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 if wh_corr < 0:
                     raise ValidationError("报工工时不能为负数")
             if "reported_at" in update_data and update_data.get("reported_at") is not None:
-                corrected_reported_at = update_data["reported_at"]
-                now_ref = (
-                    datetime.now(corrected_reported_at.tzinfo)
-                    if getattr(corrected_reported_at, "tzinfo", None) is not None
-                    else datetime.now()
-                )
-                if corrected_reported_at > now_ref:
+                if is_future_datetime(update_data["reported_at"]):
                     raise ValidationError("报工时间不能晚于当前时间")
 
             update_data['remarks'] = updated_remarks

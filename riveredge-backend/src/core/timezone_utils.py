@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 
@@ -38,4 +38,31 @@ def to_naive_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-__all__ = ["now", "now_utc", "today_str", "make_aware", "to_naive_utc"]
+def is_future_datetime(
+    dt: datetime,
+    *,
+    slack_seconds: int = 60,
+    naive_tz: str = "Asia/Shanghai",
+) -> bool:
+    """
+    判断 ``dt`` 是否明显晚于当前 UTC 时刻。
+
+    - aware：按瞬时 UTC 比较
+    - naive：按 ``naive_tz`` 解释（默认业务时区 Asia/Shanghai），避免 UTC 服务器将本地墙钟误判为未来
+    """
+    if dt.tzinfo is None:
+        aware = make_aware(dt, naive_tz)
+    else:
+        aware = dt
+    limit = now_utc() + timedelta(seconds=slack_seconds)
+    return aware.astimezone(timezone.utc) > limit
+
+
+__all__ = [
+    "now",
+    "now_utc",
+    "today_str",
+    "make_aware",
+    "to_naive_utc",
+    "is_future_datetime",
+]

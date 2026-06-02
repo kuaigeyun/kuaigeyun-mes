@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 
+from core.timezone_utils import is_future_datetime
+
 from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -767,13 +769,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             raise ValidationError("报工工时不能为负数")
 
         if reporting_data.reported_at:
-            reported_at = reporting_data.reported_at
-            now_ref = (
-                datetime.now(reported_at.tzinfo)
-                if getattr(reported_at, "tzinfo", None) is not None
-                else datetime.now()
-            )
-            if reported_at > now_ref:
+            if is_future_datetime(reporting_data.reported_at):
                 raise ValidationError("报工时间不能晚于当前时间")
 
         user_info = await self.get_user_info(reported_by)
