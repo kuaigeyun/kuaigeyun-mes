@@ -1,0 +1,306 @@
+/**
+ * @riveredge/hmi-ui 基础样式
+ * 在应用根节点添加 class="hmi-root" 后生效
+ */
+.hmi-root {
+  --hmi-left-w: 380px;
+  --hmi-right-w: 380px;
+  --hmi-gap: 20px;
+  --hmi-pad: 20px;
+  --hmi-safe-top: 16px;
+  --hmi-safe-right: 24px;
+  --hmi-safe-bottom: 24px;
+  --hmi-safe-left: 24px;
+  --hmi-btn-icon-size: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* —— 按钮 —— */
+.hmi-root .hmi-btn.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.hmi-root .hmi-btn.ant-btn .anticon {
+  font-size: var(--hmi-btn-icon-size);
+}
+
+.hmi-root .hmi-btn--default.ant-btn-default:disabled,
+.hmi-root .hmi-btn--default.ant-btn-default.ant-btn-disabled {
+  color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hmi-root .hmi-btn--primary.ant-btn-primary:disabled,
+.hmi-root .hmi-btn--primary.ant-btn-primary.ant-btn-disabled,
+.hmi-root .hmi-btn--success.ant-btn-primary:disabled,
+.hmi-root .hmi-btn--success.ant-btn-primary.ant-btn-disabled {
+  color: rgba(255, 255, 255, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  box-shadow: none !important;
+}
+
+.hmi-root .hmi-btn--icon.ant-btn {
+  min-width: 48px;
+  width: 48px;
+  padding-inline: 0;
+}
+
+.hmi-root .hmi-btn--header.ant-btn {
+  min-height: 48px;
+  min-width: 120px;
+}
+
+#premium-terminal-layout .header-extra-container .hmi-btn--header.ant-btn {
+  min-height: 48px !important;
+  height: auto !important;
+  padding: 0 20px !important;
+  font-size: 16px !important;
+}
+
+/* —— 输入 —— */
+.hmi-root .hmi-input--qty.ant-input {
+  min-height: 72px;
+  font-size: 28px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* —— 卡片 —— */
+.hmi-root .hmi-card.ant-card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.hmi-root .hmi-card .ant-card-head {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 52px;
+}
+
+.hmi-root .hmi-card--fill.ant-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hmi-root .hmi-card--fill .ant-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hmi-root .hmi-card .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* —— 空状态 —— */
+.hmi-root .hmi-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.hmi-root .hmi-empty .ant-empty-image {
+  opacity: 0.45;
+}
+
+.hmi-root .hmi-empty__text {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 18px;
+}
+
+/* —— 搜索框 —— */
+.hmi-root .hmi-search.ant-input-affix-wrapper {
+  min-height: 48px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.hmi-root .hmi-search.ant-input-affix-wrapper .ant-input {
+  font-size: 16px;
+  background: transparent;
+}
+
+.hmi-root .hmi-search.ant-input-affix-wrapper:hover,
+.hmi-root .hmi-search.ant-input-affix-wrapper-focused {
+  border-color: rgba(22, 119, 255, 0.55);
+}
+
+/* —— 列表项 —— */
+.hmi-root .hmi-list-item {
+  min-height: 76px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hmi-root .hmi-list-item--selected {
+  border-color: rgba(0, 200, 83, 0.5);
+}
+
+.hmi-root .hmi-list-item__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.hmi-root .hmi-list-item__subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 4px;
+}
+
+/* —— KPI 指标条 —— */
+.hmi-root .hmi-metrics-bar {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 2fr;
+  gap: 16px;
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  align-items: center;
+}
+
+.hmi-root .hmi-metrics-bar .ant-typography {
+  line-height: 1.2;
+}
+
+.hmi-root .hmi-metrics-bar .ant-progress-line {
+  margin-bottom: 0;
+}
+
+.hmi-root .hmi-metrics-bar .ant-progress-text {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+}
+
+.hmi-root .hmi-metrics-bar__label {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 14px;
+}
+
+.hmi-root .hmi-metrics-bar__text {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* —— 工作台三栏 —— */
+.hmi-root .hmi-workbench {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  margin: -8px -8px 0;
+}
+
+.hmi-root .hmi-workbench > *:not(.hmi-workbench__body) {
+  flex-shrink: 0;
+}
+
+.hmi-root .hmi-workbench__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--hmi-left-w) 1fr var(--hmi-right-w);
+  gap: var(--hmi-gap);
+  padding: var(--hmi-pad);
+  overflow: hidden;
+}
+
+.hmi-root .hmi-workbench__right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--hmi-gap);
+}
+
+.hmi-root .hmi-workbench__right > .hmi-card {
+  flex-shrink: 0;
+}
+
+.hmi-root .hmi-workbench__right > .hmi-card--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.hmi-root .hmi-op-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.hmi-root .hmi-qty-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.hmi-root .hmi-qty-grid .ant-form-item-label > label {
+  font-size: 18px;
+}
+
+/* —— 底部操作栏 —— */
+.hmi-root .hmi-action-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 24px;
+  background: linear-gradient(180deg, rgba(10, 31, 60, 0.98) 0%, rgba(0, 8, 20, 1) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hmi-root .hmi-action-bar__primary,
+.hmi-root .hmi-action-bar__secondary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+
+.hmi-root .hmi-kiosk-footer {
+  flex-shrink: 0;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border-top: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.hmi-root .hmi-kiosk-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hmi-root .hmi-kiosk-panel__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}

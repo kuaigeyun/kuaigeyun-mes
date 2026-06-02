@@ -1,0 +1,113 @@
+/**
+ * 工位客户端：安全边距 + 全屏模式 + 工位终端视觉增强
+ * 与 .hmi-root 同用
+ */
+.hmi-root.hmi-station #root {
+  padding: var(--hmi-safe-top) var(--hmi-safe-right) var(--hmi-safe-bottom) var(--hmi-safe-left);
+  background: #000814;
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+}
+
+.hmi-root.hmi-station #root > * {
+  height: 100%;
+  min-height: 0;
+}
+
+.hmi-root.hmi-station .premium-terminal-fullscreen-wrap {
+  padding: var(--hmi-safe-top) var(--hmi-safe-right) var(--hmi-safe-bottom) var(--hmi-safe-left);
+  box-sizing: border-box;
+}
+
+.hmi-root.hmi-station .premium-terminal-fullscreen-wrap > * {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+/* —— 工位终端：KPI 条 —— */
+.hmi-root.hmi-station .hmi-metrics-bar {
+  min-height: 64px;
+  padding: 12px 28px;
+  background: linear-gradient(
+    90deg,
+    rgba(22, 119, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    rgba(22, 119, 255, 0.1) 100%
+  );
+  border-top: 2px solid rgba(22, 119, 255, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hmi-root.hmi-station .hmi-metrics-bar__label {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.hmi-root.hmi-station .hmi-metrics-bar__value {
+  font-size: 34px !important;
+  font-weight: 700 !important;
+  line-height: 1.1 !important;
+}
+
+.hmi-root.hmi-station .hmi-metrics-bar__text {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.hmi-root.hmi-station .hmi-metrics-bar__progress .ant-progress-inner {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* —— 工位终端：三栏面板 —— */
+.hmi-root.hmi-station .hmi-kiosk-panel.ant-card {
+  border: 1px solid rgba(22, 119, 255, 0.22);
+  box-shadow:
+    0 0 32px rgba(22, 119, 255, 0.08),
+    0 4px 20px rgba(0, 0, 0, 0.28);
+}
+
+.hmi-root.hmi-station .hmi-kiosk-panel .ant-card-head {
+  background: linear-gradient(90deg, rgba(22, 119, 255, 0.12) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hmi-root.hmi-station .hmi-kiosk-panel .ant-card-head-title {
+  padding-left: 10px;
+  border-left: 3px solid rgba(22, 119, 255, 0.75);
+}
+
+/* —— 工位终端：工单列表 —— */
+.hmi-root.hmi-station .hmi-list-item--selected {
+  border-left: 4px solid #00c853;
+  box-shadow: inset 0 0 0 1px rgba(0, 200, 83, 0.28);
+}
+
+/* —— 工位终端：底部操作栏 —— */
+.hmi-root.hmi-station .hmi-action-bar {
+  min-height: 96px;
+  padding: 0 28px;
+  background: linear-gradient(180deg, rgba(8, 28, 56, 0.98) 0%, rgba(0, 6, 16, 1) 100%);
+  border-top: 2px solid rgba(22, 119, 255, 0.25);
+}
+
+.hmi-root.hmi-station .hmi-action-bar__secondary {
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  padding-left: 28px;
+  margin-left: 8px;
+}
+
+.hmi-root.hmi-station .hmi-btn--report-active.ant-btn-primary {
+  box-shadow:
+    0 4px 18px rgba(0, 200, 83, 0.45),
+    0 0 0 1px rgba(0, 200, 83, 0.35);
+}
+
+.hmi-root.hmi-station .hmi-empty__text {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.5);
+}
