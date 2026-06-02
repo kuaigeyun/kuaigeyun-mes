@@ -1204,7 +1204,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True,  # 只查询未删除的工单
             parent_work_order_id__isnull=True,  # 列表仅展示原工单；拆分工单挂在 children
         ).filter(
-            Q(group_role__isnull=True) | Q(group_role="root"),
+            Q(group_role__isnull=True)
+            | Q(group_role__in=["root", "component", "outsource_component"]),
         )
 
         # 添加筛选条件
@@ -1426,13 +1427,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         group_ids = list({wo.work_order_group_id for wo in work_orders if wo.work_order_group_id})
         group_code_map: dict[int, str] = {}
+        group_name_map: dict[int, str] = {}
         if group_ids:
             from apps.kuaizhizao.models.work_order_group import WorkOrderGroup
 
             groups = await WorkOrderGroup.filter(tenant_id=tenant_id, id__in=group_ids).only(
-                "id", "group_code"
+                "id", "group_code", "group_name"
             )
             group_code_map = {g.id: g.group_code for g in groups}
+            group_name_map = {
+                g.id: (g.group_name or "").strip()
+                for g in groups
+                if (g.group_name or "").strip()
+            }
 
         # 转换为响应格式
         result = []
@@ -1466,7 +1473,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         item_dict["sales_order_name"] = snap[1]
 
                 if wo.work_order_group_id:
-                    item_dict["group_code"] = group_code_map.get(wo.work_order_group_id)
+                    gid = wo.work_order_group_id
+                    item_dict["group_code"] = group_code_map.get(gid)
+                    if gid in group_name_map:
+                        item_dict["group_name"] = group_name_map[gid]
 
                 result_dicts.append(item_dict)
             except Exception as e:

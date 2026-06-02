@@ -17,6 +17,7 @@ from core.config.system_menu_config import LEGACY_SYSTEM_GROUP_ALIASES, SYSTEM_M
 from core.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
 from core.services.application.application_service import ApplicationService
+from core.config.menu_takeover import merge_menu_meta_for_sync
 from core.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
@@ -1225,7 +1226,7 @@ class MenuService:
                     existing_menu.is_active = _resolved
                 existing_menu.is_external = menu_is_external
                 existing_menu.external_url = menu_external_url
-                existing_menu.meta = menu_meta
+                existing_menu.meta = merge_menu_meta_for_sync(existing_menu.meta, menu_meta)
                 existing_menu.parent_id = parent_id
                 await existing_menu.save()
                 

@@ -30,11 +30,11 @@ class WorkOrderGroupResponse(BaseModel):
     uuid: str
     group_code: str
     group_name: Optional[str] = None
-    root_demand_item_id: int
+    root_demand_item_id: Optional[int] = None
     root_material_id: int
     root_material_code: str
     root_material_name: str
-    demand_computation_id: int
+    demand_computation_id: Optional[int] = None
     demand_id: Optional[int] = None
     sales_order_id: Optional[int] = None
     status: str

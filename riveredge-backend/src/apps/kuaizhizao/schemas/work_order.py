@@ -279,6 +279,7 @@ class WorkOrderListResponse(BaseModel):
     supplier_name: Optional[str] = Field(None, description="委外供应商（row_kind=outsource）")
     work_order_group_id: Optional[int] = Field(None, description="所属工单组 ID")
     group_code: Optional[str] = Field(None, description="工单组编码")
+    group_name: Optional[str] = Field(None, description="工单组名称")
     group_role: Optional[str] = Field(None, description="组内角色 root/component/outsource_component")
     bom_parent_work_order_id: Optional[int] = Field(None, description="BOM 上级工单 ID")
     supply_mode: Optional[str] = Field(None, description="供应模式 stocked/direct")
@@ -560,6 +561,84 @@ class WorkOrderMergeResponse(BaseModel):
     merged_work_order: WorkOrderResponse = Field(..., description="合并后的工单")
     original_work_order_ids: list[int] = Field(..., description="原工单ID列表")
     original_work_order_codes: list[str] = Field(..., description="原工单编码列表")
+
+
+class WorkOrderMergeIntoGroupRequest(BaseModel):
+    """将多张工单编入同一工单组（不取消原工单）"""
+    work_order_ids: list[int] = Field(..., min_length=2, description="工单 ID 列表（至少 2 个）")
+    root_work_order_id: Optional[int] = Field(
+        None,
+        description="组成品工单 ID（可选）；不传则仅虚拟编组，成员在组下平级展示",
+    )
+    remarks: Optional[str] = Field(None, description="工单组名称（可选；未填则使用默认名称）")
+
+
+class WorkOrderMergeIntoGroupResponse(BaseModel):
+    """编入工单组结果"""
+    work_order_group_id: int = Field(..., description="工单组 ID")
+    group_code: str = Field(..., description="工单组编码")
+    work_order_ids: list[int] = Field(..., description="已编入的工单 ID")
+    work_order_codes: list[str] = Field(..., description="已编入的工单编码")
+
+
+class WorkOrderDissolveGroupRequest(BaseModel):
+    """解除编组（工单保留）"""
+    work_order_group_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description="工单组 ID 列表",
+    )
+
+
+class WorkOrderDissolveGroupItem(BaseModel):
+    """单个工单组解除编组结果"""
+    work_order_group_id: int = Field(..., description="工单组 ID")
+    group_code: str = Field(..., description="工单组编码")
+    group_name: Optional[str] = Field(None, description="工单组名称")
+    work_order_count: int = Field(..., description="解除关联的生产工单数")
+    outsource_count: int = Field(..., description="解除关联的委外工单数")
+
+
+class WorkOrderDissolveGroupResponse(BaseModel):
+    """解除编组结果"""
+    groups: list[WorkOrderDissolveGroupItem] = Field(..., description="已解除编组的工单组")
+
+
+class PeerGroupWorkOrderItemCreate(BaseModel):
+    """平级组工单明细行"""
+    product_id: int = Field(..., description="产品物料 ID")
+    quantity: Decimal = Field(..., gt=0, description="计划数量")
+    priority: str = Field("normal", description="优先级")
+    process_route_id: Optional[int] = Field(
+        None, alias="processRouteId", description="工艺路线 ID（可选；未选则按产品自动匹配）"
+    )
+    allow_operation_jump: Optional[bool] = Field(
+        None, description="是否允许跳转工序；不传则随工艺路线"
+    )
+    over_report_mode: str = Field("none", description="工单默认超报模式")
+    over_report_value: Decimal = Field(Decimal("0"), description="工单默认超报数值")
+
+
+class WorkOrderCreatePeerGroupRequest(BaseModel):
+    """新建平级组工单（批量创建工单并编入同一虚拟组）"""
+    group_name: Optional[str] = Field(None, description="工单组名称（可选）")
+    production_mode: str = Field("MTS", description="生产模式（MTS/MTO）")
+    sales_order_id: Optional[int] = Field(None, description="销售订单 ID（MTO）")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始（应用于各成员）")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束（应用于各成员）")
+    items: list[PeerGroupWorkOrderItemCreate] = Field(
+        ...,
+        min_length=2,
+        description="组内工单明细（至少 2 行）",
+    )
+
+
+class WorkOrderCreatePeerGroupResponse(BaseModel):
+    """新建平级组工单结果"""
+    work_order_group_id: int = Field(..., description="工单组 ID")
+    group_code: str = Field(..., description="工单组编码")
+    work_order_ids: list[int] = Field(..., description="已创建的工单 ID")
+    work_order_codes: list[str] = Field(..., description="已创建的工单编码")
 
 
 # 更新前向引用（Pydantic v2 需要）

@@ -32,6 +32,12 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderBatchPriorityRequest,
     WorkOrderMergeRequest,
     WorkOrderMergeResponse,
+    WorkOrderMergeIntoGroupRequest,
+    WorkOrderMergeIntoGroupResponse,
+    WorkOrderDissolveGroupRequest,
+    WorkOrderDissolveGroupResponse,
+    WorkOrderCreatePeerGroupRequest,
+    WorkOrderCreatePeerGroupResponse,
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
@@ -94,6 +100,46 @@ async def create_work_order(
         work_order_data=work_order,
         created_by=current_user.id
     )
+
+
+@router.post(
+    "/work-orders/create-peer-group",
+    response_model=WorkOrderCreatePeerGroupResponse,
+    summary="Create peer-level work order group with detail lines",
+)
+async def create_peer_group_work_orders(
+    body: WorkOrderCreatePeerGroupRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderCreatePeerGroupResponse:
+    """
+    新建平级组工单：按明细表批量创建工单并编入同一虚拟工单组。
+    """
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    items = [
+        {
+            "product_id": it.product_id,
+            "quantity": it.quantity,
+            "priority": it.priority,
+            "process_route_id": it.process_route_id,
+            "allow_operation_jump": it.allow_operation_jump,
+            "over_report_mode": it.over_report_mode,
+            "over_report_value": it.over_report_value,
+        }
+        for it in body.items
+    ]
+    result = await WorkOrderGroupService().create_peer_group_work_orders(
+        tenant_id=tenant_id,
+        items=items,
+        group_name=body.group_name,
+        production_mode=body.production_mode,
+        sales_order_id=body.sales_order_id,
+        planned_start_date=body.planned_start_date,
+        planned_end_date=body.planned_end_date,
+        created_by=current_user.id,
+    )
+    return WorkOrderCreatePeerGroupResponse.model_validate(result)
 
 
 @router.get("/work-orders/statistics", summary="Work order statistics (KPI cards)")
@@ -926,7 +972,7 @@ async def merge_work_orders(
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderMergeResponse:
     """
-    合并工单
+    合并工单（累加数量为一张新工单，原工单取消）
 
     - **merge_data**: 合并数据（work_order_ids: 要合并的工单ID列表（至少2个）, remarks: 合并备注（可选））
     """
@@ -935,6 +981,54 @@ async def merge_work_orders(
         merge_data=merge_data,
         created_by=current_user.id
     )
+
+
+@router.post(
+    "/work-orders/merge-into-group",
+    response_model=WorkOrderMergeIntoGroupResponse,
+    summary="Merge work orders into work order group",
+)
+async def merge_work_orders_into_group(
+    merge_data: WorkOrderMergeIntoGroupRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderMergeIntoGroupResponse:
+    """
+    将多张工单编入同一工单组（原工单保留，仅在列表中以组展示）。
+    """
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    result = await WorkOrderGroupService().merge_work_orders_into_group(
+        tenant_id=tenant_id,
+        work_order_ids=merge_data.work_order_ids,
+        root_work_order_id=merge_data.root_work_order_id,
+        created_by=current_user.id,
+        remarks=merge_data.remarks,
+    )
+    return WorkOrderMergeIntoGroupResponse.model_validate(result)
+
+
+@router.post(
+    "/work-orders/dissolve-group",
+    response_model=WorkOrderDissolveGroupResponse,
+    summary="Dissolve work order groups",
+)
+async def dissolve_work_order_groups(
+    body: WorkOrderDissolveGroupRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderDissolveGroupResponse:
+    """
+    解除编组：取消组内工单与委外单的编组关系，工单与委外单保留。
+    """
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    result = await WorkOrderGroupService().dissolve_work_order_groups(
+        tenant_id=tenant_id,
+        work_order_group_ids=body.work_order_group_ids,
+        updated_by=current_user.id,
+    )
+    return WorkOrderDissolveGroupResponse.model_validate(result)
 
 
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="Create rework order from work order")

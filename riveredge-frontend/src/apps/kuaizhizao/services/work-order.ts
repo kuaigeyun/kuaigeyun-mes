@@ -177,6 +177,49 @@ export const workOrderApi = {
     apiRequest('/apps/kuaizhizao/work-orders/batch-update-operation-dates', { method: 'PUT', data: { updates } }),
   merge: async (data: { work_order_ids: number[]; remarks?: string }) =>
     apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data }),
+  mergeIntoGroup: async (data: {
+    work_order_ids: number[]
+    root_work_order_id?: number | null
+    remarks?: string
+  }) =>
+    apiRequest<{
+      work_order_group_id: number
+      group_code: string
+      work_order_ids: number[]
+      work_order_codes: string[]
+    }>('/apps/kuaizhizao/work-orders/merge-into-group', { method: 'POST', data }),
+  createPeerGroup: async (data: {
+    group_name?: string
+    production_mode?: string
+    sales_order_id?: number
+    planned_start_date?: string
+    planned_end_date?: string
+    items: Array<{
+      product_id: number
+      quantity: number
+      priority?: string
+      process_route_id?: number
+      allow_operation_jump?: boolean
+      over_report_mode?: string
+      over_report_value?: number
+    }>
+  }) =>
+    apiRequest<{
+      work_order_group_id: number
+      group_code: string
+      work_order_ids: number[]
+      work_order_codes: string[]
+    }>('/apps/kuaizhizao/work-orders/create-peer-group', { method: 'POST', data }),
+  dissolveGroup: async (data: { work_order_group_ids: number[] }) =>
+    apiRequest<{
+      groups: Array<{
+        work_order_group_id: number
+        group_code: string
+        group_name?: string | null
+        work_order_count: number
+        outsource_count: number
+      }>
+    }>('/apps/kuaizhizao/work-orders/dissolve-group', { method: 'POST', data }),
   generateQRCode: async (workOrderId: string, workOrderCode: string, workOrderName: string): Promise<any> => {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateWorkOrder({

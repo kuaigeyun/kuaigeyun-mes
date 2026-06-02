@@ -7,10 +7,101 @@ import dayjs from 'dayjs'
 import { stableJsonForQueryKey } from '../../../../../utils/tableQueryKey'
 import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
 import { workOrderApi } from '../../../services/production'
+import {
+  buildWorkOrderGroupForest,
+  flattenWorkOrderListRows,
+} from './workOrderListGroupTree'
+import type { WorkOrderListRow } from './workOrderListTreeTypes'
 
 export const WORK_ORDER_LIST_TANSTACK_PREFIX = ['kuaizhizao', 'work-orders', 'list'] as const
 
 export const WORK_ORDER_LIST_STALE_MS = 5 * 60 * 1000
+
+/** 从列表 rowKey 解析工单组 ID（组父行：work_order_group-123 或负数 id） */
+export function parseWorkOrderGroupIdFromListRowKey(key: React.Key): number | null {
+  const keyStr = String(key)
+  const match = /^work_order_group-(\d+)$/.exec(keyStr)
+  if (match) {
+    const gid = Number(match[1])
+    return Number.isFinite(gid) && gid > 0 ? gid : null
+  }
+  if (typeof key === 'number' && Number.isFinite(key) && key < 0) {
+    return -key
+  }
+  const n = Number(keyStr)
+  if (Number.isFinite(n) && n < 0) return -n
+  return null
+}
+
+/** 从列表 rowKey 解析生产工单 ID（支持数字或 work_order-123） */
+export function resolveWorkOrderIdFromListRowKey(key: React.Key): number | null {
+  if (typeof key === 'number' && Number.isFinite(key) && key > 0) return key
+  const s = String(key)
+  const match = /^(?:work_order|split)-(\d+)$/.exec(s)
+  if (match) return Number(match[1])
+  const n = Number(s)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 批量操作：仅保留可编入组的主工单（排除组节点、拆分子行等） */
+export function resolveMergeableWorkOrderIdsFromRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    const rowKey = String(key)
+    if (parseWorkOrderGroupIdFromListRowKey(key) != null) continue
+    const row = rowByKey?.get(rowKey)
+    if (row?.row_kind === 'work_order_group') continue
+    const kind = row?.row_kind ?? (rowKey.startsWith('split-') ? 'split' : 'work_order')
+    if (kind !== 'work_order') continue
+    const id = row?.id != null ? Number(row.id) : resolveWorkOrderIdFromListRowKey(key)
+    if (id == null || id < 1 || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+/** 从列表行解析工单组 ID（组父行或组内成员行） */
+export function resolveWorkOrderGroupIdFromListRow(row: WorkOrderListRow): number | null {
+  if (row.row_kind === 'work_order_group') {
+    if (row.work_order_group_id != null) {
+      const gid = Number(row.work_order_group_id)
+      return Number.isFinite(gid) && gid > 0 ? gid : null
+    }
+    const id = row.id != null ? Number(row.id) : null
+    if (id != null && id < 0) return -id
+    return null
+  }
+  if (row.work_order_group_id != null) {
+    const gid = Number(row.work_order_group_id)
+    return Number.isFinite(gid) && gid > 0 ? gid : null
+  }
+  return null
+}
+
+/** 批量解除编组：从勾选行收集不重复的工单组 ID */
+export function resolveDissolvableWorkOrderGroupIdsFromRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    let gid = parseWorkOrderGroupIdFromListRowKey(key)
+    if (gid == null) {
+      const row = rowByKey?.get(String(key))
+      if (row) gid = resolveWorkOrderGroupIdFromListRow(row)
+    }
+    if (gid == null || seen.has(gid)) continue
+    seen.add(gid)
+    ids.push(gid)
+  }
+  return ids
+}
 
 export type WorkOrderListTableResult = {
   data: any[]
@@ -51,7 +142,25 @@ function tenantIdForSnapshot(): string {
 
 const SPLIT_CHILD_CODE = /^(.+)-(\d{3})$/
 
-type WorkOrderListRow = Record<string, any>
+/**
+ * 拆分子行 / 返工单 / 委外单通常不带 work_order_group_id，需从父工单继承以便留在组树内展示。
+ */
+function propagateWorkOrderGroupIdFromParent(flat: WorkOrderListRow[]): WorkOrderListRow[] {
+  const groupIdByWorkOrderId = new Map<number, number>()
+  for (const row of flat) {
+    if (row.id != null && row.work_order_group_id != null) {
+      groupIdByWorkOrderId.set(Number(row.id), Number(row.work_order_group_id))
+    }
+  }
+  return flat.map((row) => {
+    if (row.work_order_group_id != null || row.parent_work_order_id == null) {
+      return row
+    }
+    const gid = groupIdByWorkOrderId.get(Number(row.parent_work_order_id))
+    if (gid == null) return row
+    return { ...row, work_order_group_id: gid }
+  })
+}
 
 /** 拆分工单子行继承主工单工序步骤摘要 */
 function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderListRow[] {
@@ -73,28 +182,8 @@ function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderLis
   })
 }
 
-/**
- * 将列表行组装为 ProTable 树形 dataSource：
- * - API 已带 children 时原样返回（仅补 row_kind）
- * - 扁平列表时按 parent_work_order_id / 编码 xxx-NNN 挂到主工单下
- */
-export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOrderListRow[] {
-  if (!rows?.length) return []
-
-  if (rows.some((r) => Array.isArray(r.children) && r.children.length > 0)) {
-    return inheritOperationStepsFromParent(
-      rows.map((row) => ({
-        ...row,
-        row_kind: row.row_kind || 'work_order',
-        children: Array.isArray(row.children)
-          ? row.children.map((child: WorkOrderListRow) => ({
-              ...child,
-              row_kind: child.row_kind || 'split',
-            }))
-          : row.children,
-      })),
-    )
-  }
+function normalizeUngroupedWorkOrderTree(rows: WorkOrderListRow[]): WorkOrderListRow[] {
+  if (!rows.length) return []
 
   const rowById = new Map<number, WorkOrderListRow>()
   const rowByCode = new Map<string, WorkOrderListRow>()
@@ -114,6 +203,7 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
       ...child,
       row_kind: child.row_kind || 'split',
       parent_work_order_id: parent.id,
+      list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
       operation_steps:
         Array.isArray(child.operation_steps) && child.operation_steps.length > 0
           ? child.operation_steps
@@ -141,6 +231,7 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
 
   const roots = [...rowById.values()].filter((row) => row.id == null || !childIds.has(Number(row.id)))
   for (const root of roots) {
+    root.list_tree_depth = 0
     if (root.children?.length) {
       root.children.sort((a, b) => {
         const order = (row: WorkOrderListRow) => {
@@ -155,12 +246,36 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
       })
     }
   }
-  return inheritOperationStepsFromParent(roots)
+  return roots
+}
+
+/**
+ * 将列表行组装为 ProTable 树形 dataSource：
+ * - 有 work_order_group_id 的按组建树（组 → BOM → 拆分子行）
+ * - 无组的按 parent_work_order_id / 编码 xxx-NNN 挂拆分子行
+ */
+export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOrderListRow[] {
+  if (!rows?.length) return []
+
+  const flat = propagateWorkOrderGroupIdFromParent(
+    flattenWorkOrderListRows(rows).map((row) => ({
+      ...row,
+      row_kind: row.row_kind || 'work_order',
+    }))
+  )
+
+  const groupedFlat = flat.filter((r) => r.work_order_group_id != null && r.id != null)
+  const ungroupedFlat = flat.filter((r) => r.work_order_group_id == null)
+
+  const groupForest = buildWorkOrderGroupForest(groupedFlat)
+  const ungroupedRoots = normalizeUngroupedWorkOrderTree(ungroupedFlat)
+
+  return inheritOperationStepsFromParent([...groupForest, ...ungroupedRoots])
 }
 
 function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
-  /* v10：返工子行工序摘要 + 创建返工弹窗增强 */
-  return `riveredge.woList.v10:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
+  /* v12：组内继承拆分子行/返工/委外 */
+  return `riveredge.woList.v12:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
 }
 
 /** 将上次成功的列表写入 sessionStorage，下次进页可瞬时 hydrate */

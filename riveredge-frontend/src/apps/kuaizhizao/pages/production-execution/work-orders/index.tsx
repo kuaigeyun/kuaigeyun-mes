@@ -62,7 +62,6 @@ import {
   Statistic,
   Alert,
 } from 'antd'
-import type { MenuProps } from 'antd'
 import type { GlobalToken } from 'antd/es/theme/interface'
 import {
   PlusOutlined,
@@ -73,7 +72,6 @@ import {
   QrcodeOutlined,
   DeleteOutlined,
   PrinterOutlined,
-  MoreOutlined,
   StopOutlined,
   TeamOutlined,
   ShoppingOutlined,
@@ -83,11 +81,16 @@ import {
   SendOutlined,
   RetweetOutlined,
   SplitCellsOutlined,
+  DisconnectOutlined,
+  GroupOutlined,
+  FlagOutlined,
   LockOutlined,
   UnlockOutlined,
   DownOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
+import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch'
+import type { UniBatchMenuItem } from '../../../../../components/uni-batch'
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -99,6 +102,9 @@ import {
   fetchWorkOrderListForTable,
   prefetchDefaultWorkOrderList,
   hydrateDefaultWorkOrderListPageFromSession,
+  resolveDissolvableWorkOrderGroupIdsFromRowKeys,
+  resolveMergeableWorkOrderIdsFromRowKeys,
+  resolveWorkOrderGroupIdFromListRow,
   WORK_ORDER_LIST_STALE_MS,
 } from './workOrderListTable'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
@@ -162,6 +168,11 @@ const LazyStatTrendArea = lazy(() =>
   import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
 )
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
+const LazyWorkOrderPeerGroupCreateDetail = lazy(
+  () => import('./components/WorkOrderPeerGroupCreateDetail')
+)
+import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
+import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
 import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
@@ -239,10 +250,14 @@ interface WorkOrder {
   /** 工序步骤摘要（include_operation_steps=true） */
   operation_steps?: WorkOrderOperationStep[]
   /** 列表行类型 */
-  row_kind?: 'work_order' | 'split' | 'rework' | 'outsource'
+  row_kind?: 'work_order' | 'work_order_group' | 'split' | 'rework' | 'outsource'
+  /** 主表树形缩进深度（组节点 / BOM / 拆分子行） */
+  list_tree_depth?: number
+  member_count?: number
   parent_work_order_id?: number
   work_order_group_id?: number
   group_code?: string
+  group_name?: string
   group_role?: 'root' | 'component' | 'outsource_component' | string
   bom_parent_work_order_id?: number
   demand_item_id?: number
@@ -558,9 +573,13 @@ function isSplitParentWorkOrder(record: WorkOrder): boolean {
 }
 
 /** 是否允许点击工序列展开工序卡（数量为 0 时不展开） */
+function isWorkOrderGroupListRow(record: WorkOrder): boolean {
+  return record.row_kind === 'work_order_group'
+}
+
 function canExpandWorkOrderOperationPanel(record: WorkOrder): boolean {
   const kind = record.row_kind || 'work_order'
-  if (kind === 'rework' || kind === 'outsource') return false
+  if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') return false
   if (record.id == null) return false
   if (isSplitParentWorkOrder(record) && record.split_remaining_quantity != null) {
     const remaining = Number(record.split_remaining_quantity)
@@ -672,9 +691,9 @@ function WorkOrderProductCodeCell({
         primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
         secondary={String(record.code ?? '')}
         primaryExtra={primaryExtra}
-        secondaryLeadingExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
         secondaryExtra={
           <>
+            {renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
             {renderWorkOrderTreeChildTags(record, secondaryTagStyle)}
             {isWorkOrderListOverdue(record) ? (
               <Tag color="error" style={secondaryTagStyle}>
@@ -695,7 +714,14 @@ function WorkOrderProductCodeCell({
 }
 
 function getWorkOrderListRowKey(record: WorkOrder): string {
-  return `${record.row_kind || 'work_order'}-${record.id ?? record.code ?? 'row'}`
+  const kind = record.row_kind || 'work_order'
+  if (kind === 'work_order_group') {
+    const gid =
+      record.work_order_group_id ??
+      (record.id != null && Number(record.id) < 0 ? -Number(record.id) : null)
+    return `work_order_group-${gid ?? record.code ?? 'row'}`
+  }
+  return `${kind}-${record.id ?? record.code ?? 'row'}`
 }
 
 /** 与 Ant Design Table 勾选列 / 首列内边距 / 树形缩进一致，供工序卡行 left inset */
@@ -707,6 +733,9 @@ const WO_TABLE_TREE_EXPAND_GAP = 8
 const WO_TABLE_OPERATION_PANEL_INSET_RIGHT = 16
 
 function getWorkOrderTreeRowDepth(record: WorkOrder): number {
+  if (record.list_tree_depth != null) {
+    return record.list_tree_depth
+  }
   if (record.parent_work_order_id != null) {
     return 1
   }
@@ -824,13 +853,44 @@ function parseWorkOrderOperationsBundle(
 
 function isWorkOrderListSelectableRow(record: WorkOrder): boolean {
   const kind = record.row_kind || 'work_order'
-  return kind === 'work_order' || kind === 'split'
+  return kind === 'work_order' || kind === 'split' || kind === 'work_order_group'
+}
+
+function renderWorkOrderGroupMemberCountTag(
+  record: WorkOrder,
+  tagStyle: React.CSSProperties,
+): React.ReactNode {
+  const count = record.member_count
+  if (count == null || count <= 0) return null
+  return (
+    <Tag color="geekblue" style={tagStyle}>
+      {count} 张
+    </Tag>
+  )
 }
 
 function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
   const kind = record.row_kind || 'work_order'
   const { token } = theme.useToken()
   const splitTagStyle = getWorkOrderStackedPrimaryTagStyle(token)
+
+  if (kind === 'work_order_group') {
+    const groupCode = String(record.group_code ?? record.code ?? '').trim() || '-'
+    const title = String(record.product_name ?? groupCode).trim() || '-'
+    return (
+      <UniTableStackedPrimaryCell
+        primary={title}
+        primaryExtra={
+          <Tag color="geekblue" style={{ margin: 0, ...splitTagStyle }}>
+            工单组
+          </Tag>
+        }
+        secondary={groupCode}
+        secondaryCopyable={groupCode !== '-'}
+        secondaryExtra={renderWorkOrderGroupMemberCountTag(record, splitTagStyle)}
+      />
+    )
+  }
 
   if (kind === 'rework') {
     const operationLabel =
@@ -891,7 +951,7 @@ function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
     <UniTableStackedPrimaryCell
       primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
       secondary={String(record.code ?? '')}
-      secondaryLeadingExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
+      secondaryExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
     />
   )
 }
@@ -980,6 +1040,7 @@ const WorkOrdersPage: React.FC = () => {
   }, [queryClient, workOrderListDefaultPageSize])
 
   const workOrderRowByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
+  const [workOrderListRowIndexVersion, setWorkOrderListRowIndexVersion] = useState(0)
   const operationPanelRecordByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
 
   const syncWorkOrderListRowIndexFromTableData = useCallback((rows: WorkOrder[]) => {
@@ -987,6 +1048,16 @@ const WorkOrdersPage: React.FC = () => {
     const map = new Map<string, WorkOrder>()
     indexWorkOrderListRows(rows, map)
     workOrderRowByKeyRef.current = map
+    setWorkOrderListRowIndexVersion((v) => v + 1)
+    const groupRowKeys = rows
+      .filter((r) => r.row_kind === 'work_order_group')
+      .map((r) => getWorkOrderListRowKey(r))
+    if (groupRowKeys.length > 0) {
+      setWorkOrderTreeExpandedRowKeys((prev) => {
+        const merged = new Set([...prev, ...groupRowKeys])
+        return [...merged]
+      })
+    }
     return rows
   }, [])
 
@@ -1189,6 +1260,7 @@ const WorkOrdersPage: React.FC = () => {
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false)
+  const [createWorkOrderMode, setCreateWorkOrderMode] = useState<'normal' | 'peer_group'>('normal')
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
   const formRef = useRef<any>(null)
@@ -1378,8 +1450,10 @@ const WorkOrdersPage: React.FC = () => {
 
   // 合并工单相关状态
   const [mergeModalVisible, setMergeModalVisible] = useState(false)
+  const [mergeTargetWorkOrderIds, setMergeTargetWorkOrderIds] = useState<number[]>([])
   const mergeFormRef = useRef<any>(null)
   const [mergeLoading, setMergeLoading] = useState(false)
+  const [dissolveGroupLoading, setDissolveGroupLoading] = useState(false)
 
   // 拆分工单相关状态
   const [splitModalVisible, setSplitModalVisible] = useState(false)
@@ -1701,6 +1775,7 @@ const WorkOrdersPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentWorkOrder(null)
+    setCreateWorkOrderMode('normal')
     setProductionMode('MTS') // 重置为MTS模式
     setSelectedOperations([]) // 清空选中的工序
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
@@ -1883,6 +1958,7 @@ const WorkOrdersPage: React.FC = () => {
       // 加载完整详情
       const detail = await workOrderApi.get(record.id!.toString())
       setIsEdit(true)
+      setCreateWorkOrderMode('normal')
       setCurrentWorkOrder(detail)
       setModalVisible(true)
       // 加载工单工序列表，用于编辑时展示
@@ -3087,6 +3163,53 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      if (!isEdit && createWorkOrderMode === 'peer_group') {
+        const items = (values.group_items || []).filter(
+          (row: { product_id?: number }) => row?.product_id != null
+        )
+        if (items.length < 2) {
+          messageApi.error('平级组工单至少需要 2 条有效明细')
+          throw new Error('平级组工单至少需要 2 条有效明细')
+        }
+        const result = await workOrderApi.createPeerGroup({
+          group_name: values.group_name,
+          production_mode: values.sales_order_id ? 'MTO' : values.production_mode || 'MTS',
+          sales_order_id: values.sales_order_id,
+          planned_start_date: values.planned_start_date,
+          planned_end_date: values.planned_end_date,
+          items: items.map(
+            (row: {
+              product_id: number
+              quantity: number
+              priority?: string
+              process_route_id?: number
+              allow_operation_jump?: boolean
+              over_report_mode?: string
+              over_report_value?: number
+            }) => ({
+              product_id: Number(row.product_id),
+              quantity: Number(row.quantity),
+              priority: row.priority || 'normal',
+              process_route_id:
+                row.process_route_id != null ? Number(row.process_route_id) : undefined,
+              allow_operation_jump: row.allow_operation_jump,
+              over_report_mode: row.over_report_mode || 'none',
+              over_report_value: Number(row.over_report_value ?? 0) || 0,
+            })
+          ),
+        })
+        messageApi.success(`已创建平级组工单：${result.group_code}`)
+        setWorkOrderTreeExpandedRowKeys((prev) => [
+          ...prev,
+          `work_order_group-${result.work_order_group_id}`,
+        ])
+        setModalVisible(false)
+        setCreateWorkOrderMode('normal')
+        invalidateStatistics()
+        actionRef.current?.reload()
+        return
+      }
+
       // 处理附件
       const formAttachments = values.attachments || [];
       values.attachments = formAttachments.map((f: any) => {
@@ -3968,34 +4091,6 @@ const WorkOrdersPage: React.FC = () => {
     setBatchPriorityModalVisible(true)
   }
 
-  const moreBatchMenuItems = useMemo<MenuProps['items']>(
-    () => [
-      {
-        key: 'batch-qrcode',
-        icon: <QrcodeOutlined />,
-        label: '批量生成二维码',
-        onClick: handleBatchGenerateQRCode,
-      },
-      {
-        key: 'batchPriority',
-        label: '批量设置优先级',
-        onClick: handleBatchSetPriority,
-      },
-      {
-        key: 'batchFreeze',
-        label: '批量冻结',
-        onClick: handleBatchFreeze,
-      },
-      {
-        key: 'batchCancel',
-        label: '批量取消',
-        danger: true,
-        onClick: handleBatchCancel,
-      },
-    ],
-    [handleBatchGenerateQRCode, handleBatchSetPriority, handleBatchFreeze, handleBatchCancel],
-  )
-
   /**
    * 处理提交批量设置优先级
    */
@@ -4015,35 +4110,234 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
-   * 处理合并工单
-   */
-  const handleMerge = () => {
-    if (selectedRowKeys.length < 2) {
-      messageApi.warning('请至少选择2个工单进行合并')
-      return
-    }
-    // 合并功能将在Modal中实现
-    setMergeModalVisible(true)
-  }
-
-  /**
-   * 处理提交合并工单
+   * 提交合并为组工单（默认虚拟组根，成员平级）
    */
   const handleSubmitMerge = async (values: any): Promise<void> => {
+    setMergeLoading(true)
     try {
-      const result = await workOrderApi.merge({
-        work_order_ids: selectedRowKeys.map(key => Number(key)),
+      const result = await workOrderApi.mergeIntoGroup({
+        work_order_ids: mergeTargetWorkOrderIds,
         remarks: values.remarks,
       })
-      messageApi.success(`工单合并成功，新工单编号：${result.merged_work_order.code}`)
+      messageApi.success(`已合并为组工单：${result.group_code}`)
+      setWorkOrderTreeExpandedRowKeys((prev) => [
+        ...prev,
+        `work_order_group-${result.work_order_group_id}`,
+      ])
       setMergeModalVisible(false)
+      setMergeTargetWorkOrderIds([])
+      mergeFormRef.current?.resetFields()
       setSelectedRowKeys([])
-      invalidateStatistics(); actionRef.current?.reload()
+      invalidateStatistics()
+      actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || '工单合并失败')
+      messageApi.error(error.message || '合并为组工单失败')
       throw error
+    } finally {
+      setMergeLoading(false)
     }
   }
+
+  const formatDissolveGroupLabels = useCallback((groupIds: number[]) => {
+    const map = workOrderRowByKeyRef.current
+    return groupIds
+      .map((gid) => {
+        const row = map.get(`work_order_group-${gid}`)
+        const code = row?.group_code ?? `ID ${gid}`
+        const title = String(row?.product_name ?? row?.group_name ?? '').trim()
+        return title ? `${title}（${code}）` : code
+      })
+      .join('、')
+  }, [])
+
+  /**
+   * 解除编组：组内工单保留，仅取消组展示关系
+   */
+  const handleDissolveGroups = useCallback(
+    (groupIds: number[]) => {
+      const uniqueIds = [...new Set(groupIds.filter((id) => id > 0))]
+      if (uniqueIds.length === 0) {
+        messageApi.warning('请选择工单组行，或勾选组内主工单')
+        return
+      }
+      const label = formatDissolveGroupLabels(uniqueIds)
+      Modal.confirm({
+        title: '解除编组',
+        content: (
+          <div>
+            <p>
+              将解除以下工单组的编组关系，组内各张工单恢复为独立工单单独展示；工单本身不会被删除或取消。
+            </p>
+            <p>
+              <strong>{label}</strong>
+            </p>
+            <p>确定继续？</p>
+          </div>
+        ),
+        okText: '解除编组',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: async () => {
+          setDissolveGroupLoading(true)
+          try {
+            const result = await workOrderApi.dissolveGroup({
+              work_order_group_ids: uniqueIds,
+            })
+            const codes = result.groups.map((g) => g.group_code).join('、')
+            messageApi.success(
+              result.groups.length > 1
+                ? `已解除编组 ${result.groups.length} 个工单组：${codes}`
+                : `已解除编组：${codes}`
+            )
+            setWorkOrderTreeExpandedRowKeys((prev) =>
+              prev.filter((k) => !uniqueIds.some((gid) => k === `work_order_group-${gid}`))
+            )
+            setSelectedRowKeys([])
+            invalidateStatistics()
+            actionRef.current?.reload()
+          } catch (error: any) {
+            messageApi.error(error.message || '解除编组失败')
+            throw error
+          } finally {
+            setDissolveGroupLoading(false)
+          }
+        },
+      })
+    },
+    [formatDissolveGroupLabels, messageApi]
+  )
+
+  const dissolvableWorkOrderGroupIds = useMemo(
+    () =>
+      resolveDissolvableWorkOrderGroupIdsFromRowKeys(
+        selectedRowKeys,
+        workOrderRowByKeyRef.current
+      ),
+    [selectedRowKeys, workOrderListRowIndexVersion]
+  )
+
+  const mergeableWorkOrderIds = useMemo(
+    () =>
+      resolveMergeableWorkOrderIdsFromRowKeys(
+        selectedRowKeys,
+        workOrderRowByKeyRef.current
+      ),
+    [selectedRowKeys, workOrderListRowIndexVersion]
+  )
+
+  const workOrderBatchMenuItems = useMemo<UniBatchMenuItem[]>(() => {
+    return [
+      {
+        key: 'batch-qrcode',
+        icon: <QrcodeOutlined />,
+        label: '批量生成二维码',
+        onClick: () => handleBatchGenerateQRCode(),
+      },
+      {
+        key: 'batchPriority',
+        label: '批量设置优先级',
+        icon: <FlagOutlined />,
+        onClick: () => handleBatchSetPriority(),
+      },
+      {
+        key: 'batchFreeze',
+        label: '批量冻结',
+        icon: <LockOutlined />,
+        onClick: () => handleBatchFreeze(),
+      },
+      {
+        key: 'batchCancel',
+        label: '批量取消',
+        icon: <CloseCircleOutlined />,
+        onClick: () => handleBatchCancel(),
+      },
+    ]
+  }, [
+    selectedRowKeys,
+    handleBatchGenerateQRCode,
+    handleBatchSetPriority,
+    handleBatchFreeze,
+    handleBatchCancel,
+    messageApi,
+  ])
+
+  const workOrderToolBarActionsAfterDelete = useMemo(
+    () => [
+      <UniBatchButton
+        key="batch-release"
+        selectedRowKeys={selectedRowKeys}
+        type="primary"
+        size="middle"
+        icon={<SendOutlined />}
+        onAction={() => void handleBatchRelease()}
+      >
+        批量下达
+      </UniBatchButton>,
+      ...(selectedRowKeys.length > 0
+        ? [
+            <UniBatchButton
+              key="merge-into-group"
+              selectedRowKeys={selectedRowKeys}
+              size="middle"
+              icon={<GroupOutlined />}
+              disabled={mergeableWorkOrderIds.length < 2}
+              onAction={(keys) => {
+                const ids = resolveMergeableWorkOrderIdsFromRowKeys(
+                  keys,
+                  workOrderRowByKeyRef.current
+                )
+                if (ids.length < 2) {
+                  messageApi.warning('请至少选择 2 张主工单（不含拆分子行、工单组行）')
+                  return
+                }
+                setMergeTargetWorkOrderIds(ids)
+                setMergeModalVisible(true)
+              }}
+            >
+              合并为组工单
+            </UniBatchButton>,
+          ]
+        : []),
+      ...(dissolvableWorkOrderGroupIds.length > 0
+        ? [
+            <UniBatchButton
+              key="dissolve-group"
+              selectedRowKeys={selectedRowKeys}
+              size="middle"
+              icon={<DisconnectOutlined />}
+              loading={dissolveGroupLoading}
+              onAction={(keys) =>
+                handleDissolveGroups(
+                  resolveDissolvableWorkOrderGroupIdsFromRowKeys(
+                    keys,
+                    workOrderRowByKeyRef.current
+                  )
+                )
+              }
+            >
+              解除编组
+            </UniBatchButton>,
+          ]
+        : []),
+      <UniBatchMenuButton
+        key="work-order-batch-menu"
+        selectedRowKeys={selectedRowKeys}
+        menuItems={workOrderBatchMenuItems}
+        toolBarButtonSize="middle"
+        buttonText="批量操作"
+      />,
+    ],
+    [
+      selectedRowKeys,
+      mergeableWorkOrderIds,
+      dissolvableWorkOrderGroupIds,
+      dissolveGroupLoading,
+      workOrderBatchMenuItems,
+      handleDissolveGroups,
+      messageApi,
+      handleBatchRelease,
+    ]
+  )
 
   /**
    * 处理拆分工单
@@ -4580,6 +4874,7 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'group_code',
       width: 120,
       ellipsis: true,
+      hideInTable: true,
       hideInSearch: false,
       render: (_, record) => record.group_code || <Typography.Text type="secondary">—</Typography.Text>,
     },
@@ -4590,7 +4885,12 @@ const WorkOrdersPage: React.FC = () => {
       align: 'right',
       uniTableKeepWidth: true,
       sorter: true,
-      render: (_, record) => formatWorkOrderListQuantity(record),
+      render: (_, record) =>
+        isWorkOrderGroupListRow(record) ? (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ) : (
+          formatWorkOrderListQuantity(record)
+        ),
     },
       {
         title: '模式',
@@ -4600,6 +4900,9 @@ const WorkOrdersPage: React.FC = () => {
         uniTableKeepWidth: true,
         hideInSearch: true,
         render: (_, record) => {
+        if (isWorkOrderGroupListRow(record)) {
+          return <Typography.Text type="secondary">—</Typography.Text>
+        }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
           return <Typography.Text type="secondary">—</Typography.Text>
@@ -4637,6 +4940,9 @@ const WorkOrdersPage: React.FC = () => {
       uniTableKeepWidth: true,
       valueType: 'digit',
       render: (_text, record) => {
+        if (isWorkOrderGroupListRow(record)) {
+          return <Typography.Text type="secondary">—</Typography.Text>
+        }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
           return <Typography.Text type="secondary">—</Typography.Text>
@@ -4675,6 +4981,9 @@ const WorkOrdersPage: React.FC = () => {
       uniTablePrimaryFlex: true,
       hideInSearch: true,
       render: (_, record) => {
+        if (isWorkOrderGroupListRow(record)) {
+          return <Typography.Text type="secondary">—</Typography.Text>
+        }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource' || record.id == null) {
           return <Typography.Text type="secondary">—</Typography.Text>
@@ -4743,7 +5052,12 @@ const WorkOrdersPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, record) => <WorkOrderPlannedRangeCell record={record} />,
+      render: (_, record) =>
+        isWorkOrderGroupListRow(record) ? (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ) : (
+          <WorkOrderPlannedRangeCell record={record} />
+        ),
     },
     {
       title: '计划开始时间',
@@ -4820,6 +5134,26 @@ const WorkOrdersPage: React.FC = () => {
         const rowKind = record.row_kind || 'work_order'
         if (rowKind === 'rework' || rowKind === 'outsource') {
           return null
+        }
+        if (rowKind === 'work_order_group') {
+          const groupId = resolveWorkOrderGroupIdFromListRow(record)
+          if (groupId == null) return null
+          return renderRowActionsOverflow(
+            [
+              <Button
+                key="dissolve-group"
+                type="link"
+                size="small"
+                danger
+                icon={<DisconnectOutlined />}
+                loading={dissolveGroupLoading}
+                onClick={() => handleDissolveGroups([groupId])}
+              >
+                解除编组
+              </Button>,
+            ],
+            `wo-group-${groupId}`
+          )
         }
 
         const rawStatus = record.status || ''
@@ -5312,6 +5646,8 @@ const WorkOrdersPage: React.FC = () => {
           showCreateButton={false}
           createButtonText="新建工单"
           onCreate={handleCreate}
+          toolBarButtonSize="middle"
+          selectedRowKeys={selectedRowKeys}
           enableRowSelection
           rowSelectionGetCheckboxProps={(record) => ({
             disabled: !isWorkOrderListSelectableRow(record),
@@ -5362,70 +5698,41 @@ const WorkOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          toolBarRender={() => {
-            const hasSelected = selectedRowKeys.length > 0;
-            const hasMultipleSelected = selectedRowKeys.length >= 2;
-
-            return [
-              <UniPullCreateToolbar
-                compactKey="create-work-order-with-pull"
-                createIcon={<PlusOutlined />}
-                createLabel="新建工单"
-                onCreate={handleCreate}
-                menuItems={buildKuaizhizaoPullCreateMenuItems([
-                  {
-                    key: 'pull-from-demand-computation',
-                    actionKey: 'work_order.pull_from_demand_computation',
-                    onClick: () => {
-                      void handlePullFromComputation()
-                    },
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              key="create-work-order-with-pull"
+              compactKey="create-work-order-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建工单"
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-demand-computation',
+                  actionKey: 'work_order.pull_from_demand_computation',
+                  onClick: () => {
+                    void handlePullFromComputation()
                   },
-                  {
-                    key: 'pull-from-production-plan',
-                    actionKey: 'work_order.pull_from_production_plan',
-                    onClick: () => {
-                      void handlePullFromProductionPlan()
-                    },
+                },
+                {
+                  key: 'pull-from-production-plan',
+                  actionKey: 'work_order.pull_from_production_plan',
+                  onClick: () => {
+                    void handlePullFromProductionPlan()
                   },
-                ])}
-              />,
-              <Button
-                key="smartRelease"
-                style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
-                icon={<PlayCircleOutlined />}
-                onClick={handleSmartReleaseKitted}
-              >
-                齐套自动下达
-              </Button>,
-              // 批量操作区：仅在有选中时显示
-              hasSelected && (
-                <Button
-                  key="batchRelease"
-                  type="primary"
-                  onClick={handleBatchRelease}
-                >
-                  批量下达
-                </Button>
-              ),
-              hasMultipleSelected && (
-                <Button key="merge" onClick={handleMerge}>
-                  合并工单
-                </Button>
-              ),
-              hasSelected && (
-                <Dropdown 
-                  key="more-batch" 
-                  menu={{ items: moreBatchMenuItems }} 
-                  trigger={['click']}
-                  placement="bottomLeft"
-                >
-                  <Button icon={<MoreOutlined />}>
-                    更多批量操作
-                  </Button>
-                </Dropdown>
-              ),
-            ].filter(Boolean) as React.ReactNode[];
-          }}
+                },
+              ])}
+            />,
+            <Button
+              key="smartRelease"
+              size="middle"
+              style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
+              icon={<PlayCircleOutlined />}
+              onClick={handleSmartReleaseKitted}
+            >
+              齐套自动下达
+            </Button>,
+          ]}
+          toolBarActionsAfterDelete={workOrderToolBarActionsAfterDelete}
           onDelete={handleDelete}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
           customViews={[
@@ -5921,6 +6228,7 @@ const WorkOrdersPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false)
           setCurrentWorkOrder(null)
+          setCreateWorkOrderMode('normal')
           setSelectedMaterialSourceInfo(null)
           setProductSourceData(null)
           setSelectedOperations([])
@@ -5932,25 +6240,84 @@ const WorkOrdersPage: React.FC = () => {
         formRef={formRef}
         grid
       >
-        <CodeField
-          pageCode="kuaizhizao-production-work-order"
-          name="code"
-          label="工单编号"
-          required={true}
-          autoGenerateOnCreate={!isEdit}
-          showGenerateButton={false}
-          context={{}}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="name"
-          label="工单名称"
-          placeholder="可选"
-          disabled={isEdit}
-          colProps={{ span: 12 }}
-        />
+        {!isEdit && createWorkOrderMode === 'peer_group' ? (
+          <ProFormText
+            name="group_name"
+            label="工单组名称"
+            placeholder="可选；未填则使用默认名称"
+            colProps={{ span: 12 }}
+          />
+        ) : (
+          <CodeField
+            pageCode="kuaizhizao-production-work-order"
+            name="code"
+            label="工单编号"
+            required={true}
+            autoGenerateOnCreate={!isEdit}
+            showGenerateButton={false}
+            context={{}}
+            colProps={{ span: 12 }}
+          />
+        )}
+        {!isEdit && (
+          <Col span={12}>
+            <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
+              <ThemedSegmented
+                value={createWorkOrderMode}
+                onChange={(v) => {
+                  const mode = v as 'normal' | 'peer_group'
+                  setCreateWorkOrderMode(mode)
+                  if (mode === 'peer_group') {
+                    setSelectedOperations([])
+                    const items = formRef.current?.getFieldValue('group_items')
+                    if (!items?.length) {
+                      formRef.current?.setFieldsValue({
+                        group_items: [
+                          { ...EMPTY_PEER_GROUP_ITEM },
+                          { ...EMPTY_PEER_GROUP_ITEM },
+                        ],
+                      })
+                    }
+                  } else {
+                    setSelectedOperations([])
+                    formRef.current?.setFieldsValue({
+                      process_route_id: undefined,
+                      operations: undefined,
+                      allow_operation_jump: false,
+                      over_report_mode: 'none',
+                      over_report_value: 0,
+                    })
+                  }
+                }}
+                options={[
+                  { label: '普通工单', value: 'normal' },
+                  { label: '平级组工单', value: 'peer_group' },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+        )}
+        {createWorkOrderMode === 'normal' && (
+          <ProFormText
+            name="name"
+            label="工单名称"
+            placeholder="可选"
+            disabled={isEdit}
+            colProps={{ span: 12 }}
+          />
+        )}
         <ProFormText name="production_mode" initialValue="MTS" hidden />
 
+        {!isEdit && createWorkOrderMode === 'peer_group' && (
+          <Col span={24}>
+            <Suspense fallback={<Spin />}>
+              <LazyWorkOrderPeerGroupCreateDetail processRouteList={processRouteList} />
+            </Suspense>
+          </Col>
+        )}
+
+        {createWorkOrderMode === 'normal' && (
+          <>
         {/* 产品与数量：裸 Col 与 ProForm 栅格并存为既有布局，勿改为 ProFormGroup（会改变内部 Form.Item 宽度与行高） */}
         <Col span={10}>
           <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
@@ -6309,6 +6676,27 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
+          </>
+        )}
+
+        {!isEdit && createWorkOrderMode === 'peer_group' && (
+          <>
+            <ProFormDatePicker
+              name="planned_start_date"
+              label="计划开始"
+              placeholder="可选（应用于各成员）"
+              colProps={{ span: 12 }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormDatePicker
+              name="planned_end_date"
+              label="计划结束"
+              placeholder="可选（应用于各成员）"
+              colProps={{ span: 12 }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </>
+        )}
       </FormModalTemplate>
 
       {/* 选择产品来源文档 Modal（销售订单/销售预测/需求）- 产品明细 */}
@@ -7654,12 +8042,13 @@ const WorkOrdersPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 合并工单Modal */}
+      {/* 合并为组工单 Modal */}
       <FormModalTemplate
-        title="合并工单"
+        title="合并为组工单"
         open={mergeModalVisible}
         onClose={() => {
           setMergeModalVisible(false)
+          setMergeTargetWorkOrderIds([])
           mergeFormRef.current?.resetFields()
         }}
         onFinish={handleSubmitMerge}
@@ -7668,24 +8057,14 @@ const WorkOrdersPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <div style={{ marginBottom: 16 }}>
-          已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行合并。
+          已选择 <strong>{mergeTargetWorkOrderIds.length}</strong> 张主工单编入同一工单组。
           <br />
-          主工单将作为合并后的工单，其他工单将被取消。
+          原工单均保留；列表以虚拟工单组为父行，成员平级展示，无需指定组成品。
         </div>
-        <ProFormSelect
-          name="main_work_order_id"
-          label="选择主工单"
-          placeholder="请选择一个工单作为主工单"
-          rules={[{ required: true, message: '请选择主工单' }]}
-          options={selectedRows.map((row: any) => ({
-            label: `${row.code} - ${row.product_name}`,
-            value: row.id,
-          }))}
-        />
         <ProFormTextArea
           name="remarks"
-          label="合并备注"
-          placeholder="请输入合并备注（可选）"
+          label="工单组名称"
+          placeholder="请输入工单组名称（可选；未填则显示默认名称）"
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>

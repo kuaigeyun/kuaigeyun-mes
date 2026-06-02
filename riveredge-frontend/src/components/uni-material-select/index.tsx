@@ -86,6 +86,8 @@ interface UniMaterialSelectProps {
   showAdvancedSearch?: boolean;
   /** 编辑时预填值对应的选项（当物料不在默认列表中时用于展示） */
   fallbackOption?: { value: number; label: string };
+  /** 按物料来源类型过滤（如 Make 仅自制件） */
+  sourceType?: string;
   onChange?: (value: number | undefined, material: Material | undefined) => void;
 }
 
@@ -120,6 +122,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   quickCreate: quickCreateProp,
   showAdvancedSearch = true,
   fallbackOption,
+  sourceType,
   onChange,
   formItemProps,
   ...restProps
@@ -147,6 +150,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         keyword: searchText,
         isActive: activeOnly ? true : undefined,
         mastersOnly: mastersOnly ? true : undefined,
+        sourceType: sourceType || undefined,
         limit: 200,
       });
       const raw = response?.data || response?.items || response || [];
@@ -167,7 +171,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   useEffect(() => {
     fetchMaterials();
-  }, [activeOnly, mastersOnly]);
+  }, [activeOnly, mastersOnly, sourceType]);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -262,6 +266,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                   limit: 200,
                   isActive: activeOnly ? true : undefined,
                   mastersOnly: mastersOnly ? true : undefined,
+                  sourceType: sourceType || undefined,
                   ...(kw && { keyword: kw }),
                 });
                 const raw = list as { items?: Material[]; data?: Material[] } | Material[];

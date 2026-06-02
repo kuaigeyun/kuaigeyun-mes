@@ -55,6 +55,33 @@ async def test_revert_takeover_restores_suppressed_master_data_process_menus():
 
 
 @pytest.mark.asyncio
+async def test_revert_takeover_restores_orphaned_inactive_process_menus():
+    """菜单同步抹掉 meta 后，禁用时仍应恢复 process 路径下已抑制的菜单。"""
+    orphaned = _FakeMenu(
+        path="/apps/master-data/process/operations",
+        is_active=False,
+        meta=None,
+    )
+
+    class _FakeQuery:
+        async def all(self):
+            return [orphaned]
+
+    with patch.object(
+        MenuTakeoverService,
+        "_get_app_uuid",
+        new=AsyncMock(return_value="master-data-uuid"),
+    ), patch(
+        "core.services.system.menu_takeover_service.Menu.filter",
+        return_value=_FakeQuery(),
+    ):
+        restored = await MenuTakeoverService.revert_takeover(tenant_id=1, consumer_app_code="kuaiplm")
+
+    assert restored == 1
+    assert orphaned.is_active is True
+
+
+@pytest.mark.asyncio
 async def test_sync_for_application_lifecycle_disable_calls_revert():
     with patch.object(
         MenuTakeoverService,

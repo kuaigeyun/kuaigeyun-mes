@@ -31,13 +31,19 @@ class WorkOrderGroup(BaseModel):
     group_code = fields.CharField(max_length=50, description="工单组编码（组织内唯一）")
     group_name = fields.CharField(max_length=200, null=True, description="工单组名称")
 
-    root_demand_item_id = fields.IntField(description="组成品需求行 ID")
+    root_demand_item_id = fields.IntField(
+        null=True,
+        description="组成品需求行 ID（需求计算下推时有值；手工组工单为空）",
+    )
     root_material_id = fields.IntField(description="组成品物料 ID")
     root_material_code = fields.CharField(max_length=50, description="组成品物料编码")
     root_material_name = fields.CharField(max_length=200, description="组成品物料名称")
 
     demand_id = fields.IntField(null=True, description="需求 ID")
-    demand_computation_id = fields.IntField(description="需求计算 ID")
+    demand_computation_id = fields.IntField(
+        null=True,
+        description="需求计算 ID（手工组工单为空）",
+    )
     sales_order_id = fields.IntField(null=True, description="销售订单 ID（MTO）")
 
     status = fields.CharField(

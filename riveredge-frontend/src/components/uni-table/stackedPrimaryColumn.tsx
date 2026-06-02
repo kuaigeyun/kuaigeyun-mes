@@ -29,7 +29,7 @@ export interface UniTableStackedPrimaryCellProps {
   secondary: string;
   /** 次行是否显示复制按钮，默认 true */
   secondaryCopyable?: boolean;
-  /** 次行文案后、复制按钮前的附加内容（如优先级徽章） */
+  /** @deprecated 请用 secondaryExtra；复制按钮前的插槽（历史兼容） */
   secondaryLeadingExtra?: React.ReactNode;
   /** 次行末尾附加内容（如逾期标签） */
   secondaryExtra?: React.ReactNode;

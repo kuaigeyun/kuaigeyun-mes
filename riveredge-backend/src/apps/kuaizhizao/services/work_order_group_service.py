@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 
-from apps.common.base_service import BaseService
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
@@ -26,10 +26,10 @@ from apps.kuaizhizao.utils.work_order_group_bom_tree import (
     quantize_qty,
     tree_has_direct_supply,
 )
-from infra.exceptions.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 
-class WorkOrderGroupService(BaseService):
+class WorkOrderGroupService(AppBaseService):
     """工单组业务逻辑。"""
 
     async def should_group_by_demand_item(self, tenant_id: int) -> bool:
@@ -420,3 +420,265 @@ class WorkOrderGroupService(BaseService):
                     if owo.demand_item_id is None:
                         keys.add((None, owo.product_id))
         return keys
+
+    async def merge_work_orders_into_group(
+        self,
+        tenant_id: int,
+        *,
+        work_order_ids: List[int],
+        root_work_order_id: int,
+        created_by: int,
+        remarks: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        将多张已存在的生产工单编入同一工单组（不取消、不合并数量）。
+        """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+        wo_svc = WorkOrderService()
+        if not await wo_svc._is_work_order_param_enabled(tenant_id, "merge", False):
+            raise BusinessLogicError(
+                "当前组织未开启工单合并能力，请在参数设置中开启「工单合并」"
+            )
+
+        unique_ids = list(dict.fromkeys(int(i) for i in work_order_ids))
+        if len(unique_ids) < 2:
+            raise ValidationError("至少需要 2 张工单才能合并为组工单")
+
+        work_orders: List[WorkOrder] = []
+        for wo_id in unique_ids:
+            wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id, id=wo_id, deleted_at__isnull=True
+            )
+            if not wo:
+                raise ValidationError(f"工单不存在: {wo_id}")
+            work_orders.append(wo)
+
+        virtual_root = root_work_order_id is None
+        root_wo: Optional[WorkOrder] = None
+        if not virtual_root:
+            if int(root_work_order_id) not in unique_ids:
+                raise ValidationError("组成品工单须在已选工单列表中")
+            root_wo = next(wo for wo in work_orders if wo.id == int(root_work_order_id))
+        else:
+            work_orders.sort(key=lambda w: str(w.code or w.id or ""))
+            root_wo = work_orders[0]
+
+        blocked_statuses = {"cancelled", "completed", "已取消", "已完成"}
+        for wo in work_orders:
+            if wo.parent_work_order_id is not None:
+                raise BusinessLogicError(
+                    f"工单 {wo.code} 为拆分子工单，请在其主工单上操作或改选主工单"
+                )
+            if wo.work_order_group_id is not None:
+                raise BusinessLogicError(f"工单 {wo.code} 已属于工单组，请先移出或改选")
+            if (wo.status or "") in blocked_statuses:
+                raise BusinessLogicError(f"工单 {wo.code} 状态为 {wo.status}，不能编入组工单")
+            if wo.is_frozen:
+                raise BusinessLogicError(f"工单 {wo.code} 已冻结，不能编入组工单")
+
+        group_code = await self.generate_code(tenant_id, "WORK_ORDER_CODE", prefix="WG")
+        remarks_text = (remarks or "").strip()
+        if remarks_text:
+            group_name = remarks_text
+        elif virtual_root:
+            group_name = f"平级工单组（{len(work_orders)} 张）"
+        else:
+            group_name = f"{root_wo.product_name or root_wo.product_code or '工单'} 工单组"
+
+        group = await WorkOrderGroup.create(
+            tenant_id=tenant_id,
+            group_code=group_code,
+            group_name=group_name,
+            root_demand_item_id=None,
+            root_material_id=int(root_wo.product_id),
+            root_material_code=root_wo.product_code or "",
+            root_material_name=root_wo.product_name or "",
+            demand_id=None,
+            demand_computation_id=None,
+            sales_order_id=root_wo.sales_order_id,
+            status="draft",
+            has_direct_supply=False,
+            root_work_order_id=None if virtual_root else root_wo.id,
+            member_count=len(work_orders),
+            remarks=None,
+            created_by=created_by,
+        )
+
+        codes: List[str] = []
+        for wo in work_orders:
+            if virtual_root:
+                role = "component"
+            else:
+                role = "root" if wo.id == root_wo.id else "component"
+            await WorkOrder.filter(tenant_id=tenant_id, id=wo.id).update(
+                work_order_group_id=group.id,
+                group_role=role,
+                bom_parent_work_order_id=None,
+            )
+            codes.append(wo.code or str(wo.id))
+
+        logger.info(
+            "work_order_group_manual_merge tenant={} group={} members={}",
+            tenant_id,
+            group_code,
+            codes,
+        )
+
+        return {
+            "work_order_group_id": group.id,
+            "group_code": group.group_code,
+            "work_order_ids": unique_ids,
+            "work_order_codes": codes,
+        }
+
+    async def create_peer_group_work_orders(
+        self,
+        tenant_id: int,
+        *,
+        items: List[Dict[str, Any]],
+        group_name: Optional[str] = None,
+        production_mode: str = "MTS",
+        sales_order_id: Optional[int] = None,
+        planned_start_date: Optional[Any] = None,
+        planned_end_date: Optional[Any] = None,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        新建平级组工单：按明细批量创建生产工单并编入同一虚拟工单组。
+        """
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+        if len(items) < 2:
+            raise ValidationError("平级组工单至少需要 2 条明细")
+
+        wo_svc = WorkOrderService()
+        work_order_ids: List[int] = []
+
+        for idx, item in enumerate(items):
+            product_id = int(item["product_id"])
+            quantity = item.get("quantity")
+            if quantity is None or Decimal(str(quantity)) <= 0:
+                raise ValidationError(f"第 {idx + 1} 行计划数量须大于 0")
+
+            item_pr = item.get("process_route_id")
+            item_jump = item.get("allow_operation_jump")
+            item_orm = str(item.get("over_report_mode") or "none")
+            item_orv = Decimal(str(item.get("over_report_value") or 0))
+
+            create_data = WorkOrderCreate(
+                code_rule="WORK_ORDER_CODE",
+                product_id=product_id,
+                quantity=Decimal(str(quantity)),
+                production_mode=production_mode or "MTS",
+                sales_order_id=sales_order_id,
+                priority=str(item.get("priority") or "normal"),
+                planned_start_date=planned_start_date,
+                planned_end_date=planned_end_date,
+                process_route_id=int(item_pr) if item_pr is not None else None,
+                allow_operation_jump=item_jump,
+                over_report_mode=item_orm,
+                over_report_value=item_orv,
+                operations=None,
+            )
+            created = await wo_svc.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=create_data,
+                created_by=created_by,
+            )
+            if created.id is None:
+                raise BusinessLogicError(f"第 {idx + 1} 行工单创建失败")
+            work_order_ids.append(int(created.id))
+
+        return await self.merge_work_orders_into_group(
+            tenant_id=tenant_id,
+            work_order_ids=work_order_ids,
+            root_work_order_id=None,
+            created_by=created_by,
+            remarks=group_name,
+        )
+
+    async def dissolve_work_order_groups(
+        self,
+        tenant_id: int,
+        *,
+        work_order_group_ids: List[int],
+        updated_by: int,
+    ) -> Dict[str, Any]:
+        """
+        解除编组：解除组内工单/委外单与组的关联，软删除组记录；不取消、不删除工单。
+        """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from tortoise import timezone
+
+        wo_svc = WorkOrderService()
+        if not await wo_svc._is_work_order_param_enabled(tenant_id, "merge", False):
+            raise BusinessLogicError(
+                "当前组织未开启工单合并能力，请在参数设置中开启「工单合并」"
+            )
+
+        unique_gids = list(dict.fromkeys(int(i) for i in work_order_group_ids))
+        dissolved: List[Dict[str, Any]] = []
+
+        for gid in unique_gids:
+            group = await WorkOrderGroup.get_or_none(
+                tenant_id=tenant_id, id=gid, deleted_at__isnull=True
+            )
+            if not group:
+                raise ValidationError(f"工单组不存在: {gid}")
+
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=gid,
+                deleted_at__isnull=True,
+            ).all()
+            outsource_orders = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=gid,
+                deleted_at__isnull=True,
+            ).all()
+
+            for wo in work_orders:
+                if wo.is_frozen:
+                    raise BusinessLogicError(
+                        f"工单 {wo.code} 已冻结，请先解冻后再解除编组"
+                    )
+
+            if work_orders:
+                await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    work_order_group_id=gid,
+                    deleted_at__isnull=True,
+                ).update(work_order_group_id=None, group_role=None)
+            if outsource_orders:
+                await OutsourceWorkOrder.filter(
+                    tenant_id=tenant_id,
+                    work_order_group_id=gid,
+                    deleted_at__isnull=True,
+                ).update(work_order_group_id=None, group_role=None)
+
+            group.deleted_at = timezone.now()
+            group.updated_by = updated_by
+            group.member_count = 0
+            group.status = "cancelled"
+            await group.save()
+
+            logger.info(
+                "work_order_group_dissolved tenant={} group={} work_orders={} outsource={}",
+                tenant_id,
+                group.group_code,
+                len(work_orders),
+                len(outsource_orders),
+            )
+            dissolved.append(
+                {
+                    "work_order_group_id": gid,
+                    "group_code": group.group_code,
+                    "group_name": (group.group_name or "").strip() or None,
+                    "work_order_count": len(work_orders),
+                    "outsource_count": len(outsource_orders),
+                }
+            )
+
+        return {"groups": dissolved}

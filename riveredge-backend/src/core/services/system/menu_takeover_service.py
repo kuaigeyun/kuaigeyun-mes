@@ -14,6 +14,7 @@ from core.config.menu_takeover import (
     META_SUPPRESSED_BY_TAKEOVER,
     MENU_TAKEOVER_RULES,
     MenuTakeoverRule,
+    merge_menu_meta_for_sync,
     path_matches_takeover_prefix,
 )
 from core.models.application import Application
@@ -70,7 +71,7 @@ class MenuTakeoverService:
             meta: Dict[str, Any] = dict(menu.meta or {})
             if not menu.is_active and meta.get(META_SUPPRESSED_BY_TAKEOVER) == consumer_app_code:
                 continue
-            if menu.is_active:
+            if menu.is_active or meta.get(META_SUPPRESSED_BY_TAKEOVER) != consumer_app_code:
                 meta[META_SUPPRESSED_BY_TAKEOVER] = consumer_app_code
                 menu.meta = meta
                 menu.is_active = False
@@ -101,8 +102,13 @@ class MenuTakeoverService:
         ).all()
         restored = 0
         for menu in menus:
+            if not path_matches_takeover_prefix(menu.path, rule):
+                continue
             meta: Dict[str, Any] = dict(menu.meta or {})
-            if meta.get(META_SUPPRESSED_BY_TAKEOVER) != consumer_app_code:
+            tagged = meta.get(META_SUPPRESSED_BY_TAKEOVER) == consumer_app_code
+            # 菜单同步曾覆盖 meta 时，接管标记丢失但 is_active 仍为 False，禁用时仍须交还
+            orphaned_suppression = not menu.is_active and not tagged
+            if not tagged and not orphaned_suppression:
                 continue
             meta.pop(META_SUPPRESSED_BY_TAKEOVER, None)
             menu.meta = meta or None
