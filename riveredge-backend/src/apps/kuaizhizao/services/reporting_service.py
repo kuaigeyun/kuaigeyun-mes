@@ -21,8 +21,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
-from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
-from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.services.work_order_inbound_bom_role import is_semi_finished_product_by_bom_role
 from apps.kuaizhizao.models.defect_record import DefectRecord
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
@@ -49,6 +48,28 @@ from infra.models.user import User
 from core.services.authorization.user_permission_service import UserPermissionService
 
 
+async def _resolve_work_order_operation_for_reporting(
+    tenant_id: int,
+    work_order_id: int,
+    operation_id: int,
+) -> Optional[WorkOrderOperation]:
+    """
+    解析报工目标工单工序行。
+
+    operation_id 与报工 payload 一致：优先主数据工序 ID；兼容误传工单工序行主键。
+    须排除软删除行，否则历史重复行会导致 get_or_none 抛出 MultipleObjectsReturned。
+    """
+    base = WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        deleted_at__isnull=True,
+    )
+    woo = await base.filter(operation_id=operation_id).order_by("-id").first()
+    if woo:
+        return woo
+    return await base.filter(id=operation_id).order_by("-id").first()
+
+
 class ReportingService(AppBaseService[ReportingRecord]):
     """
     报工服务类
@@ -73,14 +94,79 @@ class ReportingService(AppBaseService[ReportingRecord]):
         except Exception:
             return default_rate
 
-    async def _maybe_trigger_direct_finished_goods_inbound(
+    async def _is_last_operation_for_work_order(
         self,
         tenant_id: int,
         work_order_id: int,
+        operation_id: int,
+    ) -> bool:
+        """报工工序是否为工单工艺末道（按 sequence / id 取最大）。"""
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not operations:
+            return False
+        last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
+        return int(last_op.operation_id) == int(operation_id)
+
+    async def _direct_inbound_receipt_exists_for_reporting(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
+    ) -> bool:
+        """末道报工是否已生成过生产入库单（幂等）。"""
+        return await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="reporting_record",
+            source_id=reporting_record_id,
+            target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
+        ).exists()
+
+    async def _sync_pending_inbound_receipts_if_needed(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> None:
+        """
+        将待入库生产入库单数量与末道累计合格数对齐。
+
+        「直接入库」模式下每笔末道报工各建一张入库单，不再做整单数量同步。
+        """
+        mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
+        if mode == "direct_inbound":
+            return
+        try:
+            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+            from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+                SemiFinishedGoodsReceiptService,
+            )
+
+            await FinishedGoodsReceiptService().sync_pending_finished_goods_receipts_for_work_order(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+            )
+            await SemiFinishedGoodsReceiptService().sync_pending_semi_finished_goods_receipts_for_work_order(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+            )
+        except Exception as sync_err:
+            logger.warning(
+                "同步待入库生产入库单失败 tenant_id=%s work_order_id=%s err=%s",
+                tenant_id,
+                work_order_id,
+                sync_err,
+            )
+
+    async def _maybe_trigger_direct_finished_goods_inbound(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
         acting_user_id: int,
     ) -> None:
         """
-        业务参数「末道工序自动入库」为直接入库时，在报工已审核且工单已完工后尝试自动生成成品入库单。
+        业务参数「末道工序自动入库」为直接入库时，末道每笔已审核报工按合格数量各建一张入库单。
         在报工事务提交之后调用，避免与报工嵌套事务冲突。
         """
         try:
@@ -88,25 +174,39 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if mode != "direct_inbound":
                 return
 
-            wo = await WorkOrder.get_or_none(id=work_order_id, tenant_id=tenant_id)
-            if not wo or wo.status != "completed":
+            record = await ReportingRecord.get_or_none(
+                id=reporting_record_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not record or record.status != "approved":
+                return
+
+            if not await self._is_last_operation_for_work_order(
+                tenant_id,
+                record.work_order_id,
+                record.operation_id,
+            ):
+                return
+
+            qualified = float(record.qualified_quantity or 0)
+            if qualified <= 0:
+                return
+
+            if await self._direct_inbound_receipt_exists_for_reporting(
+                tenant_id, reporting_record_id
+            ):
+                return
+
+            wo = await WorkOrder.get_or_none(
+                id=record.work_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not wo or wo.status not in ("released", "in_progress", "completed"):
                 return
 
             semi = await is_semi_finished_product_by_bom_role(tenant_id, wo.product_id)
-            if semi:
-                exists = await SemiFinishedGoodsReceipt.filter(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                    deleted_at__isnull=True,
-                ).exists()
-            else:
-                exists = await FinishedGoodsReceipt.filter(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                    deleted_at__isnull=True,
-                ).exists()
-            if exists:
-                return
 
             from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
 
@@ -117,26 +217,60 @@ class ReportingService(AppBaseService[ReportingRecord]):
             )
             if not resolved:
                 logger.warning(
-                    "末道工序直接入库已开启但跳过创建成品入库单：未解析到默认仓库，请配置与工单工作中心/车间关联的启用仓库或至少一个启用的普通仓。"
-                    f" tenant_id={tenant_id} work_order_id={work_order_id} work_order_code={getattr(wo, 'code', '')}"
+                    "末道工序直接入库已开启但跳过创建成品入库单：未解析到默认仓库，请在成品物料上配置默认仓库，或维护与工单工作中心/车间关联的启用仓库。"
+                    f" tenant_id={tenant_id} work_order_id={record.work_order_id}"
+                    f" work_order_code={getattr(wo, 'code', '')} reporting_record_id={reporting_record_id}"
                 )
                 return
 
             warehouse_id, warehouse_name = resolved
-            await wh_svc.quick_receipt_from_work_order(
+            receipt = await wh_svc.quick_receipt_from_work_order(
                 tenant_id=tenant_id,
-                work_order_id=work_order_id,
+                work_order_id=record.work_order_id,
                 created_by=acting_user_id,
                 warehouse_id=warehouse_id,
                 warehouse_name=warehouse_name,
+                receipt_quantity=qualified,
             )
+
+            target_type = "semi_finished_goods_receipt" if semi else "finished_goods_receipt"
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="reporting_record",
+                        source_id=reporting_record_id,
+                        source_code=record.work_order_code,
+                        source_name=f"{record.operation_name} 报工",
+                        target_type=target_type,
+                        target_id=receipt.id,
+                        target_code=receipt.receipt_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="末道工序报工直接入库",
+                    ),
+                    created_by=acting_user_id,
+                )
+            except Exception as rel_err:
+                logger.warning(
+                    "末道工序直接入库：建立报工→入库单关联失败 reporting_record_id=%s err=%s",
+                    reporting_record_id,
+                    rel_err,
+                )
+
             logger.info(
-                f"末道工序直接入库：已为工单 {wo.code}（id={work_order_id}）自动创建"
-                f"{'半成品' if semi else '成品'}入库单"
+                f"末道工序直接入库：报工 id={reporting_record_id} 已为工单 {wo.code} 创建"
+                f"{'半成品' if semi else '成品'}入库单 {receipt.receipt_code}，数量 {qualified}"
             )
         except Exception as e:
             logger.warning(
-                f"末道工序直接入库自动创建生产入库单失败：tenant_id={tenant_id} work_order_id={work_order_id} err={e}"
+                f"末道工序直接入库自动创建生产入库单失败：tenant_id={tenant_id}"
+                f" reporting_record_id={reporting_record_id} err={e}"
             )
 
     async def create_reporting_record(
@@ -162,13 +296,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             NotFoundError: 工单不存在
         """
         trigger_direct_inbound = False
-        wo_id_for_auto: Optional[int] = None
+        reporting_record_id_for_auto: Optional[int] = None
 
         if True:
             # 验证工单是否存在且状态正确
             work_order = await WorkOrder.get_or_none(
                 id=reporting_data.work_order_id,
-                tenant_id=tenant_id
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
             )
 
             if not work_order:
@@ -243,11 +378,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 raise ValidationError("只能对已下达或进行中的工单进行报工")
 
             # 获取工单工序信息（用于校验跳转规则和报工类型）
-            work_order_operation = await WorkOrderOperation.get_or_none(
+            work_order_operation = await _resolve_work_order_operation_for_reporting(
                 tenant_id=tenant_id,
                 work_order_id=reporting_data.work_order_id,
                 operation_id=reporting_data.operation_id,
-
             )
 
             if not work_order_operation:
@@ -530,39 +664,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
-            trigger_direct_inbound = (
-                reporting_record.status == "approved"
-                and work_order.status == "completed"
-            )
-            wo_id_for_auto = work_order.id
+            trigger_direct_inbound = reporting_record.status == "approved"
+            reporting_record_id_for_auto = reporting_record.id
 
-        if trigger_direct_inbound and wo_id_for_auto is not None:
+        if trigger_direct_inbound and reporting_record_id_for_auto is not None:
             await self._maybe_trigger_direct_finished_goods_inbound(
-                tenant_id, wo_id_for_auto, reported_by
+                tenant_id, reporting_record_id_for_auto, reported_by
             )
 
-        # 新建/自动审核报工后，待入库成品入库单数量与末道已审合格数对齐（撤销审核等走 _update_work_order_progress）
-        try:
-            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
-            from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
-                SemiFinishedGoodsReceiptService,
-            )
-
-            await FinishedGoodsReceiptService().sync_pending_finished_goods_receipts_for_work_order(
-                tenant_id=tenant_id,
-                work_order_id=reporting_record.work_order_id,
-            )
-            await SemiFinishedGoodsReceiptService().sync_pending_semi_finished_goods_receipts_for_work_order(
-                tenant_id=tenant_id,
-                work_order_id=reporting_record.work_order_id,
-            )
-        except Exception as sync_err:
-            logger.warning(
-                "报工创建后同步待入库生产入库单失败 tenant_id=%s work_order_id=%s err=%s",
-                tenant_id,
-                getattr(reporting_record, "work_order_id", None),
-                sync_err,
-            )
+        await self._sync_pending_inbound_receipts_if_needed(
+            tenant_id=tenant_id,
+            work_order_id=reporting_record.work_order_id,
+        )
         return ReportingRecordResponse.model_validate(reporting_record)
 
     async def get_reporting_record_by_id(
@@ -670,7 +783,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ValidationError: 审核状态错误
         """
         should_try_direct_inbound = False
-        wo_id_for_inbound: Optional[int] = None
+        reporting_record_id_for_inbound: Optional[int] = None
         async with in_transaction():
             record = await ReportingRecord.get_or_none(
                 id=record_id,
@@ -742,11 +855,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 审核通过时自动累计模具使用次数
             if record.status == 'approved':
-                work_order_op = await WorkOrderOperation.get_or_none(
+                work_order_op = await _resolve_work_order_operation_for_reporting(
                     tenant_id=tenant_id,
                     work_order_id=record.work_order_id,
                     operation_id=record.operation_id,
-                    deleted_at__isnull=True,
                 )
                 work_order = await WorkOrder.get_or_none(id=record.work_order_id, tenant_id=tenant_id)
                 if work_order_op and work_order:
@@ -773,13 +885,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if record.status == "approved":
                 should_try_direct_inbound = True
-                wo_id_for_inbound = record.work_order_id
+                reporting_record_id_for_inbound = record.id
 
             response = ReportingRecordResponse.model_validate(record)
 
-        if should_try_direct_inbound and wo_id_for_inbound is not None:
+        if should_try_direct_inbound and reporting_record_id_for_inbound is not None:
             await self._maybe_trigger_direct_finished_goods_inbound(
-                tenant_id, wo_id_for_inbound, approved_by
+                tenant_id, reporting_record_id_for_inbound, approved_by
             )
 
         return response
@@ -954,11 +1066,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         async with in_transaction():
             # 获取工单工序并扣减计数
-            work_order_op = await WorkOrderOperation.get_or_none(
+            work_order_op = await _resolve_work_order_operation_for_reporting(
                 tenant_id=tenant_id,
                 work_order_id=record.work_order_id,
                 operation_id=record.operation_id,
-                deleted_at__isnull=True,
             )
             if work_order_op:
                 work_order_op.completed_quantity = _dec_non_negative((work_order_op.completed_quantity or Decimal('0')) - record.reported_quantity)
@@ -1232,28 +1343,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             await work_order.save()
 
-            # 末道报工变动后，同步尚未确认入库的成品入库数量（与下推/自动入库口径一致）
-            try:
-                from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
-                from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
-                    SemiFinishedGoodsReceiptService,
-                )
-
-                await FinishedGoodsReceiptService().sync_pending_finished_goods_receipts_for_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                )
-                await SemiFinishedGoodsReceiptService().sync_pending_semi_finished_goods_receipts_for_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                )
-            except Exception as sync_err:
-                logger.warning(
-                    "同步待入库生产入库单失败 tenant_id=%s work_order_id=%s err=%s",
-                    tenant_id,
-                    work_order_id,
-                    sync_err,
-                )
+            await self._sync_pending_inbound_receipts_if_needed(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+            )
 
     async def _update_work_order_unqualified_quantity(
         self,

@@ -43,30 +43,12 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         tenant_id: int,
         work_order: WorkOrder,
     ) -> Optional[Tuple[int, str]]:
-        from apps.master_data.models.warehouse import Warehouse
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
 
-        base = Warehouse.filter(
-            tenant_id=tenant_id,
-            is_active=True,
-            deleted_at__isnull=True,
+        return await FinishedGoodsReceiptService().resolve_default_inbound_warehouse_for_work_order(
+            tenant_id,
+            work_order,
         )
-        wc_id = getattr(work_order, "work_center_id", None)
-        if wc_id:
-            wh = await base.filter(work_center_id=wc_id).order_by("id").first()
-            if wh:
-                return (wh.id, wh.name)
-        ws_id = getattr(work_order, "workshop_id", None)
-        if ws_id:
-            wh = await base.filter(workshop_id=ws_id).order_by("id").first()
-            if wh:
-                return (wh.id, wh.name)
-        wh = await base.filter(warehouse_type="normal").order_by("id").first()
-        if wh:
-            return (wh.id, wh.name)
-        wh = await base.order_by("id").first()
-        if wh:
-            return (wh.id, wh.name)
-        return None
 
     async def create_semi_finished_goods_receipt(
         self,

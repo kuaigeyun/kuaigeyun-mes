@@ -117,7 +117,8 @@ class UserResponse(UserBase):
         updated_at: 更新时间
     """
 
-    uuid: str = Field(..., description="用户UUID（对外暴露，业务标识）")
+    # 响应须如实返回库内数据，不可套用创建时的 min_length=3（历史/中文短用户名如「正邦」）
+    username: str = Field(..., max_length=50, description="用户名")
     tenant_id: int = Field(..., description="组织 ID")
     last_login: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")

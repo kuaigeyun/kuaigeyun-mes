@@ -1261,9 +1261,22 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         """
         为工单解析成品入库默认仓库（用于末道工序自动入库等场景）。
 
-        优先级：关联工作中心的启用仓库 > 关联车间的启用仓库 > 首个启用的普通仓 > 任意启用仓库。
+        优先级：工单成品物料 defaults 默认仓库（按 priority）> 关联工作中心的启用仓库
+        > 关联车间的启用仓库 > 首个启用的普通仓 > 任意启用仓库。
         """
         from apps.master_data.models.warehouse import Warehouse
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        product_id = getattr(work_order, "product_id", None)
+        if product_id:
+            material_wh = await resolve_primary_default_warehouse_from_material(
+                tenant_id,
+                material_id=product_id,
+            )
+            if material_wh:
+                return material_wh
 
         base = Warehouse.filter(
             tenant_id=tenant_id,

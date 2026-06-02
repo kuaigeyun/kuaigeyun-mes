@@ -79,6 +79,69 @@ def _material_defaults_as_dict(raw: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+async def resolve_primary_default_warehouse_from_material(
+    tenant_id: int,
+    material_id: Optional[int] = None,
+    *,
+    material: Optional[Material] = None,
+) -> Optional[Tuple[int, str]]:
+    """
+    从物料 defaults.defaultWarehouses 按 priority 解析首个启用且未删除的仓库。
+
+    与前端 MaterialForm「默认仓库（可多选，按优先级排序）」写入格式一致。
+    """
+    from apps.master_data.models.warehouse import Warehouse
+
+    if material is None:
+        if not material_id:
+            return None
+        material = await Material.get_or_none(
+            id=material_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+    if not material:
+        return None
+
+    defaults = _material_defaults_as_dict(getattr(material, "defaults", None))
+    if not defaults:
+        return None
+
+    raw_list = defaults.get("defaultWarehouses") or defaults.get("default_warehouses")
+    if not isinstance(raw_list, list) or not raw_list:
+        return None
+
+    def _priority(entry: dict) -> int:
+        try:
+            return int(entry.get("priority") or 999)
+        except (TypeError, ValueError):
+            return 999
+
+    sorted_entries = sorted(
+        [e for e in raw_list if isinstance(e, dict)],
+        key=_priority,
+    )
+
+    for entry in sorted_entries:
+        wh_id = entry.get("warehouseId") or entry.get("warehouse_id")
+        if wh_id is None:
+            continue
+        try:
+            wh_id_int = int(wh_id)
+        except (TypeError, ValueError):
+            continue
+        wh = await Warehouse.get_or_none(
+            id=wh_id_int,
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        if wh:
+            return (wh.id, wh.name)
+
+    return None
+
+
 async def _enrich_inspection_plan_name(resp_data: Dict[str, Any]) -> None:
     """当有 default_inspection_plan_id 时，填充 default_inspection_plan_name"""
     plan_id = resp_data.get("default_inspection_plan_id")

@@ -10574,11 +10574,33 @@ export default {
 
   'app.kuaizhizao.common.fieldNotes': 'Notes',
   'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound':
-    'Last operation: “Direct inbound” is enabled. After the work order is completed and conditions are met, the system will try to post finished-goods inbound automatically (subject to actual processing).',
+    'Last operation: “Direct inbound” is enabled. Each approved last-op reporting will auto-create a pending inbound receipt for the qualified quantity (subject to actual processing).',
   'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice':
     'Last operation: “Inbound notice” is enabled. After completion, a pending inbound / notice will be created (reserved for FG inspection; subject to actual processing).',
   'apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound':
     'Last operation: auto inbound is off. Please create finished-goods inbound manually in the warehouse module after completion.',
+  'apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty': 'Work order plan',
+  'apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss': 'Cumulative material loss',
+  'apps.kuaizhizao.workOrder.quickReport.replenishmentQty': 'Replenishment',
+  'apps.kuaizhizao.workOrder.quickReport.reportablePanelHint':
+    'WO plan is production qty; cumulative loss is unqualified plus scrap (reduces upstream transfer, see material formula); replenishment is delivered SCRAP_REPLENISH calls. Plan reportable is not plan minus loss—it is remaining against this operation’s plan cap.',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableFormula': '{{plan}} − reported here {{reported}}',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableFormula': 'From prev op {{transfer}} − reported here {{reported}}',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableTitle': 'Plan reportable (remaining)',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableHint':
+    'Remaining quantity this operation may still report against the work order plan and over-report rules.',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableTitle': 'Material reportable (remaining)',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableHint':
+    'Qualified output from the previous operation not yet consumed by reporting on this operation.',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableHintFirstOp':
+    'Work order plan quantity not yet consumed by reporting on this operation.',
+  'apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle': 'Max for this reporting',
+  'apps.kuaizhizao.workOrder.quickReport.effectiveReportableHint':
+    'Qualified plus unqualified must not exceed the max for this reporting.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffective':
+    'Exceeds the max for this reporting ({{max}}). Adjust qualified or unqualified quantity.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit':
+    'Reporting quantity cannot exceed the max for this reporting ({{max}})',
   'app.kuaizhizao.customerFollowUp.activityTypePlaceholder': 'Select activity type',
   'app.kuaizhizao.customerFollowUp.quickAddCustomer': 'Quick Add Customer',
   'app.kuaizhizao.salesForecast.importTitle': 'Import Sales Forecast',

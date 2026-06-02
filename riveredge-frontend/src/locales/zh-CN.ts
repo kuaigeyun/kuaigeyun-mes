@@ -1033,7 +1033,7 @@ export default {
   'pages.system.businessConfig.param.work_order.allow_production_without_material.description': '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
   'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.name': '末道工序自动入库',
   'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.description':
-    '末道工序完工后是否自动入库：关闭、直接入库，或入库通知（成品入库检验预留）。',
+    '末道工序每笔已审核报工按合格数量各建一张待入库单；关闭、直接入库，或入库通知（成品入库检验预留）。',
   'pages.system.businessConfig.param.reporting.quick_reporting.name': '快速报工',
   'pages.system.businessConfig.param.reporting.quick_reporting.description': '是否启用快速报工功能',
   'pages.system.businessConfig.param.reporting.parameter_reporting.name': '带参数报工',
@@ -6475,7 +6475,7 @@ export default {
   'pages.system.configCenter.param.work_order_merge_desc': '是否支持工单合并',
   'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode': '末道工序自动入库',
   'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_desc':
-    '末道工序报工完成并满足完工条件时，是否自动触发成品入库相关动作。「入库通知」为成品入库检验流程预留，当前可先选「关闭」或「直接入库」。',
+    '末道工序每笔已审核报工按合格数量各建一张待入库单（无需等工单全部报满）。「入库通知」为成品入库检验流程预留，当前可先选「关闭」或「直接入库」。',
   'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_none': '关闭',
   'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_direct': '直接入库',
   'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice': '入库通知（成品入库检验预留）',
@@ -10637,11 +10637,33 @@ export default {
 
   'app.kuaizhizao.common.fieldNotes': '备注',
   'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound':
-    '末道工序：当前组织已开启「直接入库」。工单完工并满足条件后，系统将尝试自动办理成品入库（以实际执行为准）。',
+    '末道工序：当前组织已开启「直接入库」。每笔末道报工审核通过后，系统将按合格数量自动生成待入库单（以实际执行为准）。',
   'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice':
     '末道工序：当前组织已开启「入库通知」。工单完工并满足条件后，将生成待入库/入库通知（预留成品入库检验流程，以实际执行为准）。',
   'apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound':
     '末道工序：当前未开启自动入库。完工后请自行在仓储模块办理成品入库。',
+  'apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty': '工单计划',
+  'apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss': '累计料损',
+  'apps.kuaizhizao.workOrder.quickReport.replenishmentQty': '补料',
+  'apps.kuaizhizao.workOrder.quickReport.reportablePanelHint':
+    '工单计划为投产数量；累计料损为各工序不合格与报废合计（影响上道转出，见物料可报公式）；补料为「报废/质量异常」叫料已送达数量。计划可报≠计划−料损，而是本工序相对工单计划尚可报数量。',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableFormula': '{{plan}} − 本工序已报 {{reported}}',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableFormula': '上道转出 {{transfer}} − 本工序已报 {{reported}}',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableTitle': '计划可报（剩余）',
+  'apps.kuaizhizao.workOrder.quickReport.planReportableHint':
+    '相对工单计划量与超报规则，本工序尚可累计报工的数量。',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableTitle': '物料可报（剩余）',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableHint':
+    '上道工序合格转出、尚未在本工序报工消耗的数量。',
+  'apps.kuaizhizao.workOrder.quickReport.materialReportableHintFirstOp':
+    '工单计划量中，尚未在本工序报工消耗的数量。',
+  'apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle': '本次可报上限',
+  'apps.kuaizhizao.workOrder.quickReport.effectiveReportableHint':
+    '合格数与不合格数之和不得超过「本次可报上限」。',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffective':
+    '已超出本次可报上限（{{max}}），请调整合格数或不合格数。',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit':
+    '报工数量不能超过本次可报上限（{{max}}）',
   'app.kuaizhizao.customerFollowUp.activityTypePlaceholder': '请选择活动类型',
   'app.kuaizhizao.customerFollowUp.quickAddCustomer': '快速新增客户',
   'app.kuaizhizao.salesForecast.importTitle': '导入销售预测',

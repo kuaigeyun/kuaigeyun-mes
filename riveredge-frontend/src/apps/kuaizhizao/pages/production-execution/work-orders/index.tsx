@@ -189,6 +189,7 @@ import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, LIST_LIFECYCLE
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
+import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
 import type { CurrentUser } from '../../../../../types/api'
@@ -2335,7 +2336,9 @@ const WorkOrdersPage: React.FC = () => {
         }
         const rem = getRemainingReportableQuantity(quickReportingOperation, Number(quickReportingWorkOrder.quantity) || 0)
         if (rq > rem + 1e-9) {
-          messageApi.warning(`报工数量不能超过本工序可报数量（剩余 ${rem}）`)
+          messageApi.warning(
+            t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', { max: rem })
+          )
           return
         }
         const defectOpts = getOperationDefectTypeOptions(quickReportingOperation)
@@ -6039,43 +6042,12 @@ const WorkOrdersPage: React.FC = () => {
           <>
             {quickReportingWorkOrder && quickReportingOperation && (
               <Col span={24} style={{ marginBottom: 16 }}>
-                <div
-                  style={{
-                    padding: '14px 16px',
-                    borderRadius: token.borderRadiusLG,
-                    background: token.colorFillAlter,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                  }}
-                >
-                  <Statistic
-                    title={
-                      <span style={{ fontSize: 12, color: token.colorTextSecondary, fontWeight: 400 }}>
-                        本工序可报数量（剩余）
-                      </span>
-                    }
-                    value={getRemainingReportableQuantity(
-                      quickReportingOperation,
-                      Number(quickReportingWorkOrder.quantity) || 0
-                    )}
-                    valueStyle={{
-                      color: token.colorPrimary,
-                      fontSize: 26,
-                      fontWeight: 600,
-                      lineHeight: 1.2,
-                    }}
-                  />
-                  <Typography.Paragraph
-                    type="secondary"
-                    style={{
-                      marginBottom: 0,
-                      marginTop: 10,
-                      fontSize: 12,
-                      lineHeight: 1.65,
-                    }}
-                  >
-                    合格数与不合格数之和不得超过上述可报数量。
-                  </Typography.Paragraph>
-                </div>
+                <ReportableQuantityPanel
+                  operation={quickReportingOperation}
+                  workOrderQuantity={Number(quickReportingWorkOrder.quantity) || 0}
+                  operations={quickReportingRouteOperations}
+                  workOrderId={quickReportingWorkOrder.id}
+                />
               </Col>
             )}
             <ProFormDigit
@@ -6125,7 +6097,7 @@ const WorkOrdersPage: React.FC = () => {
                     </div>
                     {over && (
                       <Typography.Text type="danger" style={{ display: 'block', marginTop: 8 }}>
-                        已超出本工序可报数量（剩余 {rem}），请调整合格数或不合格数。
+                        {t('apps.kuaizhizao.workOrder.quickReport.exceedEffective', { max: rem })}
                       </Typography.Text>
                     )}
                   </Col>
