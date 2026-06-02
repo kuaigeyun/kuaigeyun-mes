@@ -58,6 +58,9 @@ function Load-DeployEnv {
     if (-not $script:CADDY_ENABLE_LETSENCRYPT) { $script:CADDY_ENABLE_LETSENCRYPT = 'false' }
     if (-not $script:NODE_BUILD_MEM) { $script:NODE_BUILD_MEM = 4096 }
     if (-not $script:SERVER_IP) { $script:SERVER_IP = '' }
+    if (-not $script:TASKIQ_WORKERS) {
+        if ($script:DeployMode -eq 'prod') { $script:TASKIQ_WORKERS = 1 } else { $script:TASKIQ_WORKERS = 2 }
+    }
 }
 
 function Apply-CN-Mirrors {
@@ -674,6 +677,7 @@ function Start-WorkerDev {
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $wArgs = @('run','--extra','pdf','taskiq','worker','core.tasks.taskiq_app:broker','--fs-discover',
+            '--workers',"$($script:TASKIQ_WORKERS)",
             'core.tasks.taskiq_app','core.tasks.data_backup_handlers','core.inngest.functions',
             'apps.master_data.inngest.functions','apps.kuaizhizao.inngest.functions')
         Start-ProcessBackground 'worker' $uv $wArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
@@ -728,7 +732,7 @@ function Start-WorkerProd {
     $uv = Resolve-Uv
     if (-not (Test-Path (Join-Path $script:LogsDir 'worker.pid'))) {
         Write-LogInfo '启动 Taskiq Worker...'
-        $args = @('run','taskiq','worker','--app-dir','src','--fs-discover','core.tasks.taskiq_app:broker')
+        $args = @('run','taskiq','worker','--app-dir','src','--fs-discover','--workers',"$($script:TASKIQ_WORKERS)",'core.tasks.taskiq_app:broker')
         Start-ProcessBackground 'worker' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir

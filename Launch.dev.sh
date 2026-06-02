@@ -258,7 +258,9 @@ start_worker() {
     log_info "正在拉起 Taskiq Worker/Scheduler..."
     cd riveredge-backend
     [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
+    TASKIQ_WORKERS="${TASKIQ_WORKERS:-2}"
     PYTHONPATH="src" nohup uv run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+        --workers "$TASKIQ_WORKERS" \
         core.tasks.taskiq_app \
         core.tasks.data_backup_handlers \
         core.inngest.functions \

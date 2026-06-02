@@ -47,6 +47,14 @@ load_deploy_env() {
     CADDY_ENABLE_LETSENCRYPT="${CADDY_ENABLE_LETSENCRYPT:-false}"
     NODE_BUILD_MEM="${NODE_BUILD_MEM:-4096}"
     SERVER_IP="${SERVER_IP:-}"
+    # Taskiq 子进程数：生产默认 1（CLI 内置默认为 2，每子进程约 +200MB RSS）
+    if [ -z "${TASKIQ_WORKERS:-}" ]; then
+        if [ "$DEPLOY_MODE" = "prod" ]; then
+            TASKIQ_WORKERS=1
+        else
+            TASKIQ_WORKERS=2
+        fi
+    fi
 }
 
 is_windows_gitbash() {
@@ -1264,6 +1272,7 @@ start_worker_dev() {
         export PYTHONPATH="$BACKEND_DIR/src"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         nohup "$(resolve_uv)" run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+            --workers "$TASKIQ_WORKERS" \
             core.tasks.taskiq_app core.tasks.data_backup_handlers core.inngest.functions \
             apps.master_data.inngest.functions apps.kuaizhizao.inngest.functions \
             > "$LOGS_DIR/worker.log" 2>&1 &
@@ -1334,7 +1343,9 @@ start_worker_prod() {
             export ENVIRONMENT=production
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
-            nohup "$(resolve_uv)" run taskiq worker --app-dir src --fs-discover core.tasks.taskiq_app:broker \
+            nohup "$(resolve_uv)" run taskiq worker --app-dir src --fs-discover \
+                --workers "$TASKIQ_WORKERS" \
+                core.tasks.taskiq_app:broker \
                 > "$LOGS_DIR/worker.log" 2>&1 &
             echo $! > "$LOGS_DIR/worker.pid"
         )

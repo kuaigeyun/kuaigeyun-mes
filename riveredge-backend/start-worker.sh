@@ -13,8 +13,10 @@ ENVIRONMENT=${ENVIRONMENT:-development}
 
 if [ "$ENVIRONMENT" = "development" ]; then
     RELOAD="--reload"
+    TASKIQ_WORKERS="${TASKIQ_WORKERS:-2}"
 else
     RELOAD=""
+    TASKIQ_WORKERS="${TASKIQ_WORKERS:-1}"
 fi
 
 # Worker：消费 PG 队列中的任务（与 API 共用 core.tasks.taskiq_app:broker）
@@ -22,6 +24,7 @@ echo "📦 正在启动 Taskiq worker..."
 uv run taskiq worker \
     --app-dir src \
     --fs-discover \
+    --workers "$TASKIQ_WORKERS" \
     $RELOAD \
     core.tasks.taskiq_app:broker &
 
