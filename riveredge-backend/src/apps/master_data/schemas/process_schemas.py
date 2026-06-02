@@ -145,6 +145,18 @@ class OperationBase(BaseModel):
         if m not in ("none", "fixed", "percent"):
             raise ValueError("超报模式必须是: none, fixed, percent")
         return m
+
+    @field_validator("over_report_value")
+    @classmethod
+    def validate_over_report_value(cls, v: Decimal, info) -> Decimal:
+        mode = info.data.get("over_report_mode") or info.data.get("overReportMode") or "none"
+        m = str(mode).lower().strip()
+        val = v if v is not None else Decimal("0")
+        if m == "percent" and val > Decimal("100"):
+            raise ValueError("按比例超报时，超报值须在 0–100 之间（百分数）")
+        if val < 0:
+            raise ValueError("超报值不能为负数")
+        return val
     
     @field_validator("code")
     @classmethod

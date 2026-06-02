@@ -432,20 +432,27 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order_operation.actual_start_date = work_order_operation.actual_start_date or datetime.now()
             
             # 更新工序完成数量
-            work_order_operation.completed_quantity = (work_order_operation.completed_quantity or Decimal('0')) + reporting_data.reported_quantity
-            work_order_operation.qualified_quantity = (work_order_operation.qualified_quantity or Decimal('0')) + reporting_data.qualified_quantity
-            work_order_operation.unqualified_quantity = (work_order_operation.unqualified_quantity or Decimal('0')) + reporting_data.unqualified_quantity
-            
-            # 检查工序是否完成（按数量报工：完成数量>=计划数量，按状态报工：reported_quantity=1）
-            if reporting_type == "status":
-                # 按状态报工：reported_quantity=1表示完成
-                if reporting_data.reported_quantity == 1:
-                    work_order_operation.status = 'completed'
-                    work_order_operation.actual_end_date = datetime.now()
+            if reporting_type == "status" and reported_quantity_dec == 1:
+                from apps.kuaizhizao.services.over_report_rules import status_reporting_target_quantity
+
+                target_qty = status_reporting_target_quantity(work_order, work_order_operation)
+                work_order_operation.completed_quantity = target_qty
+                work_order_operation.qualified_quantity = target_qty
+                work_order_operation.unqualified_quantity = Decimal("0")
+                work_order_operation.status = "completed"
+                work_order_operation.actual_end_date = datetime.now()
             else:
-                # 按数量报工：完成数量>=计划数量（工单数量）
+                work_order_operation.completed_quantity = (
+                    work_order_operation.completed_quantity or Decimal("0")
+                ) + reporting_data.reported_quantity
+                work_order_operation.qualified_quantity = (
+                    work_order_operation.qualified_quantity or Decimal("0")
+                ) + reporting_data.qualified_quantity
+                work_order_operation.unqualified_quantity = (
+                    work_order_operation.unqualified_quantity or Decimal("0")
+                ) + reporting_data.unqualified_quantity
                 if work_order_operation.completed_quantity >= work_order.quantity:
-                    work_order_operation.status = 'completed'
+                    work_order_operation.status = "completed"
                     work_order_operation.actual_end_date = datetime.now()
             
             await work_order_operation.save()

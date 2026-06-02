@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
 from tortoise.transactions import in_transaction
@@ -233,6 +234,13 @@ class StationService(WorkOrderService):
                 await open_dt.save()
 
             user_info = await self.get_user_info(completed_by)
+            if (op.reporting_type or "quantity") == "status":
+                from apps.kuaizhizao.services.over_report_rules import status_reporting_target_quantity
+
+                target_qty = status_reporting_target_quantity(work_order, op)
+                op.completed_quantity = target_qty
+                op.qualified_quantity = target_qty
+                op.unqualified_quantity = Decimal("0")
             op.status = "completed"
             op.actual_end_date = datetime.now()
             op.updated_by = completed_by
@@ -240,6 +248,10 @@ class StationService(WorkOrderService):
             if remarks:
                 op.remarks = (op.remarks or "") + f"\n[结束] {remarks}"
             await op.save()
+
+            from apps.kuaizhizao.services.reporting_service import ReportingService
+
+            await ReportingService()._update_work_order_progress(tenant_id, work_order_id)
 
             dmap = await _batch_default_operators_snapshots_by_master_operation_id(
                 tenant_id, [op.operation_id]

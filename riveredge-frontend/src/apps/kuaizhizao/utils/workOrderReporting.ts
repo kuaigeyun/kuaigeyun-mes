@@ -2,14 +2,20 @@
  * 报工数量上限：优先使用后端下发的 max_reportable_quantity，否则按工序上超报规则与工单计划推算。
  */
 
+/** percent 模式：超报值为百分数 0–100（误填如 10000 时按 100 处理） */
+function clampOverReportValue(mode: string, val: number): number {
+  if (mode === 'percent') {
+    if (val > 100) return 100;
+    if (val < 0) return 0;
+  }
+  return val < 0 ? 0 : val;
+}
+
 export function getMaxReportableQuantityForOperation(operation: any, workOrderQuantity: number): number {
   const plan = Number(workOrderQuantity) || 0;
-  const mr = operation?.max_reportable_quantity ?? operation?.maxReportableQuantity;
-  if (mr != null && !Number.isNaN(Number(mr))) {
-    return Math.max(0, Number(mr));
-  }
   const mode = operation?.over_report_mode ?? operation?.overReportMode ?? 'none';
-  const val = Number(operation?.over_report_value ?? operation?.overReportValue ?? 0) || 0;
+  const rawVal = Number(operation?.over_report_value ?? operation?.overReportValue ?? 0) || 0;
+  const val = clampOverReportValue(mode, rawVal);
   if (mode === 'fixed') {
     return Math.max(0, plan + val);
   }

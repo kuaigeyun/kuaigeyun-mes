@@ -90,6 +90,21 @@ def merge_over_report_layers(
     return m, v
 
 
+def clamp_over_report_value_for_mode(mode: str, value: Any) -> Decimal:
+    """percent 模式按百分数 0–100 解释；异常大值（如误填 10000）钳制到 100。"""
+    md = normalize_over_report_mode(mode)
+    v = to_decimal(value)
+    if md == OVER_REPORT_PERCENT:
+        if v > Decimal("100"):
+            return Decimal("100")
+        if v < Decimal("0"):
+            return Decimal("0")
+    elif md == OVER_REPORT_FIXED:
+        if v < Decimal("0"):
+            return Decimal("0")
+    return v
+
+
 def max_completed_quantity_for_plan(plan_qty: Any, mode: str, value: Decimal) -> Decimal:
     plan = to_decimal(plan_qty)
     if plan < 0:
@@ -98,9 +113,16 @@ def max_completed_quantity_for_plan(plan_qty: Any, mode: str, value: Decimal) ->
     if md == OVER_REPORT_NONE:
         return plan
     if md == OVER_REPORT_FIXED:
-        return plan + max(to_decimal(value), Decimal("0"))
+        return plan + clamp_over_report_value_for_mode(md, value)
     if md == OVER_REPORT_PERCENT:
-        pct = max(to_decimal(value), Decimal("0"))
+        pct = clamp_over_report_value_for_mode(md, value)
         extra = plan * pct / Decimal("100")
         return plan + extra.quantize(Decimal("0.01"))
     return plan
+
+
+def status_reporting_target_quantity(work_order: Any, work_order_operation: Any) -> Decimal:
+    """按状态报工标记完成时，本道工序应达到的累计完成/合格数量（含超报上限）。"""
+    plan_qty = to_decimal(getattr(work_order, "quantity", None))
+    om, ov = tuple_from_model(work_order_operation)
+    return max_completed_quantity_for_plan(plan_qty, om, ov)
