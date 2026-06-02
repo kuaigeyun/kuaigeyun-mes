@@ -12,7 +12,7 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
-import { removeCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
+import { removeCustomPageTitle, resolveCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
 import {
   useConfigStore,
   resolveEffectiveHomePath,
@@ -197,6 +197,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const getTabTitle = useCallback(
     (pathOrKey: string): string => {
       const pathname = (pathOrKey || '').split('?')[0];
+      const search = pathOrKey.includes('?') ? pathOrKey.slice(pathOrKey.indexOf('?')) : '';
+      const custom = resolveCustomPageTitle(pathname, search);
+      if (custom) return custom;
       return findMenuTitleWithTranslation(pathname, menuConfig, t);
     },
     [menuConfig, t]

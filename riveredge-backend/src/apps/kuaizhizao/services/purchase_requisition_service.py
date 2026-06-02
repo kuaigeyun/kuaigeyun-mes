@@ -105,6 +105,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 source_id=data.source_id,
                 source_code=data.source_code,
                 notes=data.notes,
+                attachments=data.attachments,
                 created_by=created_by,
                 updated_by=created_by,
             )

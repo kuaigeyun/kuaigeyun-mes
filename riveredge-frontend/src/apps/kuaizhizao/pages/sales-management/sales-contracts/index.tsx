@@ -6,11 +6,14 @@
 
 
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useTranslation } from 'react-i18next';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 
@@ -55,6 +58,7 @@ import {
   InputNumber,
 
   Modal,
+  Card,
 
   Row,
 
@@ -92,6 +96,12 @@ import {
 
   StopOutlined,
 
+  ArrowLeftOutlined,
+
+  ImportOutlined,
+
+  FileTextOutlined,
+
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
@@ -104,11 +114,15 @@ import {
 
   DRAWER_CONFIG,
 
-  FormModalTemplate,
-
   ListPageTemplate,
 
   MODAL_CONFIG,
+
+  DocumentFormPageLayout,
+
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+
+  PAGE_SPACING,
 
 } from '../../../../../components/layout-templates';
 
@@ -118,7 +132,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 
 import { resolveOrderLineSalePrice } from '../../../../master-data/utils/resolve-partner-material-price';
 
-import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 
@@ -157,6 +171,22 @@ import salesContractApi, {
 } from '../../../services/sales-contract';
 
 import { SalesContractItemsFormTable } from './SalesContractItemsFormTable';
+import SalesContractTermsManageModal from './SalesContractTermsManageModal';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  buildTermTemplatesFromGroupItems,
+  extractPlaceholdersFromTerms,
+  resolveTermsWithPlaceholders,
+} from './contract-term-placeholders';
+import {
+  salesContractTermApi,
+  type SalesContractTermSnapshot,
+} from '../../../services/sales-contract-term';
+
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 
 import {
 
@@ -248,8 +278,6 @@ function remainingItemQty(item: { contract_quantity?: number; released_quantity?
 
 }
 
-
-
 const defaultMilestone = {
   milestone_name: '',
   planned_date: undefined as string | undefined,
@@ -313,11 +341,25 @@ type ReleaseRow = {
 
 
 
+const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contracts';
+const SALES_CONTRACT_CREATE_PATH = `${SALES_CONTRACT_LIST_PATH}/new`;
+const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}/edit`;
+
 const SalesContractsPage: React.FC = () => {
 
   const navigate = useNavigate();
 
   const location = useLocation();
+
+  const [searchParams] = useSearchParams();
+
+  const isCreatePage = location.pathname.endsWith('/sales-contracts/new');
+  const editRouteMatch = location.pathname.match(/\/sales-contracts\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+
+  const formPageInitializedRef = useRef(false);
 
   const { message: messageApi } = App.useApp();
 
@@ -331,11 +373,10 @@ const SalesContractsPage: React.FC = () => {
 
   const contractEditingInclValueRef = useRef<number | null>(null);
 
-  const [formModalVisible, setFormModalVisible] = useState(false);
-
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
 
   const [customerList, setCustomerList] = useState<any[]>([]);
 
@@ -389,6 +430,17 @@ const SalesContractsPage: React.FC = () => {
 
   const [changeSubmitting, setChangeSubmitting] = useState(false);
 
+  const [termsManageOpen, setTermsManageOpen] = useState(false);
+  const [termGroupOptions, setTermGroupOptions] = useState<{ label: string; value: number }[]>([]);
+  const [termTemplateTerms, setTermTemplateTerms] = useState<SalesContractTermSnapshot[]>([]);
+  const [termPlaceholderValues, setTermPlaceholderValues] = useState<Record<string, string>>({});
+  const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
+
+  const termPlaceholderKeys = useMemo(
+    () => extractPlaceholdersFromTerms(termTemplateTerms),
+    [termTemplateTerms],
+  );
+
 
 
   const contractTracking = useDocumentTracking(
@@ -426,6 +478,86 @@ const SalesContractsPage: React.FC = () => {
       .catch((e) => console.error('加载物料失败', e));
 
   }, []);
+
+  const loadTermGroupOptions = useCallback(async () => {
+    try {
+      const res = await salesContractTermApi.listGroups({ limit: 500, is_active: true });
+      setTermGroupOptions(
+        (res.items || []).map((g) => ({
+          label: g.group_name,
+          value: g.id!,
+        })),
+      );
+    } catch (e) {
+      console.error('加载条款组失败', e);
+      setTermGroupOptions([]);
+    }
+  }, []);
+
+  const syncTermsPreview = useCallback(
+    (templates: SalesContractTermSnapshot[], placeholderValues: Record<string, string>) => {
+      const resolved = resolveTermsWithPlaceholders(templates, placeholderValues);
+      setTermsPreview(resolved);
+    },
+    [],
+  );
+
+  const applyTermGroupPreview = useCallback(
+    async (groupId: number | undefined | null, existingTerms?: SalesContractTermSnapshot[]) => {
+      if (!groupId) {
+        setTermTemplateTerms([]);
+        setTermPlaceholderValues({});
+        setTermsPreview([]);
+        return;
+      }
+      if (existingTerms?.length) {
+        const templates = existingTerms.map((term) => ({
+          ...term,
+          template_content: term.template_content ?? term.content,
+        }));
+        const mergedValues: Record<string, string> = {};
+        for (const term of existingTerms) {
+          if (term.placeholder_values) {
+            Object.assign(mergedValues, term.placeholder_values);
+          }
+        }
+        setTermTemplateTerms(templates);
+        setTermPlaceholderValues(mergedValues);
+        syncTermsPreview(templates, mergedValues);
+        return;
+      }
+      try {
+        const group = await salesContractTermApi.getGroup(groupId);
+        const templates = buildTermTemplatesFromGroupItems(group.items || []);
+        setTermTemplateTerms(templates);
+        setTermPlaceholderValues({});
+        syncTermsPreview(templates, {});
+      } catch (e: any) {
+        messageApi.error(e?.message || '加载条款组失败');
+        setTermTemplateTerms([]);
+        setTermPlaceholderValues({});
+        setTermsPreview([]);
+      }
+    },
+    [messageApi, syncTermsPreview],
+  );
+
+  const handleTermPlaceholderChange = useCallback(
+    (key: string, value: string) => {
+      setTermPlaceholderValues((prev) => {
+        const next = { ...prev, [key]: value };
+        syncTermsPreview(termTemplateTerms, next);
+        return next;
+      });
+    },
+    [termTemplateTerms, syncTermsPreview],
+  );
+
+  useEffect(() => {
+    if (isFormPage || termsManageOpen) {
+      loadTermGroupOptions();
+    }
+  }, [isFormPage, termsManageOpen, loadTermGroupOptions]);
 
 
 
@@ -555,7 +687,64 @@ const SalesContractsPage: React.FC = () => {
 
   );
 
+  const handleItemImport = useCallback(
+    (data: any[][]) => {
+      const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const rows = data.slice(2);
+      const newItems = rows
+        .map((row) => {
+          const materialCode = String(row[0] || '').trim();
+          const spec = String(row[1] || '').trim();
+          const unit = String(row[2] || '').trim();
+          const quantity = parseFloat(row[3]) || 0;
+          const price = parseFloat(row[4]) || 0;
+          const deliveryDate = row[5];
+          const notes = String(row[6] || '').trim();
 
+          if (!materialCode) return null;
+
+          const material = materialList.find(
+            (m) => (m.mainCode ?? (m as any).code) === materialCode,
+          );
+          const taxR =
+            Number((material as any)?.defaults?.defaultTaxRate ?? (material as any)?.defaults?.default_tax_rate) || 0;
+          let unitPrice =
+            price ||
+            Number(
+              (material as any)?.defaults?.defaultSalePrice ?? (material as any)?.defaults?.default_sale_price,
+            ) ||
+            0;
+          if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
+            unitPrice = convertUnitPriceByPriceType(unitPrice, taxR, 'tax_exclusive', 'tax_inclusive');
+          }
+
+          return {
+            material_id: material?.id,
+            material_code: material?.mainCode ?? (material as any)?.code ?? materialCode,
+            material_name: material?.name ?? '',
+            material_spec: material?.specification ?? spec,
+            material_unit: material?.baseUnit ?? unit,
+            contract_quantity: quantity || 1,
+            unit_price: unitPrice,
+            tax_rate: taxR,
+            delivery_date: deliveryDate && dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined,
+            notes: notes || '',
+          };
+        })
+        .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id != null || it.material_code !== ''));
+
+      if (newItems.length === 0) {
+        messageApi.warning('未检测到有效数据（请确保物料编号不为空）');
+        return;
+      }
+
+      const currentItems = formRef.current?.getFieldValue('items') || [];
+      formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
+      messageApi.success(`成功导入 ${newItems.length} 条明细`);
+      setImportModalVisible(false);
+    },
+    [materialList, messageApi],
+  );
 
   const buildFormPayload = (values: any) => {
 
@@ -607,7 +796,13 @@ const SalesContractsPage: React.FC = () => {
 
       payment_terms: values.payment_terms,
 
+      term_group_id: values.term_group_id || undefined,
+
+      contract_terms: termsPreview.length ? termsPreview : undefined,
+
       notes: values.notes,
+
+      attachments: normalizeDocumentAttachments(values.attachments),
 
       items: validItems.map((it: any) => ({
 
@@ -673,144 +868,161 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const handleCreate = () => {
-
+  async function initSalesContractCreateForm() {
     setEditingId(null);
-
     formRef.current?.resetFields();
-
-    setFormModalVisible(true);
-
     setTimeout(() => {
-
       formRef.current?.setFieldsValue({
-
         contract_type: 'single',
-
         contract_date: dayjs(),
-
         valid_from: dayjs(),
-
         price_type: 'tax_exclusive',
-
         currency_code: 'CNY',
-
         items: [{ ...defaultContractItem }],
-
         milestones: [],
-
+        term_group_id: undefined,
       });
-
+      setTermTemplateTerms([]);
+      setTermPlaceholderValues({});
+      setTermsPreview([]);
     }, 100);
+  }
 
-  };
-
-
-
-  const handleEdit = async (record: SalesContract) => {
-
+  async function initSalesContractEditForm(contractId: number) {
     try {
-
-      const data = await salesContractApi.get(record.id!);
-
-      setEditingId(record.id!);
-
-      setFormModalVisible(true);
-
+      const data = await salesContractApi.get(contractId);
+      setEditingId(contractId);
       setTimeout(() => {
-
         formRef.current?.setFieldsValue({
-
           contract_type: data.contract_type || 'single',
-
           customer_id: data.customer_id,
-
           customer_name: data.customer_name,
-
           customer_contact: data.customer_contact,
-
           customer_phone: data.customer_phone,
-
           contract_date: data.contract_date ? dayjs(data.contract_date) : undefined,
-
           valid_from: data.valid_from ? dayjs(data.valid_from) : undefined,
-
           valid_to: data.valid_to ? dayjs(data.valid_to) : undefined,
-
           price_type: data.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
-
           currency_code: data.currency_code || 'CNY',
-
           salesman_name: data.salesman_name,
-
           shipping_address: data.shipping_address,
-
           shipping_method: data.shipping_method,
-
           payment_terms: data.payment_terms,
-
           notes: data.notes,
-
+          attachments: mapAttachmentsToUploadList(data.attachments),
           items: (data.items ?? []).length
-
             ? data.items!.map((it) => ({
-
                 ...it,
-
                 delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
-
               }))
-
             : [{ ...defaultContractItem }],
-
           milestones: (data.milestones ?? []).map((ms) => ({
-
             ...ms,
-
             planned_date: ms.planned_date ? dayjs(ms.planned_date) : undefined,
-
           })),
-
+          term_group_id: data.term_group_id,
+          contract_terms: data.contract_terms,
         });
-
+        applyTermGroupPreview(data.term_group_id, data.contract_terms as SalesContractTermSnapshot[] | undefined);
       }, 100);
-
     } catch (e: any) {
-
       messageApi.error(e?.message || '加载合同失败');
-
+      navigate(SALES_CONTRACT_LIST_PATH);
     }
+  }
 
+  const handleCreate = () => {
+    navigate(SALES_CONTRACT_CREATE_PATH);
   };
 
+  const handleEdit = (record: SalesContract) => {
+    if (!record.id) return;
+    navigate(salesContractEditPath(record.id));
+  };
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitializedRef.current = false;
+      return;
+    }
+    const titleKey = isCreatePage
+      ? 'app.kuaizhizao.menu.sales-management.sales-contracts.new'
+      : 'app.kuaizhizao.menu.sales-management.sales-contracts.edit';
+    const title = t(titleKey);
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const cleanSearch = sp.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, title);
+    setCustomPageTitle(tabKey, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t]);
+
+  useEffect(() => {
+    if (!isFormPage || formPageInitializedRef.current) return;
+    formPageInitializedRef.current = true;
+    if (isCreatePage) {
+      void initSalesContractCreateForm();
+    } else if (editRouteId) {
+      void initSalesContractEditForm(editRouteId);
+    }
+  }, [isFormPage, isCreatePage, editRouteId]);
+
+  const triggerContractFormSubmit = () => formRef.current?.submit?.();
+
+  useSubmitShortcut(() => triggerContractFormSubmit(), isFormPage);
 
 
-  const handleFormSubmit = async (values: any) => {
 
+  const handleFormSubmit = async (values: any, options?: { asDraft?: boolean }) => {
+    const asDraft = options?.asDraft ?? false;
     const payload = buildFormPayload(values);
 
     if (editingId) {
-
       await salesContractApi.update(editingId, payload);
-
-      messageApi.success('销售合同已更新');
-
+      if (!asDraft) {
+        await salesContractApi.submit(editingId);
+        messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit', '已保存并提交'));
+      } else {
+        messageApi.success(t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存'));
+      }
     } else {
-
-      await salesContractApi.create(payload, false);
-
-      messageApi.success('销售合同已创建');
-
+      await salesContractApi.create(payload, !asDraft);
+      messageApi.success(
+        asDraft
+          ? t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存')
+          : '销售合同已创建',
+      );
     }
 
-    setFormModalVisible(false);
+    if (isFormPage) {
+      navigate(SALES_CONTRACT_LIST_PATH);
+    } else {
+      setEditingId(null);
+      actionRef.current?.reload();
+      if (detail?.id === editingId) openDetail(editingId);
+    }
+  };
 
-    setEditingId(null);
-
-    actionRef.current?.reload();
-
-    if (detail?.id === editingId) openDetail(editingId);
-
+  const handleSaveDraft = async () => {
+    try {
+      const values = await formRef.current?.validateFields();
+      if (values) await handleFormSubmit(values, { asDraft: true });
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(err?.message ?? t('components.layoutTemplates.formModal.checkFormHint'));
+      } else if (err?.message) {
+        messageApi.error(err.message);
+      }
+    }
   };
 
 
@@ -885,33 +1097,25 @@ const SalesContractsPage: React.FC = () => {
 
           <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
 
-            <UniDropdown
-
-              showSearch
-
-              allowClear
+            <CustomerSelectDropdown
 
               placeholder="请选择客户"
 
               style={{ width: '100%' }}
 
-              options={customerList.map((c: any) => ({
+              customers={customerList}
 
-                value: c.id ?? c.customer_id,
+              onCustomersChange={setCustomerList}
 
-                label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim(),
+              autoLoad={false}
 
-              }))}
-
-              onChange={(v) => {
-
-                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+              onCustomerPick={(cust) => {
 
                 if (cust) {
 
                   formRef.current?.setFieldsValue({
 
-                    customer_name: cust.name || cust.customer_name,
+                    customer_name: cust.name || (cust as any).customer_name,
 
                     customer_contact: cust.contactPerson ?? (cust as any).contact,
 
@@ -919,7 +1123,23 @@ const SalesContractsPage: React.FC = () => {
 
                     shipping_address: cust.address,
 
-                    salesman_name: cust.salesman_name ?? (cust as any).salesmanName,
+                    salesman_name: (cust as any).salesman_name ?? (cust as any).salesmanName,
+
+                  });
+
+                } else {
+
+                  formRef.current?.setFieldsValue({
+
+                    customer_name: undefined,
+
+                    customer_contact: undefined,
+
+                    customer_phone: undefined,
+
+                    shipping_address: undefined,
+
+                    salesman_name: undefined,
 
                   });
 
@@ -1067,6 +1287,8 @@ const SalesContractsPage: React.FC = () => {
 
         onOpenMaterialPicker={() => setMaterialPickerOpen(true)}
 
+        onOpenImport={() => setImportModalVisible(true)}
+
         onPriceTypeToggle={handleContractPriceTypeToggle}
 
         onRefreshLinePriceByVariant={refreshContractLinePriceByVariant}
@@ -1081,13 +1303,7 @@ const SalesContractsPage: React.FC = () => {
 
       <div style={{ marginTop: 16 }}>
 
-        <Typography.Title level={5} style={{ marginBottom: 8 }}>
-
-          收款计划（可选）
-
-        </Typography.Title>
-
-        <ProForm.Item name="milestones" noStyle>
+        <ProForm.Item label="收款计划（可选）" colon={false}>
 
           <AntForm.List name="milestones">
 
@@ -1262,6 +1478,99 @@ const SalesContractsPage: React.FC = () => {
       </div>
 
       <div style={{ marginTop: 16 }}>
+
+        <Row gutter={16}>
+
+          <Col span={12}>
+
+            <ProFormSelect
+
+              name="term_group_id"
+
+              label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
+
+              placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
+
+              options={termGroupOptions}
+
+              fieldProps={{
+
+                allowClear: true,
+
+                onChange: (val: number) => {
+
+                  applyTermGroupPreview(val);
+
+                },
+
+              }}
+
+            />
+
+          </Col>
+
+        </Row>
+
+        {termPlaceholderKeys.length > 0 && (
+          <Card
+            size="small"
+            title={t('app.kuaizhizao.salesContract.terms.placeholderFillTitle')}
+            style={{ marginBottom: 16 }}
+          >
+            <Row gutter={[16, 12]}>
+              {termPlaceholderKeys.map((key) => (
+                <Col key={key} span={8}>
+                  <div style={{ marginBottom: 4 }}>
+                    <Typography.Text type="secondary">{key}</Typography.Text>
+                  </div>
+                  <Input
+                    value={termPlaceholderValues[key] ?? ''}
+                    placeholder={t('app.kuaizhizao.salesContract.terms.placeholderInputHint', { name: key })}
+                    onChange={(e) => handleTermPlaceholderChange(key, e.target.value)}
+                  />
+                </Col>
+              ))}
+            </Row>
+          </Card>
+        )}
+
+        {termsPreview.length > 0 && (
+
+          <Card
+
+            size="small"
+
+            title={t('app.kuaizhizao.salesContract.terms.previewTitle')}
+
+            style={{ marginBottom: 16 }}
+
+          >
+
+            {termsPreview.map((term, idx) => (
+
+              <div key={`${term.term_item_id ?? idx}-${term.term_name}`} style={{ marginBottom: 12 }}>
+
+                <Typography.Text strong>
+
+                  {idx + 1}. {term.term_name}
+
+                </Typography.Text>
+
+                <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+
+                  {term.content}
+
+                </Typography.Paragraph>
+
+              </div>
+
+            ))}
+
+          </Card>
+
+        )}
+
+        <DocumentAttachmentsField category="sales_contract_attachments" />
 
         <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
 
@@ -2101,6 +2410,30 @@ const SalesContractsPage: React.FC = () => {
 
     { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
 
+    {
+      title: t('app.kuaizhizao.salesContract.terms.selectGroup'),
+      dataIndex: 'term_group_name',
+      span: 3,
+      render: (_, r) =>
+        r.term_group_name ? (
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <span>{r.term_group_name}</span>
+            {(r.contract_terms as SalesContractTermSnapshot[] | undefined)?.map((term, idx) => (
+              <div key={`${term.term_item_id ?? idx}`}>
+                <Typography.Text strong>
+                  {idx + 1}. {term.term_name}
+                </Typography.Text>
+                <Typography.Paragraph style={{ marginBottom: 4, whiteSpace: 'pre-wrap' }}>
+                  {term.content}
+                </Typography.Paragraph>
+              </div>
+            ))}
+          </Space>
+        ) : (
+          '—'
+        ),
+    },
+
     { title: '备注', dataIndex: 'notes', span: 3 },
 
   ];
@@ -2110,6 +2443,84 @@ const SalesContractsPage: React.FC = () => {
   const detailLifecycle = detail?.lifecycle ? parseBackendLifecycle(detail.lifecycle) : null;
 
 
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={() => navigate(SALES_CONTRACT_LIST_PATH)}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {isCreatePage
+                  ? t('app.kuaizhizao.menu.sales-management.sales-contracts.new')
+                  : t('app.kuaizhizao.menu.sales-management.sales-contracts.edit')}
+              </Typography.Title>
+            </Space>
+            <Space wrap>
+              <Button onClick={() => navigate(SALES_CONTRACT_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={() => void handleSaveDraft()}>
+                {isCreatePage
+                  ? t('app.kuaizhizao.salesContract.saveDraft', '保存为草稿')
+                  : t('common.save')}
+              </Button>
+              <Button type="primary" onClick={triggerContractFormSubmit}>
+                {isCreatePage
+                  ? t('components.layoutTemplates.formModal.submitCreate')
+                  : t('app.kuaizhizao.salesContract.saveAndSubmit', '保存并提交')}
+                {SUBMIT_SHORTCUT_HINT}
+              </Button>
+            </Space>
+            </>
+          }
+        >
+          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
+            <div className="form-modal-content-inner">
+              <ProForm
+                formRef={formRef}
+                layout="vertical"
+                submitter={false}
+                scrollToFirstError
+                onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
+                onFinishFailed={({ errorFields }) => {
+                  const first = errorFields?.[0];
+                  const text = first?.errors?.filter(Boolean)[0];
+                  messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+                }}
+                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }] } : undefined}
+              >
+                {renderCreateForm()}
+              </ProForm>
+            </div>
+          </Card>
+        </DocumentFormPageLayout>
+        <UniMaterialBatchPicker
+          open={materialPickerOpen}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={(selected) => {
+            appendContractItemsFromMaterials(selected);
+            setMaterialPickerOpen(false);
+          }}
+        />
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={handleItemImport}
+            title="导入合同明细"
+            headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期', '备注']}
+            exampleRow={['MAT001', 'Spec X', '件', '100', '1.5', '2026-03-01', '']}
+          />
+        </Suspense>
+      </>
+    );
+  }
 
   return (
 
@@ -2148,6 +2559,12 @@ const SalesContractsPage: React.FC = () => {
         createButtonText="新建合同"
 
         onCreate={handleCreate}
+
+        toolBarActionsAfterCreate={[
+          <Button key="terms-manage" icon={<FileTextOutlined />} onClick={() => setTermsManageOpen(true)}>
+            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
+          </Button>,
+        ]}
 
         request={async (params, _sort, _filter, searchFormValues) => {
 
@@ -2836,38 +3253,6 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-      <FormModalTemplate
-
-        title={editingId ? '编辑销售合同' : '新建销售合同'}
-
-        open={formModalVisible}
-
-        onClose={() => {
-
-          setFormModalVisible(false);
-
-          setEditingId(null);
-
-        }}
-
-        formRef={formRef}
-
-        onFinish={handleFormSubmit}
-
-        width={MODAL_CONFIG.LARGE_WIDTH}
-
-        grid={false}
-
-        initialValues={{ items: [{ ...defaultContractItem }] }}
-
-      >
-
-        {renderCreateForm()}
-
-      </FormModalTemplate>
-
-
-
       <UniMaterialBatchPicker
 
         open={materialPickerOpen}
@@ -2882,6 +3267,14 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
+      />
+
+      <SalesContractTermsManageModal
+        open={termsManageOpen}
+        onClose={() => {
+          setTermsManageOpen(false);
+          loadTermGroupOptions();
+        }}
       />
 
     </ListPageTemplate>

@@ -12,8 +12,8 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined } from '@ant-design/icons';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -30,7 +30,7 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
-import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
@@ -48,18 +48,20 @@ import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDe
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
   isAuditedStatus,
+  isDraftStatus,
 } from '../../../constants/documentStatus';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
 import {
   ListPageTemplate,
-  FormModalTemplate,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  MODAL_CONFIG,
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
+  PAGE_SPACING,
+  DocumentFormPageLayout,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -131,7 +133,7 @@ import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
@@ -139,6 +141,9 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { renderRowActionsOverflow } from '../../../../../components/uni-action';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -427,12 +432,23 @@ const DEFAULT_PAYMENT_TERMS_OPTIONS = [
   { label: '月结60天', value: 'NET60' },
 ];
 
+const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
+const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
+const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
+
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const pullFromQuotationAction = getKuaizhizaoDocumentAction('sales_order.pull_from_quotation');
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isCreatePage = location.pathname.endsWith('/sales-orders/new');
+  const editRouteMatch = location.pathname.match(/\/sales-orders\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const formPageInitializedRef = useRef(false);
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -537,9 +553,7 @@ const SalesOrdersPage: React.FC = () => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentId, setCurrentId] = useState<number | null>(null);
+  const [formEditOrder, setFormEditOrder] = useState<SalesOrder | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
@@ -580,7 +594,6 @@ const SalesOrdersPage: React.FC = () => {
   const [pullQuotationKeyword, setPullQuotationKeyword] = useState('');
   const [selectedPullQuotationId, setSelectedPullQuotationId] = useState<number | undefined>(undefined);
   const [pullQuotationCandidates, setPullQuotationCandidates] = useState<PullQuotationCandidate[]>([]);
-  const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 与客户跟进列表一致：交货逾期行浅色警示背景 */
   const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
@@ -676,35 +689,39 @@ const SalesOrdersPage: React.FC = () => {
   }, []);
 
   /**
-   * 新建弹窗打开后，等表单挂载完成再设置订单日期默认当天；交货日期由用户自行输入
-   */
-  useEffect(() => {
-    if (modalVisible && !isEdit) {
-      const timer = setTimeout(() => {
-        formRef.current?.setFieldsValue({ order_date: dayjs() });
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-  }, [modalVisible, isEdit]);
-
-  /**
    * 处理新建销售订单
    * 若启用编号规则，用 testGenerateCode 预填订单编号（不占用序号）
    */
-  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '' };
+  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '', notes: '' };
 
-  const handleCreate = async () => {
-    if (!salesNodeEnabled.sales_order) {
-      messageApi.warning('销售订单节点未启用，无法新建');
-      return;
-    }
-    setIsEdit(false);
-    setCurrentId(null);
-    setModalVisible(true);
+  async function initSalesOrderCreateForm(options?: { customerId?: number }) {
+    setFormEditOrder(null);
     formRef.current?.resetFields();
     setTimeout(() => {
-      formRef.current?.setFieldsValue({ price_type: 'tax_exclusive', items: [defaultOrderItem] });
+      formRef.current?.setFieldsValue({
+        price_type: 'tax_exclusive',
+        items: [defaultOrderItem],
+        order_date: dayjs(),
+      });
       lastPriceTypeRef.current = 'tax_exclusive';
+      const prefillCustomerId = options?.customerId;
+      if (prefillCustomerId != null) {
+        const c = customers.find((x) => x.id === prefillCustomerId);
+        if (c) {
+          const sId = (c as any).salesmanId ?? (c as any).salesman_id;
+          const salesman = users.find((u) => u.id === sId);
+          const sName = (c as any).salesmanName ?? (c as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
+          formRef.current?.setFieldsValue({
+            customer_id: c.id,
+            customer_name: c.name ?? (c as any).customer_name,
+            customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
+            customer_phone: (c as any).phone ?? (c as any).customer_phone,
+            salesman_id: sId,
+            salesman_name: sName,
+            shipping_address: (c as any).address ?? (c as any).shipping_address,
+          });
+        }
+      }
     }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-sales-order');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-sales-order');
@@ -734,66 +751,124 @@ const SalesOrdersPage: React.FC = () => {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
     }
+  }
+
+  const handleCreate = (options?: { customerId?: number }) => {
+    if (!salesNodeEnabled.sales_order) {
+      messageApi.warning('销售订单节点未启用，无法新建');
+      return;
+    }
+    const qs =
+      options?.customerId != null && Number.isFinite(options.customerId)
+        ? `?customerId=${options.customerId}`
+        : '';
+    navigate(`${SALES_ORDER_CREATE_PATH}${qs}`);
   };
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitializedRef.current = false;
+      return;
+    }
+    const titleKey = isCreatePage
+      ? 'app.kuaizhizao.menu.sales-management.sales-orders.new'
+      : 'app.kuaizhizao.menu.sales-management.sales-orders.edit';
+    const title = t(titleKey);
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const cleanSearch = sp.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, title);
+    setCustomPageTitle(tabKey, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t]);
+
+  async function initSalesOrderEditForm(orderId: number) {
+    try {
+      const data = await getSalesOrder(orderId, true);
+      setFormEditOrder(data);
+      const items = (data.items || []).map((item: SalesOrderItem) => {
+        const mid = item.material_id != null ? Number(item.material_id) : undefined;
+        const matchedById = mid ? materials.find((m: any) => m.id === mid) : null;
+        const matchedByCodeOrName = !mid
+          ? materials.find((m: any) => (m.mainCode || m.main_code || m.code) === item.material_code || m.name === item.material_name)
+          : null;
+        const matched = matchedById ?? matchedByCodeOrName;
+        const materialCode = item.material_code || (matched ? ((matched as any).mainCode || (matched as any).main_code || (matched as any).code) : undefined);
+        const base = {
+          ...item,
+          material_id: mid ?? (matched ? matched.id : undefined),
+          material_code: materialCode ?? item.material_code ?? '',
+          required_quantity: Number(item.required_quantity) || 0,
+          unit_price: item.unit_price != null ? Number(item.unit_price) : undefined,
+          tax_rate: item.tax_rate != null ? Number(item.tax_rate) : 0,
+          delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
+          variant_attributes: (() => {
+            const va = (item as any).variant_attributes;
+            return parseVariantAttributesValue(va) ?? (va == null ? undefined : va);
+          })(),
+        };
+        return base;
+      });
+      const customerId = data.customer_id ?? customers.find(c => c.name === data.customer_name)?.id;
+      const salesmanId = data.salesman_id;
+      const salesmanName = data.salesman_name;
+      const formData = {
+        ...data,
+        items,
+        customer_id: customerId,
+        salesman_id: salesmanId,
+        salesman_name: salesmanName,
+        order_date: data.order_date ? dayjs(data.order_date) : undefined,
+        delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
+        attachments: (data as any).attachments || [],
+      };
+      window.setTimeout(() => {
+        formRef.current?.setFieldsValue(formData);
+        lastPriceTypeRef.current = ((formData as any)?.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive');
+      }, 100);
+    } catch (error: any) {
+      messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
+      console.error('编辑销售订单错误:', error);
+      navigate(SALES_ORDER_LIST_PATH);
+    }
+  }
+
+  useEffect(() => {
+    if (!isFormPage || formPageInitializedRef.current) return;
+    formPageInitializedRef.current = true;
+    if (isCreatePage) {
+      if (!salesNodeEnabled.sales_order) {
+        messageApi.warning('销售订单节点未启用，无法新建');
+        navigate(SALES_ORDER_LIST_PATH);
+        return;
+      }
+      const raw = searchParams.get('customerId');
+      const customerId = raw != null ? Number(raw) : NaN;
+      void initSalesOrderCreateForm(
+        Number.isFinite(customerId) && customerId > 0 ? { customerId } : undefined,
+      );
+    } else if (editRouteId) {
+      void initSalesOrderEditForm(editRouteId);
+    }
+  }, [isFormPage, isCreatePage, editRouteId, salesNodeEnabled.sales_order, navigate, messageApi, searchParams]);
 
   /**
    * 处理编辑销售订单
    */
-  const handleEdit = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const id = Number(keys[0]);
-      setIsEdit(true);
-      setCurrentId(id);
-      setModalVisible(true);
-      try {
-        const data = await getSalesOrder(id, true);  // includeItems=true
-        // 明细中若缺少 material_id，用物料列表按编号/名称匹配后填入，再一起写入表单
-        const items = (data.items || []).map((item: SalesOrderItem) => {
-          const mid = item.material_id != null ? Number(item.material_id) : undefined;
-          const matchedById = mid ? materials.find((m: any) => m.id === mid) : null;
-          const matchedByCodeOrName = !mid
-            ? materials.find((m: any) => (m.mainCode || m.main_code || m.code) === item.material_code || m.name === item.material_name)
-            : null;
-          const matched = matchedById ?? matchedByCodeOrName;
-          const materialCode = item.material_code || (matched ? ((matched as any).mainCode || (matched as any).main_code || (matched as any).code) : undefined);
-          const base = {
-            ...item,
-            material_id: mid ?? (matched ? matched.id : undefined),
-            material_code: materialCode ?? item.material_code ?? '',
-            required_quantity: Number(item.required_quantity) || 0,
-            unit_price: item.unit_price != null ? Number(item.unit_price) : undefined,
-            tax_rate: item.tax_rate != null ? Number(item.tax_rate) : 0,
-            delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
-            variant_attributes: (() => {
-              const va = (item as any).variant_attributes;
-              return parseVariantAttributesValue(va) ?? (va == null ? undefined : va);
-            })(),
-          };
-          return base;
-        });
-        const customerId = data.customer_id ?? customers.find(c => c.name === data.customer_name)?.id;
-        const salesmanId = data.salesman_id;
-        const salesmanName = data.salesman_name;
-
-        // 转换主表单的日期字段为 dayjs 对象
-        const formData = {
-          ...data,
-          items,
-          customer_id: customerId,
-          salesman_id: salesmanId,
-          salesman_name: salesmanName,
-          order_date: data.order_date ? dayjs(data.order_date) : undefined,
-          delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
-          attachments: (data as any).attachments || [],
-        };
-
-        formRef.current?.setFieldsValue(formData);
-        lastPriceTypeRef.current = ((formData as any)?.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive');
-      } catch (error: any) {
-        messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
-        console.error('编辑销售订单错误:', error);
-      }
-    }
+  const handleEdit = (keys: React.Key[]) => {
+    if (keys.length !== 1) return;
+    const id = Number(keys[0]);
+    if (!Number.isFinite(id) || id <= 0) return;
+    navigate(salesOrderEditPath(id));
   };
 
   /**
@@ -1132,7 +1207,7 @@ const SalesOrdersPage: React.FC = () => {
       // 新建时若启用编号规则，保存草稿/提交均正式占号，避免预览编号重复导致创建失败
       const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-order');
       const shouldAutoGenerateCode =
-        !isEdit &&
+        isCreatePage &&
         ruleCodeToUse &&
         (isAutoGenerateEnabled('kuaizhizao-sales-order') || effectiveRuleCode) &&
         (values.order_code === previewCode || !values.order_code);
@@ -1149,12 +1224,13 @@ const SalesOrdersPage: React.FC = () => {
         }
       }
 
-      let orderId = currentId;
+      let orderId = isEditPage ? editRouteId : null;
 
       // 1. 创建或更新订单
       let updateRes: any = null;
-      if (isEdit && currentId) {
-        updateRes = await updateSalesOrder(currentId, values);
+      if (isEditPage && editRouteId) {
+        updateRes = await updateSalesOrder(editRouteId, values);
+        orderId = editRouteId;
       } else {
         const res = await createSalesOrder(values);
         orderId = (res as any)?.id;
@@ -1162,7 +1238,7 @@ const SalesOrdersPage: React.FC = () => {
 
       // 2. 草稿保存直接提示
       if (isDraft) {
-         messageApi.success(isEdit ? t('app.kuaizhizao.salesOrder.updated') : t('app.kuaizhizao.salesOrder.savedDraft'));
+         messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.updated') : t('app.kuaizhizao.salesOrder.savedDraft'));
       } else if (orderId) {
         // 非草稿（即点击了“提交订单”或“更新”），则执行提交。编辑时若 update 已自动审核则跳过 submit，避免重复审核
         const alreadyApproved = updateRes?.status === 'AUDITED' || updateRes?.status === '已审核';
@@ -1172,23 +1248,25 @@ const SalesOrdersPage: React.FC = () => {
           const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
           const syncTip = submitRes?.demand_synced ? t('app.kuaizhizao.salesOrder.demandSyncTip') : '';
           if (isApproved) {
-             messageApi.success(isEdit ? t('app.kuaizhizao.salesOrder.orderUpdatedAndAutoApproved', { syncTip }) : t('app.kuaizhizao.salesOrder.orderCreatedAndAutoApproved', { syncTip }));
+             messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderUpdatedAndAutoApproved', { syncTip }) : t('app.kuaizhizao.salesOrder.orderCreatedAndAutoApproved', { syncTip }));
           } else {
-             messageApi.success(isEdit ? t('app.kuaizhizao.salesOrder.orderResubmitted') : t('app.kuaizhizao.salesOrder.orderCreatedAndSubmitted'));
+             messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderResubmitted') : t('app.kuaizhizao.salesOrder.orderCreatedAndSubmitted'));
           }
         } catch (submitError: any) {
           messageApi.error(t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', { message: submitError.message || t('app.kuaizhizao.salesOrder.unknownError') }));
         }
       }
 
-      setModalVisible(false);
       setPreviewCode(null);
       setEffectiveRuleCode(null);
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
 
-          actionRef.current?.reload();
+      if (isFormPage) {
+        navigate(SALES_ORDER_LIST_PATH);
+      }
+      actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {
         refreshDrawerOrder(orderId);
       }
@@ -2491,379 +2569,12 @@ const SalesOrdersPage: React.FC = () => {
         },
       ];
 
-  return (
+  const triggerSalesOrderFormSubmit = () => formRef.current?.submit?.();
+
+  useSubmitShortcut(() => triggerSalesOrderFormSubmit(), isFormPage);
+
+  const salesOrderFormItemContent = (
     <>
-      <style>{`
-        .sales-order-row-overdue td.ant-table-cell {
-          background: var(--ant-color-warning-bg) !important;
-        }
-      `}</style>
-      <ListPageTemplate statCards={statCards}>
-        <SalesOrderIndicatorsProvider>
-        <UniTable
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders"
-          selectedRowKeys={selectedRowKeys}
-          onRowSelectionChange={setSelectedRowKeys}
-          onTableDataChange={handleTableDataChange}
-          formRef={tableSearchFormRef}
-          headerTitle={t('app.kuaizhizao.salesOrder.title')}
-          viewTypes={['table', 'detailTable', 'help']}
-          defaultViewType="table"
-          onViewTypeChange={(v) => {
-            const nextMode = v === 'table' ? 'order' : 'detail';
-            dataViewModeRef.current = nextMode;
-            setViewTypeState(v as 'table' | 'detailTable' | 'help');
-            setTimeout(() => actionRef.current?.reload(), 0);
-          }}
-          detailTableColumns={detailColumns}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p><strong>表格视图</strong>：按订单维度展示。</p>
-                <p><strong>明细表格</strong>：以每行订单明细为展示维度，纯查看用途，支持库存/BOM 检查。</p>
-              </div>
-            ),
-          }}
-          actionRef={actionRef}
-          toolBarButtonSize="middle"
-          columns={columns}
-          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
-          rowClassName={(record) => {
-            if (!highlightDeliveryOverdue) return '';
-            if (dataViewMode === 'order') {
-              return isSalesOrderDeliveryOverdue(record as SalesOrder, auditEnabled) ? 'sales-order-row-overdue' : '';
-            }
-            return isSalesOrderLineDeliveryOverdue(record as SalesOrderItemRow, auditEnabled)
-              ? 'sales-order-row-overdue'
-              : '';
-          }}
-          request={async (params: any, sort: any, _filter: any, searchFormValues: any): Promise<any> => {
-            const apiParams: any = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-            };
-            // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status / review_status
-            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));
-            if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
-            if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
-            if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
-            // 订单日期范围
-            if (searchFormValues?.order_date && Array.isArray(searchFormValues.order_date) && searchFormValues.order_date.length === 2) {
-              const [start, end] = searchFormValues.order_date;
-              if (start) apiParams.start_date = dayjs(start).format('YYYY-MM-DD');
-              if (end) apiParams.end_date = dayjs(end).format('YYYY-MM-DD');
-            }
-            // 排序
-            if (sort && Object.keys(sort).length > 0) {
-              const key = Object.keys(sort)[0];
-              const order = sort[key];
-              if (order) {
-                apiParams.order_by = order === 'ascend' ? key : `-${key}`;
-              }
-            }
-            // 始终请求 include_items=true，切换视图时从缓存转换，避免重复请求
-            apiParams.include_items = true;
-            const paramsKey = JSON.stringify({
-              skip: apiParams.skip,
-              limit: apiParams.limit,
-              status: apiParams.status,
-              review_status: apiParams.review_status,
-              lifecycle_stage: apiParams.lifecycle_stage,
-              customer_name: apiParams.customer_name,
-              order_code: apiParams.order_code,
-              keyword: apiParams.keyword,
-              start_date: apiParams.start_date,
-              end_date: apiParams.end_date,
-              order_by: apiParams.order_by,
-            });
-
-            const toFlatRows = (orders: SalesOrder[]) => {
-              const map = new Map<string, number>();
-              const flatRows: SalesOrderItemRow[] = [];
-              for (const order of orders) {
-                const lifecycle = getSalesOrderLifecycle(order as SalesOrder, auditEnabled);
-                const stageName = lifecycle.stageName ?? order.status ?? '草稿';
-                const items = order.items ?? [];
-                if (items.length === 0) {
-                  const rowKey = `order-${order.id}-empty`;
-                  map.set(rowKey, order.id ?? 0);
-                  flatRows.push({
-                    _rowKey: rowKey,
-                    _lifecycleStage: stageName,
-                    sales_order_id: order.id ?? 0,
-                    order_code: order.order_code,
-                    customer_name: order.customer_name,
-                    order_date: order.order_date,
-                    order_delivery_date: order.delivery_date,
-                    total_quantity: order.total_quantity,
-                    total_amount: order.total_amount,
-                    delivery_progress: order.delivery_progress,
-                    status: order.status,
-                    review_status: order.review_status,
-                    pushed_to_computation: order.pushed_to_computation,
-                    has_shippable_products: order.has_shippable_products,
-                    shippable_quantity: order.shippable_quantity,
-                    material_code: '-',
-                    material_name: '-',
-                    required_quantity: 0,
-                    delivery_date: order.delivery_date ?? '',
-                  } as SalesOrderItemRow);
-                } else {
-                  items.forEach((item: SalesOrderItem, idx: number) => {
-                    const rowKey = item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`;
-                    map.set(rowKey, order.id ?? 0);
-                    flatRows.push({
-                      ...item,
-                      _rowKey: rowKey,
-                      _lifecycleStage: stageName,
-                      sales_order_id: order.id ?? 0,
-                      order_code: order.order_code,
-                      customer_name: order.customer_name,
-                      order_date: order.order_date,
-                      order_delivery_date: order.delivery_date,
-                      total_quantity: order.total_quantity,
-                      total_amount: order.total_amount,
-                      delivery_progress: order.delivery_progress,
-                      status: order.status,
-                      review_status: order.review_status,
-                      pushed_to_computation: order.pushed_to_computation,
-                      has_shippable_products: order.has_shippable_products,
-                      shippable_quantity: order.shippable_quantity,
-                      material_code: item.material_code ?? '',
-                      material_name: item.material_name ?? '',
-                      material_spec: item.material_spec ?? '',
-                      material_unit: item.material_unit ?? '',
-                      required_quantity: item.required_quantity ?? 0,
-                      unit_price: item.unit_price,
-                      tax_rate: item.tax_rate,
-                      item_amount: item.item_amount,
-                      delivered_quantity: item.delivered_quantity,
-                      remaining_quantity: item.remaining_quantity,
-                      delivery_date: item.delivery_date ?? order.delivery_date ?? '',
-                    } as SalesOrderItemRow);
-                  });
-                }
-              }
-              rowKeyToOrderIdRef.current = map;
-              return flatRows;
-            };
-
-            try {
-              const cache = lastOrdersCacheRef.current;
-              let orders: SalesOrder[];
-              let total: number;
-
-              if (cache?.paramsKey === paramsKey && cache.orders) {
-                orders = cache.orders;
-                total = cache.total;
-              } else {
-                const response = await listSalesOrders(apiParams);
-                orders = Array.isArray(response) ? response : (response as any).data || [];
-                total = (response as any).total ?? orders.length;
-                lastOrdersCacheRef.current = { orders, total, paramsKey };
-              }
-              const mode = dataViewModeRef.current;
-              if (mode === 'order') {
-                const map = new Map<string, number>();
-                orders.forEach(o => {
-                  if (o.id) map.set(String(o.id), o.id);
-                });
-                rowKeyToOrderIdRef.current = map;
-                return { data: orders, success: true, total };
-              }
-              return { data: toFlatRows(orders), success: true, total };
-            } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));
-              return { data: [], success: false, total: 0 };
-            }
-          }}
-          showAdvancedSearch={true}
-          enableRowSelection={viewTypeState !== 'detailTable'}
-          showCreateButton={false}
-          createButtonText={t('app.kuaizhizao.salesOrder.create')}
-          onCreate={handleCreate}
-          toolBarRender={() => salesOrderToolbarRenderItems}
-          showDeleteButton={viewTypeState !== 'detailTable'}
-          deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
-          onDelete={handleBatchDelete}
-          deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
-          deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
-          toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="sales-order-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              toolBarButtonSize="middle"
-              menuItems={[
-                {
-                  key: 'submit',
-                  label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
-                  icon: <SendOutlined />,
-                  onClick: handleBatchSubmit,
-                },
-                {
-                  key: 'withdraw',
-                  label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
-                  icon: <RollbackOutlined />,
-                  disabled:
-                    selectedOrdersForBatch.length > 0 &&
-                    !selectedOrdersForBatch.some((o) => canWithdrawSalesOrderRecord(o, auditEnabled)),
-                  onClick: handleBatchWithdraw,
-                },
-                {
-                  key: 'approve',
-                  label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
-                  icon: <FileTextOutlined />,
-                  onClick: handleBatchApprove,
-                },
-                {
-                  key: 'unapprove',
-                  label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
-                  icon: <RollbackOutlined />,
-                  disabled:
-                    selectedOrdersForBatch.length > 0 &&
-                    !selectedOrdersForBatch.some((o) => canUnapproveSalesOrderRecord(o, auditEnabled)),
-                  onClick: handleBatchUnapprove,
-                },
-                {
-                  key: 'close',
-                  label: t('app.kuaizhizao.salesOrder.batchClose', '批量关闭'),
-                  icon: <StopOutlined />,
-                  requireConfirm: true,
-                  confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle', '确认批量关闭'),
-                  confirmDescription: (count) =>
-                    t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', {
-                      count,
-                      defaultValue: `关闭后剩余未交货/未执行部分将不再继续履约，确定关闭选中的 ${count} 条销售订单吗？`,
-                    }),
-                  onClick: handleBatchClose,
-                },
-              ]}
-            />,
-          ]}
-          toolBarActionsAfterBatch={[
-            <Space key="highlight-overdue-switch" align="center">
-              <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-              <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
-                {t('app.kuaizhizao.salesOrder.highlightOverdue')}
-              </span>
-            </Space>,
-          ]}
-          // 表头固定；scroll.y 由 UniTable 全局常量模板自动计算（统一行为）
-          sticky
-          showImportButton={true}
-          onImport={handleImport}
-          showExportButton
-          onExport={async (type, keys, pageData) => {
-            try {
-              const res = await listSalesOrders({ skip: 0, limit: 10000, include_items: true });
-              const orders = (res as any).data || [];
-              const flatRows: SalesOrderItemRow[] = [];
-              for (const order of orders) {
-                const items = order.items ?? [];
-                if (items.length === 0) {
-                  flatRows.push({
-                    _rowKey: `order-${order.id}-empty`,
-                    sales_order_id: order.id,
-                    order_code: order.order_code,
-                    customer_name: order.customer_name,
-                    material_code: '-',
-                    material_name: '-',
-                    required_quantity: 0,
-                    delivery_date: order.delivery_date ?? '',
-                  } as SalesOrderItemRow);
-                } else {
-                  items.forEach((item: SalesOrderItem, idx: number) => {
-                    flatRows.push({
-                      ...item,
-                      _rowKey: item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`,
-                      sales_order_id: order.id,
-                      order_code: order.order_code,
-                      customer_name: order.customer_name,
-                    } as SalesOrderItemRow);
-                  });
-                }
-              }
-              let toExport = flatRows;
-              if (type === 'currentPage' && pageData?.length) {
-                toExport = pageData as SalesOrderItemRow[];
-              } else if (type === 'selected' && keys?.length) {
-                toExport = flatRows.filter((r) => keys.includes(r._rowKey));
-              }
-              if (toExport.length === 0) {
-                messageApi.warning(t('app.kuaizhizao.salesOrder.noDataToExport'));
-                return;
-              }
-              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `sales-order-items-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-              messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
-            } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.exportFailed'));
-            }
-          }}
-          showSyncButton
-          onSync={() => setSyncModalVisible(true)}
-          importHeaders={[
-            t('app.kuaizhizao.salesOrder.orderDate'),
-            t('app.kuaizhizao.salesOrder.deliveryDate'),
-            t('app.kuaizhizao.salesOrder.importHeaderCustomerId'),
-            t('app.kuaizhizao.salesOrder.customerName'),
-            t('app.kuaizhizao.salesOrder.customerContact'),
-            t('app.kuaizhizao.salesOrder.customerPhone'),
-            t('app.kuaizhizao.salesOrder.importHeaderSalesmanId'),
-            t('app.kuaizhizao.salesOrder.salesman'),
-            t('app.kuaizhizao.salesOrder.shippingAddress'),
-            t('app.kuaizhizao.salesOrder.shippingMethod'),
-            t('app.kuaizhizao.salesOrder.paymentTerms'),
-            t('app.kuaizhizao.salesOrder.notes'),
-          ]}
-          importExampleRow={[
-            '2026-01-01',
-            '2026-01-31',
-            '',
-            t('app.kuaizhizao.salesOrder.importExampleCustomer'),
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            t('app.kuaizhizao.salesOrder.importExampleNotes'),
-          ]}
-        />
-        </SalesOrderIndicatorsProvider>
-      </ListPageTemplate>
-
-      {/* 新建/编辑 Modal：使用标准 FormModalTemplate，统一创建按钮与快捷键 */}
-      <FormModalTemplate
-        title={isEdit ? t('app.kuaizhizao.salesOrder.edit') : t('app.kuaizhizao.salesOrder.create')}
-        open={modalVisible}
-        zIndex={elevatedModalZIndex}
-        onClose={() => {
-          setModalVisible(false);
-          setPreviewCode(null);
-          setEffectiveRuleCode(null);
-        }}
-        onFinish={async (values) => {
-          setModalSubmitting(true);
-          try {
-            await handleSaveInternal(values, false);
-          } finally {
-            setModalSubmitting(false);
-          }
-        }}
-        isEdit={isEdit}
-        formRef={formRef}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        loading={modalSubmitting}
-        grid={false}
-        extraFooter={!isEdit ? <Button onClick={handleSaveDraft}>{t('app.kuaizhizao.salesOrder.saveDraft')}</Button> : undefined}
-      >
         <Row gutter={16}>
             <Col span={12}>
               <ProFormText
@@ -2871,7 +2582,7 @@ const SalesOrdersPage: React.FC = () => {
                 label="订单编号"
                 placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? '编号将根据编号规则自动生成，可修改' : '请输入订单编号'}
                 rules={[{ required: true, message: '请输入订单编号' }]}
-                fieldProps={{ disabled: isEdit }}
+                fieldProps={{ disabled: isEditPage }}
               />
             </Col>
             <Col span={6}>
@@ -2905,18 +2616,15 @@ const SalesOrdersPage: React.FC = () => {
                 label="客户名称"
                 rules={[{ required: true, message: '请选择客户' }]}
               >
-                <UniDropdown
+                <CustomerSelectDropdown
                   placeholder="请选择客户"
-                  showSearch
-                  allowClear
-                  loading={customersLoading}
                   style={{ width: '100%' }}
-                  options={customers.map((c) => ({
-                    label: (c.code ? `${c.code} - ` : '') + c.name,
-                    value: c.id,
-                  }))}
-                  onChange={(id: number | undefined) => {
-                    const c = id ? customers.find((x) => x.id === id) : null;
+                  customers={customers}
+                  loading={customersLoading}
+                  onCustomersChange={setCustomers}
+                  autoLoad={false}
+                  modalZIndex={nestedElevatedPopupZIndex}
+                  onCustomerPick={(c) => {
                     if (c) {
                       const sId = (c as any).salesmanId ?? (c as any).salesman_id;
                       const salesman = users.find((u) => u.id === sId);
@@ -2939,44 +2647,6 @@ const SalesOrdersPage: React.FC = () => {
                         shipping_address: undefined,
                       });
                     }
-                  }}
-                  quickCreate={{
-                    label: '快速新建',
-                    onClick: () => setCustomerCreateVisible(true),
-                  }}
-                  advancedSearch={{
-                    label: '高级搜索',
-                    fields: [
-                      { name: 'code', label: '客户编号' },
-                      { name: 'name', label: '客户名称' },
-                      { name: 'contactPerson', label: '联系人' },
-                    ],
-                    onSearch: async (values) => {
-                      let list: Customer[] = [];
-                      try {
-                        const res = await customerApi.list({ limit: 200, skip: 0 });
-                        list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-                      } catch {
-                        return [];
-                      }
-                      let filtered = list;
-                      if (values.code?.trim()) {
-                        const k = values.code.trim().toLowerCase();
-                        filtered = filtered.filter((c) => (c.code ?? '').toLowerCase().includes(k));
-                      }
-                      if (values.name?.trim()) {
-                        const k = values.name.trim().toLowerCase();
-                        filtered = filtered.filter((c) => (c.name ?? '').toLowerCase().includes(k));
-                      }
-                      if (values.contactPerson?.trim()) {
-                        const k = values.contactPerson.trim().toLowerCase();
-                        filtered = filtered.filter((c) => (c.contactPerson ?? '').toLowerCase().includes(k));
-                      }
-                      return filtered.map((c) => ({
-                        value: c.id,
-                        label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id),
-                      }));
-                    },
                   }}
                 />
               </ProForm.Item>
@@ -3353,6 +3023,16 @@ const SalesOrdersPage: React.FC = () => {
                         </AntForm.Item>
                       ),
                     },
+                    {
+                      title: t('app.kuaizhizao.salesOrder.notes', '备注'),
+                      dataIndex: 'notes',
+                      width: 120,
+                      render: (_: any, __: any, index: number) => (
+                        <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                          <Input placeholder="备注" size="small" />
+                        </AntForm.Item>
+                      ),
+                    },
                   ];
               return (
                 <UniTableDetail
@@ -3470,6 +3150,11 @@ const SalesOrdersPage: React.FC = () => {
             label="备注"
             placeholder="请输入备注"
           />
+    </>
+  );
+
+  const salesOrderFormAuxModals = (
+    <>
         <UniMaterialBatchPicker
           open={materialPickerOpen}
           zIndex={nestedElevatedPopupZIndex}
@@ -3489,29 +3174,431 @@ const SalesOrdersPage: React.FC = () => {
             exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
           />
         </Suspense>
-      </FormModalTemplate>
+    </>
+  );
 
-      <CustomerFormModal
-        open={customerCreateVisible}
-        zIndex={nestedElevatedPopupZIndex}
-        onClose={() => setCustomerCreateVisible(false)}
-        editUuid={null}
-        onSuccess={(customer) => {
-          setCustomers((prev) => [...prev, customer]);
-          const sId = customer.salesmanId ?? (customer as any).salesman_id;
-          const salesman = users.find((u) => u.id === sId);
-          const sName = customer.salesmanName ?? (customer as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
-          formRef.current?.setFieldsValue({
-            customer_id: customer.id,
-            customer_name: customer.name,
-            customer_contact: customer.contactPerson ?? (customer as any).contact_person,
-            customer_phone: customer.phone ?? (customer as any).customer_phone,
-            salesman_id: sId,
-            salesman_name: sName,
-          });
-          setCustomerCreateVisible(false);
-        }}
-      />
+  if (isFormPage) {
+    const canSubmitAfterSave =
+      isCreatePage || (isEditPage && isDraftStatus(formEditOrder?.status));
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={() => navigate(SALES_ORDER_LIST_PATH)}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {isCreatePage
+                  ? t('app.kuaizhizao.menu.sales-management.sales-orders.new')
+                  : t('app.kuaizhizao.menu.sales-management.sales-orders.edit')}
+              </Typography.Title>
+            </Space>
+            <Space wrap>
+              <Button onClick={() => navigate(SALES_ORDER_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={() => void handleSaveDraft()}>
+                {isCreatePage ? t('app.kuaizhizao.salesOrder.saveDraft') : t('common.save')}
+              </Button>
+              {canSubmitAfterSave ? (
+                <Button type="primary" onClick={triggerSalesOrderFormSubmit}>
+                  {isCreatePage
+                    ? t('components.layoutTemplates.formModal.submitCreate')
+                    : t('app.kuaizhizao.salesOrder.saveAndSubmit', '保存并提交')}
+                  {SUBMIT_SHORTCUT_HINT}
+                </Button>
+              ) : (
+                <Button type="primary" onClick={triggerSalesOrderFormSubmit}>
+                  {t('common.save')}
+                  {SUBMIT_SHORTCUT_HINT}
+                </Button>
+              )}
+            </Space>
+            </>
+          }
+        >
+          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
+            <div className="form-modal-content-inner">
+              <ProForm
+                formRef={formRef}
+                layout="vertical"
+                submitter={false}
+                scrollToFirstError
+                onFinish={async (values) => {
+                  setModalSubmitting(true);
+                  try {
+                    await handleSaveInternal(values, false);
+                  } finally {
+                    setModalSubmitting(false);
+                  }
+                }}
+                onFinishFailed={({ errorFields }) => {
+                  const first = errorFields?.[0];
+                  const text = first?.errors?.filter(Boolean)[0];
+                  messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+                }}
+                initialValues={isCreatePage ? { price_type: 'tax_exclusive', order_date: dayjs() } : undefined}
+              >
+                {salesOrderFormItemContent}
+              </ProForm>
+            </div>
+          </Card>
+        </DocumentFormPageLayout>
+        {salesOrderFormAuxModals}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <style>{`
+        .sales-order-row-overdue td.ant-table-cell {
+          background: var(--ant-color-warning-bg) !important;
+        }
+      `}</style>
+      <ListPageTemplate statCards={statCards}>
+        <SalesOrderIndicatorsProvider>
+        <UniTable
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders"
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          onTableDataChange={handleTableDataChange}
+          formRef={tableSearchFormRef}
+          headerTitle={t('app.kuaizhizao.salesOrder.title')}
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType="table"
+          onViewTypeChange={(v) => {
+            const nextMode = v === 'table' ? 'order' : 'detail';
+            dataViewModeRef.current = nextMode;
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailColumns}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p><strong>表格视图</strong>：按订单维度展示。</p>
+                <p><strong>明细表格</strong>：以每行订单明细为展示维度，纯查看用途，支持库存/BOM 检查。</p>
+              </div>
+            ),
+          }}
+          actionRef={actionRef}
+          toolBarButtonSize="middle"
+          columns={columns}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
+          rowClassName={(record) => {
+            if (!highlightDeliveryOverdue) return '';
+            if (dataViewMode === 'order') {
+              return isSalesOrderDeliveryOverdue(record as SalesOrder, auditEnabled) ? 'sales-order-row-overdue' : '';
+            }
+            return isSalesOrderLineDeliveryOverdue(record as SalesOrderItemRow, auditEnabled)
+              ? 'sales-order-row-overdue'
+              : '';
+          }}
+          request={async (params: any, sort: any, _filter: any, searchFormValues: any): Promise<any> => {
+            const apiParams: any = {
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
+            };
+            // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status / review_status
+            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));
+            if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
+            if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
+            if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
+            // 订单日期范围
+            if (searchFormValues?.order_date && Array.isArray(searchFormValues.order_date) && searchFormValues.order_date.length === 2) {
+              const [start, end] = searchFormValues.order_date;
+              if (start) apiParams.start_date = dayjs(start).format('YYYY-MM-DD');
+              if (end) apiParams.end_date = dayjs(end).format('YYYY-MM-DD');
+            }
+            // 排序
+            if (sort && Object.keys(sort).length > 0) {
+              const key = Object.keys(sort)[0];
+              const order = sort[key];
+              if (order) {
+                apiParams.order_by = order === 'ascend' ? key : `-${key}`;
+              }
+            }
+            // 始终请求 include_items=true，切换视图时从缓存转换，避免重复请求
+            apiParams.include_items = true;
+            const paramsKey = JSON.stringify({
+              skip: apiParams.skip,
+              limit: apiParams.limit,
+              status: apiParams.status,
+              review_status: apiParams.review_status,
+              lifecycle_stage: apiParams.lifecycle_stage,
+              customer_name: apiParams.customer_name,
+              order_code: apiParams.order_code,
+              keyword: apiParams.keyword,
+              start_date: apiParams.start_date,
+              end_date: apiParams.end_date,
+              order_by: apiParams.order_by,
+            });
+
+            const toFlatRows = (orders: SalesOrder[]) => {
+              const map = new Map<string, number>();
+              const flatRows: SalesOrderItemRow[] = [];
+              for (const order of orders) {
+                const lifecycle = getSalesOrderLifecycle(order as SalesOrder, auditEnabled);
+                const stageName = lifecycle.stageName ?? order.status ?? '草稿';
+                const items = order.items ?? [];
+                if (items.length === 0) {
+                  const rowKey = `order-${order.id}-empty`;
+                  map.set(rowKey, order.id ?? 0);
+                  flatRows.push({
+                    _rowKey: rowKey,
+                    _lifecycleStage: stageName,
+                    sales_order_id: order.id ?? 0,
+                    order_code: order.order_code,
+                    customer_name: order.customer_name,
+                    order_date: order.order_date,
+                    order_delivery_date: order.delivery_date,
+                    total_quantity: order.total_quantity,
+                    total_amount: order.total_amount,
+                    delivery_progress: order.delivery_progress,
+                    status: order.status,
+                    review_status: order.review_status,
+                    pushed_to_computation: order.pushed_to_computation,
+                    has_shippable_products: order.has_shippable_products,
+                    shippable_quantity: order.shippable_quantity,
+                    material_code: '-',
+                    material_name: '-',
+                    required_quantity: 0,
+                    delivery_date: order.delivery_date ?? '',
+                  } as SalesOrderItemRow);
+                } else {
+                  items.forEach((item: SalesOrderItem, idx: number) => {
+                    const rowKey = item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`;
+                    map.set(rowKey, order.id ?? 0);
+                    flatRows.push({
+                      ...item,
+                      _rowKey: rowKey,
+                      _lifecycleStage: stageName,
+                      sales_order_id: order.id ?? 0,
+                      order_code: order.order_code,
+                      customer_name: order.customer_name,
+                      order_date: order.order_date,
+                      order_delivery_date: order.delivery_date,
+                      total_quantity: order.total_quantity,
+                      total_amount: order.total_amount,
+                      delivery_progress: order.delivery_progress,
+                      status: order.status,
+                      review_status: order.review_status,
+                      pushed_to_computation: order.pushed_to_computation,
+                      has_shippable_products: order.has_shippable_products,
+                      shippable_quantity: order.shippable_quantity,
+                      material_code: item.material_code ?? '',
+                      material_name: item.material_name ?? '',
+                      material_spec: item.material_spec ?? '',
+                      material_unit: item.material_unit ?? '',
+                      required_quantity: item.required_quantity ?? 0,
+                      unit_price: item.unit_price,
+                      tax_rate: item.tax_rate,
+                      item_amount: item.item_amount,
+                      delivered_quantity: item.delivered_quantity,
+                      remaining_quantity: item.remaining_quantity,
+                      delivery_date: item.delivery_date ?? order.delivery_date ?? '',
+                    } as SalesOrderItemRow);
+                  });
+                }
+              }
+              rowKeyToOrderIdRef.current = map;
+              return flatRows;
+            };
+
+            try {
+              const cache = lastOrdersCacheRef.current;
+              let orders: SalesOrder[];
+              let total: number;
+
+              if (cache?.paramsKey === paramsKey && cache.orders) {
+                orders = cache.orders;
+                total = cache.total;
+              } else {
+                const response = await listSalesOrders(apiParams);
+                orders = Array.isArray(response) ? response : (response as any).data || [];
+                total = (response as any).total ?? orders.length;
+                lastOrdersCacheRef.current = { orders, total, paramsKey };
+              }
+              const mode = dataViewModeRef.current;
+              if (mode === 'order') {
+                const map = new Map<string, number>();
+                orders.forEach(o => {
+                  if (o.id) map.set(String(o.id), o.id);
+                });
+                rowKeyToOrderIdRef.current = map;
+                return { data: orders, success: true, total };
+              }
+              return { data: toFlatRows(orders), success: true, total };
+            } catch (error: any) {
+              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          showAdvancedSearch={true}
+          enableRowSelection={viewTypeState !== 'detailTable'}
+          showCreateButton={false}
+          createButtonText={t('app.kuaizhizao.salesOrder.create')}
+          onCreate={handleCreate}
+          toolBarRender={() => salesOrderToolbarRenderItems}
+          showDeleteButton={viewTypeState !== 'detailTable'}
+          deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
+          deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="sales-order-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              toolBarButtonSize="middle"
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
+                  icon: <SendOutlined />,
+                  onClick: handleBatchSubmit,
+                },
+                {
+                  key: 'withdraw',
+                  label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
+                  icon: <RollbackOutlined />,
+                  disabled:
+                    selectedOrdersForBatch.length > 0 &&
+                    !selectedOrdersForBatch.some((o) => canWithdrawSalesOrderRecord(o, auditEnabled)),
+                  onClick: handleBatchWithdraw,
+                },
+                {
+                  key: 'approve',
+                  label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
+                  icon: <FileTextOutlined />,
+                  onClick: handleBatchApprove,
+                },
+                {
+                  key: 'unapprove',
+                  label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
+                  icon: <RollbackOutlined />,
+                  disabled:
+                    selectedOrdersForBatch.length > 0 &&
+                    !selectedOrdersForBatch.some((o) => canUnapproveSalesOrderRecord(o, auditEnabled)),
+                  onClick: handleBatchUnapprove,
+                },
+                {
+                  key: 'close',
+                  label: t('app.kuaizhizao.salesOrder.batchClose', '批量关闭'),
+                  icon: <StopOutlined />,
+                  requireConfirm: true,
+                  confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle', '确认批量关闭'),
+                  confirmDescription: (count) =>
+                    t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', {
+                      count,
+                      defaultValue: `关闭后剩余未交货/未执行部分将不再继续履约，确定关闭选中的 ${count} 条销售订单吗？`,
+                    }),
+                  onClick: handleBatchClose,
+                },
+              ]}
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
+            <Space key="highlight-overdue-switch" align="center">
+              <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
+              <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+                {t('app.kuaizhizao.salesOrder.highlightOverdue')}
+              </span>
+            </Space>,
+          ]}
+          // 表头固定；scroll.y 由 UniTable 全局常量模板自动计算（统一行为）
+          sticky
+          showImportButton={true}
+          onImport={handleImport}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listSalesOrders({ skip: 0, limit: 10000, include_items: true });
+              const orders = (res as any).data || [];
+              const flatRows: SalesOrderItemRow[] = [];
+              for (const order of orders) {
+                const items = order.items ?? [];
+                if (items.length === 0) {
+                  flatRows.push({
+                    _rowKey: `order-${order.id}-empty`,
+                    sales_order_id: order.id,
+                    order_code: order.order_code,
+                    customer_name: order.customer_name,
+                    material_code: '-',
+                    material_name: '-',
+                    required_quantity: 0,
+                    delivery_date: order.delivery_date ?? '',
+                  } as SalesOrderItemRow);
+                } else {
+                  items.forEach((item: SalesOrderItem, idx: number) => {
+                    flatRows.push({
+                      ...item,
+                      _rowKey: item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`,
+                      sales_order_id: order.id,
+                      order_code: order.order_code,
+                      customer_name: order.customer_name,
+                    } as SalesOrderItemRow);
+                  });
+                }
+              }
+              let toExport = flatRows;
+              if (type === 'currentPage' && pageData?.length) {
+                toExport = pageData as SalesOrderItemRow[];
+              } else if (type === 'selected' && keys?.length) {
+                toExport = flatRows.filter((r) => keys.includes(r._rowKey));
+              }
+              if (toExport.length === 0) {
+                messageApi.warning(t('app.kuaizhizao.salesOrder.noDataToExport'));
+                return;
+              }
+              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `sales-order-items-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
+            } catch (error: any) {
+              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.exportFailed'));
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
+          importHeaders={[
+            t('app.kuaizhizao.salesOrder.orderDate'),
+            t('app.kuaizhizao.salesOrder.deliveryDate'),
+            t('app.kuaizhizao.salesOrder.importHeaderCustomerId'),
+            t('app.kuaizhizao.salesOrder.customerName'),
+            t('app.kuaizhizao.salesOrder.customerContact'),
+            t('app.kuaizhizao.salesOrder.customerPhone'),
+            t('app.kuaizhizao.salesOrder.importHeaderSalesmanId'),
+            t('app.kuaizhizao.salesOrder.salesman'),
+            t('app.kuaizhizao.salesOrder.shippingAddress'),
+            t('app.kuaizhizao.salesOrder.shippingMethod'),
+            t('app.kuaizhizao.salesOrder.paymentTerms'),
+            t('app.kuaizhizao.salesOrder.notes'),
+          ]}
+          importExampleRow={[
+            '2026-01-01',
+            '2026-01-31',
+            '',
+            t('app.kuaizhizao.salesOrder.importExampleCustomer'),
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            t('app.kuaizhizao.salesOrder.importExampleNotes'),
+          ]}
+        />
+        </SalesOrderIndicatorsProvider>
+      </ListPageTemplate>
 
       {/* 详情抽屉：DetailDrawerTemplate + 与报价单一致的分区 */}
       {currentSalesOrder ? (

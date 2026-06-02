@@ -25,6 +25,7 @@ from .sales_order_changes.sales_order_changes import router as sales_order_chang
 from .purchase_order_changes.purchase_order_changes import router as purchase_order_change_router
 from .quotations.quotations import router as quotation_router
 from .sales_contracts.sales_contracts import router as sales_contract_router
+from .sales_contracts.sales_contract_terms import router as sales_contract_terms_router
 from .delivery_notices.delivery_notices import router as delivery_notice_router
 from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
@@ -72,6 +73,7 @@ router.include_router(sales_order_router)  # 销售订单管理（独立API）- 
 router.include_router(sales_order_change_router)  # 销售变更单
 router.include_router(purchase_order_change_router)  # 采购变更单
 router.include_router(quotation_router)  # 报价单管理
+router.include_router(sales_contract_terms_router)  # 条款项/条款组（须在 /{contract_id} 之前）
 router.include_router(sales_contract_router)  # 销售合同
 router.include_router(delivery_notice_router)  # 送货单管理
 router.include_router(shipment_notice_router)  # 发货通知单管理

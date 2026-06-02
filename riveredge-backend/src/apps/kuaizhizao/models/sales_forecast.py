@@ -41,8 +41,9 @@ class SalesForecast(BaseModel):
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
-    # 计划/MRP 维度：与关联 Demand 下推需求计算同进同退（不改预测主状态机）
+    # 计划/MRP 维度
     planning_pushed_to_computation = fields.BooleanField(
         default=False, description="计划侧已下推需求计算"
     )

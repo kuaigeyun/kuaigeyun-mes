@@ -41,6 +41,9 @@ import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOver
 import { customerApi, supplierApi, unwrapSupplyPagedList } from '../../../../apps/master-data/services/supply-chain';
 import type { Customer, Supplier } from '../../../../apps/master-data/types/supply-chain';
 
+/** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
+const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
+
 /**
  * 账户管理列表页面组件
  */
@@ -268,9 +271,10 @@ const UserListPage: React.FC = () => {
       setCurrentUserUuid(record.uuid);
       
       const detail = await getUserByUuid(record.uuid);
+      const userUuid = detail.uuid || record.uuid;
       const [supplierBindings, customerBindings] = await Promise.all([
-        getUserDataScopeBindings(detail.uuid, 'supplier'),
-        getUserDataScopeBindings(detail.uuid, 'customer'),
+        getUserDataScopeBindings(userUuid, 'supplier'),
+        getUserDataScopeBindings(userUuid, 'customer'),
       ]);
       const supplierCodes = supplierBindings.map((x) => x.scope_code).filter(Boolean);
       const customerCodes = customerBindings.map((x) => x.scope_code).filter(Boolean);
@@ -963,12 +967,11 @@ const UserListPage: React.FC = () => {
           label={t('field.user.username')}
           rules={[
             { required: true, message: t('field.user.usernameRequired') },
-            { min: 3, message: t('field.user.usernameMin') },
+            { min: 2, message: t('field.user.usernameMin') },
             { max: 50, message: t('field.user.usernameMax') },
-            { pattern: /^[a-zA-Z0-9_-]+$/, message: t('field.user.usernamePattern') }
+            { pattern: USERNAME_PATTERN, message: t('field.user.usernamePattern') },
           ]}
           placeholder={t('field.user.usernamePlaceholder')}
-          disabled={isEdit}
           fieldProps={{
             autoComplete: 'off'
           }}

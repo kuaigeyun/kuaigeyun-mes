@@ -358,6 +358,15 @@ class UserService:
         if not user:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
+        if data.username is not None and data.username != user.username:
+            existing_user = await User.filter(
+                tenant_id=tenant_id,
+                username=data.username,
+                deleted_at__isnull=True,
+            ).exclude(id=user.id).first()
+            if existing_user:
+                raise ValidationError(f"用户名 '{data.username}' 已被使用，请选择其他用户名")
+        
         # 记录变更前的状态（用于检测变更）
         old_department_id = user.department_id
         old_position_id = user.position_id
@@ -397,6 +406,10 @@ class UserService:
         
         # 更新其他字段
         update_data = data.model_dump(exclude_unset=True, exclude={'department_uuid', 'position_uuid', 'role_uuids'})
+        if "password" in update_data:
+            password = update_data.pop("password")
+            if password:
+                update_data["password_hash"] = User.hash_password(password)
         for key, value in update_data.items():
             if hasattr(user, key):
                 setattr(user, key, value)

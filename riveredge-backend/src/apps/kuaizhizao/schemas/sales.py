@@ -32,6 +32,7 @@ class SalesForecastBase(BaseSchema):
     review_status: str = Field("待审核", max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[list] = Field(None, description="附件列表")
 
 
 class SalesForecastCreate(SalesForecastBase):

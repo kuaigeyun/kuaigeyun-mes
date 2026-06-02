@@ -106,6 +106,9 @@ from .sales_contract import SalesContract
 from .sales_contract_item import SalesContractItem
 from .sales_contract_milestone import SalesContractMilestone
 from .sales_contract_change import SalesContractChange
+from .sales_contract_term_item import SalesContractTermItem
+from .sales_contract_term_group import SalesContractTermGroup
+from .sales_contract_term_group_item import SalesContractTermGroupItem
 from .quotation import Quotation
 from .quotation_item import QuotationItem
 from .delivery_notice import DeliveryNotice
@@ -251,6 +254,9 @@ __all__ = [
     'SalesContractItem',
     'SalesContractMilestone',
     'SalesContractChange',
+    'SalesContractTermItem',
+    'SalesContractTermGroup',
+    'SalesContractTermGroupItem',
     'Quotation',
     'QuotationItem',
     'DeliveryNotice',

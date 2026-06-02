@@ -18,7 +18,7 @@ class UserBase(BaseModel):
     包含用户的基本字段，用于创建和更新操作。
     """
     
-    username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
+    username: str = Field(..., min_length=2, max_length=50, description="用户名（2-50 字符）")
     phone: Optional[str] = Field(None, description="手机号（可选，11位中国大陆手机号）")
     email: Optional[str] = Field(None, description="用户邮箱（可选，用于邮件通知）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
@@ -56,7 +56,7 @@ class UserCreate(UserBase):
     用于创建新用户的请求数据。
     
     Attributes:
-        username: 用户名（必填，3-50 字符）
+        username: 用户名（必填，2-50 字符）
         email: 用户邮箱（可选，符合中国用户使用习惯）
         password: 密码（必填，最少 8 字符）
         full_name: 用户全名（可选）
@@ -77,7 +77,7 @@ class UserUpdate(BaseModel):
     用于更新用户信息的请求数据。所有字段都是可选的。
     
     Attributes:
-        username: 用户名（可选，3-50 字符）
+        username: 用户名（可选，2-50 字符）
         email: 用户邮箱（可选，邮箱格式）
         password: 密码（可选，最少 8 字符）
         full_name: 用户全名（可选）
@@ -86,13 +86,34 @@ class UserUpdate(BaseModel):
         is_tenant_admin: 是否为组织管理员（可选）
     """
     
-    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名（3-50 字符）")
+    username: Optional[str] = Field(None, min_length=2, max_length=50, description="用户名（2-50 字符）")
+    phone: Optional[str] = Field(None, description="手机号（可选，11位中国大陆手机号）")
     email: Optional[EmailStr] = Field(None, description="用户邮箱（邮箱格式）")
     password: Optional[str] = Field(None, min_length=8, max_length=100, description="密码（最少 8 字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: Optional[bool] = Field(None, description="是否激活")
     is_infra_admin: Optional[bool] = Field(None, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
     is_tenant_admin: Optional[bool] = Field(None, description="是否为组织管理员")
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v):
+        """空字符串视为未填写；有值时须为大陆手机号。"""
+        if v is None or v == "":
+            return None
+        if not re.match(r'^1[3-9]\d{9}$', str(v).strip()):
+            raise ValueError('手机号格式不正确，须为11位中国大陆手机号')
+        return str(v).strip()
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """验证邮箱字段，允许空值"""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str) and '@' not in v:
+            raise ValueError('邮箱格式不正确，必须包含@符号')
+        return v
 
 
 class UserResponse(UserBase):
@@ -118,6 +139,7 @@ class UserResponse(UserBase):
     """
 
     # 响应须如实返回库内数据，不可套用创建时的 min_length=3（历史/中文短用户名如「正邦」）
+    uuid: str = Field(..., description="用户UUID（对外暴露，业务标识）")
     username: str = Field(..., max_length=50, description="用户名")
     tenant_id: int = Field(..., description="组织 ID")
     last_login: Optional[datetime] = Field(None, description="最后登录时间")

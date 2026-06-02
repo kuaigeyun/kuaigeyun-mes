@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.sales_contract import SalesContract
 from apps.kuaizhizao.models.sales_contract_change import SalesContractChange
 from apps.kuaizhizao.models.sales_contract_item import SalesContractItem
 from apps.kuaizhizao.models.sales_contract_milestone import SalesContractMilestone
+from apps.kuaizhizao.models.sales_contract_term_group import SalesContractTermGroup
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.sales_contract import (
     SalesContractAlertItem,
@@ -37,6 +38,7 @@ from apps.kuaizhizao.schemas.sales_contract import (
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved, get_sales_contract_lifecycle
+from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTermService
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -48,6 +50,29 @@ class SalesContractService(AppBaseService[SalesContract]):
     def __init__(self) -> None:
         super().__init__(SalesContract)
         self.business_config_service = BusinessConfigService()
+        self.term_service = SalesContractTermService()
+
+    async def _resolve_contract_terms(
+        self,
+        tenant_id: int,
+        term_group_id: Optional[int],
+        contract_terms=None,
+    ) -> tuple[Optional[int], Optional[str], Optional[list]]:
+        if contract_terms is not None:
+            group_name = None
+            if term_group_id:
+                group = await SalesContractTermGroup.get_or_none(
+                    tenant_id=tenant_id, id=term_group_id, deleted_at__isnull=True
+                )
+                group_name = group.group_name if group else None
+            snapshot = [
+                t.model_dump() if hasattr(t, "model_dump") else dict(t)
+                for t in contract_terms
+            ]
+            return term_group_id, group_name, snapshot
+        if term_group_id:
+            return await self.term_service.build_terms_snapshot(tenant_id, term_group_id)
+        return None, None, None
 
     @staticmethod
     def _remaining(contract: SalesContract) -> tuple[Decimal, Decimal]:
@@ -112,6 +137,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             "shipping_address": contract.shipping_address,
             "shipping_method": contract.shipping_method,
             "payment_terms": contract.payment_terms,
+            "term_group_id": contract.term_group_id,
+            "term_group_name": contract.term_group_name,
+            "contract_terms": contract.contract_terms,
             "quotation_id": contract.quotation_id,
             "quotation_code": contract.quotation_code,
             "root_contract_id": contract.root_contract_id,
@@ -227,6 +255,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             if cfg.get("parameters", {}).get("sales", {}).get("contract_milestone_required") and not data.milestones:
                 raise ValidationError("框架合同须维护至少一条收款里程碑")
         total_qty, total_amt = self._sum_items(data.items)
+        term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
+            tenant_id, data.term_group_id, data.contract_terms
+        )
         contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
         async with in_transaction():
             contract = await SalesContract.create(
@@ -251,6 +282,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                 shipping_address=data.shipping_address,
                 shipping_method=data.shipping_method,
                 payment_terms=data.payment_terms,
+                term_group_id=term_group_id,
+                term_group_name=term_group_name,
+                contract_terms=contract_terms,
                 quotation_id=data.quotation_id,
                 notes=data.notes,
                 attachments=data.attachments,
@@ -361,7 +395,20 @@ class SalesContractService(AppBaseService[SalesContract]):
         if (contract.status or "") not in ("草稿",):
             raise BusinessLogicError("仅草稿状态合同可编辑")
         async with in_transaction():
-            update_fields = data.model_dump(exclude_unset=True, exclude={"items", "milestones"})
+            update_fields = data.model_dump(exclude_unset=True, exclude={"items", "milestones", "contract_terms"})
+            if "term_group_id" in data.model_fields_set or data.contract_terms is not None:
+                term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
+                    tenant_id,
+                    data.term_group_id if "term_group_id" in data.model_fields_set else contract.term_group_id,
+                    data.contract_terms,
+                )
+                contract.term_group_id = term_group_id
+                contract.term_group_name = term_group_name
+                contract.contract_terms = contract_terms
+            elif "term_group_id" in update_fields and data.term_group_id is None:
+                contract.term_group_id = None
+                contract.term_group_name = None
+                contract.contract_terms = None
             for k, v in update_fields.items():
                 setattr(contract, k, v)
             contract.updated_by = updated_by

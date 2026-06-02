@@ -11,11 +11,11 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateSalesOrderList';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Card } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -32,7 +32,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
-import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import {
   getMaterialDefaultTaxRate,
@@ -42,7 +42,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -88,8 +88,17 @@ import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { UniPdfPreview } from '../../../../../components/uni-preview';
+
+const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
+const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
+const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
@@ -587,6 +596,13 @@ const QuotationsPage: React.FC = () => {
   const quotationNestedElevatedPopupZIndex = quotationElevatedModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isCreatePage = location.pathname.endsWith('/quotations/new');
+  const editRouteMatch = location.pathname.match(/\/quotations\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const formPageInitializedRef = useRef(false);
   const { message: messageApi } = App.useApp();
   const defaultQuotationCurrency = useConfigStore((s) => {
     const c = s.configs.default_currency;
@@ -629,7 +645,6 @@ const QuotationsPage: React.FC = () => {
   const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>(undefined);
   const [printSubmitting, setPrintSubmitting] = useState(false);
 
-  const [modalVisible, setModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
@@ -673,8 +688,6 @@ const QuotationsPage: React.FC = () => {
   const [userList, setUserList] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
-  const [customerFormOpen, setCustomerFormOpen] = useState(false);
-  const [customerEditUuid, setCustomerEditUuid] = useState<string | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -761,30 +774,44 @@ const QuotationsPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!modalVisible || pendingCreateCustomerId == null) return;
-    if (applyCustomerById(pendingCreateCustomerId)) {
-      setPendingCreateCustomerId(null);
+    if (!isFormPage) {
+      formPageInitializedRef.current = false;
+      return;
     }
-  }, [modalVisible, pendingCreateCustomerId, customerList, applyCustomerById]);
+    const titleKey = isCreatePage
+      ? 'app.kuaizhizao.menu.sales-management.quotations.new'
+      : 'app.kuaizhizao.menu.sales-management.quotations.edit';
+    const title = t(titleKey);
+    const searchParams = new URLSearchParams(location.search || '');
+    searchParams.delete('_refresh');
+    const cleanSearch = searchParams.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, title);
+    setCustomPageTitle(tabKey, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t]);
 
-  const openCustomerFormForCreate = useCallback(() => {
-    setCustomerEditUuid(null);
-    setCustomerFormOpen(true);
-  }, []);
-
-  const openCustomerFormForEdit = useCallback(
-    (customerId: unknown) => {
-      const c = customerList.find((x: any) => (x.id ?? x.customer_id) === customerId);
-      const uuid = c?.uuid;
-      if (!uuid) {
-        messageApi.warning('无法编辑该客户，请刷新客户列表后重试');
-        return;
-      }
-      setCustomerEditUuid(String(uuid));
-      setCustomerFormOpen(true);
-    },
-    [customerList, messageApi],
-  );
+  useEffect(() => {
+    if (!isFormPage || formPageInitializedRef.current) return;
+    formPageInitializedRef.current = true;
+    if (isCreatePage) {
+      const raw = searchParams.get('customerId');
+      const customerId = raw != null ? Number(raw) : NaN;
+      void initQuotationCreateForm(
+        Number.isFinite(customerId) && customerId > 0 ? { customerId } : undefined,
+      );
+    } else if (editRouteId) {
+      void initQuotationEditForm(editRouteId);
+    }
+  }, [isFormPage, isCreatePage, editRouteId, searchParams]);
 
   useEffect(() => {
     const loadShippingMethod = async () => {
@@ -1043,14 +1070,6 @@ const QuotationsPage: React.FC = () => {
     })();
   }, [location.state, location.pathname, location.search, navigate, messageApi]);
 
-  useEffect(() => {
-    const raw = (location.state as { openCreateWithCustomerId?: unknown } | null)?.openCreateWithCustomerId;
-    const customerId = typeof raw === 'number' ? raw : raw != null ? Number(raw) : NaN;
-    if (!Number.isFinite(customerId) || customerId <= 0) return;
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
-    void handleCreate({ customerId });
-  }, [location.state, location.pathname, location.search, navigate]);
-
   const openFollowUpFromQuotation = (record: Quotation) => {
     const cid = record.customer_id;
     if (cid == null || !Number.isFinite(Number(cid))) {
@@ -1065,52 +1084,9 @@ const QuotationsPage: React.FC = () => {
     setFollowUpModalOpen(true);
   };
 
-  const handleEdit = async (record: Quotation) => {
-    try {
-      const detail = await getQuotation(record.id!, true);
-      setQuotationDetail(detail);
-      setEditingId(record.id!);
-      setModalVisible(true);
-      // Modal 使用 destroyOnHidden：挂载前 setFieldsValue 会丢。弹窗打开后再写入。
-      const editValues = {
-        quotation_code: detail.quotation_code,
-        quotation_date: detail.quotation_date ? dayjs(detail.quotation_date) : undefined,
-        valid_until: detail.valid_until ? dayjs(detail.valid_until) : undefined,
-        delivery_date: detail.delivery_date ? dayjs(detail.delivery_date) : undefined,
-        customer_id: detail.customer_id,
-        customer_name: detail.customer_name,
-        customer_contact: detail.customer_contact,
-        customer_phone: detail.customer_phone,
-        salesman_id: detail.salesman_id,
-        salesman_name: detail.salesman_name,
-        shipping_address: detail.shipping_address,
-        shipping_method: detail.shipping_method,
-        payment_terms: detail.payment_terms,
-        currency_code: detail.currency_code ?? defaultQuotationCurrency,
-        notes: detail.notes,
-        price_type: detail.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
-        items: (detail.items || []).map((it) => ({
-          material_id: it.material_id!,
-          material_code: it.material_code || '',
-          material_name: it.material_name || '',
-          material_spec: it.material_spec,
-          material_unit: it.material_unit || '',
-          quote_quantity: Number(it.quote_quantity) || 0,
-          unit_price: Number(it.unit_price) || 0,
-          tax_rate: Number(it.tax_rate) || 0,
-          variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
-          delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
-          notes: it.notes,
-        })),
-      };
-      setTimeout(() => {
-        formRef.current?.setFieldsValue(editValues);
-        lastPriceTypeRef.current =
-          editValues.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
-      }, 50);
-    } catch {
-      messageApi.error('获取报价单详情失败');
-    }
+  const handleEdit = (record: Quotation) => {
+    if (!record.id) return;
+    navigate(quotationEditPath(record.id));
   };
 
   const handleDelete = (record: Quotation) => {
@@ -1660,9 +1636,11 @@ const QuotationsPage: React.FC = () => {
           );
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
-          // 创建新版后直接进入编辑 Modal（与“新建”一致），不再跳详情抽屉。
+          // 创建新版后直接进入编辑页（与「新建」一致），不再跳详情抽屉。
           setDetailDrawerVisible(false);
-          await handleEdit(created);
+          if (created.id) {
+            navigate(quotationEditPath(created.id));
+          }
         } catch (e: any) {
           messageApi.error(e?.message || e?.detail || '操作失败');
         }
@@ -1858,7 +1836,7 @@ const QuotationsPage: React.FC = () => {
     notes: '',
   };
 
-  async function handleCreate(options?: { customerId?: number }) {
+  async function initQuotationCreateForm(options?: { customerId?: number }) {
     const prefillCustomerId = options?.customerId;
     formRef.current?.resetFields();
     setEditingId(null);
@@ -1866,13 +1844,13 @@ const QuotationsPage: React.FC = () => {
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
-    setModalVisible(true);
     setTimeout(() => {
       lastPriceTypeRef.current = 'tax_exclusive';
       formRef.current?.setFieldsValue({
         items: [defaultQuoteItem],
         currency_code: defaultQuotationCurrency,
         price_type: 'tax_exclusive',
+        quotation_date: dayjs(),
       });
       if (prefillCustomerId != null) {
         const applied = applyCustomerById(prefillCustomerId);
@@ -1922,6 +1900,61 @@ const QuotationsPage: React.FC = () => {
     }
   }
 
+  async function initQuotationEditForm(quotationId: number) {
+    try {
+      const detail = await getQuotation(quotationId, true);
+      setEditingId(quotationId);
+      const editValues = {
+        quotation_code: detail.quotation_code,
+        quotation_date: detail.quotation_date ? dayjs(detail.quotation_date) : undefined,
+        valid_until: detail.valid_until ? dayjs(detail.valid_until) : undefined,
+        delivery_date: detail.delivery_date ? dayjs(detail.delivery_date) : undefined,
+        customer_id: detail.customer_id,
+        customer_name: detail.customer_name,
+        customer_contact: detail.customer_contact,
+        customer_phone: detail.customer_phone,
+        salesman_id: detail.salesman_id,
+        salesman_name: detail.salesman_name,
+        shipping_address: detail.shipping_address,
+        shipping_method: detail.shipping_method,
+        payment_terms: detail.payment_terms,
+        currency_code: detail.currency_code ?? defaultQuotationCurrency,
+        notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
+        price_type: detail.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        items: (detail.items || []).map((it) => ({
+          material_id: it.material_id!,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_spec: it.material_spec,
+          material_unit: it.material_unit || '',
+          quote_quantity: Number(it.quote_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+          tax_rate: Number(it.tax_rate) || 0,
+          variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
+          delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
+          notes: it.notes,
+        })),
+      };
+      setTimeout(() => {
+        formRef.current?.setFieldsValue(editValues);
+        lastPriceTypeRef.current =
+          editValues.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
+      }, 100);
+    } catch {
+      messageApi.error('获取报价单详情失败');
+      navigate(QUOTATION_LIST_PATH);
+    }
+  }
+
+  function handleCreate(options?: { customerId?: number }) {
+    const qs =
+      options?.customerId != null && Number.isFinite(options.customerId)
+        ? `?customerId=${options.customerId}`
+        : '';
+    navigate(`${QUOTATION_CREATE_PATH}${qs}`);
+  }
+
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
     const validItems = (values.items || []).filter(
       (it: any) =>
@@ -1961,6 +1994,7 @@ const QuotationsPage: React.FC = () => {
         payment_terms: values.payment_terms,
         currency_code: values.currency_code ?? defaultQuotationCurrency,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
@@ -1979,11 +2013,13 @@ const QuotationsPage: React.FC = () => {
       { autoSubmit: !options?.asDraft },
     );
     messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : '创建成功');
-    setModalVisible(false);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
 
+    if (isFormPage) {
+      navigate(QUOTATION_LIST_PATH);
+    }
     actionRef.current?.reload();
   };
 
@@ -2027,6 +2063,7 @@ const QuotationsPage: React.FC = () => {
       payment_terms: values.payment_terms,
       currency_code: values.currency_code ?? defaultQuotationCurrency,
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
       price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
       items: validItems.map((it: any) => ({
         material_id: it.material_id,
@@ -2043,12 +2080,14 @@ const QuotationsPage: React.FC = () => {
       })),
     });
     messageApi.success('更新成功');
-    setModalVisible(false);
     setEditingId(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
 
+    if (isFormPage) {
+      navigate(QUOTATION_LIST_PATH);
+    }
     actionRef.current?.reload();
   };
 
@@ -2269,6 +2308,48 @@ const QuotationsPage: React.FC = () => {
     [messageApi, t]
   );
 
+  useEffect(() => {
+    if (!isCreatePage || pendingCreateCustomerId == null) return;
+    if (applyCustomerById(pendingCreateCustomerId)) {
+      setPendingCreateCustomerId(null);
+    }
+  }, [isCreatePage, pendingCreateCustomerId, customerList, applyCustomerById]);
+
+  const quotationFormOnValuesChange = useCallback(
+    (changed: Record<string, unknown>, _all: Record<string, unknown>) => {
+      if ('customer_id' in changed && changed.customer_id != null) {
+        const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
+        if (c) {
+          const sId = c.salesmanId ?? c.salesman_id;
+          const salesman = userList.find((u) => u.id === sId);
+          const sName =
+            c.salesmanName ?? c.salesman_name ?? (salesman ? salesman.full_name || salesman.username : '');
+          formRef.current?.setFieldsValue({
+            customer_name: c.name ?? c.customer_name,
+            customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
+            customer_phone: c.phone ?? c.customer_phone,
+            salesman_id: sId,
+            salesman_name: sName,
+          });
+        }
+      }
+    },
+    [customerList, userList],
+  );
+
+  const triggerQuotationFormSubmit = useCallback(() => {
+    requestAnimationFrame(() => {
+      const inst = formRef.current;
+      if (!inst || typeof inst.submit !== 'function') {
+        messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+        return;
+      }
+      inst.submit();
+    });
+  }, [formRef, messageApi, t]);
+
+  useSubmitShortcut(() => triggerQuotationFormSubmit(), isFormPage);
+
   const appendEmptyQuotationItem = useCallback(() => {
     const items = [...(formRef.current?.getFieldValue('items') ?? [])];
     items.push({
@@ -2300,61 +2381,27 @@ const QuotationsPage: React.FC = () => {
         </Col>
         <Col span={12}>
           <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
-            <UniDropdown
+            <CustomerSelectDropdown
               placeholder="请选择客户"
-              showSearch
-              allowClear
-              loading={customersLoading}
               style={{ width: '100%' }}
-              options={customerList.map((c: any) => ({
-                value: c.id ?? c.customer_id,
-                label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
-              }))}
-              onChange={(value) => {
-                const c = customerList.find((x: any) => (x.id ?? x.customer_id) === value);
-                if (c) applyCustomerToQuotationForm(c);
-              }}
-              quickCreate={{
-                label: '快速新建',
-                onClick: openCustomerFormForCreate,
-              }}
-              quickEdit={{
-                label: '编辑客户',
-                onEdit: (value) => openCustomerFormForEdit(value),
-              }}
-              advancedSearch={{
-                label: '高级搜索',
-                fields: [
-                  { name: 'code', label: '客户编号' },
-                  { name: 'name', label: '客户名称' },
-                  { name: 'contactPerson', label: '联系人' },
-                ],
-                onSearch: async (values) => {
-                  let list: any[] = [];
-                  try {
-                    const res = await customerApi.list({ limit: 200, skip: 0 });
-                    list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-                  } catch {
-                    return [];
-                  }
-                  let filtered = list;
-                  if (values.code?.trim()) {
-                    const k = values.code.trim().toLowerCase();
-                    filtered = filtered.filter((c: any) => (c.code ?? '').toLowerCase().includes(k));
-                  }
-                  if (values.name?.trim()) {
-                    const k = values.name.trim().toLowerCase();
-                    filtered = filtered.filter((c: any) => (c.name ?? '').toLowerCase().includes(k));
-                  }
-                  if (values.contactPerson?.trim()) {
-                    const k = values.contactPerson.trim().toLowerCase();
-                    filtered = filtered.filter((c: any) => (c.contactPerson ?? '').toLowerCase().includes(k));
-                  }
-                  return filtered.map((c: any) => ({
-                    value: c.id ?? c.uuid,
-                    label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id ?? c.uuid),
-                  }));
-                },
+              customers={customerList}
+              loading={customersLoading}
+              onCustomersChange={setCustomerList}
+              autoLoad={false}
+              modalZIndex={quotationNestedElevatedPopupZIndex}
+              onCustomerPick={(c) => {
+                if (c) {
+                  applyCustomerToQuotationForm(c as Record<string, any>);
+                } else {
+                  formRef.current?.setFieldsValue({
+                    customer_name: undefined,
+                    customer_contact: undefined,
+                    customer_phone: undefined,
+                    salesman_id: undefined,
+                    salesman_name: undefined,
+                    shipping_address: undefined,
+                  });
+                }
               }}
             />
           </ProForm.Item>
@@ -2803,7 +2850,7 @@ const QuotationsPage: React.FC = () => {
                       导入明细
                     </Button>
                     <Button
-                      type="dashed"
+                      type="default"
                       icon={<PlusOutlined />}
                       onClick={appendEmptyQuotationItem}
                     >
@@ -2844,6 +2891,7 @@ const QuotationsPage: React.FC = () => {
         }}
       </Form.Item>
       <QuotationFormSummary />
+      <DocumentAttachmentsField category="quotation_attachments" />
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <UniMaterialBatchPicker
         open={materialPickerOpen}
@@ -2853,6 +2901,88 @@ const QuotationsPage: React.FC = () => {
       />
     </>
   );
+
+  const quotationFormModals = (
+    <>
+      <Suspense fallback={null}>
+        <LazyUniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleItemImport}
+          title="导入报价明细"
+          headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
+          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+        />
+      </Suspense>
+    </>
+  );
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={() => navigate(QUOTATION_LIST_PATH)}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {isCreatePage
+                  ? t('app.kuaizhizao.menu.sales-management.quotations.new')
+                  : t('app.kuaizhizao.menu.sales-management.quotations.edit')}
+              </Typography.Title>
+            </Space>
+            <Space wrap>
+              <Button onClick={() => navigate(QUOTATION_LIST_PATH)}>{t('common.cancel')}</Button>
+              {isCreatePage ? (
+                <>
+                  <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.quotation.saveDraft')}</Button>
+                  <Button type="primary" onClick={triggerQuotationFormSubmit}>
+                    {t('components.layoutTemplates.formModal.submitCreate')}
+                    {SUBMIT_SHORTCUT_HINT}
+                  </Button>
+                </>
+              ) : (
+                <Button type="primary" onClick={triggerQuotationFormSubmit}>
+                  {t('common.save')}
+                  {SUBMIT_SHORTCUT_HINT}
+                </Button>
+              )}
+            </Space>
+            </>
+          }
+        >
+          <Card className="quotation-create-form-card" styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
+            <div className="form-modal-content-inner">
+              <ProForm
+                formRef={formRef}
+                layout="vertical"
+                submitter={false}
+                scrollToFirstError
+                onFinish={isCreatePage ? submitCreate : submitEdit}
+                onFinishFailed={({ errorFields }) => {
+                  const first = errorFields?.[0];
+                  const text = first?.errors?.filter(Boolean)[0];
+                  messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+                }}
+                onValuesChange={quotationFormOnValuesChange}
+                initialValues={
+                  isCreatePage ? { quotation_date: dayjs(), currency_code: defaultQuotationCurrency } : undefined
+                }
+              >
+                {formItemContent}
+              </ProForm>
+            </div>
+          </Card>
+        </DocumentFormPageLayout>
+        {quotationFormModals}
+      </>
+    );
+  }
 
   return (
     <>
@@ -3316,70 +3446,7 @@ const QuotationsPage: React.FC = () => {
         }
       />
 
-      <FormModalTemplate
-        title={editingId != null ? '编辑报价单' : '新建报价单'}
-        open={modalVisible}
-        zIndex={quotationElevatedModalZIndex}
-        onClose={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
-        onFinish={async (values) => {
-          if (editingId != null) await submitEdit(values);
-          else await submitCreate(values);
-        }}
-        isEdit={editingId != null}
-        formRef={formRef}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        layout="vertical"
-        extraFooter={
-          editingId == null ? (
-            <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.quotation.saveDraft')}</Button>
-          ) : undefined
-        }
-        initialValues={editingId == null ? { quotation_date: dayjs(), currency_code: defaultQuotationCurrency } : undefined}
-        onValuesChange={(changed, _all) => {
-          if ('customer_id' in changed && changed.customer_id != null) {
-            const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
-            if (c) {
-              const sId = c.salesmanId ?? c.salesman_id;
-              const salesman = userList.find((u) => u.id === sId);
-              const sName = c.salesmanName ?? c.salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
-              formRef.current?.setFieldsValue({
-                customer_name: c.name ?? c.customer_name,
-                customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
-                customer_phone: c.phone ?? c.customer_phone,
-                salesman_id: sId,
-                salesman_name: sName,
-              });
-            }
-          }
-        }}
-      >
-        {formItemContent}
-      </FormModalTemplate>
-
-      <CustomerFormModal
-        open={customerFormOpen}
-        zIndex={quotationNestedElevatedPopupZIndex}
-        onClose={() => {
-          setCustomerFormOpen(false);
-          setCustomerEditUuid(null);
-        }}
-        editUuid={customerEditUuid}
-        onSuccess={(customer) => {
-          setCustomerList((prev) => {
-            const matchKey = customer.uuid ?? customer.id;
-            const idx = prev.findIndex((c) => (c.uuid ?? c.id) === matchKey);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = { ...next[idx], ...customer };
-              return next;
-            }
-            return [...prev, customer];
-          });
-          applyCustomerToQuotationForm(customer as Record<string, any>);
-          setCustomerFormOpen(false);
-          setCustomerEditUuid(null);
-        }}
-      />
+      {quotationFormModals}
 
       <Suspense fallback={null}>
         <LazySyncFromDatasetModal
@@ -3388,15 +3455,6 @@ const QuotationsPage: React.FC = () => {
           onClose={() => setSyncModalVisible(false)}
           onConfirm={handleSyncConfirm}
           title="从数据集同步报价单"
-        />
-
-        <LazyUniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleItemImport}
-          title="导入报价明细"
-          headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
-          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
         />
       </Suspense>
 

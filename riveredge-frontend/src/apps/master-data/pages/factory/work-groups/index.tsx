@@ -24,7 +24,7 @@ import {
 } from '../../../../../components/custom-fields';
 
 const WorkGroupsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
 
   const actionRef = useRef<ActionType>(null);
@@ -130,7 +130,7 @@ const WorkGroupsPage: React.FC = () => {
         (m: any) =>
           `${m.employeeName ?? m.employee_name ?? m.employeeId ?? m.employee_id} (${m.performanceWeight ?? m.performance_weight ?? 1})`,
       )
-      .join('；');
+      .join(t('common.listSeparator'));
   };
 
   const handleImport = async (data: any[][]) => {
@@ -156,20 +156,10 @@ const WorkGroupsPage: React.FC = () => {
     }
 
     const headerMap: Record<string, string> = {
-      '工作小组编号': 'code',
-      '*工作小组编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '工作小组名称': 'name',
-      '*工作小组名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '描述': 'description',
-      '备注': 'description',
       'description': 'description',
     };
 
@@ -189,7 +179,7 @@ const WorkGroupsPage: React.FC = () => {
     if (headerIndexMap['code'] === undefined) {
       messageApi.error(
         t('app.master-data.importMissingField', {
-          field: t('field.workGroup.code'),
+          field: 'code',
           headers: headers.join(', '),
         }),
       );
@@ -198,7 +188,7 @@ const WorkGroupsPage: React.FC = () => {
     if (headerIndexMap['name'] === undefined) {
       messageApi.error(
         t('app.master-data.importMissingField', {
-          field: t('field.workGroup.name'),
+          field: 'name',
           headers: headers.join(', '),
         }),
       );
@@ -401,7 +391,7 @@ const WorkGroupsPage: React.FC = () => {
           item.description || '',
           formatMembersSummary(item),
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
         csvRows.push(
           row.map((cell) => {
@@ -644,23 +634,17 @@ const WorkGroupsPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*工作小组编号', '*工作小组名称', '描述']}
-          importExampleRow={['WG001', '装配一组', '负责装配工序的人员分组']}
+          importHeaders={['*code', '*name', 'description']}
+          importExampleRow={[
+            'WG001',
+            'Assembly Team 1',
+            'Team for assembly operations',
+          ]}
           importFieldMap={{
-            '工作小组编号': 'code',
-            '*工作小组编号': 'code',
-            '编号': 'code',
-            '*编号': 'code',
             'code': 'code',
             '*code': 'code',
-            '工作小组名称': 'name',
-            '*工作小组名称': 'name',
-            '名称': 'name',
-            '*名称': 'name',
             'name': 'name',
             '*name': 'name',
-            '描述': 'description',
-            '备注': 'description',
             'description': 'description',
           }}
           importFieldRules={{

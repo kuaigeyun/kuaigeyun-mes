@@ -243,8 +243,8 @@ class MessageTemplateService:
         {
             "name": "审批通过通知",
             "code": "approval_approved",
-            "type": "email",
-            "description": "审批通过时发送的通知邮件",
+            "type": "internal",
+            "description": "审批通过时发送的站内信",
             "subject": "【审批通过】{title}",
             "content": "您好，\n\n您的审批申请「{title}」已通过。\n\n申请人：{submitter_name}\n审批人：{approver_name}\n通过时间：{approved_at}\n\n如有疑问请联系相关人员。",
             "variables": {
@@ -258,8 +258,8 @@ class MessageTemplateService:
         {
             "name": "审批驳回通知",
             "code": "approval_rejected",
-            "type": "email",
-            "description": "审批驳回时发送的通知邮件",
+            "type": "internal",
+            "description": "审批驳回时发送的站内信",
             "subject": "【审批驳回】{title}",
             "content": "您好，\n\n您的审批申请「{title}」已被驳回。\n\n申请人：{submitter_name}\n审批人：{approver_name}\n驳回时间：{rejected_at}\n驳回意见：{comment}\n\n请根据意见修改后重新提交。",
             "variables": {

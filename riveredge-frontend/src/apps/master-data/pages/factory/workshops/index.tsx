@@ -37,7 +37,7 @@ import {
  * 车间管理列表页面组件
  */
 const WorkshopsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
 
     const actionRef = useRef<ActionType>(null);
@@ -213,27 +213,12 @@ const WorkshopsPage: React.FC = () => {
     // 表头字段映射（支持中英文，支持带*号的必填项标识）
     // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
     const headerMap: Record<string, string> = {
-      '车间编号': 'code',
-      '*车间编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '车间名称': 'name',
-      '*车间名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '所属厂区': 'plantCode',
-      '厂区': 'plantCode',
-      '厂区编号': 'plantCode',
-      '厂区名称': 'plantName',
       'plantCode': 'plantCode',
-      'plant_code': 'plantCode',
-      'plantName': 'plantName',
-      'plant_name': 'plantName',
-      '描述': 'description',
+      '*plantCode': 'plantCode',
       'description': 'description',
     };
 
@@ -256,17 +241,21 @@ const WorkshopsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workshops.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workshops.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['plantCode'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'plantCode', headers: headers.join(', ') }));
       return;
     }
 
     // 解析数据行（使用已过滤的非空行）
     const importData: WorkshopCreate[] = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const errors: Array<{ row: number; message: string; kind?: 'plant' }> = [];
 
     nonEmptyRows.forEach((row: any[], rowIndex: number) => {
       // 再次检查是否为空行（双重保险）
@@ -296,7 +285,6 @@ const WorkshopsPage: React.FC = () => {
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
         const plantCodeIndex = headerIndexMap['plantCode'];
-        const plantNameIndex = headerIndexMap['plantName'];
 
         // 确保数组有足够的长度
         if (codeIndex === undefined || nameIndex === undefined) {
@@ -312,9 +300,6 @@ const WorkshopsPage: React.FC = () => {
         const plantCode = plantCodeIndex !== undefined && row[plantCodeIndex] !== undefined
           ? row[plantCodeIndex]
           : undefined;
-        const plantName = plantNameIndex !== undefined && row[plantNameIndex] !== undefined
-          ? row[plantNameIndex]
-          : undefined;
         
         // 验证必需字段（去除空白字符后检查）
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
@@ -329,45 +314,27 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属厂区（根据厂区编号或名称查找 plantId）
-        let plantId: number | undefined = undefined;
-        if (plantCode || plantName) {
-          const plantCodeValue = plantCode ? String(plantCode).trim().toUpperCase() : '';
-          const plantNameValue = plantName ? String(plantName).trim() : '';
-          
-          // 优先通过编号查找
-          if (plantCodeValue) {
-            const foundPlant = plants.find(p => p.code.toUpperCase() === plantCodeValue);
-            if (foundPlant) {
-              plantId = foundPlant.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.plantCodeNotFound', { code: plantCodeValue }) 
-              });
-              return;
-            }
-          } 
-          // 如果编号未找到，尝试通过名称查找
-          else if (plantNameValue) {
-            const foundPlant = plants.find(p => p.name === plantNameValue);
-            if (foundPlant) {
-              plantId = foundPlant.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.plantNameNotFound', { name: plantNameValue }) 
-              });
-              return;
-            }
-          }
+        // 处理所属厂区（仅支持通过厂区编号查找 plantId）
+        const plantCodeValue = plantCode ? String(plantCode).trim().toUpperCase() : '';
+        if (!plantCodeValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.workshops.plantRequired'), kind: 'plant' });
+          return;
+        }
+        const foundPlant = plants.find(p => p.code.toUpperCase() === plantCodeValue);
+        if (!foundPlant) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.plantCodeNotFound', { code: plantCodeValue }),
+            kind: 'plant',
+          });
+          return;
         }
 
         // 构建导入数据（isActive 使用默认值 true，不导入）
         const workshopData: WorkshopCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          plantId: plantId,
+          plantId: foundPlant.id,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -383,8 +350,7 @@ const WorkshopsPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      // 检查是否有厂区相关的错误
-      const hasPlantError = errors.some(e => e.message.includes('厂区'));
+      const hasPlantError = errors.some(e => e.kind === 'plant');
       
       Modal.warning({
         title: t('app.master-data.dataValidationFailed'),
@@ -419,7 +385,7 @@ const WorkshopsPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  {t('app.master-data.plantImportHint', { code: plants[0]?.code || '', name: plants[0]?.name || '' })}
+                  {t('app.master-data.plantImportHint', { code: plants[0]?.code || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -532,7 +498,7 @@ const WorkshopsPage: React.FC = () => {
           plant ? plant.name : '',
           item.description || '',
           (item.isActive ?? (item as any).is_active) ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
         // 处理包含逗号、引号或换行符的字段
         csvRows.push(row.map(cell => {
@@ -731,40 +697,25 @@ const WorkshopsPage: React.FC = () => {
         viewTypes={['table', 'help']}
         defaultViewType="table"
         onImport={handleImport}
-        importHeaders={['*车间编号', '*车间名称', '所属厂区', '描述']}
+        importHeaders={['*code', '*name', '*plantCode', 'description']}
         importExampleRow={[
           'WS-WX-01-01', 
-          '精密加工车间', 
+          'Precision Workshop',
           plants.length > 0 ? plants[0].code : 'PLANT-WX-01', 
-          '负责核心零部件加工'
+          'Core parts machining',
         ]}
         importFieldMap={{
-          '车间编号': 'code',
-          '*车间编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '车间名称': 'name',
-          '*车间名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '所属厂区': 'plantCode',
-          '厂区': 'plantCode',
-          '厂区编号': 'plantCode',
-          '厂区名称': 'plantName',
           'plantCode': 'plantCode',
-          'plant_code': 'plantCode',
-          'plantName': 'plantName',
-          'plant_name': 'plantName',
-          '描述': 'description',
           'description': 'description',
         }}
         importFieldRules={{
           code: { required: true },
           name: { required: true },
+          plantCode: { required: true },
         }}
         showExportButton={true}
         onExport={handleExport}

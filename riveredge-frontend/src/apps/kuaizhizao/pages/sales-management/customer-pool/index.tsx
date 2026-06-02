@@ -62,9 +62,7 @@ const CustomerPoolPage: React.FC = () => {
   };
 
   const toQuotation = (customerId: number) => {
-    navigate('/apps/kuaizhizao/sales-management/quotations', {
-      state: { openCreateWithCustomerId: customerId },
-    });
+    navigate(`/apps/kuaizhizao/sales-management/quotations/new?customerId=${customerId}`);
   };
 
   const claimAndQuote = async (row: CustomerPoolItem) => {
@@ -183,7 +181,7 @@ const CustomerPoolPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
           beforeSearchButtons={
             <ThemedSegmented
-              size="middle"
+              surfaceBackground
               value={scope}
               onChange={(v) => setScope(v as 'pool' | 'mine' | 'all')}
               options={[

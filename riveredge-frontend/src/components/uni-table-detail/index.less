@@ -74,9 +74,33 @@
     }
   }
 
-  /* ===== 顶部边框 ===== */
-  .ant-table {
-    border-top: 1px solid var(--ant-color-border, #d9d9d9);
+  /*
+   * 明细表外框：圆角与边框跟随 Ant Design token（ConfigProvider / BasicLayout 注入的 CSS 变量）
+   */
+  .uni-table-detail-body {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--ant-color-border, #d9d9d9);
+    border-radius: var(--ant-border-radius-lg, var(--ant-borderRadiusLG, 8px));
+    overflow: hidden;
+    background: var(--ant-color-bg-container, #ffffff);
+  }
+
+  .uni-table-detail-scroll {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .uni-table-detail-body .ant-table {
+    border-top: none;
+  }
+
+  .uni-table-detail-body .ant-table-container {
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
   }
 
   /* ===== 表头文字不换行 ===== */

@@ -29,6 +29,7 @@ class SalesForecastBase(BaseSchema):
     status: str = Field(default="草稿", max_length=20, description="预测状态")
     review_status: str = Field(default="待审核", max_length=20, description="审核状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[list] = Field(None, description="附件列表")
     
     # 审核信息
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
@@ -77,6 +78,7 @@ class SalesForecastUpdate(BaseSchema):
     review_time: Optional[datetime] = Field(None, description="审核时间")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[list] = Field(None, description="附件列表")
 
 
 class SalesForecastResponse(SalesForecastBase):

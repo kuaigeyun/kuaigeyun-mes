@@ -18,17 +18,12 @@ class TenantInitDataService:
     集中管理所有初始化项，支持必选/可选执行。
     """
 
-    # 必选初始化项（系统级默认加载，新建组织时 100% 执行）
+    # 必选初始化项（租户「初始项加载」与新建组织 run_required 执行；不含应用注册）
     INIT_ITEMS_REQUIRED: List[Dict[str, Any]] = [
         {
             "key": "language",
             "name": "系统语言",
             "description": "简体中文、English 等系统语言",
-        },
-        {
-            "key": "application",
-            "name": "应用注册",
-            "description": "扫描并自动安装、启用应用中心免费应用",
         },
         {
             "key": "data_dictionary",
@@ -44,6 +39,11 @@ class TenantInitDataService:
         {"key": "approval_process_preset", "name": "审批流程预设", "description": "采购单、销售单等审批流程"},
         {"key": "message_template_preset", "name": "消息模板预设", "description": "审批通知、验证码等消息模板"},
         {"key": "print_template_preset", "name": "打印模板预设", "description": "通用标签、收据等打印模板"},
+        {
+            "key": "menu_sync",
+            "name": "应用菜单同步",
+            "description": "按已安装应用将 manifest 菜单写入侧栏（不安装/启用应用，由平台管理员处理）",
+        },
     ]
 
     # 可选初始化项（业务预设，新建组织时由用户勾选是否加载）
@@ -362,5 +362,9 @@ class TenantInitDataService:
             return await MaterialVariantAttributeService.load_preset_sme(
                 tenant_id, created_by=current_user_id
             )
+
+        if key == "menu_sync":
+            from core.services.system.menu_service import MenuService
+            return await MenuService.sync_all_menus_from_applications(tenant_id)
 
         raise ValueError(f"未知的初始化项: {key}")

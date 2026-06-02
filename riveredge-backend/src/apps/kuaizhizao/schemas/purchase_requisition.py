@@ -72,6 +72,7 @@ class PurchaseRequisitionBase(BaseModel):
     source_id: Optional[int] = None
     source_code: Optional[str] = None
     notes: Optional[str] = None
+    attachments: Optional[list] = None
 
 
 class PurchaseRequisitionCreate(BaseModel):
@@ -84,6 +85,7 @@ class PurchaseRequisitionCreate(BaseModel):
     source_id: Optional[int] = None
     source_code: Optional[str] = None
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     items: List[PurchaseRequisitionItemCreate] = Field(..., description="申请明细")
 
 
@@ -93,6 +95,7 @@ class PurchaseRequisitionUpdate(BaseModel):
     requisition_date: Optional[date] = None
     required_date: Optional[date] = None
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     items: Optional[List[PurchaseRequisitionItemCreate]] = None
 
 

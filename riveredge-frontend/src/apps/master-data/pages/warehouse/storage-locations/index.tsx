@@ -29,7 +29,7 @@ import {
  * 库位管理列表页面组件
  */
 const StorageLocationsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -145,11 +145,6 @@ const StorageLocationsPage: React.FC = () => {
    * 
    * 支持从 Excel 导入库位数据，批量创建库位
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
-   * 
-   * 所属库区字段说明：
-   * - 可以填写库区编号（如：SA001）或库区名称（如：A区）
-   * - 系统会根据编号或名称自动匹配对应的库区
-   * - 如果库区不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
@@ -186,27 +181,12 @@ const StorageLocationsPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '库位编号': 'code',
-      '*库位编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '库位名称': 'name',
-      '*库位名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '所属库区': 'storageAreaCode',
-      '库区': 'storageAreaCode',
-      '库区编号': 'storageAreaCode',
-      '库区名称': 'storageAreaName',
       'storageAreaCode': 'storageAreaCode',
-      'storage_area_code': 'storageAreaCode',
-      'storageAreaName': 'storageAreaName',
-      'storage_area_name': 'storageAreaName',
-      '描述': 'description',
+      '*storageAreaCode': 'storageAreaCode',
       'description': 'description',
     };
 
@@ -226,17 +206,21 @@ const StorageLocationsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageLocations.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageLocations.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['storageAreaCode'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'storageAreaCode', headers: headers.join(', ') }));
       return;
     }
 
     // 解析数据行
     const importData: StorageLocationCreate[] = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const errors: Array<{ row: number; message: string; kind?: 'storageArea' }> = [];
 
     nonEmptyRows.forEach((row: any[], rowIndex: number) => {
       const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
@@ -261,7 +245,6 @@ const StorageLocationsPage: React.FC = () => {
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
         const storageAreaCodeIndex = headerIndexMap['storageAreaCode'];
-        const storageAreaNameIndex = headerIndexMap['storageAreaName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.headerMapError') });
@@ -276,9 +259,6 @@ const StorageLocationsPage: React.FC = () => {
         const storageAreaCode = storageAreaCodeIndex !== undefined && row[storageAreaCodeIndex] !== undefined
           ? row[storageAreaCodeIndex]
           : undefined;
-        const storageAreaName = storageAreaNameIndex !== undefined && row[storageAreaNameIndex] !== undefined
-          ? row[storageAreaNameIndex]
-          : undefined;
         
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
@@ -292,42 +272,22 @@ const StorageLocationsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属库区（根据库区编号或名称查找 storageAreaId）
-        let storageAreaId: number | undefined = undefined;
-        if (storageAreaCode || storageAreaName) {
-          const storageAreaCodeValue = storageAreaCode ? String(storageAreaCode).trim().toUpperCase() : '';
-          const storageAreaNameValue = storageAreaName ? String(storageAreaName).trim() : '';
-          
-          // 优先通过编号查找
-          if (storageAreaCodeValue) {
-            const foundStorageArea = storageAreas.find(s => s.code.toUpperCase() === storageAreaCodeValue);
-            if (foundStorageArea) {
-              storageAreaId = foundStorageArea.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.storageLocations.storageAreaCodeNotExist', { value: storageAreaCodeValue }) 
-              });
-              return;
-            }
-          } 
-          // 如果编号未找到，尝试通过名称查找
-          else if (storageAreaNameValue) {
-            const foundStorageArea = storageAreas.find(s => s.name === storageAreaNameValue);
-            if (foundStorageArea) {
-              storageAreaId = foundStorageArea.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.storageLocations.storageAreaNameNotExist', { value: storageAreaNameValue }) 
-              });
-              return;
-            }
-          }
-        } else {
-          errors.push({ 
-            row: actualRowIndex, 
-            message: t('app.master-data.storageLocations.storageAreaRequired') 
+        // 处理所属库区（仅支持通过库区编号查找 storageAreaId）
+        const storageAreaCodeValue = storageAreaCode ? String(storageAreaCode).trim().toUpperCase() : '';
+        if (!storageAreaCodeValue) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.storageLocations.storageAreaRequired'),
+            kind: 'storageArea',
+          });
+          return;
+        }
+        const foundStorageArea = storageAreas.find(s => s.code.toUpperCase() === storageAreaCodeValue);
+        if (!foundStorageArea) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.storageLocations.storageAreaCodeNotExist', { value: storageAreaCodeValue }),
+            kind: 'storageArea',
           });
           return;
         }
@@ -336,7 +296,7 @@ const StorageLocationsPage: React.FC = () => {
         const storageLocationData: StorageLocationCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          storageAreaId: storageAreaId!,
+          storageAreaId: foundStorageArea.id,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -352,7 +312,7 @@ const StorageLocationsPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      const hasStorageAreaError = errors.some(e => e.message.includes('库区') || e.message.includes('Storage area'));
+      const hasStorageAreaError = errors.some(e => e.kind === 'storageArea');
       
       Modal.warning({
         title: t('app.master-data.warehouses.importValidationFailed'),
@@ -387,7 +347,7 @@ const StorageLocationsPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  {t('app.master-data.storageLocations.importTip', { code: storageAreas[0]?.code || '', name: storageAreas[0]?.name || '' })}
+                  {t('app.master-data.storageLocations.importTip', { code: storageAreas[0]?.code || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -498,7 +458,7 @@ const StorageLocationsPage: React.FC = () => {
           storageArea ? `${storageArea.code}(${storageArea.name})` : '',
           item.description || '',
           (item.isActive ?? (item as any).is_active) ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
       });
 
@@ -764,35 +724,20 @@ const StorageLocationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*库位编号', '*库位名称', '*所属库区', '描述']}
+        importHeaders={['*code', '*name', '*storageAreaCode', 'description']}
         importExampleRow={[
           'SL001', 
-          'A-01-01', 
+          'A-01-01',
           storageAreas.length > 0 ? storageAreas[0].code : 'SA001', 
-          'A区第1排第1列'
+          'Area A row 1 column 1',
         ]}
         importFieldMap={{
-          '库位编号': 'code',
-          '*库位编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '库位名称': 'name',
-          '*库位名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '所属库区': 'storageAreaCode',
-          '库区': 'storageAreaCode',
-          '库区编号': 'storageAreaCode',
-          '库区名称': 'storageAreaName',
           'storageAreaCode': 'storageAreaCode',
-          'storage_area_code': 'storageAreaCode',
-          'storageAreaName': 'storageAreaName',
-          'storage_area_name': 'storageAreaName',
-          '描述': 'description',
+          '*storageAreaCode': 'storageAreaCode',
           'description': 'description',
         }}
         importFieldRules={{

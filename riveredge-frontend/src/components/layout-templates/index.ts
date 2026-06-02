@@ -33,6 +33,10 @@ export type { MultiTabListPageTemplateProps, TabItem } from './MultiTabListPageT
 export { FormModalTemplate } from './FormModalTemplate'
 export type { FormModalTemplateProps } from './FormModalTemplate'
 
+// 独立新建/编辑页布局
+export { DocumentFormPageLayout } from './DocumentFormPageLayout'
+export type { DocumentFormPageLayoutProps } from './DocumentFormPageLayout'
+
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
 export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'

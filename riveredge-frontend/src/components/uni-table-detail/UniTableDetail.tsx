@@ -210,8 +210,8 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
           }
 
           return (
-            <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-              <div style={{ width: '100%', overflowX: 'auto' }}>
+            <div className="uni-table-detail-body">
+              <div className="uni-table-detail-scroll">
                 <Table
                   className="uni-detail-table"
                   dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}

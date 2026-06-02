@@ -35,7 +35,7 @@ import {
  * 工位管理列表页面组件
  */
 const WorkstationsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -191,28 +191,13 @@ const WorkstationsPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '工位编号': 'code',
-      '*工位编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '工位名称': 'name',
-      '*工位名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '所属产线': 'productionLineCode',
-      '产线': 'productionLineCode',
-      '产线编号': 'productionLineCode',
-      '产线名称': 'productionLineName',
       'productionLineCode': 'productionLineCode',
-      'production_line_code': 'productionLineCode',
-      'productionLineName': 'productionLineName',
-      'production_line_name': 'productionLineName',
-      '描述': 'description',
       'description': 'description',
+      '*productionLineCode': 'productionLineCode',
     };
 
     // 找到表头索引
@@ -231,17 +216,21 @@ const WorkstationsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workstations.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workstations.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['productionLineCode'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'productionLineCode', headers: headers.join(', ') }));
       return;
     }
 
     // 解析数据行
     const importData: WorkstationCreate[] = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const errors: Array<{ row: number; message: string; kind?: 'productionLine' }> = [];
 
     nonEmptyRows.forEach((row: any[], rowIndex: number) => {
       const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
@@ -266,7 +255,6 @@ const WorkstationsPage: React.FC = () => {
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
         const productionLineCodeIndex = headerIndexMap['productionLineCode'];
-        const productionLineNameIndex = headerIndexMap['productionLineName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
@@ -281,58 +269,35 @@ const WorkstationsPage: React.FC = () => {
         const productionLineCode = productionLineCodeIndex !== undefined && row[productionLineCodeIndex] !== undefined
           ? row[productionLineCodeIndex]
           : undefined;
-        const productionLineName = productionLineNameIndex !== undefined && row[productionLineNameIndex] !== undefined
-          ? row[productionLineNameIndex]
-          : undefined;
         
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '工位编号不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.workstations.codeRequired') });
           return;
         }
         if (!nameValue) {
-          errors.push({ row: actualRowIndex, message: '工位名称不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.workstations.nameRequired') });
           return;
         }
 
-        // 处理所属产线（根据产线编号或名称查找 productionLineId）
-        let productionLineId: number | undefined = undefined;
-        if (productionLineCode || productionLineName) {
-          const productionLineCodeValue = productionLineCode ? String(productionLineCode).trim().toUpperCase() : '';
-          const productionLineNameValue = productionLineName ? String(productionLineName).trim() : '';
-          
-          // 优先通过编号查找
-          if (productionLineCodeValue) {
-            const foundProductionLine = productionLines.find(p => p.code.toUpperCase() === productionLineCodeValue);
-            if (foundProductionLine) {
-              productionLineId = foundProductionLine.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: `产线编号 "${productionLineCodeValue}" 不存在，请检查产线编号是否正确` 
-              });
-              return;
-            }
-          } 
-          // 如果编号未找到，尝试通过名称查找
-          else if (productionLineNameValue) {
-            const foundProductionLine = productionLines.find(p => p.name === productionLineNameValue);
-            if (foundProductionLine) {
-              productionLineId = foundProductionLine.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: `产线名称 "${productionLineNameValue}" 不存在，请检查产线名称是否正确` 
-              });
-              return;
-            }
-          }
-        } else {
-          errors.push({ 
-            row: actualRowIndex, 
-            message: '所属产线不能为空' 
+        // 处理所属产线（仅支持通过产线编号查找 productionLineId）
+        const productionLineCodeValue = productionLineCode ? String(productionLineCode).trim().toUpperCase() : '';
+        if (!productionLineCodeValue) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.workstations.productionLineRequired'),
+            kind: 'productionLine',
+          });
+          return;
+        }
+        const foundProductionLine = productionLines.find(p => p.code.toUpperCase() === productionLineCodeValue);
+        if (!foundProductionLine) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.workstations.productionLineCodeNotExist', { value: productionLineCodeValue }),
+            kind: 'productionLine',
           });
           return;
         }
@@ -341,7 +306,7 @@ const WorkstationsPage: React.FC = () => {
         const workstationData: WorkstationCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          productionLineId: productionLineId!,
+          productionLineId: foundProductionLine.id,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -350,28 +315,28 @@ const WorkstationsPage: React.FC = () => {
       } catch (error: any) {
         errors.push({
           row: actualRowIndex,
-          message: error.message || '数据解析失败',
+          message: error.message || t('app.master-data.workstations.dataParseFailed'),
         });
       }
     });
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      const hasProductionLineError = errors.some(e => e.message.includes('产线'));
+      const hasProductionLineError = errors.some(e => e.kind === 'productionLine');
       
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.dataValidationFailed'),
         width: 700,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
                   <Typography.Text type="danger">
-                    第 {item.row} 行：{item.message}
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
                   </Typography.Text>
                 </List.Item>
               )}
@@ -379,7 +344,7 @@ const WorkstationsPage: React.FC = () => {
             {hasProductionLineError && productionLines.length > 0 && (
               <div style={{ marginTop: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  当前可用的产线列表：
+                  {t('app.master-data.availableProductionLinesList')}
                 </Typography.Text>
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {productionLines.map(productionLine => (
@@ -392,7 +357,7 @@ const WorkstationsPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属产线列可以填写产线编号（如：{productionLines[0]?.code}）或产线名称（如：{productionLines[0]?.name}）
+                  {t('app.master-data.productionLineImportHint', { code: productionLines[0]?.code || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -509,7 +474,7 @@ const WorkstationsPage: React.FC = () => {
           plLabel,
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
       });
 
@@ -769,35 +734,20 @@ const WorkstationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*工位编号', '*工位名称', '*所属产线', '描述']}
+        importHeaders={['*code', '*name', '*productionLineCode', 'description']}
         importExampleRow={[
           'ST001', 
-          '工位1', 
+          'Station 1',
           productionLines.length > 0 ? productionLines[0].code : 'PL001', 
-          '主要负责产品加工'
+          'For primary processing',
         ]}
         importFieldMap={{
-          '工位编号': 'code',
-          '*工位编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '工位名称': 'name',
-          '*工位名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '所属产线': 'productionLineCode',
-          '产线': 'productionLineCode',
-          '产线编号': 'productionLineCode',
-          '产线名称': 'productionLineName',
           'productionLineCode': 'productionLineCode',
-          'production_line_code': 'productionLineCode',
-          'productionLineName': 'productionLineName',
-          'production_line_name': 'productionLineName',
-          '描述': 'description',
+          '*productionLineCode': 'productionLineCode',
           'description': 'description',
         }}
         importFieldRules={{

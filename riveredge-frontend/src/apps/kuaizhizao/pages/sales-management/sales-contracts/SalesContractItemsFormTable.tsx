@@ -4,7 +4,7 @@
 import React from 'react';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { ProForm } from '@ant-design/pro-components';
-import { AppstoreAddOutlined, PlusOutlined } from '@ant-design/icons';
+import { AppstoreAddOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, DatePicker, Form, Input, InputNumber, Space, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -24,6 +24,7 @@ export type ContractItemsFormTableProps = {
   formRef: React.RefObject<ProFormInstance | undefined>;
   materialList: Material[];
   onOpenMaterialPicker: () => void;
+  onOpenImport: () => void;
   onPriceTypeToggle: (checked: boolean) => void;
   onRefreshLinePriceByVariant: (index: number, attrs?: Record<string, unknown>) => void | Promise<void>;
   editingIncl: { index: number; value: number | null } | null;
@@ -35,6 +36,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   formRef,
   materialList,
   onOpenMaterialPicker,
+  onOpenImport,
   onPriceTypeToggle,
   onRefreshLinePriceByVariant,
   editingIncl,
@@ -382,6 +384,13 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                 )}
                 headerExtra={(
                   <Space size={8}>
+                    <Button
+                      type="default"
+                      icon={<ImportOutlined />}
+                      onClick={onOpenImport}
+                    >
+                      导入明细
+                    </Button>
                     <Button
                       type="dashed"
                       icon={<PlusOutlined />}

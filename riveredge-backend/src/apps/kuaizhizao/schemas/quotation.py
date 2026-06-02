@@ -113,6 +113,7 @@ class QuotationBase(BaseSchema):
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY 人民币）")
 
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[list] = Field(None, description="附件列表")
 
 
 class QuotationCreate(QuotationBase):
@@ -147,6 +148,7 @@ class QuotationUpdate(BaseSchema):
     payment_terms: Optional[str] = Field(None, max_length=100)
     currency_code: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     items: Optional[List[QuotationItemCreate]] = None
 
 

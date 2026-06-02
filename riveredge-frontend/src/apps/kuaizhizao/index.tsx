@@ -245,8 +245,12 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 采购管理路由 */}
       <Route path="purchase-management/dashboard" element={withPageSuspense(PurchaseDashboardPage)} />
+      <Route path="purchase-management/purchase-orders/new" element={withPageSuspense(PurchaseOrdersPage)} />
+      <Route path="purchase-management/purchase-orders/:id/edit" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-order-changes" element={withPageSuspense(PurchaseOrderChangesPage)} />
+      <Route path="purchase-management/purchase-requisitions/new" element={withPageSuspense(PurchaseRequisitionsPage)} />
+      <Route path="purchase-management/purchase-requisitions/:id/edit" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-inquiries" element={withPageSuspense(PurchaseInquiriesPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
@@ -274,9 +278,17 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 销售管理路由 */}
       <Route path="sales-management/dashboard" element={withPageSuspense(SalesDashboardPage)} />
       <Route path="sales-management/customer-pool" element={withPageSuspense(CustomerPoolPage)} />
+      <Route path="sales-management/sales-forecasts/new" element={withPageSuspense(SalesForecastsPage)} />
+      <Route path="sales-management/sales-forecasts/:id/edit" element={withPageSuspense(SalesForecastsPage)} />
       <Route path="sales-management/sales-forecasts" element={withPageSuspense(SalesForecastsPage)} />
+      <Route path="sales-management/quotations/new" element={withPageSuspense(QuotationsPage)} />
+      <Route path="sales-management/quotations/:id/edit" element={withPageSuspense(QuotationsPage)} />
       <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
+      <Route path="sales-management/sales-contracts/new" element={withPageSuspense(SalesContractsPage)} />
+      <Route path="sales-management/sales-contracts/:id/edit" element={withPageSuspense(SalesContractsPage)} />
       <Route path="sales-management/sales-contracts" element={withPageSuspense(SalesContractsPage)} />
+      <Route path="sales-management/sales-orders/new" element={withPageSuspense(SalesOrdersPage)} />
+      <Route path="sales-management/sales-orders/:id/edit" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-order-changes" element={withPageSuspense(SalesOrderChangesPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />

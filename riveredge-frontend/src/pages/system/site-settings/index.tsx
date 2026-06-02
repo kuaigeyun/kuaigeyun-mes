@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker } from 'antd';
-import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
 import {
@@ -26,6 +26,7 @@ import {
 import { getLanguageList } from '../../../services/language';
 import ImageCropper from '../../../components/image-cropper';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
+import { TenantInitDataPanel } from '../config-center/TenantInitDataPanel';
 
 /**
  * 站点设置页面组件
@@ -898,6 +899,8 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
+  const tenantInitTabContent = <TenantInitDataPanel />;
+
   return (
     <Form
       form={form}
@@ -910,6 +913,7 @@ const SiteSettingsPage: React.FC = () => {
         tabs={[
           { key: 'basic', label: (<Space><InfoCircleOutlined /><span>{t('pages.system.siteSettings.tabBasic')}</span></Space>), children: basicInfoWithActions },
           { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
+          { key: 'init-data', label: (<Space><CloudDownloadOutlined /><span>{t('pages.system.siteSettings.tabInitData')}</span></Space>), children: tenantInitTabContent },
         ]}
       />
 

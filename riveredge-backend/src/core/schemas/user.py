@@ -20,7 +20,7 @@ class UserCreateRequest(BaseModel):
 
     用于前端创建用户的请求数据，不包含 tenant_id（由后端自动获取）。
     """
-    username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
+    username: str = Field(..., min_length=2, max_length=50, description="用户名（2-50 字符）")
     email: Optional[str] = Field(None, description="用户邮箱（可选）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")

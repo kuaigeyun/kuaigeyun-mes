@@ -39,7 +39,6 @@ import {
 } from './configTree';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
 import { WorkOrderScoreProfilesPanel } from './WorkOrderScoreProfilesPanel';
-import { TenantInitDataPanel } from './TenantInitDataPanel';
 import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
 import type { Color } from 'antd/es/color-picker';
@@ -403,15 +402,7 @@ const ConfigCenterPage: React.FC = () => {
       }
       mergedByCat.set(c.id, target);
     }
-    return [
-      ...Array.from(mergedByCat.values()),
-      {
-        id: 'system',
-        nameKey: 'pages.system.configCenter.category.system',
-        descriptionKey: 'pages.system.configCenter.category.systemDesc',
-        params: [],
-      },
-    ];
+    return Array.from(mergedByCat.values());
   }, []);
 
   const renderText = (key: string | undefined, fallback?: string) => {
@@ -781,11 +772,9 @@ const ConfigCenterPage: React.FC = () => {
     icon: React.ReactNode,
     showAuditSection: boolean = false,
     showScoreProfilesPanel: boolean = false,
-    showTenantInitPanel: boolean = false,
   ) => {
     const currentCat = categories.find(c => c.id === selectedCatId) || categories[0];
     const auditSwitches = showAuditSection ? AUDIT_SWITCH_ITEMS.filter(it => it.categoryId === selectedCatId) : [];
-    const isSystemInitView = showTenantInitPanel && selectedCatId === 'system';
 
     return (
       <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
@@ -830,9 +819,7 @@ const ConfigCenterPage: React.FC = () => {
               </Card>
             )}
 
-            {isSystemInitView && <TenantInitDataPanel />}
-
-            {!showAuditSection && !isSystemInitView && (
+            {!showAuditSection && (
               <>
                 <Spin spinning={loading}>
                   <Form
@@ -918,7 +905,7 @@ const ConfigCenterPage: React.FC = () => {
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />, false, true, true) },
+          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />, false, true) },
           { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
           { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
           { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },

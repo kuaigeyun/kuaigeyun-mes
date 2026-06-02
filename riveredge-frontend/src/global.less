@@ -112,6 +112,11 @@
   box-sizing: border-box;
 }
 
+.quotation-create-form-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /*
  * 客户跟进：Ant Design TextArea showCount 默认把 .ant-input-data-count 放在边框下方（bottom 为负），
  * 会撑出可滚动区域、诱发 Modal 竖条。改为叠在框内右下角，并给 textarea 留底边距避免文字与字数重叠。
@@ -159,6 +164,41 @@
 }
 .form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* 独立新建/编辑页：抵消 uni-tabs 左右 16px，滚动区贴边；滚动条隐藏（仍可滚轮/触控滚动） */
+.document-form-page-layout {
+  margin-left: -16px;
+  margin-right: -16px;
+  width: calc(100% + 32px);
+}
+
+.document-form-page-header {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.document-form-page-body {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 0px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+/* 表单页仅内层滚动，避免 uni-tabs 外层再出现滚动条 */
+.uni-tabs-content:has(.document-form-page-layout) {
+  overflow: hidden !important;
+}
+
+.uni-tabs-content-page-inner:has(.document-form-page-layout) {
+  overflow: hidden;
 }
 
 /* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */
@@ -910,8 +950,9 @@ code {
   padding-top: 16px;
 }
 
-/* 全局：Modal 内表单标题为粗体 */
-.ant-modal .ant-form-item-label > label {
+/* 全局：Modal / 全页表单容器内表单项标题为粗体（与 FormModalTemplate 一致） */
+.ant-modal .ant-form-item-label > label,
+.form-modal-content-inner .ant-form-item-label > label {
   font-weight: 600;
 }
 

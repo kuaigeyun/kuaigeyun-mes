@@ -63,7 +63,7 @@ export const TenantInitDataPanel: React.FC = () => {
   const requiredItems = config?.required ?? [];
   const optionalItems = config?.optional ?? [];
   const allItems = useMemo(
-    () => [...requiredItems, ...optionalItems, { key: 'menu_sync', name: '菜单同步', description: '' }],
+    () => [...requiredItems, ...optionalItems],
     [requiredItems, optionalItems],
   );
 

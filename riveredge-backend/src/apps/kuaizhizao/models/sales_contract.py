@@ -71,6 +71,9 @@ class SalesContract(BaseModel):
     previous_contract_id = fields.IntField(null=True, description="上一版本合同ID")
 
     notes = fields.TextField(null=True, description="备注")
+    term_group_id = fields.IntField(null=True, description="条款组ID")
+    term_group_name = fields.CharField(max_length=200, null=True, description="条款组名称（快照）")
+    contract_terms = fields.JSONField(null=True, description="合同条款快照")
     attachments = fields.JSONField(null=True, description="附件列表")
 
     is_active = fields.BooleanField(default=True, description="是否有效")

@@ -163,6 +163,33 @@ export const DOCUMENT_DETAIL_PAGE_HEADER_STYLE: CSSProperties = {
   flexWrap: 'wrap',
 };
 
+/** 独立新建/编辑页根容器：占满标签页高度，顶栏固定 + 内容滚动 */
+export const DOCUMENT_FORM_PAGE_ROOT_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  minHeight: 0,
+  boxSizing: 'border-box',
+};
+
+/** 独立新建/编辑页固定顶栏 */
+export const DOCUMENT_FORM_PAGE_HEADER_STYLE: CSSProperties = {
+  ...DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
+  flexShrink: 0,
+  marginBottom: 0,
+  paddingBottom: PAGE_SPACING.BLOCK_GAP,
+  background: 'var(--ant-colorBgLayout)',
+  borderBottom: '1px solid var(--ant-colorBorderSecondary)',
+};
+
+/** 独立新建/编辑页可滚动内容区（顶栏下间距见 global.less .document-form-page-body） */
+export const DOCUMENT_FORM_PAGE_BODY_STYLE: CSSProperties = {
+  flex: '1 1 auto',
+  minHeight: 0,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+};
+
 /** 单据详情页标题样式 */
 export const DOCUMENT_DETAIL_PAGE_TITLE_STYLE: CSSProperties = {
   margin: 0,

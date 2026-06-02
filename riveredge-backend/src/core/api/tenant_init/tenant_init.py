@@ -51,17 +51,9 @@ async def run_required_init_items(
     current_user: User = Depends(get_current_user_dep),
 ):
     """
-    执行全部必备系统初始项（与新建租户时自动加载一致，可重复执行以补全缺失数据）。
+    执行全部必备系统初始项（不含应用注册；应用安装/启用由平台管理员处理）。
     """
     results = await TenantInitDataService.run_required(tenant_id)
-
-    try:
-        from core.services.system.menu_service import MenuService
-
-        menu_count = await MenuService.sync_all_menus_from_applications(tenant_id)
-        results["menu_sync"] = {"success": True, "created": menu_count}
-    except Exception as e:
-        results["menu_sync"] = {"success": False, "error": str(e)}
 
     success_count = sum(1 for r in results.values() if r.get("success"))
     total = len(results)

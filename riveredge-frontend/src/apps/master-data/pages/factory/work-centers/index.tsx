@@ -34,7 +34,7 @@ import {
  * 工作中心列表页面组件
  */
 const WorkCentersPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
 
   const actionRef = useRef<ActionType>(null);
@@ -174,19 +174,10 @@ const WorkCentersPage: React.FC = () => {
     }
 
     const headerMap: Record<string, string> = {
-      '工作中心编号': 'code',
-      '*工作中心编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '工作中心名称': 'name',
-      '*工作中心名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '描述': 'description',
       'description': 'description',
     };
 
@@ -204,11 +195,11 @@ const WorkCentersPage: React.FC = () => {
     });
 
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('field.workCenter.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('field.workCenter.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
       return;
     }
 
@@ -390,7 +381,7 @@ const WorkCentersPage: React.FC = () => {
           item.name || '',
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
         csvRows.push(row.map(cell => {
           const cellStr = String(cell || '');
@@ -526,7 +517,7 @@ const WorkCentersPage: React.FC = () => {
           .map((id) => workstationMap[id])
           .filter(Boolean)
           .map((ws) => `${ws.code} - ${ws.name}`);
-        return labels.join('；') || '-';
+        return labels.join(t('common.listSeparator')) || '-';
       },
     },
     {
@@ -623,22 +614,21 @@ const WorkCentersPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*工作中心编号', '*工作中心名称', '描述']}
-          importExampleRow={['GZZX0001', '焊接工作中心', '负责焊接工序的产能单元']}
+          importHeaders={[
+            '*code',
+            '*name',
+            'description',
+          ]}
+          importExampleRow={[
+            'GZZX0001',
+            'Welding work center',
+            'Capacity unit for welding',
+          ]}
           importFieldMap={{
-            '工作中心编号': 'code',
-            '*工作中心编号': 'code',
-            '编号': 'code',
-            '*编号': 'code',
             'code': 'code',
             '*code': 'code',
-            '工作中心名称': 'name',
-            '*工作中心名称': 'name',
-            '名称': 'name',
-            '*名称': 'name',
             'name': 'name',
             '*name': 'name',
-            '描述': 'description',
             'description': 'description',
           }}
           importFieldRules={{

@@ -30,7 +30,7 @@ import {
  * 库区管理列表页面组件
  */
 const StorageAreasPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -145,11 +145,6 @@ const StorageAreasPage: React.FC = () => {
    * 
    * 支持从 Excel 导入库区数据，批量创建库区
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
-   * 
-   * 所属仓库字段说明：
-   * - 可以填写仓库编号（如：WH001）或仓库名称（如：成品仓库）
-   * - 系统会根据编号或名称自动匹配对应的仓库
-   * - 如果仓库不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
@@ -186,27 +181,12 @@ const StorageAreasPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '库区编号': 'code',
-      '*库区编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '库区名称': 'name',
-      '*库区名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '所属仓库': 'warehouseCode',
-      '仓库': 'warehouseCode',
-      '仓库编号': 'warehouseCode',
-      '仓库名称': 'warehouseName',
       'warehouseCode': 'warehouseCode',
-      'warehouse_code': 'warehouseCode',
-      'warehouseName': 'warehouseName',
-      'warehouse_name': 'warehouseName',
-      '描述': 'description',
+      '*warehouseCode': 'warehouseCode',
       'description': 'description',
     };
 
@@ -226,17 +206,21 @@ const StorageAreasPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageAreas.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageAreas.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['warehouseCode'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'warehouseCode', headers: headers.join(', ') }));
       return;
     }
 
     // 解析数据行
     const importData: StorageAreaCreate[] = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const errors: Array<{ row: number; message: string; kind?: 'warehouse' }> = [];
 
     nonEmptyRows.forEach((row: any[], rowIndex: number) => {
       const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
@@ -261,7 +245,6 @@ const StorageAreasPage: React.FC = () => {
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
         const warehouseCodeIndex = headerIndexMap['warehouseCode'];
-        const warehouseNameIndex = headerIndexMap['warehouseName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.headerMapError') });
@@ -276,9 +259,6 @@ const StorageAreasPage: React.FC = () => {
         const warehouseCode = warehouseCodeIndex !== undefined && row[warehouseCodeIndex] !== undefined
           ? row[warehouseCodeIndex]
           : undefined;
-        const warehouseName = warehouseNameIndex !== undefined && row[warehouseNameIndex] !== undefined
-          ? row[warehouseNameIndex]
-          : undefined;
         
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
@@ -292,42 +272,22 @@ const StorageAreasPage: React.FC = () => {
           return;
         }
 
-        // 处理所属仓库（根据仓库编号或名称查找 warehouseId）
-        let warehouseId: number | undefined = undefined;
-        if (warehouseCode || warehouseName) {
-          const warehouseCodeValue = warehouseCode ? String(warehouseCode).trim().toUpperCase() : '';
-          const warehouseNameValue = warehouseName ? String(warehouseName).trim() : '';
-          
-          // 优先通过编号查找
-          if (warehouseCodeValue) {
-            const foundWarehouse = warehouses.find(w => w.code.toUpperCase() === warehouseCodeValue);
-            if (foundWarehouse) {
-              warehouseId = foundWarehouse.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.storageAreas.warehouseCodeNotExist', { value: warehouseCodeValue }) 
-              });
-              return;
-            }
-          } 
-          // 如果编号未找到，尝试通过名称查找
-          else if (warehouseNameValue) {
-            const foundWarehouse = warehouses.find(w => w.name === warehouseNameValue);
-            if (foundWarehouse) {
-              warehouseId = foundWarehouse.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: t('app.master-data.storageAreas.warehouseNameNotExist', { value: warehouseNameValue }) 
-              });
-              return;
-            }
-          }
-        } else {
-          errors.push({ 
-            row: actualRowIndex, 
-            message: t('app.master-data.storageAreas.warehouseRequired') 
+        // 处理所属仓库（仅支持通过仓库编号查找 warehouseId）
+        const warehouseCodeValue = warehouseCode ? String(warehouseCode).trim().toUpperCase() : '';
+        if (!warehouseCodeValue) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.storageAreas.warehouseRequired'),
+            kind: 'warehouse',
+          });
+          return;
+        }
+        const foundWarehouse = warehouses.find(w => w.code.toUpperCase() === warehouseCodeValue);
+        if (!foundWarehouse) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.storageAreas.warehouseCodeNotExist', { value: warehouseCodeValue }),
+            kind: 'warehouse',
           });
           return;
         }
@@ -336,7 +296,7 @@ const StorageAreasPage: React.FC = () => {
         const storageAreaData: StorageAreaCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          warehouseId: warehouseId!,
+          warehouseId: foundWarehouse.id,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -352,7 +312,7 @@ const StorageAreasPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      const hasWarehouseError = errors.some(e => e.message.includes('仓库') || e.message.includes('Warehouse'));
+      const hasWarehouseError = errors.some(e => e.kind === 'warehouse');
       
       Modal.warning({
         title: t('app.master-data.warehouses.importValidationFailed'),
@@ -387,7 +347,7 @@ const StorageAreasPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  {t('app.master-data.storageAreas.importTip', { code: warehouses[0]?.code || '', name: warehouses[0]?.name || '' })}
+                  {t('app.master-data.storageAreas.importTip', { code: warehouses[0]?.code || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -498,7 +458,7 @@ const StorageAreasPage: React.FC = () => {
           warehouse ? `${warehouse.code}(${warehouse.name})` : '',
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
       });
 
@@ -765,35 +725,20 @@ const StorageAreasPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*库区编号', '*库区名称', '*所属仓库', '描述']}
+        importHeaders={['*code', '*name', '*warehouseCode', 'description']}
         importExampleRow={[
           'SA001', 
-          'A区', 
+          'Area A',
           warehouses.length > 0 ? warehouses[0].code : 'WH001', 
-          '主要用于存储A类物料'
+          'For category A materials',
         ]}
         importFieldMap={{
-          '库区编号': 'code',
-          '*库区编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '库区名称': 'name',
-          '*库区名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '所属仓库': 'warehouseCode',
-          '仓库': 'warehouseCode',
-          '仓库编号': 'warehouseCode',
-          '仓库名称': 'warehouseName',
           'warehouseCode': 'warehouseCode',
-          'warehouse_code': 'warehouseCode',
-          'warehouseName': 'warehouseName',
-          'warehouse_name': 'warehouseName',
-          '描述': 'description',
+          '*warehouseCode': 'warehouseCode',
           'description': 'description',
         }}
         importFieldRules={{

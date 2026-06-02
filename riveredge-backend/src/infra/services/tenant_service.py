@@ -627,7 +627,16 @@ class TenantService:
                 SiteSettingUpdate(settings={"site_name": tenant.name}),
             )
 
-        # 1. 执行必选初始化
+        # 0. 应用注册与启用（平台新建组织流程；租户「初始项加载」不包含此项）
+        try:
+            count = await TenantInitDataService.run_single(tenant_id, "application")
+            logger.info(f"组织 {tenant_id} 应用注册完成，处理 {count} 项")
+        except Exception as e:
+            logger.error(f"组织 {tenant_id} 应用注册失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        # 1. 执行必选初始化（含菜单同步，不含应用注册）
         try:
             await TenantInitDataService.run_required(tenant_id)
             logger.info(f"组织 {tenant_id} 必选数据初始化完成")
@@ -666,17 +675,7 @@ class TenantService:
                     import traceback
                     logger.error(traceback.format_exc())
 
-        # 3. 显式同步应用级菜单到数据库（确保注册后菜单立即可用）
-        # 应用注册时可能因时序等原因未完成菜单同步，此处统一兜底
-        try:
-            from core.services.system.menu_service import MenuService
-            count = await MenuService.sync_all_menus_from_applications(tenant_id)
-            if count > 0:
-                logger.info(f"组织 {tenant_id} 初始化完成，已同步 {count} 个应用菜单")
-        except Exception as e:
-            logger.warning(f"组织 {tenant_id} 菜单同步失败（不中断流程）: {e}")
-
-        # 4. 自动应用默认初始化设置（时区/货币/语言等），跳过初始化向导
+        # 3. 自动应用默认初始化设置（时区/货币/语言等），跳过初始化向导
         try:
             from infra.services.init_wizard_service import InitWizardService
             await InitWizardService().apply_default_init_settings(tenant_id)

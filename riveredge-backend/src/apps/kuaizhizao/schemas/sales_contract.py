@@ -7,6 +7,8 @@ from decimal import Decimal
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
+from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
+
 
 class SalesContractItemCreate(BaseModel):
     material_id: int
@@ -76,6 +78,8 @@ class SalesContractCreate(BaseModel):
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = None
     payment_terms: Optional[str] = None
+    term_group_id: Optional[int] = None
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     quotation_id: Optional[int] = None
     notes: Optional[str] = None
     attachments: Optional[list] = None
@@ -99,6 +103,8 @@ class SalesContractUpdate(BaseModel):
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = None
     payment_terms: Optional[str] = None
+    term_group_id: Optional[int] = None
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: Optional[List[SalesContractItemCreate]] = None
@@ -138,6 +144,9 @@ class SalesContractResponse(BaseModel):
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = None
     payment_terms: Optional[str] = None
+    term_group_id: Optional[int] = None
+    term_group_name: Optional[str] = None
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     quotation_id: Optional[int] = None
     quotation_code: Optional[str] = None
     root_contract_id: Optional[int] = None

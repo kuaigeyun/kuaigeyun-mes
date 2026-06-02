@@ -34,7 +34,7 @@ import {
  * 产线管理列表页面组件
  */
 const ProductionLinesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -189,28 +189,13 @@ const ProductionLinesPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '产线编号': 'code',
-      '*产线编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '产线名称': 'name',
-      '*产线名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '所属车间': 'workshopCode',
-      '车间': 'workshopCode',
-      '车间编号': 'workshopCode',
-      '车间名称': 'workshopName',
       'workshopCode': 'workshopCode',
-      'workshop_code': 'workshopCode',
-      'workshopName': 'workshopName',
-      'workshop_name': 'workshopName',
-      '描述': 'description',
       'description': 'description',
+      '*workshopCode': 'workshopCode',
     };
 
     // 找到表头索引
@@ -229,17 +214,21 @@ const ProductionLinesPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.productionLines.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.productionLines.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['workshopCode'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'workshopCode', headers: headers.join(', ') }));
       return;
     }
 
     // 解析数据行
     const importData: ProductionLineCreate[] = [];
-    const errors: Array<{ row: number; message: string }> = [];
+    const errors: Array<{ row: number; message: string; kind?: 'workshop' }> = [];
 
     nonEmptyRows.forEach((row: any[], rowIndex: number) => {
       const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
@@ -264,7 +253,6 @@ const ProductionLinesPage: React.FC = () => {
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
         const workshopCodeIndex = headerIndexMap['workshopCode'];
-        const workshopNameIndex = headerIndexMap['workshopName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
@@ -279,58 +267,35 @@ const ProductionLinesPage: React.FC = () => {
         const workshopCode = workshopCodeIndex !== undefined && row[workshopCodeIndex] !== undefined
           ? row[workshopCodeIndex]
           : undefined;
-        const workshopName = workshopNameIndex !== undefined && row[workshopNameIndex] !== undefined
-          ? row[workshopNameIndex]
-          : undefined;
         
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '产线编号不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.productionLines.codeRequired') });
           return;
         }
         if (!nameValue) {
-          errors.push({ row: actualRowIndex, message: '产线名称不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.productionLines.nameRequired') });
           return;
         }
 
-        // 处理所属车间（根据车间编号或名称查找 workshopId）
-        let workshopId: number | undefined = undefined;
-        if (workshopCode || workshopName) {
-          const workshopCodeValue = workshopCode ? String(workshopCode).trim().toUpperCase() : '';
-          const workshopNameValue = workshopName ? String(workshopName).trim() : '';
-          
-          // 优先通过编号查找
-          if (workshopCodeValue) {
-            const foundWorkshop = workshops.find(w => w.code.toUpperCase() === workshopCodeValue);
-            if (foundWorkshop) {
-              workshopId = foundWorkshop.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: `车间编号 "${workshopCodeValue}" 不存在，请检查车间编号是否正确` 
-              });
-              return;
-            }
-          } 
-          // 如果编号未找到，尝试通过名称查找
-          else if (workshopNameValue) {
-            const foundWorkshop = workshops.find(w => w.name === workshopNameValue);
-            if (foundWorkshop) {
-              workshopId = foundWorkshop.id;
-            } else {
-              errors.push({ 
-                row: actualRowIndex, 
-                message: `车间名称 "${workshopNameValue}" 不存在，请检查车间名称是否正确` 
-              });
-              return;
-            }
-          }
-        } else {
-          errors.push({ 
-            row: actualRowIndex, 
-            message: '所属车间不能为空' 
+        // 处理所属车间（仅支持通过车间编号查找 workshopId）
+        const workshopCodeValue = workshopCode ? String(workshopCode).trim().toUpperCase() : '';
+        if (!workshopCodeValue) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.productionLines.workshopRequired'),
+            kind: 'workshop',
+          });
+          return;
+        }
+        const foundWorkshop = workshops.find(w => w.code.toUpperCase() === workshopCodeValue);
+        if (!foundWorkshop) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.master-data.productionLines.workshopCodeNotExist', { value: workshopCodeValue }),
+            kind: 'workshop',
           });
           return;
         }
@@ -339,7 +304,7 @@ const ProductionLinesPage: React.FC = () => {
         const productionLineData: ProductionLineCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          workshopId: workshopId!,
+          workshopId: foundWorkshop.id,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -348,28 +313,28 @@ const ProductionLinesPage: React.FC = () => {
       } catch (error: any) {
         errors.push({
           row: actualRowIndex,
-          message: error.message || '数据解析失败',
+          message: error.message || t('app.master-data.productionLines.dataParseFailed'),
         });
       }
     });
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      const hasWorkshopError = errors.some(e => e.message.includes('车间'));
+      const hasWorkshopError = errors.some(e => e.kind === 'workshop');
       
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.dataValidationFailed'),
         width: 700,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
                   <Typography.Text type="danger">
-                    第 {item.row} 行：{item.message}
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
                   </Typography.Text>
                 </List.Item>
               )}
@@ -377,7 +342,7 @@ const ProductionLinesPage: React.FC = () => {
             {hasWorkshopError && workshops.length > 0 && (
               <div style={{ marginTop: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  当前可用的车间列表：
+                  {t('app.master-data.availableWorkshopsList')}
                 </Typography.Text>
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {workshops.map(workshop => (
@@ -390,7 +355,7 @@ const ProductionLinesPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属车间列可以填写车间编号（如：{workshops[0]?.code}）或车间名称（如：{workshops[0]?.name}）
+                  {t('app.master-data.workshopImportHint', { code: workshops[0]?.code || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -507,7 +472,7 @@ const ProductionLinesPage: React.FC = () => {
           wsLabel,
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
       });
 
@@ -765,35 +730,20 @@ const ProductionLinesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*产线编号', '*产线名称', '*所属车间', '描述']}
+        importHeaders={['*code', '*name', '*workshopCode', 'description']}
         importExampleRow={[
           'PL001', 
-          '产线1', 
+          'Line 1',
           workshops.length > 0 ? workshops[0].code : 'WS001', 
-          '主要负责产品生产'
+          'For primary production',
         ]}
         importFieldMap={{
-          '产线编号': 'code',
-          '*产线编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '产线名称': 'name',
-          '*产线名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '所属车间': 'workshopCode',
-          '车间': 'workshopCode',
-          '车间编号': 'workshopCode',
-          '车间名称': 'workshopName',
           'workshopCode': 'workshopCode',
-          'workshop_code': 'workshopCode',
-          'workshopName': 'workshopName',
-          'workshop_name': 'workshopName',
-          '描述': 'description',
+          '*workshopCode': 'workshopCode',
           'description': 'description',
         }}
         importFieldRules={{

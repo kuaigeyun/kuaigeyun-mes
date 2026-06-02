@@ -37,7 +37,7 @@ import {
  * 仓库管理列表页面组件
  */
 const WarehousesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
@@ -167,27 +167,13 @@ const WarehousesPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '仓库编号': 'code',
-      '*仓库编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '仓库名称': 'name',
-      '*仓库名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '描述': 'description',
       'description': 'description',
-      '仓库类型': 'warehouseType',
       'warehouseType': 'warehouseType',
-      '车间': 'workshopCode',
-      '车间编号': 'workshopCode',
       'workshopCode': 'workshopCode',
-      '工作中心': 'workCenterCode',
-      '工作中心编号': 'workCenterCode',
       'workCenterCode': 'workCenterCode',
     };
 
@@ -207,11 +193,11 @@ const WarehousesPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.warehouses.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.warehouses.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
       return;
     }
 
@@ -311,7 +297,10 @@ const WarehousesPage: React.FC = () => {
           if (found) {
             workshopId = found.id;
           } else {
-            errors.push({ row: actualRowIndex, message: `车间编号 "${workshopCodeVal}" 不存在` });
+            errors.push({
+              row: actualRowIndex,
+              message: t('app.master-data.warehouses.workshopCodeNotExist', { value: workshopCodeVal }),
+            });
             return;
           }
         }
@@ -494,7 +483,7 @@ const WarehousesPage: React.FC = () => {
         item.workCenterName || '',
         item.description || '',
         item.isActive ? t('common.enabled') : t('common.disabled'),
-        item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+        item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
       ]);
 
       // 生成 CSV 内容
@@ -770,23 +759,24 @@ const WarehousesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*仓库编号', '*仓库名称', '仓库类型', '车间', '工作中心', '描述']}
-        importExampleRow={['WH-WX-01', '无锡中心仓', '普通仓', '', '', '综合性零件存储']}
+        importHeaders={['*code', '*name', 'warehouseType', 'workshopCode', 'workCenterCode', 'description']}
+        importExampleRow={[
+          'WH-WX-01',
+          'Wuxi central warehouse',
+          'normal',
+          '',
+          '',
+          'General parts storage',
+        ]}
         importFieldMap={{
-          '仓库编号': 'code',
-          '*仓库编号': 'code',
-          '编号': 'code',
-          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
-          '仓库名称': 'name',
-          '*仓库名称': 'name',
-          '名称': 'name',
-          '*名称': 'name',
           'name': 'name',
           '*name': 'name',
-          '描述': 'description',
           'description': 'description',
+          'warehouseType': 'warehouseType',
+          'workshopCode': 'workshopCode',
+          'workCenterCode': 'workCenterCode',
         }}
         importFieldRules={{
           code: { required: true },

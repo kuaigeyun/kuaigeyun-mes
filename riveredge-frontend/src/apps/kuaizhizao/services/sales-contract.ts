@@ -9,6 +9,7 @@
 import { apiRequest } from '../../../services/api';
 
 import type { BackendLifecycle } from '../utils/backendLifecycle';
+import type { SalesContractTermSnapshot } from './sales-contract-term';
 
 
 
@@ -125,6 +126,12 @@ export interface SalesContract {
   salesman_name?: string;
 
   notes?: string;
+
+  term_group_id?: number;
+
+  term_group_name?: string;
+
+  contract_terms?: SalesContractTermSnapshot[];
 
   items?: SalesContractItem[];
 

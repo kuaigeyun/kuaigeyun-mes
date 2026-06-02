@@ -7,15 +7,15 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -25,7 +25,21 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerInlineFullChain,
+  DetailDrawerActions,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  DocumentFormPageLayout,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  PAGE_SPACING,
+  type StatCard,
+} from '../../../../../components/layout-templates';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -64,6 +78,10 @@ import {
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
@@ -82,7 +100,7 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -383,12 +401,23 @@ const ORDER_TYPE_FALLBACK: Array<{ label: string; value: string }> = [
   { label: '框架协议', value: '框架协议' },
 ];
 
+const PURCHASE_ORDER_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-orders';
+const PURCHASE_ORDER_CREATE_PATH = `${PURCHASE_ORDER_LIST_PATH}/new`;
+const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}/edit`;
+
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/purchase-orders/new');
+  const editRouteMatch = location.pathname.match(/\/purchase-orders\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const formPageInitializedRef = useRef(false);
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
@@ -398,6 +427,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -451,7 +481,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
-  const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
   const [pullFromRequisitionVisible, setPullFromRequisitionVisible] = useState(false);
   const [pullRequisitionLoading, setPullRequisitionLoading] = useState(false);
   const [pullRequisitionSubmitting, setPullRequisitionSubmitting] = useState(false);
@@ -606,6 +635,53 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
+  );
+
+  const handleItemImport = useCallback(
+    (data: any[][]) => {
+      const rows = data.slice(2);
+      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+      const defaultDate =
+        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const newItems = rows
+        .map((row) => {
+          const materialCode = String(row[0] || '').trim();
+          const spec = String(row[1] || '').trim();
+          const unit = String(row[2] || '').trim();
+          const quantity = parseFloat(row[3]) || 0;
+          const price = parseFloat(row[4]) || 0;
+          const requiredDate = row[5];
+
+          if (!materialCode) return null;
+
+          return {
+            material_code: materialCode,
+            material_name: '',
+            material_spec: spec,
+            unit: unit || '件',
+            ordered_quantity: quantity || 1,
+            unit_price: price,
+            tax_rate: 0,
+            required_date: requiredDate
+              ? dayjs(requiredDate).isValid()
+                ? dayjs(requiredDate)
+                : defaultDate
+              : defaultDate,
+          };
+        })
+        .filter((it): it is NonNullable<typeof it> => it !== null);
+
+      if (newItems.length === 0) {
+        messageApi.warning('未检测到有效数据（请确保物料编号不为空）');
+        return;
+      }
+
+      const currentItems = formRef.current?.getFieldValue('items') || [];
+      formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
+      messageApi.success(`成功导入 ${newItems.length} 条明细`);
+      setImportModalVisible(false);
+    },
+    [messageApi],
   );
 
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
@@ -1348,13 +1424,11 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // 处理编辑
-  const handleEdit = async (record: PurchaseOrder) => {
+  async function initPurchaseOrderEditForm(orderId: number) {
     try {
-      const detail = await getPurchaseOrder(record.id!);
+      const detail = await getPurchaseOrder(orderId);
       setIsEdit(true);
       setCurrentOrder(detail);
-      setModalVisible(true);
       const items = (detail.items || []).map((it: any) => ({
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
@@ -1385,21 +1459,65 @@ const PurchaseOrdersPage: React.FC = () => {
           items: items.length > 0 ? items : [defaultOrderItem],
         });
       }, 100);
-    } catch (error) {
+    } catch {
       messageApi.error('获取采购订单详情失败');
+      navigate(PURCHASE_ORDER_LIST_PATH);
     }
-  };
+  }
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
-  const handleCreate = () => {
+  function initPurchaseOrderCreateForm() {
     setIsEdit(false);
     setCurrentOrder(null);
-    setModalVisible(true);
-    setTimeout(() => {
-      formRef.current?.resetFields();
+    formRef.current?.resetFields();
+    window.setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
     }, 0);
+  }
+
+  const handleEdit = (record: PurchaseOrder) => {
+    if (!record.id) return;
+    navigate(purchaseOrderEditPath(record.id));
   };
+
+  const handleCreate = () => {
+    navigate(PURCHASE_ORDER_CREATE_PATH);
+  };
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitializedRef.current = false;
+      return;
+    }
+    const titleKey = isCreatePage
+      ? 'app.kuaizhizao.menu.purchase-management.purchase-orders.new'
+      : 'app.kuaizhizao.menu.purchase-management.purchase-orders.edit';
+    const title = t(titleKey);
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const cleanSearch = sp.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, title);
+    setCustomPageTitle(tabKey, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t]);
+
+  useEffect(() => {
+    if (!isFormPage || formPageInitializedRef.current) return;
+    formPageInitializedRef.current = true;
+    if (isCreatePage) {
+      initPurchaseOrderCreateForm();
+    } else if (editRouteId) {
+      void initPurchaseOrderEditForm(editRouteId);
+    }
+  }, [isFormPage, isCreatePage, editRouteId]);
 
   const loadPullRequisitionCandidates = async (keyword: string = '') => {
     setPullRequisitionLoading(true);
@@ -1617,7 +1735,11 @@ const PurchaseOrdersPage: React.FC = () => {
         submitAfterSaveRef.current = false;
       }
 
-      setModalVisible(false);
+      if (isFormPage) {
+        navigate(PURCHASE_ORDER_LIST_PATH);
+      } else {
+        setModalVisible(false);
+      }
       invalidateStatistics();
       invalidateMenuBadgeCounts();
 
@@ -1818,266 +1940,12 @@ const PurchaseOrdersPage: React.FC = () => {
         },
       ];
 
-  return (
+  const triggerPurchaseOrderFormSubmit = () => formRef.current?.submit?.();
+
+  useSubmitShortcut(() => triggerPurchaseOrderFormSubmit(), isFormPage);
+
+  const purchaseOrderFormItemContent = (
     <>
-      <ListPageTemplate statCards={statCards}>
-        <UniTable<PurchaseOrder>
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-orders"
-          headerTitle="采购订单"
-          formRef={tableSearchFormRef}
-          actionRef={actionRef}
-          rowKey="id"
-          columns={columns}
-          showAdvancedSearch={true}
-          showCreateButton={false}
-          createButtonText="新建采购订单"
-          onCreate={handleCreate}
-          toolBarRender={() => [
-            <UniPullCreateToolbar
-              compactKey="create-purchase-order-with-pull"
-              createIcon={<PlusOutlined />}
-              createLabel="新建采购订单"
-              onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
-                {
-                  key: 'pull-from-requisition',
-                  actionKey: 'purchase_order.pull_from_requisition',
-                  onClick: handlePullFromRequisition,
-                },
-              ])}
-            />,
-            <UniPushToolbarButton
-              key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}
-              menuItems={toolbarPushMenuItems}
-              disabled={!selectedOrderForToolbar || !canUseToolbarPush}
-            />,
-          ]}
-          enableRowSelection
-          selectedRowKeys={selectedRowKeys}
-          onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
-          onDelete={handleBatchDelete}
-          showImportButton={true}
-          onImport={handleListImport}
-          importHeaders={['订单编号', '供应商名称', '订单日期', '物料编号', '数量', '单价', '交货日期', '备注']}
-          importExampleRow={['PO001', '供应商A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
-          importFieldMap={{
-            '订单编号': 'order_code',
-            '供应商名称': 'supplier_name',
-            '订单日期': 'order_date',
-            '物料编号': 'material_code',
-            '数量': 'ordered_quantity',
-            '单价': 'unit_price',
-            '交货日期': 'delivery_date',
-            '备注': 'notes',
-          }}
-          importFieldRules={{
-            supplier_name: { required: true },
-            order_date: { required: true },
-            material_code: { required: true },
-            ordered_quantity: { required: true },
-          }}
-          showExportButton
-          onExport={async (type, keys, pageData) => {
-            try {
-              const res = await listPurchaseOrders({ skip: 0, limit: 10000 });
-              let items = res.data || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
-                items = items.filter((d) => d.id != null && keys.includes(d.id));
-              }
-              if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
-                return;
-              }
-              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              window.URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
-            } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
-            }
-          }}
-          showSyncButton
-          onSync={() => setSyncModalVisible(true)}
-          request={async (params, _sort, _filter, searchFormValues) => {
-            try {
-              const apiParams: Record<string, unknown> = {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                keyword: params.keyword,
-              };
-              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(
-                searchFormValues,
-                params,
-              );
-              if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
-              if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
-              const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
-              lastOrdersCacheRef.current = response.data || [];
-              return {
-                data: response.data || [],
-                success: response.success !== false,
-                total: response.total || 0,
-              };
-            } catch (error) {
-              messageApi.error('获取采购订单列表失败');
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              };
-            }
-          }}
-          scroll={{ x: 1400 }}
-        />
-      </ListPageTemplate>
-
-      <Modal
-        title={pullFromRequisitionAction.label}
-        open={pullFromRequisitionVisible}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        onCancel={() => setPullFromRequisitionVisible(false)}
-        onOk={handlePullFromRequisitionConfirm}
-        okText="创建采购订单"
-        cancelText="取消"
-        okButtonProps={{ disabled: selectedPullRequisitionLineKeys.length === 0 || pullRequisitionLoading }}
-        confirmLoading={pullRequisitionSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
-          <Input.Search
-            allowClear
-            value={pullRequisitionKeyword}
-            placeholder="搜索采购申请明细（申请单号/申请名称）"
-            enterButton="搜索"
-            onChange={(e) => setPullRequisitionKeyword(e.target.value)}
-            onSearch={(value) => {
-              const keyword = value?.trim?.() || '';
-              setPullRequisitionKeyword(keyword);
-              loadPullRequisitionCandidates(keyword);
-            }}
-          />
-          <Table<PullPurchaseRequisitionLineCandidate>
-            rowKey="key"
-            loading={pullRequisitionLoading}
-            size="small"
-            pagination={false}
-            locale={{ emptyText: pullRequisitionKeyword ? '未找到匹配采购申请明细' : '暂无可选采购申请明细' }}
-            rowSelection={{
-              type: 'checkbox',
-              selectedRowKeys: selectedPullRequisitionLineKeys,
-              onChange: (keys) => {
-                setSelectedPullRequisitionLineKeys(keys);
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.converted,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.converted) return;
-                const selected = selectedPullRequisitionLineKeys.includes(record.key);
-                setSelectedPullRequisitionLineKeys((prev) =>
-                  selected ? prev.filter((k) => k !== record.key) : [...prev, record.key],
-                );
-              },
-            })}
-            columns={[
-              { title: '申请单号', dataIndex: 'requisition_code', width: 170 },
-              { title: '申请名称', dataIndex: 'requisition_name', width: 160, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '物料编码', dataIndex: 'material_code', width: 140, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '物料名称', dataIndex: 'material_name', width: 170, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '规格', dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-              { title: '单位', dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
-              { title: '需求日期', dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              { title: '申请人', dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
-              {
-                title: '状态',
-                dataIndex: 'requisition_status',
-                width: 100,
-                render: (v: string) => <Tag color={v?.includes('转单') ? 'gold' : 'blue'}>{v || '-'}</Tag>,
-              },
-              {
-                title: '审核',
-                dataIndex: 'review_status',
-                width: 100,
-                render: (v: string) => {
-                  const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
-                  const rejected = v === 'REJECTED' || v === '已驳回';
-                  return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
-                },
-              },
-              {
-                title: '供应商',
-                width: 160,
-                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
-                  record.supplier_id ? `已指定(${record.supplier_id})` : '待定（草稿中补充）',
-              },
-              {
-                title: '转单状态',
-                width: 180,
-                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
-                  record.converted ? (
-                    <Tag color="gold">已转采购订单#{record.purchase_order_id}</Tag>
-                  ) : (
-                    <Tag color="green">可转单</Tag>
-                  ),
-              },
-            ]}
-            dataSource={pullRequisitionLineCandidates}
-            scroll={{ x: 1600, y: 320 }}
-          />
-          <Typography.Text type="secondary">
-            已选择 {selectedPullRequisitionLineKeys.length} 条明细，将按采购申请与供应商自动拆分创建采购订单草稿。
-          </Typography.Text>
-        </Space>
-      </Modal>
-
-      {/* 创建/编辑采购订单 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑采购订单' : '新建采购订单'}
-        open={modalVisible}
-        onClose={() => {
-          setModalVisible(false);
-          setCurrentOrder(null);
-          submitAfterSaveRef.current = false;
-          formRef.current?.resetFields();
-        }}
-        onFinish={handleFormSubmit}
-        isEdit={isEdit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        formRef={formRef}
-        grid={false}
-        initialValues={!isEdit ? { items: [defaultOrderItem] } : undefined}
-        extraFooter={
-          (isEdit && isDraftStatus(currentOrder?.status)) || !isEdit ? (
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={async () => {
-                try {
-                  await formRef.current?.validateFields();
-                  submitAfterSaveRef.current = true;
-                  formRef.current?.submit();
-                } catch (err: any) {
-                  if (err?.errorFields?.length) {
-                    messageApi.warning('请完善必填项后再提交');
-                  }
-                }
-              }}
-            >
-              {isEdit ? '保存并提交' : '创建并提交'}
-            </Button>
-          ) : undefined
-        }
-      >
         <Row gutter={16}>
           <Col span={12}>
             <CodeField
@@ -2117,52 +1985,31 @@ const PurchaseOrdersPage: React.FC = () => {
               label="供应商"
               rules={[{ required: true, message: '请选择供应商' }]}
             >
-              <UniDropdown
+              <SupplierSelectDropdown
                 placeholder="请选择供应商"
-                showSearch
-                allowClear
-                loading={suppliersLoading}
                 style={{ width: '100%' }}
-                options={supplierList.map((s: any) => ({
-                  value: s.id ?? s.supplier_id,
-                  label: `${s.code ?? s.supplier_code ?? ''} - ${s.name ?? s.supplier_name ?? ''}`.trim() || String(s.id ?? s.supplier_id),
-                }))}
-                onChange={(v) => {
-                  const s = supplierList.find((x: any) => (x.id ?? x.supplier_id) === v);
+                suppliers={supplierList}
+                loading={suppliersLoading}
+                onSuppliersChange={setSupplierList}
+                autoLoad={false}
+                onSupplierPick={(s) => {
                   if (s) {
                     formRef.current?.setFieldsValue({
-                      supplier_name: s.name ?? s.supplier_name,
-                      supplier_contact: s.contact_person ?? s.contactPerson ?? s.supplier_contact,
-                      supplier_phone: s.phone ?? s.supplier_phone,
-                      buyer_id: s.buyerId || s.buyer_id,
-                      buyer_name: s.buyerName || s.buyer_name,
+                      supplier_name: s.name ?? (s as any).supplier_name,
+                      supplier_contact: (s as any).contact_person ?? s.contactPerson ?? (s as any).supplier_contact,
+                      supplier_phone: s.phone ?? (s as any).supplier_phone,
+                      buyer_id: (s as any).buyerId || (s as any).buyer_id,
+                      buyer_name: (s as any).buyerName || (s as any).buyer_name,
+                    });
+                  } else {
+                    formRef.current?.setFieldsValue({
+                      supplier_name: undefined,
+                      supplier_contact: undefined,
+                      supplier_phone: undefined,
+                      buyer_id: undefined,
+                      buyer_name: undefined,
                     });
                   }
-                }}
-                quickCreate={{
-                  label: '快速新建',
-                  onClick: () => setSupplierCreateVisible(true),
-                }}
-                advancedSearch={{
-                  label: '高级搜索',
-                  fields: [
-                    { name: 'code', label: '供应商编号' },
-                    { name: 'name', label: '供应商名称' },
-                    { name: 'contact_person', label: '联系人' },
-                  ],
-                  onSearch: async (values) => {
-                    try {
-                      // 这里假设 supplierApi.list 支持这些过滤参数，通常后端是支持的
-                      const res = await supplierApi.list({ ...values, limit: 100 });
-                      const list = Array.isArray(res) ? res : (res as any)?.data || [];
-                      return list.map((s: any) => ({
-                        value: s.id ?? s.supplier_id,
-                        label: `${s.code ?? s.supplier_code ?? ''} - ${s.name ?? s.supplier_name ?? ''}`.trim() || String(s.id ?? s.supplier_id),
-                      }));
-                    } catch {
-                      return [];
-                    }
-                  },
                 }}
               />
             </ProForm.Item>
@@ -2244,6 +2091,13 @@ const PurchaseOrdersPage: React.FC = () => {
                 )}
                 headerExtra={(
                   <Space size={8}>
+                    <Button
+                      type="default"
+                      icon={<ImportOutlined />}
+                      onClick={() => setImportModalVisible(true)}
+                    >
+                      导入明细
+                    </Button>
                     <Button
                       type="dashed"
                       icon={<PlusOutlined />}
@@ -2562,28 +2416,331 @@ const PurchaseOrdersPage: React.FC = () => {
           placeholder="请输入备注信息"
           fieldProps={{ rows: 3 }}
         />
+    </>
+  );
+
+  const purchaseOrderFormAuxModals = (
+    <>
         <UniMaterialBatchPicker
           open={materialPickerOpen}
           onCancel={() => setMaterialPickerOpen(false)}
           onConfirm={appendPurchaseItemsFromMaterials}
         />
-      </FormModalTemplate>
+      <Suspense fallback={null}>
+        <LazyUniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleItemImport}
+          title="导入采购明细"
+          headers={['物料编号', '规格', '单位', '数量', '单价', '要求到货']}
+          exampleRow={['MAT001', 'Spec X', '件', '10', '100', '2026-03-01']}
+        />
+      </Suspense>
+    </>
+  );
 
-      <SupplierFormModal
-        open={supplierCreateVisible}
-        onClose={() => setSupplierCreateVisible(false)}
-        editUuid={null}
-        onSuccess={(supplier) => {
-          setSupplierList((prev) => [...prev, supplier]);
-          formRef.current?.setFieldsValue({
-            supplier_id: supplier.id,
-            supplier_name: supplier.name,
-            supplier_contact: supplier.contactPerson,
-            supplier_phone: supplier.phone,
-          });
-          setSupplierCreateVisible(false);
-        }}
-      />
+  if (isFormPage) {
+    const canSubmitAfterSave =
+      isCreatePage || (isEditPage && isDraftStatus(currentOrder?.status));
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={() => navigate(PURCHASE_ORDER_LIST_PATH)}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {isCreatePage
+                  ? t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')
+                  : t('app.kuaizhizao.menu.purchase-management.purchase-orders.edit')}
+              </Typography.Title>
+            </Space>
+            <Space wrap>
+              <Button onClick={() => navigate(PURCHASE_ORDER_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={triggerPurchaseOrderFormSubmit}>
+                {isCreatePage ? t('app.kuaizhizao.purchaseOrder.saveDraft', '保存') : t('common.save')}
+              </Button>
+              {canSubmitAfterSave ? (
+                <Button
+                  type="primary"
+                  icon={<SendOutlined />}
+                  onClick={async () => {
+                    try {
+                      await formRef.current?.validateFields();
+                      submitAfterSaveRef.current = true;
+                      formRef.current?.submit();
+                    } catch (err) {
+                      if ((err as any)?.errorFields?.length) {
+                        messageApi.warning('请完善必填项后再提交');
+                      }
+                    }
+                  }}
+                >
+                  {isCreatePage ? '创建并提交' : '保存并提交'}
+                  {SUBMIT_SHORTCUT_HINT}
+                </Button>
+              ) : (
+                <Button type="primary" onClick={triggerPurchaseOrderFormSubmit}>
+                  {t('common.save')}
+                  {SUBMIT_SHORTCUT_HINT}
+                </Button>
+              )}
+            </Space>
+            </>
+          }
+        >
+          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
+            <div className="form-modal-content-inner">
+              <ProForm
+                formRef={formRef}
+                layout="vertical"
+                submitter={false}
+                scrollToFirstError
+                onFinish={handleFormSubmit}
+                onFinishFailed={({ errorFields }) => {
+                  const first = errorFields?.[0];
+                  const errText = first?.errors?.filter(Boolean)[0];
+                  messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
+                }}
+                initialValues={isCreatePage ? { items: [defaultOrderItem], price_type: 'tax_exclusive' } : undefined}
+              >
+                {purchaseOrderFormItemContent}
+              </ProForm>
+            </div>
+          </Card>
+        </DocumentFormPageLayout>
+        {purchaseOrderFormAuxModals}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<PurchaseOrder>
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-orders"
+          headerTitle="采购订单"
+          formRef={tableSearchFormRef}
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch={true}
+          showCreateButton={false}
+          createButtonText="新建采购订单"
+          onCreate={handleCreate}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              compactKey="create-purchase-order-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建采购订单"
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-requisition',
+                  actionKey: 'purchase_order.pull_from_requisition',
+                  onClick: handlePullFromRequisition,
+                },
+              ])}
+            />,
+            <UniPushToolbarButton
+              key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!selectedOrderForToolbar || !canUseToolbarPush}
+            />,
+          ]}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          showImportButton={true}
+          onImport={handleListImport}
+          importHeaders={['订单编号', '供应商名称', '订单日期', '物料编号', '数量', '单价', '交货日期', '备注']}
+          importExampleRow={['PO001', '供应商A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
+          importFieldMap={{
+            '订单编号': 'order_code',
+            '供应商名称': 'supplier_name',
+            '订单日期': 'order_date',
+            '物料编号': 'material_code',
+            '数量': 'ordered_quantity',
+            '单价': 'unit_price',
+            '交货日期': 'delivery_date',
+            '备注': 'notes',
+          }}
+          importFieldRules={{
+            supplier_name: { required: true },
+            order_date: { required: true },
+            material_code: { required: true },
+            ordered_quantity: { required: true },
+          }}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listPurchaseOrders({ skip: 0, limit: 10000 });
+              let items = res.data || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            try {
+              const apiParams: Record<string, unknown> = {
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                keyword: params.keyword,
+              };
+              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(
+                searchFormValues,
+                params,
+              );
+              if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
+              if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
+              const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
+              lastOrdersCacheRef.current = response.data || [];
+              return {
+                data: response.data || [],
+                success: response.success !== false,
+                total: response.total || 0,
+              };
+            } catch (error) {
+              messageApi.error('获取采购订单列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          scroll={{ x: 1400 }}
+        />
+      </ListPageTemplate>
+
+      <Modal
+        title={pullFromRequisitionAction.label}
+        open={pullFromRequisitionVisible}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        onCancel={() => setPullFromRequisitionVisible(false)}
+        onOk={handlePullFromRequisitionConfirm}
+        okText="创建采购订单"
+        cancelText="取消"
+        okButtonProps={{ disabled: selectedPullRequisitionLineKeys.length === 0 || pullRequisitionLoading }}
+        confirmLoading={pullRequisitionSubmitting}
+        destroyOnHidden
+      >
+        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
+          <Input.Search
+            allowClear
+            value={pullRequisitionKeyword}
+            placeholder="搜索采购申请明细（申请单号/申请名称）"
+            enterButton="搜索"
+            onChange={(e) => setPullRequisitionKeyword(e.target.value)}
+            onSearch={(value) => {
+              const keyword = value?.trim?.() || '';
+              setPullRequisitionKeyword(keyword);
+              loadPullRequisitionCandidates(keyword);
+            }}
+          />
+          <Table<PullPurchaseRequisitionLineCandidate>
+            rowKey="key"
+            loading={pullRequisitionLoading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: pullRequisitionKeyword ? '未找到匹配采购申请明细' : '暂无可选采购申请明细' }}
+            rowSelection={{
+              type: 'checkbox',
+              selectedRowKeys: selectedPullRequisitionLineKeys,
+              onChange: (keys) => {
+                setSelectedPullRequisitionLineKeys(keys);
+              },
+              getCheckboxProps: (record) => ({
+                disabled: record.converted,
+              }),
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.converted) return;
+                const selected = selectedPullRequisitionLineKeys.includes(record.key);
+                setSelectedPullRequisitionLineKeys((prev) =>
+                  selected ? prev.filter((k) => k !== record.key) : [...prev, record.key],
+                );
+              },
+            })}
+            columns={[
+              { title: '申请单号', dataIndex: 'requisition_code', width: 170 },
+              { title: '申请名称', dataIndex: 'requisition_name', width: 160, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '物料编码', dataIndex: 'material_code', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '物料名称', dataIndex: 'material_name', width: 170, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '规格', dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+              { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
+              { title: '单位', dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
+              { title: '需求日期', dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: '申请人', dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
+              {
+                title: '状态',
+                dataIndex: 'requisition_status',
+                width: 100,
+                render: (v: string) => <Tag color={v?.includes('转单') ? 'gold' : 'blue'}>{v || '-'}</Tag>,
+              },
+              {
+                title: '审核',
+                dataIndex: 'review_status',
+                width: 100,
+                render: (v: string) => {
+                  const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+                  const rejected = v === 'REJECTED' || v === '已驳回';
+                  return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+                },
+              },
+              {
+                title: '供应商',
+                width: 160,
+                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
+                  record.supplier_id ? `已指定(${record.supplier_id})` : '待定（草稿中补充）',
+              },
+              {
+                title: '转单状态',
+                width: 180,
+                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
+                  record.converted ? (
+                    <Tag color="gold">已转采购订单#{record.purchase_order_id}</Tag>
+                  ) : (
+                    <Tag color="green">可转单</Tag>
+                  ),
+              },
+            ]}
+            dataSource={pullRequisitionLineCandidates}
+            scroll={{ x: 1600, y: 320 }}
+          />
+          <Typography.Text type="secondary">
+            已选择 {selectedPullRequisitionLineKeys.length} 条明细，将按采购申请与供应商自动拆分创建采购订单草稿。
+          </Typography.Text>
+        </Space>
+      </Modal>
+
 
       <LandingCostAllocationModal
         visible={landingCostModalVisible}

@@ -1094,6 +1094,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   columnPersistenceId?: string
   /**
+   * 嵌入模式（Modal / Drawer / Tab 内）：去掉 ProTable 外层卡片边框，减少嵌套视觉层级。
+   */
+  embedded?: boolean
+  /**
    * @deprecated 历史占位；组件内不使用，仅从 props 剥离以免传入 ProTable。
    */
   searchFormItems?: unknown
@@ -1186,6 +1190,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   searchParamsRef: externalSearchParamsRef,
   tanstackQuery,
   columnPersistenceId,
+  embedded = false,
   columnsState: userColumnsState,
   searchFormItems: _unusedSearchFormItems,
   ...restProps
@@ -2586,6 +2591,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
 
+  const showSearchToolbarRow =
+    showFuzzySearch ||
+    showAdvancedSearch ||
+    Boolean(beforeSearchButtons) ||
+    Boolean(afterSearchButtons) ||
+    Boolean(betweenFuzzyAndAdvancedButtons) ||
+    (isMobile && gatedShowCreateButton && onCreate)
+
   return (
     <>
       <style>{`
@@ -2595,6 +2608,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           padding: 0;
           margin: 0;
           width: 100%;
+        }
+        .uni-table-container.uni-table-embedded .ant-pro-card {
+          border: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+        }
+        .uni-table-container.uni-table-embedded .ant-pro-card .ant-pro-card-body {
+          padding: 0 !important;
+        }
+        .uni-table-container.uni-table-embedded .uni-table-pro-table {
+          margin: 0 !important;
+        }
+        .uni-table-container.uni-table-embedded .ant-pro-table-list-toolbar-container {
+          padding-block: 0 8px !important;
         }
         /* 表身行高/内边距由 ProTable size="small"（antd Table 密度）统一控制，勿在此覆盖 padding */
         .uni-table-container .ant-table-tbody > tr > td {
@@ -2717,7 +2744,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       `}</style>
       <div
         ref={containerRef}
-        className={`uni-table-container${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}`}
+        className={`uni-table-container${embedded ? ' uni-table-embedded' : ''}${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}`}
         style={{
           position: 'relative',
           padding: isMobile ? '0 8px' : 0,
@@ -2729,6 +2756,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }}
       >
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+          {showSearchToolbarRow ? (
           <div
             ref={buttonContainerRef}
             className="pro-table-button-container"
@@ -2797,6 +2825,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               </div>
             ) : null}
           </div>
+          ) : null}
 
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
@@ -2825,7 +2854,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               className={`uni-table-pro-table${proTableBodyScrollYEnabled ? ' uni-table-scroll-y' : ''}`}
               style={{ margin: 0, padding: 0 }}
               bordered={false}
-              cardBordered={true}
+              cardBordered={!embedded}
               {...(!showLoading ? { loading: false } : loadingDelay > 0 ? { loading: showDelayedLoading } : {})}
               columnsState={mergedColumnsStateProp}
               toolbar={memoizedToolbar}

@@ -45,6 +45,8 @@ import { OrderChangeItemsTable } from '../../../components/order-change/OrderCha
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { OrderChangeSourceOrderPickerModal } from '../../../components/order-change/OrderChangeSourceOrderPickerModal';
 import type { OrderChangeSourceOrderOption } from '../../../utils/orderChangeSourceOrder';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const PurchaseOrderChangesPage: React.FC = () => {
   const { message, modal } = App.useApp();
@@ -87,6 +89,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     editForm.setFieldsValue({
       change_reason: full.change_reason,
       notes: full.notes,
+      attachments: mapAttachmentsToUploadList(full.attachments),
     });
     setEditOpen(true);
   };
@@ -96,6 +99,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     await updatePurchaseOrderChange(editingId!, {
       change_reason: values.change_reason,
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
       items: (editItems ?? []).map((item, idx) => ({
         id: item.id,
         line_no: item.line_no ?? idx + 1,
@@ -337,6 +341,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
       >
         <ProFormTextArea name="change_reason" label="变更原因" rules={[{ required: true }]} />
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="purchase_order_change_attachments" />
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
       </FormModalTemplate>
 

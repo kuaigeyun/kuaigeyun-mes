@@ -35,7 +35,7 @@ import {
  * 厂区管理列表页面组件
  */
 const PlantsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
 
   const actionRef = useRef<ActionType>(null);
@@ -188,30 +188,12 @@ const PlantsPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（支持中英文，支持带*号的必填项标识）
-    // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
     const headerMap: Record<string, string> = {
-      [t('app.master-data.plants.code')]: 'code',
-      [`*${t('app.master-data.plants.code')}`]: 'code',
-      [t('app.master-data.plants.name')]: 'name',
-      [`*${t('app.master-data.plants.name')}`]: 'name',
-      [t('app.master-data.plants.address')]: 'address',
-      [t('app.master-data.plants.description')]: 'description',
-      '厂区编号': 'code',
-      '*厂区编号': 'code',
-      '编号': 'code',
-      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
-      '厂区名称': 'name',
-      '*厂区名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
       'name': 'name',
       '*name': 'name',
-      '地址': 'address',
       'address': 'address',
-      '描述': 'description',
       'description': 'description',
     };
 
@@ -234,11 +216,11 @@ const PlantsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.plants.code'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.plants.name'), headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
       return;
     }
 
@@ -448,7 +430,7 @@ const PlantsPage: React.FC = () => {
           item.address || '',
           item.description || '',
           item.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
         ];
         // 处理包含逗号、引号或换行符的字段
         csvRows.push(row.map(cell => {
@@ -686,20 +668,9 @@ const PlantsPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={[
-            `*${t('app.master-data.plants.code')}`,
-            `*${t('app.master-data.plants.name')}`,
-            t('app.master-data.plants.address'),
-            t('app.master-data.plants.description')
-          ]}
-          importExampleRow={['PLANT-WX-01', '无锡高新生产基地', '江苏省无锡市新吴区机电五支路15号', '核心制造基地']}
+          importHeaders={['*code', '*name', 'address', 'description']}
+          importExampleRow={['PLANT-WX-01', 'Wuxi Plant', 'No.15 Jidian Rd, Wuxi', 'Core manufacturing base']}
           importFieldMap={{
-            [t('app.master-data.plants.code')]: 'code',
-            [`*${t('app.master-data.plants.code')}`]: 'code',
-            [t('app.master-data.plants.name')]: 'name',
-            [`*${t('app.master-data.plants.name')}`]: 'name',
-            [t('app.master-data.plants.address')]: 'address',
-            [t('app.master-data.plants.description')]: 'description',
             'code': 'code',
             '*code': 'code',
             'name': 'name',
