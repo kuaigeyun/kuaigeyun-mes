@@ -145,15 +145,27 @@ def _upkeep_record_lines_from_store(raw: Any) -> List[EquipmentUpkeepRecordLineO
     return out
 
 
+def _upkeep_record_lines_input_to_dicts(
+    lines: Optional[List[EquipmentUpkeepRecordLineIn | dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for x in lines or []:
+        if isinstance(x, EquipmentUpkeepRecordLineIn):
+            out.append(x.model_dump())
+        else:
+            out.append(EquipmentUpkeepRecordLineIn.model_validate(x).model_dump())
+    return out
+
+
 async def _apply_upkeep_complete_storage(
     tenant_id: int,
     equipment_id: int,
     *,
     upkeep_param_set_id: Optional[int],
     completion_content: Optional[str],
-    upkeep_record_lines: Optional[List[EquipmentUpkeepRecordLineIn]],
+    upkeep_record_lines: Optional[List[EquipmentUpkeepRecordLineIn | dict[str, Any]]],
 ) -> dict[str, Any]:
-    record_in = [x.model_dump() for x in (upkeep_record_lines or [])]
+    record_in = _upkeep_record_lines_input_to_dicts(upkeep_record_lines)
     return await build_equipment_upkeep_completion_storage(
         tenant_id,
         equipment_id,
