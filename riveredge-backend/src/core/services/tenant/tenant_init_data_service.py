@@ -21,11 +21,6 @@ class TenantInitDataService:
     # 必选初始化项（系统级默认加载，新建组织时 100% 执行）
     INIT_ITEMS_REQUIRED: List[Dict[str, Any]] = [
         {
-            "key": "data_dictionary",
-            "name": "数据字典",
-            "description": "CURRENCY、TIMEZONE 等基础字典（初始化向导依赖）",
-        },
-        {
             "key": "language",
             "name": "系统语言",
             "description": "简体中文、English 等系统语言",
@@ -34,6 +29,11 @@ class TenantInitDataService:
             "key": "application",
             "name": "应用注册",
             "description": "扫描并自动安装、启用应用中心免费应用",
+        },
+        {
+            "key": "data_dictionary",
+            "name": "数据字典",
+            "description": "CURRENCY、TIMEZONE 及已安装应用归属的系统字典",
         },
         {
             "key": "system_parameter",
@@ -115,8 +115,8 @@ class TenantInitDataService:
         for item in cls.INIT_ITEMS_REQUIRED:
             key = item["key"]
             try:
-                await cls.run_single(tenant_id, key)
-                results[key] = {"success": True}
+                count = await cls.run_single(tenant_id, key)
+                results[key] = {"success": True, "created": count}
             except Exception as e:
                 logger.error(f"必选初始化 {key} 失败: {e}")
                 results[key] = {"success": False, "error": str(e)}
@@ -230,7 +230,9 @@ class TenantInitDataService:
         """
         if key == "data_dictionary":
             from core.services.data.data_dictionary_service import DataDictionaryService
-            result = await DataDictionaryService.initialize_system_dictionaries(tenant_id)
+            result = await DataDictionaryService.initialize_system_dictionaries_for_installed_apps(
+                tenant_id
+            )
             return result.get("dictionaries_count", 0) + result.get("items_created_count", 0)
 
         if key == "language":

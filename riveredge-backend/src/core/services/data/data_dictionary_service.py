@@ -715,6 +715,39 @@ class DataDictionaryService:
             return None
 
     @staticmethod
+    async def initialize_system_dictionaries_for_installed_apps(
+        tenant_id: int,
+    ) -> Dict[str, Any]:
+        """按租户已安装应用，初始化全局 + 归属应用的系统字典。"""
+        from core.services.system.installed_feature_scope import (
+            get_installed_application_codes,
+            system_dictionary_codes_for_installed_apps,
+        )
+
+        installed = await get_installed_application_codes(tenant_id)
+        codes = system_dictionary_codes_for_installed_apps(installed)
+        return await DataDictionaryService.initialize_system_dictionaries(
+            tenant_id,
+            only_codes=codes,
+        )
+
+    @staticmethod
+    async def initialize_system_dictionaries_for_app_code(
+        tenant_id: int,
+        app_code: str,
+    ) -> Dict[str, Any]:
+        """应用启用后，补同步该应用归属的系统字典（含全局字典）。"""
+        from core.services.system.installed_feature_scope import (
+            system_dictionary_codes_for_app_code,
+        )
+
+        codes = system_dictionary_codes_for_app_code(app_code)
+        return await DataDictionaryService.initialize_system_dictionaries(
+            tenant_id,
+            only_codes=codes,
+        )
+
+    @staticmethod
     async def initialize_system_dictionaries(
         tenant_id: int,
         *,

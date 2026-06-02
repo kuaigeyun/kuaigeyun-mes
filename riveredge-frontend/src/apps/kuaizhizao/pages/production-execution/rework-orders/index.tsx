@@ -449,8 +449,8 @@ const ReworkOrdersPage: React.FC = () => {
         unqualified_quantity: Number(values.unqualified_quantity ?? 0),
         work_hours: Number(values.work_hours ?? 0),
         reported_at: values.reported_at
-          ? values.reported_at.format('YYYY-MM-DD HH:mm:ss')
-          : dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          ? values.reported_at.toDate().toISOString()
+          : new Date().toISOString(),
         remarks: values.remarks || undefined,
       });
       messageApi.success('返工报工成功');

@@ -430,15 +430,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
                                 f"工序跳转规则：请先完成前序工序「{previous_operation.operation_name}」后，再将当前工序报为完成"
                             )
                     
-                    # 检查前序工序的报工数量
-                    previous_completed = Decimal(str(previous_operation.completed_quantity or 0))
+                    # 检查前序工序转入量（以上道合格产出为准，与 material_remaining 一致）
+                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity
+
+                    previous_transfer = qualified_transfer_quantity(previous_operation)
                     current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
                     new_total = current_completed + reported_quantity_dec
-                    
-                    # 下一道工序的报工数量不可超过上一道工序
-                    if reporting_type == "quantity" and new_total > previous_completed:
+
+                    if reporting_type == "quantity" and new_total > previous_transfer:
                         raise BusinessLogicError(
-                            f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过前序工序 '{previous_operation.operation_name}' 的报工数量（{previous_completed}）"
+                            f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过"
+                            f"前序工序「{previous_operation.operation_name}」的合格产出（{previous_transfer}）"
                         )
             else:
                 await validate_reporting_respects_node_operations(
@@ -581,7 +583,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order_operation.unqualified_quantity = (
                     work_order_operation.unqualified_quantity or Decimal("0")
                 ) + reporting_data.unqualified_quantity
-                if work_order_operation.completed_quantity >= work_order.quantity:
+                from apps.kuaizhizao.services.over_report_rules import (
+                    max_completed_quantity_for_plan,
+                    tuple_from_model,
+                )
+
+                plan_qty_for_complete = work_order.quantity or Decimal("0")
+                om_complete, ov_complete = tuple_from_model(work_order_operation)
+                max_completed_for_op = max_completed_quantity_for_plan(
+                    plan_qty_for_complete, om_complete, ov_complete
+                )
+                if work_order_operation.completed_quantity >= max_completed_for_op:
                     work_order_operation.status = "completed"
                     work_order_operation.actual_end_date = datetime.now()
             

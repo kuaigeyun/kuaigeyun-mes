@@ -45,6 +45,32 @@ async def get_init_config(
     return TenantInitDataService.get_init_items_config()
 
 
+@router.post("/run-required", response_model=RunInitResponse)
+async def run_required_init_items(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user_dep),
+):
+    """
+    执行全部必备系统初始项（与新建租户时自动加载一致，可重复执行以补全缺失数据）。
+    """
+    results = await TenantInitDataService.run_required(tenant_id)
+
+    try:
+        from core.services.system.menu_service import MenuService
+
+        menu_count = await MenuService.sync_all_menus_from_applications(tenant_id)
+        results["menu_sync"] = {"success": True, "created": menu_count}
+    except Exception as e:
+        results["menu_sync"] = {"success": False, "error": str(e)}
+
+    success_count = sum(1 for r in results.values() if r.get("success"))
+    total = len(results)
+    return RunInitResponse(
+        results=results,
+        message=f"必备初始项执行完成，成功 {success_count}/{total} 项",
+    )
+
+
 @router.post("/run", response_model=RunInitResponse)
 async def run_init_items(
     data: RunInitRequest,

@@ -759,7 +759,23 @@ class ApplicationService:
         await MenuTakeoverService.sync_for_application_lifecycle(
             tenant_id, app_code, enabled=True
         )
-        
+
+        if app_code:
+            from core.services.data.data_dictionary_service import DataDictionaryService
+            from loguru import logger
+
+            try:
+                await DataDictionaryService.initialize_system_dictionaries_for_app_code(
+                    tenant_id, app_code
+                )
+            except Exception as e:
+                logger.warning(
+                    "应用 {} 启用后同步系统字典失败 tenant_id={}: {}",
+                    app_code,
+                    tenant_id,
+                    e,
+                )
+
         return application
     
     @staticmethod

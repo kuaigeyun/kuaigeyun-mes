@@ -39,6 +39,15 @@ export async function getInitConfig(): Promise<InitConfigResponse> {
 }
 
 /**
+ * 执行全部必备系统初始项（与新建租户自动加载一致，可重复执行补全）
+ */
+export async function runRequiredInitItems(): Promise<RunInitResponse> {
+  return apiRequest<RunInitResponse>('/core/tenant-init/run-required', {
+    method: 'POST',
+  });
+}
+
+/**
  * 执行选中的初始化项
  */
 export async function runInitItems(keys: string[]): Promise<RunInitResponse> {

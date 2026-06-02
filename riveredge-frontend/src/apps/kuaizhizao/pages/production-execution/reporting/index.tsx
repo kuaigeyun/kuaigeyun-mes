@@ -409,9 +409,24 @@ const ReportingPage: React.FC = () => {
         reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0;
         reportingData.unqualified_quantity = 0;
       } else {
-        reportingData.reported_quantity = values.reported_quantity || 0;
-        reportingData.qualified_quantity = values.qualified_quantity ?? values.reported_quantity ?? 0;
-        reportingData.unqualified_quantity = (values.reported_quantity || 0) - (values.qualified_quantity ?? values.reported_quantity ?? 0);
+        const rq = Number(values.reported_quantity) || 0;
+        if (rq <= 0) {
+          messageApi.warning('报工数量须大于 0');
+          return;
+        }
+        const rem = getRemainingReportableQuantity(
+          operation,
+          parseFloat(workOrder.quantity?.toString() || '0') || 0,
+        );
+        if (rq > rem + 1e-9) {
+          messageApi.warning(
+            t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', { max: rem }),
+          );
+          return;
+        }
+        reportingData.reported_quantity = rq;
+        reportingData.qualified_quantity = values.qualified_quantity ?? rq ?? 0;
+        reportingData.unqualified_quantity = rq - (values.qualified_quantity ?? rq ?? 0);
       }
       await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
       messageApi.success('报工成功');

@@ -249,6 +249,17 @@ def system_dictionary_codes_for_installed_apps(installed: Set[str]) -> Set[str]:
     return visible
 
 
+def system_dictionary_codes_for_app_code(app_code: str) -> Set[str]:
+    """单个应用启用/安装后，应同步的系统字典 code（含全局字典）。"""
+    codes: Set[str] = set(_SYSTEM_DICTIONARY_ALWAYS_VISIBLE)
+    ac = (app_code or "").strip()
+    if ac:
+        codes.update(
+            c for c, req in _SYSTEM_DICTIONARY_REQUIRES_APPS.items() if ac in req
+        )
+    return codes
+
+
 def code_rule_disallowed_rule_codes(installed: Set[str]) -> Set[str]:
     from core.config.code_rule_pages import CODE_RULE_PAGES
 

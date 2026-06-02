@@ -1,9 +1,9 @@
 /**
- * 报工弹窗：工单计划 / 料损 / 补料 + 计划可报 / 物料可报 / 本次可报上限（单行六列）
+ * 报工弹窗：工单计划 / 累计料损 / 补料 / 已报合格数 / 剩余可报 / 物料剩余 / 本次可报
  */
 
 import React, { useMemo } from 'react';
-import { Col, Row, Statistic, Typography, theme } from 'antd';
+import { Col, Row, Statistic, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -15,7 +15,6 @@ import { warehouseApi } from '../services/warehouse-execution';
 export interface ReportableQuantityPanelProps {
   operation: any;
   workOrderQuantity: number;
-  /** 工单全部工序（用于累计料损） */
   operations?: any[];
   workOrderId?: number;
 }
@@ -28,14 +27,11 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
 }) => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
-  const {
-    planCap,
-    operationCompleted,
-    planRemaining,
-    materialRemaining,
-    prevTransferQty,
-    effectiveRemaining,
-  } = getReportableQuantityBreakdown(operation, workOrderQuantity);
+  const { planRemaining, materialRemaining, effectiveRemaining } =
+    getReportableQuantityBreakdown(operation, workOrderQuantity);
+
+  const operationQualified =
+    Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
 
   const cumulativeLoss = useMemo(
     () => getWorkOrderMaterialLossTotal(operations),
@@ -67,128 +63,76 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
   };
   const statValueStyle: React.CSSProperties = {
     color: token.colorText,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 600,
     lineHeight: 1.2,
   };
-  const lossValueStyle: React.CSSProperties = {
-    ...statValueStyle,
-    color: cumulativeLoss > 0 ? token.colorError : token.colorTextTertiary,
-  };
-  const replenishValueStyle: React.CSSProperties = {
-    ...statValueStyle,
-    color: replenishmentQty > 0 ? token.colorWarning : token.colorTextTertiary,
-  };
 
-  const formulaTextStyle: React.CSSProperties = {
-    fontSize: 11,
-    lineHeight: 1.45,
-    display: 'block',
-    marginTop: 4,
-  };
+  const metrics: Array<{ key: string; title: string; value: number | string; valueStyle?: React.CSSProperties }> = [
+    {
+      key: 'plan',
+      title: t('apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty'),
+      value: workOrderQuantity,
+    },
+    {
+      key: 'loss',
+      title: t('apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss'),
+      value: cumulativeLoss,
+      valueStyle: {
+        color: cumulativeLoss > 0 ? token.colorError : token.colorTextTertiary,
+      },
+    },
+    {
+      key: 'replenish',
+      title: t('apps.kuaizhizao.workOrder.quickReport.replenishmentQty'),
+      value: replenishmentQty,
+      valueStyle: {
+        color: replenishmentQty > 0 ? token.colorWarning : token.colorTextTertiary,
+      },
+    },
+    {
+      key: 'qualified',
+      title: t('apps.kuaizhizao.workOrder.quickReport.reportedQualifiedQty'),
+      value: operationQualified,
+    },
+    {
+      key: 'planRemaining',
+      title: t('apps.kuaizhizao.workOrder.quickReport.planRemainingTitle'),
+      value: planRemaining,
+    },
+    {
+      key: 'materialRemaining',
+      title: t('apps.kuaizhizao.workOrder.quickReport.materialRemainingTitle'),
+      value: materialRemaining ?? '—',
+    },
+    {
+      key: 'effective',
+      title: t('apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle'),
+      value: effectiveRemaining,
+      valueStyle: { color: token.colorPrimary },
+    },
+  ];
 
   return (
     <div
       style={{
-        padding: '12px 16px',
+        padding: '12px 14px',
         borderRadius: token.borderRadiusLG,
         background: token.colorFillAlter,
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      <Row gutter={[12, 8]} align="top">
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={statTitleStyle}>
-                {t('apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty')}
-              </span>
-            }
-            value={workOrderQuantity}
-            valueStyle={statValueStyle}
-          />
-        </Col>
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={statTitleStyle}>
-                {t('apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss')}
-              </span>
-            }
-            value={cumulativeLoss}
-            valueStyle={lossValueStyle}
-          />
-        </Col>
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={statTitleStyle}>
-                {t('apps.kuaizhizao.workOrder.quickReport.replenishmentQty')}
-              </span>
-            }
-            value={replenishmentQty}
-            valueStyle={replenishValueStyle}
-          />
-        </Col>
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={statTitleStyle}>
-                {t('apps.kuaizhizao.workOrder.quickReport.planReportableTitle')}
-              </span>
-            }
-            value={planRemaining}
-            valueStyle={statValueStyle}
-          />
-          <Typography.Text type="secondary" style={formulaTextStyle}>
-            {t('apps.kuaizhizao.workOrder.quickReport.planReportableFormula', {
-              plan: planCap,
-              reported: operationCompleted,
-            })}
-          </Typography.Text>
-        </Col>
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={statTitleStyle}>
-                {t('apps.kuaizhizao.workOrder.quickReport.materialReportableTitle')}
-              </span>
-            }
-            value={materialRemaining ?? '—'}
-            valueStyle={statValueStyle}
-          />
-          {materialRemaining != null && prevTransferQty != null ? (
-            <Typography.Text type="secondary" style={formulaTextStyle}>
-              {t('apps.kuaizhizao.workOrder.quickReport.materialReportableFormula', {
-                transfer: prevTransferQty,
-                reported: operationCompleted,
-              })}
-            </Typography.Text>
-          ) : null}
-        </Col>
-        <Col span={4}>
-          <Statistic
-            title={
-              <span style={{ ...statTitleStyle, color: token.colorPrimary }}>
-                {t('apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle')}
-              </span>
-            }
-            value={effectiveRemaining}
-            valueStyle={{
-              color: token.colorPrimary,
-              fontSize: 20,
-              fontWeight: 600,
-              lineHeight: 1.2,
-            }}
-          />
-        </Col>
+      <Row gutter={8} wrap={false} align="top">
+        {metrics.map((m) => (
+          <Col key={m.key} flex="1 1 0" style={{ minWidth: 0 }}>
+            <Statistic
+              title={<span style={statTitleStyle}>{m.title}</span>}
+              value={m.value}
+              valueStyle={{ ...statValueStyle, ...m.valueStyle }}
+            />
+          </Col>
+        ))}
       </Row>
-      <Typography.Paragraph
-        type="secondary"
-        style={{ marginBottom: 0, marginTop: 10, fontSize: 12, lineHeight: 1.65 }}
-      >
-        {t('apps.kuaizhizao.workOrder.quickReport.reportablePanelHint')}
-      </Typography.Paragraph>
     </div>
   );
 };

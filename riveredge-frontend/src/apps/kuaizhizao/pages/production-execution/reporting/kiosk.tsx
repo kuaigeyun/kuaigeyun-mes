@@ -161,7 +161,7 @@ const ReportingKioskPage: React.FC = () => {
         (op.is_node_operation || op.isNodeOperation)
     );
     const blockedNode = nodePreds.find(
-      (op: any) => Number(op.completed_quantity ?? 0) <= 0
+      (op: any) => Number(op.qualified_quantity ?? op.qualifiedQuantity ?? 0) <= 0
     );
     if (allowJump && blockedNode) {
       setJumpRuleError(
@@ -180,10 +180,10 @@ const ReportingKioskPage: React.FC = () => {
       setJumpRuleError('');
       return;
     }
-    const prevQty = Number(prev.completed_quantity ?? 0);
+    const prevQty = Number(prev.qualified_quantity ?? prev.qualifiedQuantity ?? 0);
     if (prevQty <= 0) {
       setJumpRuleError(
-        `工序跳转规则：前序工序「${prev.operation_name}」须有报工产出后，当前工序才能报工`
+        `工序跳转规则：前序工序「${prev.operation_name}」须有合格产出后，当前工序才能报工`
       );
       return;
     }
@@ -250,12 +250,39 @@ const ReportingKioskPage: React.FC = () => {
 
     setLoading(true);
     try {
+      let reportedQty = Number(values.reported_quantity) || 0;
+      let qualifiedQty = Number(values.qualified_quantity) || 0;
+      let unqualifiedQty = Number(values.unqualified_quantity) || 0;
+
+      if (currentOperation.reporting_type === 'quantity') {
+        const rq = qualifiedQty + unqualifiedQty || reportedQty;
+        if (rq <= 0) {
+          messageApi.warning('报工数量须大于 0');
+          setLoading(false);
+          return;
+        }
+        const rem = getRemainingReportableQuantity(
+          currentOperation,
+          Number(currentWorkOrder.quantity) || 0,
+        );
+        if (rq > rem + 1e-9) {
+          messageApi.warning(`本次报工数量不能超过本次可报上限（${rem}）`);
+          setLoading(false);
+          return;
+        }
+        reportedQty = rq;
+        if (qualifiedQty + unqualifiedQty <= 0) {
+          qualifiedQty = rq;
+          unqualifiedQty = 0;
+        }
+      }
+
       const reportingData = {
         work_order_id: currentWorkOrder.id,
         operation_id: currentOperation.operation_id,
-        reported_quantity: values.reported_quantity || 0,
-        qualified_quantity: values.qualified_quantity || 0,
-        unqualified_quantity: values.unqualified_quantity || 0,
+        reported_quantity: reportedQty,
+        qualified_quantity: qualifiedQty,
+        unqualified_quantity: unqualifiedQty,
         work_hours: values.work_hours || 0,
         completed_status: values.completed_status || 'completed',
         remarks: values.remarks || '',

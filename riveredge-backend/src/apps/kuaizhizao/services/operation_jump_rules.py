@@ -14,6 +14,11 @@ def effective_allow_jump(work_order: Any, work_order_operation: Optional[WorkOrd
     return bool(getattr(work_order, "allow_operation_jump", False))
 
 
+def qualified_transfer_quantity(operation: WorkOrderOperation) -> Decimal:
+    """上道工序转入下道的数量（以上道累计合格产出为准，与 material_remaining 一致）。"""
+    return Decimal(str(getattr(operation, "qualified_quantity", None) or 0))
+
+
 async def list_node_predecessors(
     tenant_id: int,
     work_order_id: int,
@@ -36,7 +41,7 @@ async def validate_start_respects_node_operations(
     """允许跳转时：所有前序节点工序须已有产出。"""
     nodes = await list_node_predecessors(tenant_id, work_order_id, work_order_operation.sequence)
     for n in nodes:
-        if Decimal(str(n.completed_quantity or 0)) <= 0:
+        if qualified_transfer_quantity(n) <= 0:
             raise BusinessLogicError(
                 f"节点工序不可跳过：请先完成前序节点工序「{n.operation_name}」后再开始当前工序"
             )
@@ -51,7 +56,7 @@ async def validate_reporting_respects_node_operations(
 ) -> None:
     """
     允许跳转时：
-    - 数量报工：累计报工不可超过任一前序节点工序的完成数量
+    - 数量报工：累计报工不可超过任一前序节点工序的合格产出
     - 状态报工且报完成：前序节点工序须均已 completed
     """
     nodes = await list_node_predecessors(tenant_id, work_order_id, work_order_operation.sequence)
@@ -70,9 +75,9 @@ async def validate_reporting_respects_node_operations(
     current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
     new_total = current_completed + reported_quantity
     for n in nodes:
-        n_done = Decimal(str(n.completed_quantity or 0))
-        if new_total > n_done:
+        n_transfer = qualified_transfer_quantity(n)
+        if new_total > n_transfer:
             raise BusinessLogicError(
                 f"节点工序不可跳过：当前工序累计报工数量（{new_total}）不能超过"
-                f"前序节点工序「{n.operation_name}」的报工数量（{n_done}）"
+                f"前序节点工序「{n.operation_name}」的合格产出（{n_transfer}）"
             )
