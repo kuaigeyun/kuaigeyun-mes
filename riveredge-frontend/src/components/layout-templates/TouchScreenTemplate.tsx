@@ -9,8 +9,9 @@
  */
 
 import React, { ReactNode, useEffect } from 'react';
-import { Button, theme, Space } from 'antd';
+import { theme, Space } from 'antd';
 import { TOUCH_SCREEN_CONFIG, ANT_DESIGN_TOKENS, HMI_DESIGN_TOKENS } from './constants';
+import { HmiButton } from './hmi';
 
 const { useToken } = theme;
 
@@ -103,7 +104,7 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
 
   return (
     <div
-      className={className}
+      className={['hmi-root', className].filter(Boolean).join(' ')}
       style={{
         width: '100%',
         height: fullscreen ? '100vh' : 'auto',
@@ -153,24 +154,17 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
           }}
         >
           {footerButtons.map((button, index) => (
-            <Button
+            <HmiButton
               key={index}
-              type={button.type || 'primary'}
+              hmiVariant={button.type === 'primary' ? 'primary' : 'default'}
+              hmiSize="action"
               icon={button.icon}
               onClick={button.onClick}
               disabled={button.disabled}
               block={button.block !== false}
-              size="large"
-              style={{
-                minHeight: `${TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT}px`,
-                height: `${TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT}px`,
-                fontSize: Math.max(TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, HMI_DESIGN_TOKENS.FONT_BODY_MIN),
-                fontWeight: 500,
-                ...(button.type === 'primary' ? { backgroundColor: HMI_DESIGN_TOKENS.STATUS_INFO, borderColor: HMI_DESIGN_TOKENS.STATUS_INFO } : {}),
-              }}
             >
               {button.title}
-            </Button>
+            </HmiButton>
           ))}
         </div>
       )}

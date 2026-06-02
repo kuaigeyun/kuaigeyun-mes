@@ -174,23 +174,24 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
     };
 
     return (
-         <div style={{ maxWidth: 600, margin: '0 auto', paddingTop: 20 }}>
+         <div style={{ maxWidth: 600, margin: '0 auto', paddingTop: 20, color: 'rgba(255,255,255,0.88)' }}>
             <div style={{ textAlign: 'center', marginBottom: 30 }}>
                 <EnvironmentOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-                <Title level={3}>请绑定当前终端所属工位</Title>
-                <Text type="secondary">绑定后，终端将自动显示该工位的生产任务</Text>
+                <Title level={3} style={{ color: '#fff' }}>请绑定当前终端所属工位</Title>
+                <Text type="secondary" style={{ color: 'rgba(255,255,255,0.55)' }}>绑定后，终端将自动显示该工位的生产任务</Text>
             </div>
 
             <Form layout="vertical" size="large">
                 <Form.Item label="所属车间">
                     <Select
                         placeholder="请选择车间"
-                        style={{ height: 50 }}
+                        style={{ height: 50, width: '100%' }}
+                        popupClassName="station-select-dropdown"
                         onChange={handleWorkshopChange}
                         value={selectedWorkshop}
                         optionFilterProp="children"
                         loading={loading}
-                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
                     >
                         {workshops.map(w => (
                             <Option key={w.id} value={w.id}>{w.name}</Option>
@@ -201,11 +202,12 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                 <Form.Item label="所属产线" required>
                     <Select
                         placeholder="请选择产线"
-                        style={{ height: 50 }}
+                        style={{ height: 50, width: '100%' }}
+                        popupClassName="station-select-dropdown"
                         onChange={handleLineChange}
                         value={selectedLine}
                         disabled={!selectedWorkshop}
-                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
                     >
                         {lines.map(l => (
                             <Option key={l.id} value={l.id}>{l.name}</Option>
@@ -216,13 +218,14 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                 <Form.Item label="作业工位" required>
                     <Select
                         placeholder="请选择工位"
-                        style={{ height: 50 }}
+                        style={{ height: 50, width: '100%' }}
+                        popupClassName="station-select-dropdown"
                         onChange={(val) => setSelectedStation(val)}
                         value={selectedStation}
                         disabled={!selectedLine}
                         showSearch
                         optionFilterProp="children"
-                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
                     >
                         {stations.map(s => (
                             <Option key={s.id} value={s.id}>

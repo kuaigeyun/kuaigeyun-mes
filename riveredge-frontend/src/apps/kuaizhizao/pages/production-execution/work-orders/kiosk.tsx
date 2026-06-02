@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 
 import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { HmiButton, HmiCard, HmiListItem, HmiStatusTag, HmiInput } from '../../../../../components/layout-templates/hmi';
 import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
 import StationBinder, { getStationStorageKey, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
@@ -340,10 +341,6 @@ const WorkOrdersKioskPage: React.FC = () => {
         low: '低', normal: '普通', high: '高', urgent: '紧急',
     };
     const formatDate = (d?: string) => d ? dayjs(d).format('MM-DD HH:mm') : '—';
-    const getStatusBadgeStyle = (status?: string): { background: string; color: string } => {
-        const s = HMI_DESIGN_TOKENS.STATUS_BADGE[status as keyof typeof HMI_DESIGN_TOKENS.STATUS_BADGE] ?? HMI_DESIGN_TOKENS.STATUS_BADGE.default;
-        return { background: s.bg, color: s.color };
-    };
 
     const filteredWorkOrders = workOrders.filter(wo => {
         const matchSearch = !searchKeyword ||
@@ -357,28 +354,24 @@ const WorkOrdersKioskPage: React.FC = () => {
     });
 
     const renderLeftPanel = () => (
-        <div
-            onClick={() => setFocusedNumField(null)}
+        <HmiCard
+            fill
+            className="hmi-kiosk-panel"
+            title={
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
+                    工单列表
+                </span>
+            }
+            extra={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontWeight: 400 }}>共 {filteredWorkOrders.length} 项</span>}
             style={{
-                height: '100%',
                 width: HMI_LAYOUT.LEFT_PANEL_WIDTH,
                 minWidth: HMI_LAYOUT.LEFT_PANEL_WIDTH,
-                background: HMI_DESIGN_TOKENS.BG_CARD,
-                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
+                height: '100%',
             }}
+            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
         >
             <div style={{ padding: HMI_DESIGN_TOKENS.PANEL_PADDING, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, flexShrink: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}>
-                        <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
-                        工单列表
-                    </span>
-                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 400 }}>共 {filteredWorkOrders.length} 项</div>
-                </div>
                 <Select
                     value={workOrderFilter}
                     getPopupContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
@@ -401,9 +394,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                     style={{ background: HMI_DESIGN_TOKENS.BG_CARD, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
                 />
             </div>
-            <div className="kiosk-work-order-list" style={{ flex: 1, overflowY: 'auto', padding: `${HMI_DESIGN_TOKENS.PANEL_PADDING}px` }}>
+            <div className="kiosk-work-order-list hmi-kiosk-panel__scroll" style={{ padding: HMI_DESIGN_TOKENS.PANEL_PADDING }}>
                 <style>{`
-                    .kiosk-work-order-list .ant-list-item { border: none !important; border-bottom: none !important; }
                     .kiosk-work-order-filter-select.ant-select .ant-select-selector,
                     .kiosk-work-order-filter-select.ant-select-single .ant-select-selection-item {
                         font-size: 14px !important;
@@ -412,62 +404,51 @@ const WorkOrdersKioskPage: React.FC = () => {
                     }
                     .kiosk-work-order-filter-dropdown .ant-select-item { font-size: 14px !important; font-weight: 400 !important; color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important; }
                 `}</style>
-                <List
-                    split={false}
-                    dataSource={filteredWorkOrders}
-                    loading={loading}
-                    style={{ margin: 0, padding: 0, border: 'none' }}
-                    locale={{ emptyText: (
-                        <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>选择工位后加载工单</span>}
-                        />
-                    ) }}
-                    renderItem={wo => {
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 24 }}>加载中…</div>
+                ) : filteredWorkOrders.length === 0 ? (
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>选择工位后加载工单</span>}
+                    />
+                ) : (
+                    filteredWorkOrders.map((wo) => {
                         const isSelected = selectedWorkOrder?.id === wo.id;
                         const pct = Math.round(((wo.completed_quantity || 0) / (wo.quantity || 1)) * 100);
                         const isComplete = wo.status === 'completed';
                         return (
-                            <List.Item
+                            <HmiListItem
+                                key={wo.id ?? wo.code}
+                                selected={isSelected}
                                 onClick={() => handleSelectWorkOrder(wo)}
-                                style={{
-                                    cursor: 'pointer',
-                                    minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                    padding: `${HMI_DESIGN_TOKENS.LIST_CARD_PADDING}px 16px`,
-                                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                    marginBottom: HMI_DESIGN_TOKENS.LIST_CARD_GAP,
-                                    background: isSelected ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.LIST_CARD_BG,
-                                    border: 'none',
-                                    borderBottom: 'none',
-                                    transition: 'background 0.2s',
-                                }}
-                            >
-                                <div style={{ width: '100%' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                        <Text strong style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{wo.code}</Text>
-                                        <span style={{ fontSize: 12, lineHeight: 1, padding: '4px 8px', margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontWeight: 500, ...getStatusBadgeStyle(wo.status) }}>{STATUS_LABELS[wo.status || ''] || wo.status}</span>
+                                title={
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                        <span>{wo.code}</span>
+                                        <HmiStatusTag status={wo.status}>{STATUS_LABELS[wo.status || ''] || wo.status}</HmiStatusTag>
                                     </div>
-                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{wo.product_name}</div>
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                                        {wo.work_center_name && <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>{wo.work_center_name}</span>}
-                                        {wo.priority && wo.priority !== 'normal' && <Tag style={{ margin: 0, fontSize: 11 }}>{PRIORITY_LABELS[wo.priority] || wo.priority}</Tag>}
-                                        <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>{formatDate(wo.planned_start_date)} ~ {formatDate(wo.planned_end_date)}</span>
-                                    </div>
-                                    <div style={{ marginTop: 8 }}>
+                                }
+                                subtitle={
+                                    <>
+                                        <div>{wo.product_name}</div>
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', fontSize: 12, color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>
+                                            {wo.work_center_name && <span>{wo.work_center_name}</span>}
+                                            {wo.priority && wo.priority !== 'normal' && <Tag style={{ margin: 0, fontSize: 11 }}>{PRIORITY_LABELS[wo.priority] || wo.priority}</Tag>}
+                                            <span>{formatDate(wo.planned_start_date)} ~ {formatDate(wo.planned_end_date)}</span>
+                                        </div>
                                         <Progress
                                             percent={pct}
                                             size="small"
                                             strokeColor={isComplete ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.STATUS_INFO}
-                                            style={{ marginBottom: 0 }}
+                                            style={{ marginTop: 8, marginBottom: 0 }}
                                         />
-                                    </div>
-                                </div>
-                            </List.Item>
+                                    </>
+                                }
+                            />
                         );
-                    }}
-                />
+                    })
+                )}
             </div>
-        </div>
+        </HmiCard>
     );
 
     const currentStatusLabel = !selectedWorkOrder
@@ -690,81 +671,22 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                     </>
                                                 )}
                                             </div>
-                                            <div style={{ display: 'flex', gap: 8 }}>
-                                                <Button
-                                                    type="default"
-                                                    icon={<FileProtectOutlined />}
-                                                    onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}
-                                                    style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
-                                                    }}
-                                                >
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                <HmiButton hmiSize="header" icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
                                                     作业指导书
-                                                </Button>
-                                                <Button
-                                                    type="default"
-                                                    onClick={() => setParamModalVisible(true)}
-                                                    style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
-                                                    }}
-                                                >
+                                                </HmiButton>
+                                                <HmiButton hmiSize="header" onClick={() => setParamModalVisible(true)}>
                                                     报工参数
-                                                </Button>
-                                                <Button
-                                                    type="default"
-                                                    disabled={!lastReportingRecordId}
-                                                    onClick={() => setMaterialBindingModalVisible(true)}
-                                                    style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                        color: lastReportingRecordId ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                                                    }}
-                                                >
+                                                </HmiButton>
+                                                <HmiButton hmiSize="header" disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
                                                     物料绑定
-                                                </Button>
-                                                <Button
-                                                    type="default"
-                                                    disabled={!activeOperation}
-                                                    onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}
-                                                    style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                        color: activeOperation ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                                                    }}
-                                                >
+                                                </HmiButton>
+                                                <HmiButton hmiSize="header" disabled={!activeOperation} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
                                                     条码打印
-                                                </Button>
-                                                <Button
-                                                    type="default"
-                                                    disabled={!activeOperation}
-                                                    onClick={() => setProcessInspectionModalVisible(true)}
-                                                    style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                        color: activeOperation ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                                                    }}
-                                                >
+                                                </HmiButton>
+                                                <HmiButton hmiSize="header" disabled={!activeOperation} onClick={() => setProcessInspectionModalVisible(true)}>
                                                     工序检验
-                                                </Button>
+                                                </HmiButton>
                                             </div>
                                         </div>
                                         <Form form={form} layout="vertical">
@@ -819,23 +741,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 </Form.Item>
                                             </Form.Item>
                                             <Form.Item label={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>&nbsp;</span>}>
-                                                <Button
-                                                    type="primary"
+                                                <HmiButton
+                                                    hmiVariant="success"
+                                                    hmiSize="action"
                                                     icon={<CheckCircleOutlined />}
                                                     onClick={handleReport}
                                                     loading={opsLoading}
-                                                    style={{
-                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                        fontWeight: 600,
-                                                        background: HMI_DESIGN_TOKENS.STATUS_OK,
-                                                        borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
-                                                        boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                                                        padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
-                                                    }}
                                                 >
                                                     确认报工
-                                                </Button>
+                                                </HmiButton>
                                             </Form.Item>
                                         </div>
                                     </Form>
@@ -1071,8 +985,8 @@ const WorkOrdersKioskPage: React.FC = () => {
             deviceName={(stationInfo as any).deviceName || '未连接'}
             headerExtra={
                 <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
-                    <Button icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</Button>
-                    <Button icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</Button>
+                    <HmiButton hmiSize="header" icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</HmiButton>
+                    <HmiButton hmiSize="header" icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</HmiButton>
                 </div>
             }
         >
@@ -1156,144 +1070,60 @@ const WorkOrdersKioskPage: React.FC = () => {
                     {renderRightPanel()}
                 </div>
                 {/* 底部操作栏：始终显示，未选工单时置灰辅助功能 */}
-                <div
-                    onClick={() => setFocusedNumField(null)}
-                    style={{
-                        flexShrink: 0,
-                        height: HMI_LAYOUT.FOOTER_HEIGHT,
-                        minHeight: HMI_LAYOUT.FOOTER_HEIGHT,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: HMI_DESIGN_TOKENS.BUTTON_GAP,
-                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                        borderTop: `2px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                        boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
-                    }}>
-                    <Button
-                        type="primary"
+                <div className="hmi-kiosk-footer" onClick={() => setFocusedNumField(null)}>
+                    <HmiButton
+                        hmiVariant={!selectedWorkOrder ? 'default' : isRunning ? 'primary' : 'success'}
+                        hmiSize="action"
                         disabled={!selectedWorkOrder}
                         icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
                         onClick={handleStartEnd}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: !selectedWorkOrder ? undefined : (isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK),
-                            borderColor: !selectedWorkOrder ? undefined : (isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK),
-                            boxShadow: isRunning ? HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW : HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                        }}
                     >
                         {isRunning ? '结束' : '开始'}
-                    </Button>
+                    </HmiButton>
                     {activeOperation?.status === 'processing' && (
-                        <Button
-                            type="primary"
+                        <HmiButton
+                            hmiVariant="success"
+                            hmiSize="action"
                             icon={<CheckCircleOutlined />}
                             onClick={handleReport}
-                            style={{
-                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
-                                background: HMI_DESIGN_TOKENS.STATUS_OK,
-                                borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
-                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                            }}
                         >
                             完成报工
-                        </Button>
+                        </HmiButton>
                     )}
-                    <Button
+                    <HmiButton
+                        hmiSize="action"
                         icon={<PauseCircleOutlined />}
                         disabled={!selectedWorkOrder}
                         onClick={handlePauseResume}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                        }}
                     >
                         {isPaused ? '继续' : '暂停'}
-                    </Button>
-                    <Button
+                    </HmiButton>
+                    <HmiButton
+                        hmiVariant="danger"
+                        hmiSize="action"
                         icon={<AlertOutlined />}
                         onClick={handleCall}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                            borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                            color: '#fff',
-                        }}
+                        style={{ background: HMI_DESIGN_TOKENS.STATUS_ALARM, borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM, color: '#fff' }}
                     >
                         呼叫
-                    </Button>
+                    </HmiButton>
 
                     <Divider orientation="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
 
-                    <Button
-                        icon={<HistoryOutlined />}
-                        disabled={!selectedWorkOrder}
-                        onClick={handleQuickPick}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                        }}
-                    >
+                    <HmiButton hmiSize="action" icon={<HistoryOutlined />} disabled={!selectedWorkOrder} onClick={handleQuickPick}>
                         领料
-                    </Button>
-                    <Button
-                        icon={<PrinterOutlined />}
-                        disabled={!selectedWorkOrder}
-                        onClick={handlePrintWorkOrder}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                        }}
-                    >
+                    </HmiButton>
+                    <HmiButton hmiSize="action" icon={<PrinterOutlined />} disabled={!selectedWorkOrder} onClick={handlePrintWorkOrder}>
                         打印
-                    </Button>
-                    <Button
+                    </HmiButton>
+                    <HmiButton
+                        hmiSize="action"
                         icon={<QrcodeOutlined />}
                         disabled={!selectedWorkOrder}
                         onClick={() => { setBarcodePrintLevel('work_order'); setBarcodePrintModalVisible(true); }}
-                        style={{
-                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
-                        }}
                     >
                         条码
-                    </Button>
+                    </HmiButton>
                 </div>
             </div>
             {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}

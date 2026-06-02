@@ -13,7 +13,7 @@ from loguru import logger
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_module_access
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
@@ -55,6 +55,8 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkReportingOptionsResponse,
 )
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
+from apps.kuaizhizao.schemas.station import OperationPauseRequest, OperationCompleteRequest
+from apps.kuaizhizao.services.station_service import StationService
 from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
     OutsourceOrderCreateFromWorkOrder,
@@ -640,6 +642,81 @@ async def start_work_order_operation(
         operation_id=operation_id,
         started_by=current_user.id
     )
+
+
+@router.post(
+    "/work-orders/{work_order_id}/operations/{operation_id}/pause",
+    summary="Pause work order operation (station downtime)",
+)
+async def pause_work_order_operation(
+    work_order_id: int,
+    operation_id: int,
+    data: OperationPauseRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await StationService().pause_work_order_operation(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+            data=data,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post(
+    "/work-orders/{work_order_id}/operations/{operation_id}/resume",
+    summary="Resume paused work order operation",
+)
+async def resume_work_order_operation(
+    work_order_id: int,
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await StationService().resume_work_order_operation(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post(
+    "/work-orders/{work_order_id}/operations/{operation_id}/complete",
+    response_model=WorkOrderOperationResponse,
+    summary="Complete work order operation (station end)",
+)
+async def complete_work_order_operation(
+    work_order_id: int,
+    operation_id: int,
+    data: OperationCompleteRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderOperationResponse:
+    remarks = data.remarks if data else None
+    try:
+        return await StationService().complete_work_order_operation(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+            completed_by=current_user.id,
+            remarks=remarks,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/work-orders/{work_order_id}/picking-confirmation-status", summary="Check picking confirmation status")

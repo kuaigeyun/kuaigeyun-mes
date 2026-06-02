@@ -13,8 +13,15 @@ import type { ProxyOptions } from 'vite'
 
 // src 目录路径（src 目录）
 const srcPath = resolve(__dirname, 'src')
+const hmiUiRoot = resolve(__dirname, '../riveredge-hmi-ui/src')
 /** Windows 上别名替换需统一为正斜杠，否则 `@/…` 经 alias 后混用 `\\` 与 `/` 可能导致 Rollup 无法解析 */
 const srcRootPosix = normalizePath(srcPath)
+const hmiUiRootPosix = normalizePath(hmiUiRoot)
+const frontendRoot = __dirname
+
+function resolvePkg(name: string): string {
+  return resolve(frontendRoot, 'node_modules', name)
+}
 
 
 /** Safari < 16.4 不支持 (?<!#) 负向回顾；Univer engine-formula 模块初始化时会 new RegExp 抛错。 */
@@ -56,6 +63,28 @@ function fixUniverSafariLookbehindPlugin(): Plugin {
         const patched = patch(code);
         if (patched !== code) fs.writeFileSync(fp, patched, 'utf8');
       }
+    },
+  };
+}
+
+/** 从 riveredge-hmi-ui 引用的模块，依赖仍解析到 frontend/node_modules */
+function hmiUiDependencyResolver(): Plugin {
+  return {
+    name: 'hmi-ui-dependency-resolver',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      const fromHmiUi = importer?.replace(/\\/g, '/').includes('riveredge-hmi-ui');
+      if (!fromHmiUi) return null;
+      if (source.startsWith('.') || source.startsWith('\0')) return null;
+      const candidates = [
+        resolve(frontendRoot, 'node_modules', source),
+        resolve(frontendRoot, 'node_modules', `${source}.js`),
+        resolve(frontendRoot, 'node_modules', source, 'index.js'),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return normalizePath(candidate);
+      }
+      return null;
     },
   };
 }
@@ -274,6 +303,7 @@ export default defineConfig({
     } : undefined,
   },
   plugins: [
+    hmiUiDependencyResolver(),
     fixUniverSafariLookbehindPlugin(),
     // occt-import-js 为 Emscripten CJS，Vite 动态 import 不会自动补 default export
     {
@@ -330,6 +360,19 @@ export default defineConfig({
         find: /^@\/(.*)$/,
         replacement: `${srcRootPosix}/$1`,
       },
+      {
+        find: /^@riveredge\/hmi-ui$/,
+        replacement: `${hmiUiRootPosix}/index.ts`,
+      },
+      {
+        find: /^@riveredge\/hmi-ui\/(.*)$/,
+        replacement: `${hmiUiRootPosix}/$1`,
+      },
+      { find: 'react/jsx-runtime', replacement: resolvePkg('react/jsx-runtime.js') },
+      { find: 'react-dom', replacement: resolvePkg('react-dom') },
+      { find: 'react', replacement: resolvePkg('react') },
+      { find: 'antd', replacement: resolvePkg('antd') },
+      { find: '@ant-design/icons', replacement: resolvePkg('@ant-design/icons') },
     ],
   },
   define: {

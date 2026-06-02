@@ -19,6 +19,7 @@ import { searchUserIdOptions } from '../../../../../utils/userDisplay';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
 import type { DictionaryItem } from '../../../../../services/dataDictionary';
 import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
+import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
 import { PatrolImagePreview } from './PatrolImagePreview';
 
 const { Text } = Typography;
@@ -105,20 +106,22 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
   );
 
   const uploadProps: UploadProps = {
-    listType: 'picture-card',
-    accept: '.jpg,.jpeg,.png,.gif,.webp',
-    fileList: beforeFiles,
-    disabled: readOnly,
-    onChange: ({ fileList }) => onBeforeFilesChange(fileList),
-    customRequest: async (options) => {
-      try {
-        const file = options.file as File;
-        const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_patrol_hazard' });
-        options.onSuccess?.(res, options.file);
-      } catch (e) {
-        options.onError?.(e instanceof Error ? e : new Error(String(e)));
-      }
-    },
+    ...withMoldPictureCardUploadClass({
+      listType: 'picture-card',
+      accept: '.jpg,.jpeg,.png,.gif,.webp',
+      fileList: beforeFiles,
+      disabled: readOnly,
+      onChange: ({ fileList }) => onBeforeFilesChange(fileList),
+      customRequest: async (options) => {
+        try {
+          const file = options.file as File;
+          const res: FileUploadResponse = await uploadFile(file, { category: 'haoligo_patrol_hazard' });
+          options.onSuccess?.(res, options.file);
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e : new Error(String(e)));
+        }
+      },
+    }),
   };
 
   return (

@@ -333,6 +333,9 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.material_borrow_item",  # 物料借出明细模型
                 "apps.kuaizhizao.models.material_call_request",  # 叫料请求模型
                 "apps.kuaizhizao.models.material_call_request_item",  # 叫料单明细模型
+                "apps.kuaizhizao.models.station_andon_call",  # 工位安灯
+                "apps.kuaizhizao.models.station_sop_acknowledgment",  # 工位SOP确认
+                "apps.kuaizhizao.models.station_operation_downtime",  # 工位停机
                 "apps.kuaizhizao.models.material_return",  # 物料退回（非生产）模型
                 "apps.kuaizhizao.models.material_return_item",  # 物料退回明细模型
                 "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型

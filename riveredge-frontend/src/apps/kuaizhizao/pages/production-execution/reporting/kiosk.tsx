@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { HmiButton, HmiChip } from '../../../../../components/layout-templates/hmi';
 import { reportingApi, workOrderApi } from '../../../services/production';
 import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -353,16 +354,15 @@ const ReportingKioskPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col span={24}>
-                  <Button
-                    type="primary"
-                    size="large"
+                  <HmiButton
+                    hmiVariant="primary"
+                    hmiSize="action"
                     block
                     icon={<ScanOutlined />}
                     onClick={handleManualInput}
-                    style={{ height: 60, fontSize: 24 }}
                   >
                     加载工单信息
-                  </Button>
+                  </HmiButton>
                 </Col>
               </Row>
 
@@ -405,14 +405,13 @@ const ReportingKioskPage: React.FC = () => {
             <Card title="选择工序" style={{ marginBottom: 24 }}>
               <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {workOrderOperations.map((operation) => (
-                  <Button
+                  <HmiChip
                     key={operation.operation_id}
-                    type={currentOperation?.operation_id === operation.operation_id ? 'primary' : 'default'}
-                    size="large"
+                    selected={currentOperation?.operation_id === operation.operation_id}
                     block
-                    onClick={() => handleSelectOperation(operation)}
                     disabled={operation.status === 'completed'}
-                    style={{ height: 60, fontSize: 24, textAlign: 'left' }}
+                    onClick={() => handleSelectOperation(operation)}
+                    style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left' }}
                   >
                     <Space>
                       <span>
@@ -428,7 +427,7 @@ const ReportingKioskPage: React.FC = () => {
                         <Tag color="processing">节点</Tag>
                       )}
                     </Space>
-                  </Button>
+                  </HmiChip>
                 ))}
               </Space>
 

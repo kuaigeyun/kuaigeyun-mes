@@ -62,6 +62,7 @@ import { uploadFile } from '../../../../../services/file';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { EquipmentImageList } from '../../../components/EquipmentImageList';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../patrol/shared/uploadHelpers';
+import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
 import {
   HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT,
   useEquipmentOperationalStatusLabels,
@@ -284,27 +285,28 @@ const EquipmentLedgerPage: React.FC = () => {
   };
 
   const uploadFieldProps = useMemo(
-    (): Partial<UploadProps> => ({
-      listType: 'picture-card',
-      accept: '.jpg,.jpeg,.png,.gif,.webp',
-      beforeUpload: (file) => {
-        const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
-        if (!isLt30M) {
-          messageApi.error(t('app.haoligo.equipment.ledger.imageSizeLimit'));
-          return Upload.LIST_IGNORE;
-        }
-        return true;
-      },
-      customRequest: async (options) => {
-        try {
-          const file = options.file as Parameters<typeof uploadFile>[0];
-          const res = await uploadFile(file, { category: 'haoligo_equipment' });
-          options.onSuccess?.(res, options.file);
-        } catch (err) {
-          options.onError?.(err instanceof Error ? err : new Error(String(err)));
-        }
-      },
-    }),
+    (): Partial<UploadProps> =>
+      withMoldPictureCardUploadClass({
+        listType: 'picture-card',
+        accept: '.jpg,.jpeg,.png,.gif,.webp',
+        beforeUpload: (file) => {
+          const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
+          if (!isLt30M) {
+            messageApi.error(t('app.haoligo.equipment.ledger.imageSizeLimit'));
+            return Upload.LIST_IGNORE;
+          }
+          return true;
+        },
+        customRequest: async (options) => {
+          try {
+            const file = options.file as Parameters<typeof uploadFile>[0];
+            const res = await uploadFile(file, { category: 'haoligo_equipment' });
+            options.onSuccess?.(res, options.file);
+          } catch (err) {
+            options.onError?.(err instanceof Error ? err : new Error(String(err)));
+          }
+        },
+      }),
     [messageApi, t],
   );
 

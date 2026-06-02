@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG, HMI_DESIGN_TOKENS } from '../../../../../components/layout-templates';
+import { HmiButton, HmiInput } from '../../../../../components/layout-templates/hmi';
 import NumericKeypad from '../../../../../components/touch-keyboard/NumericKeypad';
 import { workOrderApi } from '../../../services/production';
 
@@ -154,14 +155,14 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                         </Col>
                          <Col span={8} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                              {activeOperation?.status === 'pending' && (
-                                 <Button type="primary" size="large" icon={<PlayCircleOutlined />} onClick={handleStart} style={{ minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, width: '140px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, backgroundColor: HMI_DESIGN_TOKENS.STATUS_INFO, borderColor: HMI_DESIGN_TOKENS.STATUS_INFO }}>
+                                 <HmiButton hmiVariant="primary" hmiSize="action" icon={<PlayCircleOutlined />} onClick={handleStart} style={{ width: 140 }}>
                                      开始
-                                 </Button>
+                                 </HmiButton>
                              )}
                              {activeOperation?.status === 'processing' && (
-                                 <Button type="primary" size="large" icon={<CheckCircleOutlined />} onClick={handleComplete} style={{ minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, width: '140px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, backgroundColor: HMI_DESIGN_TOKENS.STATUS_OK, borderColor: HMI_DESIGN_TOKENS.STATUS_OK }}>
+                                 <HmiButton hmiVariant="success" hmiSize="action" icon={<CheckCircleOutlined />} onClick={handleComplete} style={{ width: 140 }}>
                                      完工
-                                 </Button>
+                                 </HmiButton>
                              )}
                         </Col>
                     </Row>
@@ -193,7 +194,9 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                 label: <span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, padding: '12px 16px', minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE, display: 'inline-flex', alignItems: 'center' }}><BarcodeOutlined /> 关键物料投料</span>,
                                 children: (
                                     <div style={{ padding: '20px', textAlign: 'center' }}>
-                                        <Button size="large" icon={<BarcodeOutlined />} style={{ minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, height: '80px', width: '200px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>扫描投料</Button>
+                                        <HmiButton hmiSize="action" icon={<BarcodeOutlined />} style={{ width: 200 }}>
+                                            扫描投料
+                                        </HmiButton>
                                         <div style={{ marginTop: '20px', color: '#999', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>扫描关键件条码进行防错校验和追溯绑定</div>
                                     </div>
                                 )
@@ -216,11 +219,10 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
                     <div style={{ width: '100%' }}>
                          <div style={{ marginBottom: '8px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#666' }}>本次报工数量:</div>
-                         <Input 
-                            size="large" 
-                            value={reportQuantity} 
-                            readOnly 
-                            style={{ height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, fontSize: '32px', textAlign: 'center', fontWeight: 'bold', borderColor: HMI_DESIGN_TOKENS.BORDER }} 
+                         <HmiInput
+                            qty
+                            value={reportQuantity}
+                            readOnly
                             placeholder="请点击下方键盘输入"
                          />
                     </div>

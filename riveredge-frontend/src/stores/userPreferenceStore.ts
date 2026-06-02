@@ -173,8 +173,10 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         if (!options?.force && initialized) return;
 
         purgeLegacyTableColumnPreferences();
-        // 先按当前账户 key 恢复本地缓存，再拉接口，避免换账号后首帧读到旧数据
-        get().rehydrateFromStorage();
+        // 首帧占位：仅首次拉取前恢复本地缓存；force 或已 initialized 时跳过，避免本地覆盖云端
+        if (!options?.force && !initialized) {
+          get().rehydrateFromStorage();
+        }
         set({ loading: true });
         try {
           const data = await getUserPreference();
@@ -189,6 +191,10 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
           syncTableColumnsToLocalStorage(finalPrefs);
         } catch (error) {
           console.warn('Failed to fetch user preferences:', error);
+          // 拉取失败且尚无服务端数据时，才回退到本地缓存
+          if (!initialized && Object.keys(get().preferences).length === 0) {
+            get().rehydrateFromStorage();
+          }
           set({ loading: false, initialized: true });
         }
       },
@@ -299,6 +305,8 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       name: PREFERENCE_STORAGE_KEY_BASE,
       storage: preferenceStorage,
       partialize: (state) => ({ preferences: state.preferences }),
+      // 禁用启动时自动 rehydrate，避免异步 hydration 在 API 返回后覆盖云端偏好（主题等）
+      skipHydration: true,
     }
   )
 );

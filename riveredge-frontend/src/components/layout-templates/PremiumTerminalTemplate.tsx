@@ -16,6 +16,7 @@ import { Layout, Button, Divider, theme, ConfigProvider, Tag } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import '../../styles/hmi.css';
 import { HMI_DESIGN_TOKENS, HMI_LAYOUT, HMI_ANTD_TOKEN_OVERRIDE } from './constants';
 
 /** 与语言无关地识别管理员角色，避免仅匹配中文「管理员」 */
@@ -152,7 +153,8 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
     >
       <Layout 
         id="premium-terminal-layout"
-        style={{ 
+        className="hmi-root"
+        style={{
           height: '100%',
           minHeight: 0,
           width: '100%',

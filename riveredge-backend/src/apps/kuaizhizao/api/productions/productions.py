@@ -270,6 +270,7 @@ from .warehouse_execution import router as warehouse_execution_router
 from .quality_execution import router as quality_execution_router
 from .quality_improvement import router as quality_improvement_router
 from .document_relations_legacy import router as document_relations_legacy_router
+from ..station.station import router as station_router
 
 # 创建路由
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
@@ -284,6 +285,7 @@ router.include_router(warehouse_execution_router)
 router.include_router(quality_execution_router)
 router.include_router(quality_improvement_router)
 router.include_router(document_relations_legacy_router)
+router.include_router(station_router)
 
 
 def _http_exception_with_trace(

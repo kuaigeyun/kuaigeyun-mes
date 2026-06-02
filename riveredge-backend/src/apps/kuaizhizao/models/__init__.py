@@ -71,6 +71,9 @@ from .line_side_inventory import LineSideInventory
 from .backflush_record import BackflushRecord
 from .material_call_request import MaterialCallRequest
 from .material_call_request_item import MaterialCallRequestItem
+from .station_andon_call import StationAndonCall
+from .station_sop_acknowledgment import StationSopAcknowledgment
+from .station_operation_downtime import StationOperationDowntime
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem

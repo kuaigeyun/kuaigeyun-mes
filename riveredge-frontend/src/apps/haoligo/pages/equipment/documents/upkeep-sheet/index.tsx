@@ -41,6 +41,7 @@ import {
 } from '../../../../services/haoligo';
 import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 
 const EquipmentUpkeepSheetPage: React.FC = () => {
@@ -146,27 +147,28 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   );
 
   const uploadFieldProps = useMemo(
-    (): Partial<UploadProps> => ({
-      listType: 'picture-card',
-      accept: '.jpg,.jpeg,.png,.gif,.webp',
-      beforeUpload: (file) => {
-        const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
-        if (!isLt30M) {
-          messageApi.error('单个文件需小于 30MB');
-          return Upload.LIST_IGNORE;
-        }
-        return true;
-      },
-      customRequest: async (options) => {
-        try {
-          const file = options.file as Parameters<typeof uploadFile>[0];
-          const res = await uploadFile(file, { category: 'haoligo_equipment_upkeep' });
-          options.onSuccess?.(res, options.file);
-        } catch (err) {
-          options.onError?.(err instanceof Error ? err : new Error(String(err)));
-        }
-      },
-    }),
+    (): Partial<UploadProps> =>
+      withMoldPictureCardUploadClass({
+        listType: 'picture-card',
+        accept: '.jpg,.jpeg,.png,.gif,.webp',
+        beforeUpload: (file) => {
+          const isLt30M = (file.size ?? 0) / 1024 / 1024 < 30;
+          if (!isLt30M) {
+            messageApi.error('单个文件需小于 30MB');
+            return Upload.LIST_IGNORE;
+          }
+          return true;
+        },
+        customRequest: async (options) => {
+          try {
+            const file = options.file as Parameters<typeof uploadFile>[0];
+            const res = await uploadFile(file, { category: 'haoligo_equipment_upkeep' });
+            options.onSuccess?.(res, options.file);
+          } catch (err) {
+            options.onError?.(err instanceof Error ? err : new Error(String(err)));
+          }
+        },
+      }),
     [messageApi],
   );
 
