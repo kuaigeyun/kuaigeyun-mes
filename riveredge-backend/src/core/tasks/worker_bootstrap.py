@@ -1,16 +1,7 @@
 """
-任务处理器注册入口。
+任务处理器注册入口（兼容 fs-discover / 显式模块列表）。
 
-Taskiq broker 任务定义于 core.tasks.taskiq_app；事件处理器由下方 workflow 模块注册到 dispatcher。
+实际注册在 ``taskiq_app._on_worker_startup`` → ``workflow_bootstrap.bootstrap_worker_event_handlers``。
 """
 
 import core.tasks.taskiq_app  # noqa: F401
-
-# 导入即注册（register_event_handler）
-from core.workflows.functions import *  # noqa: F401,F403
-from apps.master_data.workflows.functions import *  # noqa: F401,F403
-from apps.kuaizhizao.workflows.functions import *  # noqa: F401,F403
-
-
-def bootstrap() -> None:
-    return None

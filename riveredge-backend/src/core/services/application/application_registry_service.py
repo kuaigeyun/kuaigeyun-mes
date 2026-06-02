@@ -113,10 +113,8 @@ class ApplicationRegistryService:
                 logger.warning("⚠️ 数据库中没有已安装的应用，尝试从文件系统扫描应用")
                 raise Exception("数据库中没有应用，回退到文件系统扫描")
 
-            # 首租户 core_applications 若漏装某应用，此前会直接跳过文件系统扫描，导致该应用在 OpenAPI 中完全不存在（整路径 404）。
-            # 合并：1) manifest 扫描（APPS_MANIFEST_DIR 正确时）2) src/apps/*/api/router.py 包目录（manifest 目录指错或未扫描到仍生效）
-            merged = cls._append_filesystem_apps_for_missing_codes(apps)
-            return cls._append_router_package_dirs_for_missing_codes(merged)
+            # 仅以 DB 已安装且启用的应用为准；未入库的应用请在应用中心安装/启用，避免启动时加载全部磁盘 router。
+            return apps
 
         except Exception as e:
             logger.warning(f"⚠️ 数据库查询失败或没有应用，尝试从文件系统扫描应用: {e}")
@@ -364,15 +362,10 @@ class ApplicationRegistryService:
         为每个活跃的应用注册其API路由。
         """
         registered_routes = []
-        # 在 main.py 中已静态注册的应用，此处跳过避免重复注册
-        statically_registered_apps = {"master-data", "kuaireport", "kuaizhizao", "kuaiplm"}
 
         for app in apps:
             app_code = app['code']
             app_name = app['name']
-            if app_code in statically_registered_apps:
-                logger.debug(f"⏭️ 应用 {app_code} 已在 main.py 静态注册，跳过动态注册")
-                continue
 
             try:
                 # 构建路由模块路径
@@ -434,11 +427,13 @@ class ApplicationRegistryService:
                 logger.error(f"❌ 注册应用 {app_name}({app_code}) 路由失败: {e}")
 
         if registered_routes:
-            logger.debug(
-                f"动态路由注册完成：{len(registered_routes)} 个 -> {', '.join(registered_routes)}"
+            logger.info(
+                "应用 API 路由注册完成：{} 个 -> {}",
+                len(registered_routes),
+                ", ".join(registered_routes),
             )
         else:
-            logger.debug("没有动态应用路由需要注册（静态注册的应用已在 main.py 直接 include）")
+            logger.warning("没有注册任何应用 API 路由，请检查 core_applications 是否已安装并启用")
 
     @classmethod
     def _module_exists(cls, module_path: str) -> bool:

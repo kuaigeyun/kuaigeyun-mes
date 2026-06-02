@@ -86,6 +86,11 @@ async def _on_worker_startup(_state: TaskiqState) -> None:
     from infra.infrastructure.database.database import init_tortoise_for_worker_process
 
     await init_tortoise_for_worker_process()
+
+    from core.tasks.workflow_bootstrap import bootstrap_worker_event_handlers
+
+    await bootstrap_worker_event_handlers()
+
     # 与 API 侧 kiq 的 task_name 必须一致；若缺漏，Receiver 会打 warning「task is not found」且备份永远 pending
     try:
         names = sorted(broker.get_all_tasks().keys())

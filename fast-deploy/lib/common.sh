@@ -1273,8 +1273,7 @@ start_worker_dev() {
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         nohup "$(resolve_uv)" run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
             --workers "$TASKIQ_WORKERS" \
-            core.tasks.taskiq_app core.tasks.data_backup_handlers core.inngest.functions \
-            apps.master_data.inngest.functions apps.kuaizhizao.inngest.functions \
+            core.tasks.taskiq_app core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
             > "$LOGS_DIR/worker.log" 2>&1 &
         echo $! > "$LOGS_DIR/worker.pid"
         nohup "$(resolve_uv)" run --extra pdf taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \

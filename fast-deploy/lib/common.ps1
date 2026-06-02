@@ -678,8 +678,7 @@ function Start-WorkerDev {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $wArgs = @('run','--extra','pdf','taskiq','worker','core.tasks.taskiq_app:broker','--fs-discover',
             '--workers',"$($script:TASKIQ_WORKERS)",
-            'core.tasks.taskiq_app','core.tasks.data_backup_handlers','core.inngest.functions',
-            'apps.master_data.inngest.functions','apps.kuaizhizao.inngest.functions')
+            'core.tasks.taskiq_app','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers')
         Start-ProcessBackground 'worker' $uv $wArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
         $sArgs = @('run','--extra','pdf','taskiq','scheduler','core.tasks.taskiq_app:scheduler','--fs-discover',
             'core.tasks.taskiq_app','core.inngest.functions',

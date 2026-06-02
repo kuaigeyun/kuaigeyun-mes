@@ -126,16 +126,7 @@ from core.api.plugin_manager.plugin_manager import router as plugin_manager_rout
 # 应用路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动导入应用路由模块
 
-# Task dispatcher bootstrap
-try:
-    from core.workflows.functions import *  # noqa: F401,F403 - 仅用于注册事件处理器
-    from apps.master_data.workflows.functions import *  # noqa: F401,F403
-    from apps.kuaizhizao.workflows.functions import *  # noqa: F401,F403
-    TASK_DISPATCHER_READY = True
-except Exception as e:
-    TASK_DISPATCHER_READY = False
-    logger.warning(f"⚠️ 任务处理器注册失败: {e}")
-
+# Taskiq broker 任务定义（API 仅投递；事件处理器在 Worker 中按已安装应用懒加载）
 try:
     import core.tasks.taskiq_app  # noqa: F401 — 注册 Taskiq broker 任务（run_event_pipeline 等）
 except Exception as e:
@@ -520,10 +511,7 @@ def load_plugin_routes():
 # 注意：插件路由现在在lifespan中加载，确保路由管理器和应用注册服务都已初始化
 # load_plugin_routes()  # 已移至lifespan中调用
 
-if TASK_DISPATCHER_READY:
-    logger.info("✅ 事件任务处理器已注册（Task dispatcher）")
-else:
-    logger.warning("⚠️ 事件任务处理器未完全注册")
+logger.info("ℹ️ 事件任务处理器在 Taskiq Worker 启动时按已安装应用注册（API 进程不预加载 workflow）")
 
 # 健康检查端点
 @app.get("/health")
@@ -823,38 +811,7 @@ app.include_router(business_board_title_router, prefix="/api/v1/core")
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
-# 应用级功能路由现在通过 ApplicationRegistryService 动态注册
-# 以下应用静态注册，确保 API 始终可用（动态注册可能因应用未安装或 DB 未就绪而失败）
-# master-data：基础数据（仓库、物料、工序、工厂等）
-try:
-    from apps.master_data.api.router import router as master_data_router
-    app.include_router(master_data_router, prefix="/api/v1/apps/master-data")
-except ImportError as e:
-    logger.warning(f"⚠️ 无法加载 master-data 路由: {e}")
-# kuaireport：报表/大屏
-try:
-    from apps.kuaireport.api.router import router as kuaireport_router
-    app.include_router(kuaireport_router, prefix="/api/v1/apps/kuaireport")
-except ImportError as e:
-    logger.warning(f"⚠️ 无法加载 kuaireport 路由: {e}")
-# kuaizhizao：快制造（车间执行、销售采购、仓储等）— 与 master-data 同级静态挂载，避免动态注册失败导致整前缀 404
-try:
-    from apps.kuaizhizao.api.router import router as kuaizhizao_router
-    app.include_router(kuaizhizao_router, prefix="/api/v1/apps/kuaizhizao")
-except ImportError as e:
-    logger.warning(f"⚠️ 无法加载 kuaizhizao 路由: {e}")
-# kuaiplm：快研发（研发项目 / NPI / 变更 / 知识库）— 与 kuaizhizao 同级静态挂载
-try:
-    from apps.kuaiplm.api.router import router as kuaiplm_router
-    app.include_router(kuaiplm_router, prefix="/api/v1/apps/kuaiplm")
-except ImportError as e:
-    logger.warning(f"⚠️ 无法加载 kuaiplm 路由: {e}")
-# haoligo：好力GO（客户专用应用）— 与 master-data / kuaizhizao 同级静态挂载
-try:
-    from apps.haoligo.api.router import router as haoligo_router
-    app.include_router(haoligo_router, prefix="/api/v1/apps/haoligo")
-except ImportError as e:
-    logger.warning(f"⚠️ 无法加载 haoligo 路由: {e}")
+# 应用级 API 路由由 ApplicationRegistryService + ApplicationRouteManager 在 lifespan 中按 DB 已安装应用动态注册
 
 if __name__ == "__main__":
     import uvicorn

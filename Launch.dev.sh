@@ -262,10 +262,8 @@ start_worker() {
     PYTHONPATH="src" nohup uv run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
         --workers "$TASKIQ_WORKERS" \
         core.tasks.taskiq_app \
-        core.tasks.data_backup_handlers \
-        core.inngest.functions \
-        apps.master_data.inngest.functions \
-        apps.kuaizhizao.inngest.functions > ../.logs/worker.log 2>&1 &
+        core.tasks.worker_bootstrap \
+        core.tasks.data_backup_handlers > ../.logs/worker.log 2>&1 &
     echo $! > ../.logs/worker.pid
 
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
