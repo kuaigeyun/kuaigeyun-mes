@@ -242,11 +242,6 @@ def validate_failure_handling_payload(
     notify_ids = normalize_report_user_ids(pending_notify_user_ids)
     repair_id = repair_warehouse_id
     if mode == TRIAL_FAILURE_HANDLING_PENDING:
-        if not notify_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="待处理时请至少指定一名消息提醒接收人",
-            )
         return mode, notify_ids, None
     if mode == TRIAL_FAILURE_HANDLING_REPAIR:
         if repair_id is None or int(repair_id) < 1:
@@ -416,6 +411,10 @@ async def _trial_failure_message_variables(
 ) -> dict[str, str]:
     times = row.trial_times
     mode = (row.failure_handling or "").strip() or "—"
+    trial_result = (row.trial_result or "").strip()
+    prod = (getattr(row, "production_trial_result", None) or "").strip()
+    if prod:
+        trial_result = f"{trial_result or '—'} / 试产{prod}"
     return {
         "sheet_no": (row.sheet_no or "").strip() or f"#{row.id}",
         "purchase_order_no": (row.purchase_order_no or "").strip() or "—",
@@ -424,6 +423,7 @@ async def _trial_failure_message_variables(
         "supplier_name": (row.supplier_name or "").strip() or "—",
         "trial_user_name": (row.trial_user_name or "").strip() or "—",
         "trial_times": str(times) if times is not None else "—",
+        "trial_result": trial_result or "—",
         "failure_handling": mode,
         "repair_warehouse_name": repair_warehouse_name,
         "trial_sheet_id": str(row.id),
@@ -431,52 +431,75 @@ async def _trial_failure_message_variables(
     }
 
 
-async def _send_trial_failure_messages(
-    tenant_id: int,
-    row: HaoligoMoldTrialSheet,
-    *,
-    template_code: str,
-    recipient_ids: List[int],
-    repair_warehouse_name: str = "—",
-) -> None:
-    if not recipient_ids:
-        return
-    await validate_report_notify_users(tenant_id, recipient_ids)
-    await ensure_haoligo_trial_message_templates(tenant_id)
-    variables = await _trial_failure_message_variables(
-        row,
-        repair_warehouse_name=repair_warehouse_name,
+def _trial_notification_context(row: HaoligoMoldTrialSheet) -> dict:
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {"supplier_name": (row.supplier_name or "").strip()}
+    if row.trial_user_id and int(row.trial_user_id) > 0:
+        ctx["trial_user_id"] = int(row.trial_user_id)
+        ctx.setdefault("creator_user_id", int(row.trial_user_id))
+    return with_form_notify_user_ids(ctx, getattr(row, "pending_notify_user_ids", None))
+
+
+def _trial_submitted_notification_context(row: HaoligoMoldTrialSheet) -> dict:
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {"supplier_name": (row.supplier_name or "").strip()}
+    if row.trial_user_id and int(row.trial_user_id) > 0:
+        ctx["trial_user_id"] = int(row.trial_user_id)
+        ctx.setdefault("creator_user_id", int(row.trial_user_id))
+    return with_form_notify_user_ids(ctx, getattr(row, "submitted_notify_user_ids", None))
+
+
+async def send_trial_submitted_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_SUBMITTED,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
     )
-    for uid in recipient_ids:
-        try:
-            result = await MessageService.send_message(
-                tenant_id=tenant_id,
-                request=SendMessageRequest(
-                    type="internal",
-                    recipient=str(uid),
-                    template_code=template_code,
-                    variables=variables,
-                    content="",
-                ),
-            )
-            if not result.success:
-                logger.error(
-                    "试模不合格站内信未成功 tenant={} sheet={} template={} user={} err={}",
-                    tenant_id,
-                    row.id,
-                    template_code,
-                    uid,
-                    result.error,
-                )
-        except Exception as e:
-            logger.error(
-                "试模不合格站内信发送失败 tenant={} sheet={} template={} user={}: {}",
-                tenant_id,
-                row.id,
-                template_code,
-                uid,
-                e,
-            )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_SUBMITTED,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_submitted_notification_context(row),
+    )
+
+
+async def send_trial_approved_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_APPROVED,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_APPROVED,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_notification_context(row),
+    )
+
+
+async def send_trial_rejected_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_REJECTED,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_REJECTED,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_notification_context(row),
+    )
 
 
 async def list_trial_repair_notify_recipient_ids(
@@ -495,12 +518,19 @@ async def send_trial_failure_pending_messages(
     tenant_id: int,
     row: HaoligoMoldTrialSheet,
 ) -> None:
-    designated = normalize_report_user_ids(row.pending_notify_user_ids)
-    await _send_trial_failure_messages(
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_TRIAL_FAILURE_PENDING,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
         tenant_id,
-        row,
-        template_code=HAOLIGO_MOLD_TRIAL_FAILURE_PENDING,
-        recipient_ids=designated,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_TRIAL_FAILURE_PENDING,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_notification_context(row),
     )
 
 
@@ -508,14 +538,23 @@ async def send_trial_failure_repair_messages(
     tenant_id: int,
     row: HaoligoMoldTrialSheet,
 ) -> None:
-    recipients = await list_trial_repair_notify_recipient_ids(tenant_id, row)
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_TRIAL_FAILURE_REPAIR,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
     repair_name = await _resolve_repair_warehouse_name(tenant_id, row.repair_warehouse_id)
-    await _send_trial_failure_messages(
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
         tenant_id,
-        row,
-        template_code=HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
-        recipient_ids=recipients,
-        repair_warehouse_name=repair_name,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_TRIAL_FAILURE_REPAIR,
+        variables=await _trial_failure_message_variables(
+            row,
+            repair_warehouse_name=repair_name,
+        ),
+        context=_trial_notification_context(row),
     )
 
 
@@ -695,16 +734,8 @@ async def dispatch_trial_pending_sheet(
     )
     row.failure_handling = TRIAL_FAILURE_HANDLING_DISPATCHED
     await row.save()
-    repair_name = await _resolve_repair_warehouse_name(tenant_id, row.repair_warehouse_id)
     if not await _trial_message_already_sent(tenant_id, row.id, HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR):
-        recipients = await list_trial_repair_notify_recipient_ids(tenant_id, row)
-        await _send_trial_failure_messages(
-            tenant_id,
-            row,
-            template_code=HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
-            recipient_ids=recipients,
-            repair_warehouse_name=repair_name,
-        )
+        await send_trial_failure_repair_messages(tenant_id, row)
 
 
 async def mark_trial_adjustment_complete(
@@ -798,6 +829,9 @@ async def create_replacement_trial_sheet_after_recall(
         trial_user_name=trial_uname,
         failure_handling=None,
         pending_notify_user_ids=[],
+        submitted_notify_user_ids=list(
+            getattr(source_row, "submitted_notify_user_ids", None) or []
+        ),
         repair_warehouse_id=None,
         dispatch_origin_warehouse_id=None,
         result_attachment_file_uuids=[],

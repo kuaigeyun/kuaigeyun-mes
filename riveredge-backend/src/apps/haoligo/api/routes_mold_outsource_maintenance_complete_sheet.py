@@ -595,6 +595,11 @@ async def create_outsource_maintenance_complete_sheet(
             line_items=stored,
             sheet_status="待审核",
         )
+    from apps.haoligo.services.mold_outsource_complete_sheet_side_effects import (
+        send_outsource_complete_submitted_messages,
+    )
+
+    await send_outsource_complete_submitted_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -832,6 +837,11 @@ async def approve_outsource_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    from apps.haoligo.services.mold_outsource_complete_sheet_side_effects import (
+        send_outsource_complete_approved_messages,
+    )
+
+    await send_outsource_complete_approved_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -859,6 +869,11 @@ async def reject_outsource_maintenance_complete_sheet(
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     for mc in codes:
         await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
+    from apps.haoligo.services.mold_outsource_complete_sheet_side_effects import (
+        send_outsource_complete_rejected_messages,
+    )
+
+    await send_outsource_complete_rejected_messages(tenant_id, row)
     return await _serialize(row)
 
 

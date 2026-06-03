@@ -91,12 +91,17 @@ export async function searchUserIdOptions(args: {
     return mergeSelectedIdOptions([], selectedIds, labelById);
   }
 
+  const keywordText =
+    typeof keyword === 'string'
+      ? keyword.trim() || undefined
+      : undefined;
+
   let opts: { label: string; value: number }[] = [];
   if (canReadUserDirectory(currentUser)) {
     const res = await getUserList({
       page: 1,
       page_size: pageSize,
-      keyword: keyword?.trim() || undefined,
+      keyword: keywordText,
       ...(isActive !== undefined ? { is_active: isActive } : {}),
       ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
       ...(positionUuid ? { position_uuid: positionUuid } : {}),
@@ -106,7 +111,7 @@ export async function searchUserIdOptions(args: {
     const res = await searchUserDisplay({
       page: 1,
       page_size: pageSize,
-      keyword: keyword?.trim() || undefined,
+      keyword: keywordText,
       ...(isActive !== undefined ? { is_active: isActive } : {}),
       ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
       ...(positionUuid ? { position_uuid: positionUuid } : {}),

@@ -13,9 +13,7 @@ from apps.haoligo.models.patrol import HaoligoHazardReport
 from apps.haoligo.services.patrol_message_templates import ensure_haoligo_patrol_message_templates
 from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from core.models.message_log import MessageLog
-from core.schemas.message_template import SendMessageRequest
 from core.services.data.data_dictionary_service import DataDictionaryService
-from core.services.messaging.message_service import MessageService
 
 HAOLIGO_PATROL_ISSUE_TYPE_DICT = "HAOLIGO_PATROL_ISSUE_TYPE"
 
@@ -123,38 +121,79 @@ async def send_hazard_report_messages(
     row: HaoligoHazardReport,
     user_ids: List[int],
 ) -> None:
-    if not user_ids:
-        return
+    del user_ids
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_REPORTED,
+        DOC_PATROL_ISSUE_REGISTER,
+        dispatch_haoligo_notification,
+    )
+
     await ensure_haoligo_patrol_message_templates(tenant_id)
     variables = await _hazard_report_message_variables(tenant_id, row)
-    for uid in user_ids:
-        try:
-            result = await MessageService.send_message(
-                tenant_id=tenant_id,
-                request=SendMessageRequest(
-                    type="internal",
-                    recipient=str(uid),
-                    template_code=HAOLIGO_PATROL_ISSUE_REGISTER_REPORT,
-                    variables=variables,
-                    content="",
-                ),
-            )
-            if not result.success:
-                logger.error(
-                    "问题登记上报站内信未成功 tenant={} hazard={} user={} err={}",
-                    tenant_id,
-                    row.id,
-                    uid,
-                    result.error,
-                )
-        except Exception as e:
-            logger.error(
-                "问题登记上报站内信发送失败 tenant={} hazard={} user={}: {}",
-                tenant_id,
-                row.id,
-                uid,
-                e,
-            )
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {}
+    if row.registrant_user_id and int(row.registrant_user_id) > 0:
+        ctx["reporter_user_id"] = int(row.registrant_user_id)
+        ctx["creator_user_id"] = int(row.registrant_user_id)
+    ctx = with_form_notify_user_ids(ctx, row.report_notify_user_ids)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_PATROL_ISSUE_REGISTER,
+        trigger_action=ACTION_REPORTED,
+        variables=variables,
+        context=ctx,
+    )
+
+
+async def _hazard_remediated_message_variables(
+    tenant_id: int,
+    row: HaoligoHazardReport,
+) -> dict[str, str]:
+    base = await _hazard_report_message_variables(tenant_id, row)
+    handled_at = row.handled_at.strftime("%Y-%m-%d %H:%M") if row.handled_at else "—"
+    base["handler_name"] = (row.handler_name or "").strip() or "—"
+    base["handled_at"] = handled_at
+    return base
+
+
+async def send_hazard_remediated_messages(tenant_id: int, row: HaoligoHazardReport) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_REMEDIATED,
+        DOC_PATROL_ISSUE_REGISTER,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_patrol_message_templates(tenant_id)
+    variables = await _hazard_remediated_message_variables(tenant_id, row)
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {}
+    if row.registrant_user_id and int(row.registrant_user_id) > 0:
+        ctx["reporter_user_id"] = int(row.registrant_user_id)
+        ctx["creator_user_id"] = int(row.registrant_user_id)
+    ctx = with_form_notify_user_ids(ctx, row.report_notify_user_ids)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_PATROL_ISSUE_REGISTER,
+        trigger_action=ACTION_REMEDIATED,
+        variables=variables,
+        context=ctx,
+    )
+
+
+async def maybe_send_hazard_remediated_on_save(
+    tenant_id: int,
+    row: HaoligoHazardReport,
+    *,
+    old_status: str,
+    new_status: str,
+) -> None:
+    old_s = (old_status or "").strip()
+    new_s = (new_status or "").strip()
+    if new_s != "已治理" or old_s == "已治理":
+        return
+    await send_hazard_remediated_messages(tenant_id, row)
 
 
 async def maybe_send_hazard_report_on_save(
@@ -165,7 +204,7 @@ async def maybe_send_hazard_report_on_save(
     report_notify_user_ids: List[int],
     send_report: bool,
 ) -> None:
-    if not send_report or not report_enabled or not report_notify_user_ids:
+    if not send_report or not report_enabled:
         return
     if await _hazard_report_already_sent(tenant_id, row.id):
         return

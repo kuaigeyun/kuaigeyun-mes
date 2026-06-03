@@ -31,6 +31,10 @@ class HaoligoMoldTrialSheet(HaoligoTenantModel):
         default=list,
         description="待处理：消息提醒接收人用户 ID 列表",
     )
+    submitted_notify_user_ids = fields.JSONField(
+        default=list,
+        description="提交待审：开单时指定的待审核通知人员用户 ID 列表",
+    )
     repair_warehouse_id = fields.IntField(
         null=True,
         description="立即送修/待处理已发出：目标模具仓库 ID（供应商外部仓）",

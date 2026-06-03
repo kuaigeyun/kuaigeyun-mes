@@ -1,0 +1,145 @@
+/**
+ * 开单时选择通知接收人（配合配置中心规则中的「用户指定」范围）
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Form } from 'antd';
+import { ProFormSelect } from '@ant-design/pro-components';
+import { useDebounceFn } from 'ahooks';
+import { useTranslation } from 'react-i18next';
+import { useGlobalStore } from '../../../stores';
+import { canPickUsersForDisplay } from '../../../utils/userDisplay';
+
+export type NotifyUsersSearchFn = (
+  keyword?: string,
+  selectedIds?: number[],
+) => Promise<Array<{ label: string; value: number }>>;
+
+export type FormNotifyUsersSelectProps = {
+  name?: string;
+  label?: string;
+  placeholder?: string;
+  readonly?: boolean;
+  /** 配置中心「开单默认人员」；表单未填时写入并用于回显选项 */
+  seedUserIds?: number[];
+  searchUsers: NotifyUsersSearchFn;
+};
+
+function normalizeNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
+
+/** ProFormSelect request 入参（keyWords）→ 搜索关键词 */
+export function resolveSelectSearchKeyword(params?: unknown): string | undefined {
+  if (typeof params === 'string') {
+    const s = params.trim();
+    return s || undefined;
+  }
+  if (params && typeof params === 'object') {
+    const raw = (params as { keyWords?: unknown; keyword?: unknown }).keyWords
+      ?? (params as { keyword?: unknown }).keyword;
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      return s || undefined;
+    }
+  }
+  return undefined;
+}
+
+export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
+  name = 'report_notify_user_ids',
+  label,
+  placeholder,
+  readonly,
+  seedUserIds,
+  searchUsers,
+}) => {
+  const { t } = useTranslation();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canPick = canPickUsersForDisplay(currentUser);
+  const resolvedLabel = label ?? t('app.haoligo.equipment.documents.formReportNotifyUsers');
+  const resolvedPh = placeholder ?? t('app.haoligo.equipment.documents.formReportNotifyUsersPh');
+
+  const form = Form.useFormInstance();
+  const watchedIds = Form.useWatch(name, form);
+  const [options, setOptions] = useState<{ label: string; value: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const loadGenRef = useRef(0);
+
+  const resolvedSelectedIds = React.useMemo(() => {
+    const fromForm = normalizeNotifyUserIds(watchedIds);
+    if (fromForm.length) return fromForm;
+    return normalizeNotifyUserIds(seedUserIds);
+  }, [watchedIds, seedUserIds]);
+
+  const fetchOptions = useCallback(
+    async (keyword?: string) => {
+      const gen = ++loadGenRef.current;
+      setLoading(true);
+      try {
+        const opts = await searchUsers(keyword, resolvedSelectedIds);
+        if (gen === loadGenRef.current) {
+          setOptions(opts);
+        }
+        return opts;
+      } catch {
+        if (gen === loadGenRef.current) {
+          setOptions([]);
+        }
+        return [];
+      } finally {
+        if (gen === loadGenRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [searchUsers, resolvedSelectedIds],
+  );
+
+  const { run: debouncedFetch } = useDebounceFn(
+    (kw: string) => {
+      void fetchOptions(kw.trim() || undefined);
+    },
+    { wait: 300 },
+  );
+
+  useEffect(() => {
+    const seeds = normalizeNotifyUserIds(seedUserIds);
+    if (!seeds.length || !form) return;
+    const cur = normalizeNotifyUserIds(form.getFieldValue(name));
+    if (cur.length) return;
+    form.setFieldsValue({ [name]: seeds });
+  }, [form, name, seedUserIds]);
+
+  useEffect(() => {
+    void fetchOptions();
+  }, [fetchOptions, resolvedSelectedIds]);
+
+  const effectiveReadonly = readonly || !canPick;
+
+  return (
+    <ProFormSelect
+      name={name}
+      label={resolvedLabel}
+      debounceTime={300}
+      options={options}
+      request={async (params) => fetchOptions(resolveSelectSearchKeyword(params))}
+      fieldProps={{
+        mode: 'multiple',
+        showSearch: canPick,
+        filterOption: false,
+        disabled: effectiveReadonly,
+        loading,
+        placeholder: canPick ? resolvedPh : '无人员选择权限',
+        notFoundContent: canPick ? undefined : '无人员选择权限（需 system:user:read 或 system:user:display）',
+        onSearch: canPick ? debouncedFetch : undefined,
+        onDropdownVisibleChange: (open) => {
+          if (open && canPick) {
+            void fetchOptions();
+          }
+        },
+      }}
+    />
+  );
+};

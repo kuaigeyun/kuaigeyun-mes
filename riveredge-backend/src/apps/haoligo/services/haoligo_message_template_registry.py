@@ -11,6 +11,18 @@ from apps.haoligo.services.outsource_maintenance_message_templates import (
     HAOLIGO_OUTSOURCE_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
 )
 from apps.haoligo.services.patrol_message_templates import HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS
+from apps.haoligo.services.equipment_upkeep_message_templates import (
+    HAOLIGO_EQUIPMENT_UPKEEP_MESSAGE_TEMPLATE_PRESETS,
+)
+from apps.haoligo.services.mold_maintenance_complete_message_templates import (
+    HAOLIGO_MOLD_MAINTENANCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
+)
+from apps.haoligo.services.mold_maintenance_message_templates import (
+    HAOLIGO_MOLD_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
+)
+from apps.haoligo.services.mold_outsource_complete_message_templates import (
+    HAOLIGO_MOLD_OUTSOURCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
+)
 from apps.haoligo.services.trial_message_templates import HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS
 from core.models.message_template import MessageTemplate
 from core.schemas.message_template import MessageTemplateCreate
@@ -21,6 +33,10 @@ HAOLIGO_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
     *HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_OUTSOURCE_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_MOLD_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_MOLD_MAINTENANCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_MOLD_OUTSOURCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_EQUIPMENT_UPKEEP_MESSAGE_TEMPLATE_PRESETS,
 ]
 
 

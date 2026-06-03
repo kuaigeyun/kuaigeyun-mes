@@ -109,6 +109,8 @@ class MoldTrialSheetOut(BaseModel):
     failure_handling: Optional[str] = None
     pending_notify_user_ids: List[int] = Field(default_factory=list)
     pending_notify_users: List["MoldTrialSupplierNotifyUserOut"] = Field(default_factory=list)
+    submitted_notify_user_ids: List[int] = Field(default_factory=list)
+    submitted_notify_users: List["MoldTrialSupplierNotifyUserOut"] = Field(default_factory=list)
     repair_warehouse_id: Optional[int] = None
     dispatch_origin_warehouse_id: Optional[int] = None
     result_attachment_file_uuids: List[str] = Field(default_factory=list)
@@ -135,6 +137,7 @@ class MoldTrialSheetCreate(BaseModel):
     trial_user_id: Optional[int] = Field(None, ge=1)
     failure_handling: Optional[str] = None
     pending_notify_user_ids: Optional[List[int]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
     production_trial_result: Optional[TrialResultLiteral] = None
     production_trial_user_id: Optional[int] = Field(None, ge=1)
@@ -178,6 +181,7 @@ class MoldTrialSheetUpdate(BaseModel):
     trial_user_id: Optional[int] = Field(None, ge=1)
     failure_handling: Optional[str] = None
     pending_notify_user_ids: Optional[List[int]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
     production_trial_result: Optional[TrialResultLiteral] = None
     production_trial_user_id: Optional[int] = Field(None, ge=1)
@@ -315,6 +319,8 @@ async def _resolve_notify_users(
 async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
     notify_ids = normalize_report_user_ids(row.pending_notify_user_ids)
     notify_users = await _resolve_notify_users(row.tenant_id, notify_ids)
+    submitted_ids = normalize_report_user_ids(getattr(row, "submitted_notify_user_ids", None))
+    submitted_users = await _resolve_notify_users(row.tenant_id, submitted_ids)
     return MoldTrialSheetOut(
         id=row.id,
         uuid=row.uuid,
@@ -329,6 +335,8 @@ async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         failure_handling=row.failure_handling,
         pending_notify_user_ids=notify_ids,
         pending_notify_users=notify_users,
+        submitted_notify_user_ids=submitted_ids,
+        submitted_notify_users=submitted_users,
         repair_warehouse_id=row.repair_warehouse_id,
         dispatch_origin_warehouse_id=getattr(row, "dispatch_origin_warehouse_id", None),
         result_attachment_file_uuids=list(row.result_attachment_file_uuids or []),
@@ -473,6 +481,7 @@ async def create_trial_sheet(
     trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(trial_uid))
     fh_mode: Optional[str] = None
     notify_ids: List[int] = []
+    submitted_notify_ids: List[int] = normalize_report_user_ids(body.submitted_notify_user_ids)
     repair_wh_id: Optional[int] = None
     workflow_phase = WORKFLOW_PHASE_TRIAL
     inspection_uuids: List[str] = []
@@ -509,6 +518,8 @@ async def create_trial_sheet(
 
     if notify_ids:
         await validate_report_notify_users(tenant_id, notify_ids)
+    if submitted_notify_ids:
+        await validate_report_notify_users(tenant_id, submitted_notify_ids)
     await assert_mold_trial_process_can_start_new_sheet(
         tenant_id,
         mold_code=mold_code,
@@ -534,6 +545,7 @@ async def create_trial_sheet(
         trial_user_name=trial_uname,
         failure_handling=fh_mode,
         pending_notify_user_ids=notify_ids,
+        submitted_notify_user_ids=submitted_notify_ids,
         repair_warehouse_id=repair_wh_id,
         result_attachment_file_uuids=_norm_uuid_list(body.result_attachment_file_uuids),
         inspection_attachment_file_uuids=inspection_uuids,
@@ -544,6 +556,9 @@ async def create_trial_sheet(
         production_trial_user_name=prod_uname,
         sheet_status=SHEET_STATUS_PENDING,
     )
+    from apps.haoligo.services.trial_sheet_side_effects import send_trial_submitted_messages
+
+    await send_trial_submitted_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -768,6 +783,11 @@ async def update_trial_sheet(
         data["inspection_attachment_file_uuids"] = _norm_uuid_list(data["inspection_attachment_file_uuids"])
     if "pending_notify_user_ids" in data and data["pending_notify_user_ids"] is not None:
         data["pending_notify_user_ids"] = normalize_report_user_ids(data["pending_notify_user_ids"])
+    if "submitted_notify_user_ids" in data and data["submitted_notify_user_ids"] is not None:
+        submitted_notify_ids = normalize_report_user_ids(data["submitted_notify_user_ids"])
+        if submitted_notify_ids:
+            await validate_report_notify_users(tenant_id, submitted_notify_ids)
+        data["submitted_notify_user_ids"] = submitted_notify_ids
     if "trial_user_id" in data and data["trial_user_id"] is not None:
         trial_uid, trial_uname = await _resolve_applicant_only(tenant_id, int(data["trial_user_id"]))
         data["trial_user_id"] = trial_uid
@@ -776,10 +796,15 @@ async def update_trial_sheet(
         prod_uid, prod_uname = await _resolve_applicant_only(tenant_id, int(data["production_trial_user_id"]))
         data["production_trial_user_id"] = prod_uid
         data["production_trial_user_name"] = prod_uname
+    was_rejected = effective_sheet_status(row) == SHEET_STATUS_REJECTED
     apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
+    if was_rejected and effective_sheet_status(row) == SHEET_STATUS_PENDING:
+        from apps.haoligo.services.trial_sheet_side_effects import send_trial_submitted_messages
+
+        await send_trial_submitted_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -877,6 +902,18 @@ async def approve_trial_sheet(
                 await apply_production_trial_failure_after_save(tenant_id, row, send_notify=True)
             else:
                 await apply_trial_failure_after_save(tenant_id, row, send_notify=True)
+    else:
+        row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+        if row:
+            from apps.haoligo.constants.mold_trial_workflow_phase import WORKFLOW_PHASE_CLOSED
+            from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
+            from apps.haoligo.services.trial_sheet_side_effects import send_trial_approved_messages
+
+            if (
+                (row.sheet_status or "").strip() == SHEET_STATUS_APPROVED
+                and (getattr(row, "workflow_phase", None) or "").strip() == WORKFLOW_PHASE_CLOSED
+            ):
+                await send_trial_approved_messages(tenant_id, row)
 
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     if not row:
@@ -899,6 +936,9 @@ async def reject_trial_sheet(
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
     await row.save()
+    from apps.haoligo.services.trial_sheet_side_effects import send_trial_rejected_messages
+
+    await send_trial_rejected_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -995,6 +1035,9 @@ async def recall_trial_sheet_and_retrial(
         )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    from apps.haoligo.services.trial_sheet_side_effects import send_trial_submitted_messages
+
+    await send_trial_submitted_messages(tenant_id, new_row)
     return MoldTrialRecallRetrialOut(
         recalled=await _serialize(row),
         new_sheet=await _serialize(new_row),

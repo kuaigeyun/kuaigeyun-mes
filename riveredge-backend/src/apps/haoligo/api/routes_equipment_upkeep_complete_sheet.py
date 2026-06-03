@@ -457,6 +457,11 @@ async def create_upkeep_complete_sheet(
             equipment_id,
             changed_by_user_id=user.id,
         )
+    from apps.haoligo.services.equipment_upkeep_side_effects import (
+        send_equipment_upkeep_complete_created_messages,
+    )
+
+    await send_equipment_upkeep_complete_created_messages(tenant_id, row)
     return await _serialize(row)
 
 

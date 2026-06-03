@@ -552,6 +552,11 @@ async def create_maintenance_complete_sheet(
         for mc in unique_mold_codes_from_stored_line_items(stored):
             await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
         await apply_upkeep_clear_from_inhouse_complete_sheet(tenant_id, row)
+    from apps.haoligo.services.mold_maintenance_complete_sheet_side_effects import (
+        send_mold_maintenance_complete_created_messages,
+    )
+
+    await send_mold_maintenance_complete_created_messages(tenant_id, row)
     return await _serialize(row)
 
 

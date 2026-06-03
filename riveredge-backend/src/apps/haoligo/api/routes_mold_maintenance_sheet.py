@@ -418,6 +418,11 @@ async def create_maintenance_sheet(
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
+    from apps.haoligo.services.mold_maintenance_sheet_side_effects import (
+        send_mold_maintenance_submitted_messages,
+    )
+
+    await send_mold_maintenance_submitted_messages(tenant_id, row)
     return _serialize(row)
 
 
@@ -525,6 +530,11 @@ async def approve_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
+    from apps.haoligo.services.mold_maintenance_sheet_side_effects import (
+        send_mold_maintenance_approved_messages,
+    )
+
+    await send_mold_maintenance_approved_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -550,6 +560,11 @@ async def reject_maintenance_sheet(
     row.audited_at = timezone.now()
     row.audited_by_user_id = user.id
     await row.save()
+    from apps.haoligo.services.mold_maintenance_sheet_side_effects import (
+        send_mold_maintenance_rejected_messages,
+    )
+
+    await send_mold_maintenance_rejected_messages(tenant_id, row)
     return _serialize(row)
 
 

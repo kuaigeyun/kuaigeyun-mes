@@ -112,12 +112,8 @@ async def _hazard_report_fields(
     report_notify_user_ids: Optional[List[int]],
 ) -> tuple[bool, List[int]]:
     user_ids = normalize_report_user_ids(report_notify_user_ids)
-    if report_enabled and not user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="开启上报时请至少选择一名接收人",
-        )
-    await validate_report_notify_users(tenant_id, user_ids)
+    if user_ids:
+        await validate_report_notify_users(tenant_id, user_ids)
     return report_enabled, user_ids
 
 
@@ -381,8 +377,17 @@ async def create_hazard(
         row,
         report_enabled=report_enabled,
         report_notify_user_ids=report_user_ids,
-        send_report=report_enabled and bool(report_user_ids),
+        send_report=report_enabled,
     )
+    from apps.haoligo.services.hazard_report_side_effects import maybe_send_hazard_remediated_on_save
+
+    if eff_status == "已治理":
+        await maybe_send_hazard_remediated_on_save(
+            tenant_id,
+            row,
+            old_status="已登记",
+            new_status=eff_status,
+        )
     return await _serialize_hazard(row, tenant_id)
 
 
@@ -409,6 +414,7 @@ async def update_hazard(
     if not row:
         await _not_found()
     body_set = body.model_dump(exclude_unset=True)
+    old_status = (row.status or "").strip()
     old_report_enabled = row.report_enabled
     old_report_user_ids = normalize_report_user_ids(row.report_notify_user_ids)
     report_enabled = row.report_enabled
@@ -424,12 +430,16 @@ async def update_hazard(
         report_notify_user_ids=report_user_ids,
     )
     report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
-    send_report = False
-    if report_enabled and report_user_ids:
-        if not old_report_enabled and report_enabled:
-            send_report = True
-        elif report_fields_touched and not await _hazard_report_already_sent(tenant_id, row.id):
-            send_report = True
+    from apps.haoligo.services.report_dispatch import should_send_report_notification
+
+    send_report = should_send_report_notification(
+        report_enabled=report_enabled,
+        old_report_enabled=old_report_enabled,
+        report_fields_touched=report_fields_touched,
+        old_notify_user_ids=old_report_user_ids,
+        new_notify_user_ids=report_user_ids,
+        already_sent=await _hazard_report_already_sent(tenant_id, row.id),
+    )
     if "workshop_id" in data and data["workshop_id"] is not None:
         if not await tenant_alive(HaoligoWorkshop, tenant_id).filter(id=data["workshop_id"]).exists():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="车间不存在")
@@ -459,6 +469,14 @@ async def update_hazard(
         report_enabled=report_enabled,
         report_notify_user_ids=report_user_ids,
         send_report=send_report,
+    )
+    from apps.haoligo.services.hazard_report_side_effects import maybe_send_hazard_remediated_on_save
+
+    await maybe_send_hazard_remediated_on_save(
+        tenant_id,
+        row,
+        old_status=old_status,
+        new_status=(row.status or "").strip(),
     )
     return await _serialize_hazard(row, tenant_id)
 

@@ -268,6 +268,9 @@ async def create_upkeep_sheet(
             service_type=svc,
             changed_by_user_id=user.id,
         )
+    from apps.haoligo.services.equipment_upkeep_side_effects import send_equipment_upkeep_sheet_created_messages
+
+    await send_equipment_upkeep_sheet_created_messages(tenant_id, row)
     await row.fetch_related("equipment")
     return await _serialize(row)
 

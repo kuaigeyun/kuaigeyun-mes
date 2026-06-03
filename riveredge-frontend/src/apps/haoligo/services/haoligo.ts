@@ -1557,6 +1557,8 @@ export interface MoldTrialSheetRow {
   failure_handling?: string | null;
   pending_notify_user_ids?: number[];
   pending_notify_users?: Array<{ id: number; name: string }>;
+  submitted_notify_user_ids?: number[];
+  submitted_notify_users?: Array<{ id: number; name: string }>;
   repair_warehouse_id?: number | null;
   dispatch_origin_warehouse_id?: number | null;
   result_attachment_file_uuids: string[];
@@ -1585,6 +1587,7 @@ export type MoldTrialSheetCreatePayload = {
   trial_user_id?: number;
   failure_handling?: '待处理' | '立即送修' | null;
   pending_notify_user_ids?: number[];
+  submitted_notify_user_ids?: number[];
   repair_warehouse_id?: number | null;
   production_trial_result?: '合格' | '不合格' | null;
   production_trial_user_id?: number;
@@ -2512,4 +2515,15 @@ export function getPatrolReport(
 /** 为当前租户创建缺失的好力 GO 维保完成单打印模板预设（幂等） */
 export function loadHaoligoPrintTemplatePresets(): Promise<{ created: number }> {
   return apiRequest(`${PREFIX}/print/load-presets`, { method: 'POST' });
+}
+
+/** 加载好力 GO 消息提醒规则预设（幂等；已有规则仅合并缺失的收件范围） */
+export function loadHaoligoNotificationRulePresets(): Promise<{
+  created: number;
+  updated: number;
+  skipped_duplicate: number;
+  skipped_missing_template: number;
+  total_rules: number;
+}> {
+  return apiRequest(`${PREFIX}/config/notification-rules/load-presets`, { method: 'POST' });
 }

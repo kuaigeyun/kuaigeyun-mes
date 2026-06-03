@@ -333,6 +333,12 @@ class TenantInitDataService:
                 )
 
                 count += await load_haoligo_message_template_presets(tenant_id)
+                from apps.haoligo.services.haoligo_notification_rule_presets import (
+                    load_haoligo_notification_rule_presets,
+                )
+
+                preset_rules = await load_haoligo_notification_rule_presets(tenant_id)
+                count += int(preset_rules.get("created") or 0)
             return count
 
         if key == "print_template_preset":

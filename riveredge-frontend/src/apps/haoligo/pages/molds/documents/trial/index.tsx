@@ -53,7 +53,13 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../../components/uni-table/stackedPrimaryColumn';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+  notificationRuleRequiresFormNotifyUsers,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
 import { useGlobalStore } from '../../../../../../stores';
@@ -103,6 +109,7 @@ import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheet
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { hasPermission } from '../../../../../../utils/permission';
 import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 
 const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
 
@@ -737,10 +744,38 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
   );
 };
 
+const TRIAL_DOC_NOTIFICATION = 'haoligo_mold_trial';
+const TRIAL_ACTION_SUBMITTED = 'submitted';
+
 const MoldTrialSheetsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const currentUser = useGlobalStore((s) => s.currentUser);
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+
+  const trialSubmittedNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        TRIAL_DOC_NOTIFICATION,
+        TRIAL_ACTION_SUBMITTED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const trialSubmittedNeedsFormNotifyUsers = useMemo(
+    () => notificationRuleRequiresFormNotifyUsers(trialSubmittedNotifyRule),
+    [trialSubmittedNotifyRule],
+  );
+  const trialSubmittedNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(trialSubmittedNotifyRule),
+    [trialSubmittedNotifyRule],
+  );
+
   const actionRef = useRef<ActionType>(null);
   const bumpMoldLedgerTableCache = useCallback(() => {
     invalidateHaoligoMoldLedgerTableCache(queryClient);
@@ -757,6 +792,26 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [auditSheetStatus, setAuditSheetStatus] = useState<string>('待审核');
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+
+  useEffect(() => {
+    if (!modalVisible || isDetailView || isEdit) return;
+    if (!trialSubmittedNeedsFormNotifyUsers || trialSubmittedNotifyDefaults.length === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const cur = formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined;
+      if (Array.isArray(cur) && cur.length > 0) return;
+      formRef.current?.setFieldsValue({
+        submitted_notify_user_ids: [...trialSubmittedNotifyDefaults],
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    modalVisible,
+    isDetailView,
+    isEdit,
+    trialSubmittedNeedsFormNotifyUsers,
+    trialSubmittedNotifyDefaults,
+  ]);
+
   const [supplierOptions, setSupplierOptions] = useState<{ value: string; label: string; key: string }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ value: number; label: string }[]>([]);
   const [warehouseRows, setWarehouseRows] = useState<MoldWarehouseRow[]>([]);
@@ -972,13 +1027,14 @@ const MoldTrialSheetsPage: React.FC = () => {
       trial_user_id: getDefaultTrialUserId(),
       failure_handling: undefined,
       pending_notify_user_ids: [],
+      submitted_notify_user_ids: [...trialSubmittedNotifyDefaults],
       repair_warehouse_id: undefined,
       result_attachments: [],
     });
     setModalVisible(true);
     setPoPickerSelectedKeys([]);
     setPoPickerSelectedRow(null);
-  }, [datasetBinding, poPickerSelectedRow, messageApi]);
+  }, [datasetBinding, poPickerSelectedRow, messageApi, trialSubmittedNotifyDefaults]);
 
   const loadTrialBlockedMoldCodes = useCallback(async () => {
     try {
@@ -1029,8 +1085,35 @@ const MoldTrialSheetsPage: React.FC = () => {
   }, [loadPendingEnableMolds]);
 
   const searchPendingNotifyUsers = useCallback(
-    async (keyword?: string) => {
-      const selIds = (formRef.current?.getFieldValue('pending_notify_user_ids') as number[] | undefined) || [];
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('pending_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: pendingNotifyLabelRef,
+        currentUser,
+      });
+      for (const o of opts) {
+        pendingNotifyLabelRef.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser, pendingNotifyLabelRef],
+  );
+
+  const searchSubmittedNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined) ||
+            []);
       const opts = await searchUserIdOptions({
         keyword,
         pageSize: 50,
@@ -1326,6 +1409,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         trial_user_id: getDefaultTrialUserId(),
         failure_handling: undefined,
         pending_notify_user_ids: [],
+        submitted_notify_user_ids: [...trialSubmittedNotifyDefaults],
         repair_warehouse_id: undefined,
         result_attachments: [],
       });
@@ -1333,7 +1417,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       setModalVisible(true);
       messageApi.success(`已选择模具 ${row.mold_code}`);
     },
-    [messageApi, trialBlockedByMoldCode, trialBlockedMessage],
+    [messageApi, trialBlockedByMoldCode, trialBlockedMessage, trialSubmittedNotifyDefaults],
   );
 
   const filteredPendingMolds = useMemo(() => {
@@ -1575,6 +1659,10 @@ const MoldTrialSheetsPage: React.FC = () => {
         production_trial_result: detail.production_trial_result ?? undefined,
         failure_handling: detail.failure_handling ?? undefined,
         pending_notify_user_ids: detail.pending_notify_user_ids ?? [],
+        submitted_notify_user_ids:
+          (detail.submitted_notify_user_ids?.length
+            ? detail.submitted_notify_user_ids
+            : trialSubmittedNotifyDefaults) ?? [],
         repair_warehouse_id: detail.repair_warehouse_id ?? undefined,
       });
       setModalVisible(true);
@@ -1640,10 +1728,16 @@ const MoldTrialSheetsPage: React.FC = () => {
 
     if (isProductionTrialPhase(phase)) {
       const prodResult = values.production_trial_result === '不合格' ? '不合格' : '合格';
+      const submittedNotifyIds = trialSubmittedNeedsFormNotifyUsers
+        ? parsePendingNotifyUserIds(values.submitted_notify_user_ids)
+        : [];
       const base: MoldTrialSheetCreatePayload = {
         production_trial_result: prodResult,
         production_trial_user_id: parseUserId('production_trial_user_id'),
         inspection_attachment_file_uuids: normUploadUuids(values.inspection_attachments),
+        ...(trialSubmittedNeedsFormNotifyUsers
+          ? { submitted_notify_user_ids: submittedNotifyIds }
+          : {}),
       };
       if (prodResult !== '不合格') {
         return {
@@ -1671,6 +1765,9 @@ const MoldTrialSheetsPage: React.FC = () => {
     }
 
     const trialResult = values.trial_result === '不合格' ? '不合格' : '合格';
+    const submittedNotifyIds = trialSubmittedNeedsFormNotifyUsers
+      ? parsePendingNotifyUserIds(values.submitted_notify_user_ids)
+      : [];
     const base: MoldTrialSheetCreatePayload = {
       purchase_order_no: (() => {
         const s = String(values.purchase_order_no ?? '').trim();
@@ -1682,6 +1779,9 @@ const MoldTrialSheetsPage: React.FC = () => {
       result_attachment_file_uuids: normUploadUuids(values.result_attachments),
       trial_result: trialResult,
       trial_user_id: parseUserId('trial_user_id'),
+      ...(trialSubmittedNeedsFormNotifyUsers
+        ? { submitted_notify_user_ids: submittedNotifyIds }
+        : {}),
     };
     if (trialResult === '不合格') {
       return {
@@ -1774,13 +1874,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             messageApi.warning('试产不合格时请选择处理方式');
             throw new Error('validation');
           }
-          if (mode === TRIAL_FAILURE_PENDING) {
-            const notifyIds = parsePendingNotifyUserIds(values.pending_notify_user_ids);
-            if (notifyIds.length === 0) {
-              messageApi.warning('待处理时请至少指定一名消息提醒接收人');
-              throw new Error('validation');
-            }
-          } else if (mode === TRIAL_FAILURE_REPAIR) {
+          if (mode === TRIAL_FAILURE_REPAIR) {
             const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
             if (whId == null) {
               messageApi.warning('试产不合格须立即送修，请选择送修仓库');
@@ -1803,13 +1897,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       }
       if (values.production_trial_result === '不合格') {
         const mode = String(values.failure_handling ?? '').trim() || TRIAL_FAILURE_REPAIR;
-        if (mode === TRIAL_FAILURE_PENDING) {
-          const notifyIds = parsePendingNotifyUserIds(values.pending_notify_user_ids);
-          if (notifyIds.length === 0) {
-            messageApi.warning('待处理时请至少指定一名消息提醒接收人');
-            throw new Error('validation');
-          }
-        } else if (mode === TRIAL_FAILURE_REPAIR) {
+        if (mode === TRIAL_FAILURE_REPAIR) {
           const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
           if (whId == null) {
             messageApi.warning('试产不合格须立即送修，请选择送修仓库');
@@ -2566,6 +2654,23 @@ const MoldTrialSheetsPage: React.FC = () => {
                   presetUsers={trialUserPresets}
                 />
               </Col>
+              {!isDetailView &&
+              trialSubmittedNeedsFormNotifyUsers &&
+              (auditSheetStatus === '待审核' || auditSheetStatus === '已驳回' || !isEdit) ? (
+                <Col span={24}>
+                  <FormNotifyUsersSelect
+                    name="submitted_notify_user_ids"
+                    label="待审核通知人员"
+                    seedUserIds={trialSubmittedNotifyDefaults}
+                    placeholder={
+                      trialSubmittedNotifyDefaults.length > 0
+                        ? '已按配置预填默认人员；可改选，留空则仍按默认发送'
+                        : '请选择待审核通知人员（可在配置中心为该规则设置默认人员）'
+                    }
+                    searchUsers={searchSubmittedNotifyUsers}
+                  />
+                </Col>
+              ) : null}
               <Col span={12}>
                 <ProFormRadio.Group
                   name="trial_result"
@@ -2739,28 +2844,15 @@ const MoldTrialSheetsPage: React.FC = () => {
                                 />
                               </Col>
                               {failure_handling === TRIAL_FAILURE_PENDING ? (
-                                <>
-                                  <Col span={12}>
-                                    <ProFormSelect
-                                      name="pending_notify_user_ids"
-                                      label="消息提醒人员"
-                                      mode="multiple"
-                                      showSearch
-                                      debounceTime={300}
-                                      rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
-                                      request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
-                                      options={pendingNotifyPresetOptions}
-                                      fieldProps={{
-                                        style: { width: '100%' },
-                                        placeholder: '搜索并选择接收站内信的人员',
-                                        filterOption: false,
-                                      }}
-                                    />
-                                  </Col>
-                                  <Col span={24}>
-                                    <TrialSupplierCcHint supplierName={supplierNameStr} />
-                                  </Col>
-                                </>
+                                <Col span={24}>
+                                  <FormNotifyUsersSelect
+                                    name="pending_notify_user_ids"
+                                    label={t('app.haoligo.molds.trial.pendingNotifyUsers')}
+                                    readonly={isDetailView}
+                                    searchUsers={searchPendingNotifyUsers}
+                                  />
+                                  <TrialSupplierCcHint supplierName={supplierNameStr} />
+                                </Col>
                               ) : null}
                               {failure_handling === TRIAL_FAILURE_REPAIR ? (
                                 <TrialImmediateRepairWarehouseFields
@@ -2899,32 +2991,19 @@ const MoldTrialSheetsPage: React.FC = () => {
                         />
                       </Col>
                       {failure_handling === TRIAL_FAILURE_PENDING ? (
-                        <>
-                          <Col span={12}>
-                            <ProFormSelect
-                              name="pending_notify_user_ids"
-                              label="消息提醒人员"
-                              mode="multiple"
-                              showSearch
-                              debounceTime={300}
-                              rules={[{ required: true, message: '请至少选择一名提醒接收人' }]}
-                              request={async ({ keyWords }) => searchPendingNotifyUsers(keyWords)}
-                              options={pendingNotifyPresetOptions}
-                              fieldProps={{
-                                style: { width: '100%' },
-                                placeholder: '搜索并选择接收站内信的人员',
-                                filterOption: false,
-                              }}
-                            />
-                          </Col>
-                          <Col span={24}>
-                            <TrialSupplierCcHint
-                              supplierName={
-                                typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '')
-                              }
-                            />
-                          </Col>
-                        </>
+                        <Col span={24}>
+                          <FormNotifyUsersSelect
+                            name="pending_notify_user_ids"
+                            label={t('app.haoligo.molds.trial.pendingNotifyUsers')}
+                            readonly={isDetailView}
+                            searchUsers={searchPendingNotifyUsers}
+                          />
+                          <TrialSupplierCcHint
+                            supplierName={
+                              typeof supplier_name === 'string' ? supplier_name : String(supplier_name ?? '')
+                            }
+                          />
+                        </Col>
                       ) : null}
                       {failure_handling === TRIAL_FAILURE_REPAIR ? (
                         <TrialImmediateRepairWarehouseFields

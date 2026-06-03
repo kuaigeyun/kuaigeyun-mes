@@ -62,7 +62,6 @@ const PatrolDailyFormPage = lazy(() => import('./pages/patrol/daily/form'));
 const PatrolHazardsPage = lazy(() => import('./pages/patrol/hazards'));
 const PatrolReportGroupPage = lazy(() => import('./pages/patrol/reports/PatrolReportGroupPage'));
 const PatrolReportLegacyRedirect = lazy(() => import('./pages/patrol/reports/PatrolReportLegacyRedirect'));
-
 const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>

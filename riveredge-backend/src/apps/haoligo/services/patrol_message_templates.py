@@ -6,7 +6,10 @@ from typing import Any, Dict, List
 
 from loguru import logger
 
-from apps.haoligo.constants.message_template_codes import HAOLIGO_PATROL_ISSUE_REGISTER_REPORT
+from apps.haoligo.constants.message_template_codes import (
+    HAOLIGO_PATROL_ISSUE_REGISTER_REPORT,
+    HAOLIGO_PATROL_ISSUE_REMEDIATED,
+)
 
 PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_CONTENT = (
     "您好，\n\n"
@@ -35,6 +38,18 @@ PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_VARIABLES: Dict[str, str] = {
     "equipment_label": "关联设备（编码+名称）",
 }
 
+PATROL_ISSUE_REMEDIATED_TEMPLATE_CONTENT = (
+    "您好，\n\n"
+    "现场巡查问题已完成治理，请您知悉。\n\n"
+    "登记单号：{hazard_ref}\n"
+    "车间：{workshop_name}\n"
+    "问题类型：{issue_type_label}\n"
+    "登记人：{registrant_name}\n"
+    "治理人：{handler_name}\n"
+    "治理时间：{handled_at}\n\n"
+    "请登录系统查看「隐患治理」记录。"
+)
+
 HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
     {
         "name": "现场巡查问题登记上报",
@@ -44,6 +59,20 @@ HAOLIGO_PATROL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
         "subject": "【现场巡查上报】{hazard_ref}",
         "content": PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_CONTENT,
         "variables": PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_VARIABLES,
+        "is_active": True,
+    },
+    {
+        "name": "现场巡查问题治理完成",
+        "code": HAOLIGO_PATROL_ISSUE_REMEDIATED,
+        "type": "internal",
+        "description": "隐患状态变为已治理时通知登记人及相关人员",
+        "subject": "【隐患已治理】{hazard_ref}",
+        "content": PATROL_ISSUE_REMEDIATED_TEMPLATE_CONTENT,
+        "variables": {
+            **PATROL_ISSUE_REGISTER_REPORT_TEMPLATE_VARIABLES,
+            "handler_name": "治理人",
+            "handled_at": "治理时间",
+        },
         "is_active": True,
     },
 ]

@@ -19,8 +19,6 @@ from apps.haoligo.services.spot_check_side_effects import (
     normalize_report_user_ids,
 )
 from core.models.message_log import MessageLog
-from core.schemas.message_template import SendMessageRequest
-from core.services.messaging.message_service import MessageService
 from infra.models.user import User
 
 
@@ -166,37 +164,28 @@ async def send_route_patrol_report_messages(
     *,
     status_changes: List[tuple[str, Optional[str], Optional[str]]],
 ) -> None:
-    if not user_ids:
-        return
+    del user_ids
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_REPORTED,
+        DOC_EQUIPMENT_ROUTE_PATROL,
+        dispatch_haoligo_notification,
+    )
+
     await ensure_haoligo_equipment_message_templates(tenant_id)
     variables = await _route_patrol_report_message_variables(
         tenant_id, header, status_changes=status_changes
     )
-    for uid in user_ids:
-        try:
-            result = await MessageService.send_message(
-                tenant_id=tenant_id,
-                request=SendMessageRequest(
-                    type="internal",
-                    recipient=str(uid),
-                    template_code=HAOLIGO_EQUIPMENT_ROUTE_PATROL_REPORT,
-                    variables=variables,
-                    content="",
-                ),
-            )
-            if not result.success:
-                logger.error(
-                    "路线巡检上报站内信未成功 tenant={} patrol={} user={} err={}",
-                    tenant_id,
-                    header.id,
-                    uid,
-                    result.error,
-                )
-        except Exception as e:
-            logger.error(
-                "路线巡检上报站内信发送失败 tenant={} patrol={} user={}: {}",
-                tenant_id,
-                header.id,
-                uid,
-                e,
-            )
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {}
+    if header.reporter_user_id and int(header.reporter_user_id) > 0:
+        ctx["reporter_user_id"] = int(header.reporter_user_id)
+        ctx["creator_user_id"] = int(header.reporter_user_id)
+    ctx = with_form_notify_user_ids(ctx, header.report_notify_user_ids)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_EQUIPMENT_ROUTE_PATROL,
+        trigger_action=ACTION_REPORTED,
+        variables=variables,
+        context=ctx,
+    )

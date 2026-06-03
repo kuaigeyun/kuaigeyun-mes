@@ -532,12 +532,8 @@ async def _spot_check_report_fields(
     report_notify_user_ids: Optional[List[int]],
 ) -> tuple[bool, List[int]]:
     user_ids = normalize_report_user_ids(report_notify_user_ids)
-    if report_enabled and not user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="开启上报时请至少选择一名接收人",
-        )
-    await validate_report_notify_users(tenant_id, user_ids)
+    if user_ids:
+        await validate_report_notify_users(tenant_id, user_ids)
     return report_enabled, user_ids
 
 
@@ -562,7 +558,7 @@ async def _run_spot_check_side_effects(
         if status_after:
             header.applied_operational_status = status_after
             await header.save(update_fields=["applied_operational_status"])
-    if send_report and report_enabled and report_notify_user_ids:
+    if send_report and report_enabled:
         await send_spot_check_report_messages(
             tenant_id,
             header,
@@ -804,7 +800,7 @@ async def create_spot_check(
             report_enabled=report_enabled,
             report_notify_user_ids=report_user_ids,
             actor_user_id=user.id,
-            send_report=False,
+            send_report=report_enabled,
         )
     await header.fetch_related("equipment")
     return await _serialize_spot_check(header, with_lines=True)
@@ -856,16 +852,17 @@ async def update_spot_check(
 
     body_set = body.model_dump(exclude_unset=True)
     report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
-    send_report = False
-    if report_enabled and report_user_ids:
-        if report_fields_touched and (
-            (not old_report_enabled and report_enabled)
-            or set(old_report_user_ids) != set(report_user_ids)
-        ):
-            send_report = True
-        elif line_updates is not None and report_fields_touched:
-            if not await _spot_check_report_already_sent(tenant_id, row.id):
-                send_report = True
+    from apps.haoligo.services.report_dispatch import should_send_report_notification
+
+    send_report = should_send_report_notification(
+        report_enabled=report_enabled,
+        old_report_enabled=old_report_enabled,
+        report_fields_touched=report_fields_touched,
+        old_notify_user_ids=old_report_user_ids,
+        new_notify_user_ids=report_user_ids,
+        content_fields_touched=line_updates is not None,
+        already_sent=await _spot_check_report_already_sent(tenant_id, row.id),
+    )
 
     async with in_transaction():
         row.report_enabled = report_enabled
@@ -1035,12 +1032,8 @@ async def _route_patrol_report_fields(
     report_notify_user_ids: Optional[List[int]],
 ) -> tuple[bool, List[int]]:
     user_ids = normalize_report_user_ids(report_notify_user_ids)
-    if report_enabled and not user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="开启上报时请至少选择一名接收人",
-        )
-    await validate_report_notify_users(tenant_id, user_ids)
+    if user_ids:
+        await validate_report_notify_users(tenant_id, user_ids)
     return report_enabled, user_ids
 
 
@@ -1262,16 +1255,17 @@ async def update_route_patrol(
 
     body_set = body.model_dump(exclude_unset=True)
     report_fields_touched = "report_enabled" in body_set or "report_notify_user_ids" in body_set
-    send_report = False
-    if report_enabled and report_user_ids:
-        if report_fields_touched and (
-            (not old_report_enabled and report_enabled)
-            or set(old_report_user_ids) != set(report_user_ids)
-        ):
-            send_report = True
-        elif line_updates is not None and report_fields_touched:
-            if not await _route_patrol_report_already_sent(tenant_id, row.id):
-                send_report = True
+    from apps.haoligo.services.report_dispatch import should_send_report_notification
+
+    send_report = should_send_report_notification(
+        report_enabled=report_enabled,
+        old_report_enabled=old_report_enabled,
+        report_fields_touched=report_fields_touched,
+        old_notify_user_ids=old_report_user_ids,
+        new_notify_user_ids=report_user_ids,
+        content_fields_touched=line_updates is not None,
+        already_sent=await _route_patrol_report_already_sent(tenant_id, row.id),
+    )
 
     line_status_by_id: dict[int, Optional[str]] = {}
     status_changes: List[tuple[str, Optional[str], Optional[str]]] = []
@@ -1322,7 +1316,7 @@ async def update_route_patrol(
                 actor_user_id=user.id,
             )
 
-        if send_report and report_enabled and report_user_ids:
+        if send_report and report_enabled:
             await send_route_patrol_report_messages(
                 tenant_id,
                 row,

@@ -57,6 +57,7 @@ import { uploadFile, type FileUploadResponse } from '../../../../../../services/
 import { useGlobalStore } from '../../../../../../stores';
 import { resolveUserIdLabels, searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
@@ -1053,19 +1054,9 @@ const SpotCheckDocumentsPage: React.FC = () => {
                 <ProFormDependency name={['report_enabled']}>
                   {({ report_enabled: reportOn }) =>
                     reportOn ? (
-                      <ProFormSelect
-                        name="report_notify_user_ids"
-                        label={t('app.haoligo.equipment.documents.formReportNotifyUsers')}
-                        mode="multiple"
-                        showSearch
-                        debounceTime={300}
-                        rules={[{ required: true, message: t('app.haoligo.equipment.documents.selectReportToUser') }]}
-                        request={async ({ keyWords }) => searchReportNotifyUsers(keyWords)}
-                        fieldProps={{
-                          style: { width: '100%', maxWidth: 480 },
-                          placeholder: t('app.haoligo.equipment.documents.formReportNotifyUsersPh'),
-                          filterOption: false,
-                        }}
+                      <FormNotifyUsersSelect
+                        readonly={detailMode}
+                        searchUsers={searchReportNotifyUsers}
                       />
                     ) : null
                   }

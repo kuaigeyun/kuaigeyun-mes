@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Checkbox, Col, Row, Spin, Typography, Upload } from 'antd';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import {
@@ -21,6 +22,7 @@ import type { DictionaryItem } from '../../../../../services/dataDictionary';
 import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
 import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
 import { PatrolImagePreview } from './PatrolImagePreview';
+import { FormNotifyUsersSelect } from '../../../components/FormNotifyUsersSelect';
 
 const { Text } = Typography;
 
@@ -90,6 +92,7 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
   onBeforeFilesChange,
   readOnly,
 }) => {
+  const { t } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
 
   const searchReportNotifyUsers = useCallback(
@@ -248,39 +251,7 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
         <ProFormDependency name={['report_enabled']}>
           {({ report_enabled: reportOn }) =>
             reportOn ? (
-              readOnly ? (
-                <ProFormDependency name={['report_notify_user_ids']}>
-                  {({ report_notify_user_ids: notifyIds }) =>
-                    Array.isArray(notifyIds) && notifyIds.length > 0 ? (
-                      <ProForm.Item label="责任人">
-                        <Text>
-                          {notifyIds
-                            .map(
-                              (id: number) =>
-                                userOptions.find((o) => o.value === id)?.label || `用户#${id}`,
-                            )
-                            .join('、')}
-                        </Text>
-                      </ProForm.Item>
-                    ) : null
-                  }
-                </ProFormDependency>
-              ) : (
-                <ProFormSelect
-                  name="report_notify_user_ids"
-                  label="责任人"
-                  mode="multiple"
-                  showSearch
-                  debounceTime={300}
-                  rules={[{ required: true, message: '开启上报时请至少选择一名责任人' }]}
-                  request={async ({ keyWords }) => searchReportNotifyUsers(keyWords)}
-                  fieldProps={{
-                    style: { width: '100%' },
-                    placeholder: '搜索并选择责任人',
-                    filterOption: false,
-                  }}
-                />
-              )
+              <FormNotifyUsersSelect readonly={readOnly} searchUsers={searchReportNotifyUsers} />
             ) : null
           }
         </ProFormDependency>
