@@ -1,7 +1,7 @@
 /**
  * 应付单列表页
  */
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
@@ -11,6 +11,10 @@ import { payableService } from '../../../services/finance/payable';
 import { Payable, PayableCreateData } from '../../../types/finance/payable';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useTranslation } from 'react-i18next';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -25,7 +29,37 @@ const PayableList: React.FC = () => {
     const [createModalVisible, setCreateModalVisible] = useState(false);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+
+    const payableImportTemplate = useMemo(
+        () =>
+            buildFactoryImportTemplate(
+                t,
+                [
+                    {
+                        field: 'supplier',
+                        required: true,
+                        labelKey: 'app.kuaicaiwu.payable.import.supplierName',
+                        aliases: ['供应商名称', '供应商'],
+                    },
+                    {
+                        field: 'amount',
+                        required: true,
+                        labelKey: 'app.kuaicaiwu.payable.import.amount',
+                        aliases: ['应付金额', '金额'],
+                    },
+                    { field: 'dueDate', labelKey: 'app.kuaicaiwu.payable.import.dueDate', aliases: ['到期日期'] },
+                    { field: 'businessDate', labelKey: 'app.kuaicaiwu.payable.import.businessDate', aliases: ['业务日期'] },
+                ],
+                [
+                    t('app.kuaicaiwu.payable.importExample.supplierName'),
+                    t('app.kuaicaiwu.payable.importExample.amount'),
+                    t('app.kuaicaiwu.payable.importExample.dueDate'),
+                    t('app.kuaicaiwu.payable.importExample.businessDate'),
+                ],
+            ),
+        [t, i18n.language],
+    );
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -275,33 +309,33 @@ const PayableList: React.FC = () => {
                         return;
                     }
                     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-                    const getIdx = (...keys: string[]) => {
-                        for (const k of keys) {
-                            const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').trim().toLowerCase().includes(k.toLowerCase()));
-                            if (i >= 0) return i;
-                        }
-                        return -1;
-                    };
-                    const sIdx = getIdx('供应商', 'supplier', 'supplier_name');
-                    const amtIdx = getIdx('应付', '金额', 'amount', 'total_amount');
-                    const dueIdx = getIdx('到期', 'due');
-                    const dateIdx = getIdx('业务', 'business');
-                    if (sIdx < 0 || amtIdx < 0) {
+                    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+                        headers,
+                        payableImportTemplate.importHeaderMap,
+                    );
+                    if (headerIndexMap.supplier === undefined || headerIndexMap.amount === undefined) {
                         messageApi.error('导入表头需包含供应商名称和应付金额');
                         return;
                     }
                     const items: PayableCreateData[] = [];
-                    for (let i = 1; i < data.length; i++) {
-                        const row = data[i];
-                        if (!row || row.length === 0) continue;
-                        const suppLabel = String(row[sIdx] ?? '').trim();
+                    const importRows = data.slice(2).filter((row: any[]) =>
+                        row?.some((c: any) => c != null && String(c).trim() !== ''),
+                    );
+                    for (const row of importRows) {
+                        const suppLabel = String(row[headerIndexMap.supplier] ?? '').trim();
                         const suppOpt = supplierOptions.find(o => (o.label || '').trim() === suppLabel) ?? supplierOptions.find(o => (o.label || '').includes(suppLabel));
                         const suppId = suppOpt?.value;
-                        const amount = Number(row[amtIdx]) || 0;
+                        const amount = Number(row[headerIndexMap.amount]) || 0;
                         if (!suppId || amount <= 0) continue;
                         const today = dayjs().format('YYYY-MM-DD');
-                        const dueDate = dueIdx >= 0 && row[dueIdx] ? dayjs(row[dueIdx]).format('YYYY-MM-DD') : today;
-                        const bizDate = dateIdx >= 0 && row[dateIdx] ? dayjs(row[dateIdx]).format('YYYY-MM-DD') : today;
+                        const dueDate =
+                            headerIndexMap.dueDate !== undefined && row[headerIndexMap.dueDate]
+                                ? dayjs(row[headerIndexMap.dueDate]).format('YYYY-MM-DD')
+                                : today;
+                        const bizDate =
+                            headerIndexMap.businessDate !== undefined && row[headerIndexMap.businessDate]
+                                ? dayjs(row[headerIndexMap.businessDate]).format('YYYY-MM-DD')
+                                : today;
                         items.push({
                             source_type: '手工',
                             source_id: 0,
@@ -335,7 +369,9 @@ const PayableList: React.FC = () => {
                         messageApi.warning(`部分失败 ${result.failureCount} 条`);
                     }
                 }}
-                importHeaders={['*供应商名称', '*应付金额', '到期日期', '业务日期']}
+                importHeaders={payableImportTemplate.importHeaders}
+                importExampleRow={payableImportTemplate.importExampleRow}
+                importFieldMap={payableImportTemplate.importHeaderMap}
                 showExportButton
                 onExport={async (type, keys, pageData) => {
                     try {

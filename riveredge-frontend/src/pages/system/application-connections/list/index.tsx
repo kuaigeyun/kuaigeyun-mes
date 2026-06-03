@@ -62,6 +62,10 @@ import {
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../utils/spreadsheetImportTemplate';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -129,7 +133,7 @@ const SENSITIVE_KEYS = [
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const getConnectionStatus = (
     conn: ApplicationConnection
@@ -164,6 +168,42 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
+
+  const applicationConnectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'name', required: true, labelKey: 'pages.system.applicationConnections.importHeaderName' },
+          { field: 'code', required: true, labelKey: 'pages.system.applicationConnections.importHeaderCode' },
+          { field: 'type', required: true, labelKey: 'pages.system.applicationConnections.importHeaderType' },
+          {
+            field: 'description',
+            labelKey: 'pages.system.applicationConnections.importHeaderDescription',
+            aliases: ['描述'],
+          },
+          {
+            field: 'isActive',
+            labelKey: 'pages.system.applicationConnections.importHeaderActive',
+            aliases: ['启用状态'],
+          },
+          {
+            field: 'configJson',
+            labelKey: 'pages.system.applicationConnections.importHeaderConfigJson',
+            aliases: ['连接配置(JSON)'],
+          },
+        ],
+        [
+          t('pages.system.applicationConnections.importExampleName'),
+          'example_conn',
+          'feishu',
+          t('pages.system.applicationConnections.importExampleDescription'),
+          t('pages.system.applicationConnections.importExampleActive'),
+          '{}',
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -849,41 +889,44 @@ const ApplicationConnectionsListPage: React.FC = () => {
               messageApi.warning(t('pages.system.applicationConnections.importDataRequired'));
               return;
             }
-            const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
-            const rows = data.slice(1).filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()));
-            const fieldMap: Record<string, string> = {
-              '名称': 'name', 'name': 'name',
-              '代码': 'code', 'code': 'code',
-              '类型': 'type', 'type': 'type',
-              '描述': 'description', 'description': 'description',
-              '启用状态': 'is_active', 'is_active': 'is_active',
-              '连接配置(JSON)': 'config_json', 'config_json': 'config_json',
+            const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+            const rows = data.slice(2).filter((row: any[]) =>
+              row.some((c: any) => c != null && String(c).trim()),
+            );
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              applicationConnectionImportTemplate.importHeaderMap,
+            );
+            const val = (row: any[], field: string) => {
+              const idx = headerIndexMap[field];
+              return idx !== undefined && row[idx] != null ? row[idx] : undefined;
             };
             let done = 0;
             const ts = Date.now();
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
-              const obj: Record<string, any> = {};
-              headers.forEach((h, idx) => {
-                const field = fieldMap[h] || fieldMap[h?.trim()];
-                if (field && row[idx] != null) obj[field] = row[idx];
-              });
-              if (obj.name && obj.code && obj.type) {
+              const name = val(row, 'name');
+              const code = val(row, 'code');
+              const type = val(row, 'type');
+              if (name && code && type) {
                 let config: Record<string, any> = {};
-                if (obj.config_json) {
+                const configJson = val(row, 'configJson');
+                if (configJson) {
                   try {
-                    config = JSON.parse(String(obj.config_json));
+                    config = JSON.parse(String(configJson));
                   } catch {
                     config = {};
                   }
                 }
+                const isActiveRaw = val(row, 'isActive');
                 await createApplicationConnection({
-                  name: String(obj.name),
-                  code: `${String(obj.code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
-                  type: String(obj.type),
+                  name: String(name),
+                  code: `${String(code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
+                  type: String(type),
                   config,
-                  description: obj.description ? String(obj.description) : undefined,
-                  is_active: obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',
+                  description: val(row, 'description') ? String(val(row, 'description')) : undefined,
+                  is_active:
+                    isActiveRaw !== 'false' && isActiveRaw !== '0' && isActiveRaw !== '',
                 });
                 done++;
               }
@@ -891,22 +934,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
             messageApi.success(t('pages.system.applicationConnections.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
-          importHeaders={[
-            `*${t('pages.system.applicationConnections.importHeaderName')}`,
-            `*${t('pages.system.applicationConnections.importHeaderCode')}`,
-            `*${t('pages.system.applicationConnections.importHeaderType')}`,
-            t('pages.system.applicationConnections.importHeaderDescription'),
-            t('pages.system.applicationConnections.importHeaderActive'),
-            t('pages.system.applicationConnections.importHeaderConfigJson'),
-          ]}
-          importExampleRow={[
-            t('pages.system.applicationConnections.importExampleName'),
-            'example_conn',
-            'feishu',
-            t('pages.system.applicationConnections.importExampleDescription'),
-            t('pages.system.applicationConnections.importExampleActive'),
-            '{}',
-          ]}
+          importHeaders={applicationConnectionImportTemplate.importHeaders}
+          importExampleRow={applicationConnectionImportTemplate.importExampleRow}
+          importFieldMap={applicationConnectionImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: ApplicationConnection[] = [];

@@ -4,7 +4,7 @@
  * 提供工位的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
@@ -30,6 +30,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 工位管理列表页面组件
@@ -85,6 +89,32 @@ const WorkstationsPage: React.FC = () => {
       }, 200);
     }
   }, [customFields.length]);
+
+  const workstationImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.workstations.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.workstations.name' },
+          {
+            field: 'productionLineCode',
+            required: true,
+            labelKey: 'app.master-data.workstations.productionLineCode',
+          },
+          { field: 'description', labelKey: 'app.master-data.workstations.description' },
+        ],
+        [
+          t('app.master-data.workstations.importExample.code'),
+          t('app.master-data.workstations.importExample.name'),
+          productionLines.length > 0
+            ? productionLines[0].code
+            : t('app.master-data.productionLines.importExample.code'),
+          t('app.master-data.workstations.importExample.description'),
+        ],
+      ),
+    [t, i18n.language, productionLines],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -189,30 +219,10 @@ const WorkstationsPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'productionLineCode': 'productionLineCode',
-      'description': 'description',
-      '*productionLineCode': 'productionLineCode',
-    };
-
-    // 找到表头索引
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      workstationImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -734,22 +744,9 @@ const WorkstationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*code', '*name', '*productionLineCode', 'description']}
-        importExampleRow={[
-          'ST001', 
-          'Station 1',
-          productionLines.length > 0 ? productionLines[0].code : 'PL001', 
-          'For primary processing',
-        ]}
-        importFieldMap={{
-          'code': 'code',
-          '*code': 'code',
-          'name': 'name',
-          '*name': 'name',
-          'productionLineCode': 'productionLineCode',
-          '*productionLineCode': 'productionLineCode',
-          'description': 'description',
-        }}
+        importHeaders={workstationImportTemplate.importHeaders}
+        importExampleRow={workstationImportTemplate.importExampleRow}
+        importFieldMap={workstationImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

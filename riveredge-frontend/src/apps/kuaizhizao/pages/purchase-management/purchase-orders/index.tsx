@@ -15,6 +15,10 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
 import { useTranslation } from 'react-i18next';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -406,7 +410,7 @@ const PURCHASE_ORDER_CREATE_PATH = `${PURCHASE_ORDER_LIST_PATH}/new`;
 const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}/edit`;
 
 const PurchaseOrdersPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -424,6 +428,50 @@ const PurchaseOrdersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const lastOrdersCacheRef = useRef<PurchaseOrder[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
+  const purchaseOrderImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.purchaseOrder.import.code', aliases: ['订单编号', '编号'] },
+          {
+            field: 'supplier',
+            required: true,
+            labelKey: 'app.kuaizhizao.purchaseOrder.import.supplierName',
+            aliases: ['供应商', '供应商名称'],
+          },
+          {
+            field: 'date',
+            required: true,
+            labelKey: 'app.kuaizhizao.purchaseOrder.import.orderDate',
+            aliases: ['订单日期', '日期'],
+          },
+          {
+            field: 'material',
+            required: true,
+            labelKey: 'app.kuaizhizao.purchaseOrder.import.materialCode',
+            aliases: ['物料', '物料编号'],
+          },
+          { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.purchaseOrder.import.quantity', aliases: ['数量'] },
+          { field: 'unitPrice', labelKey: 'app.kuaizhizao.purchaseOrder.import.unitPrice', aliases: ['单价'] },
+          { field: 'delivery', labelKey: 'app.kuaizhizao.purchaseOrder.import.deliveryDate', aliases: ['交货日期'] },
+          { field: 'notes', labelKey: 'app.kuaizhizao.purchaseOrder.import.notes', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.purchaseOrder.importExample.code'),
+          t('app.kuaizhizao.purchaseOrder.importExample.supplierName'),
+          t('app.kuaizhizao.purchaseOrder.importExample.orderDate'),
+          t('app.kuaizhizao.purchaseOrder.importExample.materialCode'),
+          t('app.kuaizhizao.purchaseOrder.importExample.quantity'),
+          t('app.kuaizhizao.purchaseOrder.importExample.unitPrice'),
+          t('app.kuaizhizao.purchaseOrder.importExample.deliveryDate'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
+
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -1274,16 +1322,19 @@ const PurchaseOrdersPage: React.FC = () => {
       return;
     }
 
-    const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name);
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      purchaseOrderImportTemplate.importHeaderMap,
+    );
     const idx = {
-      code: col('订单编号') >= 0 ? col('订单编号') : col('编号'),
-      supplier: col('供应商名称') >= 0 ? col('供应商名称') : col('供应商'),
-      date: col('订单日期') >= 0 ? col('订单日期') : col('日期'),
-      material: col('物料编号') >= 0 ? col('物料编号') : col('物料'),
-      qty: col('数量') >= 0 ? col('数量') : -1,
-      price: col('单价') >= 0 ? col('单价') : -1,
-      delivery: col('交货日期') >= 0 ? col('交货日期') : -1,
-      notes: col('备注') >= 0 ? col('备注') : -1,
+      code: headerIndexMap['code'] ?? -1,
+      supplier: headerIndexMap['supplier'] ?? -1,
+      date: headerIndexMap['date'] ?? -1,
+      material: headerIndexMap['material'] ?? -1,
+      qty: headerIndexMap['quantity'] ?? -1,
+      price: headerIndexMap['unitPrice'] ?? -1,
+      delivery: headerIndexMap['delivery'] ?? -1,
+      notes: headerIndexMap['notes'] ?? -1,
     };
 
     if (idx.supplier < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
@@ -2560,23 +2611,14 @@ const PurchaseOrdersPage: React.FC = () => {
           onDelete={handleBatchDelete}
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['订单编号', '供应商名称', '订单日期', '物料编号', '数量', '单价', '交货日期', '备注']}
-          importExampleRow={['PO001', '供应商A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
-          importFieldMap={{
-            '订单编号': 'order_code',
-            '供应商名称': 'supplier_name',
-            '订单日期': 'order_date',
-            '物料编号': 'material_code',
-            '数量': 'ordered_quantity',
-            '单价': 'unit_price',
-            '交货日期': 'delivery_date',
-            '备注': 'notes',
-          }}
+          importHeaders={purchaseOrderImportTemplate.importHeaders}
+          importExampleRow={purchaseOrderImportTemplate.importExampleRow}
+          importFieldMap={purchaseOrderImportTemplate.importHeaderMap}
           importFieldRules={{
-            supplier_name: { required: true },
-            order_date: { required: true },
-            material_code: { required: true },
-            ordered_quantity: { required: true },
+            supplier: { required: true },
+            date: { required: true },
+            material: { required: true },
+            quantity: { required: true },
           }}
           showExportButton
           onExport={async (type, keys, pageData) => {

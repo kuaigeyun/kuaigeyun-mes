@@ -65,6 +65,7 @@ import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsO
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 
@@ -141,7 +142,39 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const IncomingInspectionPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const incomingInspectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'purchaseReceiptCode',
+            labelKey: 'app.kuaizhizao.quality.incoming.import.purchaseReceiptCode',
+            aliases: ['采购入库单号'],
+          },
+          {
+            field: 'material',
+            labelKey: 'app.kuaizhizao.quality.incoming.import.materialCode',
+            aliases: ['物料编号'],
+          },
+          { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.incoming.import.inspectionQty', aliases: ['检验数量'] },
+          { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.qualifiedQty', aliases: ['合格数量'] },
+          { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.unqualifiedQty', aliases: ['不合格数量'] },
+          { field: 'remark', labelKey: 'app.kuaizhizao.quality.incoming.import.notes', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.quality.incoming.importExample.purchaseReceiptCode'),
+          t('app.kuaizhizao.quality.incoming.importExample.materialCode'),
+          t('app.kuaizhizao.quality.incoming.importExample.inspectionQty'),
+          t('app.kuaizhizao.quality.incoming.importExample.qualifiedQty'),
+          t('app.kuaizhizao.quality.incoming.importExample.unqualifiedQty'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -756,8 +789,9 @@ const IncomingInspectionPage: React.FC = () => {
         })}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['采购入库单号', '物料编号', '检验数量', '合格数量', '不合格数量', '备注']}
-        importExampleRow={['PR20250115001', 'MAT001', '100', '95', '5', '']}
+        importHeaders={incomingInspectionImportTemplate.importHeaders}
+        importExampleRow={incomingInspectionImportTemplate.importExampleRow}
+        importFieldMap={incomingInspectionImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}

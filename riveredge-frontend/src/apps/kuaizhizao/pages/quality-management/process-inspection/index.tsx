@@ -66,6 +66,7 @@ import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsO
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 
@@ -194,7 +195,39 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const processInspectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'workOrderCode',
+            labelKey: 'app.kuaizhizao.quality.process.import.workOrderCode',
+            aliases: ['工单编号'],
+          },
+          {
+            field: 'operationCode',
+            labelKey: 'app.kuaizhizao.quality.process.import.operationCode',
+            aliases: ['工序编号'],
+          },
+          { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.process.import.inspectionQty', aliases: ['检验数量'] },
+          { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.process.import.qualifiedQty', aliases: ['合格数量'] },
+          { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.process.import.unqualifiedQty', aliases: ['不合格数量'] },
+          { field: 'remark', labelKey: 'app.kuaizhizao.quality.process.import.notes', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.quality.process.importExample.workOrderCode'),
+          t('app.kuaizhizao.quality.process.importExample.operationCode'),
+          t('app.kuaizhizao.quality.process.importExample.inspectionQty'),
+          t('app.kuaizhizao.quality.process.importExample.qualifiedQty'),
+          t('app.kuaizhizao.quality.process.importExample.unqualifiedQty'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -811,8 +844,9 @@ const ProcessInspectionPage: React.FC = () => {
         })}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['工单编号', '工序编号', '检验数量', '合格数量', '不合格数量', '备注']}
-        importExampleRow={['WO20250115001', 'OP001', '100', '98', '2', '']}
+        importHeaders={processInspectionImportTemplate.importHeaders}
+        importExampleRow={processInspectionImportTemplate.importExampleRow}
+        importFieldMap={processInspectionImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}

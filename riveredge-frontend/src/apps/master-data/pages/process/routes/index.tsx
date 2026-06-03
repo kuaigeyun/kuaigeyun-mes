@@ -24,12 +24,16 @@ import type { ProcessRoute } from '../../../types/process';
 import type { Material, MaterialGroup } from '../../../types/material';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 工艺路线管理列表页面组件
  */
 const ProcessRoutesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -56,6 +60,24 @@ const ProcessRoutesPage: React.FC = () => {
   const [pendingMaterialUuids, setPendingMaterialUuids] = useState<string[]>([]);
   const [bindApplying, setBindApplying] = useState(false);
   const routeDetailReqRef = useRef(0);
+
+  const routeImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.route.code' },
+          { field: 'name', required: true, labelKey: 'field.route.name' },
+          { field: 'description', labelKey: 'field.route.description', aliases: ['描述'] },
+        ],
+        [
+          t('app.master-data.routes.importExample.code'),
+          t('app.master-data.routes.importExample.name'),
+          t('app.master-data.routes.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const closeBindModal = () => {
     setBindModalVisible(false);
@@ -264,20 +286,28 @@ const ProcessRoutesPage: React.FC = () => {
       messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
-    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
-    const idxCode = col('工艺路线编号') >= 0 ? col('工艺路线编号') : col('编号');
-    const idxName = col('工艺路线名称') >= 0 ? col('工艺路线名称') : col('名称');
-    const idxDesc = col('描述') >= 0 ? col('描述') : -1;
-    if (idxCode < 0 || idxName < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工艺路线编号/名称', headers: headers.join(', ') }));
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      routeImportTemplate.importHeaderMap,
+    );
+    if (headerIndexMap['code'] === undefined || headerIndexMap['name'] === undefined) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: `${t('field.route.code')}/${t('field.route.name')}`,
+          headers: headers.join(', '),
+        }),
+      );
       return;
     }
     const items: { code: string; name: string; description?: string }[] = [];
     const errors: Array<{ row: number; message: string }> = [];
     rows.forEach((row: any[], i: number) => {
-      const code = (row[idxCode] ?? '').toString().trim();
-      const name = (row[idxName] ?? '').toString().trim();
-      const desc = idxDesc >= 0 ? (row[idxDesc] ?? '').toString().trim() : undefined;
+      const code = (row[headerIndexMap['code']] ?? '').toString().trim();
+      const name = (row[headerIndexMap['name']] ?? '').toString().trim();
+      const desc =
+        headerIndexMap['description'] !== undefined
+          ? (row[headerIndexMap['description']] ?? '').toString().trim()
+          : undefined;
       if (!code) {
         errors.push({ row: i + 3, message: t('app.master-data.routes.codeRequired') });
         return;
@@ -709,13 +739,9 @@ const ProcessRoutesPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*工艺路线编号', '*工艺路线名称', '描述']}
-        importExampleRow={['PR-WX-001', '无锡总部标准装配工艺', '适用于所有X系列产品的标准工艺流程']}
-        importFieldMap={{
-          '工艺路线编号': 'code', '*工艺路线编号': 'code', '编号': 'code', 'code': 'code',
-          '工艺路线名称': 'name', '*工艺路线名称': 'name', '名称': 'name', 'name': 'name',
-          '描述': 'description', 'description': 'description',
-        }}
+        importHeaders={routeImportTemplate.importHeaders}
+        importExampleRow={routeImportTemplate.importExampleRow}
+        importFieldMap={routeImportTemplate.importHeaderMap}
         importFieldRules={{ code: { required: true }, name: { required: true } }}
         showExportButton={true}
         onExport={handleExport}

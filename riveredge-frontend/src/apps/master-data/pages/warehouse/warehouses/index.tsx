@@ -4,7 +4,7 @@
  * 提供仓库的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography, theme } from 'antd';
@@ -32,6 +32,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 仓库管理列表页面组件
@@ -78,6 +82,30 @@ const WarehousesPage: React.FC = () => {
       }, 200);
     }
   }, [customFields.length]);
+
+  const warehouseImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.warehouses.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.warehouses.name' },
+          { field: 'warehouseType', labelKey: 'field.warehouse.warehouseType' },
+          { field: 'workshopCode', labelKey: 'app.master-data.warehouses.workshopCode' },
+          { field: 'workCenterCode', labelKey: 'app.master-data.warehouses.workCenterCode' },
+          { field: 'description', labelKey: 'app.master-data.warehouses.description' },
+        ],
+        [
+          t('app.master-data.warehouses.importExample.code'),
+          t('app.master-data.warehouses.importExample.name'),
+          t('app.master-data.warehouses.importExample.warehouseType'),
+          '',
+          '',
+          t('app.master-data.warehouses.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -165,31 +193,10 @@ const WarehousesPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'description': 'description',
-      'warehouseType': 'warehouseType',
-      'workshopCode': 'workshopCode',
-      'workCenterCode': 'workCenterCode',
-    };
-
-    // 找到表头索引
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      warehouseImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -759,25 +766,9 @@ const WarehousesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*code', '*name', 'warehouseType', 'workshopCode', 'workCenterCode', 'description']}
-        importExampleRow={[
-          'WH-WX-01',
-          'Wuxi central warehouse',
-          'normal',
-          '',
-          '',
-          'General parts storage',
-        ]}
-        importFieldMap={{
-          'code': 'code',
-          '*code': 'code',
-          'name': 'name',
-          '*name': 'name',
-          'description': 'description',
-          'warehouseType': 'warehouseType',
-          'workshopCode': 'workshopCode',
-          'workCenterCode': 'workCenterCode',
-        }}
+        importHeaders={warehouseImportTemplate.importHeaders}
+        importExampleRow={warehouseImportTemplate.importExampleRow}
+        importFieldMap={warehouseImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

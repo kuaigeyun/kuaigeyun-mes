@@ -8,7 +8,7 @@
  * @date 2026-02-22
  */
 
-import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
@@ -43,6 +43,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface ShipmentNotice {
@@ -92,7 +93,31 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
 
 const ShipmentNoticesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const noticeItemImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'material', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialCode', aliases: ['物料编号'] },
+          { field: 'quantity', labelKey: 'app.kuaizhizao.shipmentNotice.import.quantity', aliases: ['数量'] },
+          { field: 'unitPrice', labelKey: 'app.kuaizhizao.shipmentNotice.import.unitPrice', aliases: ['单价'] },
+          { field: 'name', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialName', aliases: ['物料名称'] },
+          { field: 'specification', labelKey: 'app.kuaizhizao.shipmentNotice.import.specification', aliases: ['规格'] },
+          { field: 'unit', labelKey: 'app.kuaizhizao.shipmentNotice.import.unit', aliases: ['单位'] },
+        ],
+        [
+          t('app.kuaizhizao.shipmentNotice.importExample.materialCode'),
+          t('app.kuaizhizao.shipmentNotice.importExample.quantity'),
+          t('app.kuaizhizao.shipmentNotice.importExample.unitPrice'),
+          t('app.kuaizhizao.shipmentNotice.importExample.materialName'),
+          t('app.kuaizhizao.shipmentNotice.importExample.specification'),
+          t('app.kuaizhizao.shipmentNotice.importExample.unit'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('shipment_notice.pull_from_sales_order');
@@ -635,9 +660,6 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
-  const NOTICE_ITEM_IMPORT_HEADERS = ['物料编号', '数量', '单价', '物料名称', '规格', '单位'] as const;
-  const NOTICE_ITEM_IMPORT_EXAMPLE = ['MT001', '10', '15.5', '示例物料', '规格X', '件'] as const;
-
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
   const applyExcelRowsToNoticeForm = (data: any[][]) => {
     if (data.length <= 1) return;
@@ -987,8 +1009,9 @@ const ShipmentNoticesPage: React.FC = () => {
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
-          importHeaders={[...NOTICE_ITEM_IMPORT_HEADERS]}
-          importExampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
+          importHeaders={noticeItemImportTemplate.importHeaders}
+          importExampleRow={noticeItemImportTemplate.importExampleRow}
+          importFieldMap={noticeItemImportTemplate.importHeaderMap}
           onImport={handleListToolbarImport}
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -1282,8 +1305,8 @@ const ShipmentNoticesPage: React.FC = () => {
           onCancel={() => setImportVisible(false)}
           onConfirm={handleFormLineImport}
           title="导入通知明细"
-          headers={[...NOTICE_ITEM_IMPORT_HEADERS]}
-          exampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
+          headers={noticeItemImportTemplate.importHeaders}
+          exampleRow={noticeItemImportTemplate.importExampleRow}
         />
       </Suspense>
     </>

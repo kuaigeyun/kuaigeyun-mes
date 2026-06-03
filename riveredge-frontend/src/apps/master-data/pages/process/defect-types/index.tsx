@@ -24,15 +24,41 @@ import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImportParsedRows } from '../../../../../utils/import';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 不良品信息管理列表页面组件
  */
 const DefectTypesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const defectTypeImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.defectTypes.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.defectTypes.name' },
+          {
+            field: 'description',
+            labelKey: 'field.defectType.description',
+            aliases: ['描述'],
+          },
+        ],
+        [
+          t('app.master-data.defectTypes.importExample.code'),
+          t('app.master-data.defectTypes.importExample.name'),
+          t('app.master-data.defectTypes.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -202,19 +228,10 @@ const DefectTypesPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', '*编号': 'code', code: 'code',
-      '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', '*名称': 'name', name: 'name',
-      '分类': 'category', category: 'category',
-      '描述': 'description', description: 'description',
-    };
-
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalized = String(header || '').trim();
-      const key = headerMap[normalized] ?? headerMap[normalized.replace(/^\*+/, '').trim()];
-      if (key) headerIndexMap[key] = index;
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      defectTypeImportTemplate.importHeaderMap,
+    );
 
     const autoCodeEnabled = isAutoGenerateEnabled('master-data-defect-type');
     if (!autoCodeEnabled && headerIndexMap['code'] === undefined) {
@@ -544,13 +561,9 @@ const DefectTypesPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*不良品编号', '*不良品名称', '描述']}
-        importExampleRow={['DEF-WX-001', '无锡精工尺寸超差', '精密压铸件外径超出公差范围']}
-        importFieldMap={{
-          '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', 'code': 'code',
-          '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', 'name': 'name',
-          '描述': 'description', 'description': 'description',
-        }}
+        importHeaders={defectTypeImportTemplate.importHeaders}
+        importExampleRow={defectTypeImportTemplate.importExampleRow}
+        importFieldMap={defectTypeImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
       />

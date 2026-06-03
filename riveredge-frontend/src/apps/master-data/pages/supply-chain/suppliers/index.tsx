@@ -34,11 +34,16 @@ import {
 } from '../../../utils/partner-static-labels';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
+
 /**
  * 供应商管理列表页面组件
  */
 const SuppliersPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -65,6 +70,34 @@ const SuppliersPage: React.FC = () => {
     return seed;
   });
   const supplierDetailReqRef = useRef(0);
+
+  const supplierImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.supplier.code' },
+          { field: 'name', required: true, labelKey: 'field.supplier.name' },
+          { field: 'shortName', labelKey: 'field.supplier.shortName' },
+          { field: 'contactPerson', labelKey: 'field.supplier.contactPerson' },
+          { field: 'phone', labelKey: 'field.supplier.phone' },
+          { field: 'email', labelKey: 'field.supplier.email' },
+          { field: 'address', labelKey: 'field.supplier.address' },
+          { field: 'category', labelKey: 'field.supplier.category' },
+        ],
+        [
+          t('app.master-data.suppliers.importExample.code'),
+          t('app.master-data.suppliers.importExample.name'),
+          t('app.master-data.suppliers.importExample.shortName'),
+          t('app.master-data.suppliers.importExample.contactPerson'),
+          t('app.master-data.suppliers.importExample.phone'),
+          t('app.master-data.suppliers.importExample.email'),
+          t('app.master-data.suppliers.importExample.address'),
+          t('app.master-data.suppliers.importExample.category'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -233,35 +266,10 @@ const SuppliersPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      [t('field.supplier.code')]: 'code',
-      [`*${t('field.supplier.code')}`]: 'code',
-      [t('field.supplier.name')]: 'name',
-      [`*${t('field.supplier.name')}`]: 'name',
-      [t('field.supplier.shortName')]: 'shortName',
-      [t('field.supplier.contactPerson')]: 'contactPerson',
-      [t('field.supplier.phone')]: 'phone',
-      [t('field.supplier.email')]: 'email',
-      [t('field.supplier.address')]: 'address',
-      [t('field.supplier.category')]: 'category',
-      '编号': 'code', '*编号': 'code', 'code': 'code', '*code': 'code',
-      '名称': 'name', '*名称': 'name', 'name': 'name', '*name': 'name',
-      '简称': 'shortName', '联系人': 'contactPerson', '电话': 'phone',
-      '邮箱': 'email', '地址': 'address', '分类': 'category',
-    };
-
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      supplierImportTemplate.importHeaderMap,
+    );
 
     if (headerIndexMap['code'] === undefined) {
       messageApi.error(t('app.master-data.importMissingField', { field: t('field.supplier.code'), headers: headers.join(', ') }));
@@ -847,32 +855,9 @@ const SuppliersPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={[
-          `*${t('field.supplier.code')}`,
-          `*${t('field.supplier.name')}`,
-          t('field.supplier.shortName'),
-          t('field.supplier.contactPerson'),
-          t('field.supplier.phone'),
-          t('field.supplier.email'),
-          t('field.supplier.address'),
-          t('field.supplier.category'),
-        ]}
-        importExampleRow={['SUPP-WX-001', '无锡德力精密零件有限公司', '德力精密', '王经理', '0510-82220002', 'contact@deli-wx.com', '无锡市锡山经济技术开发区二号路88号', '原材料']}
-        importFieldMap={{
-          [t('field.supplier.code')]: 'code',
-          [`*${t('field.supplier.code')}`]: 'code',
-          [t('field.supplier.name')]: 'name',
-          [`*${t('field.supplier.name')}`]: 'name',
-          [t('field.supplier.shortName')]: 'shortName',
-          [t('field.supplier.contactPerson')]: 'contactPerson',
-          [t('field.supplier.phone')]: 'phone',
-          [t('field.supplier.email')]: 'email',
-          [t('field.supplier.address')]: 'address',
-          [t('field.supplier.category')]: 'category',
-          'code': 'code', '*code': 'code', 'name': 'name', '*name': 'name',
-          'shortName': 'shortName', 'contactPerson': 'contactPerson', 'phone': 'phone',
-          'email': 'email', 'address': 'address', 'category': 'category',
-        }}
+        importHeaders={supplierImportTemplate.importHeaders}
+        importExampleRow={supplierImportTemplate.importExampleRow}
+        importFieldMap={supplierImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

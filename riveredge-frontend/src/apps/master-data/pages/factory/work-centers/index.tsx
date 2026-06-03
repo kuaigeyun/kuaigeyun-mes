@@ -4,7 +4,7 @@
  * 提供工作中心的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
@@ -29,6 +29,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 工作中心列表页面组件
@@ -82,6 +86,24 @@ const WorkCentersPage: React.FC = () => {
       }, 200);
     }
   }, [customFields.length]);
+
+  const workCenterImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.workCenter.code' },
+          { field: 'name', required: true, labelKey: 'field.workCenter.name' },
+          { field: 'description', labelKey: 'field.workCenter.description' },
+        ],
+        [
+          t('app.master-data.workCenters.importExample.code'),
+          t('app.master-data.workCenters.importExample.name'),
+          t('app.master-data.workCenters.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -173,26 +195,10 @@ const WorkCentersPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'description': 'description',
-    };
-
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      workCenterImportTemplate.importHeaderMap,
+    );
 
     if (headerIndexMap['code'] === undefined) {
       messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
@@ -614,23 +620,9 @@ const WorkCentersPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={[
-            '*code',
-            '*name',
-            'description',
-          ]}
-          importExampleRow={[
-            'GZZX0001',
-            'Welding work center',
-            'Capacity unit for welding',
-          ]}
-          importFieldMap={{
-            'code': 'code',
-            '*code': 'code',
-            'name': 'name',
-            '*name': 'name',
-            'description': 'description',
-          }}
+          importHeaders={workCenterImportTemplate.importHeaders}
+          importExampleRow={workCenterImportTemplate.importExampleRow}
+          importFieldMap={workCenterImportTemplate.importHeaderMap}
           importFieldRules={{
             code: { required: true },
             name: { required: true },

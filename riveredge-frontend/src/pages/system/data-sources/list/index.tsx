@@ -49,6 +49,10 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../utils/spreadsheetImportTemplate';
 
 dayjs.extend(relativeTime);
 
@@ -129,7 +133,58 @@ const getConnectionStatus = (dataSource: DataSource, t: TFunction): { status: 's
  * 数据源管理列表页面组件
  */
 const DataSourceListPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const dataSourceImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'name',
+            required: true,
+            labelKey: 'pages.system.dataSources.labelName',
+            aliases: ['数据源名称'],
+          },
+          {
+            field: 'code',
+            required: true,
+            labelKey: 'pages.system.dataSources.labelCode',
+            aliases: ['数据源代码'],
+          },
+          {
+            field: 'type',
+            required: true,
+            labelKey: 'pages.system.dataSources.labelType',
+            aliases: ['数据源类型'],
+          },
+          {
+            field: 'description',
+            labelKey: 'pages.system.dataSources.columnDescription',
+            aliases: ['描述'],
+          },
+          {
+            field: 'is_active',
+            labelKey: 'pages.system.dataSources.columnActive',
+            aliases: ['启用状态'],
+          },
+          {
+            field: 'config_json',
+            labelKey: 'pages.system.dataSources.detailColumnConfig',
+            aliases: ['连接配置(JSON)'],
+          },
+        ],
+        [
+          t('pages.system.dataSources.importExampleName'),
+          t('pages.system.dataSources.importExampleCode'),
+          t('pages.system.dataSources.importExampleType'),
+          '',
+          t('pages.system.dataSources.enabled'),
+          t('pages.system.dataSources.importExampleConfig'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
@@ -928,25 +983,22 @@ const DataSourceListPage: React.FC = () => {
               messageApi.warning(t('pages.system.dataSources.fillImportData'));
               return;
             }
-            const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
-            const rows = data.slice(1).filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()));
-            const fieldMap: Record<string, string> = {
-              '数据源名称': 'name', 'name': 'name',
-              '数据源代码': 'code', 'code': 'code',
-              '数据源类型': 'type', 'type': 'type',
-              '描述': 'description', 'description': 'description',
-              '启用状态': 'is_active', 'is_active': 'is_active',
-              '连接配置(JSON)': 'config_json', 'config_json': 'config_json',
-            };
+            const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              dataSourceImportTemplate.importHeaderMap,
+            );
+            const rows = data.slice(2).filter((row: any[]) =>
+              row?.some((c: any) => c != null && String(c).trim() !== ''),
+            );
             let done = 0;
             const ts = Date.now();
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
               const obj: Record<string, any> = {};
-              headers.forEach((h, idx) => {
-                const field = fieldMap[h] || fieldMap[h?.trim()];
-                if (field && row[idx] != null) obj[field] = row[idx];
-              });
+              for (const [field, idx] of Object.entries(headerIndexMap)) {
+                if (row[idx] != null) obj[field] = row[idx];
+              }
               if (obj.name && obj.code && obj.type) {
                 let config: Record<string, any> = {};
                 if (obj.config_json) {
@@ -970,8 +1022,9 @@ const DataSourceListPage: React.FC = () => {
             messageApi.success(t('pages.system.dataSources.importSuccessCount', { count: done }));
             actionRef.current?.reload();
           }}
-          importHeaders={['*数据源名称', '*数据源代码', '*数据源类型', '描述', '启用状态', '连接配置(JSON)']}
-          importExampleRow={['示例数据源', 'example_db', 'postgresql', '选填', '是', '{}']}
+          importHeaders={dataSourceImportTemplate.importHeaders}
+          importExampleRow={dataSourceImportTemplate.importExampleRow}
+          importFieldMap={dataSourceImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: DataSource[] = [];

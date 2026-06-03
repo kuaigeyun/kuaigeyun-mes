@@ -150,6 +150,16 @@ class MaterialBase(BaseModel):
     model: Optional[str] = Field(None, max_length=100, description="型号")
     texture: Optional[str] = Field(None, max_length=100, description="材质（如：钢、塑料、铝合金等）")
     images: Optional[List[str]] = Field(None, description="物料附件文件 UUID 列表（图片、PDF、DWG 等）")
+    weight: Optional[Decimal] = Field(None, ge=0, description="重量 (kg)")
+    volume: Optional[Decimal] = Field(None, ge=0, description="体积 (m³)")
+    barcode: Optional[str] = Field(None, max_length=100, description="条码/GTIN/EAN")
+    shelf_life_managed: bool = Field(False, alias="shelfLifeManaged", description="是否启用保质期管理")
+    shelf_life_days: Optional[int] = Field(None, alias="shelfLifeDays", ge=1, description="保质期天数")
+    reference_cost: Optional[Decimal] = Field(None, alias="referenceCost", ge=0, description="参考成本")
+    country_of_origin: Optional[str] = Field(
+        None, alias="countryOfOrigin", max_length=100, description="原产国"
+    )
+    customs_code: Optional[str] = Field(None, alias="customsCode", max_length=50, description="海关编码")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
     # 部门编码列表（用于创建时输入）
@@ -224,6 +234,14 @@ class MaterialUpdate(BaseModel):
     model: Optional[str] = Field(None, max_length=100, description="型号")
     texture: Optional[str] = Field(None, max_length=100, description="材质")
     images: Optional[List[str]] = Field(None, description="物料附件文件 UUID 列表（图片、PDF、DWG 等）")
+    weight: Optional[Decimal] = Field(None, ge=0, description="重量 (kg)")
+    volume: Optional[Decimal] = Field(None, ge=0, description="体积 (m³)")
+    barcode: Optional[str] = Field(None, max_length=100, description="条码/GTIN/EAN")
+    shelf_life_managed: Optional[bool] = Field(None, alias="shelfLifeManaged", description="是否启用保质期管理")
+    shelf_life_days: Optional[int] = Field(None, alias="shelfLifeDays", ge=1, description="保质期天数")
+    reference_cost: Optional[Decimal] = Field(None, alias="referenceCost", ge=0, description="参考成本")
+    country_of_origin: Optional[str] = Field(None, alias="countryOfOrigin", max_length=100, description="原产国")
+    customs_code: Optional[str] = Field(None, alias="customsCode", max_length=50, description="海关编码")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
     # 部门编码列表（用于更新时输入）
@@ -471,6 +489,68 @@ class MaterialBatchUpdateSourceTypeRequest(BaseModel):
     source_type: str = Field(..., alias="sourceType", max_length=20, description="物料来源类型")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkDefaultsPatchRequest(BaseModel):
+    """批量合并更新物料 defaults JSON 中的部分字段（未传字段保持原值）。"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    default_tax_rate: Optional[int] = Field(
+        None,
+        alias="defaultTaxRate",
+        ge=0,
+        le=100,
+        description="默认税率（百分比，如 13 表示 13%）",
+    )
+    default_warehouse_ids: Optional[List[int]] = Field(
+        None,
+        alias="defaultWarehouseIds",
+        description="默认仓库 ID 列表（按顺序写入 priority）；传空列表表示清除默认仓库",
+    )
+    safety_stock: Optional[Decimal] = Field(
+        None,
+        alias="safetyStock",
+        ge=0,
+        description="安全库存",
+    )
+    max_stock: Optional[Decimal] = Field(
+        None,
+        alias="maxStock",
+        ge=0,
+        description="最大库存",
+    )
+    default_sale_price: Optional[Decimal] = Field(
+        None,
+        alias="defaultSalePrice",
+        ge=0,
+        description="默认销售价格",
+    )
+    default_location: Optional[str] = Field(
+        None,
+        alias="defaultLocation",
+        max_length=200,
+        description="默认库位",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def at_least_one_patch_field(self) -> "MaterialBulkDefaultsPatchRequest":
+        if (
+            self.default_tax_rate is None
+            and self.default_warehouse_ids is None
+            and self.safety_stock is None
+            and self.max_stock is None
+            and self.default_sale_price is None
+            and self.default_location is None
+        ):
+            raise ValueError("至少指定一项要批量更新的默认值字段")
+        return self
 
 
 class MaterialBatchFieldUpdateResponse(BaseModel):

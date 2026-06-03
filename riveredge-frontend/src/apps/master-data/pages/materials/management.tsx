@@ -33,6 +33,7 @@ import {
   Table,
   Skeleton,
   Form,
+  InputNumber,
 } from 'antd'
 import {
   EditOutlined,
@@ -54,6 +55,7 @@ import {
   NodeIndexOutlined,
   PartitionOutlined,
   ClusterOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -219,6 +221,8 @@ function MaterialListStackedCell({ record }: { record: Material }) {
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
 import { processRouteApi } from '../../services/process'
+import { warehouseApi } from '../../services/warehouse'
+import type { Warehouse } from '../../types/warehouse'
 import type { ProcessRoute } from '../../types/process'
 import {
   formatMaterialGroupLabel,
@@ -246,6 +250,7 @@ import {
   parseMaterialImportRows,
   resolveMasterMaterialForImport,
 } from '../../utils/materialImport'
+import { buildFactoryImportTemplate } from '../../utils/factoryImportTemplate'
 import { downloadFile } from '../../../../utils'
 import { formatDateTimeBySiteSetting } from '../../../../utils/format'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
@@ -397,7 +402,7 @@ type StandardPartFlatRow = {
  * 物料管理合并页面组件
  */
 const MaterialsManagementPage: React.FC = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const trialRunMode = useTrialRunMode()
   // 标准件预设导入当前阶段关闭（保留代码以便后续恢复）。
   const standardPresetFeatureEnabled = false
@@ -430,6 +435,18 @@ const MaterialsManagementPage: React.FC = () => {
   const [batchSourceTypeOpen, setBatchSourceTypeOpen] = useState(false)
   const [batchSourceTypeValue, setBatchSourceTypeValue] = useState<string | undefined>(undefined)
   const [batchSourceTypeSubmitting, setBatchSourceTypeSubmitting] = useState(false)
+  const [batchDefaultsOpen, setBatchDefaultsOpen] = useState(false)
+  const [batchDefaultsSubmitting, setBatchDefaultsSubmitting] = useState(false)
+  const [batchDefaultsApplyTax, setBatchDefaultsApplyTax] = useState(false)
+  const [batchDefaultsTaxRate, setBatchDefaultsTaxRate] = useState<number | undefined>(13)
+  const [batchDefaultsApplyWarehouse, setBatchDefaultsApplyWarehouse] = useState(false)
+  const [batchDefaultsWarehouseIds, setBatchDefaultsWarehouseIds] = useState<number[]>([])
+  const [warehousesForBulk, setWarehousesForBulk] = useState<Warehouse[]>([])
+  const [warehousesForBulkLoading, setWarehousesForBulkLoading] = useState(false)
+  const [batchDefaultsApplySafetyStock, setBatchDefaultsApplySafetyStock] = useState(false)
+  const [batchDefaultsSafetyStock, setBatchDefaultsSafetyStock] = useState<number | undefined>()
+  const [batchDefaultsApplyMaxStock, setBatchDefaultsApplyMaxStock] = useState(false)
+  const [batchDefaultsMaxStock, setBatchDefaultsMaxStock] = useState<number | undefined>()
   const [batchVariantModalOpen, setBatchVariantModalOpen] = useState(false)
   const [batchVariantSubmitting, setBatchVariantSubmitting] = useState(false)
   const [bulkVariantMode, setBulkVariantMode] = useState<'enable' | 'disable'>('enable')
@@ -1392,6 +1409,105 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [selectedRowKeys, batchSourceTypeValue, messageApi, t])
 
+  const handleOpenBatchDefaults = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchDefaultsApplyTax(false)
+    setBatchDefaultsTaxRate(13)
+    setBatchDefaultsApplyWarehouse(false)
+    setBatchDefaultsWarehouseIds([])
+    setBatchDefaultsApplySafetyStock(false)
+    setBatchDefaultsSafetyStock(undefined)
+    setBatchDefaultsApplyMaxStock(false)
+    setBatchDefaultsMaxStock(undefined)
+    setBatchDefaultsOpen(true)
+    setWarehousesForBulkLoading(true)
+    warehouseApi
+      .list({ limit: 1000, is_active: true })
+      .then((result) => {
+        setWarehousesForBulk(result.items ?? [])
+      })
+      .catch(() => {
+        messageApi.error(t('app.master-data.materialForm.fetchWarehousesFailed'))
+        setWarehousesForBulk([])
+      })
+      .finally(() => setWarehousesForBulkLoading(false))
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchDefaults = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    if (
+      !batchDefaultsApplyTax &&
+      !batchDefaultsApplyWarehouse &&
+      !batchDefaultsApplySafetyStock &&
+      !batchDefaultsApplyMaxStock
+    ) {
+      messageApi.warning(t('app.master-data.materials.batchDefaultsPickOne'))
+      return Promise.reject()
+    }
+    if (batchDefaultsApplyTax && batchDefaultsTaxRate == null) {
+      messageApi.warning(t('app.master-data.defaults.defaultTaxRatePlaceholder'))
+      return Promise.reject()
+    }
+    if (batchDefaultsApplySafetyStock && batchDefaultsSafetyStock == null) {
+      messageApi.warning(t('app.master-data.defaults.safetyStockPlaceholder'))
+      return Promise.reject()
+    }
+    if (batchDefaultsApplyMaxStock && batchDefaultsMaxStock == null) {
+      messageApi.warning(t('app.master-data.defaults.maxStockPlaceholder'))
+      return Promise.reject()
+    }
+    setBatchDefaultsSubmitting(true)
+    try {
+      const payload: import('../../types/material').MaterialBulkDefaultsPatchPayload = {
+        material_uuids: selectedRowKeys.map((k) => String(k)),
+      }
+      if (batchDefaultsApplyTax) payload.defaultTaxRate = batchDefaultsTaxRate
+      if (batchDefaultsApplyWarehouse) {
+        payload.defaultWarehouseIds = batchDefaultsWarehouseIds
+      }
+      if (batchDefaultsApplySafetyStock) payload.safetyStock = batchDefaultsSafetyStock
+      if (batchDefaultsApplyMaxStock) payload.maxStock = batchDefaultsMaxStock
+      const res = await materialApi.bulkPatchDefaults(payload)
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.batchDefaultsSuccess', { count: res.updated_count }),
+        )
+      }
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (notFound > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.batchDefaultsNotFound', { count: notFound }),
+        )
+      }
+      setBatchDefaultsOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.batchDefaultsFailed'))
+      return Promise.reject()
+    } finally {
+      setBatchDefaultsSubmitting(false)
+    }
+  }, [
+    selectedRowKeys,
+    batchDefaultsApplyTax,
+    batchDefaultsTaxRate,
+    batchDefaultsApplyWarehouse,
+    batchDefaultsWarehouseIds,
+    batchDefaultsApplySafetyStock,
+    batchDefaultsSafetyStock,
+    batchDefaultsApplyMaxStock,
+    batchDefaultsMaxStock,
+    messageApi,
+    t,
+  ])
+
   const handleOpenBatchVariantModal = useCallback(() => {
     if (selectedRowKeys.length === 0) {
       messageApi.warning(t('common.selectAtLeastOne'))
@@ -1488,6 +1604,68 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [rewriteMainCodesScope, rewriteResetSequence, selectedRowKeys, messageApi, t])
 
+  const materialImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'mainCode', labelKey: 'app.master-data.materials.materialCode', aliases: ['物料编号', '编号'] },
+          {
+            field: 'name',
+            required: true,
+            labelKey: 'app.master-data.materials.materialName',
+            aliases: ['物料名称', '名称'],
+          },
+          {
+            field: 'baseUnit',
+            required: true,
+            labelKey: 'app.master-data.materials.baseUnit',
+            aliases: ['基础单位', '单位'],
+          },
+          { field: 'specification', labelKey: 'app.master-data.materials.specification', aliases: ['规格'] },
+          { field: 'sourceType', labelKey: 'app.master-data.materials.sourceType', aliases: ['物料类型'] },
+          {
+            field: 'groupCode',
+            labelKey: 'app.master-data.materials.materialGroup',
+            aliases: ['分组编号', '分组'],
+          },
+          {
+            field: 'rowType',
+            labelKey: 'app.master-data.materials.importRowType',
+            aliases: ['行类型'],
+          },
+          {
+            field: 'masterMainCode',
+            labelKey: 'app.master-data.materials.importMasterMainCode',
+            aliases: ['主编码'],
+          },
+          {
+            field: 'variantAttributes',
+            labelKey: 'app.master-data.materials.importVariantAttrs',
+            aliases: ['属性组合'],
+          },
+          {
+            field: 'variantManaged',
+            labelKey: 'app.master-data.materials.importVariantManaged',
+            aliases: ['启用属性管理'],
+          },
+        ],
+        [
+          t('app.master-data.materials.importExample.code'),
+          t('app.master-data.materials.importExample.name'),
+          t('app.master-data.materials.importExample.baseUnit'),
+          '',
+          t('app.master-data.materials.importExample.sourceType'),
+          t('app.master-data.materials.importExample.groupCode'),
+          t('app.master-data.materials.importExample.rowType'),
+          '',
+          '',
+          t('app.master-data.materials.importExample.variantManaged'),
+        ],
+      ),
+    [t, i18n.language],
+  )
+
   const handleMaterialImport = async (data: any[][]) => {
     if (!data || data.length < 2) {
       messageApi.warning(t('app.master-data.importEmpty'))
@@ -1500,7 +1678,7 @@ const MaterialsManagementPage: React.FC = () => {
       return
     }
 
-    const idx = buildMaterialImportColumnIndex(headers, t('app.master-data.materials.materialGroup'))
+    const idx = buildMaterialImportColumnIndex(headers, materialImportTemplate.importHeaderMap)
     const hasMasterCols = idx.name >= 0 && idx.unit >= 0
     const hasSkuCols = idx.masterMainCode >= 0 && idx.variantAttrs >= 0
     if (!hasMasterCols && !hasSkuCols) {
@@ -1848,6 +2026,66 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'texture',
       },
       {
+        title: t('app.master-data.materialForm.weight'),
+        dataIndex: 'weight',
+        render: (_, record) => {
+          const v = record.weight ?? (record as any).weight
+          return v != null && Number(v) !== 0 ? String(v) : '-'
+        },
+      },
+      {
+        title: t('app.master-data.materialForm.volume'),
+        dataIndex: 'volume',
+        render: (_, record) => {
+          const v = record.volume ?? (record as any).volume
+          return v != null && Number(v) !== 0 ? String(v) : '-'
+        },
+      },
+      {
+        title: t('app.master-data.materialForm.barcode'),
+        dataIndex: 'barcode',
+      },
+      {
+        title: t('app.master-data.materialForm.referenceCost'),
+        dataIndex: 'referenceCost',
+        render: (_, record) => {
+          const v = record.referenceCost ?? (record as any).reference_cost
+          return v != null && v !== '' ? String(v) : '-'
+        },
+      },
+      {
+        title: t('app.master-data.materialForm.shelfLifeManaged'),
+        dataIndex: 'shelfLifeManaged',
+        render: (_, record) => {
+          const managed =
+            record.shelfLifeManaged ?? (record as any).shelf_life_managed ?? false
+          const days = record.shelfLifeDays ?? (record as any).shelf_life_days
+          if (!managed) {
+            return <Tag>{t('app.master-data.bom.no')}</Tag>
+          }
+          if (days != null) {
+            return (
+              <span>
+                {t('app.master-data.bom.yes')} · {days}
+                {t('app.master-data.materialForm.shelfLifeDayUnit')}
+              </span>
+            )
+          }
+          return <Tag color="blue">{t('app.master-data.bom.yes')}</Tag>
+        },
+      },
+      {
+        title: t('app.master-data.materialForm.countryOfOrigin'),
+        dataIndex: 'countryOfOrigin',
+        render: (_, record) =>
+          record.countryOfOrigin ?? (record as any).country_of_origin ?? '-',
+      },
+      {
+        title: t('app.master-data.materialForm.customsCode'),
+        dataIndex: 'customsCode',
+        render: (_, record) => record.customsCode ?? (record as any).customs_code ?? '-',
+      },
+      {
         title: t('app.master-data.materials.batchManaged'),
         dataIndex: 'batchManaged',
         render: (_, record) => (
@@ -1981,8 +2219,8 @@ const MaterialsManagementPage: React.FC = () => {
           renderMasterCell(
             record,
             <UniTableStackedPrimaryCell
-              primary={getMaterialProcessRouteName(record)}
-              secondary={getMaterialSourceTypeLabel(record, sourceTypeOptions)}
+              primary={getMaterialSourceTypeLabel(record, sourceTypeOptions)}
+              secondary={getMaterialProcessRouteName(record)}
               secondaryCopyable={false}
             />,
           ),
@@ -2280,6 +2518,12 @@ const MaterialsManagementPage: React.FC = () => {
                           onClick: () => handleOpenBatchSourceType(),
                         },
                         {
+                          key: 'batchDefaults',
+                          label: t('app.master-data.materials.batchDefaults'),
+                          icon: <SettingOutlined />,
+                          onClick: () => handleOpenBatchDefaults(),
+                        },
+                        {
                           key: 'batchVariant',
                           label: t('app.master-data.materials.batchVariantToolbar'),
                           icon: <ClusterOutlined />,
@@ -2405,42 +2649,9 @@ const MaterialsManagementPage: React.FC = () => {
                 }}
                 showImportButton={true}
                 onImport={handleMaterialImport}
-                importHeaders={[
-                t('app.master-data.materials.materialCode'),
-                `*${t('app.master-data.materials.materialName')}`,
-                `*${t('app.master-data.materials.baseUnit')}`,
-                t('app.master-data.materials.specification'),
-                t('app.master-data.materials.sourceType'),
-                t('app.master-data.materials.materialGroup'),
-                t('app.master-data.materials.importRowType', { defaultValue: '行类型' }),
-                t('app.master-data.materials.importMasterMainCode', { defaultValue: '主编码' }),
-                t('app.master-data.materials.importVariantAttrs', { defaultValue: '属性组合' }),
-                t('app.master-data.materials.importVariantManaged', { defaultValue: '启用属性管理' }),
-                ]}
-                importExampleRow={[
-                  'CP0001',
-                  '皮条',
-                  '件',
-                  '',
-                  'Make',
-                  'CP',
-                  '主物料',
-                  '',
-                  '',
-                  '是',
-                ]}
-                importFieldMap={{
-                [t('app.master-data.materials.materialCode')]: 'mainCode',
-                [t('app.master-data.materials.materialName')]: 'name',
-                [t('app.master-data.materials.baseUnit')]: 'baseUnit',
-                [t('app.master-data.materials.specification')]: 'specification',
-                [t('app.master-data.materials.sourceType')]: 'sourceType',
-                [t('app.master-data.materials.materialGroup')]: 'groupCode',
-                [t('app.master-data.materials.importRowType', { defaultValue: '行类型' })]: 'rowType',
-                [t('app.master-data.materials.importMasterMainCode', { defaultValue: '主编码' })]: 'masterMainCode',
-                [t('app.master-data.materials.importVariantAttrs', { defaultValue: '属性组合' })]: 'variantAttributes',
-                [t('app.master-data.materials.importVariantManaged', { defaultValue: '启用属性管理' })]: 'variantManaged',
-                }}
+                importHeaders={materialImportTemplate.importHeaders}
+                importExampleRow={materialImportTemplate.importExampleRow}
+                importFieldMap={materialImportTemplate.importHeaderMap}
                 importFieldRules={{
                 name: { required: true },
                 baseUnit: { required: true },
@@ -2624,6 +2835,113 @@ const MaterialsManagementPage: React.FC = () => {
               onChange={(v) => setBatchSourceTypeValue(v)}
               options={sourceTypeOptions}
               optionFilterProp="label"
+            />
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.batchDefaultsTitle')}
+        open={batchDefaultsOpen}
+        onCancel={() => {
+          if (!batchDefaultsSubmitting) setBatchDefaultsOpen(false)
+        }}
+        onOk={handleConfirmBatchDefaults}
+        confirmLoading={batchDefaultsSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchDefaultsHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Checkbox
+              checked={batchDefaultsApplyTax}
+              onChange={(e) => setBatchDefaultsApplyTax(e.target.checked)}
+              disabled={batchDefaultsSubmitting}
+            >
+              {t('app.master-data.materials.batchDefaultsApplyTax')}
+            </Checkbox>
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
+              disabled={!batchDefaultsApplyTax || batchDefaultsSubmitting}
+              placeholder={t('app.master-data.defaults.defaultTaxRatePlaceholder')}
+              value={batchDefaultsTaxRate}
+              onChange={(v) => setBatchDefaultsTaxRate(v)}
+              options={[
+                { label: t('app.master-data.defaults.taxRate0'), value: 0 },
+                { label: t('app.master-data.defaults.taxRate3'), value: 3 },
+                { label: t('app.master-data.defaults.taxRate6'), value: 6 },
+                { label: t('app.master-data.defaults.taxRate9'), value: 9 },
+                { label: t('app.master-data.defaults.taxRate13'), value: 13 },
+              ]}
+            />
+          </div>
+          <div>
+            <Checkbox
+              checked={batchDefaultsApplyWarehouse}
+              onChange={(e) => setBatchDefaultsApplyWarehouse(e.target.checked)}
+              disabled={batchDefaultsSubmitting}
+            >
+              {t('app.master-data.materials.batchDefaultsApplyWarehouse')}
+            </Checkbox>
+            <Select
+              mode="multiple"
+              style={{ width: '100%', marginTop: 8 }}
+              disabled={!batchDefaultsApplyWarehouse || batchDefaultsSubmitting}
+              placeholder={t('app.master-data.defaults.selectWarehouses')}
+              value={batchDefaultsWarehouseIds}
+              onChange={(v) => setBatchDefaultsWarehouseIds(v)}
+              loading={warehousesForBulkLoading}
+              options={warehousesForBulk.map((w) => ({
+                label: `${w.code} - ${w.name}`,
+                value: w.id,
+              }))}
+              optionFilterProp="label"
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+              {t('app.master-data.materials.batchDefaultsClearWarehouse')}
+            </Typography.Text>
+          </div>
+          <div>
+            <Checkbox
+              checked={batchDefaultsApplySafetyStock}
+              onChange={(e) => setBatchDefaultsApplySafetyStock(e.target.checked)}
+              disabled={batchDefaultsSubmitting}
+            >
+              {t('app.master-data.materials.batchDefaultsApplySafetyStock')}
+            </Checkbox>
+            <InputNumber
+              style={{ width: '100%', marginTop: 8 }}
+              min={0}
+              disabled={!batchDefaultsApplySafetyStock || batchDefaultsSubmitting}
+              placeholder={t('app.master-data.defaults.safetyStockPlaceholder')}
+              value={batchDefaultsSafetyStock}
+              onChange={(v) => setBatchDefaultsSafetyStock(v ?? undefined)}
+            />
+          </div>
+          <div>
+            <Checkbox
+              checked={batchDefaultsApplyMaxStock}
+              onChange={(e) => setBatchDefaultsApplyMaxStock(e.target.checked)}
+              disabled={batchDefaultsSubmitting}
+            >
+              {t('app.master-data.materials.batchDefaultsApplyMaxStock')}
+            </Checkbox>
+            <InputNumber
+              style={{ width: '100%', marginTop: 8 }}
+              min={0}
+              disabled={!batchDefaultsApplyMaxStock || batchDefaultsSubmitting}
+              placeholder={t('app.master-data.defaults.maxStockPlaceholder')}
+              value={batchDefaultsMaxStock}
+              onChange={(v) => setBatchDefaultsMaxStock(v ?? undefined)}
             />
           </div>
         </Space>
@@ -3258,6 +3576,20 @@ const MaterialsManagementPage: React.FC = () => {
                 brand: currentMaterial.brand,
                 model: currentMaterial.model,
                 texture: currentMaterial.texture ?? (currentMaterial as any).texture,
+                weight: Number(currentMaterial.weight ?? (currentMaterial as any).weight ?? 0) || undefined,
+                volume: Number(currentMaterial.volume ?? (currentMaterial as any).volume ?? 0) || undefined,
+                barcode: currentMaterial.barcode ?? (currentMaterial as any).barcode,
+                shelfLifeManaged:
+                  currentMaterial.shelfLifeManaged ??
+                  (currentMaterial as any).shelf_life_managed ??
+                  false,
+                shelfLifeDays:
+                  currentMaterial.shelfLifeDays ?? (currentMaterial as any).shelf_life_days,
+                referenceCost:
+                  currentMaterial.referenceCost ?? (currentMaterial as any).reference_cost,
+                countryOfOrigin:
+                  currentMaterial.countryOfOrigin ?? (currentMaterial as any).country_of_origin,
+                customsCode: currentMaterial.customsCode ?? (currentMaterial as any).customs_code,
                 isActive: currentMaterial.isActive ?? (currentMaterial as any).is_active,
                 inspectionMode:
                   (currentMaterial as any).inspectionMode ??

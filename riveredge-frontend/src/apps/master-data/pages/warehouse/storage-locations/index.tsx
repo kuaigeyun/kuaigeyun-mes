@@ -4,7 +4,7 @@
  * 提供库位的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
@@ -24,6 +24,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 库位管理列表页面组件
@@ -80,6 +84,32 @@ const StorageLocationsPage: React.FC = () => {
     };
     loadStorageAreas();
   }, []);
+
+  const storageLocationImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.storageLocations.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.storageLocations.name' },
+          {
+            field: 'storageAreaCode',
+            required: true,
+            labelKey: 'app.master-data.storageLocations.storageAreaCode',
+          },
+          { field: 'description', labelKey: 'app.master-data.warehouses.description' },
+        ],
+        [
+          t('app.master-data.storageLocations.importExample.code'),
+          t('app.master-data.storageLocations.importExample.name'),
+          storageAreas.length > 0
+            ? storageAreas[0].code
+            : t('app.master-data.storageAreas.importExample.code'),
+          t('app.master-data.storageLocations.importExample.description'),
+        ],
+      ),
+    [t, i18n.language, storageAreas],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -179,30 +209,10 @@ const StorageLocationsPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'storageAreaCode': 'storageAreaCode',
-      '*storageAreaCode': 'storageAreaCode',
-      'description': 'description',
-    };
-
-    // 找到表头索引
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      storageLocationImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -724,22 +734,9 @@ const StorageLocationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*code', '*name', '*storageAreaCode', 'description']}
-        importExampleRow={[
-          'SL001', 
-          'A-01-01',
-          storageAreas.length > 0 ? storageAreas[0].code : 'SA001', 
-          'Area A row 1 column 1',
-        ]}
-        importFieldMap={{
-          'code': 'code',
-          '*code': 'code',
-          'name': 'name',
-          '*name': 'name',
-          'storageAreaCode': 'storageAreaCode',
-          '*storageAreaCode': 'storageAreaCode',
-          'description': 'description',
-        }}
+        importHeaders={storageLocationImportTemplate.importHeaders}
+        importExampleRow={storageLocationImportTemplate.importExampleRow}
+        importFieldMap={storageLocationImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

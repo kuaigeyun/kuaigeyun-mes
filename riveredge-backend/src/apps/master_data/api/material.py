@@ -34,6 +34,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchDeleteRequest, MaterialBatchDeleteResponse,
     MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
     MaterialBatchUpdateProcessRouteRequest, MaterialBatchUpdateSourceTypeRequest,
+    MaterialBulkDefaultsPatchRequest,
     MaterialBatchFieldUpdateResponse,
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
@@ -1690,6 +1691,28 @@ async def bulk_update_material_source_type(
     """
     try:
         return await MaterialService.bulk_update_material_source_type(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-defaults",
+    response_model=MaterialBatchFieldUpdateResponse,
+    summary="Bulk patch material defaults JSON fields",
+)
+async def bulk_patch_material_defaults(
+    data: MaterialBulkDefaultsPatchRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量合并更新物料 defaults（税率、默认仓库、安全库存等）。
+
+    仅更新请求体中显式传入的字段，其余 defaults 键保持不变。
+    defaultWarehouseIds 传空数组表示清除默认仓库。
+    """
+    try:
+        return await MaterialService.bulk_patch_material_defaults(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

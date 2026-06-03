@@ -65,6 +65,7 @@ import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsO
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasPermission } from '../../../../../utils/permission';
 
@@ -146,7 +147,33 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const FinishedGoodsInspectionPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const finishedInspectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'workOrderCode',
+            labelKey: 'app.kuaizhizao.quality.finished.import.workOrderCode',
+            aliases: ['工单编号'],
+          },
+          { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.finished.import.inspectionQty', aliases: ['检验数量'] },
+          { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.finished.import.qualifiedQty', aliases: ['合格数量'] },
+          { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.finished.import.unqualifiedQty', aliases: ['不合格数量'] },
+          { field: 'remark', labelKey: 'app.kuaizhizao.quality.finished.import.notes', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.quality.finished.importExample.workOrderCode'),
+          t('app.kuaizhizao.quality.finished.importExample.inspectionQty'),
+          t('app.kuaizhizao.quality.finished.importExample.qualifiedQty'),
+          t('app.kuaizhizao.quality.finished.importExample.unqualifiedQty'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -786,8 +813,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         })}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['工单编号', '检验数量', '合格数量', '不合格数量', '备注']}
-        importExampleRow={['WO20250115001', '100', '98', '2', '']}
+        importHeaders={finishedInspectionImportTemplate.importHeaders}
+        importExampleRow={finishedInspectionImportTemplate.importExampleRow}
+        importFieldMap={finishedInspectionImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}

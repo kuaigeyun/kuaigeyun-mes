@@ -55,6 +55,10 @@ import dayjs from 'dayjs';
 import ProductionControlTower from './ProductionControlTower';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -121,7 +125,40 @@ const PLAN_TYPE_FALLBACK = [
 ];
 
 const ProductionPlansPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const productionPlanImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'plan_code', labelKey: 'app.kuaizhizao.productionPlan.import.planCode', aliases: ['计划编号'] },
+          { field: 'plan_name', required: true, labelKey: 'app.kuaizhizao.productionPlan.import.planName', aliases: ['计划名称'] },
+          { field: 'plan_type', labelKey: 'app.kuaizhizao.productionPlan.import.planType', aliases: ['计划类型'] },
+          { field: 'start', labelKey: 'app.kuaizhizao.productionPlan.import.startDate', aliases: ['开始日期'] },
+          { field: 'end', labelKey: 'app.kuaizhizao.productionPlan.import.endDate', aliases: ['结束日期'] },
+          {
+            field: 'material_code',
+            required: true,
+            labelKey: 'app.kuaizhizao.productionPlan.import.materialCode',
+            aliases: ['物料编号', '物料'],
+          },
+          { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.productionPlan.import.quantity', aliases: ['数量'] },
+          { field: 'unit', labelKey: 'app.kuaizhizao.productionPlan.import.unit', aliases: ['单位'] },
+        ],
+        [
+          t('app.kuaizhizao.productionPlan.importExample.planCode'),
+          t('app.kuaizhizao.productionPlan.importExample.planName'),
+          t('app.kuaizhizao.productionPlan.importExample.planType'),
+          t('app.kuaizhizao.productionPlan.importExample.startDate'),
+          t('app.kuaizhizao.productionPlan.importExample.endDate'),
+          t('app.kuaizhizao.productionPlan.importExample.materialCode'),
+          t('app.kuaizhizao.productionPlan.importExample.quantity'),
+          t('app.kuaizhizao.productionPlan.importExample.unit'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -478,36 +515,30 @@ const ProductionPlansPage: React.FC = () => {
       return;
     }
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-    const headerMap: Record<string, number> = {};
-    headers.forEach((h, i) => {
-      if (h.includes('计划编号') || h.includes('plan_code')) headerMap['plan_code'] = i;
-      else if (h.includes('计划名称') || h.includes('plan_name')) headerMap['plan_name'] = i;
-      else if (h.includes('计划类型') || h.includes('plan_type')) headerMap['plan_type'] = i;
-      else if (h.includes('开始') || h.includes('start')) headerMap['start'] = i;
-      else if (h.includes('结束') || h.includes('end')) headerMap['end'] = i;
-      else if (h.includes('物料') || h.includes('material')) headerMap['material_code'] = i;
-      else if (h.includes('数量') || h.includes('quantity')) headerMap['quantity'] = i;
-      else if (h.includes('单位') || h.includes('unit')) headerMap['unit'] = i;
-    });
-    if (headerMap['plan_name'] === undefined) {
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      productionPlanImportTemplate.importHeaderMap,
+    );
+    if (headerIndexMap.plan_name === undefined) {
       messageApi.error('导入表头需包含计划名称');
       return;
     }
-    if (headerMap['material_code'] === undefined || headerMap['quantity'] === undefined) {
+    if (headerIndexMap.material_code === undefined || headerIndexMap.quantity === undefined) {
       messageApi.error('导入表头需包含物料编号和数量');
       return;
     }
     const getVal = (row: any[], key: string) => {
-      const idx = headerMap[key];
+      const idx = headerIndexMap[key];
       if (idx === undefined) return '';
       const v = row[idx];
       return v != null ? String(v).trim() : '';
     };
     const grouped = new Map<string, { plan_name: string; plan_type: string; start: string; end: string; items: { material_code: string; quantity: number; unit: string }[] }>();
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
+    const importRows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
+    for (let i = 0; i < importRows.length; i++) {
+      const row = importRows[i];
       if (!row || row.every((c: any) => (c == null || String(c).trim() === ''))) continue;
-      const planCode = getVal(row, 'plan_code') || `PLAN-IMPORT-${i}`;
+      const planCode = getVal(row, 'plan_code') || `PLAN-IMPORT-${i + 3}`;
       const planName = getVal(row, 'plan_name');
       const materialCode = getVal(row, 'material_code');
       const qty = Number(getVal(row, 'quantity')) || 0;
@@ -608,7 +639,9 @@ const ProductionPlansPage: React.FC = () => {
           onDelete={handleBatchDelete}
           showImportButton
           onImport={handleListImport}
-          importHeaders={['计划编号', '*计划名称', '计划类型', '开始日期', '结束日期', '*物料编号', '*数量', '单位']}
+          importHeaders={productionPlanImportTemplate.importHeaders}
+          importExampleRow={productionPlanImportTemplate.importExampleRow}
+          importFieldMap={productionPlanImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

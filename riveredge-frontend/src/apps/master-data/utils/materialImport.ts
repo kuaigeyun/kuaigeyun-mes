@@ -10,6 +10,7 @@ import {
   parseImportBool,
   parseVariantAttributesImport,
 } from './parseVariantAttributesImport';
+import { resolveFactoryImportHeaderIndexMap } from '../../../utils/spreadsheetImportTemplate';
 
 export type MaterialImportRowKind = 'master' | 'sku';
 
@@ -44,31 +45,21 @@ export interface MaterialImportColumnIndex {
 
 export function buildMaterialImportColumnIndex(
   headers: string[],
-  groupTitle?: string,
+  importHeaderMap: Record<string, string>,
 ): MaterialImportColumnIndex {
-  const col = (n: string) =>
-    headers.findIndex(
-      (h) => (h || '').replace(/\*+/, '').trim() === n || (h || '').trim() === n,
-    );
-
+  const m = resolveFactoryImportHeaderIndexMap(headers, importHeaderMap);
+  const idx = (field: string) => m[field] ?? -1;
   return {
-    code: col('物料编号') >= 0 ? col('物料编号') : col('编号'),
-    name: col('物料名称') >= 0 ? col('物料名称') : col('名称'),
-    unit: col('基础单位') >= 0 ? col('基础单位') : col('单位'),
-    spec: col('规格') >= 0 ? col('规格') : -1,
-    type: col('物料类型') >= 0 ? col('物料类型') : -1,
-    group:
-      col('分组编号') >= 0
-        ? col('分组编号')
-        : col('分组') >= 0
-          ? col('分组')
-          : groupTitle && col(groupTitle) >= 0
-            ? col(groupTitle)
-            : -1,
-    rowType: col('行类型') >= 0 ? col('行类型') : -1,
-    masterMainCode: col('主编码') >= 0 ? col('主编码') : -1,
-    variantAttrs: col('属性组合') >= 0 ? col('属性组合') : -1,
-    variantManaged: col('启用属性管理') >= 0 ? col('启用属性管理') : -1,
+    code: idx('mainCode'),
+    name: idx('name'),
+    unit: idx('baseUnit'),
+    spec: idx('specification'),
+    type: idx('sourceType'),
+    group: idx('groupCode'),
+    rowType: idx('rowType'),
+    masterMainCode: idx('masterMainCode'),
+    variantAttrs: idx('variantAttributes'),
+    variantManaged: idx('variantManaged'),
   };
 }
 

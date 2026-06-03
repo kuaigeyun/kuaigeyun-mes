@@ -32,6 +32,10 @@ import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { toolApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -120,7 +124,27 @@ interface ToolCalibration {
 
 const ToolLedgerPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const toolLedgerImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.toolLedger.import.code', aliases: ['工装编号', '编号'] },
+          { field: 'name', required: true, labelKey: 'app.kuaizhizao.toolLedger.import.name', aliases: ['工装名称', '名称'] },
+          { field: 'type', labelKey: 'app.kuaizhizao.toolLedger.import.type', aliases: ['工装类型', '类型'] },
+          { field: 'spec', labelKey: 'app.kuaizhizao.toolLedger.import.specification', aliases: ['规格型号', '规格'] },
+        ],
+        [
+          t('app.kuaizhizao.toolLedger.importExample.code'),
+          t('app.kuaizhizao.toolLedger.importExample.name'),
+          t('app.kuaizhizao.toolLedger.importExample.type'),
+          t('app.kuaizhizao.toolLedger.importExample.specification'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const toolDetailDrawerZIndex = token.zIndexPopupBase;
@@ -573,32 +597,35 @@ const ToolLedgerPage: React.FC = () => {
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-            const getIdx = (...keys: string[]) => {
-              for (const k of keys) {
-                const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
-                if (i >= 0) return i;
-              }
-              return -1;
-            };
-            const nameIdx = getIdx('名称', 'name');
-            if (nameIdx < 0) {
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              toolLedgerImportTemplate.importHeaderMap,
+            );
+            if (headerIndexMap.name === undefined) {
               messageApi.error('导入表头需包含工装名称');
               return;
             }
             const items: any[] = [];
-            for (let i = 1; i < data.length; i++) {
-              const row = data[i];
-              if (!row || row.length === 0) continue;
-              const name = String(row[nameIdx] ?? '').trim();
+            const importRows = data.slice(2).filter((row: any[]) =>
+              row?.some((c: any) => c != null && String(c).trim() !== ''),
+            );
+            for (const row of importRows) {
+              const name = String(row[headerIndexMap.name] ?? '').trim();
               if (!name) continue;
-              const codeIdx = getIdx('编号', 'code');
-              const typeIdx = getIdx('类型', 'type');
-              const specIdx = getIdx('规格', 'spec');
               items.push({
-                code: codeIdx >= 0 ? String(row[codeIdx] ?? '').trim() : undefined,
+                code:
+                  headerIndexMap.code !== undefined
+                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
+                    : undefined,
                 name,
-                type: typeIdx >= 0 ? String(row[typeIdx] ?? '').trim() : undefined,
-                spec: specIdx >= 0 ? String(row[specIdx] ?? '').trim() : undefined,
+                type:
+                  headerIndexMap.type !== undefined
+                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
+                    : undefined,
+                spec:
+                  headerIndexMap.spec !== undefined
+                    ? String(row[headerIndexMap.spec] ?? '').trim() || undefined
+                    : undefined,
               });
             }
             if (items.length === 0) {
@@ -619,7 +646,9 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['工装编号', '*工装名称', '工装类型', '规格型号']}
+          importHeaders={toolLedgerImportTemplate.importHeaders}
+          importExampleRow={toolLedgerImportTemplate.importExampleRow}
+          importFieldMap={toolLedgerImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

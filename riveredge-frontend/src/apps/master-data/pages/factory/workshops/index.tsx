@@ -32,6 +32,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 车间管理列表页面组件
@@ -76,6 +80,26 @@ const WorkshopsPage: React.FC = () => {
     };
     loadPlants();
   }, []);
+
+  const workshopImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.workshops.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.workshops.name' },
+          { field: 'plantCode', required: true, labelKey: 'app.master-data.workshops.plantCode' },
+          { field: 'description', labelKey: 'app.master-data.workshops.description' },
+        ],
+        [
+          t('app.master-data.workshops.importExample.code'),
+          t('app.master-data.workshops.importExample.name'),
+          plants.length > 0 ? plants[0].code : t('app.master-data.plants.importExample.code'),
+          t('app.master-data.workshops.importExample.description'),
+        ],
+      ),
+    [t, i18n.language, plants],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -210,34 +234,10 @@ const WorkshopsPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（支持中英文，支持带*号的必填项标识）
-    // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'plantCode': 'plantCode',
-      '*plantCode': 'plantCode',
-      'description': 'description',
-    };
-
-    // 找到表头索引（支持去除空格和特殊字符）
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      // 去除空格、星号等特殊字符进行匹配
-      const normalizedHeader = String(header || '').trim();
-      // 直接匹配
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        // 尝试去除星号后匹配
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      workshopImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -697,21 +697,9 @@ const WorkshopsPage: React.FC = () => {
         viewTypes={['table', 'help']}
         defaultViewType="table"
         onImport={handleImport}
-        importHeaders={['*code', '*name', '*plantCode', 'description']}
-        importExampleRow={[
-          'WS-WX-01-01', 
-          'Precision Workshop',
-          plants.length > 0 ? plants[0].code : 'PLANT-WX-01', 
-          'Core parts machining',
-        ]}
-        importFieldMap={{
-          'code': 'code',
-          '*code': 'code',
-          'name': 'name',
-          '*name': 'name',
-          'plantCode': 'plantCode',
-          'description': 'description',
-        }}
+        importHeaders={workshopImportTemplate.importHeaders}
+        importExampleRow={workshopImportTemplate.importExampleRow}
+        importFieldMap={workshopImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

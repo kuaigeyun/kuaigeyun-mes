@@ -54,6 +54,10 @@ import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut'
 import { equipmentApi } from '../../../services/equipment';
 import { workshopApi } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -126,7 +130,31 @@ interface Equipment {
 
 const EquipmentPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const equipmentImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.equipment.import.code', aliases: ['设备编号', '编号'] },
+          { field: 'name', required: true, labelKey: 'app.kuaizhizao.equipment.import.name', aliases: ['设备名称', '名称'] },
+          { field: 'type', labelKey: 'app.kuaizhizao.equipment.import.type', aliases: ['设备类型', '类型'] },
+          { field: 'category', labelKey: 'app.kuaizhizao.equipment.import.category', aliases: ['设备分类', '分类'] },
+          { field: 'brand', labelKey: 'app.kuaizhizao.equipment.import.brand', aliases: ['品牌'] },
+          { field: 'model', labelKey: 'app.kuaizhizao.equipment.import.model', aliases: ['型号'] },
+        ],
+        [
+          t('app.kuaizhizao.equipment.importExample.code'),
+          t('app.kuaizhizao.equipment.importExample.name'),
+          t('app.kuaizhizao.equipment.importExample.type'),
+          t('app.kuaizhizao.equipment.importExample.category'),
+          t('app.kuaizhizao.equipment.importExample.brand'),
+          t('app.kuaizhizao.equipment.importExample.model'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const equipmentDetailDrawerZIndex = token.zIndexPopupBase;
@@ -652,37 +680,43 @@ const EquipmentPage: React.FC = () => {
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-            const getIdx = (...keys: string[]) => {
-              for (const k of keys) {
-                const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
-                if (i >= 0) return i;
-              }
-              return -1;
-            };
-            const codeIdx = getIdx('编号', 'code');
-            const nameIdx = getIdx('名称', 'name');
-            if (nameIdx < 0) {
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              equipmentImportTemplate.importHeaderMap,
+            );
+            if (headerIndexMap.name === undefined) {
               messageApi.error('导入表头需包含设备名称');
               return;
             }
             const items: any[] = [];
-            for (let i = 1; i < data.length; i++) {
-              const row = data[i];
-              if (!row || row.length === 0) continue;
-              const name = String(row[nameIdx] ?? '').trim();
+            const importRows = data.slice(2).filter((row: any[]) =>
+              row?.some((c: any) => c != null && String(c).trim() !== ''),
+            );
+            for (const row of importRows) {
+              const name = String(row[headerIndexMap.name] ?? '').trim();
               if (!name) continue;
-              const code = codeIdx >= 0 ? String(row[codeIdx] ?? '').trim() : undefined;
-              const typeIdx = getIdx('类型', 'type');
-              const catIdx = getIdx('分类', 'category');
-              const brandIdx = getIdx('品牌', 'brand');
-              const modelIdx = getIdx('型号', 'model');
               items.push({
-                code: code || undefined,
+                code:
+                  headerIndexMap.code !== undefined
+                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
+                    : undefined,
                 name,
-                type: typeIdx >= 0 ? String(row[typeIdx] ?? '').trim() : undefined,
-                category: catIdx >= 0 ? String(row[catIdx] ?? '').trim() : undefined,
-                brand: brandIdx >= 0 ? String(row[brandIdx] ?? '').trim() : undefined,
-                model: modelIdx >= 0 ? String(row[modelIdx] ?? '').trim() : undefined,
+                type:
+                  headerIndexMap.type !== undefined
+                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
+                    : undefined,
+                category:
+                  headerIndexMap.category !== undefined
+                    ? String(row[headerIndexMap.category] ?? '').trim() || undefined
+                    : undefined,
+                brand:
+                  headerIndexMap.brand !== undefined
+                    ? String(row[headerIndexMap.brand] ?? '').trim() || undefined
+                    : undefined,
+                model:
+                  headerIndexMap.model !== undefined
+                    ? String(row[headerIndexMap.model] ?? '').trim() || undefined
+                    : undefined,
               });
             }
             if (items.length === 0) {
@@ -703,7 +737,9 @@ const EquipmentPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['设备编号', '*设备名称', '设备类型', '设备分类', '品牌', '型号']}
+          importHeaders={equipmentImportTemplate.importHeaders}
+          importExampleRow={equipmentImportTemplate.importExampleRow}
+          importFieldMap={equipmentImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

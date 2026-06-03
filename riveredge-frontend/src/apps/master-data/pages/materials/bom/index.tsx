@@ -41,6 +41,10 @@ import { searchUserDisplay } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
 type MaterialBOMProColumn = ProColumns<MaterialBOMRow> & {
@@ -229,7 +233,7 @@ function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProD
  * 物料清单BOM管理列表页面组件
  */
 const BOMPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -260,6 +264,32 @@ const BOMPage: React.FC = () => {
   
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
+
+  const bomImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'parentCode', required: true, labelKey: 'app.master-data.bom.importHeaderParentCode' },
+          { field: 'componentCode', required: true, labelKey: 'app.master-data.bom.importHeaderComponentCode' },
+          { field: 'quantity', required: true, labelKey: 'app.master-data.bom.importHeaderQuantity' },
+          { field: 'unit', labelKey: 'app.master-data.bom.importHeaderUnit' },
+          { field: 'wasteRate', labelKey: 'app.master-data.bom.importHeaderWasteRate' },
+          { field: 'isRequired', labelKey: 'app.master-data.bom.importHeaderIsRequired' },
+          { field: 'remark', labelKey: 'app.master-data.bom.importHeaderRemark' },
+        ],
+        [
+          t('app.master-data.bom.importExample.parentCode'),
+          t('app.master-data.bom.importExample.componentCode'),
+          t('app.master-data.bom.importExample.quantity'),
+          t('app.master-data.bom.importExample.unit'),
+          t('app.master-data.bom.importExample.wasteRate'),
+          t('app.master-data.bom.importExample.isRequired'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
   
   // 版本管理Modal状态
   const [versionModalVisible, setVersionModalVisible] = useState(false);
@@ -1290,22 +1320,21 @@ const BOMPage: React.FC = () => {
         return;
       }
 
-      // 解析数据（第一行是表头，从第二行开始是数据）
-      const headers = data[0];
-      const rows = data.slice(1);
+      const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+      const rows = data.slice(2).filter((row: any[]) =>
+        row?.some((c: any) => c != null && String(c).trim() !== ''),
+      );
 
-      // 验证表头
-      const expectedHeaders = ['父件编号', '子件编号', '子件数量', '子件单位', '损耗率', '是否必选', '备注'];
-      const headerIndexes: Record<string, number> = {};
-      expectedHeaders.forEach((header, index) => {
-        const foundIndex = headers.findIndex(h => h === header || h?.toString().trim() === header);
-        if (foundIndex >= 0) {
-          headerIndexes[header] = foundIndex;
-        }
-      });
+      const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+        headers,
+        bomImportTemplate.importHeaderMap,
+      );
 
-      // 必填字段验证
-      if (headerIndexes['父件编号'] === undefined || headerIndexes['子件编号'] === undefined || headerIndexes['子件数量'] === undefined) {
+      if (
+        headerIndexMap['parentCode'] === undefined ||
+        headerIndexMap['componentCode'] === undefined ||
+        headerIndexMap['quantity'] === undefined
+      ) {
         messageApi.error(t('app.master-data.bom.importHeadersRequired'));
         return;
       }
@@ -1315,37 +1344,48 @@ const BOMPage: React.FC = () => {
       const errors: string[] = [];
 
       rows.forEach((row, rowIndex) => {
-        // 跳过空行
-        if (!row || row.length === 0 || !row[headerIndexes['父件编号']]) {
+        if (!row || row.length === 0 || !row[headerIndexMap['parentCode']]) {
           return;
         }
 
-        const parentCode = row[headerIndexes['父件编号']]?.toString().trim();
-        const componentCode = row[headerIndexes['子件编号']]?.toString().trim();
-        const quantityStr = row[headerIndexes['子件数量']]?.toString().trim();
-        const unit = headerIndexes['子件单位'] !== undefined ? row[headerIndexes['子件单位']]?.toString().trim() : undefined;
-        const wasteRateStr = headerIndexes['损耗率'] !== undefined ? row[headerIndexes['损耗率']]?.toString().trim() : undefined;
-        const isRequiredStr = headerIndexes['是否必选'] !== undefined ? row[headerIndexes['是否必选']]?.toString().trim() : undefined;
-        const remark = headerIndexes['备注'] !== undefined ? row[headerIndexes['备注']]?.toString().trim() : undefined;
+        const parentCode = row[headerIndexMap['parentCode']]?.toString().trim();
+        const componentCode = row[headerIndexMap['componentCode']]?.toString().trim();
+        const quantityStr = row[headerIndexMap['quantity']]?.toString().trim();
+        const unit =
+          headerIndexMap['unit'] !== undefined
+            ? row[headerIndexMap['unit']]?.toString().trim()
+            : undefined;
+        const wasteRateStr =
+          headerIndexMap['wasteRate'] !== undefined
+            ? row[headerIndexMap['wasteRate']]?.toString().trim()
+            : undefined;
+        const isRequiredStr =
+          headerIndexMap['isRequired'] !== undefined
+            ? row[headerIndexMap['isRequired']]?.toString().trim()
+            : undefined;
+        const remark =
+          headerIndexMap['remark'] !== undefined
+            ? row[headerIndexMap['remark']]?.toString().trim()
+            : undefined;
 
         // 验证必填字段
         if (!parentCode) {
-          errors.push(`第 ${rowIndex + 2} 行：父件编号不能为空`);
+          errors.push(`第 ${rowIndex + 3} 行：父件编号不能为空`);
           return;
         }
         if (!componentCode) {
-          errors.push(`第 ${rowIndex + 2} 行：子件编号不能为空`);
+          errors.push(`第 ${rowIndex + 3} 行：子件编号不能为空`);
           return;
         }
         if (!quantityStr) {
-          errors.push(`第 ${rowIndex + 2} 行：子件数量不能为空`);
+          errors.push(`第 ${rowIndex + 3} 行：子件数量不能为空`);
           return;
         }
 
         // 解析数量
         const quantity = parseFloat(quantityStr);
         if (isNaN(quantity) || quantity <= 0) {
-          errors.push(`第 ${rowIndex + 2} 行：子件数量必须是大于0的数字`);
+          errors.push(`第 ${rowIndex + 3} 行：子件数量必须是大于0的数字`);
           return;
         }
 
@@ -1355,7 +1395,7 @@ const BOMPage: React.FC = () => {
           const wasteRateValue = parseFloat(wasteRateStr.replace('%', ''));
           if (!isNaN(wasteRateValue)) {
             if (wasteRateValue < 0 || wasteRateValue > 100) {
-              errors.push(`第 ${rowIndex + 2} 行：损耗率必须在0-100之间`);
+              errors.push(`第 ${rowIndex + 3} 行：损耗率必须在0-100之间`);
               return;
             }
             wasteRate = wasteRateValue;
@@ -2513,17 +2553,9 @@ const BOMPage: React.FC = () => {
         }
         showImportButton={true}
         onImport={handleBatchImportConfirm}
-        importHeaders={['父件编号', '子件编号', '子件数量', '子件单位', '损耗率', '是否必选', '备注']}
-        importExampleRow={['SALE-A001', 'PROD-A001', '2', '个', '0%', '是', '']}
-        importFieldMap={{
-          '父件编号': 'parentCode',
-          '子件编号': 'componentCode',
-          '子件数量': 'quantity',
-          '子件单位': 'unit',
-          '损耗率': 'wasteRate',
-          '是否必选': 'isRequired',
-          '备注': 'remark',
-        }}
+        importHeaders={bomImportTemplate.importHeaders}
+        importExampleRow={bomImportTemplate.importExampleRow}
+        importFieldMap={bomImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={async (type, selectedRowKeys, currentPageData) => {
           try {

@@ -18,6 +18,7 @@ import type {
   MaterialBulkTrackingPayload,
   MaterialBulkTrackingResult,
   MaterialBulkVariantPayload,
+  MaterialBulkDefaultsPatchPayload,
   MaterialGenerateVariantsPayload,
   MaterialGenerateVariantsResult,
   MaterialMaterializeVariantPayload,
@@ -361,6 +362,22 @@ export const materialApi = {
       material_uuids: data.material_uuids,
       variantManaged: data.variantManaged,
     });
+  },
+
+  /**
+   * 批量合并更新物料 defaults（税率、默认仓库、安全库存等）
+   */
+  bulkPatchDefaults: async (
+    data: MaterialBulkDefaultsPatchPayload,
+  ): Promise<MaterialBatchFieldUpdateResult> => {
+    const body: Record<string, unknown> = { material_uuids: data.material_uuids };
+    if (data.defaultTaxRate !== undefined) body.defaultTaxRate = data.defaultTaxRate;
+    if (data.defaultWarehouseIds !== undefined) body.defaultWarehouseIds = data.defaultWarehouseIds;
+    if (data.safetyStock !== undefined) body.safetyStock = data.safetyStock;
+    if (data.maxStock !== undefined) body.maxStock = data.maxStock;
+    if (data.defaultSalePrice !== undefined) body.defaultSalePrice = data.defaultSalePrice;
+    if (data.defaultLocation !== undefined) body.defaultLocation = data.defaultLocation;
+    return api.post('/apps/master-data/materials/batch-defaults', body);
   },
 
   listVariants: async (materialUuid: string): Promise<Material[]> =>

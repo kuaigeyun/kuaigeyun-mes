@@ -28,12 +28,16 @@ import { materialApi, materialGroupApi } from '../../../services/material';
 import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 标准操作SOP管理列表页面组件
  */
 const SOPPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -63,6 +67,24 @@ const SOPPage: React.FC = () => {
   const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const sopDetailReqRef = useRef(0);
+
+  const sopImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.sop.codeLabel' },
+          { field: 'name', required: true, labelKey: 'app.master-data.sop.nameLabel' },
+          { field: 'version', labelKey: 'app.master-data.sop.versionLabel' },
+        ],
+        [
+          t('app.master-data.sop.importExample.code'),
+          t('app.master-data.sop.importExample.name'),
+          t('app.master-data.sop.importExample.version'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   /**
    * 从 URL 参数打开编辑弹窗（editUuid）、设计页（editUuid+tab=workflow/formConfig）或新建弹窗（create=1）
@@ -324,26 +346,44 @@ const SOPPage: React.FC = () => {
       messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
-    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
-    const idxCode = col('SOP编号') >= 0 ? col('SOP编号') : col('编号');
-    const idxName = col('SOP名称') >= 0 ? col('SOP名称') : col('名称');
-    const idxVersion = col('版本') >= 0 ? col('版本') : -1;
-    if (idxCode < 0 || idxName < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: 'SOP编号/名称', headers: headers.join(', ') }));
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      sopImportTemplate.importHeaderMap,
+    );
+    if (headerIndexMap['code'] === undefined || headerIndexMap['name'] === undefined) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: `${t('app.master-data.sop.codeLabel')}/${t('app.master-data.sop.nameLabel')}`,
+          headers: headers.join(', '),
+        }),
+      );
       return;
     }
     const items: SOPCreate[] = [];
     const errors: Array<{ row: number; message: string }> = [];
     rows.forEach((row: any[], i: number) => {
-      const code = (row[idxCode] ?? '').toString().trim();
-      const name = (row[idxName] ?? '').toString().trim();
-      const version = idxVersion >= 0 ? (row[idxVersion] ?? '').toString().trim() : undefined;
+      const code = (row[headerIndexMap['code']] ?? '').toString().trim();
+      const name = (row[headerIndexMap['name']] ?? '').toString().trim();
+      const version =
+        headerIndexMap['version'] !== undefined
+          ? (row[headerIndexMap['version']] ?? '').toString().trim()
+          : undefined;
       if (!code) {
-        errors.push({ row: i + 3, message: 'SOP编号不能为空' });
+        errors.push({
+          row: i + 3,
+          message: t('app.master-data.operations.codeRequired', {
+            defaultValue: `${t('app.master-data.sop.codeLabel')}不能为空`,
+          }),
+        });
         return;
       }
       if (!name) {
-        errors.push({ row: i + 3, message: 'SOP名称不能为空' });
+        errors.push({
+          row: i + 3,
+          message: t('app.master-data.routes.nameRequired', {
+            defaultValue: `${t('app.master-data.sop.nameLabel')}不能为空`,
+          }),
+        });
         return;
       }
       items.push({ code, name, version: version || undefined, isActive: true });
@@ -924,15 +964,9 @@ const SOPPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*SOP编号', '*SOP名称', '版本']}
-        importExampleRow={['SOP001', '装配作业指导', 'v1.0']}
-        importFieldMap={{
-          'SOP编号': 'code',
-          '*SOP编号': 'code',
-          'SOP名称': 'name',
-          '*SOP名称': 'name',
-          '版本': 'version',
-        }}
+        importHeaders={sopImportTemplate.importHeaders}
+        importExampleRow={sopImportTemplate.importExampleRow}
+        importFieldMap={sopImportTemplate.importHeaderMap}
         importFieldRules={{ code: { required: true }, name: { required: true } }}
         showExportButton={true}
         onExport={handleExport}

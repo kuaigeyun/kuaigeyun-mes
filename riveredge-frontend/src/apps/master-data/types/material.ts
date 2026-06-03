@@ -118,6 +118,19 @@ export interface Material {
   brand?: string;
   model?: string;
   texture?: string;
+  weight?: number;
+  volume?: number;
+  barcode?: string;
+  shelfLifeManaged?: boolean;
+  shelf_life_managed?: boolean;
+  shelfLifeDays?: number;
+  shelf_life_days?: number;
+  referenceCost?: number;
+  reference_cost?: number;
+  countryOfOrigin?: string;
+  country_of_origin?: string;
+  customsCode?: string;
+  customs_code?: string;
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
   codeAliases?: MaterialCodeAlias[]; // 编号别名列表
@@ -314,6 +327,17 @@ export interface MaterialBulkTrackingPayload {
 export interface MaterialBulkVariantPayload {
   material_uuids: string[];
   variantManaged: boolean;
+}
+
+/** POST /materials/batch-defaults — 合并更新 defaults 部分字段 */
+export interface MaterialBulkDefaultsPatchPayload {
+  material_uuids: string[];
+  defaultTaxRate?: number;
+  defaultWarehouseIds?: number[];
+  safetyStock?: number;
+  maxStock?: number;
+  defaultSalePrice?: number;
+  defaultLocation?: string;
 }
 
 /** POST /materials/{uuid}/generate-variants */

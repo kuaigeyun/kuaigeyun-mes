@@ -202,6 +202,10 @@ const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
 const WORK_ORDER_ROW_EXPAND_STALE_MS = 60_000
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate'
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
 
@@ -971,8 +975,42 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
 const WORK_ORDER_LIFECYCLE_VALUE_ENUM = buildWorkOrderLifecycleValueEnum()
 
 const WorkOrdersPage: React.FC = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message: messageApi } = App.useApp()
+
+  const workOrderImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.workOrder.import.code', aliases: ['工单编号', '编号'] },
+          {
+            field: 'product',
+            required: true,
+            labelKey: 'app.kuaizhizao.workOrder.import.productCode',
+            aliases: ['产品编号', '物料编号'],
+          },
+          {
+            field: 'plannedQty',
+            required: true,
+            labelKey: 'app.kuaizhizao.workOrder.import.plannedQty',
+            aliases: ['计划数量', '数量'],
+          },
+          {
+            field: 'workshop',
+            labelKey: 'app.kuaizhizao.workOrder.import.workshopCode',
+            aliases: ['车间编号', '车间'],
+          },
+        ],
+        [
+          t('app.kuaizhizao.workOrder.importExample.code'),
+          t('app.kuaizhizao.workOrder.importExample.productCode'),
+          t('app.kuaizhizao.workOrder.importExample.plannedQty'),
+          t('app.kuaizhizao.workOrder.importExample.workshopCode'),
+        ],
+      ),
+    [t, i18n.language],
+  )
   const pullFromDemandComputationAction = getKuaizhizaoDocumentAction('work_order.pull_from_demand_computation')
   const pullFromProductionPlanAction = getKuaizhizaoDocumentAction('work_order.pull_from_production_plan')
   const { token } = theme.useToken()
@@ -3028,15 +3066,18 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
 
-    const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name)
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      workOrderImportTemplate.importHeaderMap,
+    )
     const idx = {
-      code: col('工单编号') >= 0 ? col('工单编号') : col('编号'),
-      product: col('产品编号') >= 0 ? col('产品编号') : col('物料编号'),
-      qty: col('计划数量') >= 0 ? col('计划数量') : col('数量'),
-      workshop: col('车间编号') >= 0 ? col('车间编号') : col('车间'),
+      code: headerIndexMap.code,
+      product: headerIndexMap.product,
+      qty: headerIndexMap.plannedQty,
+      workshop: headerIndexMap.workshop,
     }
 
-    if (idx.product < 0 || idx.qty < 0) {
+    if (idx.product === undefined || idx.qty === undefined) {
       messageApi.error('缺少必需列：产品编号、计划数量')
       return
     }
@@ -3069,8 +3110,8 @@ const WorkOrdersPage: React.FC = () => {
         return
       }
 
-      const woCode = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : undefined
-      const workshopCode = idx.workshop >= 0 ? (row[idx.workshop] ?? '').toString().trim() : undefined
+      const woCode = idx.code !== undefined ? (row[idx.code] ?? '').toString().trim() : undefined
+      const workshopCode = idx.workshop !== undefined ? (row[idx.workshop] ?? '').toString().trim() : undefined
       let workshopId: number | undefined
       if (workshopCode) {
         const ws = workshops.find((w: any) => (w.code || '').toUpperCase() === workshopCode.toUpperCase())
@@ -5659,19 +5700,12 @@ const WorkOrdersPage: React.FC = () => {
           showDeleteButton
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['工单编号', '*产品编号', '*计划数量', '车间编号']}
-          importExampleRow={['WO001', 'PROD-A001', '100', 'WS001']}
-          importFieldMap={{
-            '工单编号': 'code',
-            '产品编号': 'product_code',
-            '*产品编号': 'product_code',
-            '计划数量': 'quantity',
-            '*计划数量': 'quantity',
-            '车间编号': 'workshop_code',
-          }}
+          importHeaders={workOrderImportTemplate.importHeaders}
+          importExampleRow={workOrderImportTemplate.importExampleRow}
+          importFieldMap={workOrderImportTemplate.importHeaderMap}
           importFieldRules={{
-            product_code: { required: true },
-            quantity: { required: true },
+            product: { required: true },
+            plannedQty: { required: true },
           }}
           showExportButton
           onExport={async (type, keys, pageData) => {

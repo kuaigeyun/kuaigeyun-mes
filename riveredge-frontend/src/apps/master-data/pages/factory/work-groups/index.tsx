@@ -4,7 +4,7 @@
  * 提供工作小组的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
@@ -22,6 +22,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 const WorkGroupsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -45,6 +49,24 @@ const WorkGroupsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<WorkGroup>({ tableName: 'master_data_factory_work_groups' });
+
+  const workGroupImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.workGroup.code' },
+          { field: 'name', required: true, labelKey: 'field.workGroup.name' },
+          { field: 'description', labelKey: 'field.workGroup.description' },
+        ],
+        [
+          t('app.master-data.workGroups.importExample.code'),
+          t('app.master-data.workGroups.importExample.name'),
+          t('app.master-data.workGroups.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -155,26 +177,10 @@ const WorkGroupsPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'description': 'description',
-    };
-
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      workGroupImportTemplate.importHeaderMap,
+    );
 
     if (headerIndexMap['code'] === undefined) {
       messageApi.error(
@@ -634,19 +640,9 @@ const WorkGroupsPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*code', '*name', 'description']}
-          importExampleRow={[
-            'WG001',
-            'Assembly Team 1',
-            'Team for assembly operations',
-          ]}
-          importFieldMap={{
-            'code': 'code',
-            '*code': 'code',
-            'name': 'name',
-            '*name': 'name',
-            'description': 'description',
-          }}
+          importHeaders={workGroupImportTemplate.importHeaders}
+          importExampleRow={workGroupImportTemplate.importExampleRow}
+          importFieldMap={workGroupImportTemplate.importHeaderMap}
           importFieldRules={{
             code: { required: true },
             name: { required: true },

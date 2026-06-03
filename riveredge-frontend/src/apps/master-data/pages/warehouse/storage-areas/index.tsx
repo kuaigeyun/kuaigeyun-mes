@@ -4,7 +4,7 @@
  * 提供库区的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
@@ -25,6 +25,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 库区管理列表页面组件
@@ -80,6 +84,28 @@ const StorageAreasPage: React.FC = () => {
     };
     loadWarehouses();
   }, []);
+
+  const storageAreaImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.storageAreas.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.storageAreas.name' },
+          { field: 'warehouseCode', required: true, labelKey: 'app.master-data.storageAreas.warehouseCode' },
+          { field: 'description', labelKey: 'app.master-data.storageAreas.description' },
+        ],
+        [
+          t('app.master-data.storageAreas.importExample.code'),
+          t('app.master-data.storageAreas.importExample.name'),
+          warehouses.length > 0
+            ? warehouses[0].code
+            : t('app.master-data.warehouses.importExample.code'),
+          t('app.master-data.storageAreas.importExample.description'),
+        ],
+      ),
+    [t, i18n.language, warehouses],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -179,30 +205,10 @@ const StorageAreasPage: React.FC = () => {
       return;
     }
 
-    // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'warehouseCode': 'warehouseCode',
-      '*warehouseCode': 'warehouseCode',
-      'description': 'description',
-    };
-
-    // 找到表头索引
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      storageAreaImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -725,22 +731,9 @@ const StorageAreasPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*code', '*name', '*warehouseCode', 'description']}
-        importExampleRow={[
-          'SA001', 
-          'Area A',
-          warehouses.length > 0 ? warehouses[0].code : 'WH001', 
-          'For category A materials',
-        ]}
-        importFieldMap={{
-          'code': 'code',
-          '*code': 'code',
-          'name': 'name',
-          '*name': 'name',
-          'warehouseCode': 'warehouseCode',
-          '*warehouseCode': 'warehouseCode',
-          'description': 'description',
-        }}
+        importHeaders={storageAreaImportTemplate.importHeaders}
+        importExampleRow={storageAreaImportTemplate.importExampleRow}
+        importFieldMap={storageAreaImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

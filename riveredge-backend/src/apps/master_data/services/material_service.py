@@ -79,6 +79,39 @@ def _material_defaults_as_dict(raw: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _normalize_material_logistics_fields(material_data: Dict[str, Any], *, for_create: bool = False) -> None:
+    """规范化物流/贸易扩展字段（条码、保质期、重量体积等）。"""
+    for key in ("barcode", "country_of_origin", "customs_code"):
+        if key in material_data and material_data[key] is not None:
+            val = str(material_data[key]).strip()
+            material_data[key] = val if val else None
+
+    if "shelf_life_managed" in material_data:
+        if not material_data.get("shelf_life_managed"):
+            material_data["shelf_life_days"] = None
+        elif material_data.get("shelf_life_days") is None:
+            raise ValidationError("启用保质期管理时请填写保质期天数")
+
+    for key in ("weight", "volume"):
+        if key not in material_data:
+            continue
+        val = material_data[key]
+        if val is None:
+            if for_create:
+                material_data[key] = 0
+            else:
+                material_data.pop(key, None)
+        else:
+            material_data[key] = float(val)
+
+    if "reference_cost" in material_data:
+        rc = material_data["reference_cost"]
+        if rc is None or rc == "":
+            material_data["reference_cost"] = None
+        else:
+            material_data["reference_cost"] = float(rc)
+
+
 async def resolve_primary_default_warehouse_from_material(
     tenant_id: int,
     material_id: Optional[int] = None,
@@ -363,6 +396,14 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "model": getattr(material, "model", None),
         "texture": getattr(material, "texture", None),
         "images": getattr(material, "images", None),
+        "weight": getattr(material, "weight", None),
+        "volume": getattr(material, "volume", None),
+        "barcode": getattr(material, "barcode", None),
+        "shelf_life_managed": getattr(material, "shelf_life_managed", False),
+        "shelf_life_days": getattr(material, "shelf_life_days", None),
+        "reference_cost": getattr(material, "reference_cost", None),
+        "country_of_origin": getattr(material, "country_of_origin", None),
+        "customs_code": getattr(material, "customs_code", None),
         "is_active": getattr(material, "is_active", True),
         "defaults": getattr(material, "defaults", None),
         "source_type": getattr(material, "source_type", None),
@@ -915,6 +956,8 @@ class MaterialService:
         if not main_code_val or (isinstance(main_code_val, str) and not main_code_val.strip()):
             raise ValidationError("物料主编码不能为空，请检查编码规则或手动填写")
         material_data["main_code"] = main_code_val.strip() if isinstance(main_code_val, str) else main_code_val
+
+        _normalize_material_logistics_fields(material_data, for_create=True)
         
         # 同步 code：主物料 code=main_code；属性 SKU 在创建循环内分配唯一编码
         is_variant_sku = bool(material_data.get("variant_attributes"))
@@ -2236,6 +2279,8 @@ class MaterialService:
         if "variant_attributes" in update_data and update_data["variant_attributes"]:
             sorted_attrs = dict(sorted(update_data["variant_attributes"].items()))
             update_data["variant_attributes"] = sorted_attrs
+
+        _normalize_material_logistics_fields(update_data, for_create=False)
         
         for key, value in update_data.items():
             setattr(material, key, value)
@@ -2633,6 +2678,98 @@ class MaterialService:
 
         return MaterialBatchFieldUpdateResponse(
             updated_count=len(ids),
+            requested_count=len(uuids),
+            not_found_uuids=not_found,
+        )
+
+    @staticmethod
+    async def bulk_patch_material_defaults(
+        tenant_id: int,
+        data: Any,
+    ) -> MaterialBatchFieldUpdateResponse:
+        """批量合并更新物料 defaults JSON（仅覆盖请求中显式传入的键）。"""
+        from tortoise import timezone
+        from apps.master_data.models.warehouse import Warehouse
+
+        uuids = list(dict.fromkeys(str(u).strip() for u in data.material_uuids if u))
+        if not uuids:
+            return MaterialBatchFieldUpdateResponse(
+                updated_count=0,
+                requested_count=0,
+                not_found_uuids=[],
+            )
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+        ).all()
+        found_uuid_set = {str(m.uuid) for m in materials}
+        not_found = [u for u in uuids if u not in found_uuid_set]
+
+        if not materials:
+            return MaterialBatchFieldUpdateResponse(
+                updated_count=0,
+                requested_count=len(uuids),
+                not_found_uuids=not_found,
+            )
+
+        patch: Dict[str, Any] = {}
+        if data.default_tax_rate is not None:
+            patch["defaultTaxRate"] = int(data.default_tax_rate)
+
+        if data.default_warehouse_ids is not None:
+            wh_ids = list(dict.fromkeys(int(i) for i in data.default_warehouse_ids))
+            if wh_ids:
+                warehouses = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    id__in=wh_ids,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).all()
+                wh_by_id = {w.id: w for w in warehouses}
+                missing = [i for i in wh_ids if i not in wh_by_id]
+                if missing:
+                    raise ValidationError(f"仓库不存在或未启用: {missing}")
+                patch["defaultWarehouses"] = [
+                    {
+                        "warehouseId": wh_by_id[wid].id,
+                        "warehouseName": wh_by_id[wid].name,
+                        "priority": idx + 1,
+                    }
+                    for idx, wid in enumerate(wh_ids)
+                ]
+            else:
+                patch["__clear_defaultWarehouses"] = True
+
+        if data.safety_stock is not None:
+            patch["safetyStock"] = float(data.safety_stock)
+        if data.max_stock is not None:
+            patch["maxStock"] = float(data.max_stock)
+        if data.default_sale_price is not None:
+            patch["defaultSalePrice"] = float(data.default_sale_price)
+        if data.default_location is not None:
+            loc = (data.default_location or "").strip()
+            patch["defaultLocation"] = loc if loc else None
+
+        now = timezone.now()
+        updated = 0
+        for material in materials:
+            merged = dict(_material_defaults_as_dict(material.defaults) or {})
+            for key, value in patch.items():
+                if key == "__clear_defaultWarehouses":
+                    merged.pop("defaultWarehouses", None)
+                    merged.pop("default_warehouses", None)
+                    merged.pop("defaultWarehouseIds", None)
+                else:
+                    merged[key] = value
+            material.defaults = merged if merged else None
+            material.updated_at = now
+            await material.save(update_fields=["defaults", "updated_at"])
+            updated += 1
+
+        return MaterialBatchFieldUpdateResponse(
+            updated_count=updated,
             requested_count=len(uuids),
             not_found_uuids=not_found,
         )

@@ -25,12 +25,16 @@ import type { Operation, DefectTypeMinimal } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import dayjs from 'dayjs';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 工序信息管理列表页面组件
  */
 const OperationsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
@@ -51,6 +55,40 @@ const OperationsPage: React.FC = () => {
   const [selectedPresetKeys, setSelectedPresetKeys] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const operationDetailReqRef = useRef(0);
+
+  const operationImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.operation.code' },
+          { field: 'name', required: true, labelKey: 'field.operation.name' },
+          {
+            field: 'description',
+            labelKey: 'field.operation.description',
+            aliases: ['描述'],
+          },
+          {
+            field: 'isActive',
+            labelKey: 'app.master-data.operations.isActive',
+            aliases: ['启用状态'],
+          },
+          {
+            field: 'defectTypes',
+            labelKey: 'app.master-data.operations.defectTypes',
+            aliases: ['不良品项'],
+          },
+        ],
+        [
+          t('app.master-data.operations.importExample.code'),
+          t('app.master-data.operations.importExample.name'),
+          t('app.master-data.operations.importExample.description'),
+          t('app.master-data.operations.importExample.isActive'),
+          t('app.master-data.operations.importExample.defectTypes'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const presetOperations = useMemo(() => {
     if (!presetCatalog?.industries?.length || !presetIndustryId) return [];
@@ -230,41 +268,45 @@ const OperationsPage: React.FC = () => {
       return;
     }
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-    const idx = (key: string) => {
-      const k = key.toLowerCase();
-      const i = headers.findIndex((h: string) => h.replace(/^\*/, '').toLowerCase().includes(k) || (k === 'code' && (h.includes('编号') || h.includes('code'))) || (k === 'name' && (h.includes('名称') || h.includes('name'))));
-      return i >= 0 ? i : -1;
-    };
-    const codeIdx = idx('code') >= 0 ? idx('code') : headers.findIndex((h: string) => h.includes('工序编号'));
-    const nameIdx = idx('name') >= 0 ? idx('name') : headers.findIndex((h: string) => h.includes('工序名称'));
-    if (codeIdx < 0 || nameIdx < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工序编号、工序名称', headers: headers.join(', ') }));
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      operationImportTemplate.importHeaderMap,
+    );
+    if (headerIndexMap['code'] === undefined || headerIndexMap['name'] === undefined) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: `${t('field.operation.code')}、${t('field.operation.name')}`,
+          headers: headers.join(', '),
+        }),
+      );
       return;
     }
-    const descIdx = headers.findIndex((h: string) => h.includes('描述') || h.toLowerCase().includes('desc'));
-    const activeIdx = headers.findIndex((h: string) => h.includes('启用') || h.toLowerCase().includes('active'));
-    const defectIdx = headers.findIndex((h: string) => h.includes('不良品') || h.toLowerCase().includes('defect'));
 
-    // 1. 收集所有不良品项（编号或名称，逗号/分号分隔）
+    const parseIsActive = (cell: unknown) => {
+      if (cell === true) return true;
+      const s = String(cell ?? '').trim().toLowerCase();
+      return s === '是' || s === '1' || s === 'true' || s === 'enabled' || s === '启用';
+    };
+
     const allDefectInputs = new Set<string>();
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (!row || row.length === 0) continue;
-      const code = String(row[codeIdx] ?? '').trim();
-      const name = String(row[nameIdx] ?? '').trim();
+    for (const row of rows) {
+      if (!row?.length) continue;
+      const code = String(row[headerIndexMap['code']] ?? '').trim();
+      const name = String(row[headerIndexMap['name']] ?? '').trim();
       if (!code || !name) continue;
-      if (defectIdx >= 0 && row[defectIdx] != null) {
+      const defectIdx = headerIndexMap['defectTypes'];
+      if (defectIdx !== undefined && row[defectIdx] != null) {
         const val = String(row[defectIdx]).trim();
         if (val) {
-          val.split(/[,，;；]/).forEach((s: string) => {
-            const t = s.trim();
-            if (t) allDefectInputs.add(t);
+          val.split(/[,，;；]/).forEach((part: string) => {
+            const trimmed = part.trim();
+            if (trimmed) allDefectInputs.add(trimmed);
           });
         }
       }
     }
 
-    // 2. 批量解析或创建不良品项
     let defectMap: Record<string, string> = {};
     if (allDefectInputs.size > 0) {
       try {
@@ -276,14 +318,14 @@ const OperationsPage: React.FC = () => {
     }
 
     const items: { code: string; name: string; description?: string; isActive?: boolean; defectTypeUuids?: string[] }[] = [];
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (!row || row.length === 0) continue;
-      const code = String(row[codeIdx] ?? '').trim();
-      const name = String(row[nameIdx] ?? '').trim();
+    for (const row of rows) {
+      if (!row?.length) continue;
+      const code = String(row[headerIndexMap['code']] ?? '').trim();
+      const name = String(row[headerIndexMap['name']] ?? '').trim();
       if (!code || !name) continue;
       let defectTypeUuids: string[] = [];
-      if (defectIdx >= 0 && row[defectIdx] != null) {
+      const defectIdx = headerIndexMap['defectTypes'];
+      if (defectIdx !== undefined && row[defectIdx] != null) {
         const val = String(row[defectIdx]).trim();
         if (val) {
           defectTypeUuids = val
@@ -294,11 +336,14 @@ const OperationsPage: React.FC = () => {
             .filter(Boolean);
         }
       }
+      const descIdx = headerIndexMap['description'];
+      const activeIdx = headerIndexMap['isActive'];
       items.push({
         code,
         name,
-        description: descIdx >= 0 && row[descIdx] != null ? String(row[descIdx]).trim() : undefined,
-        isActive: activeIdx >= 0 ? (row[activeIdx] === true || row[activeIdx] === '是' || row[activeIdx] === '1' || String(row[activeIdx]).toLowerCase() === 'true') : true,
+        description:
+          descIdx !== undefined && row[descIdx] != null ? String(row[descIdx]).trim() : undefined,
+        isActive: activeIdx !== undefined ? parseIsActive(row[activeIdx]) : true,
         defectTypeUuids: defectTypeUuids.length > 0 ? defectTypeUuids : undefined,
       });
     }
@@ -687,15 +732,9 @@ const OperationsPage: React.FC = () => {
         }}
         showImportButton
         onImport={handleImport}
-        importHeaders={['*工序编号', '*工序名称', '描述', '启用状态', '不良品项']}
-        importExampleRow={['OP-WX-001', '精密装配工序', '针对无锡工厂电子单元的精密装配', '启用', '尺寸偏差,外观划痕']}
-        importFieldMap={{
-          '工序编号': 'code', '*工序编号': 'code', '编号': 'code', 'code': 'code',
-          '工序名称': 'name', '*工序名称': 'name', '名称': 'name', 'name': 'name',
-          '描述': 'description', 'description': 'description',
-          '启用状态': 'isActive', 'isActive': 'isActive',
-          '不良品项': 'defectTypes', 'defectTypes': 'defectTypes',
-        }}
+        importHeaders={operationImportTemplate.importHeaders}
+        importExampleRow={operationImportTemplate.importExampleRow}
+        importFieldMap={operationImportTemplate.importHeaderMap}
         showExportButton
         onExport={handleExport}
       />

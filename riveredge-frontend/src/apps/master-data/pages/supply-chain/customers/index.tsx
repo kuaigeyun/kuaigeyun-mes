@@ -38,12 +38,16 @@ import {
   CustomerFollowUpFormModal,
   type CustomerFollowUpPreset,
 } from '../../../../kuaizhizao/components/CustomerFollowUpFormModal';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 客户管理列表页面组件
  */
 const CustomersPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -70,6 +74,35 @@ const CustomersPage: React.FC = () => {
     return seed;
   });
   const customerDetailReqRef = useRef(0);
+
+  const customerImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.customer.code' },
+          { field: 'name', required: true, labelKey: 'field.customer.name' },
+          { field: 'shortName', labelKey: 'field.customer.shortName' },
+          { field: 'contactPerson', labelKey: 'field.customer.contactPerson' },
+          { field: 'phone', labelKey: 'field.customer.phone' },
+          { field: 'email', labelKey: 'field.customer.email' },
+          { field: 'address', labelKey: 'field.customer.address' },
+          { field: 'category', labelKey: 'field.customer.category' },
+        ],
+        [
+          t('app.master-data.customers.importExample.code'),
+          t('app.master-data.customers.importExample.name'),
+          t('app.master-data.customers.importExample.shortName'),
+          t('app.master-data.customers.importExample.contactPerson'),
+          t('app.master-data.customers.importExample.phone'),
+          t('app.master-data.customers.importExample.email'),
+          t('app.master-data.customers.importExample.address'),
+          t('app.master-data.customers.importExample.category'),
+        ],
+      ),
+    [t, i18n.language],
+  );
+
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
   const [salesmanOptions, setSalesmanOptions] = useState<Array<{ label: string; value: string | number }>>([]);
@@ -270,35 +303,10 @@ const CustomersPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      [t('field.customer.code')]: 'code',
-      [`*${t('field.customer.code')}`]: 'code',
-      [t('field.customer.name')]: 'name',
-      [`*${t('field.customer.name')}`]: 'name',
-      [t('field.customer.shortName')]: 'shortName',
-      [t('field.customer.contactPerson')]: 'contactPerson',
-      [t('field.customer.phone')]: 'phone',
-      [t('field.customer.email')]: 'email',
-      [t('field.customer.address')]: 'address',
-      [t('field.customer.category')]: 'category',
-      '编号': 'code', '*编号': 'code', 'code': 'code', '*code': 'code',
-      '名称': 'name', '*名称': 'name', 'name': 'name', '*name': 'name',
-      '简称': 'shortName', '联系人': 'contactPerson', '电话': 'phone',
-      '邮箱': 'email', '地址': 'address', '分类': 'category',
-    };
-
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      const normalizedHeader = String(header || '').trim();
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      customerImportTemplate.importHeaderMap,
+    );
 
     if (headerIndexMap['code'] === undefined) {
       messageApi.error(t('app.master-data.importMissingField', { field: t('field.customer.code'), headers: headers.join(', ') }));
@@ -918,32 +926,9 @@ const CustomersPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={[
-          `*${t('field.customer.code')}`,
-          `*${t('field.customer.name')}`,
-          t('field.customer.shortName'),
-          t('field.customer.contactPerson'),
-          t('field.customer.phone'),
-          t('field.customer.email'),
-          t('field.customer.address'),
-          t('field.customer.category'),
-        ]}
-        importExampleRow={['CUST-WX-001', '无锡盛世高新装备有限公司', '盛世高新', '张经理', '0510-81110001', 'contact@shengshi-wx.com', '无锡市新吴区机电五支路1000号', '制造业']}
-        importFieldMap={{
-          [t('field.customer.code')]: 'code',
-          [`*${t('field.customer.code')}`]: 'code',
-          [t('field.customer.name')]: 'name',
-          [`*${t('field.customer.name')}`]: 'name',
-          [t('field.customer.shortName')]: 'shortName',
-          [t('field.customer.contactPerson')]: 'contactPerson',
-          [t('field.customer.phone')]: 'phone',
-          [t('field.customer.email')]: 'email',
-          [t('field.customer.address')]: 'address',
-          [t('field.customer.category')]: 'category',
-          'code': 'code', '*code': 'code', 'name': 'name', '*name': 'name',
-          'shortName': 'shortName', 'contactPerson': 'contactPerson', 'phone': 'phone',
-          'email': 'email', 'address': 'address', 'category': 'category',
-        }}
+        importHeaders={customerImportTemplate.importHeaders}
+        importExampleRow={customerImportTemplate.importExampleRow}
+        importFieldMap={customerImportTemplate.importHeaderMap}
         importFieldRules={{
           code: { required: true },
           name: { required: true },

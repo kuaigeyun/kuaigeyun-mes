@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography } from 'antd';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
@@ -956,6 +956,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         brand: restValues.brand,
         model: restValues.model,
         texture: restValues.texture,
+        weight: restValues.weight ?? 0,
+        volume: restValues.volume ?? 0,
+        barcode: restValues.barcode?.trim() || undefined,
+        shelf_life_managed: Boolean(restValues.shelfLifeManaged),
+        shelf_life_days: restValues.shelfLifeManaged ? restValues.shelfLifeDays : null,
+        reference_cost: restValues.referenceCost ?? undefined,
+        country_of_origin: restValues.countryOfOrigin?.trim() || undefined,
+        customs_code: restValues.customsCode?.trim() || undefined,
         is_active: restValues.isActive,
         images: imageUuids.length > 0 ? imageUuids : null,
         // 部门编号
@@ -1090,7 +1098,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         /* Modal 内 Tab 内容区：底部留白 16px；左右不设 padding，与模板 Modal 内容区对齐 */
         .material-form-modal .ant-pro-form .ant-tabs-tabpane {
           width: 100%;
-          max-width: 968px;
           padding: 0 0 16px 0;
           box-sizing: border-box;
         }
@@ -1099,20 +1106,49 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         .material-form-modal .ant-collapse {
           width: 100%;
         }
+
+        .material-form-modal .material-form-basic-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          column-gap: 16px;
+          row-gap: 8px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .material-form-modal .material-form-basic-grid__cell {
+          min-width: 0;
+        }
+
+        .material-form-modal .material-form-basic-grid__cell--full {
+          grid-column: 1 / -1;
+        }
+
+        .material-form-modal .material-form-more-collapse {
+          width: 100%;
+          margin: 4px 0 12px;
+          background: rgba(0, 0, 0, 0.02);
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .material-form-modal .material-form-more-collapse > .ant-collapse-item {
+          border: none !important;
+        }
+
+        .material-form-modal .material-form-more-collapse > .ant-collapse-item > .ant-collapse-header {
+          padding: 10px 12px !important;
+          align-items: center !important;
+        }
+
+        .material-form-modal .material-form-more-collapse .ant-collapse-content-box {
+          padding: 4px 12px 12px !important;
+        }
         
         /* 默认值设置Tab的Collapse - 增加底部margin */
-        .material-form-modal .ant-tabs-tabpane .ant-collapse {
+        .material-form-modal .ant-tabs-tabpane .ant-collapse:not(.material-form-more-collapse) {
           margin-bottom: 16px;
-        }
-        
-        /* Modal 内 Collapse 的 Panel 内容 - 确保占满宽度 */
-        .material-form-modal .ant-collapse-content-box {
-          width: 100%;
-        }
-        
-        /* Modal 内 Collapse 的 Panel 内容 - 确保占满宽度 */
-        .material-form-modal .ant-collapse-content-box {
-          width: 100%;
         }
         
         /* Modal 内的 Table - 确保占满宽度 */
@@ -1279,8 +1315,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               children: (
                 <DefaultsTab
                   customers={customers}
+                  suppliers={suppliers}
                   warehouses={warehouses}
                   customersLoading={customersLoading}
+                  suppliersLoading={suppliersLoading}
                   warehousesLoading={warehousesLoading}
                 />
               ),
@@ -1722,36 +1760,127 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
     loadRules();
   }, []);
 
+  const groupId = ProForm.useWatch('groupId');
+  const shelfLifeManaged = ProForm.useWatch('shelfLifeManaged');
+
   if (part === 1) {
-    return (
-      <Row gutter={16} style={{ width: '100%' }}>
-        <ProFormDependency name={['groupId']}>
-          {({ groupId }) => (
-            <Col span={6} style={{ minWidth: 0 }}>
-              <ProFormText
-                name="mainCode"
-                label={t('app.master-data.materialForm.mainCode')}
-                placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
+    const moreFieldsPanel = (
+      <Panel
+        key="extended"
+        header={
+          <Space size={8} wrap>
+            <span>{t('app.master-data.materialForm.viewMoreFields')}</span>
+            <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              {t('app.master-data.materialForm.viewMoreFieldsHint')}
+            </Typography.Text>
+          </Space>
+        }
+      >
+        <div className="material-form-basic-grid">
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="weight"
+              label={t('app.master-data.materialForm.weight')}
+              placeholder={t('app.master-data.materialForm.weightPlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="volume"
+              label={t('app.master-data.materialForm.volume')}
+              placeholder={t('app.master-data.materialForm.volumePlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="barcode"
+              label={t('app.master-data.materialForm.barcode')}
+              placeholder={t('app.master-data.materialForm.barcodePlaceholder')}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.barcodeMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="referenceCost"
+              label={t('app.master-data.materialForm.referenceCost')}
+              placeholder={t('app.master-data.materialForm.referenceCostPlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="countryOfOrigin"
+              label={t('app.master-data.materialForm.countryOfOrigin')}
+              placeholder={t('app.master-data.materialForm.countryOfOriginPlaceholder')}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="customsCode"
+              label={t('app.master-data.materialForm.customsCode')}
+              placeholder={t('app.master-data.materialForm.customsCodePlaceholder')}
+              rules={[{ max: 50, message: t('app.master-data.materialForm.barcodeMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormSwitch
+              name="shelfLifeManaged"
+              label={t('app.master-data.materialForm.shelfLifeManaged')}
+            />
+          </div>
+          {shelfLifeManaged ? (
+            <div className="material-form-basic-grid__cell">
+              <ProFormDigit
+                name="shelfLifeDays"
+                label={t('app.master-data.materialForm.shelfLifeDays')}
+                placeholder={t('app.master-data.materialForm.shelfLifeDaysPlaceholder')}
+                min={1}
+                fieldProps={{ precision: 0 }}
                 rules={[
-                  { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
-                  { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
                   {
-                    validator: (_, value) => {
-                      if (value === t('app.master-data.materialForm.mainCodeSelectGroupHint')) {
-                        return Promise.reject(new Error(t('app.master-data.materialForm.mainCodeSelectGroupHint')));
-                      }
-                      return Promise.resolve();
-                    },
+                    required: true,
+                    message: t('app.master-data.materialForm.shelfLifeDaysRequired'),
                   },
                 ]}
-                fieldProps={{
-                  style: !groupId ? { color: 'red' } : { textTransform: 'uppercase' },
-                }}
               />
-            </Col>
-          )}
-        </ProFormDependency>
-        <Col span={6} style={{ minWidth: 0 }}>
+            </div>
+          ) : null}
+        </div>
+      </Panel>
+    );
+
+    return (
+      <>
+      <div className="material-form-basic-grid">
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="mainCode"
+            label={t('app.master-data.materialForm.mainCode')}
+            placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
+              { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
+              {
+                validator: (_, value) => {
+                  if (value === t('app.master-data.materialForm.mainCodeSelectGroupHint')) {
+                    return Promise.reject(new Error(t('app.master-data.materialForm.mainCodeSelectGroupHint')));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+            fieldProps={{
+              style: !groupId ? { color: 'red' } : { textTransform: 'uppercase' },
+            }}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="name"
             label={t('app.master-data.materialForm.materialName')}
@@ -1761,8 +1890,8 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               { max: 200, message: t('app.master-data.materialForm.materialNameMax') },
             ]}
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <SafeProFormSelect
             name="groupId"
             label={t('app.master-data.materialForm.materialGroup')}
@@ -1773,8 +1902,8 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             }))}
             fieldProps={{ showSearch: true, allowClear: true, style: { width: '100%' } }}
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <DictionarySelect
             dictionaryCode="MATERIAL_UNIT"
             name="baseUnit"
@@ -1782,70 +1911,83 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
             required
             formRef={formRef}
-            colProps={{ span: 24 }}
             valueEqualsLabel
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="specification"
             label={t('app.master-data.materialForm.specification')}
             placeholder={t('app.master-data.materialForm.specificationPlaceholder')}
             rules={[{ max: 500, message: t('app.master-data.materialForm.specificationMax') }]}
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="model"
             label={t('app.master-data.materialForm.model')}
             placeholder={t('app.master-data.materialForm.modelPlaceholder')}
             rules={[{ max: 100, message: t('app.master-data.materialForm.modelMax') }]}
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="brand"
             label={t('app.master-data.materialForm.brand')}
             placeholder={t('app.master-data.materialForm.brandPlaceholder')}
             rules={[{ max: 100, message: t('app.master-data.materialForm.brandMax') }]}
           />
-        </Col>
-        <Col span={6} style={{ minWidth: 0 }}>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="texture"
             label={t('app.master-data.materialForm.texture')}
             placeholder={t('app.master-data.materialForm.texturePlaceholder')}
             rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
           />
-        </Col>
-
-        {/* 自定义字段插槽：放在基础信息 Row 内部以确保完美对齐 */}
-        <CustomFieldsFormSection
-          customFields={customFields}
-          customFieldValues={customFieldValues}
-        />
-      </Row>
+        </div>
+      </div>
+      {customFields.length > 0 ? (
+        <Row gutter={[16, 8]} style={{ width: '100%', marginTop: 8 }}>
+          <CustomFieldsFormSection
+            customFields={customFields}
+            customFieldValues={customFieldValues}
+          />
+        </Row>
+      ) : null}
+      <Collapse
+        bordered={false}
+        defaultActiveKey={[]}
+        className="material-form-more-collapse"
+        expandIconPosition="start"
+      >
+        {moreFieldsPanel}
+      </Collapse>
+      </>
     );
   }
 
   return (
-    <Row gutter={16}>
-      <Col span={6}>
+    <>
+    <div className="material-form-basic-grid">
+      <div className="material-form-basic-grid__cell">
         <ProFormSwitch name="batchManaged" label={t('app.master-data.materialForm.batchManaged')} />
-      </Col>
-      <Col span={6}>
+      </div>
+      <div className="material-form-basic-grid__cell">
         <ProFormSwitch name="serialManaged" label={t('app.master-data.materialForm.serialManaged')} />
-      </Col>
-      <Col span={6}>
+      </div>
+      <div className="material-form-basic-grid__cell">
         <ProFormSwitch
           name="variantManaged"
           label={t('app.master-data.materialForm.variantManaged')}
           fieldProps={{ onChange: onVariantManagedChange }}
         />
-      </Col>
-      <Col span={6}>
+      </div>
+      <div className="material-form-basic-grid__cell">
         <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
-      </Col>
+      </div>
+    </div>
+    <Row gutter={16} style={{ width: '100%' }}>
       <ProFormDependency name={['batchManaged']}>
         {({ batchManaged }) =>
           batchManaged ? (
@@ -1952,6 +2094,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         />
       </Col>
     </Row>
+    </>
   );
 };
 
@@ -2435,20 +2578,24 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
  */
 interface DefaultsTabProps {
   customers: Customer[];
+  suppliers: Supplier[];
   warehouses: Warehouse[];
   customersLoading: boolean;
+  suppliersLoading: boolean;
   warehousesLoading: boolean;
 }
 
 const DefaultsTab: React.FC<DefaultsTabProps> = ({
   customers,
+  suppliers,
   warehouses,
   customersLoading,
+  suppliersLoading,
   warehousesLoading,
 }) => {
   const { t } = useTranslation();
   return (
-    <Collapse defaultActiveKey={['finance', 'sale', 'inventory']}>
+    <Collapse defaultActiveKey={['finance', 'sale', 'purchase', 'inventory']}>
         <Panel header={t('app.master-data.defaults.finance')} key="finance">
           <Row gutter={16}>
             <Col span={12}>
@@ -2492,6 +2639,50 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   filterOption: (input: string, option: any) =>
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
                 }}
+              />
+            </Col>
+          </Row>
+        </Panel>
+
+        <Panel header={t('app.master-data.defaults.purchase')} key="purchase">
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultSupplierIds"
+                label={t('app.master-data.defaults.defaultSuppliers')}
+                placeholder={t('app.master-data.defaults.selectSuppliers')}
+                options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: suppliersLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultPurchasePrice"
+                label={t('app.master-data.defaults.defaultPurchasePrice')}
+                placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultPurchaseUnit"
+                label={t('app.master-data.defaults.defaultPurchaseUnit')}
+                placeholder={t('app.master-data.defaults.defaultPurchaseUnitPlaceholder')}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultPurchaseLeadTime"
+                label={t('app.master-data.defaults.defaultPurchaseLeadTime')}
+                placeholder={t('app.master-data.defaults.defaultPurchaseLeadTimePlaceholder')}
+                min={0}
+                fieldProps={{ precision: 0 }}
               />
             </Col>
           </Row>

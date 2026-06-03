@@ -218,7 +218,15 @@ class Material(BaseModel):
     images = fields.JSONField(null=True, description="产品图片列表")
     weight = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="重量 (kg)")
     volume = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="体积 (m³)")
-    
+    barcode = fields.CharField(max_length=100, null=True, description="条码/GTIN/EAN")
+    shelf_life_managed = fields.BooleanField(default=False, description="是否启用保质期管理")
+    shelf_life_days = fields.IntField(null=True, description="保质期天数")
+    reference_cost = fields.DecimalField(
+        max_digits=12, decimal_places=4, null=True, description="参考成本"
+    )
+    country_of_origin = fields.CharField(max_length=100, null=True, description="原产国")
+    customs_code = fields.CharField(max_length=50, null=True, description="海关编码")
+
     # 关联关系（ForeignKeyField 会自动创建 group_id 字段）
     group = fields.ForeignKeyField(
         "models.MaterialGroup",

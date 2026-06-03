@@ -30,6 +30,10 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
 
 /**
  * 厂区管理列表页面组件
@@ -65,6 +69,26 @@ const PlantsPage: React.FC = () => {
       setTimeout(() => actionRef.current?.reload(), 200);
     }
   }, [customFields.length]);
+
+  const plantImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.plants.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.plants.name' },
+          { field: 'address', labelKey: 'app.master-data.plants.address' },
+          { field: 'description', labelKey: 'app.master-data.plants.description' },
+        ],
+        [
+          t('app.master-data.plants.importExample.code'),
+          t('app.master-data.plants.importExample.name'),
+          t('app.master-data.plants.importExample.address'),
+          t('app.master-data.plants.importExample.description'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -188,31 +212,10 @@ const PlantsPage: React.FC = () => {
       return;
     }
 
-    const headerMap: Record<string, string> = {
-      'code': 'code',
-      '*code': 'code',
-      'name': 'name',
-      '*name': 'name',
-      'address': 'address',
-      'description': 'description',
-    };
-
-    // 找到表头索引（支持去除空格和特殊字符）
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((header, index) => {
-      // 去除空格、星号等特殊字符进行匹配
-      const normalizedHeader = String(header || '').trim();
-      // 直接匹配
-      if (headerMap[normalizedHeader]) {
-        headerIndexMap[headerMap[normalizedHeader]] = index;
-      } else {
-        // 尝试去除星号后匹配
-        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-        if (headerMap[withoutStar]) {
-          headerIndexMap[headerMap[withoutStar]] = index;
-        }
-      }
-    });
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      plantImportTemplate.importHeaderMap,
+    );
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
@@ -668,16 +671,9 @@ const PlantsPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*code', '*name', 'address', 'description']}
-          importExampleRow={['PLANT-WX-01', 'Wuxi Plant', 'No.15 Jidian Rd, Wuxi', 'Core manufacturing base']}
-          importFieldMap={{
-            'code': 'code',
-            '*code': 'code',
-            'name': 'name',
-            '*name': 'name',
-            'address': 'address',
-            'description': 'description',
-          }}
+          importHeaders={plantImportTemplate.importHeaders}
+          importExampleRow={plantImportTemplate.importExampleRow}
+          importFieldMap={plantImportTemplate.importHeaderMap}
           importFieldRules={{
             code: { required: true },
             name: { required: true },

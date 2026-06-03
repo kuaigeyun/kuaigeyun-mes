@@ -8,7 +8,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
@@ -22,6 +22,10 @@ import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -81,7 +85,31 @@ interface MoldCalibration {
 
 const MoldsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const moldImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.mold.import.code', aliases: ['模具编号', '编号'] },
+          { field: 'name', required: true, labelKey: 'app.kuaizhizao.mold.import.name', aliases: ['模具名称', '名称'] },
+          { field: 'type', labelKey: 'app.kuaizhizao.mold.import.type', aliases: ['模具类型', '类型'] },
+          { field: 'category', labelKey: 'app.kuaizhizao.mold.import.category', aliases: ['模具分类', '分类'] },
+          { field: 'brand', labelKey: 'app.kuaizhizao.mold.import.brand', aliases: ['品牌'] },
+          { field: 'model', labelKey: 'app.kuaizhizao.mold.import.model', aliases: ['型号'] },
+        ],
+        [
+          t('app.kuaizhizao.mold.importExample.code'),
+          t('app.kuaizhizao.mold.importExample.name'),
+          t('app.kuaizhizao.mold.importExample.type'),
+          t('app.kuaizhizao.mold.importExample.category'),
+          t('app.kuaizhizao.mold.importExample.brand'),
+          t('app.kuaizhizao.mold.importExample.model'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const moldDetailDrawerZIndex = token.zIndexPopupBase;
@@ -705,36 +733,43 @@ const MoldsPage: React.FC = () => {
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-            const getIdx = (...keys: string[]) => {
-              for (const k of keys) {
-                const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
-                if (i >= 0) return i;
-              }
-              return -1;
-            };
-            const nameIdx = getIdx('名称', 'name');
-            if (nameIdx < 0) {
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              moldImportTemplate.importHeaderMap,
+            );
+            if (headerIndexMap.name === undefined) {
               messageApi.error('导入表头需包含模具名称');
               return;
             }
             const items: any[] = [];
-            for (let i = 1; i < data.length; i++) {
-              const row = data[i];
-              if (!row || row.length === 0) continue;
-              const name = String(row[nameIdx] ?? '').trim();
+            const importRows = data.slice(2).filter((row: any[]) =>
+              row?.some((c: any) => c != null && String(c).trim() !== ''),
+            );
+            for (const row of importRows) {
+              const name = String(row[headerIndexMap.name] ?? '').trim();
               if (!name) continue;
-              const codeIdx = getIdx('编号', 'code');
-              const typeIdx = getIdx('类型', 'type');
-              const catIdx = getIdx('分类', 'category');
-              const brandIdx = getIdx('品牌', 'brand');
-              const modelIdx = getIdx('型号', 'model');
               items.push({
-                code: codeIdx >= 0 ? String(row[codeIdx] ?? '').trim() : undefined,
+                code:
+                  headerIndexMap.code !== undefined
+                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
+                    : undefined,
                 name,
-                type: typeIdx >= 0 ? String(row[typeIdx] ?? '').trim() : undefined,
-                category: catIdx >= 0 ? String(row[catIdx] ?? '').trim() : undefined,
-                brand: brandIdx >= 0 ? String(row[brandIdx] ?? '').trim() : undefined,
-                model: modelIdx >= 0 ? String(row[modelIdx] ?? '').trim() : undefined,
+                type:
+                  headerIndexMap.type !== undefined
+                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
+                    : undefined,
+                category:
+                  headerIndexMap.category !== undefined
+                    ? String(row[headerIndexMap.category] ?? '').trim() || undefined
+                    : undefined,
+                brand:
+                  headerIndexMap.brand !== undefined
+                    ? String(row[headerIndexMap.brand] ?? '').trim() || undefined
+                    : undefined,
+                model:
+                  headerIndexMap.model !== undefined
+                    ? String(row[headerIndexMap.model] ?? '').trim() || undefined
+                    : undefined,
               });
             }
             if (items.length === 0) {
@@ -755,7 +790,9 @@ const MoldsPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['模具编号', '*模具名称', '模具类型', '模具分类', '品牌', '型号']}
+          importHeaders={moldImportTemplate.importHeaders}
+          importExampleRow={moldImportTemplate.importExampleRow}
+          importFieldMap={moldImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

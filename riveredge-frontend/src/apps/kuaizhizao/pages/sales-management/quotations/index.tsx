@@ -85,6 +85,10 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
@@ -588,7 +592,7 @@ const QuotationFormSummary: React.FC = () => {
 };
 
 const QuotationsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = AntdTheme.useToken();
   const quotationDetailDrawerZIndex = token.zIndexPopupBase;
   const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
@@ -615,6 +619,49 @@ const QuotationsPage: React.FC = () => {
   listScopeFilterRef.current = listScopeFilter;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const invalidateSalesOrderList = useInvalidateSalesOrderList();
+
+  const quotationImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: 'app.kuaizhizao.quotation.import.code', aliases: ['报价单编号', '编号'] },
+          {
+            field: 'customer',
+            required: true,
+            labelKey: 'app.kuaizhizao.quotation.import.customerName',
+            aliases: ['客户', '客户名称'],
+          },
+          {
+            field: 'date',
+            required: true,
+            labelKey: 'app.kuaizhizao.quotation.import.quotationDate',
+            aliases: ['报价日期', '日期'],
+          },
+          {
+            field: 'material',
+            required: true,
+            labelKey: 'app.kuaizhizao.quotation.import.materialCode',
+            aliases: ['物料', '物料编号'],
+          },
+          { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.quotation.import.quantity', aliases: ['数量'] },
+          { field: 'unitPrice', labelKey: 'app.kuaizhizao.quotation.import.unitPrice', aliases: ['单价'] },
+          { field: 'delivery', labelKey: 'app.kuaizhizao.quotation.import.deliveryDate', aliases: ['交货日期'] },
+          { field: 'notes', labelKey: 'app.kuaizhizao.quotation.import.notes', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.quotation.importExample.code'),
+          t('app.kuaizhizao.quotation.importExample.customerName'),
+          t('app.kuaizhizao.quotation.importExample.quotationDate'),
+          t('app.kuaizhizao.quotation.importExample.materialCode'),
+          t('app.kuaizhizao.quotation.importExample.quantity'),
+          t('app.kuaizhizao.quotation.importExample.unitPrice'),
+          t('app.kuaizhizao.quotation.importExample.deliveryDate'),
+          '',
+        ],
+      ),
+    [t, i18n.language],
+  );
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -1253,16 +1300,19 @@ const QuotationsPage: React.FC = () => {
       return;
     }
 
-    const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name);
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      quotationImportTemplate.importHeaderMap,
+    );
     const idx = {
-      code: col('报价单编号') >= 0 ? col('报价单编号') : col('编号'),
-      customer: col('客户名称') >= 0 ? col('客户名称') : col('客户'),
-      date: col('报价日期') >= 0 ? col('报价日期') : col('日期'),
-      material: col('物料编号') >= 0 ? col('物料编号') : col('物料'),
-      qty: col('数量') >= 0 ? col('数量') : -1,
-      price: col('单价') >= 0 ? col('单价') : -1,
-      delivery: col('交货日期') >= 0 ? col('交货日期') : -1,
-      notes: col('备注') >= 0 ? col('备注') : -1,
+      code: headerIndexMap['code'] ?? -1,
+      customer: headerIndexMap['customer'] ?? -1,
+      date: headerIndexMap['date'] ?? -1,
+      material: headerIndexMap['material'] ?? -1,
+      qty: headerIndexMap['quantity'] ?? -1,
+      price: headerIndexMap['unitPrice'] ?? -1,
+      delivery: headerIndexMap['delivery'] ?? -1,
+      notes: headerIndexMap['notes'] ?? -1,
     };
 
     if (idx.customer < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
@@ -3081,23 +3131,14 @@ const QuotationsPage: React.FC = () => {
           ]}
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['报价单编号', '客户名称', '报价日期', '物料编号', '数量', '单价', '交货日期', '备注']}
-          importExampleRow={['QT001', '客户A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
-          importFieldMap={{
-            '报价单编号': 'quotation_code',
-            '客户名称': 'customer_name',
-            '报价日期': 'quotation_date',
-            '物料编号': 'material_code',
-            '数量': 'quote_quantity',
-            '单价': 'unit_price',
-            '交货日期': 'delivery_date',
-            '备注': 'notes',
-          }}
+          importHeaders={quotationImportTemplate.importHeaders}
+          importExampleRow={quotationImportTemplate.importExampleRow}
+          importFieldMap={quotationImportTemplate.importHeaderMap}
           importFieldRules={{
-            customer_name: { required: true },
-            quotation_date: { required: true },
-            material_code: { required: true },
-            quote_quantity: { required: true },
+            customer: { required: true },
+            date: { required: true },
+            material: { required: true },
+            quantity: { required: true },
           }}
           showExportButton
           onExport={async (type, keys, pageData) => {

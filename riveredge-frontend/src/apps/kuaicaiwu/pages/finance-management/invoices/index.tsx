@@ -16,6 +16,10 @@ import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { apiRequest } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -27,8 +31,47 @@ import dayjs from 'dayjs';
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const { message: messageApi } = App.useApp();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+
+  const invoiceImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'invoiceNo',
+            required: true,
+            labelKey: 'app.kuaicaiwu.invoice.import.invoiceNo',
+            aliases: ['发票号码'],
+          },
+          { field: 'type', labelKey: 'app.kuaicaiwu.invoice.import.type', aliases: ['类型(IN/OUT)', '类型'] },
+          {
+            field: 'partner',
+            required: true,
+            labelKey: 'app.kuaicaiwu.invoice.import.partner',
+            aliases: ['往来单位'],
+          },
+          {
+            field: 'totalAmount',
+            required: true,
+            labelKey: 'app.kuaicaiwu.invoice.import.totalAmount',
+            aliases: ['价税合计'],
+          },
+          { field: 'taxRate', labelKey: 'app.kuaicaiwu.invoice.import.taxRate', aliases: ['税率'] },
+          { field: 'invoiceDate', labelKey: 'app.kuaicaiwu.invoice.import.invoiceDate', aliases: ['开票日期'] },
+        ],
+        [
+          t('app.kuaicaiwu.invoice.importExample.invoiceNo'),
+          t('app.kuaicaiwu.invoice.importExample.type'),
+          t('app.kuaicaiwu.invoice.importExample.partner'),
+          t('app.kuaicaiwu.invoice.importExample.totalAmount'),
+          t('app.kuaicaiwu.invoice.importExample.taxRate'),
+          t('app.kuaicaiwu.invoice.importExample.invoiceDate'),
+        ],
+      ),
+    [t, i18n.language],
+  );
   const location = useLocation();
   const queryClient = useQueryClient();
 
@@ -269,20 +312,15 @@ const InvoiceList: React.FC = () => {
             return;
           }
           const headers = (data[0] || []).map((h: any) => String(h || '').trim());
-          const getIdx = (...keys: string[]) => {
-            for (const k of keys) {
-              const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
-              if (i >= 0) return i;
-            }
-            return -1;
-          };
-          const numIdx = getIdx('发票号码', 'invoice_number');
-          const catIdx = getIdx('类型', 'category');
-          const partnerIdx = getIdx('往来', 'partner', '单位');
-          const totalIdx = getIdx('价税', 'total', '金额');
-          const rateIdx = getIdx('税率', 'tax_rate');
-          const dateIdx = getIdx('开票', 'invoice_date', '日期');
-          if (numIdx < 0 || partnerIdx < 0 || totalIdx < 0) {
+          const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+            headers,
+            invoiceImportTemplate.importHeaderMap,
+          );
+          if (
+            headerIndexMap.invoiceNo === undefined ||
+            headerIndexMap.partner === undefined ||
+            headerIndexMap.totalAmount === undefined
+          ) {
             messageApi.error('导入表头需包含发票号码、往来单位、价税合计');
             return;
           }
@@ -293,15 +331,24 @@ const InvoiceList: React.FC = () => {
           const custList = Array.isArray(customers) ? customers : (customers as any)?.items ?? [];
           const suppList = Array.isArray(suppliers) ? suppliers : (suppliers as any)?.items ?? [];
           const items: InvoiceCreateData[] = [];
-          for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            if (!row || row.length === 0) continue;
-            const invNum = String(row[numIdx] ?? '').trim();
-            const category = (catIdx >= 0 ? String(row[catIdx] ?? '').trim().toUpperCase() : 'OUT') as 'IN' | 'OUT';
-            const partnerName = String(row[partnerIdx] ?? '').trim();
-            const total = Number(row[totalIdx]) || 0;
-            const taxRate = rateIdx >= 0 ? Number(row[rateIdx]) || 0.13 : 0.13;
-            const invDate = dateIdx >= 0 && row[dateIdx] ? String(row[dateIdx]).slice(0, 10) : new Date().toISOString().slice(0, 10);
+          const importRows = data.slice(2).filter((row: any[]) =>
+            row?.some((c: any) => c != null && String(c).trim() !== ''),
+          );
+          for (const row of importRows) {
+            const invNum = String(row[headerIndexMap.invoiceNo] ?? '').trim();
+            const category = (
+              headerIndexMap.type !== undefined
+                ? String(row[headerIndexMap.type] ?? '').trim().toUpperCase()
+                : 'OUT'
+            ) as 'IN' | 'OUT';
+            const partnerName = String(row[headerIndexMap.partner] ?? '').trim();
+            const total = Number(row[headerIndexMap.totalAmount]) || 0;
+            const taxRate =
+              headerIndexMap.taxRate !== undefined ? Number(row[headerIndexMap.taxRate]) || 0.13 : 0.13;
+            const invDate =
+              headerIndexMap.invoiceDate !== undefined && row[headerIndexMap.invoiceDate]
+                ? String(row[headerIndexMap.invoiceDate]).slice(0, 10)
+                : new Date().toISOString().slice(0, 10);
             if (!invNum || !partnerName || total <= 0) continue;
             const list = category === 'IN' ? suppList : custList;
             const partner = list.find((p: any) => (p.name || p.customer_name || p.supplier_name || p.code || '').includes(partnerName) || partnerName.includes(p.name || p.customer_name || p.supplier_name || p.code || ''));
@@ -343,7 +390,9 @@ const InvoiceList: React.FC = () => {
             messageApi.warning(`部分失败 ${result.failureCount} 张`);
           }
         }}
-        importHeaders={['*发票号码', '类型(IN/OUT)', '*往来单位', '*价税合计', '税率', '开票日期']}
+        importHeaders={invoiceImportTemplate.importHeaders}
+        importExampleRow={invoiceImportTemplate.importExampleRow}
+        importFieldMap={invoiceImportTemplate.importHeaderMap}
         showExportButton
         onExport={async (type, keys, pageData) => {
           try {

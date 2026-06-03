@@ -36,6 +36,10 @@ import {
   ExecuteQueryResponse,
 } from '../../../../services/dataset';
 import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../utils/spreadsheetImportTemplate';
+import {
   getDataConnectionsForDataset,
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
@@ -45,7 +49,7 @@ import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOver
  * 数据集管理列表页面组件
  */
 const DatasetListPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -71,6 +75,41 @@ const DatasetListPage: React.FC = () => {
   const [executeLoading, setExecuteLoading] = useState(false);
   const [executeResult, setExecuteResult] = useState<ExecuteQueryResponse | null>(null);
   const [executingUuid, setExecutingUuid] = useState<string | null>(null);
+
+  const datasetImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'name', required: true, labelKey: 'pages.system.datasets.importHeaderName' },
+          { field: 'code', required: true, labelKey: 'pages.system.datasets.importHeaderCode' },
+          {
+            field: 'dataSourceUuid',
+            required: true,
+            labelKey: 'pages.system.datasets.importHeaderDataSourceUuid',
+          },
+          { field: 'queryType', required: true, labelKey: 'pages.system.datasets.importHeaderQueryType' },
+          { field: 'description', labelKey: 'pages.system.datasets.importHeaderDescription', aliases: ['描述'] },
+          { field: 'isActive', labelKey: 'pages.system.datasets.importHeaderEnabled', aliases: ['启用状态'] },
+          {
+            field: 'queryConfigJson',
+            required: true,
+            labelKey: 'pages.system.datasets.importHeaderQueryConfigJson',
+            aliases: ['查询配置(JSON)'],
+          },
+        ],
+        [
+          t('pages.system.datasets.importExampleName'),
+          'example_ds',
+          'uuid-of-data-source',
+          'sql',
+          t('pages.system.datasets.importExampleDescription'),
+          t('pages.system.datasets.importExampleEnabled'),
+          t('pages.system.datasets.importExampleQueryConfigJson'),
+        ],
+      ),
+    [t, i18n.language],
+  );
 
   /**
    * 加载数据连接列表（合并数据源 + 应用连接器）
@@ -669,44 +708,47 @@ const DatasetListPage: React.FC = () => {
               messageApi.warning(t('pages.system.datasets.fillImportData'));
               return;
             }
-            const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
-            const rows = data.slice(1).filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()));
-            const fieldMap: Record<string, string> = {
-              '数据集名称': 'name', 'name': 'name',
-              '数据集代码': 'code', 'code': 'code',
-              '数据连接UUID': 'data_source_uuid', 'data_source_uuid': 'data_source_uuid',
-              '查询类型': 'query_type', 'query_type': 'query_type',
-              '描述': 'description', 'description': 'description',
-              '启用状态': 'is_active', 'is_active': 'is_active',
-              '查询配置(JSON)': 'query_config_json', 'query_config_json': 'query_config_json',
+            const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+            const rows = data.slice(2).filter((row: any[]) =>
+              row.some((c: any) => c != null && String(c).trim()),
+            );
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              datasetImportTemplate.importHeaderMap,
+            );
+            const val = (row: any[], field: string) => {
+              const idx = headerIndexMap[field];
+              return idx !== undefined && row[idx] != null ? row[idx] : undefined;
             };
             let done = 0;
             const ts = Date.now();
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
-              const obj: Record<string, any> = {};
-              headers.forEach((h, idx) => {
-                const field = fieldMap[h] || fieldMap[h?.trim()];
-                if (field && row[idx] != null) obj[field] = row[idx];
-              });
-              if (obj.name && obj.code && obj.data_source_uuid) {
+              const name = val(row, 'name');
+              const code = val(row, 'code');
+              const dataSourceUuid = val(row, 'dataSourceUuid');
+              if (name && code && dataSourceUuid) {
                 let queryConfig: Record<string, any> = {};
-                if (obj.query_config_json) {
+                const queryConfigJson = val(row, 'queryConfigJson');
+                if (queryConfigJson) {
                   try {
-                    queryConfig = JSON.parse(String(obj.query_config_json));
+                    queryConfig = JSON.parse(String(queryConfigJson));
                   } catch {
                     queryConfig = {};
                   }
                 }
-                const queryType = obj.query_type === 'api' ? 'api' : 'sql';
+                const queryTypeRaw = val(row, 'queryType');
+                const queryType = queryTypeRaw === 'api' ? 'api' : 'sql';
+                const isActiveRaw = val(row, 'isActive');
                 await createDataset({
-                  name: String(obj.name),
-                  code: `${String(obj.code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
-                  data_source_uuid: String(obj.data_source_uuid),
+                  name: String(name),
+                  code: `${String(code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
+                  data_source_uuid: String(dataSourceUuid),
                   query_type: queryType,
                   query_config: queryConfig,
-                  description: obj.description ? String(obj.description) : undefined,
-                  is_active: obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',
+                  description: val(row, 'description') ? String(val(row, 'description')) : undefined,
+                  is_active:
+                    isActiveRaw !== 'false' && isActiveRaw !== '0' && isActiveRaw !== '',
                 });
                 done++;
               }
@@ -714,24 +756,9 @@ const DatasetListPage: React.FC = () => {
             messageApi.success(t('pages.system.datasets.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
-          importHeaders={[
-            `*${t('pages.system.datasets.importHeaderName')}`,
-            `*${t('pages.system.datasets.importHeaderCode')}`,
-            `*${t('pages.system.datasets.importHeaderDataSourceUuid')}`,
-            `*${t('pages.system.datasets.importHeaderQueryType')}`,
-            t('pages.system.datasets.importHeaderDescription'),
-            t('pages.system.datasets.importHeaderEnabled'),
-            `*${t('pages.system.datasets.importHeaderQueryConfigJson')}`,
-          ]}
-          importExampleRow={[
-            t('pages.system.datasets.importExampleName'),
-            'example_ds',
-            'uuid-of-data-source',
-            'sql',
-            t('pages.system.datasets.importExampleDescription'),
-            t('pages.system.datasets.importExampleEnabled'),
-            t('pages.system.datasets.importExampleQueryConfigJson'),
-          ]}
+          importHeaders={datasetImportTemplate.importHeaders}
+          importExampleRow={datasetImportTemplate.importExampleRow}
+          importFieldMap={datasetImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: Dataset[] = [];
