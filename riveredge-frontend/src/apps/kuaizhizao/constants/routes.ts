@@ -56,6 +56,8 @@ export const ROUTES = {
   WM_INVENTORY_TRANSFER: `${APP_BASE}/warehouse-management/inventory-transfer`,
   /** 绩效管理 */
   PERF_HOLIDAYS: `${APP_BASE}/performance/holidays`,
+  PERF_SHIFTS: `${APP_BASE}/performance/shifts`,
+  PERF_SHIFT_ROSTERS: `${APP_BASE}/performance/shift-rosters`,
   PERF_SKILLS: `${APP_BASE}/performance/skills`,
   PERF_SUMMARIES: `${APP_BASE}/performance/summaries`,
 } as const;

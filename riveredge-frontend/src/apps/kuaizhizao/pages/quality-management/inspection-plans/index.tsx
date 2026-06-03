@@ -30,6 +30,7 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -327,16 +328,16 @@ const InspectionPlansPage: React.FC = () => {
     {
       title: '方案编号',
       dataIndex: 'plan_code',
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.plan_code ?? '') }} ellipsis>
-          {r.plan_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
-    { title: '方案名称', dataIndex: 'plan_name', width: 180, ellipsis: true },
+    stackedPrimarySecondaryColumn<InspectionPlan>(
+      '方案名称 / 编号',
+      'planStacked',
+      ['plan_name', 'planName'],
+      ['plan_code', 'planCode'],
+      { dataIndex: 'plan_name', fixed: 'left' },
+    ),
+    { title: '方案名称', dataIndex: 'plan_name', hideInTable: true, ellipsis: true },
     {
       title: '方案类型',
       dataIndex: 'plan_type',

@@ -3092,6 +3092,8 @@ export default {
   'app.kuaizhizao.menu.performance-management': '绩效管理',
   'app.kuaizhizao.menu.performance-management.dashboard': '绩效中心',
   'app.kuaizhizao.menu.performance-management.holidays': '假期设置',
+  'app.kuaizhizao.menu.performance-management.shifts': '班次定义',
+  'app.kuaizhizao.menu.performance-management.shift-rosters': '排班管理',
   'app.kuaizhizao.menu.performance-management.skills': '技能管理',
   'app.kuaizhizao.menu.performance-management.employee-configs': '员工绩效配置',
   'app.kuaizhizao.menu.performance-management.piece-rates': '计件单价',

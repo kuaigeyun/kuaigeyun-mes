@@ -1786,6 +1786,13 @@ export function listMoldOutsourceMaintenanceSheets(params?: {
   return apiRequest(`${PREFIX}/molds/outsource-maintenance-sheets`, { params });
 }
 
+/** 外协维修单「外协单位」下拉（走 haoligo 权限，不依赖主数据供应商菜单） */
+export function listOutsourceMaintenanceSupplierOptions(params?: {
+  limit?: number;
+}): Promise<Array<{ uuid: string; code: string; name: string }>> {
+  return apiRequest(`${PREFIX}/molds/outsource-maintenance-sheets/supplier-options`, { params });
+}
+
 export function getMoldOutsourceMaintenanceSheet(rowId: number): Promise<MoldOutsourceMaintenanceSheetRow> {
   return apiRequest(`${PREFIX}/molds/outsource-maintenance-sheets/${rowId}`);
 }

@@ -48,14 +48,13 @@ import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmen
 import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
 import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
-import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
-import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
 import {
   approveMoldOutsourceMaintenanceSheet,
   createMoldOutsourceMaintenanceSheet,
   deleteMoldOutsourceMaintenanceSheet,
   getMoldOutsourceMaintenanceSheet,
   listMoldOutsourceMaintenanceSheets,
+  listOutsourceMaintenanceSupplierOptions,
   rejectMoldOutsourceMaintenanceSheet,
   revokeMoldOutsourceMaintenanceSheetApproval,
   updateMoldOutsourceMaintenanceSheet,
@@ -182,21 +181,15 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   );
 
   const loadActiveSuppliers = useCallback(async () => {
-    try {
-      const res = await supplierApi.list({ limit: 1000, isActive: true });
-      const list = unwrapSupplyPagedList<Supplier>(res);
-      const mapped = list.map((s) => ({
-        key: s.uuid,
-        value: s.name,
-        label: s.code ? `${s.code} · ${s.name}` : s.name,
-        code: s.code ?? '',
-      }));
-      supplierOptionsRef.current = mapped;
-      setSupplierOptions(mapped);
-    } catch {
-      supplierOptionsRef.current = [];
-      setSupplierOptions([]);
-    }
+    const list = await listOutsourceMaintenanceSupplierOptions({ limit: 1000 });
+    const mapped = list.map((s) => ({
+      key: s.uuid,
+      value: s.name,
+      label: s.code ? `${s.code} · ${s.name}` : s.name,
+      code: s.code ?? '',
+    }));
+    supplierOptionsRef.current = mapped;
+    setSupplierOptions(mapped);
   }, []);
 
   const outsourcedSelectOptions = useMemo(() => {

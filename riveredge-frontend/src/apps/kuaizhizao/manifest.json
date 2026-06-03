@@ -1302,45 +1302,57 @@
             "sort_order": 1
           },
           {
+            "title": "app.kuaizhizao.menu.performance-management.shifts",
+            "path": "/apps/kuaizhizao/performance/shifts",
+            "permission": "kuaizhizao:performance-shifts:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.shift-rosters",
+            "path": "/apps/kuaizhizao/performance/shift-rosters",
+            "permission": "kuaizhizao:performance-shift-rosters:read",
+            "sort_order": 3
+          },
+          {
             "title": "app.kuaizhizao.menu.performance-management.skills",
             "path": "/apps/kuaizhizao/performance/skills",
             "permission": "kuaizhizao:performance-skills:read",
-            "sort_order": 2
+            "sort_order": 4
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.employee-configs",
             "path": "/apps/kuaizhizao/performance/employee-configs",
             "permission": "kuaizhizao:performance-employee-configs:read",
-            "sort_order": 3
+            "sort_order": 5
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.piece-rates",
             "path": "/apps/kuaizhizao/performance/piece-rates",
             "permission": "kuaizhizao:performance-piece-rates:read",
-            "sort_order": 4
+            "sort_order": 6
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaizhizao/performance/hourly-rates",
             "permission": "kuaizhizao:performance-hourly-rates:read",
-            "sort_order": 5
+            "sort_order": 7
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
             "path": "/apps/kuaizhizao/performance/kpi-definitions",
             "permission": "kuaizhizao:performance-kpi-definitions:read",
-            "sort_order": 6
+            "sort_order": 8
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.summaries",
             "path": "/apps/kuaizhizao/performance/summaries",
             "permission": "kuaizhizao:performance-summaries:read",
-            "sort_order": 7
+            "sort_order": 9
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.reports",
             "icon": "fileText",
-            "sort_order": 8,
+            "sort_order": 10,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
@@ -1744,6 +1756,30 @@
     "kuaizhizao:performance-holidays:revoke",
     "kuaizhizao:performance-holidays:submit",
     "kuaizhizao:performance-holidays:update",
+    "kuaizhizao:performance-shifts:approve",
+    "kuaizhizao:performance-shifts:audit",
+    "kuaizhizao:performance-shifts:create",
+    "kuaizhizao:performance-shifts:delete",
+    "kuaizhizao:performance-shifts:export",
+    "kuaizhizao:performance-shifts:import",
+    "kuaizhizao:performance-shifts:print",
+    "kuaizhizao:performance-shifts:read",
+    "kuaizhizao:performance-shifts:reject",
+    "kuaizhizao:performance-shifts:revoke",
+    "kuaizhizao:performance-shifts:submit",
+    "kuaizhizao:performance-shifts:update",
+    "kuaizhizao:performance-shift-rosters:approve",
+    "kuaizhizao:performance-shift-rosters:audit",
+    "kuaizhizao:performance-shift-rosters:create",
+    "kuaizhizao:performance-shift-rosters:delete",
+    "kuaizhizao:performance-shift-rosters:export",
+    "kuaizhizao:performance-shift-rosters:import",
+    "kuaizhizao:performance-shift-rosters:print",
+    "kuaizhizao:performance-shift-rosters:read",
+    "kuaizhizao:performance-shift-rosters:reject",
+    "kuaizhizao:performance-shift-rosters:revoke",
+    "kuaizhizao:performance-shift-rosters:submit",
+    "kuaizhizao:performance-shift-rosters:update",
     "kuaizhizao:performance-hourly-rates:approve",
     "kuaizhizao:performance-hourly-rates:audit",
     "kuaizhizao:performance-hourly-rates:create",

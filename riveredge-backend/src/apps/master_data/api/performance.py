@@ -27,6 +27,15 @@ from apps.master_data.services.employee_performance_service import (
 )
 from apps.master_data.services.performance_calc_service import PerformanceCalcService
 from apps.master_data.services.kpi_evaluator_service import KPIEvaluatorService
+from apps.master_data.services.shift_scheduling_service import ShiftSchedulingService
+from apps.master_data.schemas.shift_scheduling_schemas import (
+    ShiftCreate,
+    ShiftUpdate,
+    ShiftResponse,
+    ShiftRosterCreate,
+    ShiftRosterResponse,
+    ShiftAssignmentsBulkUpdate,
+)
 from apps.master_data.schemas.employee_performance_schemas import (
     EmployeePerformanceConfigCreate,
     EmployeePerformanceConfigUpdate,
@@ -807,4 +816,192 @@ async def list_kpi_scores(
         }
         for r in rows
     ]
+
+
+# ==================== 班次定义 ====================
+
+
+@router.post("/shifts", response_model=ShiftResponse, summary="Create shift")
+async def create_shift(
+    data: ShiftCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.create_shift(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/shifts", response_model=List[ShiftResponse], summary="List shifts")
+async def list_shifts(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    is_active: Optional[bool] = Query(None),
+):
+    return await ShiftSchedulingService.list_shifts(tenant_id, skip, limit, is_active)
+
+
+@router.get("/shifts/{shift_uuid}", response_model=ShiftResponse, summary="Get shift")
+async def get_shift(
+    shift_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.get_shift_by_uuid(tenant_id, shift_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/shifts/{shift_uuid}", response_model=ShiftResponse, summary="Update shift")
+async def update_shift(
+    shift_uuid: str,
+    data: ShiftUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.update_shift(tenant_id, shift_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/shifts/{shift_uuid}", summary="Delete shift")
+async def delete_shift(
+    shift_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await ShiftSchedulingService.delete_shift(tenant_id, shift_uuid)
+        return {"message": "班次删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 排班表 ====================
+
+
+@router.post("/shift-rosters", response_model=ShiftRosterResponse, summary="Create shift roster")
+async def create_shift_roster(
+    data: ShiftRosterCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.create_roster(tenant_id, data)
+    except (NotFoundError, ValidationError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.get("/shift-rosters", response_model=List[ShiftRosterResponse], summary="List shift rosters")
+async def list_shift_rosters(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    work_group_id: Optional[int] = Query(None, alias="workGroupId"),
+    period_start: Optional[date] = Query(None, alias="periodStart"),
+    status: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    return await ShiftSchedulingService.list_rosters(
+        tenant_id, work_group_id, period_start, status, skip, limit
+    )
+
+
+@router.get(
+    "/shift-rosters/by-week",
+    response_model=ShiftRosterResponse,
+    summary="Get or create shift roster for work group week",
+)
+async def get_or_create_shift_roster_week(
+    work_group_id: int = Query(..., alias="workGroupId"),
+    period_start: date = Query(..., alias="periodStart"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.get_or_create_roster_for_week(
+            tenant_id, work_group_id, period_start
+        )
+    except (NotFoundError, ValidationError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.get(
+    "/shift-rosters/{roster_uuid}",
+    response_model=ShiftRosterResponse,
+    summary="Get shift roster",
+)
+async def get_shift_roster(
+    roster_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.get_roster_by_uuid(tenant_id, roster_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/shift-rosters/{roster_uuid}/assignments",
+    response_model=ShiftRosterResponse,
+    summary="Save shift roster assignments",
+)
+async def save_shift_roster_assignments(
+    roster_uuid: str,
+    data: ShiftAssignmentsBulkUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.save_assignments(tenant_id, roster_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/shift-rosters/{roster_uuid}/publish",
+    response_model=ShiftRosterResponse,
+    summary="Publish shift roster",
+)
+async def publish_shift_roster(
+    roster_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.publish_roster(tenant_id, roster_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/shift-rosters/{roster_uuid}/copy-from-previous-week",
+    response_model=ShiftRosterResponse,
+    summary="Copy assignments from previous week",
+)
+async def copy_shift_roster_from_previous_week(
+    roster_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await ShiftSchedulingService.copy_from_previous_week(tenant_id, roster_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

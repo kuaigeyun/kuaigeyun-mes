@@ -136,6 +136,8 @@ const PackingBindingPage = lazy(() => import('./pages/production-execution/packi
 
 // 绩效管理页面
 const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
+const ShiftsPage = lazy(() => import('./pages/performance/shifts'));
+const ShiftRostersPage = lazy(() => import('./pages/performance/shift-rosters'));
 const PerformanceCenterDashboardPage = lazy(() => import('./pages/performance/dashboard'));
 const SkillsPage = lazy(() => import('./pages/performance/skills'));
 const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
@@ -332,6 +334,8 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 绩效管理路由 */}
       <Route path="performance/dashboard" element={withPageSuspense(PerformanceCenterDashboardPage)} />
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
+      <Route path="performance/shifts" element={withPageSuspense(ShiftsPage)} />
+      <Route path="performance/shift-rosters" element={withPageSuspense(ShiftRostersPage)} />
       <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
       <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
       <Route path="performance/piece-rates" element={withPageSuspense(PieceRatesPage)} />

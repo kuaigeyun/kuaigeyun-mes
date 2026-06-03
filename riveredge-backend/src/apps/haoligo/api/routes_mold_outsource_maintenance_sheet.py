@@ -59,6 +59,7 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     merge_line_warehouse_fields,
     mold_warehouse_snapshot_by_codes,
 )
+from apps.master_data.models.supplier import Supplier
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -380,6 +381,46 @@ async def list_outsource_maintenance_sheets(
         "skip": skip,
         "limit": limit,
     }
+
+
+class OutsourceSupplierOptionOut(BaseModel):
+    """外协单位下拉项（主数据启用供应商；不做采购员 buyer 隔离）。"""
+
+    uuid: str
+    code: str
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+@router.get(
+    "/supplier-options",
+    response_model=List[OutsourceSupplierOptionOut],
+    summary="外协单位下拉（启用供应商）",
+)
+async def list_outsource_supplier_options(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    limit: int = Query(1000, ge=1, le=2000),
+):
+    rows = (
+        await Supplier.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        .order_by("code")
+        .limit(limit)
+        .all()
+    )
+    return [
+        OutsourceSupplierOptionOut(
+            uuid=r.uuid,
+            code=(r.code or "").strip(),
+            name=(r.name or "").strip(),
+        )
+        for r in rows
+        if (r.name or "").strip()
+    ]
 
 
 @router.post("", response_model=MoldOutsourceMaintenanceSheetOut, summary="创建外协维保单")

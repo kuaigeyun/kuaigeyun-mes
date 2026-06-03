@@ -3044,6 +3044,8 @@ export default {
   'app.kuaizhizao.menu.performance-management': 'Performance',
   'app.kuaizhizao.menu.performance-management.dashboard': 'Performance Center',
   'app.kuaizhizao.menu.performance-management.holidays': 'Holidays',
+  'app.kuaizhizao.menu.performance-management.shifts': 'Shifts',
+  'app.kuaizhizao.menu.performance-management.shift-rosters': 'Shift Rosters',
   'app.kuaizhizao.menu.performance-management.skills': 'Skills',
   'app.kuaizhizao.menu.performance-management.employee-configs': 'Employee Configs',
   'app.kuaizhizao.menu.performance-management.piece-rates': 'Piece Rates',

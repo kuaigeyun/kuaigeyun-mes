@@ -179,7 +179,13 @@ class PerformanceCalcService:
             total_amount = max(total_amount, base_salary)
 
         ctx = await KPIEvaluatorService.build_context(
-            tenant_id, period, records, total_hours, total_pieces, total_unqualified,
+            tenant_id,
+            period,
+            records,
+            total_hours,
+            total_pieces,
+            total_unqualified,
+            employee_id=employee_id,
         )
         kpi_score, kpi_coefficient = await KPIEvaluatorService.evaluate_and_persist(
             tenant_id, employee_id, employee_name, period, ctx,

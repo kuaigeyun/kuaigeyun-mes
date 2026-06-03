@@ -43,6 +43,11 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  qualifiedQuantityColumnProps,
+  stackedPrimarySecondaryColumn,
+  unqualifiedQuantityColumnProps,
+} from '../components/qualityTableColumns';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -598,27 +603,22 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         </Typography.Text>
       ),
     },
+    stackedPrimarySecondaryColumn<FinishedGoodsInspection>(
+      '工单 / 销售订单',
+      'workOrderSalesOrder',
+      ['work_order_code', 'workOrderCode'],
+      ['sales_order_code', 'salesOrderCode'],
+      { dataIndex: 'work_order_code' },
+    ),
     {
       title: '工单编号',
       dataIndex: 'work_order_code',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
-          {r.work_order_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
     {
       title: '销售订单号',
       dataIndex: 'sales_order_code',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.sales_order_code ?? '') }} ellipsis>
-          {r.sales_order_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
     {
       title: '物料',
@@ -641,16 +641,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     {
       title: '合格数量',
       dataIndex: 'qualified_quantity',
-      width: 80,
-      align: 'right',
-      render: (text) => text || 0,
+      ...qualifiedQuantityColumnProps,
     },
     {
       title: '不合格数量',
       dataIndex: 'unqualified_quantity',
-      width: 100,
-      align: 'right',
-      render: (text) => text || 0,
+      ...unqualifiedQuantityColumnProps,
     },
     {
       title: '检验结果',

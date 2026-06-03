@@ -45,6 +45,10 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -94,6 +98,14 @@ interface ReportingRecord {
 }
 
 const REPORTING_DETAIL_BINDINGS_MIN_WIDTH = 1100;
+
+function getReportingWorkOrderName(record: ReportingRecord): string {
+  return String(record.work_order_name ?? record.workOrderName ?? '').trim() || '-';
+}
+
+function getReportingWorkOrderCode(record: ReportingRecord): string {
+  return String(record.work_order_code ?? record.workOrderCode ?? '').trim() || '-';
+}
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -843,21 +855,27 @@ const ReportingPage: React.FC = () => {
    */
   const columns: ProColumns<ReportingRecord>[] = [
     {
+      title: '工单名称 / 编号',
+      key: 'workOrderStacked',
+      dataIndex: 'work_order_code',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={getReportingWorkOrderName(record)}
+          secondary={getReportingWorkOrderCode(record)}
+        />
+      ),
+    },
+    {
       title: '工单编号',
       dataIndex: 'work_order_code',
-      width: 148,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
-          {r.work_order_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
     {
       title: '工单名称',
       dataIndex: 'work_order_name',
-      width: 150,
+      hideInTable: true,
       ellipsis: true,
     },
     {
@@ -895,12 +913,20 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'qualified_quantity',
       width: 100,
       align: 'right',
+      render: (_, record) => {
+        const val = Number(record.qualified_quantity ?? record.qualifiedQuantity ?? 0);
+        return <Typography.Text type="success">{val.toFixed(2)}</Typography.Text>;
+      },
     },
     {
       title: '不合格数量',
       dataIndex: 'unqualified_quantity',
       width: 100,
       align: 'right',
+      render: (_, record) => {
+        const val = Number(record.unqualified_quantity ?? record.unqualifiedQuantity ?? 0);
+        return <Typography.Text type="danger">{val.toFixed(2)}</Typography.Text>;
+      },
     },
     {
       title: '工时(小时)',
@@ -913,13 +939,6 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'reported_at',
       valueType: 'dateTime',
       width: 160,
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 168,
-      hideInSearch: true,
       defaultSortOrder: 'descend',
     },
     {

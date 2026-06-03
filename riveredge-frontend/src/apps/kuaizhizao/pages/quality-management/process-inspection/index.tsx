@@ -44,6 +44,11 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  qualifiedQuantityColumnProps,
+  stackedPrimarySecondaryColumn,
+  unqualifiedQuantityColumnProps,
+} from '../components/qualityTableColumns';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -650,21 +655,22 @@ const ProcessInspectionPage: React.FC = () => {
         </Typography.Text>
       ),
     },
+    stackedPrimarySecondaryColumn<ProcessInspection>(
+      '工序 / 工单编号',
+      'operationWorkOrder',
+      ['operation_name', 'operationName'],
+      ['work_order_code', 'workOrderCode'],
+      { dataIndex: 'operation_name' },
+    ),
     {
       title: '工单编号',
       dataIndex: 'work_order_code',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
-          {r.work_order_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
     {
       title: '工序名称',
       dataIndex: 'operation_name',
-      width: 150,
+      hideInTable: true,
       ellipsis: true,
     },
     {
@@ -688,16 +694,12 @@ const ProcessInspectionPage: React.FC = () => {
     {
       title: '合格数量',
       dataIndex: 'qualified_quantity',
-      width: 100,
-      align: 'right',
-      render: (text) => text || 0,
+      ...qualifiedQuantityColumnProps,
     },
     {
       title: '不合格数量',
       dataIndex: 'unqualified_quantity',
-      width: 100,
-      align: 'right',
-      render: (text) => text || 0,
+      ...unqualifiedQuantityColumnProps,
     },
     {
       title: '检验结果',

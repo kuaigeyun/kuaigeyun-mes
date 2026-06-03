@@ -11,6 +11,11 @@ import type {
   HolidayCreate,
   HolidayUpdate,
   HolidayListParams,
+  Shift,
+  ShiftCreate,
+  ShiftUpdate,
+  ShiftRoster,
+  ShiftRosterCreate,
   Skill,
   SkillCreate,
   SkillUpdate,
@@ -35,6 +40,42 @@ import type {
 /**
  * 假期 API 服务
  */
+export const shiftApi = {
+  create: async (data: ShiftCreate): Promise<Shift> => api.post(`${PERF_BASE}/shifts`, data),
+  list: async (params?: { skip?: number; limit?: number; is_active?: boolean }): Promise<Shift[]> =>
+    api.get(`${PERF_BASE}/shifts`, { params }),
+  get: async (uuid: string): Promise<Shift> => api.get(`${PERF_BASE}/shifts/${uuid}`),
+  update: async (uuid: string, data: ShiftUpdate): Promise<Shift> =>
+    api.put(`${PERF_BASE}/shifts/${uuid}`, data),
+  delete: async (uuid: string): Promise<void> => api.delete(`${PERF_BASE}/shifts/${uuid}`),
+};
+
+export const shiftRosterApi = {
+  create: async (data: ShiftRosterCreate): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters`, data),
+  list: async (params?: {
+    work_group_id?: number;
+    period_start?: string;
+    status?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ShiftRoster[]> => api.get(`${PERF_BASE}/shift-rosters`, { params }),
+  getByWeek: async (workGroupId: number, periodStart: string): Promise<ShiftRoster> =>
+    api.get(`${PERF_BASE}/shift-rosters/by-week`, {
+      params: { workGroupId, periodStart },
+    }),
+  get: async (uuid: string): Promise<ShiftRoster> => api.get(`${PERF_BASE}/shift-rosters/${uuid}`),
+  saveAssignments: async (
+    uuid: string,
+    assignments: Array<{ employeeId: number; workDate: string; shiftId?: number | null }>,
+  ): Promise<ShiftRoster> =>
+    api.put(`${PERF_BASE}/shift-rosters/${uuid}/assignments`, { assignments }),
+  publish: async (uuid: string): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters/${uuid}/publish`),
+  copyFromPreviousWeek: async (uuid: string): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters/${uuid}/copy-from-previous-week`),
+};
+
 export const holidayApi = {
   create: async (data: HolidayCreate): Promise<Holiday> => {
     return api.post('/apps/master-data/performance/holidays', data);

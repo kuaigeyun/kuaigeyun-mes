@@ -2,6 +2,11 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Modal, Space, Tag } from 'antd';
+import {
+  renderUnqualifiedQuantity,
+  stackedPrimarySecondaryColumn,
+} from '../components/qualityTableColumns';
+import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quality-improvement';
@@ -84,10 +89,35 @@ const NonconformingLedgerPage: React.FC = () => {
         );
       },
     },
-    { title: '工单', dataIndex: 'work_order_code', width: 120 },
-    { title: '工序', dataIndex: 'operation_name', width: 120 },
-    { title: '物料', dataIndex: 'product_name', width: 180, ellipsis: true },
-    { title: '不合格数量', dataIndex: 'defect_quantity', valueType: 'digit', width: 120 },
+    stackedPrimarySecondaryColumn<DefectLedgerItem>(
+      '工序 / 工单',
+      'operationWorkOrder',
+      ['operation_name', 'operationName'],
+      ['work_order_code', 'workOrderCode'],
+      { dataIndex: 'operation_name' },
+    ),
+    { title: '工单', dataIndex: 'work_order_code', hideInTable: true },
+    { title: '工序', dataIndex: 'operation_name', hideInTable: true },
+    {
+      title: '物料',
+      key: 'product',
+      dataIndex: 'product_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, row) => (
+        <MaterialStackedCell
+          material_name={row.product_name}
+          material_code={row.product_code ?? row.material_code}
+        />
+      ),
+    },
+    { title: '物料', dataIndex: 'product_name', hideInTable: true },
+    {
+      title: '不合格数量',
+      dataIndex: 'defect_quantity',
+      width: 100,
+      align: 'right',
+      render: (_, row) => renderUnqualifiedQuantity(row.defect_quantity),
+    },
     { title: '缺陷类型', dataIndex: 'defect_type', width: 120 },
     { title: '原因', dataIndex: 'defect_reason', width: 240, ellipsis: true },
     {

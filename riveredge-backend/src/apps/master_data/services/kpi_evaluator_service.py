@@ -125,6 +125,7 @@ class KPIEvaluatorService:
         total_hours: Decimal,
         total_pieces: Decimal,
         total_unqualified: Decimal,
+        employee_id: Optional[int] = None,
     ) -> KPIContext:
         start_d, end_d = cls._period_bounds(period)
         workdays = cls._count_workdays(start_d, end_d)
@@ -147,6 +148,16 @@ class KPIEvaluatorService:
         quality_rate = qualified / denom if denom > 0 else Decimal("1")
         efficiency = total_pieces / total_hours if total_hours > 0 else Decimal("0")
         expected_days = max(workdays - holidays, 1)
+        if employee_id is not None:
+            from apps.master_data.services.shift_scheduling_service import (
+                ShiftSchedulingService,
+            )
+
+            scheduled_days = await ShiftSchedulingService.count_scheduled_workdays_for_employee(
+                tenant_id, employee_id, start_d, end_d
+            )
+            if scheduled_days is not None:
+                expected_days = max(scheduled_days, 1)
         attendance_rate = Decimal(str(reported_days)) / Decimal(str(expected_days))
         if attendance_rate > 1:
             attendance_rate = Decimal("1")

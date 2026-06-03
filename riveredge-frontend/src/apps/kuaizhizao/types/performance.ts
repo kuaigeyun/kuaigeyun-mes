@@ -278,6 +278,74 @@ export interface PerformanceDetail {
   kpi_scores?: Array<{ kpi_code: string; score: number; source_data_json?: Record<string, unknown> }>;
 }
 
+export interface Shift {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  code: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  crossesMidnight: boolean;
+  standardHours: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShiftCreate {
+  code: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  crossesMidnight?: boolean;
+  standardHours?: number;
+  isActive?: boolean;
+}
+
+export interface ShiftUpdate {
+  code?: string;
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  crossesMidnight?: boolean;
+  standardHours?: number;
+  isActive?: boolean;
+}
+
+export interface ShiftAssignment {
+  id?: number;
+  employeeId: number;
+  employeeName?: string;
+  workDate: string;
+  shiftId?: number | null;
+  shiftCode?: string;
+  shiftName?: string;
+}
+
+export interface ShiftRoster {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  workGroupId: number;
+  workGroupCode?: string;
+  workGroupName?: string;
+  periodStart: string;
+  periodEnd: string;
+  status: 'draft' | 'published';
+  publishedAt?: string;
+  remarks?: string;
+  assignments?: ShiftAssignment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShiftRosterCreate {
+  workGroupId: number;
+  periodStart: string;
+  remarks?: string;
+}
+
 /** 工序（用于计件单价选择，从主数据 process API 获取） */
 export interface Operation {
   id: number;

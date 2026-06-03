@@ -61,6 +61,8 @@ const PerformanceCenterDashboard: React.FC = () => {
     { key: 'summary', title: '绩效汇总', icon: <BarChartOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaizhizao/performance/summaries' },
     { key: 'piece', title: '计件单价', icon: <TrophyOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/kuaizhizao/performance/piece-rates' },
     { key: 'holiday', title: '节假日', icon: <CalendarOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/performance/holidays' },
+    { key: 'shift-rosters', title: '排班管理', icon: <CalendarOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/kuaizhizao/performance/shift-rosters' },
+    { key: 'shifts', title: '班次定义', icon: <TeamOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/performance/shifts' },
     { key: 'employee', title: '员工配置', icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/performance/employee-configs' },
   ];
 

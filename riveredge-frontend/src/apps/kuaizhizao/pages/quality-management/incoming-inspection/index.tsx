@@ -43,6 +43,11 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  qualifiedQuantityColumnProps,
+  stackedPrimarySecondaryColumn,
+  unqualifiedQuantityColumnProps,
+} from '../components/qualityTableColumns';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -603,21 +608,22 @@ const IncomingInspectionPage: React.FC = () => {
     },
     { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
     { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    stackedPrimarySecondaryColumn<IncomingInspection>(
+      '供应商 / 入库单号',
+      'supplierReceipt',
+      ['supplier_name', 'supplierName'],
+      ['purchase_receipt_code', 'purchaseReceiptCode'],
+      { dataIndex: 'supplier_name' },
+    ),
     {
       title: '采购入库单号',
       dataIndex: 'purchase_receipt_code',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }} ellipsis>
-          {r.purchase_receipt_code ?? '-'}
-        </Typography.Text>
-      ),
+      hideInTable: true,
     },
     {
       title: '供应商',
       dataIndex: 'supplier_name',
-      width: 150,
+      hideInTable: true,
       ellipsis: true,
     },
     {
@@ -630,14 +636,12 @@ const IncomingInspectionPage: React.FC = () => {
     {
       title: '合格数量',
       dataIndex: 'qualified_quantity',
-      width: 100,
-      align: 'right',
+      ...qualifiedQuantityColumnProps,
     },
     {
       title: '不合格数量',
       dataIndex: 'unqualified_quantity',
-      width: 100,
-      align: 'right',
+      ...unqualifiedQuantityColumnProps,
     },
     {
       title: '检验员',

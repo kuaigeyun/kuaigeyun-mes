@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space, Tag } from 'antd';
+import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
@@ -34,8 +35,19 @@ const EightDReportsPage: React.FC = () => {
   const canClose = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:close');
 
   const columns: ProColumns<Quality8DReport>[] = [
-    { title: '8D编号', dataIndex: 'report_code', width: 160 },
-    { title: '标题', dataIndex: 'title', width: 240, ellipsis: true },
+    {
+      title: '8D编号',
+      dataIndex: 'report_code',
+      hideInTable: true,
+    },
+    stackedPrimarySecondaryColumn<Quality8DReport>(
+      '标题 / 编号',
+      'eightDStacked',
+      ['title'],
+      ['report_code', 'reportCode'],
+      { dataIndex: 'title', fixed: 'left' },
+    ),
+    { title: '标题', dataIndex: 'title', hideInTable: true, ellipsis: true },
     {
       title: '阶段',
       dataIndex: 'status',

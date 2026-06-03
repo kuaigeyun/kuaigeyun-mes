@@ -1,7 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Modal, Space, Tag } from 'antd';
+import { App, Button, Empty, Modal, Space, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  qualifiedQuantityColumnProps,
+  stackedPrimarySecondaryColumn,
+  unqualifiedQuantityColumnProps,
+} from '../components/qualityTableColumns';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
@@ -54,14 +60,50 @@ const OQCInspectionPage: React.FC = () => {
   };
 
   const columns: ProColumns<OQCInspection>[] = [
-    { title: '检验单号', dataIndex: 'inspection_code', width: 150 },
-    { title: '发货通知', dataIndex: 'shipment_notice_code', width: 140 },
-    { title: '销售订单', dataIndex: 'sales_order_code', width: 130 },
+    {
+      title: '检验单号',
+      dataIndex: 'inspection_code',
+      width: 150,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
+          {r.inspection_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    stackedPrimarySecondaryColumn<OQCInspection>(
+      '发货通知 / 销售订单',
+      'noticeSalesOrder',
+      ['shipment_notice_code', 'shipmentNoticeCode'],
+      ['sales_order_code', 'salesOrderCode'],
+      { dataIndex: 'shipment_notice_code' },
+    ),
+    { title: '发货通知', dataIndex: 'shipment_notice_code', hideInTable: true },
+    { title: '销售订单', dataIndex: 'sales_order_code', hideInTable: true },
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '来源单号', dataIndex: 'source_code', width: 130 },
-    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-    { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
-    { title: '检验数量', dataIndex: 'inspection_quantity', valueType: 'digit', width: 100 },
+    {
+      title: '物料',
+      key: 'material',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, r) => (
+        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+      ),
+    },
+    { title: '物料编码', dataIndex: 'material_code', hideInTable: true },
+    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    { title: '检验数量', dataIndex: 'inspection_quantity', valueType: 'digit', width: 100, align: 'right' },
+    {
+      title: '合格数量',
+      dataIndex: 'qualified_quantity',
+      ...qualifiedQuantityColumnProps,
+    },
+    {
+      title: '不合格数量',
+      dataIndex: 'unqualified_quantity',
+      ...unqualifiedQuantityColumnProps,
+    },
     {
       title: '放行结论',
       dataIndex: 'release_decision',

@@ -17,6 +17,7 @@ from .drawing import EngineeringDrawing
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
+from .shift_scheduling import Shift, ShiftRoster, ShiftAssignment
 from .employee_performance import (
     EmployeePerformanceConfig,
     PieceRate,
@@ -52,6 +53,9 @@ __all__ = [
     "Supplier",
     "Holiday",
     "Skill",
+    "Shift",
+    "ShiftRoster",
+    "ShiftAssignment",
     "EmployeePerformanceConfig",
     "PieceRate",
     "HourlyRate",
