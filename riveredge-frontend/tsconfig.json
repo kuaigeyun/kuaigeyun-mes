@@ -24,9 +24,7 @@
     /* Path mapping - TypeScript 6.0+ 推荐方式 */
     /* 注意：使用 moduleResolution: "bundler" 时，可以直接使用 paths 而不需要 baseUrl */
     "paths": {
-      "@/*": ["./src/*"],
-      "@riveredge/hmi-ui": ["../riveredge-hmi-ui/src/index.ts"],
-      "@riveredge/hmi-ui/*": ["../riveredge-hmi-ui/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

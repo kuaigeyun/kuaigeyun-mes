@@ -26,7 +26,12 @@ import {
 } from '@ant-design/icons';
 
 import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
-import { HmiButton, HmiCard, HmiListItem, HmiStatusTag, HmiInput } from '../../../../../components/layout-templates/hmi';
+import {
+  touchButtonProps,
+  touchCardProps,
+  TouchListItem,
+  WorkOrderStatusTag,
+} from '../../../../../components/touch-terminal';
 import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
 import StationBinder, { getStationStorageKey, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
@@ -354,9 +359,8 @@ const WorkOrdersKioskPage: React.FC = () => {
     });
 
     const renderLeftPanel = () => (
-        <HmiCard
-            fill
-            className="hmi-kiosk-panel"
+        <Card
+            {...touchCardProps({ fill: true, className: 'hmi-kiosk-panel' })}
             title={
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
@@ -417,14 +421,14 @@ const WorkOrdersKioskPage: React.FC = () => {
                         const pct = Math.round(((wo.completed_quantity || 0) / (wo.quantity || 1)) * 100);
                         const isComplete = wo.status === 'completed';
                         return (
-                            <HmiListItem
+                            <TouchListItem
                                 key={wo.id ?? wo.code}
                                 selected={isSelected}
                                 onClick={() => handleSelectWorkOrder(wo)}
                                 title={
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                                         <span>{wo.code}</span>
-                                        <HmiStatusTag status={wo.status}>{STATUS_LABELS[wo.status || ''] || wo.status}</HmiStatusTag>
+                                        <WorkOrderStatusTag status={wo.status}>{STATUS_LABELS[wo.status || ''] || wo.status}</WorkOrderStatusTag>
                                     </div>
                                 }
                                 subtitle={
@@ -448,7 +452,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     })
                 )}
             </div>
-        </HmiCard>
+        </Card>
     );
 
     const currentStatusLabel = !selectedWorkOrder
@@ -672,21 +676,21 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 )}
                                             </div>
                                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                                <HmiButton hmiSize="header" icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
                                                     作业指导书
-                                                </HmiButton>
-                                                <HmiButton hmiSize="header" onClick={() => setParamModalVisible(true)}>
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} onClick={() => setParamModalVisible(true)}>
                                                     报工参数
-                                                </HmiButton>
-                                                <HmiButton hmiSize="header" disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
                                                     物料绑定
-                                                </HmiButton>
-                                                <HmiButton hmiSize="header" disabled={!activeOperation} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
                                                     条码打印
-                                                </HmiButton>
-                                                <HmiButton hmiSize="header" disabled={!activeOperation} onClick={() => setProcessInspectionModalVisible(true)}>
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => setProcessInspectionModalVisible(true)}>
                                                     工序检验
-                                                </HmiButton>
+                                                </Button>
                                             </div>
                                         </div>
                                         <Form form={form} layout="vertical">
@@ -741,15 +745,14 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 </Form.Item>
                                             </Form.Item>
                                             <Form.Item label={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>&nbsp;</span>}>
-                                                <HmiButton
-                                                    hmiVariant="success"
-                                                    hmiSize="action"
+                                                <Button
+                                                    size="large"
+                                                    {...touchButtonProps({ variant: 'success', size: 'action', loading: opsLoading })}
                                                     icon={<CheckCircleOutlined />}
                                                     onClick={handleReport}
-                                                    loading={opsLoading}
                                                 >
                                                     确认报工
-                                                </HmiButton>
+                                                </Button>
                                             </Form.Item>
                                         </div>
                                     </Form>
@@ -985,8 +988,8 @@ const WorkOrdersKioskPage: React.FC = () => {
             deviceName={(stationInfo as any).deviceName || '未连接'}
             headerExtra={
                 <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
-                    <HmiButton hmiSize="header" icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</HmiButton>
-                    <HmiButton hmiSize="header" icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</HmiButton>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</Button>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</Button>
                 </div>
             }
         >
@@ -1071,59 +1074,64 @@ const WorkOrdersKioskPage: React.FC = () => {
                 </div>
                 {/* 底部操作栏：始终显示，未选工单时置灰辅助功能 */}
                 <div className="hmi-kiosk-footer" onClick={() => setFocusedNumField(null)}>
-                    <HmiButton
-                        hmiVariant={!selectedWorkOrder ? 'default' : isRunning ? 'primary' : 'success'}
-                        hmiSize="action"
-                        disabled={!selectedWorkOrder}
+                    <Button
+                        size="large"
+                        {...touchButtonProps({
+                          variant: !selectedWorkOrder ? 'default' : isRunning ? 'primary' : 'success',
+                          size: 'action',
+                          disabled: !selectedWorkOrder,
+                        })}
                         icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
                         onClick={handleStartEnd}
                     >
                         {isRunning ? '结束' : '开始'}
-                    </HmiButton>
+                    </Button>
                     {activeOperation?.status === 'processing' && (
-                        <HmiButton
-                            hmiVariant="success"
-                            hmiSize="action"
+                        <Button
+                            size="large"
+                            {...touchButtonProps({ variant: 'success', size: 'action' })}
                             icon={<CheckCircleOutlined />}
                             onClick={handleReport}
                         >
                             完成报工
-                        </HmiButton>
+                        </Button>
                     )}
-                    <HmiButton
-                        hmiSize="action"
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ size: 'action' })}
                         icon={<PauseCircleOutlined />}
                         disabled={!selectedWorkOrder}
                         onClick={handlePauseResume}
                     >
                         {isPaused ? '继续' : '暂停'}
-                    </HmiButton>
-                    <HmiButton
-                        hmiVariant="danger"
-                        hmiSize="action"
+                    </Button>
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ variant: 'danger', size: 'action' })}
                         icon={<AlertOutlined />}
                         onClick={handleCall}
                         style={{ background: HMI_DESIGN_TOKENS.STATUS_ALARM, borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM, color: '#fff' }}
                     >
                         呼叫
-                    </HmiButton>
+                    </Button>
 
                     <Divider orientation="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
 
-                    <HmiButton hmiSize="action" icon={<HistoryOutlined />} disabled={!selectedWorkOrder} onClick={handleQuickPick}>
+                    <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<HistoryOutlined />} disabled={!selectedWorkOrder} onClick={handleQuickPick}>
                         领料
-                    </HmiButton>
-                    <HmiButton hmiSize="action" icon={<PrinterOutlined />} disabled={!selectedWorkOrder} onClick={handlePrintWorkOrder}>
+                    </Button>
+                    <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<PrinterOutlined />} disabled={!selectedWorkOrder} onClick={handlePrintWorkOrder}>
                         打印
-                    </HmiButton>
-                    <HmiButton
-                        hmiSize="action"
+                    </Button>
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ size: 'action' })}
                         icon={<QrcodeOutlined />}
                         disabled={!selectedWorkOrder}
                         onClick={() => { setBarcodePrintLevel('work_order'); setBarcodePrintModalVisible(true); }}
                     >
                         条码
-                    </HmiButton>
+                    </Button>
                 </div>
             </div>
             {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}

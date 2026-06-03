@@ -476,10 +476,7 @@ export const ANT_DESIGN_TOKENS = {
   },
 } as const;
 
-/**
- * 工业 HMI 设计规范常量（ISA-101 风格）
- * @deprecated 实现已迁移至 @riveredge/hmi-ui，此处 re-export 保持兼容
- */
+/** 触屏终端设计 Token（与主站共用 antd，见 src/theme/hmi） */
 export {
   HMI_DESIGN_TOKENS,
   HMI_LAYOUT,
@@ -488,7 +485,8 @@ export {
   HMI_TOUCH,
   HMI_STATION_LAYOUT,
   HMI_SAFE_INSET,
-} from '../../../../riveredge-hmi-ui/src/tokens/index.ts';
+  createHmiTheme,
+} from '../../theme/hmi';
 
 /**
  * 工作台配置

@@ -12,7 +12,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
-import { HmiButton, HmiChip } from '../../../../../components/layout-templates/hmi';
+import { touchButtonProps, TouchChip } from '../../../../../components/touch-terminal';
 import { reportingApi, workOrderApi } from '../../../services/production';
 import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -381,15 +381,15 @@ const ReportingKioskPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col span={24}>
-                  <HmiButton
-                    hmiVariant="primary"
-                    hmiSize="action"
+                  <Button
+                    size="large"
                     block
+                    {...touchButtonProps({ variant: 'primary', size: 'action' })}
                     icon={<ScanOutlined />}
                     onClick={handleManualInput}
                   >
                     加载工单信息
-                  </HmiButton>
+                  </Button>
                 </Col>
               </Row>
 
@@ -432,7 +432,7 @@ const ReportingKioskPage: React.FC = () => {
             <Card title="选择工序" style={{ marginBottom: 24 }}>
               <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {workOrderOperations.map((operation) => (
-                  <HmiChip
+                  <TouchChip
                     key={operation.operation_id}
                     selected={currentOperation?.operation_id === operation.operation_id}
                     block
@@ -454,7 +454,7 @@ const ReportingKioskPage: React.FC = () => {
                         <Tag color="processing">节点</Tag>
                       )}
                     </Space>
-                  </HmiChip>
+                  </TouchChip>
                 ))}
               </Space>
 

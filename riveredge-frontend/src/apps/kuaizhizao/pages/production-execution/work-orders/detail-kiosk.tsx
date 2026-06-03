@@ -20,7 +20,7 @@ import {
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG, HMI_DESIGN_TOKENS } from '../../../../../components/layout-templates';
-import { HmiButton, HmiInput } from '../../../../../components/layout-templates/hmi';
+import { touchButtonProps, touchQtyInputProps, TOUCH_INPUT_QTY_STYLE } from '../../../../../components/touch-terminal';
 import NumericKeypad from '../../../../../components/touch-keyboard/NumericKeypad';
 import { workOrderApi } from '../../../services/production';
 
@@ -155,14 +155,14 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                         </Col>
                          <Col span={8} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                              {activeOperation?.status === 'pending' && (
-                                 <HmiButton hmiVariant="primary" hmiSize="action" icon={<PlayCircleOutlined />} onClick={handleStart} style={{ width: 140 }}>
+                                 <Button size="large" {...touchButtonProps({ variant: 'primary', size: 'action' })} icon={<PlayCircleOutlined />} onClick={handleStart} style={{ width: 140 }}>
                                      开始
-                                 </HmiButton>
+                                 </Button>
                              )}
                              {activeOperation?.status === 'processing' && (
-                                 <HmiButton hmiVariant="success" hmiSize="action" icon={<CheckCircleOutlined />} onClick={handleComplete} style={{ width: 140 }}>
+                                 <Button size="large" {...touchButtonProps({ variant: 'success', size: 'action' })} icon={<CheckCircleOutlined />} onClick={handleComplete} style={{ width: 140 }}>
                                      完工
-                                 </HmiButton>
+                                 </Button>
                              )}
                         </Col>
                     </Row>
@@ -194,9 +194,9 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                 label: <span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, padding: '12px 16px', minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE, display: 'inline-flex', alignItems: 'center' }}><BarcodeOutlined /> 关键物料投料</span>,
                                 children: (
                                     <div style={{ padding: '20px', textAlign: 'center' }}>
-                                        <HmiButton hmiSize="action" icon={<BarcodeOutlined />} style={{ width: 200 }}>
+                                        <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<BarcodeOutlined />} style={{ width: 200 }}>
                                             扫描投料
-                                        </HmiButton>
+                                        </Button>
                                         <div style={{ marginTop: '20px', color: '#999', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>扫描关键件条码进行防错校验和追溯绑定</div>
                                     </div>
                                 )
@@ -219,8 +219,9 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
                     <div style={{ width: '100%' }}>
                          <div style={{ marginBottom: '8px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#666' }}>本次报工数量:</div>
-                         <HmiInput
-                            qty
+                         <Input
+                            {...touchQtyInputProps()}
+                            style={TOUCH_INPUT_QTY_STYLE}
                             value={reportQuantity}
                             readOnly
                             placeholder="请点击下方键盘输入"

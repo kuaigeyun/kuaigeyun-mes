@@ -1,4 +1,4 @@
-/** 通用触屏配置 */
+/** 触屏工位触控尺寸 */
 export const HMI_TOUCH = {
   TOUCH_MIN_SIZE: 48,
   BUTTON_MIN_HEIGHT: 60,
@@ -6,10 +6,8 @@ export const HMI_TOUCH = {
   TITLE_FONT_SIZE: 32,
   ELEMENT_MIN_GAP: 20,
   KEYBOARD_BUTTON_SIZE: 60,
-  /** 主操作：开工、报工 */
   PRIMARY_BTN_HEIGHT: 80,
   PRIMARY_BTN_MIN_WIDTH: 160,
-  /** 次要操作 */
   ACTION_BTN_HEIGHT: 72,
   ACTION_BTN_MIN_WIDTH: 120,
   FOOTER_PADDING_X: 24,

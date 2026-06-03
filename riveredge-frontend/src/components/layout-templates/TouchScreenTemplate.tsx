@@ -9,9 +9,9 @@
  */
 
 import React, { ReactNode, useEffect } from 'react';
-import { theme, Space } from 'antd';
+import { theme, Button } from 'antd';
 import { TOUCH_SCREEN_CONFIG, ANT_DESIGN_TOKENS, HMI_DESIGN_TOKENS } from './constants';
-import { HmiButton } from './hmi';
+import { touchButtonProps } from '../touch-terminal';
 
 const { useToken } = theme;
 
@@ -154,17 +154,20 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
           }}
         >
           {footerButtons.map((button, index) => (
-            <HmiButton
+            <Button
               key={index}
-              hmiVariant={button.type === 'primary' ? 'primary' : 'default'}
-              hmiSize="action"
+              size="large"
+              {...touchButtonProps({
+                variant: button.type === 'primary' ? 'primary' : 'default',
+                size: 'action',
+              })}
               icon={button.icon}
               onClick={button.onClick}
               disabled={button.disabled}
               block={button.block !== false}
             >
               {button.title}
-            </HmiButton>
+            </Button>
           ))}
         </div>
       )}

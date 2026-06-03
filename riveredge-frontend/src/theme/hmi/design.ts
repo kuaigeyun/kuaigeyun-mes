@@ -1,6 +1,5 @@
 /**
- * 工业 HMI 设计 Token（ISA-101 风格）
- * 高对比、大触控、统一状态色
+ * 工业触屏终端设计 Token（ISA-101 风格）
  */
 export const HMI_DESIGN_TOKENS = {
   STATUS_OK: '#00C853',

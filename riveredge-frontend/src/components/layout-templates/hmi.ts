@@ -1,11 +1,6 @@
+/**
+ * @deprecated 请从 `components/touch-terminal` 导入；本文件保留兼容 re-export。
+ */
 import '../../styles/hmi.css';
 
-export * from '../hmi';
-export {
-  HMI_DESIGN_TOKENS,
-  HMI_LAYOUT,
-  HMI_TOUCH,
-  HMI_STATION_LAYOUT,
-  HMI_SAFE_INSET,
-  TOUCH_SCREEN_CONFIG,
-} from './constants';
+export * from '../touch-terminal';

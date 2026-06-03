@@ -1,12 +1,12 @@
 import { Tag } from 'antd';
 import type { TagProps } from 'antd';
-import { HMI_DESIGN_TOKENS, type HmiStatusKey } from '../tokens/design';
+import { HMI_DESIGN_TOKENS, type HmiStatusKey } from '../../theme/hmi/design';
 
-export type HmiStatusTagProps = Omit<TagProps, 'color'> & {
+export type WorkOrderStatusTagProps = Omit<TagProps, 'color'> & {
   status?: HmiStatusKey | string;
 };
 
-export function HmiStatusTag({ status = 'default', style, children, ...rest }: HmiStatusTagProps) {
+export function WorkOrderStatusTag({ status = 'default', style, children, ...rest }: WorkOrderStatusTagProps) {
   const key = (status in HMI_DESIGN_TOKENS.STATUS_BADGE ? status : 'default') as HmiStatusKey;
   const badge = HMI_DESIGN_TOKENS.STATUS_BADGE[key];
 

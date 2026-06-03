@@ -1,4 +1,3 @@
-/** Web 生产终端默认布局 */
 export const HMI_LAYOUT = {
   HEADER_HEIGHT: 64,
   METRICS_HEIGHT: 80,
@@ -7,7 +6,6 @@ export const HMI_LAYOUT = {
   FOOTER_HEIGHT: 72,
 } as const;
 
-/** 工位机 1920×1080 布局 */
 export const HMI_STATION_LAYOUT = {
   VIEWPORT_WIDTH: 1920,
   VIEWPORT_HEIGHT: 1080,
@@ -20,7 +18,6 @@ export const HMI_STATION_LAYOUT = {
   SECTION_GAP: 20,
 } as const;
 
-/** 屏幕四周安全边距（工业触屏边缘点按失效区） */
 export const HMI_SAFE_INSET = {
   TOP: 16,
   RIGHT: 24,

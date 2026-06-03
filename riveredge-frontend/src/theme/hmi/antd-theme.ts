@@ -22,7 +22,7 @@ export const HMI_ANTD_TOKEN_OVERRIDE = {
   fontSizeHeading3: 24,
 } as const;
 
-/** 工位客户端 ConfigProvider 主题 */
+/** 触屏终端 ConfigProvider 主题（与主站共用 antd 组件） */
 export function createHmiTheme(overrides?: ThemeConfig): ThemeConfig {
   return {
     token: {
